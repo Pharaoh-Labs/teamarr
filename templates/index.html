@@ -120,7 +120,7 @@
         <tbody>
             {% for item in history %}
             <tr>
-                <td>{{ item.generated_at }}</td>
+                <td>{{ item.generated_at_local }}</td>
                 <td>{{ item.num_channels }}</td>
                 <td>{{ item.num_programmes }}</td>
                 <td>{{ "%.2f"|format(item.generation_time_seconds) }}s</td>
