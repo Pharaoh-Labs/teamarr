@@ -742,7 +742,7 @@ def delete_condition_preset(preset_id):
 def get_variables():
     """Serve variable schema for UI and validation"""
     from pathlib import Path
-    variables_file = Path(__file__).parent / 'data' / 'variables.json'
+    variables_file = Path(__file__).parent / 'config' / 'variables.json'
 
     try:
         with open(variables_file, 'r', encoding='utf-8') as f:
