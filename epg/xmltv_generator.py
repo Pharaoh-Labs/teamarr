@@ -8,7 +8,7 @@ import hashlib
 class XMLTVGenerator:
     """Generate XMLTV format EPG files"""
 
-    def __init__(self, generator_name: str = "Teamarr Sports EPG Generator",
+    def __init__(self, generator_name: str = "Teamarr - Dynamic Sports Team EPG Generator",
                  generator_url: str = "http://localhost:9195"):
         self.generator_name = generator_name
         self.generator_url = generator_url
@@ -195,11 +195,17 @@ class XMLTVGenerator:
         return '\n'.join(lines)
 
     def _add_doctype(self, xml_str: str) -> str:
-        """Add XML declaration and DOCTYPE"""
+        """Add XML declaration, watermark comment, and DOCTYPE"""
         declaration = '<?xml version="1.0" encoding="UTF-8"?>'
+        watermark = (
+            '<!--\n'
+            '  Generated with Teamarr - Dynamic Sports Team EPG Generator\n'
+            '  https://github.com/egyptiangio/teamarr\n'
+            '-->'
+        )
         doctype = '<!DOCTYPE tv SYSTEM "xmltv.dtd">'
 
-        return f"{declaration}\n{doctype}\n{xml_str}"
+        return f"{declaration}\n{watermark}\n{doctype}\n{xml_str}"
 
     def calculate_file_hash(self, xml_content: str) -> str:
         """Calculate SHA256 hash of XML content for change detection"""

@@ -1,4 +1,4 @@
-"""Teamarr - Sports Team EPG Generator Flask Application"""
+"""Teamarr - Dynamic Sports Team EPG Generator Flask Application"""
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 import os
 from database import get_connection, init_database
@@ -2168,7 +2168,7 @@ if __name__ == '__main__':
     print(f"""
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
-║   Teamarr - Sports Team EPG Generator                      ║
+║   Teamarr - Dynamic Sports Team EPG Generator              ║
 ║                                                            ║
 ║   Web Interface: http://localhost:{port}                    ║
 ║   EPG File: http://localhost:{port}/teamarr.xml            ║
