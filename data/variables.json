@@ -1,0 +1,3359 @@
+{
+  "version": "1.0.0",
+  "generated": "2025-11-21",
+  "total_variables": 220,
+  "variables": [
+    {
+      "name": "team_name",
+      "description": "Full team name",
+      "source": "`/teams/{id}` → `team.displayName`",
+      "example": "Detroit Pistons",
+      "category": "Team Information (Basic)",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_abbrev",
+      "description": "Team abbreviation",
+      "source": "`/teams/{id}` → `team.abbreviation`",
+      "example": "DET",
+      "category": "Team Information (Basic)",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "league",
+      "description": "League abbreviation",
+      "source": "Team config",
+      "example": "NBA",
+      "category": "Team Information (Basic)",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "league_name",
+      "description": "Full league name",
+      "source": "Team config",
+      "example": "National Basketball Association",
+      "category": "Team Information (Basic)",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "sport",
+      "description": "Sport name",
+      "source": "Team config",
+      "example": "Basketball",
+      "category": "Team Information (Basic)",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_record",
+      "description": "Win-loss record",
+      "source": "`/teams/{id}` → `team.record.items[0].summary`",
+      "example": "13-2",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_wins",
+      "description": "Number of wins",
+      "source": "`/teams/{id}` → stats `name=wins`",
+      "example": "13",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_losses",
+      "description": "Number of losses",
+      "source": "`/teams/{id}` → stats `name=losses`",
+      "example": "2",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_ties",
+      "description": "Number of ties",
+      "source": "`/teams/{id}` → stats `name=ties`",
+      "example": "0",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "team_win_pct",
+      "description": "Win percentage",
+      "source": "`/teams/{id}` → stats `name=winPercent`",
+      "example": "0.867",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "playoff_seed",
+      "description": "Current playoff seed",
+      "source": "`/teams/{id}` → stats `name=playoffSeed`",
+      "example": "1",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "games_back",
+      "description": "Games behind leader",
+      "source": "`/teams/{id}` → stats `name=gamesBehind`",
+      "example": "0.0",
+      "category": "Team Record & Standings",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_ppg",
+      "description": "Points per game",
+      "source": "`/statistics` → `avgPoints`",
+      "example": "118.9",
+      "category": "Team Statistics (Offensive)",
+      "icon": "📈",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_papg",
+      "description": "Points allowed per game",
+      "source": "`/statistics` → `avgPointsAgainst`",
+      "example": "112.1",
+      "category": "Team Statistics (Offensive)",
+      "icon": "📈",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_rank",
+      "description": "National ranking",
+      "source": "`/scoreboard` → `curatedRank.current`",
+      "example": "#8",
+      "category": "Team Rankings",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football"
+      ]
+    },
+    {
+      "name": "is_ranked",
+      "description": "Boolean if ranked",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Team Rankings",
+      "icon": "🏆",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football"
+      ]
+    },
+    {
+      "name": "streak",
+      "description": "Current streak",
+      "source": "Calculated from `/schedule`",
+      "example": "W11",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "streak_count",
+      "description": "Streak number",
+      "source": "Calculated",
+      "example": "11",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "streak_type",
+      "description": "Win/Loss",
+      "source": "Calculated",
+      "example": "W",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "win_streak",
+      "description": "Win streak count",
+      "source": "Calculated",
+      "example": "11",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "loss_streak",
+      "description": "Loss streak count",
+      "source": "Calculated",
+      "example": "0",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "has_win_streak",
+      "description": "Boolean (3+ wins)",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "has_loss_streak",
+      "description": "Boolean (3+ losses)",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_streak",
+      "description": "Home win/loss streak",
+      "source": "Calculated from `/schedule`",
+      "example": "7-0 at home",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "away_streak",
+      "description": "Away win/loss streak",
+      "source": "Calculated from `/schedule`",
+      "example": "5-0 on road",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_5_record",
+      "description": "Last 5 games",
+      "source": "Calculated from `/schedule`",
+      "example": "5-0",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_10_record",
+      "description": "Last 10 games",
+      "source": "Calculated from `/schedule`",
+      "example": "10-0",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "recent_form",
+      "description": "Recent results",
+      "source": "Calculated",
+      "example": "WWWWW",
+      "category": "Team Streaks & Form",
+      "icon": "🔥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "pro_conference",
+      "description": "Conference name",
+      "source": "`/teams/{id}` → groups",
+      "example": "Eastern Conference",
+      "category": "Conference & Division",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "pro_conference_abbrev",
+      "description": "Conference abbrev",
+      "source": "`/teams/{id}` → groups",
+      "example": "East",
+      "category": "Conference & Division",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "pro_division",
+      "description": "Division name",
+      "source": "`/teams/{id}` → groups",
+      "example": "Central",
+      "category": "Conference & Division",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "college_conference",
+      "description": "College conference",
+      "source": "`/teams/{id}` → groups",
+      "example": "Big Ten",
+      "category": "Conference & Division",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football"
+      ]
+    },
+    {
+      "name": "conference_or_division_name",
+      "description": "Auto-select",
+      "source": "Calculated",
+      "example": "Central",
+      "category": "Conference & Division",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "division_record",
+      "description": "Division W-L",
+      "source": "`/teams/{id}` → records",
+      "example": "5-0",
+      "category": "Conference & Division",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent",
+      "description": "Opponent full name",
+      "source": "`/schedule` → event competitors",
+      "example": "Orlando Magic",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_abbrev",
+      "description": "Opponent abbreviation",
+      "source": "`/schedule` → event competitors",
+      "example": "ORL",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_record",
+      "description": "Opponent W-L",
+      "source": "`/schedule` → competitor records",
+      "example": "9-7",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_wins",
+      "description": "Opponent wins",
+      "source": "Parsed from record",
+      "example": "9",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_losses",
+      "description": "Opponent losses",
+      "source": "Parsed from record",
+      "example": "7",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_ties",
+      "description": "Opponent ties",
+      "source": "Parsed from record",
+      "example": "0",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "opponent_win_pct",
+      "description": "Opponent win %",
+      "source": "Calculated",
+      "example": "0.563",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_rank",
+      "description": "Opponent ranking",
+      "source": "`/scoreboard` → curatedRank",
+      "example": "#12",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football"
+      ]
+    },
+    {
+      "name": "opponent_is_ranked",
+      "description": "Boolean if ranked",
+      "source": "Calculated",
+      "example": "True",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football"
+      ]
+    },
+    {
+      "name": "is_ranked_matchup",
+      "description": "Both teams ranked",
+      "source": "Calculated",
+      "example": "False",
+      "category": "️ Opponent Information (Current Game)",
+      "icon": "🏟",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football"
+      ]
+    },
+    {
+      "name": "opponent_ppg",
+      "description": "Opponent PPG",
+      "source": "`/teams/{opp_id}/statistics`",
+      "example": "108.3",
+      "category": "Opponent Statistics",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_papg",
+      "description": "Opponent PAPG",
+      "source": "`/teams/{opp_id}/statistics`",
+      "example": "105.7",
+      "category": "Opponent Statistics",
+      "icon": "📊",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_date",
+      "description": "Full game date",
+      "source": "`/schedule` → event.date",
+      "example": "November 21, 2025",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_date_short",
+      "description": "Short date",
+      "source": "`/schedule` → event.date",
+      "example": "Nov 21",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_day",
+      "description": "Full day name",
+      "source": "`/schedule` → event.date",
+      "example": "Friday",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_day_short",
+      "description": "Short day name",
+      "source": "`/schedule` → event.date",
+      "example": "Fri",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_time",
+      "description": "Game time",
+      "source": "`/schedule` → event.date",
+      "example": "7:00 PM EST",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_time_12h",
+      "description": "12-hour format",
+      "source": "`/schedule` → event.date",
+      "example": "7:00 PM",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_time_24h",
+      "description": "24-hour format",
+      "source": "`/schedule` → event.date",
+      "example": "19:00",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "matchup",
+      "description": "Team matchup",
+      "source": "Calculated",
+      "example": "DET @ ORL",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "vs_at",
+      "description": "vs or @",
+      "source": "Calculated",
+      "example": "@",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_away_text",
+      "description": "Home/Away/Road",
+      "source": "Calculated",
+      "example": "Road",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_home",
+      "description": "Boolean home game",
+      "source": "Calculated",
+      "example": "False",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_away",
+      "description": "Boolean away game",
+      "source": "Calculated",
+      "example": "True",
+      "category": "️ Game Details (Current)",
+      "icon": "🗓",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "venue",
+      "description": "Venue name",
+      "source": "`/schedule` → venue.fullName",
+      "example": "Kia Center",
+      "category": "️ Venue Information",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "venue_city",
+      "description": "Venue city",
+      "source": "`/schedule` → venue.address.city",
+      "example": "Orlando",
+      "category": "️ Venue Information",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "venue_state",
+      "description": "Venue state",
+      "source": "`/schedule` → venue.address.state",
+      "example": "FL",
+      "category": "️ Venue Information",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "venue_full",
+      "description": "Full venue string",
+      "source": "Calculated",
+      "example": "Kia Center, Orlando, FL",
+      "category": "️ Venue Information",
+      "icon": "🏟",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "days_until",
+      "description": "Days until game",
+      "source": "Calculated",
+      "example": "2",
+      "category": "⏰ Time Until Game",
+      "icon": "📝",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "hours_until",
+      "description": "Hours until game",
+      "source": "Calculated",
+      "example": "52",
+      "category": "⏰ Time Until Game",
+      "icon": "📝",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "minutes_until",
+      "description": "Minutes until game",
+      "source": "Calculated",
+      "example": "3120",
+      "category": "⏰ Time Until Game",
+      "icon": "📝",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_status",
+      "description": "Current status",
+      "source": "`/scoreboard` → status.type.name",
+      "example": "STATUS_SCHEDULED",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_final",
+      "description": "Boolean if final",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_overtime",
+      "description": "Boolean if OT",
+      "source": "`/scoreboard` → status",
+      "example": "False",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "overtime_text",
+      "description": "OT description",
+      "source": "Calculated",
+      "example": "OT",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "period",
+      "description": "Current period",
+      "source": "`/scoreboard` → status.period",
+      "example": "3",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "number",
+      "availability": "live_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "period_short",
+      "description": "Short period",
+      "source": "Calculated",
+      "example": "3rd",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "string",
+      "availability": "live_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_clock",
+      "description": "Game clock",
+      "source": "`/scoreboard` → status.displayClock",
+      "example": "5:42",
+      "category": "Game Status",
+      "icon": "🎮",
+      "type": "string",
+      "availability": "live_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "team_score",
+      "description": "Team's score",
+      "source": "`/scoreboard` → competitor.score",
+      "example": "98",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_score",
+      "description": "Opponent's score",
+      "source": "`/scoreboard` → competitor.score",
+      "example": "102",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "score",
+      "description": "Combined score",
+      "source": "Calculated",
+      "example": "98-102",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "score_diff",
+      "description": "Score difference",
+      "source": "Calculated",
+      "example": "-4",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "score_differential",
+      "description": "Absolute diff",
+      "source": "Calculated",
+      "example": "4",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "score_differential_text",
+      "description": "Formatted diff",
+      "source": "Calculated",
+      "example": "by 4 points",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "result",
+      "description": "Win/loss keyword",
+      "source": "Calculated",
+      "example": "win\" or \"loss",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "result_text",
+      "description": "Result verb",
+      "source": "Calculated",
+      "example": "defeated\" or \"lost to",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "result_verb",
+      "description": "Action verb",
+      "source": "Calculated",
+      "example": "beat\" or \"fell to",
+      "category": "Scores & Results",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "attendance",
+      "description": "Attendance count",
+      "source": "`/scoreboard` → attendance",
+      "example": "21381",
+      "category": "Attendance",
+      "icon": "🎯",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "has_attendance",
+      "description": "Boolean",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Attendance",
+      "icon": "🎯",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "broadcast_simple",
+      "description": "All networks (smart)",
+      "source": "`/schedule` → broadcasts",
+      "example": "ESPN, ABC",
+      "category": "Broadcast Information",
+      "icon": "📺",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "broadcast_network",
+      "description": "Primary network",
+      "source": "`/schedule` → broadcasts",
+      "example": "ESPN",
+      "category": "Broadcast Information",
+      "icon": "📺",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "broadcast_national_network",
+      "description": "National network(s)",
+      "source": "`/schedule` → broadcasts (National)",
+      "example": "ESPN, ABC",
+      "category": "Broadcast Information",
+      "icon": "📺",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_national_broadcast",
+      "description": "Boolean flag",
+      "source": "`/schedule` → broadcasts",
+      "example": "true",
+      "category": "Broadcast Information",
+      "icon": "📺",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "spread",
+      "description": "Point spread",
+      "source": "`/scoreboard` → odds.details",
+      "example": "-3.5",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "number",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "spread_odds",
+      "description": "Team spread odds",
+      "source": "`/scoreboard` → odds",
+      "example": "-110",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "number",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_spread_odds",
+      "description": "Opponent spread odds",
+      "source": "`/scoreboard` → odds",
+      "example": "-110",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "number",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "moneyline",
+      "description": "Team moneyline",
+      "source": "`/scoreboard` → odds.moneyLine",
+      "example": "-165",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "number",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_moneyline",
+      "description": "Opponent moneyline",
+      "source": "`/scoreboard` → odds",
+      "example": "+140",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "number",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "over_under",
+      "description": "Total points O/U",
+      "source": "`/scoreboard` → odds.overUnder",
+      "example": "221.5",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "number",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "odds_provider",
+      "description": "Sportsbook name",
+      "source": "`/scoreboard` → odds.provider.name",
+      "example": "ESPN BET",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "string",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "odds_details",
+      "description": "Formatted odds",
+      "source": "Calculated",
+      "example": "DET -3.5",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "string",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "has_spread",
+      "description": "Boolean",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "boolean",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "has_over_under",
+      "description": "Boolean",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "boolean",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "spread_category",
+      "description": "Spread size",
+      "source": "Calculated",
+      "example": "small",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "string",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "spread_category_text",
+      "description": "Spread desc",
+      "source": "Calculated",
+      "example": "narrow spread",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "string",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_favorite",
+      "description": "Team favored",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "boolean",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_underdog",
+      "description": "Team underdog",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "boolean",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "was_favorite_at_open",
+      "description": "Opening line status",
+      "source": "`/scoreboard` → odds.open",
+      "example": "True",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "boolean",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "opponent_was_favorite_at_open",
+      "description": "Opp opening status",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Betting Odds (Same-Day Games ONLY)",
+      "icon": "💰",
+      "type": "boolean",
+      "availability": "same_day_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_opponent",
+      "description": "Next opponent name",
+      "source": "`/schedule` → next event",
+      "example": "LA Clippers",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_opponent_record",
+      "description": "Next opp record",
+      "source": "`/teams/{next_opp_id}`",
+      "example": "4-11",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_date",
+      "description": "Next game date",
+      "source": "`/schedule` → next event.date",
+      "example": "November 25, 2025",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_time",
+      "description": "Next game time",
+      "source": "`/schedule` → next event.date",
+      "example": "7:30 PM EST",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_datetime",
+      "description": "Combined date/time",
+      "source": "Calculated",
+      "example": "November 25 at 7:30 PM",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_venue",
+      "description": "Next venue",
+      "source": "`/schedule` → next event.venue",
+      "example": "Little Caesars Arena",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "next_matchup",
+      "description": "Next matchup",
+      "source": "Calculated",
+      "example": "LAC @ DET",
+      "category": "⏭️ Next Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_opponent",
+      "description": "Last opponent",
+      "source": "`/schedule` → last event",
+      "example": "Miami Heat",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_opponent_record",
+      "description": "Last opp record",
+      "source": "`/teams/{last_opp_id}`",
+      "example": "7-8",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_date",
+      "description": "Last game date",
+      "source": "`/schedule` → last event.date",
+      "example": "November 18, 2025",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_result",
+      "description": "Win/Loss",
+      "source": "Calculated",
+      "example": "Win",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_score",
+      "description": "Score",
+      "source": "`/scoreboard` → scores",
+      "example": "125-124",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_score_abbrev",
+      "description": "Short score",
+      "source": "Calculated",
+      "example": "W 125-124",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_matchup",
+      "description": "Last matchup",
+      "source": "Calculated",
+      "example": "MIA @ DET",
+      "category": "⏮️ Last Game Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_date",
+      "description": "Last meeting date",
+      "source": "`/schedule` history",
+      "example": "October 28, 2025",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_location",
+      "description": "Where played",
+      "source": "Calculated",
+      "example": "Orlando",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_result",
+      "description": "Game result",
+      "source": "Calculated",
+      "example": "Win",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_score",
+      "description": "Final score",
+      "source": "`/scoreboard` historical",
+      "example": "112-103",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_score_abbrev",
+      "description": "Short score",
+      "source": "Calculated",
+      "example": "W 112-103",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_winner",
+      "description": "Winning team",
+      "source": "Calculated",
+      "example": "Detroit Pistons",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_loser",
+      "description": "Losing team",
+      "source": "Calculated",
+      "example": "Orlando Magic",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_days_since",
+      "description": "Days since meeting",
+      "source": "Calculated",
+      "example": "24",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "rematch_season_series",
+      "description": "Series record",
+      "source": "Calculated",
+      "example": "1-0",
+      "category": "Rematch Variables",
+      "icon": "🔄",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "season_series",
+      "description": "Overall series",
+      "source": "Calculated from `/schedule`",
+      "example": "1-0",
+      "category": "Season Series",
+      "icon": "🎯",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "season_series_leader",
+      "description": "Leading team",
+      "source": "Calculated",
+      "example": "Detroit Pistons",
+      "category": "Season Series",
+      "icon": "🎯",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "season_series_team_wins",
+      "description": "Team's series wins",
+      "source": "Calculated",
+      "example": "1",
+      "category": "Season Series",
+      "icon": "🎯",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "season_series_opponent_wins",
+      "description": "Opp's series wins",
+      "source": "Calculated",
+      "example": "0",
+      "category": "Season Series",
+      "icon": "🎯",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_type",
+      "description": "Series format",
+      "source": "`/schedule` → series.type",
+      "example": "best-of-7",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_length",
+      "description": "Games in series",
+      "source": "Calculated",
+      "example": "7",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_round",
+      "description": "Playoff round",
+      "source": "`/schedule` → series.round",
+      "example": "First Round",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_record",
+      "description": "Series score",
+      "source": "Calculated",
+      "example": "3-2",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_team_wins",
+      "description": "Team's series wins",
+      "source": "Calculated",
+      "example": "3",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_opponent_wins",
+      "description": "Opp's series wins",
+      "source": "Calculated",
+      "example": "2",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_leader",
+      "description": "Leading team",
+      "source": "Calculated",
+      "example": "Detroit Pistons",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_leader_abbrev",
+      "description": "Leader abbrev",
+      "source": "Calculated",
+      "example": "DET",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_lead",
+      "description": "Lead description",
+      "source": "Calculated",
+      "example": "DET leads 3-2",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_summary",
+      "description": "Full summary",
+      "source": "Calculated",
+      "example": "First Round - DET leads 3-2",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_game_number",
+      "description": "Game # in series",
+      "source": "Calculated",
+      "example": "6",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_games_played",
+      "description": "Games played",
+      "source": "Calculated",
+      "example": "5",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_games_remaining",
+      "description": "Games left",
+      "source": "Calculated",
+      "example": "2",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "games_to_win_series",
+      "description": "To clinch",
+      "source": "Calculated",
+      "example": "1",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "number",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_series_clinched",
+      "description": "Boolean clinched",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "boolean",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "series_clinch_text",
+      "description": "Clinch scenario",
+      "source": "Calculated",
+      "example": "Win clinches series",
+      "category": "Playoff Series Variables",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_playoff",
+      "description": "Playoff game",
+      "source": "`/schedule` → seasonType",
+      "example": "False",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_preseason",
+      "description": "Preseason game",
+      "source": "`/schedule` → seasonType",
+      "example": "False",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_regular_season",
+      "description": "Regular season",
+      "source": "`/schedule` → seasonType",
+      "example": "True",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_conference_game",
+      "description": "Conf matchup",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_division_game",
+      "description": "Division matchup",
+      "source": "Calculated",
+      "example": "True",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_rivalry",
+      "description": "Rivalry game",
+      "source": "Configured",
+      "example": "False",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_must_win",
+      "description": "Elimination scenario",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_clinch_game",
+      "description": "Can clinch",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "is_elimination_game",
+      "description": "Elimination game",
+      "source": "Calculated",
+      "example": "False",
+      "category": "Game Context Booleans",
+      "icon": "🎮",
+      "type": "boolean",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "season_type",
+      "description": "Season type",
+      "source": "`/schedule` → seasonType",
+      "example": "Regular Season",
+      "category": "Playoff Context",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "season_year",
+      "description": "Season year",
+      "source": "`/schedule` → season",
+      "example": "2025-26",
+      "category": "Playoff Context",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "elimination_text",
+      "description": "Elimination scenario",
+      "source": "Calculated",
+      "example": "Win or go home",
+      "category": "Playoff Context",
+      "icon": "🏆",
+      "type": "string",
+      "availability": "playoff_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_record",
+      "description": "Home record",
+      "source": "`/teams/{id}` → records",
+      "example": "8-0",
+      "category": "Team Records by Situation",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "away_record",
+      "description": "Away record",
+      "source": "`/teams/{id}` → records",
+      "example": "5-2",
+      "category": "Team Records by Situation",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_team_record",
+      "description": "If home today",
+      "source": "Calculated",
+      "example": "8-0",
+      "category": "Team Records by Situation",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "away_team_record",
+      "description": "If away today",
+      "source": "Calculated",
+      "example": "5-2",
+      "category": "Team Records by Situation",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_win_pct",
+      "description": "Home win %",
+      "source": "Calculated",
+      "example": "1.000",
+      "category": "Team Records by Situation",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "away_win_pct",
+      "description": "Away win %",
+      "source": "Calculated",
+      "example": "0.714",
+      "category": "Team Records by Situation",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_summary",
+      "description": "Auto-generated summary",
+      "source": "Calculated",
+      "example": "DET @ ORL - Nov 21, 7:00 PM EST",
+      "category": "Summary Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "game_summary_text",
+      "description": "Rich summary",
+      "source": "Calculated",
+      "example": "Pistons play Magic tonight",
+      "category": "Summary Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "today_score_abbrev",
+      "description": "Today's score short",
+      "source": "Calculated",
+      "example": "W 125-124",
+      "category": "Summary Variables",
+      "icon": "📝",
+      "type": "string",
+      "availability": "final_only",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_team",
+      "description": "Home team name",
+      "source": "`/schedule` → competitors",
+      "example": "Orlando Magic",
+      "category": "Home/Away Team Context",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "away_team",
+      "description": "Away team name",
+      "source": "`/schedule` → competitors",
+      "example": "Detroit Pistons",
+      "category": "Home/Away Team Context",
+      "icon": "🏠",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "head_coach",
+      "description": "Team head coach name",
+      "source": "`/roster` → coach",
+      "example": "J.B. Bickerstaff",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "basketball_top_scorer_name",
+      "description": "Top scorer name",
+      "source": "`/roster` → athletes stats",
+      "example": "Cade Cunningham",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_scorer_position",
+      "description": "Top scorer position",
+      "source": "`/roster` → athletes",
+      "example": "PG",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_scorer_ppg",
+      "description": "Points per game",
+      "source": "`/roster` → stats",
+      "example": "24.1",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_scorer_total",
+      "description": "Total points",
+      "source": "`/roster` → stats",
+      "example": "410",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_rebounder_name",
+      "description": "Top rebounder name",
+      "source": "`/roster` → athletes stats",
+      "example": "Jalen Duren",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_rebounder_rpg",
+      "description": "Rebounds per game",
+      "source": "`/roster` → stats",
+      "example": "11.3",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_rebounder_total",
+      "description": "Total rebounds",
+      "source": "`/roster` → stats",
+      "example": "169",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_assist_name",
+      "description": "Top assist leader name",
+      "source": "`/roster` → athletes stats",
+      "example": "Cade Cunningham",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_assist_apg",
+      "description": "Assists per game",
+      "source": "`/roster` → stats",
+      "example": "9.4",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "basketball_top_assist_total",
+      "description": "Total assists",
+      "source": "`/roster` → stats",
+      "example": "151",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "football_quarterback_name",
+      "description": "Starting QB name",
+      "source": "`/roster` → athletes stats",
+      "example": "Jared Goff",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_quarterback_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "QB",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_quarterback_passing_yards",
+      "description": "Total passing yards",
+      "source": "`/roster` → stats",
+      "example": "3265",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_quarterback_passing_ypg",
+      "description": "Passing yards per game",
+      "source": "`/roster` → stats",
+      "example": "272.1",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_rusher_name",
+      "description": "Top rusher name",
+      "source": "`/roster` → athletes stats",
+      "example": "David Montgomery",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_rusher_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "RB",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_rusher_yards",
+      "description": "Total rushing yards",
+      "source": "`/roster` → stats",
+      "example": "775",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_rusher_ypg",
+      "description": "Rushing yards per game",
+      "source": "`/roster` → stats",
+      "example": "64.6",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_receiver_name",
+      "description": "Top receiver name",
+      "source": "`/roster` → athletes stats",
+      "example": "Amon-Ra St. Brown",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_receiver_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "WR",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_receiver_yards",
+      "description": "Total receiving yards",
+      "source": "`/roster` → stats",
+      "example": "882",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "football_top_receiver_ypg",
+      "description": "Receiving yards per game",
+      "source": "`/roster` → stats",
+      "example": "73.5",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "hockey_top_scorer_name",
+      "description": "Top goal scorer name",
+      "source": "`/roster` → athletes stats",
+      "example": "Dylan Larkin",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_scorer_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "C",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_scorer_goals",
+      "description": "Total goals",
+      "source": "`/roster` → stats",
+      "example": "23",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_scorer_gpg",
+      "description": "Goals per game",
+      "source": "`/roster` → stats",
+      "example": "0.51",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_playmaker_name",
+      "description": "Top assist leader name",
+      "source": "`/roster` → athletes stats",
+      "example": "Dylan Larkin",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_playmaker_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "C",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_playmaker_assists",
+      "description": "Total assists",
+      "source": "`/roster` → stats",
+      "example": "31",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "hockey_top_playmaker_apg",
+      "description": "Assists per game",
+      "source": "`/roster` → stats",
+      "example": "0.69",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "hockey"
+      ]
+    },
+    {
+      "name": "baseball_top_hitter_name",
+      "description": "Top batting average name",
+      "source": "`/roster` → athletes stats",
+      "example": "Riley Greene",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_top_hitter_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "OF",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_top_hitter_avg",
+      "description": "Batting average",
+      "source": "`/roster` → stats",
+      "example": ".285",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_top_hitter_hits",
+      "description": "Total hits",
+      "source": "`/roster` → stats",
+      "example": "142",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_power_hitter_name",
+      "description": "Home run leader name",
+      "source": "`/roster` → athletes stats",
+      "example": "Kerry Carpenter",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_power_hitter_position",
+      "description": "Position",
+      "source": "`/roster` → athletes",
+      "example": "OF",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_power_hitter_hrs",
+      "description": "Total home runs",
+      "source": "`/roster` → stats",
+      "example": "18",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "baseball_power_hitter_hr_rate",
+      "description": "HR per at bat rate",
+      "source": "`/roster` → stats",
+      "example": "0.053",
+      "category": "Rosters & Players",
+      "icon": "👥",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "baseball"
+      ]
+    },
+    {
+      "name": "last_game_top_scorer_name",
+      "description": "Top scorer in last game",
+      "source": "`/scoreboard` → boxscore",
+      "example": "Cade Cunningham",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "last_game_top_scorer_points",
+      "description": "Points scored",
+      "source": "`/scoreboard` → boxscore",
+      "example": "35",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "last_game_top_rebounder_name",
+      "description": "Top rebounder in last game",
+      "source": "`/scoreboard` → boxscore",
+      "example": "Jalen Duren",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "last_game_top_rebounder_rebounds",
+      "description": "Rebounds",
+      "source": "`/scoreboard` → boxscore",
+      "example": "14",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "last_game_top_assist_name",
+      "description": "Top assist leader in last game",
+      "source": "`/scoreboard` → boxscore",
+      "example": "Cade Cunningham",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "last_game_top_assist_assists",
+      "description": "Assists",
+      "source": "`/scoreboard` → boxscore",
+      "example": "12",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "basketball"
+      ]
+    },
+    {
+      "name": "last_game_passing_leader_name",
+      "description": "Passing leader in last game",
+      "source": "`/scoreboard` → boxscore",
+      "example": "Jared Goff",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "last_game_passing_leader_yards",
+      "description": "Passing yards",
+      "source": "`/scoreboard` → boxscore",
+      "example": "412",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "last_game_rushing_leader_name",
+      "description": "Rushing leader in last game",
+      "source": "`/scoreboard` → boxscore",
+      "example": "David Montgomery",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "last_game_rushing_leader_yards",
+      "description": "Rushing yards",
+      "source": "`/scoreboard` → boxscore",
+      "example": "116",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "last_game_receiving_leader_name",
+      "description": "Receiving leader in last game",
+      "source": "`/scoreboard` → boxscore",
+      "example": "Amon-Ra St. Brown",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    },
+    {
+      "name": "last_game_receiving_leader_yards",
+      "description": "Receiving yards",
+      "source": "`/scoreboard` → boxscore",
+      "example": "161",
+      "category": "Last Game Player Stats",
+      "icon": "⏮️",
+      "type": "number",
+      "availability": "always",
+      "sports": [
+        "football"
+      ]
+    }
+  ]
+}

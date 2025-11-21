@@ -738,6 +738,20 @@ def delete_condition_preset(preset_id):
     conn.close()
     return jsonify({'success': True})
 
+@app.route('/api/variables')
+def get_variables():
+    """Serve variable schema for UI and validation"""
+    from pathlib import Path
+    variables_file = Path(__file__).parent / 'data' / 'variables.json'
+
+    try:
+        with open(variables_file, 'r', encoding='utf-8') as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({'error': 'Variables file not found'}), 404
+    except json.JSONDecodeError as e:
+        return jsonify({'error': f'Invalid JSON: {str(e)}'}), 500
+
 @app.route('/generate', methods=['POST'])
 def generate_epg():
     """Generate EPG file"""
@@ -1853,6 +1867,15 @@ def _create_filler_chunks(start_dt: datetime, end_dt: datetime, max_hours: int,
             else:
                 score_abbrev = f"{our_abbrev} @ {opp_abbrev}"
 
+        # Extract player leaders from last game (game-specific stats)
+        last_game_leaders = {}
+        if 'competitions' in last_game_event and last_game_event['competitions']:
+            last_game_leaders = _extract_player_leaders(
+                last_game_event['competitions'][0],
+                our_team_id,
+                api_path
+            )
+
         context['last_game'] = {
             'opponent': opponent.get('name', ''),
             'opponent_record': last_opponent_record,
@@ -1860,7 +1883,8 @@ def _create_filler_chunks(start_dt: datetime, end_dt: datetime, max_hours: int,
             'matchup': matchup,
             'result': result,
             'score': f"{team_score}-{opp_score}",
-            'score_abbrev': score_abbrev
+            'score_abbrev': score_abbrev,
+            **last_game_leaders  # Merge in player leader stats
         }
         # Store raw event for today_game logic
         context['_last_game_event'] = last_game_event
@@ -1915,6 +1939,509 @@ def _create_filler_chunks(start_dt: datetime, end_dt: datetime, max_hours: int,
         current_start = current_end
 
     return chunks
+
+
+def _calculate_home_away_streaks(our_team_id: str, schedule_data: dict) -> dict:
+    """
+    Calculate current home and away win/loss streaks, plus last 5/10 records from schedule data.
+
+    Args:
+        our_team_id: Our team's ESPN ID
+        schedule_data: Schedule data from ESPN API
+
+    Returns:
+        Dict with home_streak, away_streak, last_5_record, last_10_record, and recent_form strings
+    """
+    if not schedule_data or 'events' not in schedule_data:
+        return {
+            'home_streak': '',
+            'away_streak': '',
+            'last_5_record': '',
+            'last_10_record': '',
+            'recent_form': ''
+        }
+
+    # Collect completed games by location and overall
+    home_games = []
+    away_games = []
+    all_games = []
+
+    for event in schedule_data['events']:
+        try:
+            comp = event.get('competitions', [{}])[0]
+            status = comp.get('status', {}).get('type', {})
+
+            # Only completed games
+            if not status.get('completed', False):
+                continue
+
+            # Find our team in competitors
+            competitors = comp.get('competitors', [])
+            our_team = None
+            for c in competitors:
+                if str(c.get('team', {}).get('id')) == str(our_team_id):
+                    our_team = c
+                    break
+
+            if not our_team:
+                continue
+
+            # Categorize by home/away
+            home_away = our_team.get('homeAway', '').lower()
+            won = our_team.get('winner', False)
+            game_date = event.get('date', '')
+
+            game_data = {'date': game_date, 'won': won}
+
+            # Add to overall games
+            all_games.append(game_data)
+
+            # Add to home/away specific lists
+            if home_away == 'home':
+                home_games.append(game_data)
+            elif home_away == 'away':
+                away_games.append(game_data)
+
+        except (KeyError, IndexError, TypeError):
+            continue
+
+    # Helper to calculate streak from game list
+    def calc_streak(games, location_text):
+        if not games:
+            return ""
+
+        # Sort by date (most recent first)
+        games.sort(key=lambda x: x['date'], reverse=True)
+
+        # Calculate current streak
+        is_winning = games[0]['won']
+        count = 0
+
+        for game in games:
+            if game['won'] == is_winning:
+                count += 1
+            else:
+                break
+
+        # Only show significant streaks (3+ games)
+        if count < 3:
+            return ""
+
+        if is_winning:
+            return f"{count}-0 {location_text}"
+        else:
+            return f"Lost last {count} {location_text}"
+
+    # Calculate last 5 and last 10 records
+    # Sort all games by date (most recent first)
+    all_games.sort(key=lambda x: x['date'], reverse=True)
+
+    # Last 5 record
+    last_5 = all_games[:5]
+    if len(last_5) >= 5:
+        wins_5 = sum(1 for g in last_5 if g['won'])
+        losses_5 = 5 - wins_5
+        last_5_record = f"{wins_5}-{losses_5}"
+    else:
+        last_5_record = ''
+
+    # Last 10 record
+    last_10 = all_games[:10]
+    if len(last_10) >= 10:
+        wins_10 = sum(1 for g in last_10 if g['won'])
+        losses_10 = 10 - wins_10
+        last_10_record = f"{wins_10}-{losses_10}"
+    else:
+        last_10_record = ''
+
+    # Recent form (last 5 as W/L string)
+    if len(last_5) >= 5:
+        recent_form = ''.join('W' if g['won'] else 'L' for g in reversed(last_5))
+    else:
+        recent_form = ''
+
+    return {
+        'home_streak': calc_streak(home_games, "at home"),
+        'away_streak': calc_streak(away_games, "on road"),
+        'last_5_record': last_5_record,
+        'last_10_record': last_10_record,
+        'recent_form': recent_form
+    }
+
+
+def _get_head_coach(team_id: str, league: str) -> str:
+    """
+    Fetch head coach name from roster API.
+
+    Args:
+        team_id: Team's ESPN ID
+        league: League API path (e.g., 'basketball/nba')
+
+    Returns:
+        Coach's full name or empty string if not found
+    """
+    try:
+        roster_data = espn._fetch_from_api(f'/sports/{league}/teams/{team_id}/roster')
+
+        if roster_data and 'coach' in roster_data and roster_data['coach']:
+            coach = roster_data['coach'][0]
+            first = coach.get('firstName', '')
+            last = coach.get('lastName', '')
+            return f"{first} {last}".strip()
+    except Exception as e:
+        print(f"Error fetching coach for team {team_id}: {e}")
+
+    return ''
+
+
+def _get_games_played(competitor: dict) -> int:
+    """
+    Get number of games played from competitor's record.
+
+    Args:
+        competitor: Competitor object from ESPN API
+
+    Returns:
+        Number of games played
+    """
+    if 'records' not in competitor:
+        return 0
+
+    for record in competitor['records']:
+        if record.get('name') == 'overall':
+            summary = record.get('summary', '0-0')
+            try:
+                parts = summary.replace('-', ' ').split()
+                return sum(int(p) for p in parts if p.isdigit())
+            except (ValueError, AttributeError):
+                return 0
+
+    return 0
+
+
+def _is_season_stats(leader_category: dict, game_status: str) -> bool:
+    """
+    Determine if leader data represents season stats or single-game stats.
+
+    Args:
+        leader_category: Leader category dict from ESPN API
+        game_status: Game status (STATUS_SCHEDULED, STATUS_FINAL, etc.)
+
+    Returns:
+        True = Season statistics (use for upcoming games)
+        False = Game statistics (use for completed games only)
+    """
+    category_name = leader_category.get('name', '')
+
+    # NBA: Category name changes
+    if 'PerGame' in category_name:
+        return True  # pointsPerGame = season average
+
+    # NFL: Leaders only present for scheduled games
+    if 'Leader' in category_name:
+        return True  # passingLeader = season totals
+
+    # If game is completed, assume game stats
+    if game_status in ['STATUS_FINAL', 'STATUS_FULL_TIME']:
+        # These are game-specific stats (who led in THIS game)
+        return False
+
+    # Default: scheduled/in-progress games have season stats
+    return True
+
+
+def _map_basketball_season_leaders(leaders_data: list, games_played: int) -> dict:
+    """
+    Map NBA/NCAAB season stats (API provides per-game, calculate totals).
+
+    Args:
+        leaders_data: List of leader categories from API
+        games_played: Number of games played this season
+
+    Returns:
+        Dict with basketball_* prefixed variables
+    """
+    result = {}
+
+    for category in leaders_data:
+        if not category.get('leaders'):
+            continue
+
+        player = category['leaders'][0]
+        athlete = player['athlete']
+        per_game = player['value']
+        total = per_game * games_played if games_played > 0 else 0
+        position = athlete.get('position', {}).get('abbreviation', '')
+
+        if category['name'] == 'pointsPerGame':
+            result['basketball_top_scorer_name'] = athlete['displayName']
+            result['basketball_top_scorer_position'] = position
+            result['basketball_top_scorer_ppg'] = f"{per_game:.1f}"
+            result['basketball_top_scorer_total'] = f"{total:.0f}"
+
+        elif category['name'] == 'reboundsPerGame':
+            result['basketball_top_rebounder_name'] = athlete['displayName']
+            result['basketball_top_rebounder_rpg'] = f"{per_game:.1f}"
+            result['basketball_top_rebounder_total'] = f"{total:.0f}"
+
+        elif category['name'] == 'assistsPerGame':
+            result['basketball_top_assist_name'] = athlete['displayName']
+            result['basketball_top_assist_apg'] = f"{per_game:.1f}"
+            result['basketball_top_assist_total'] = f"{total:.0f}"
+
+    return result
+
+
+def _map_basketball_game_leaders(leaders_data: list) -> dict:
+    """
+    Map NBA/NCAAB game stats (actual performance in that game).
+
+    Args:
+        leaders_data: List of leader categories from API
+
+    Returns:
+        Dict with last_game_* prefixed variables
+    """
+    result = {}
+
+    for category in leaders_data:
+        if not category.get('leaders'):
+            continue
+
+        player = category['leaders'][0]
+        athlete = player['athlete']
+        game_stat = player['value']
+
+        if category['name'] == 'points':
+            result['last_game_top_scorer_name'] = athlete['displayName']
+            result['last_game_top_scorer_points'] = f"{game_stat:.0f}"
+
+        elif category['name'] == 'rebounds':
+            result['last_game_top_rebounder_name'] = athlete['displayName']
+            result['last_game_top_rebounder_rebounds'] = f"{game_stat:.0f}"
+
+        elif category['name'] == 'assists':
+            result['last_game_top_assist_name'] = athlete['displayName']
+            result['last_game_top_assist_assists'] = f"{game_stat:.0f}"
+
+    return result
+
+
+def _map_football_season_leaders(leaders_data: list, games_played: int) -> dict:
+    """
+    Map NFL/NCAAF season stats (API provides totals, calculate per-game).
+
+    Args:
+        leaders_data: List of leader categories from API
+        games_played: Number of games played this season
+
+    Returns:
+        Dict with football_* prefixed variables
+    """
+    result = {}
+
+    for category in leaders_data:
+        if not category.get('leaders'):
+            continue
+
+        player = category['leaders'][0]
+        athlete = player['athlete']
+        total_value = player['value']
+        per_game_value = total_value / games_played if games_played > 0 else 0
+        position = athlete.get('position', {}).get('abbreviation', '')
+
+        if category['name'] == 'passingLeader':
+            result['football_quarterback_name'] = athlete['displayName']
+            result['football_quarterback_position'] = position
+            result['football_quarterback_passing_yards'] = f"{total_value:.0f}"
+            result['football_quarterback_passing_ypg'] = f"{per_game_value:.1f}"
+
+        elif category['name'] == 'rushingLeader':
+            result['football_top_rusher_name'] = athlete['displayName']
+            result['football_top_rusher_position'] = position
+            result['football_top_rusher_yards'] = f"{total_value:.0f}"
+            result['football_top_rusher_ypg'] = f"{per_game_value:.1f}"
+
+        elif category['name'] == 'receivingLeader':
+            result['football_top_receiver_name'] = athlete['displayName']
+            result['football_top_receiver_position'] = position
+            result['football_top_receiver_yards'] = f"{total_value:.0f}"
+            result['football_top_receiver_ypg'] = f"{per_game_value:.1f}"
+
+    return result
+
+
+def _map_football_game_leaders(leaders_data: list) -> dict:
+    """
+    Map NFL/NCAAF game stats (actual performance in that game).
+
+    Args:
+        leaders_data: List of leader categories from API
+
+    Returns:
+        Dict with last_game_* prefixed variables
+    """
+    result = {}
+
+    for category in leaders_data:
+        if not category.get('leaders'):
+            continue
+
+        player = category['leaders'][0]
+        athlete = player['athlete']
+        stat_value = player['value']
+
+        if category['name'] in ['passingLeader', 'passingYards']:
+            result['last_game_passing_leader_name'] = athlete['displayName']
+            result['last_game_passing_leader_yards'] = f"{stat_value:.0f}"
+
+        elif category['name'] in ['rushingLeader', 'rushingYards']:
+            result['last_game_rushing_leader_name'] = athlete['displayName']
+            result['last_game_rushing_leader_yards'] = f"{stat_value:.0f}"
+
+        elif category['name'] in ['receivingLeader', 'receivingYards']:
+            result['last_game_receiving_leader_name'] = athlete['displayName']
+            result['last_game_receiving_leader_yards'] = f"{stat_value:.0f}"
+
+    return result
+
+
+def _map_hockey_season_leaders(leaders_data: list, games_played: int) -> dict:
+    """
+    Map NHL season stats (API provides totals, calculate per-game).
+
+    Args:
+        leaders_data: List of leader categories from API
+        games_played: Number of games played this season
+
+    Returns:
+        Dict with hockey_* prefixed variables
+    """
+    result = {}
+
+    for category in leaders_data:
+        if not category.get('leaders'):
+            continue
+
+        player = category['leaders'][0]
+        athlete = player['athlete']
+        total_value = player['value']
+        per_game_value = total_value / games_played if games_played > 0 else 0
+        position = athlete.get('position', {}).get('abbreviation', '')
+
+        if category['name'] in ['goals', 'goalsStat']:
+            result['hockey_top_scorer_name'] = athlete['displayName']
+            result['hockey_top_scorer_position'] = position
+            result['hockey_top_scorer_goals'] = f"{total_value:.0f}"
+            result['hockey_top_scorer_gpg'] = f"{per_game_value:.1f}"
+
+        elif category['name'] in ['assists', 'assistsStat']:
+            result['hockey_top_playmaker_name'] = athlete['displayName']
+            result['hockey_top_playmaker_position'] = position
+            result['hockey_top_playmaker_assists'] = f"{total_value:.0f}"
+            result['hockey_top_playmaker_apg'] = f"{per_game_value:.1f}"
+
+    return result
+
+
+def _map_baseball_leaders(leaders_data: list, games_played: int) -> dict:
+    """
+    Map MLB season stats (various stat types).
+
+    Args:
+        leaders_data: List of leader categories from API
+        games_played: Number of games played this season
+
+    Returns:
+        Dict with baseball_* prefixed variables
+    """
+    result = {}
+
+    for category in leaders_data:
+        if not category.get('leaders'):
+            continue
+
+        player = category['leaders'][0]
+        athlete = player['athlete']
+        position = athlete.get('position', {}).get('abbreviation', '')
+
+        if category['name'] == 'battingAverage':
+            result['baseball_top_hitter_name'] = athlete['displayName']
+            result['baseball_top_hitter_position'] = position
+            result['baseball_top_hitter_avg'] = player['displayValue']
+            result['baseball_top_hitter_hits'] = ''  # May not be in leader data
+
+        elif category['name'] == 'homeRuns':
+            total_hrs = player['value']
+            hr_rate = total_hrs / games_played if games_played > 0 else 0
+            result['baseball_power_hitter_name'] = athlete['displayName']
+            result['baseball_power_hitter_position'] = position
+            result['baseball_power_hitter_hrs'] = f"{total_hrs:.0f}"
+            result['baseball_power_hitter_hr_rate'] = f"{hr_rate:.2f}"
+
+    return result
+
+
+def _extract_player_leaders(competition: dict, team_id: str, league: str) -> dict:
+    """
+    Extract player leaders from competition data and calculate totals/averages.
+    Automatically detects if data is season stats or game stats.
+
+    Args:
+        competition: Competition object from ESPN scoreboard API
+        team_id: Our team's ESPN ID
+        league: League API path (e.g., 'basketball/nba')
+
+    Returns:
+        Dict with sport-specific leader variables (prefixed by sport)
+    """
+    # Find our team's competitor
+    competitor = None
+    for comp in competition.get('competitors', []):
+        if str(comp['team']['id']) == str(team_id):
+            competitor = comp
+            break
+
+    if not competitor or 'leaders' not in competitor:
+        return {}
+
+    leaders_data = competitor['leaders']
+    if not leaders_data:
+        return {}
+
+    # Determine game status
+    game_status = competition.get('status', {}).get('type', {}).get('name', '')
+
+    # Determine if this is season or game stats
+    is_season = _is_season_stats(leaders_data[0], game_status)
+
+    # Get games played for calculations
+    games_played = _get_games_played(competitor)
+
+    # Map based on sport and data type
+    if 'basketball' in league:
+        if is_season:
+            return _map_basketball_season_leaders(leaders_data, games_played)
+        else:
+            return _map_basketball_game_leaders(leaders_data)
+
+    elif 'football' in league:
+        if is_season:
+            return _map_football_season_leaders(leaders_data, games_played)
+        else:
+            return _map_football_game_leaders(leaders_data)
+
+    elif 'hockey' in league:
+        if is_season:
+            return _map_hockey_season_leaders(leaders_data, games_played)
+        else:
+            # Could add game leaders for hockey if needed
+            return {}
+
+    elif 'baseball' in league:
+        return _map_baseball_leaders(leaders_data, games_played)
+
+    return {}
 
 
 def _calculate_h2h(our_team_id: str, opponent_id: str, schedule_data: dict) -> dict:
@@ -2098,6 +2625,24 @@ def _process_event(event: dict, team: dict, team_stats: dict = None, opponent_st
         if opponent_id:
             h2h = _calculate_h2h(our_team_id, opponent_id, schedule_data)
 
+        # Calculate home/away streaks
+        streaks = _calculate_home_away_streaks(our_team_id, schedule_data)
+    else:
+        streaks = {'home_streak': '', 'away_streak': ''}
+
+    # Get head coach
+    api_path = team.get('api_path', '')
+    head_coach = _get_head_coach(our_team_id, api_path) if our_team_id and api_path else ''
+
+    # Extract player leaders (season stats for upcoming games)
+    player_leaders = {}
+    if 'competitions' in event and event['competitions']:
+        player_leaders = _extract_player_leaders(
+            event['competitions'][0],
+            our_team_id,
+            api_path
+        )
+
     # Build context for template resolution
     context = {
         'game': event,
@@ -2105,6 +2650,9 @@ def _process_event(event: dict, team: dict, team_stats: dict = None, opponent_st
         'team_stats': team_stats or {},
         'opponent_stats': opponent_stats or {},
         'h2h': h2h,
+        'streaks': streaks,
+        'head_coach': head_coach,
+        'player_leaders': player_leaders,
         'epg_timezone': epg_timezone
     }
 
