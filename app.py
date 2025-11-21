@@ -24,6 +24,7 @@ template_engine = TemplateEngine()
 # Scheduler thread
 scheduler_thread = None
 scheduler_running = False
+last_run_time = None
 
 # Ensure database exists
 if not os.path.exists('teamarr.db'):
@@ -162,7 +163,7 @@ def run_scheduled_generation():
 
 def scheduler_loop():
     """Background thread that runs the scheduler"""
-    global scheduler_running
+    global scheduler_running, last_run_time
 
     print("🚀 EPG Auto-Generation Scheduler started")
 
@@ -187,29 +188,50 @@ def scheduler_loop():
             except:
                 hour, minute = 0, 0
 
-            # Check if it's time to run
+            # Check if it's time to run based on frequency and last run time
             should_run = False
 
             if frequency == 'hourly':
-                # Run at the start of every hour
-                if now.minute == 0:
+                # Run once per hour (at any point in the hour we haven't run yet)
+                if last_run_time is None:
+                    # Never run before, run now
                     should_run = True
-                    time.sleep(60)  # Sleep for a minute to avoid duplicate runs
+                else:
+                    # Check if we're in a different hour than last run
+                    last_hour = last_run_time.replace(minute=0, second=0, microsecond=0)
+                    current_hour = now.replace(minute=0, second=0, microsecond=0)
+                    if current_hour > last_hour:
+                        should_run = True
 
             elif frequency == 'daily':
                 # Run once per day at specified time
-                if now.hour == hour and now.minute == minute:
-                    should_run = True
-                    time.sleep(60)  # Sleep for a minute to avoid duplicate runs
+                if last_run_time is None:
+                    # Never run before, check if we're past the scheduled time today
+                    if now.hour > hour or (now.hour == hour and now.minute >= minute):
+                        should_run = True
+                else:
+                    # Check if we're in a different day and past the scheduled time
+                    if now.date() > last_run_time.date():
+                        if now.hour > hour or (now.hour == hour and now.minute >= minute):
+                            should_run = True
 
             elif frequency == 'weekly':
                 # Run once per week on Monday at specified time
-                if now.weekday() == 0 and now.hour == hour and now.minute == minute:
-                    should_run = True
-                    time.sleep(60)  # Sleep for a minute to avoid duplicate runs
+                if last_run_time is None:
+                    # Never run before, check if today is Monday and past scheduled time
+                    if now.weekday() == 0 and (now.hour > hour or (now.hour == hour and now.minute >= minute)):
+                        should_run = True
+                else:
+                    # Check if it's Monday, we're past scheduled time, and we haven't run this week
+                    if now.weekday() == 0 and (now.hour > hour or (now.hour == hour and now.minute >= minute)):
+                        # Check if last run was in a previous week
+                        days_since_last_run = (now.date() - last_run_time.date()).days
+                        if days_since_last_run >= 7:
+                            should_run = True
 
             if should_run:
                 run_scheduled_generation()
+                last_run_time = now
 
             time.sleep(30)  # Check every 30 seconds
 
