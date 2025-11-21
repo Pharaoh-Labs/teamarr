@@ -70,7 +70,19 @@ def run_scheduled_generation():
             conn = get_connection()
 
             try:
-                teams_list = [dict(t) for t in teams]
+                # Convert teams to dict and parse JSON fields
+                teams_list = []
+                for t in teams:
+                    team_dict = dict(t)
+                    # Parse JSON fields
+                    if team_dict.get('flags') and isinstance(team_dict['flags'], str):
+                        team_dict['flags'] = json.loads(team_dict['flags'])
+                    if team_dict.get('categories') and isinstance(team_dict['categories'], str):
+                        team_dict['categories'] = json.loads(team_dict['categories'])
+                    if team_dict.get('description_options') and isinstance(team_dict['description_options'], str):
+                        team_dict['description_options'] = json.loads(team_dict['description_options'])
+                    teams_list.append(team_dict)
+
                 all_events = {}
                 api_calls = 0
                 days_ahead = settings.get('epg_days_ahead', 14)
