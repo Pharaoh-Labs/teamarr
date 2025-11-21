@@ -99,10 +99,10 @@ CREATE TABLE IF NOT EXISTS teams (
         }
     ]',
 
-    -- Schedule Filler: Between Games
-    between_games_enabled BOOLEAN DEFAULT 1,
-    between_games_title TEXT DEFAULT '{team_name} Programming',
-    between_games_description TEXT DEFAULT 'Next game: {next_game_date} at {next_game_time} vs {next_opponent}',
+    -- Schedule Filler: Idle Days (Between Games / No Game Days)
+    idle_enabled BOOLEAN DEFAULT 1,
+    idle_title TEXT DEFAULT '{team_name} Programming',
+    idle_description TEXT DEFAULT 'Next game: {next_date} at {next_time} vs {next_opponent}',
 
     -- Simplified Pregame/Postgame Templates (alternative to complex JSON periods)
     pregame_title TEXT DEFAULT 'Pregame Coverage',

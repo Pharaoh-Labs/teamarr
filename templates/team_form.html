@@ -673,17 +673,17 @@
                         <h4 style="margin: 1.5rem 0 0.5rem 0;">Idle Day Content</h4>
                         <div class="form-group">
                             <label>
-                                <input type="checkbox" name="no_game_enabled" id="no_game_enabled" {% if not team or team.no_game_enabled %}checked{% endif %}>
+                                <input type="checkbox" name="idle_enabled" id="idle_enabled" {% if not team or team.idle_enabled %}checked{% endif %}>
                                 Enable Idle Day EPG Entries
                             </label>
                         </div>
                         <div class="form-group">
-                            <label for="no_game_title">Idle Day Title</label>
-                            <input type="text" name="no_game_title" id="no_game_title" value="{{ team.no_game_title if team else 'No Game Today' }}" class="template-field">
+                            <label for="idle_title">Idle Day Title</label>
+                            <input type="text" name="idle_title" id="idle_title" value="{{ team.idle_title if team else '{team_name} Programming' }}" class="template-field">
                         </div>
                         <div class="form-group">
-                            <label for="no_game_description">Idle Day Description</label>
-                            <input type="text" name="no_game_description" id="no_game_description" value="{{ team.no_game_description if team else '{team_name} does not play today. Next game: {next_game_opponent} on {next_game_date}' }}" class="template-field">
+                            <label for="idle_description">Idle Day Description</label>
+                            <input type="text" name="idle_description" id="idle_description" value="{{ team.idle_description if team else 'Next game: {next_date} at {next_time} vs {next_opponent}' }}" class="template-field">
                         </div>
                     </fieldset>
                 </div>
@@ -780,10 +780,10 @@
                     <input type="checkbox" value="postgame_description" checked> Postgame Description
                 </label>
                 <label class="field-checkbox-label">
-                    <input type="checkbox" value="between_games_title" checked> Between Games Title
+                    <input type="checkbox" value="idle_title" checked> Idle Day Title
                 </label>
                 <label class="field-checkbox-label">
-                    <input type="checkbox" value="between_games_description" checked> Between Games Description
+                    <input type="checkbox" value="idle_description" checked> Idle Day Description
                 </label>
                 <label class="field-checkbox-label">
                     <input type="checkbox" value="include_new_tag" checked> New Tag
@@ -933,8 +933,8 @@ function updatePreviews() {
     const pregameDesc = document.getElementById('pregame_description')?.value || '';
     const postgameTitle = document.getElementById('postgame_title')?.value || '';
     const postgameDesc = document.getElementById('postgame_description')?.value || '';
-    const idleTitle = document.getElementById('no_game_title')?.value || '';
-    const idleDesc = document.getElementById('no_game_description')?.value || '';
+    const idleTitle = document.getElementById('idle_title')?.value || '';
+    const idleDesc = document.getElementById('idle_description')?.value || '';
 
     // Update main previews
     document.getElementById('sidebar-preview-title').textContent = replaceVariables(title) || 'Title';

@@ -509,7 +509,7 @@ def edit_team(team_id):
                 no_game_enabled = ?, no_game_title = ?, no_game_description = ?, no_game_duration = ?,
                 pregame_enabled = ?, pregame_periods = ?, pregame_title = ?, pregame_description = ?,
                 postgame_enabled = ?, postgame_periods = ?, postgame_title = ?, postgame_description = ?,
-                between_games_enabled = ?, between_games_title = ?, between_games_description = ?,
+                idle_enabled = ?, idle_title = ?, idle_description = ?,
                 enable_records = ?, enable_streaks = ?, enable_head_to_head = ?,
                 enable_standings = ?, enable_statistics = ?, enable_players = ?,
                 midnight_crossover_mode = ?, max_program_hours = ?
@@ -537,9 +537,9 @@ def edit_team(team_id):
             data.get('postgame_periods', '[{"start_hours_after": 0, "end_hours_after": 3, "title": "Game Recap", "description": "{team_name} {result_text} {final_score}. Final record: {final_record}"}, {"start_hours_after": 3, "end_hours_after": 12, "title": "Extended Highlights", "description": "Highlights: {team_name} {result_text} {final_score} vs {opponent}"}, {"start_hours_after": 12, "end_hours_after": 24, "title": "Full Game Replay", "description": "Replay: {team_name} vs {opponent} - Final Score: {final_score}"}]'),
             data.get('postgame_title', 'Postgame Recap'),
             data.get('postgame_description', '{team_name} {result_text} {opponent} - Final: {final_score}'),
-            1 if data.get('between_games_enabled') == 'on' else 0,
-            data.get('between_games_title', '{team_name} Programming'),
-            data.get('between_games_description', 'Next game: {next_game_date} at {next_game_time} vs {next_opponent}'),
+            1 if data.get('idle_enabled') == 'on' else 0,
+            data.get('idle_title', '{team_name} Programming'),
+            data.get('idle_description', 'Next game: {next_date} at {next_time} vs {next_opponent}'),
             1 if data.get('enable_records') == 'on' else 0,
             1 if data.get('enable_streaks') == 'on' else 0,
             1 if data.get('enable_head_to_head') == 'on' else 0,
@@ -654,8 +654,8 @@ def get_team_templates(team_id):
         'postgame_enabled': team_dict.get('postgame_enabled', True),
         'postgame_title': team_dict.get('postgame_title', ''),
         'postgame_description': team_dict.get('postgame_description', ''),
-        'between_games_title': team_dict.get('between_games_title', ''),
-        'between_games_description': team_dict.get('between_games_description', ''),
+        'idle_title': team_dict.get('idle_title', ''),
+        'idle_description': team_dict.get('idle_description', ''),
     }
 
     return jsonify(template_data)
@@ -1562,7 +1562,18 @@ def _generate_filler_entries(team: dict, game_events: List[dict], days_ahead: in
                             team, 'postgame', games_today[-1]['event'], team_stats, games_today[-1]['event'], epg_timezone
                         )
                         filler_entries.extend(postgame_entries)
-                    # else: next day will be treated as idle (handled in else block below)
+                    elif midnight_mode == 'idle':
+                        # Use idle content after game ends (if idle is enabled)
+                        if team.get('idle_enabled', True):
+                            # Fill from game end to next midnight with idle content
+                            next_day_end = day_end + timedelta(days=1)
+                            # Find next game for idle context
+                            next_game = _find_next_game(next_date, extended_game_schedule or game_schedule, extended_game_dates or game_dates)
+                            idle_entries = _create_filler_chunks(
+                                last_game_end, next_day_end, max_hours,
+                                team, 'idle', next_game, team_stats, games_today[-1]['event'], epg_timezone
+                            )
+                            filler_entries.extend(idle_entries)
                 else:
                     # Game ends before midnight - fill to midnight
                     if last_game_end < day_end:
@@ -1583,11 +1594,13 @@ def _generate_filler_entries(team: dict, game_events: List[dict], days_ahead: in
                 prev_games = game_schedule[prev_date]
                 if prev_games:
                     last_prev_game = sorted(prev_games, key=lambda x: x['end'])[-1]
-                    if last_prev_game['end'] > day_start and midnight_mode == 'postgame':
-                        # Previous game crosses into today and mode is postgame
+                    if last_prev_game['end'] > day_start:
+                        # Previous game crosses into today
+                        # Skip idle content regardless of mode - we already filled it
+                        # (either with postgame or idle content from yesterday)
                         skip_idle = True
 
-            if not skip_idle and team.get('between_games_enabled', True):
+            if not skip_idle and team.get('idle_enabled', True):
                 # Find next game after current_date (use extended schedule for 30 days ahead)
                 next_game = _find_next_game(current_date, extended_game_schedule or game_schedule, extended_game_dates or game_dates)
 
@@ -1635,10 +1648,9 @@ def _create_filler_chunks(start_dt: datetime, end_dt: datetime, max_hours: int,
     chunk_duration = timedelta(hours=total_duration / num_chunks)
 
     # Get templates for this filler type
-    # Map 'idle' to 'between_games' for database column names
-    db_filler_type = 'between_games' if filler_type == 'idle' else filler_type
-    title_template = team.get(f'{db_filler_type}_title', f'{filler_type.capitalize()} Coverage')
-    desc_template = team.get(f'{db_filler_type}_description', '')
+    # Database column names match filler type: 'idle', 'pregame', 'postgame'
+    title_template = team.get(f'{filler_type}_title', f'{filler_type.capitalize()} Coverage')
+    desc_template = team.get(f'{filler_type}_description', '')
 
     # Build context for template resolution
     context = {

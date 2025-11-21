@@ -34,6 +34,7 @@ def init_database():
     # Run migrations after schema is initialized
     migrate_team_ids_to_numeric()
     migrate_output_path_to_data_dir()
+    migrate_between_games_to_idle()
 
 def migrate_team_ids_to_numeric():
     """
@@ -133,6 +134,55 @@ def migrate_output_path_to_data_dir():
 
     except Exception as e:
         print(f"⚠️  Output path migration warning: {e}")
+        # Don't fail startup if migration has issues
+    finally:
+        conn.close()
+
+def migrate_between_games_to_idle():
+    """
+    Rename between_games fields to idle fields for clarity.
+
+    This migration renames:
+    - between_games_enabled -> idle_enabled
+    - between_games_title -> idle_title
+    - between_games_description -> idle_description
+
+    This makes the naming more intuitive since these fields are used for
+    "idle" days when there are no games scheduled.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Check if the old column exists
+        cursor.execute("PRAGMA table_info(teams)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        # Only migrate if old columns exist and new ones don't
+        if 'between_games_enabled' in columns and 'idle_enabled' not in columns:
+            print(f"\n🔄 Migrating between_games fields to idle fields...")
+
+            # SQLite doesn't support renaming columns directly in older versions
+            # We need to use ALTER TABLE ADD COLUMN and copy data
+
+            # Add new columns
+            cursor.execute("ALTER TABLE teams ADD COLUMN idle_enabled BOOLEAN DEFAULT 1")
+            cursor.execute("ALTER TABLE teams ADD COLUMN idle_title TEXT DEFAULT '{team_name} Programming'")
+            cursor.execute("ALTER TABLE teams ADD COLUMN idle_description TEXT DEFAULT 'Next game: {next_date} at {next_time} vs {next_opponent}'")
+
+            # Copy data from old columns to new columns
+            cursor.execute("""
+                UPDATE teams
+                SET idle_enabled = between_games_enabled,
+                    idle_title = between_games_title,
+                    idle_description = between_games_description
+            """)
+
+            conn.commit()
+            print(f"✅ Migrated between_games fields to idle fields\n")
+
+    except Exception as e:
+        print(f"⚠️  Idle fields migration warning: {e}")
         # Don't fail startup if migration has issues
     finally:
         conn.close()
