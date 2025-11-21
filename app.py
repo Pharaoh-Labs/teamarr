@@ -1091,12 +1091,33 @@ def parse_espn_url():
     if not team_info:
         return jsonify({'error': 'Could not parse ESPN URL'}), 400
 
-    # Try to fetch team data
-    team_data = espn.get_team_info(
-        team_info['sport'],
-        team_info['league'],
-        team_info['team_slug']
-    )
+    # For soccer, we need to detect the actual league from team data
+    # since the URL doesn't specify (could be EPL, EFL, NWSL, MLS, etc.)
+    if team_info['sport'] == 'soccer':
+        # Try multiple possible leagues to find the team
+        possible_leagues = ['eng.1', 'eng.2', 'usa.1', 'usa.w.1', 'esp.1', 'ger.1', 'ita.1', 'fra.1']
+        team_data = None
+
+        for league in possible_leagues:
+            test_data = espn.get_team_info(
+                team_info['sport'],
+                league,
+                team_info['team_slug']
+            )
+            if test_data and 'team' in test_data:
+                team_data = test_data
+                team_info['league'] = league
+                break
+
+        if not team_data:
+            return jsonify({'error': 'Could not find team in any soccer league'}), 404
+    else:
+        # Try to fetch team data
+        team_data = espn.get_team_info(
+            team_info['sport'],
+            team_info['league'],
+            team_info['team_slug']
+        )
 
     if team_data and 'team' in team_data:
         team = team_data['team']

@@ -481,9 +481,10 @@ class ESPNClient:
         """
         Extract team information from ESPN URL
 
-        Supports two URL patterns:
+        Supports multiple URL patterns:
         - Pro sports: https://www.espn.com/nba/team/_/name/det/detroit-pistons
         - College sports: https://www.espn.com/college-football/team/_/id/130/michigan-wolverines
+        - Soccer clubs: https://www.espn.com/soccer/club/_/id/21422/angel-city-fc
 
         Args:
             url: ESPN team URL
@@ -494,22 +495,22 @@ class ESPNClient:
         import re
 
         # Try pattern 1: espn.com/{sport}/team/_/name/{team_slug}[/optional-name]
-        pattern_name = r'espn\.com/([^/]+)/team/_/name/([^/]+)(?:/([^/]+))?'
+        pattern_name = r'espn\.com/([^/]+)/(?:team|club)/_/name/([^/]+)(?:/([^/]+))?'
         match = re.search(pattern_name, url)
 
         if match:
             sport_code = match.group(1)
             team_slug = match.group(2)
         else:
-            # Try pattern 2: espn.com/{sport}/team/_/id/{team_id}[/optional-name]
-            pattern_id = r'espn\.com/([^/]+)/team/_/id/(\d+)(?:/([^/]+))?'
+            # Try pattern 2: espn.com/{sport}/team|club/_/id/{team_id}[/optional-name]
+            pattern_id = r'espn\.com/([^/]+)/(?:team|club)/_/id/(\d+)(?:/([^/]+))?'
             match = re.search(pattern_id, url)
 
             if not match:
                 return None
 
             sport_code = match.group(1)
-            team_slug = match.group(2)  # Use numeric ID as slug for college sports
+            team_slug = match.group(2)  # Use numeric ID as slug
 
         # Map ESPN URL sport codes to API paths
         sport_mapping = {
