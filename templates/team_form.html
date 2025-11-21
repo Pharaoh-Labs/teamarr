@@ -704,25 +704,25 @@
                 </div>
                 <div class="preview-item">
                     <strong>Subtitle</strong>
-                    <span id="sidebar-preview-subtitle">State Farm Arena, Atlanta</span>
+                    <span id="sidebar-preview-subtitle">Kia Center, Orlando</span>
                 </div>
                 <div class="preview-item">
                     <strong>Description</strong>
-                    <span id="sidebar-preview-description">Team (12-2) takes on Opponent (8-6) at Venue</span>
+                    <span id="sidebar-preview-description">Pistons (13-2) take on Magic (9-7) at Kia Center</span>
                 </div>
 
                 <h4 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Filler Programs</h4>
                 <div class="preview-item">
                     <strong>Pregame</strong>
-                    <span id="sidebar-preview-pregame">Pregame Coverage - Pistons play Hawks today at 7:30 PM</span>
+                    <span id="sidebar-preview-pregame">Pregame Coverage - Pistons play Magic today at 7:00 PM EST</span>
                 </div>
                 <div class="preview-item">
                     <strong>Postgame</strong>
-                    <span id="sidebar-preview-postgame">Postgame Recap - Pistons defeated Hawks - Final: 115-108</span>
+                    <span id="sidebar-preview-postgame">Postgame Recap - Pistons defeated Heat - Final: 125-124</span>
                 </div>
                 <div class="preview-item">
                     <strong>Idle Day</strong>
-                    <span id="sidebar-preview-idle">No Game Today - Pistons don't play. Next: Celtics on Nov 22</span>
+                    <span id="sidebar-preview-idle">Pistons Programming - Next game: LA Clippers on November 25</span>
                 </div>
 
                 <small style="display: block; margin-top: 1rem; color: var(--text-muted); font-size: 0.8rem;">
@@ -841,41 +841,71 @@ let conditions = {{ description_options_json | default('[]') | safe }};
 let conditionCounter = 0;
 
 // Sample data for preview (league-aware in production)
+// Sample data for live preview - all from Detroit Pistons NBA
 const sampleData = {
+    // Team Info
     team_name: '{{ team.team_name if team else "Detroit Pistons" }}',
-    opponent: 'Atlanta Hawks',
-    sport: 'Basketball',
-    venue: 'State Farm Arena',
-    venue_full: 'State Farm Arena, Atlanta',
-    game_time: '7:30 PM EST',
-    team_record: '12-2',
-    opponent_record: '8-6',
-    matchup: 'DET @ ATL',
     team_abbrev: 'DET',
-    opponent_abbrev: 'ATL',
-    win_streak: '5',
-    team_rank_formatted: '#8',
-    next_opponent: 'Boston Celtics',
-    next_opponent_record: '15-3',
-    next_date: 'November 22',
-    last_opponent: 'Chicago Bulls',
-    last_opponent_record: '8-10',
+    team_record: '13-2',
+    sport: 'Basketball',
+    league: 'NBA',
+
+    // Current Game (vs Orlando Magic)
+    opponent: 'Orlando Magic',
+    opponent_abbrev: 'ORL',
+    opponent_record: '9-7',
+    matchup: 'DET @ ORL',
+    venue: 'Kia Center',
+    venue_full: 'Kia Center, Orlando',
+    game_time: '7:00 PM EST',
+    game_date: 'November 23, 2025',
+
+    // Team Stats
+    win_streak: '11',
+    loss_streak: '0',
+    playoff_seed: '1',
+    games_back: '0.0',
+    team_rank_formatted: '#1',
+    team_ppg: '118.9',
+    team_papg: '112.1',
+    wins: '13',
+    losses: '2',
+    win_pct: '86.7',
+
+    // Next Game
+    next_opponent: 'LA Clippers',
+    next_opponent_record: '4-11',
+    next_date: 'November 25, 2025',
+    next_time: '8:00 PM EST',
+    next_venue: 'Little Caesars Arena',
+    next_matchup: 'LAC @ DET',
+
+    // Last Game (vs Miami Heat)
+    last_opponent: 'Miami Heat',
+    last_opponent_record: '7-8',
+    last_date: 'November 21, 2025',
+    last_result: 'Win',
+    last_score: '125-124',
+    last_matchup: 'MIA @ DET',
     result_text: 'defeated',
-    final_score: '115-108',
+    final_score: '125-124',
+    final_record: '13-2',
+
     // Odds & Betting
     odds_provider: 'ESPN BET',
-    over_under: '233.5',
-    spread: '1.5',
-    odds_details: 'DET -1.5',
-    moneyline: '-125',
-    opponent_moneyline: '+105',
-    spread_odds: '-105',
-    opponent_spread_odds: '-115',
-    spread_category: 'close',
-    spread_category_text: 'close game',
-    // Game Summary (based on score differential from template_engine.py)
-    game_summary: 'close game',
-    game_summary_text: 'in a close game'
+    over_under: '221.5',
+    spread: '-3.5',
+    odds_details: 'DET -3.5',
+    moneyline: '-165',
+    opponent_moneyline: '+140',
+    spread_odds: '-110',
+    opponent_spread_odds: '-110',
+    spread_category: 'slight favorite',
+    spread_category_text: 'as slight favorites',
+
+    // Game Summary
+    game_summary: 'thriller',
+    game_summary_text: 'in a thriller'
 };
 
 // ============================================================================
