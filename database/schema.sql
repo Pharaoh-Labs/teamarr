@@ -112,6 +112,10 @@ CREATE TABLE IF NOT EXISTS teams (
     enable_statistics BOOLEAN DEFAULT 1,      -- Enable {team_ppg}, {team_papg}
     enable_players BOOLEAN DEFAULT 1,         -- Enable {top_scorer_name}, etc.
 
+    -- Conditional Descriptions (Templates tab)
+    description_options JSON DEFAULT '[]',    -- Array of conditional description templates
+    -- Structure: [{"condition_type": "is_home", "template": "...", "priority": 50, "condition_value": "..."}]
+
     -- Active Status
     active BOOLEAN DEFAULT 1,                 -- Is this team active for EPG generation?
 
@@ -158,6 +162,10 @@ CREATE TABLE IF NOT EXISTS settings (
 
     -- Logging
     log_level TEXT DEFAULT 'INFO',
+
+    -- Auto-generation Settings
+    auto_generate_enabled BOOLEAN DEFAULT 1,
+    auto_generate_frequency TEXT DEFAULT 'hourly',
 
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -263,7 +271,8 @@ CREATE TABLE IF NOT EXISTS epg_history (
 
     -- Content Metadata
     num_channels INTEGER,                   -- Number of channels in EPG
-    num_programmes INTEGER,                 -- Number of programmes in EPG
+    num_programmes INTEGER,                 -- Number of programmes in EPG (includes filler)
+    num_events INTEGER,                     -- Number of actual sporting events (excludes filler)
     date_range_start DATE,                  -- First programme date
     date_range_end DATE,                    -- Last programme date
 
@@ -425,6 +434,45 @@ ORDER BY timestamp DESC
 LIMIT 100;
 
 -- =============================================================================
+-- CONDITION_PRESETS TABLE
+-- Stores reusable condition templates for the preset library
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS condition_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Preset Information
+    name TEXT NOT NULL,                     -- Preset name (e.g., "Home Game")
+    description TEXT,                       -- Description of what this preset does
+
+    -- Condition Configuration
+    condition_type TEXT NOT NULL,           -- 'is_home', 'is_away', 'opponent_is', etc.
+    condition_value TEXT DEFAULT '',        -- Value for the condition (if applicable)
+    priority INTEGER DEFAULT 50,            -- Priority level (1-100)
+
+    -- Template
+    template TEXT NOT NULL,                 -- The description template to use
+
+    -- Usage Tracking
+    usage_count INTEGER DEFAULT 0,          -- How many times this preset has been used
+
+    -- Active Status
+    active BOOLEAN DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_condition_presets_type ON condition_presets(condition_type);
+CREATE INDEX IF NOT EXISTS idx_condition_presets_usage ON condition_presets(usage_count);
+
+-- Pre-populate with example presets
+INSERT OR IGNORE INTO condition_presets (id, name, description, condition_type, condition_value, priority, template) VALUES
+    (1, 'Home Game', 'Standard template for home games', 'is_home', '', 75, '{team_name} hosts {opponent} at {venue}. Game starts at {game_time}.'),
+    (2, 'Away Game', 'Standard template for away games', 'is_away', '', 75, '{team_name} travels to face {opponent} at {venue_full}.'),
+    (3, 'Win Streak', 'Template for teams on a winning streak', 'win_streak', '3', 85, '{team_name} looks to extend their {win_streak}-game win streak against {opponent}!'),
+    (4, 'Losing Streak', 'Template for teams on a losing streak', 'loss_streak', '3', 85, '{team_name} seeks to end their {loss_streak}-game losing streak vs {opponent}.'),
+    (5, 'Has Betting Odds', 'Template when betting odds are available', 'has_odds', '', 80, '{team_name} vs {opponent} - {team_name} {odds_spread}, O/U {odds_over_under}');
+
+-- =============================================================================
 -- SCHEMA MIGRATIONS
 -- =============================================================================
 
@@ -439,6 +487,24 @@ ALTER TABLE teams ADD COLUMN include_live_tag BOOLEAN DEFAULT 0;
 
 -- New tag: <new /> element (only added to main event, not filler)
 ALTER TABLE teams ADD COLUMN include_new_tag BOOLEAN DEFAULT 0;
+
+-- Add simplified pregame/postgame content fields (alternative to complex JSON periods)
+ALTER TABLE teams ADD COLUMN pregame_title TEXT DEFAULT 'Pregame Coverage';
+ALTER TABLE teams ADD COLUMN pregame_description TEXT DEFAULT '{team_name} plays {opponent} today at {game_time}';
+ALTER TABLE teams ADD COLUMN postgame_title TEXT DEFAULT 'Postgame Recap';
+ALTER TABLE teams ADD COLUMN postgame_description TEXT DEFAULT '{team_name} {result_text} {opponent} - Final: {final_score}';
+
+-- Add timezone column (already in main schema but needs ALTER for existing DBs)
+-- ALTER TABLE teams ADD COLUMN timezone TEXT DEFAULT 'America/New_York';
+
+-- Add team_color column (already in main schema but needs ALTER for existing DBs)
+-- ALTER TABLE teams ADD COLUMN team_color TEXT;
+
+-- Add midnight_crossover_mode column (how to handle games that cross midnight)
+ALTER TABLE teams ADD COLUMN midnight_crossover_mode TEXT DEFAULT 'postgame';
+
+-- Add max_program_hours column (maximum duration for a single program)
+ALTER TABLE teams ADD COLUMN max_program_hours REAL DEFAULT 6.0;
 
 -- =============================================================================
 -- END OF SCHEMA

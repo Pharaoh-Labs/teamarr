@@ -266,8 +266,10 @@ main {
 .help-text {
     display: block;
     margin-top: 0.2rem;
+    margin-bottom: 0;
     font-size: 0.75rem;
     color: var(--text-muted);
+    line-height: 1.2;
 }
 
 .form-actions {
@@ -303,6 +305,7 @@ fieldset legend {
     padding: 0.5rem;
     text-align: left;
     border-bottom: 1px solid var(--border);
+    vertical-align: top;
 }
 
 .table th {
@@ -322,9 +325,29 @@ fieldset legend {
     background: var(--bg-tertiary);
 }
 
-.table-actions {
-    display: flex;
-    gap: 0.4rem;
+.table-actions a,
+.table-actions button {
+    margin-right: 0.4rem;
+}
+
+.table-actions a:last-child,
+.table-actions button:last-child {
+    margin-right: 0;
+}
+
+.table-actions form {
+    display: inline;
+    margin: 0;
+}
+
+.table-actions .btn {
+    margin: 0;
+    margin-right: 0.4rem;
+}
+
+.table td .badge,
+.table td code {
+    vertical-align: middle;
 }
 
 /* Status Badges - Compact */

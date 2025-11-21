@@ -3,7 +3,7 @@ Teamarr - Sports Team EPG Generator Configuration
 """
 
 # Application version - single source of truth
-VERSION = "0.1.0-beta"
+VERSION = "0.1.0"
 
 # Application settings
 APP_NAME = "Teamarr"

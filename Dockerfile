@@ -25,8 +25,8 @@ COPY templates/ ./templates/
 COPY app.py .
 COPY config.py .
 
-# Create directories for data persistence
-RUN mkdir -p /app/database /app/output
+# Create directory for data persistence
+RUN mkdir -p /app/data
 
 # Expose the application port
 EXPOSE 9195

@@ -53,6 +53,7 @@ def run_scheduled_generation():
 
             # Get settings
             settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+            epg_timezone = settings.get('default_timezone', 'America/New_York')
 
             conn.close()
 
@@ -351,6 +352,35 @@ def parse_description_options(form_data):
 
     return options
 
+# ============================================================================
+# HEALTH CHECK ENDPOINT
+# ============================================================================
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Docker healthcheck"""
+    try:
+        # Verify database connection
+        conn = get_connection()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+
+        return jsonify({
+            'status': 'healthy',
+            'version': VERSION,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 503
+
+# ============================================================================
+# ROUTES
+# ============================================================================
+
 @app.route('/teams/add', methods=['GET', 'POST'])
 def add_team():
     """Add new team"""
@@ -374,12 +404,8 @@ def add_team():
                 team_logo_url, team_color, channel_id, title_format,
                 description_template, subtitle_template, game_duration,
                 timezone, flags, categories, video_quality, audio_quality,
-                pregame_enabled, postgame_enabled, idle_enabled,
-                max_program_hours, midnight_crossover_mode,
-                pregame_title, pregame_description,
-                postgame_title, postgame_description,
-                idle_title, idle_description, description_options
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                description_options
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data['espn_team_id'],
             data['league'],
@@ -398,17 +424,6 @@ def add_team():
             json.dumps(categories_list),
             data.get('video_quality', 'HDTV'),
             data.get('audio_quality', 'stereo'),
-            1 if data.get('pregame_enabled') == 'on' else 0,
-            1 if data.get('postgame_enabled') == 'on' else 0,
-            1 if data.get('idle_enabled') == 'on' else 0,
-            int(data.get('max_program_hours', 6)),
-            data.get('midnight_crossover_mode', 'postgame'),
-            data.get('pregame_title', 'Pregame Coverage'),
-            data.get('pregame_description', '{team_name} plays {opponent} today at {game_time}'),
-            data.get('postgame_title', 'Postgame Recap'),
-            data.get('postgame_description', '{team_name} {result_text} {opponent} - Final: {final_score}'),
-            data.get('idle_title', 'No Game Today'),
-            data.get('idle_description', '{team_name} does not play today. Next game: {next_game_opponent} on {next_game_date}'),
             json.dumps(description_options)
         ))
 
@@ -432,12 +447,41 @@ def edit_team(team_id):
         # Update team
         data = request.form.to_dict()
 
-        # Parse categories from comma-separated string
-        categories_str = data.get('categories', 'Sports, Sports event, Basketball')
-        categories_list = [cat.strip() for cat in categories_str.split(',') if cat.strip()]
+        # DEBUG: Log raw form data
+        print(f"\n=== FORM SAVE DEBUG ===")
+        print(f"All form keys: {list(request.form.keys())}")
 
-        # Parse description options
-        description_options = parse_description_options(request.form)
+        # Parse categories from comma-separated string
+        categories_str = data.get('categories', '')
+        categories_list = [cat.strip() for cat in categories_str.split(',') if cat.strip()]
+        print(f"Parsed categories list: {categories_list}")
+
+        # Parse description options from form arrays (new format!)
+        description_options = []
+        cond_names = request.form.getlist('cond_name[]')
+        cond_types = request.form.getlist('cond_type[]')
+        cond_values = request.form.getlist('cond_value[]')
+        cond_priorities = request.form.getlist('cond_priority[]')
+        cond_templates = request.form.getlist('cond_template[]')
+        cond_sources = request.form.getlist('cond_source[]')
+
+        print(f"Received {len(cond_names)} conditions from form arrays")
+
+        for i in range(len(cond_names)):
+            condition = {
+                'name': cond_names[i],
+                'condition': cond_types[i] if i < len(cond_types) else '',
+                'condition_value': cond_values[i] if i < len(cond_values) else '',
+                'priority': int(cond_priorities[i]) if i < len(cond_priorities) and cond_priorities[i] else 50,
+                'template': cond_templates[i] if i < len(cond_templates) else '',
+                'source': cond_sources[i] if i < len(cond_sources) else 'custom'
+            }
+            description_options.append(condition)
+            print(f"  Condition {i+1}: {condition['name']} ({condition['condition']})")
+
+        print(f"Total conditions parsed: {len(description_options)}")
+        print(f"JSON to save: {json.dumps(description_options)}")
+        print(f"======================\n")
 
         conn.execute("""
             UPDATE teams SET
@@ -446,11 +490,16 @@ def edit_team(team_id):
                 channel_id = ?, title_format = ?, description_template = ?,
                 subtitle_template = ?, game_duration = ?, timezone = ?,
                 categories = ?, video_quality = ?, audio_quality = ?, active = ?,
-                pregame_enabled = ?, postgame_enabled = ?, idle_enabled = ?,
-                max_program_hours = ?, midnight_crossover_mode = ?,
-                pregame_title = ?, pregame_description = ?,
-                postgame_title = ?, postgame_description = ?,
-                idle_title = ?, idle_description = ?, description_options = ?
+                description_options = ?,
+                flags = ?,
+                no_game_enabled = ?, no_game_title = ?, no_game_description = ?, no_game_duration = ?,
+                pregame_enabled = ?, pregame_periods = ?, pregame_title = ?, pregame_description = ?,
+                postgame_enabled = ?, postgame_periods = ?, postgame_title = ?, postgame_description = ?,
+                between_games_enabled = ?, between_games_title = ?, between_games_description = ?,
+                enable_records = ?, enable_streaks = ?, enable_head_to_head = ?,
+                enable_standings = ?, enable_statistics = ?, enable_players = ?,
+                include_date_tag = ?, include_live_tag = ?, include_new_tag = ?,
+                midnight_crossover_mode = ?, max_program_hours = ?
             WHERE id = ?
         """, (
             data['espn_team_id'], data['league'], data['sport'], data['team_name'],
@@ -460,18 +509,34 @@ def edit_team(team_id):
             data.get('timezone'), json.dumps(categories_list),
             data.get('video_quality'), data.get('audio_quality'),
             1 if data.get('active') == 'on' else 0,
+            json.dumps(description_options),
+            data.get('flags', '{"new": true, "live": false, "premiere": false}'),
+            1 if data.get('no_game_enabled') == 'on' else 0,
+            data.get('no_game_title', 'No Game Today'),
+            data.get('no_game_description', 'No {team_name} game scheduled today. Next game: {next_game_date} vs {next_opponent}'),
+            float(data.get('no_game_duration', 24.0)),
             1 if data.get('pregame_enabled') == 'on' else 0,
-            1 if data.get('postgame_enabled') == 'on' else 0,
-            1 if data.get('idle_enabled') == 'on' else 0,
-            int(data.get('max_program_hours', 6)),
-            data.get('midnight_crossover_mode', 'postgame'),
+            data.get('pregame_periods', '[{"start_hours_before": 24, "end_hours_before": 6, "title": "Game Preview", "description": "{team_name} plays {opponent} in {hours_until} hours at {venue}"}, {"start_hours_before": 6, "end_hours_before": 2, "title": "Pre-Game Coverage", "description": "{team_name} vs {opponent} starts at {game_time}. {team_name} ({team_record}) looks to improve."}, {"start_hours_before": 2, "end_hours_before": 0, "title": "Game Starting Soon", "description": "{team_name} vs {opponent} starts in {hours_until} hours at {venue_full}"}]'),
             data.get('pregame_title', 'Pregame Coverage'),
             data.get('pregame_description', '{team_name} plays {opponent} today at {game_time}'),
+            1 if data.get('postgame_enabled') == 'on' else 0,
+            data.get('postgame_periods', '[{"start_hours_after": 0, "end_hours_after": 3, "title": "Game Recap", "description": "{team_name} {result_text} {final_score}. Final record: {final_record}"}, {"start_hours_after": 3, "end_hours_after": 12, "title": "Extended Highlights", "description": "Highlights: {team_name} {result_text} {final_score} vs {opponent}"}, {"start_hours_after": 12, "end_hours_after": 24, "title": "Full Game Replay", "description": "Replay: {team_name} vs {opponent} - Final Score: {final_score}"}]'),
             data.get('postgame_title', 'Postgame Recap'),
             data.get('postgame_description', '{team_name} {result_text} {opponent} - Final: {final_score}'),
-            data.get('idle_title', 'No Game Today'),
-            data.get('idle_description', '{team_name} does not play today. Next game: {next_game_opponent} on {next_game_date}'),
-            json.dumps(description_options),
+            1 if data.get('between_games_enabled') == 'on' else 0,
+            data.get('between_games_title', '{team_name} Programming'),
+            data.get('between_games_description', 'Next game: {next_game_date} at {next_game_time} vs {next_opponent}'),
+            1 if data.get('enable_records') == 'on' else 0,
+            1 if data.get('enable_streaks') == 'on' else 0,
+            1 if data.get('enable_head_to_head') == 'on' else 0,
+            1 if data.get('enable_standings') == 'on' else 0,
+            1 if data.get('enable_statistics') == 'on' else 0,
+            1 if data.get('enable_players') == 'on' else 0,
+            1 if data.get('include_date_tag') == 'on' else 0,
+            1 if data.get('include_live_tag') == 'on' else 0,
+            1 if data.get('include_new_tag') == 'on' else 0,
+            data.get('midnight_crossover_mode', 'postgame'),
+            float(data.get('max_program_hours', 6.0)),
             team_id
         ))
 
@@ -488,7 +553,41 @@ def edit_team(team_id):
     if not team:
         return "Team not found", 404
 
-    return render_template('team_form.html', team=dict(team), leagues=[dict(l) for l in leagues], version=VERSION)
+    # Convert team to dict and parse JSON fields
+    team_dict = dict(team)
+
+    print(f"\n=== FORM LOAD DEBUG ===")
+    print(f"Raw categories from DB: {repr(team_dict.get('categories'))}")
+    print(f"Raw description_options from DB: {repr(team_dict.get('description_options'))}")
+
+    # Parse categories - check for None, not empty list
+    if team_dict.get('categories') is not None:
+        try:
+            team_dict['categories'] = json.loads(team_dict['categories'])
+        except (json.JSONDecodeError, TypeError):
+            team_dict['categories'] = []
+    else:
+        team_dict['categories'] = []
+
+    # Parse description_options - check for None, not empty list
+    if team_dict.get('description_options') is not None:
+        try:
+            team_dict['description_options'] = json.loads(team_dict['description_options'])
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"ERROR parsing description_options: {e}")
+            print(f"String that failed to parse: {repr(team_dict.get('description_options'))}")
+            team_dict['description_options'] = []
+    else:
+        team_dict['description_options'] = []
+
+    print(f"Parsed categories (Python list): {team_dict['categories']}")
+    print(f"Parsed description_options (Python list): {team_dict['description_options']}")
+    print(f"======================\n")
+
+    # Pass description_options as both parsed list and JSON string for JavaScript
+    description_options_json = json.dumps(team_dict['description_options']) if team_dict.get('description_options') else '[]'
+
+    return render_template('team_form.html', team=team_dict, leagues=[dict(l) for l in leagues], version=VERSION, description_options_json=description_options_json)
 
 @app.route('/teams/<int:team_id>/delete', methods=['POST'])
 def delete_team(team_id):
@@ -529,9 +628,6 @@ def get_team_templates(team_id):
         'postgame_enabled': team_dict.get('postgame_enabled', True),
         'postgame_title': team_dict.get('postgame_title', ''),
         'postgame_description': team_dict.get('postgame_description', ''),
-        'idle_enabled': team_dict.get('idle_enabled', True),
-        'idle_title': team_dict.get('idle_title', ''),
-        'idle_description': team_dict.get('idle_description', ''),
     }
 
     return jsonify(template_data)
@@ -679,12 +775,8 @@ def generate_epg():
             enhanced_stats = espn.get_team_stats(team['sport'], team['league'], team['espn_team_id'])
             api_calls += 1
 
-            # Get streak type from recent games
-            streak_type = espn.get_streak_type(team['sport'], team['league'], team['espn_team_id'])
-            # Note: get_streak_type uses cached schedule data, so no extra API call
-
-            # Merge basic and enhanced stats
-            team_stats = {**team_stats_basic, **enhanced_stats, 'streak_type': streak_type}
+            # Merge basic and enhanced stats first (without streak_type)
+            team_stats = {**team_stats_basic, **enhanced_stats}
 
             # Fetch schedule from ESPN
             schedule_data = espn.get_team_schedule(
@@ -978,15 +1070,26 @@ def parse_espn_url():
     if team_data and 'team' in team_data:
         team = team_data['team']
 
-        # Extract mascot from team data or team_slug
-        mascot = team.get('nickname', '').lower().replace(' ', '-')
-        if not mascot and team_info['team_slug']:
-            # Fallback: extract mascot from slug (e.g., "detroit-pistons" -> "pistons")
+        # Extract mascot from team data
+        # Try these in order: nickname, name (last word), slug (last part)
+        mascot = None
+
+        # Option 1: Use 'nickname' field if available (e.g., "Pistons")
+        if team.get('nickname'):
+            mascot = team.get('nickname')
+        # Option 2: Extract from 'name' or 'displayName' (e.g., "Detroit Pistons" -> "Pistons")
+        elif team.get('name'):
+            mascot = team.get('name').split()[-1]
+        elif team.get('displayName'):
+            mascot = team.get('displayName').split()[-1]
+        # Option 3: Fallback to slug parsing (e.g., "detroit-pistons" -> "pistons")
+        elif team_info['team_slug']:
             parts = team_info['team_slug'].split('-')
             mascot = parts[-1] if len(parts) > 1 else team_info['team_slug']
 
-        # Generate channel_id as {mascot}.{league}
-        channel_id = f"{mascot}.{team_info['league']}"
+        # Generate channel_id as {team_slug}.{league}
+        # Use the full team slug (e.g., "detroit-pistons") instead of just mascot
+        channel_id = f"{team_info['team_slug']}.{team_info['league']}"
 
         return jsonify({
             'espn_team_id': team_info['team_slug'],
@@ -1944,8 +2047,33 @@ if __name__ == '__main__':
     # Start the auto-generation scheduler
     start_scheduler()
 
+    # Suppress Flask development server warning
+    import sys
+    import os
+
+    class FilteredStderr:
+        def __init__(self, original):
+            self.original = original
+            self.skip_next_line = False
+
+        def write(self, text):
+            # Filter out the Flask development warning
+            if 'WARNING: This is a development server' in text:
+                self.skip_next_line = True
+                return
+            if self.skip_next_line:
+                if 'Use a production WSGI server instead' in text:
+                    self.skip_next_line = False
+                    return
+            self.original.write(text)
+
+        def flush(self):
+            self.original.flush()
+
+    sys.stderr = FilteredStderr(sys.stderr)
+
     try:
-        app.run(host=host, port=port, debug=True, use_reloader=False)
+        app.run(host=host, port=port, debug=False, use_reloader=False)
     except KeyboardInterrupt:
         print("\n🛑 Shutting down...")
         stop_scheduler()

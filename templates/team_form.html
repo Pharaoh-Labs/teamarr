@@ -512,25 +512,25 @@
                         <div class="form-group">
                             <label for="channel_id">XMLTV Channel ID *</label>
                             <input type="text" name="channel_id" id="channel_id" value="{{ team.channel_id if team else '' }}" required>
-                            <small class="help-text">Format: {mascot}.{league} (e.g., pistons.nba, wolverines.ncaaf)</small>
+                            <small class="help-text">Default format: {slug}.{league}</small>
                         </div>
 
                         <div class="form-group">
                             <label for="game_duration">Game Duration (hours) *</label>
-                            <input type="number" name="game_duration" id="game_duration" step="0.5" min="1" max="6" value="{{ team.game_duration if team else 3.0 }}" required>
+                            <input type="number" name="game_duration" id="game_duration" step="0.5" min="1" max="6" value="{{ team.game_duration if team else 6.0 }}" required>
                             <small class="help-text">NBA: 3.0, NFL: 3.5, Soccer: 2.0</small>
                         </div>
 
                         <div class="form-group">
                             <label for="categories">EPG Categories (comma-separated)</label>
-                            <input type="text" name="categories" id="categories" value="{{ (team.categories | tojson | replace('[', '') | replace(']', '') | replace('"', '')) if team and team.categories else 'Sports, Sports event, Basketball' }}">
+                            <input type="text" name="categories" id="categories" value="{{ (team.categories | join(', ')) if team and team.categories is not none else '' }}">
                             <small class="help-text">Categories shown in EPG guide</small>
                         </div>
 
                         <h4 style="margin: 1.5rem 0 0.5rem 0;">XMLTV Tags</h4>
                         <div class="form-group">
                             <label>
-                                <input type="checkbox" name="include_date_tag" {% if not team or team.include_date_tag %}checked{% endif %}>
+                                <input type="checkbox" name="include_date_tag" {% if team and team.include_date_tag %}checked{% endif %}>
                                 Include Date Tag (YYYY-MM-DD format)
                             </label>
                             <small class="help-text">Adds program start date to EPG output</small>
@@ -556,287 +556,7 @@
                         <legend><h3>Program Templates</h3></legend>
 
                         <!-- Variable Helper (Collapsible) -->
-                        <details class="variable-helper" style="margin-bottom: 1.5rem; background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
-                            <summary style="cursor: pointer; font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">📝 Template Variables (180+)</summary>
-
-                            <input type="text" id="variable-search" placeholder="Search variables..." style="width: 100%; margin: 1rem 0; padding: 0.5rem;">
-
-                            <div class="variable-category">
-                                <h4>⭐ Most Common</h4>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{team_name}')">team_name</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_abbrev}')">team_abbrev</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{sport}')">sport</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{league}')">league</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent}')">opponent</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_abbrev}')">opponent_abbrev</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{matchup}')">matchup</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{venue}')">venue</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{venue_full}')">venue_full</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_time}')">game_time</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_date}')">game_date</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_record}')">team_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_record}')">opponent_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{home_away_text}')">home_away_text</button>
-                                </div>
-                            </div>
-
-                            <details style="margin-top: 1rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🔧 Date & Time</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{game_date_short}')">game_date_short</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_day}')">game_day</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_day_short}')">game_day_short</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_time_12h}')">game_time_12h</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_time_24h}')">game_time_24h</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{hours_until}')">hours_until</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{minutes_until}')">minutes_until</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{days_until}')">days_until</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{time_until_text}')">time_until_text</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">📍 Venue Details</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{venue_city}')">venue_city</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{venue_state}')">venue_state</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🏆 League</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{league}')">league</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{league_name}')">league_name</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🏠 Home/Away Context</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{home_away_text}')">home_away_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{vs_at}')">vs_at</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{home_team}')">home_team</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{away_team}')">away_team</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">📊 Records & Standings</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{team_wins}')">team_wins</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_losses}')">team_losses</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_ties}')">team_ties</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_win_pct}')">team_win_pct</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_wins}')">opponent_wins</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_losses}')">opponent_losses</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_win_pct}')">opponent_win_pct</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{home_record}')">home_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{away_record}')">away_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{home_win_pct}')">home_win_pct</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{away_win_pct}')">away_win_pct</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{conference_record}')">conference_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{division_record}')">division_record</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🏅 Rankings (College Sports)</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{team_rank}')">team_rank</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_rank_formatted}')">team_rank_formatted</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_rank}')">opponent_rank</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_rank_formatted}')">opponent_rank_formatted</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🔥 Streaks & Form</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{streak_type}')">streak_type</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{streak_count}')">streak_count</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{win_streak}')">win_streak</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{loss_streak}')">loss_streak</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{win_streak_text}')">win_streak_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{loss_streak_text}')">loss_streak_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_5_record}')">last_5_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_10_record}')">last_10_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{recent_form}')">recent_form</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{scoring_run}')">scoring_run</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🤝 H2H/Rematch</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{season_series}')">season_series</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{season_series_leader}')">season_series_leader</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{season_series_team_wins}')">season_series_team_wins</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{season_series_opponent_wins}')">season_series_opponent_wins</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_date}')">rematch_date</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_result}')">rematch_result</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_score}')">rematch_score</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_score_abbrev}')">rematch_score_abbrev</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_winner}')">rematch_winner</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_loser}')">rematch_loser</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_location}')">rematch_location</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_days_since}')">rematch_days_since</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{rematch_season_series}')">rematch_season_series</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">👥 Attendance</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{attendance}')">attendance</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🎮 Game Status (Live/Final)</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{game_status}')">game_status</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_clock}')">game_clock</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{period}')">period</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{period_short}')">period_short</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_score}')">team_score</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_score}')">opponent_score</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{score}')">score</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{score_diff}')">score_diff</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{final_score}')">final_score</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{score_differential}')">score_differential</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{score_differential_text}')">score_differential_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{result}')">result</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{result_text}')">result_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{result_verb}')">result_verb</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{outcome}')">outcome</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{overtime_text}')">overtime_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_summary}')">game_summary</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{game_summary_text}')">game_summary_text</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">📈 Team Stats</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{team_ppg}')">team_ppg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{team_papg}')">team_papg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_ppg}')">opponent_ppg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_papg}')">opponent_papg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_scorer_name}')">top_scorer_name</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_scorer_ppg}')">top_scorer_ppg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_scorer_position}')">top_scorer_position</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_rebounder_name}')">top_rebounder_name</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_rebounder_rpg}')">top_rebounder_rpg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_assist_name}')">top_assist_name</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{top_assist_apg}')">top_assist_apg</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{injury_count}')">injury_count</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{injury_list}')">injury_list</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{injury_status}')">injury_status</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🔧 Conference/Division</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{college_conference}')">college_conference</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{pro_conference}')">pro_conference</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{pro_conference_abbrev}')">pro_conference_abbrev</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{pro_division}')">pro_division</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{conference_or_division_name}')">conference_or_division_name</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">💰 Odds & Betting</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{odds_provider}')">odds_provider</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{over_under}')">over_under</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{spread}')">spread</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{odds_details}')">odds_details</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{moneyline}')">moneyline</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_moneyline}')">opponent_moneyline</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{spread_odds}')">spread_odds</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{opponent_spread_odds}')">opponent_spread_odds</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{spread_category}')">spread_category</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{spread_category_text}')">spread_category_text</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">⏮️ Last Game (Past Context)</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{last_opponent}')">last_opponent</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_date}')">last_date</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_matchup}')">last_matchup</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_result}')">last_result</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_score}')">last_score</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{last_score_abbrev}')">last_score_abbrev</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">⏭️ Next Game (Future Context)</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{next_opponent}')">next_opponent</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{next_date}')">next_date</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{next_time}')">next_time</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{next_datetime}')">next_datetime</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{next_matchup}')">next_matchup</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{next_venue}')">next_venue</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">📅 Today's Game (Completed)</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{today_score_abbrev}')">today_score_abbrev</button>
-                                </div>
-                                <small style="display: block; margin-top: 0.5rem; color: var(--text-muted);">Only populated when today's game is completed</small>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🏆 Series & Playoffs</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{series_type}')">series_type</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_round}')">series_round</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_summary}')">series_summary</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_status}')">series_status</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_record}')">series_record</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_team_wins}')">series_team_wins</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_opponent_wins}')">series_opponent_wins</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_leader}')">series_leader</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_leader_abbrev}')">series_leader_abbrev</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_lead}')">series_lead</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_game_number}')">series_game_number</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_games_played}')">series_games_played</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_length}')">series_length</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{games_to_win_series}')">games_to_win_series</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_games_remaining}')">series_games_remaining</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{playoff_seed}')">playoff_seed</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{playoff_position}')">playoff_position</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{games_back}')">games_back</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{can_advance}')">can_advance</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{can_be_eliminated}')">can_be_eliminated</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{series_clinch_text}')">series_clinch_text</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{elimination_text}')">elimination_text</button>
-                                </div>
-                            </details>
-
-                            <details style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; font-weight: bold;">🎯 Season Context</summary>
-                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <button type="button" class="chip" onclick="insertVariable('{season_year}')">season_year</button>
-                                    <button type="button" class="chip" onclick="insertVariable('{season_type}')">season_type</button>
-                                </div>
-                            </details>
-
-                            <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
-                                <strong>180+ variables available.</strong> Click to insert at cursor.
-                            </p>
-                        </details>
-
+                        <div id="template-vars-templates"></div>
                         <div class="form-group">
                             <label for="title_format">Program Title Template *</label>
                             <input type="text" name="title_format" id="title_format" value="{{ team.title_format if team else '{team_name}' }}" required class="template-field">
@@ -875,26 +595,13 @@
                             </ul>
                         </div>
 
-                        <!-- Variable Helper (Collapsible) - Same as Templates tab -->
-                        <details class="variable-helper" style="margin-bottom: 1.5rem; background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
-                            <summary style="cursor: pointer; font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">📝 Template Variables (click to view)</summary>
-                            <p style="margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-muted);">
-                                Use these variables in your condition templates. Click any variable to insert it.
-                            </p>
-                            <p style="margin: 0.5rem 0;">
-                                <a href="#" onclick="document.querySelector('.tab-button[data-tab=\\'templates\\']').click(); return false;" style="color: var(--primary);">
-                                    → View all 175+ variables in Templates tab
-                                </a>
-                            </p>
-                        </details>
-
                         <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-                            <button type="button" class="btn btn-primary" onclick="addConditionCustom()">+ Custom Condition</button>
-                            <button type="button" class="btn btn-secondary" onclick="showPresetLibrary()">📚 Preset Library</button>
+                            <button type="button" class="btn btn-primary" onclick="conditionsAddNew()" type="button">+ Add Condition</button>
+                            <button type="button" class="btn btn-secondary" onclick="showPresetLibrary()" type="button">📚 Preset Library</button>
                         </div>
 
-                        <div id="conditions-container">
-                            <!-- Condition cards will be added here -->
+                        <div id="conditions-list">
+                            <!-- Conditions will be rendered here by JavaScript -->
                         </div>
                     </fieldset>
                 </div>
@@ -905,18 +612,7 @@
                         <legend><h3>📅 EPG Filler Content</h3></legend>
 
                         <!-- Variable Helper (Collapsible) - Same as Templates tab -->
-                        <details class="variable-helper" style="margin-bottom: 1.5rem; background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
-                            <summary style="cursor: pointer; font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">📝 Template Variables (click to view)</summary>
-                            <p style="margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-muted);">
-                                Use these variables in your filler templates (pregame, postgame, idle). Click any variable to insert it.
-                            </p>
-                            <p style="margin: 0.5rem 0;">
-                                <a href="#" onclick="document.querySelector('.tab-button[data-tab=\\'templates\\']').click(); return false;" style="color: var(--primary);">
-                                    → View all 175+ variables in Templates tab
-                                </a>
-                            </p>
-                        </details>
-
+                        <div id="template-vars-fillers"></div>
                         <div class="form-group">
                             <label for="max_program_hours">Maximum Program Length (hours)</label>
                             <input type="number" name="max_program_hours" id="max_program_hours" min="1" max="24" value="{{ team.max_program_hours if team else 6 }}">
@@ -966,17 +662,17 @@
                         <h4 style="margin: 1.5rem 0 0.5rem 0;">Idle Day Content</h4>
                         <div class="form-group">
                             <label>
-                                <input type="checkbox" name="idle_enabled" id="idle_enabled" {% if not team or team.idle_enabled %}checked{% endif %}>
+                                <input type="checkbox" name="no_game_enabled" id="no_game_enabled" {% if not team or team.no_game_enabled %}checked{% endif %}>
                                 Enable Idle Day EPG Entries
                             </label>
                         </div>
                         <div class="form-group">
-                            <label for="idle_title">Idle Day Title</label>
-                            <input type="text" name="idle_title" id="idle_title" value="{{ team.idle_title if team else 'No Game Today' }}" class="template-field">
+                            <label for="no_game_title">Idle Day Title</label>
+                            <input type="text" name="no_game_title" id="no_game_title" value="{{ team.no_game_title if team else 'No Game Today' }}" class="template-field">
                         </div>
                         <div class="form-group">
-                            <label for="idle_description">Idle Day Description</label>
-                            <input type="text" name="idle_description" id="idle_description" value="{{ team.idle_description if team else '{team_name} does not play today. Next game: {next_game_opponent} on {next_game_date}' }}" class="template-field">
+                            <label for="no_game_description">Idle Day Description</label>
+                            <input type="text" name="no_game_description" id="no_game_description" value="{{ team.no_game_description if team else '{team_name} does not play today. Next game: {next_game_opponent} on {next_game_date}' }}" class="template-field">
                         </div>
                     </fieldset>
                 </div>
@@ -1106,7 +802,6 @@
 </div>
 
 <!-- Hidden inputs -->
-<input type="hidden" name="description_options" id="description_options" value="{{ team.description_options if team else '[]' }}">
 <input type="hidden" name="team_logo_url" id="team_logo_url" value="{{ team.team_logo_url if team else '' }}">
 
 {% endblock %}
@@ -1118,7 +813,8 @@
 // ============================================================================
 let activeField = null;
 let teamsCache = [];
-let conditions = {{ team.description_options if team and team.description_options else '[]' }};
+// Conditions will be stored directly in the DOM as form inputs (no hidden field)
+let conditions = {{ description_options_json | default('[]') | safe }};
 let conditionCounter = 0;
 let selectedCopyTeam = null;
 
@@ -1126,6 +822,7 @@ let selectedCopyTeam = null;
 const sampleData = {
     team_name: '{{ team.team_name if team else "Detroit Pistons" }}',
     opponent: 'Atlanta Hawks',
+    sport: 'Basketball',
     venue: 'State Farm Arena',
     venue_full: 'State Farm Arena, Atlanta',
     game_time: '7:30 PM EST',
@@ -1136,9 +833,9 @@ const sampleData = {
     opponent_abbrev: 'ATL',
     win_streak: '5',
     team_rank_formatted: '#8',
-    next_game_opponent: 'Boston Celtics',
-    next_game_date: 'November 22',
-    last_game_opponent: 'Chicago Bulls',
+    next_opponent: 'Boston Celtics',
+    next_date: 'November 22',
+    last_opponent: 'Chicago Bulls',
     result_text: 'defeated',
     final_score: '115-108',
     // Odds & Betting
@@ -1151,7 +848,10 @@ const sampleData = {
     spread_odds: '-105',
     opponent_spread_odds: '-115',
     spread_category: 'close',
-    spread_category_text: 'close game'
+    spread_category_text: 'close game',
+    // Game Summary (based on score differential from template_engine.py)
+    game_summary: 'close game',
+    game_summary_text: 'in a close game'
 };
 
 // ============================================================================
@@ -1161,9 +861,13 @@ function initTabs() {
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
+    console.log('initTabs called - found', tabButtons.length, 'buttons and', tabContents.length, 'content divs');
+
     tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
             const tabId = this.dataset.tab;
+            console.log('Tab clicked:', tabId);
 
             // Remove active class from all
             tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -1182,7 +886,8 @@ function initTabs() {
 document.addEventListener('DOMContentLoaded', function() {
     initTabs();
     initTemplatePreview();
-    loadConditions();
+    renderConditions();  // Render conditions that were already initialized from template
+    updateHiddenInput();  // Sync hidden field with conditions array
     loadTeamsList();
 
     // Update previews on input
@@ -1206,8 +911,8 @@ function updatePreviews() {
     const pregameDesc = document.getElementById('pregame_description')?.value || '';
     const postgameTitle = document.getElementById('postgame_title')?.value || '';
     const postgameDesc = document.getElementById('postgame_description')?.value || '';
-    const idleTitle = document.getElementById('idle_title')?.value || '';
-    const idleDesc = document.getElementById('idle_description')?.value || '';
+    const idleTitle = document.getElementById('no_game_title')?.value || '';
+    const idleDesc = document.getElementById('no_game_description')?.value || '';
 
     // Update main previews
     document.getElementById('sidebar-preview-title').textContent = replaceVariables(title) || 'Title';
@@ -1228,17 +933,96 @@ function replaceVariables(template) {
     return result;
 }
 
+// Track last focused template field
+let lastTemplateField = null;
+
+// Track recently used variables (stored in localStorage)
+let recentlyUsedVars = [];
+
+// Load recently used variables from localStorage
+function loadRecentlyUsed() {
+    const stored = localStorage.getItem('teamarr_recent_vars');
+    if (stored) {
+        recentlyUsedVars = JSON.parse(stored);
+        updateRecentlyUsedDisplay();
+    }
+}
+
+// Add variable to recently used list
+function addToRecentlyUsed(variable) {
+    // Remove if already exists
+    recentlyUsedVars = recentlyUsedVars.filter(v => v !== variable);
+    // Add to beginning
+    recentlyUsedVars.unshift(variable);
+    // Keep only last 10
+    recentlyUsedVars = recentlyUsedVars.slice(0, 10);
+    // Save to localStorage
+    localStorage.setItem('teamarr_recent_vars', JSON.stringify(recentlyUsedVars));
+    // Update display
+    updateRecentlyUsedDisplay();
+}
+
+// Update the recently used variables display
+function updateRecentlyUsedDisplay() {
+    const container = document.getElementById('recently-used-vars');
+    const category = document.getElementById('recently-used-category');
+
+    if (!container || recentlyUsedVars.length === 0) {
+        if (category) category.style.display = 'none';
+        return;
+    }
+
+    // Show the category
+    if (category) category.style.display = 'block';
+
+    // Clear and rebuild
+    container.innerHTML = recentlyUsedVars.map(varName =>
+        `<button type="button" class="chip" onclick="insertVariable('${varName}')">${varName.replace(/[{}]/g, '')}</button>`
+    ).join('');
+}
+
+// Update last template field when user clicks into any template field
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.template-field, input[name^="description_options"], textarea[name*="template"], textarea[name*="description"], textarea[name*="title"]').forEach(field => {
+        field.addEventListener('focus', function() {
+            lastTemplateField = this;
+        });
+    });
+
+    // Load recently used variables from localStorage
+    const stored = localStorage.getItem('teamarr_recent_vars');
+    if (stored) {
+        recentlyUsedVars = JSON.parse(stored);
+    }
+});
+
 function insertVariable(variable) {
-    const activeElement = document.activeElement;
-    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
-        const start = activeElement.selectionStart;
-        const end = activeElement.selectionEnd;
-        const text = activeElement.value;
+    let targetElement = document.activeElement;
+
+    // If no element is focused or it's not an input/textarea, use the last template field
+    if (!targetElement || (targetElement.tagName !== 'INPUT' && targetElement.tagName !== 'TEXTAREA')) {
+        targetElement = lastTemplateField;
+    }
+
+    // If still no target, try to find the description_template field as default
+    if (!targetElement) {
+        targetElement = document.getElementById('description_template');
+    }
+
+    if (targetElement && (targetElement.tagName === 'INPUT' || targetElement.tagName === 'TEXTAREA')) {
+        const start = targetElement.selectionStart || 0;
+        const end = targetElement.selectionEnd || 0;
+        const text = targetElement.value || '';
         const before = text.substring(0, start);
         const after = text.substring(end);
-        activeElement.value = before + variable + after;
-        activeElement.selectionStart = activeElement.selectionEnd = start + variable.length;
-        activeElement.focus();
+        targetElement.value = before + variable + after;
+        targetElement.selectionStart = targetElement.selectionEnd = start + variable.length;
+        targetElement.focus();
+        lastTemplateField = targetElement;  // Update last used field
+
+        // Track this variable as recently used
+        addToRecentlyUsed(variable);
+
         updatePreviews();
     }
 }
@@ -1346,195 +1130,122 @@ async function applyCopyTemplates() {
 }
 
 // ============================================================================
-// CONDITIONAL DESCRIPTIONS
+// CONDITIONAL DESCRIPTIONS - COMPLETE REWRITE USING FORM ARRAYS
 // ============================================================================
-function loadConditions() {
-    const input = document.getElementById('description_options');
-    if (input && input.value) {
-        try {
-            conditions = JSON.parse(input.value);
-        } catch (e) {
-            conditions = [];
-        }
-    }
-    renderConditions();
-}
-
-function renderConditions() {
-    const container = document.getElementById('conditions-container');
+function conditionsRender() {
+    const container = document.getElementById('conditions-list');
     container.innerHTML = '';
 
     if (conditions.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No conditions added yet. Click "Custom Condition" or browse the Preset Library to get started.</p>';
+        container.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No conditions yet. Click "+ Add Condition" to get started.</p>';
         return;
     }
 
-    // Sort conditions by priority (lower number = higher priority)
-    const sortedConditions = [...conditions].sort((a, b) => {
-        const priorityA = parseInt(a.priority) || 50;
-        const priorityB = parseInt(b.priority) || 50;
-        return priorityA - priorityB;
-    });
+    conditions.forEach((condition, index) => {
+        const card = document.createElement('div');
+        card.className = 'condition-card';
+        card.id = `cond-card-${index}`;
 
-    sortedConditions.forEach((condition, index) => {
-        // Find original index in unsorted array
-        const originalIndex = conditions.indexOf(condition);
-        const card = createConditionCard(condition, originalIndex);
-        container.appendChild(card);
-    });
+        const condType = condition.condition || '';
+        const condSummary = getConditionSummaryText(condition);
 
-    updateHiddenInput();
-}
-
-function createConditionCard(condition, index) {
-    const card = document.createElement('div');
-    card.className = 'condition-card';
-    card.id = `condition-${index}`;
-
-    const sourceBadge = condition.source === 'preset'
-        ? '<span class="condition-source-badge condition-source-preset">Preset</span>'
-        : '<span class="condition-source-badge condition-source-custom">Custom</span>';
-
-    const conditionSummary = getConditionSummary(condition);
-
-    card.innerHTML = `
-        <div class="condition-card-header" onclick="toggleCondition(${index})">
-            <div class="condition-card-title">
-                <div>
-                    <div class="condition-card-name">${condition.name || 'Unnamed Condition'}</div>
-                    <div class="condition-card-summary">${conditionSummary} • Priority: ${condition.priority}</div>
+        card.innerHTML = `
+            <div class="condition-card-header" onclick="conditionsToggle(${index})">
+                <div class="condition-card-title">
+                    <div class="condition-card-name">${condition.name || 'Condition ' + (index + 1)}</div>
+                    <div class="condition-card-summary">${condSummary} • Priority: ${condition.priority || 50}</div>
+                </div>
+                <div class="condition-card-actions">
+                    <button type="button" onclick="event.stopPropagation(); conditionsRemove(${index})" class="btn btn-sm btn-danger btn-icon" title="Delete">🗑️</button>
+                    <div class="condition-card-expand">▼</div>
                 </div>
             </div>
-            <div class="condition-card-actions">
-                ${sourceBadge}
-                <button type="button" class="btn btn-sm btn-danger btn-icon" onclick="event.stopPropagation(); deleteCondition(${index})" title="Delete">🗑️</button>
-                <div class="condition-card-expand">▼</div>
+            <div class="condition-card-body">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="cond_name[]" value="${escapeHtml(condition.name || '')}">
+                </div>
+                <div class="form-group">
+                    <label>Condition Type</label>
+                    <select name="cond_type[]">
+                        <option value="">Select...</option>
+                        <option value="win_streak" ${condType === 'win_streak' ? 'selected' : ''}>Win Streak ≥ N</option>
+                        <option value="loss_streak" ${condType === 'loss_streak' ? 'selected' : ''}>Loss Streak ≥ N</option>
+                        <option value="team_rank" ${condType === 'team_rank' ? 'selected' : ''}>Team Rank ≤ N</option>
+                        <option value="opponent_rank" ${condType === 'opponent_rank' ? 'selected' : ''}>Opponent Rank ≤ N</option>
+                        <option value="is_home" ${condType === 'is_home' ? 'selected' : ''}>Is Home Game</option>
+                        <option value="is_away" ${condType === 'is_away' ? 'selected' : ''}>Is Away Game</option>
+                        <option value="has_odds" ${condType === 'has_odds' ? 'selected' : ''}>Has Odds</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Value (if needed)</label>
+                    <input type="number" name="cond_value[]" value="${condition.condition_value || ''}">
+                </div>
+                <div class="form-group">
+                    <label>Priority (1-100, lower = higher)</label>
+                    <input type="number" name="cond_priority[]" min="1" max="100" value="${condition.priority || 50}">
+                </div>
+                <div class="form-group">
+                    <label>Description Template</label>
+                    <input type="text" name="cond_template[]" value="${escapeHtml(condition.template || '')}" class="template-field">
+                </div>
+                <input type="hidden" name="cond_source[]" value="${condition.source || 'custom'}">
             </div>
-        </div>
-        <div class="condition-card-body">
-            <div class="form-group">
-                <label>Condition Name / Alias</label>
-                <input type="text" value="${condition.name || ''}" onchange="updateCondition(${index}, 'name', this.value)">
-            </div>
-            <div class="form-group">
-                <label>Condition Type</label>
-                <select onchange="updateCondition(${index}, 'condition', this.value)">
-                    ${getConditionTypeOptions(condition.condition)}
-                </select>
-            </div>
-            ${condition.condition_value !== undefined && condition.condition_value !== '' ? `
-            <div class="form-group">
-                <label>Value</label>
-                <input type="number" value="${condition.condition_value || ''}" onchange="updateCondition(${index}, 'condition_value', this.value)">
-            </div>
-            ` : ''}
-            <div class="form-group">
-                <label>Priority (1-100, lower = higher priority)</label>
-                <input type="number" min="1" max="100" value="${condition.priority}" onchange="updateCondition(${index}, 'priority', this.value)">
-            </div>
-            <div class="form-group">
-                <label>Description Template</label>
-                <input type="text" value="${condition.template}" onchange="updateCondition(${index}, 'template', this.value)">
-            </div>
-            ${condition.source === 'custom' ? `
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" ${condition.save_as_preset ? 'checked' : ''} onchange="updateCondition(${index}, 'save_as_preset', this.checked)">
-                    Save as preset in library
-                </label>
-            </div>
-            ` : ''}
-            <div class="preview-item" style="margin-top: 1rem;">
-                <strong>Preview</strong>
-                <span>${replaceVariables(condition.template)}</span>
-            </div>
-        </div>
-    `;
+        `;
 
-    return card;
+        container.appendChild(card);
+    });
 }
 
-function getConditionTypeOptions(selectedType) {
-    const types = {
-        'Performance': [
-            { value: 'win_streak', label: 'Win Streak ≥ N games', needsValue: true },
-            { value: 'loss_streak', label: 'Loss Streak ≥ N games', needsValue: true },
-            { value: 'team_rank', label: 'Team Rank ≤ N (college sports only)', needsValue: true },
-            { value: 'opponent_rank', label: 'Opponent Rank ≤ N (college sports only)', needsValue: true }
-        ],
-        'Matchup': [
-            { value: 'teams_played_before', label: 'Teams Played Before (this season)', needsValue: false },
-            { value: 'is_home', label: 'Is Home Game', needsValue: false },
-            { value: 'is_away', label: 'Is Away Game', needsValue: false },
-            { value: 'is_conference', label: 'Is Conference Game (college sports only)', needsValue: false }
-        ],
-        'Playoffs': [
-            { value: 'is_playoff', label: 'Is Playoff Game', needsValue: false }
-        ],
-        'Odds & Betting': [
-            { value: 'has_odds', label: 'Has Odds Available (only available on game day, certain events only)', needsValue: false }
-        ]
-    };
-
-    let html = '<option value="">Select condition type...</option>';
-    for (const [category, options] of Object.entries(types)) {
-        html += `<optgroup label="${category}">`;
-        options.forEach(opt => {
-            const selected = opt.value === selectedType ? 'selected' : '';
-            html += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
-        });
-        html += '</optgroup>';
-    }
-    return html;
-}
-
-function getConditionSummary(condition) {
+function getConditionSummaryText(condition) {
     const labels = {
         'win_streak': `Win Streak ≥ ${condition.condition_value}`,
         'loss_streak': `Loss Streak ≥ ${condition.condition_value}`,
         'team_rank': `Team Rank ≤ ${condition.condition_value}`,
         'opponent_rank': `Opponent Rank ≤ ${condition.condition_value}`,
-        'teams_played_before': 'Teams Played Before',
         'is_home': 'Home Game',
         'is_away': 'Away Game',
-        'is_conference': 'Conference Game',
-        'is_playoff': 'Playoff Game',
-        'has_odds': 'Has Odds Available'
+        'has_odds': 'Has Odds'
     };
-    return labels[condition.condition] || 'Unknown';
+    return labels[condition.condition] || 'No condition selected';
 }
 
-function toggleCondition(index) {
-    const card = document.getElementById(`condition-${index}`);
-    card.classList.toggle('expanded');
-}
-
-function addConditionCustom() {
-    conditions.push({
-        name: `Condition ${conditions.length + 1}`,
-        condition: '',
-        condition_value: '',
-        priority: 50,
-        template: '{team_name} faces {opponent} at {venue}',
-        source: 'custom'
-    });
-    renderConditions();
-}
-
-function updateCondition(index, field, value) {
-    conditions[index][field] = value;
-    renderConditions();
-}
-
-function deleteCondition(index) {
-    if (confirm('Delete this condition?')) {
-        conditions.splice(index, 1);
-        renderConditions();
+function conditionsToggle(index) {
+    const card = document.getElementById(`cond-card-${index}`);
+    if (card) {
+        card.classList.toggle('expanded');
     }
 }
 
-function updateHiddenInput() {
-    document.getElementById('description_options').value = JSON.stringify(conditions);
+// Alias for old code that might call renderConditions
+function renderConditions() {
+    conditionsRender();
+}
+
+function conditionsAddNew() {
+    conditions.push({
+        name: 'New Condition',
+        condition: '',
+        condition_value: '',
+        priority: 50,
+        template: '{team_name} faces {opponent}',
+        source: 'custom'
+    });
+    conditionsRender();
+}
+
+function conditionsRemove(index) {
+    if (confirm('Delete this condition?')) {
+        conditions.splice(index, 1);
+        conditionsRender();
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ============================================================================
@@ -1562,7 +1273,7 @@ async function showPresetLibrary() {
                             <button class="preset-delete-btn" onclick="event.stopPropagation(); deletePreset(${preset.id})">Delete</button>
                         </div>
                     </div>
-                    <div class="preset-item-condition">${getConditionSummary({condition: preset.condition_type, condition_value: preset.condition_value})} • Priority: ${preset.priority}</div>
+                    <div class="preset-item-condition">${getConditionSummaryText({condition: preset.condition_type, condition_value: preset.condition_value})} • Priority: ${preset.priority}</div>
                     <div class="preset-item-template">"${preset.template}"</div>
                 `;
                 div.onclick = () => addPresetToConditions(preset);
@@ -1592,6 +1303,7 @@ function addPresetToConditions(preset) {
         preset_id: preset.id
     });
     renderConditions();
+    updateHiddenInput();
     closePresetModal();
 }
 
@@ -1667,11 +1379,202 @@ async function parseESPNUrl() {
 }
 
 // ============================================================================
-// FORM SUBMISSION
+// TEMPLATE VARIABLES GENERATION
 // ============================================================================
-document.getElementById('team-form')?.addEventListener('submit', function(e) {
-    // Ensure conditions are saved to hidden input
-    updateHiddenInput();
+
+// Define all template variables organized by category
+const TEMPLATE_VARIABLES = {
+    'Game Basics': {
+        icon: '⚽',
+        variables: ['team_name', 'team_abbrev', 'opponent', 'opponent_abbrev', 'matchup', 'sport', 'home_away_text', 'vs_at', 'home_team', 'away_team']
+    },
+    'Date & Time': {
+        icon: '📅',
+        variables: ['game_date', 'game_date_short', 'game_day', 'game_day_short', 'game_time', 'game_time_12h', 'game_time_24h', 'days_until']
+    },
+    'Venue': {
+        icon: '📍',
+        variables: ['venue', 'venue_full', 'venue_city', 'venue_state', 'attendance']
+    },
+    'League & Conference': {
+        icon: '🏆',
+        variables: ['league', 'league_name', 'college_conference', 'pro_conference', 'pro_conference_abbrev', 'pro_division']
+    },
+    'Records & Rankings': {
+        icon: '📊',
+        variables: ['team_record', 'opponent_record', 'team_wins', 'team_losses', 'team_ties', 'team_win_pct', 'opponent_wins', 'opponent_losses', 'opponent_win_pct', 'home_record', 'away_record', 'home_win_pct', 'away_win_pct', 'conference_record', 'division_record', 'team_rank', 'team_rank_formatted', 'opponent_rank', 'opponent_rank_formatted']
+    },
+    'Streaks': {
+        icon: '🔥',
+        variables: ['streak_type', 'streak_count', 'win_streak', 'loss_streak', 'win_streak_text', 'loss_streak_text', 'last_5_record', 'last_10_record']
+    },
+    'Head-to-Head': {
+        icon: '🤝',
+        variables: ['rematch_date', 'rematch_result', 'rematch_score', 'rematch_score_abbrev', 'rematch_winner', 'rematch_loser', 'rematch_location', 'rematch_days_since', 'rematch_season_series']
+    },
+    'Game Status & Scores': {
+        icon: '🎮',
+        variables: ['game_status', 'team_score', 'opponent_score', 'score', 'score_diff', 'final_score', 'score_differential', 'score_differential_text', 'result', 'result_text', 'result_verb', 'outcome', 'overtime_text', 'game_summary', 'game_summary_text']
+    },
+    'Team Stats & Players': {
+        icon: '📈',
+        variables: ['team_ppg', 'team_papg', 'opponent_ppg', 'opponent_papg', 'top_scorer_name', 'top_scorer_ppg', 'top_scorer_position', 'top_rebounder_name', 'top_rebounder_rpg', 'top_assist_name', 'top_assist_apg', 'injury_count', 'injury_list', 'injury_status']
+    },
+    'Betting Odds': {
+        icon: '💰',
+        variables: ['odds_provider', 'over_under', 'spread', 'odds_details', 'moneyline', 'opponent_moneyline', 'spread_odds', 'opponent_spread_odds', 'spread_category', 'spread_category_text']
+    },
+    'Previous & Next Games': {
+        icon: '⏮️',
+        variables: ['last_opponent', 'last_date', 'last_matchup', 'last_result', 'last_score', 'last_score_abbrev', 'next_opponent', 'next_date', 'next_time', 'next_datetime', 'next_matchup', 'next_venue', 'today_score_abbrev']
+    },
+    'Series & Playoffs': {
+        icon: '🏆',
+        variables: ['series_type', 'series_round', 'series_summary', 'series_status', 'series_record', 'series_team_wins', 'series_opponent_wins', 'series_leader', 'series_leader_abbrev', 'series_lead', 'series_game_number', 'series_games_played', 'series_length', 'games_to_win_series', 'series_games_remaining', 'playoff_seed', 'playoff_position', 'games_back', 'can_advance', 'can_be_eliminated', 'series_clinch_text', 'elimination_text']
+    },
+    'Season': {
+        icon: '🎯',
+        variables: ['season_year', 'season_type']
+    }
+};
+
+// Generate template variables HTML
+function generateTemplateVariablesHTML(containerId) {
+    let html = `
+        <details class="variable-helper" style="margin-bottom: 1.5rem; background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
+            <summary style="cursor: pointer; font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">📝 Template Variables</summary>
+
+            <input type="text" class="variable-search-input" placeholder="Search variables..." style="width: 100%; margin: 1rem 0; padding: 0.5rem;">
+
+            <div class="variable-category recently-used-category" style="display: none;">
+                <h4>🕒 Recently Used</h4>
+                <div class="recently-used-vars" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <!-- Recently used variables will be dynamically added here -->
+                </div>
+            </div>
+    `;
+
+    // Generate category details
+    for (const [categoryName, categoryData] of Object.entries(TEMPLATE_VARIABLES)) {
+        html += `
+            <details style="margin-top: ${categoryName === 'Game Basics' ? '1rem' : '0.5rem'};" class="variable-category">
+                <summary style="cursor: pointer; font-weight: bold;">${categoryData.icon} ${categoryName}</summary>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+        `;
+
+        categoryData.variables.forEach(varName => {
+            html += `<button type="button" class="chip" onclick="insertVariable('{${varName}}')">${varName}</button>`;
+        });
+
+        html += `
+                </div>
+            </details>
+        `;
+    }
+
+    html += `
+            <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-muted);">
+                Click any variable to insert at cursor.
+            </p>
+        </details>
+    `;
+
+    return html;
+}
+
+// Populate all three template variable containers
+function initializeTemplateVariables() {
+    const containers = [
+        'template-vars-templates',
+        'template-vars-conditionals',
+        'template-vars-fillers'
+    ];
+
+    containers.forEach(containerId => {
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.innerHTML = generateTemplateVariablesHTML(containerId);
+        }
+    });
+
+    // Set up search functionality for all search inputs
+    document.querySelectorAll('.variable-search-input').forEach(searchInput => {
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const parent = e.target.closest('.variable-helper');
+            const categories = parent.querySelectorAll('.variable-category');
+
+            categories.forEach(category => {
+                // Skip recently used category
+                if (category.classList.contains('recently-used-category')) return;
+
+                const buttons = category.querySelectorAll('.chip');
+                let hasVisibleButtons = false;
+
+                buttons.forEach(button => {
+                    const variableName = button.textContent.toLowerCase();
+                    if (variableName.includes(searchTerm)) {
+                        button.style.display = '';
+                        hasVisibleButtons = true;
+                    } else {
+                        button.style.display = 'none';
+                    }
+                });
+
+                // Show/hide the entire category based on whether it has visible buttons
+                if (searchTerm && hasVisibleButtons) {
+                    category.setAttribute('open', '');
+                    category.style.display = '';
+                } else if (searchTerm && !hasVisibleButtons) {
+                    category.style.display = 'none';
+                } else {
+                    category.style.display = '';
+                    category.removeAttribute('open');
+                }
+            });
+        });
+    });
+
+    // Update recently used displays in all containers
+    updateAllRecentlyUsedDisplays();
+}
+
+// Update recently used variables display in all containers
+function updateAllRecentlyUsedDisplays() {
+    const containers = document.querySelectorAll('.recently-used-vars');
+    const categories = document.querySelectorAll('.recently-used-category');
+
+    if (recentlyUsedVars.length === 0) {
+        categories.forEach(cat => cat.style.display = 'none');
+        return;
+    }
+
+    // Show all categories
+    categories.forEach(cat => cat.style.display = 'block');
+
+    // Update all containers
+    const html = recentlyUsedVars.map(varName =>
+        `<button type="button" class="chip" onclick="insertVariable('${varName}')">${varName.replace(/[{}]/g, '')}</button>`
+    ).join('');
+
+    containers.forEach(container => {
+        container.innerHTML = html;
+    });
+}
+
+// Override the existing updateRecentlyUsedDisplay to use the new function
+const originalUpdateRecentlyUsedDisplay = updateRecentlyUsedDisplay;
+updateRecentlyUsedDisplay = function() {
+    updateAllRecentlyUsedDisplays();
+};
+
+// Initialize template variables and conditions on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('[DOMCONTENTLOADED] Event fired!');
+    initializeTemplateVariables();
+
+    // Initialize conditions from server data and render them
+    conditionsRender();
 });
 </script>
 {% endblock %}

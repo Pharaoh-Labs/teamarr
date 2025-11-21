@@ -192,118 +192,116 @@ class TemplateEngine:
         # TEAM RECORDS (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_records', True):
-            record = team_stats.get('record', {})
+        record = team_stats.get('record', {})
 
-            # Always use opponent_stats for accurate records (fetched from opponent team endpoint)
-            # Schedule data often has stale or missing opponent records
-            opp_record = opponent_stats.get('record', {})
+        # Always use opponent_stats for accurate records (fetched from opponent team endpoint)
+        # Schedule data often has stale or missing opponent records
+        opp_record = opponent_stats.get('record', {})
 
 
-            # Fall back to schedule data only if opponent_stats is empty
-            if not opp_record:
-                opp_record = opponent.get('record', {})
+        # Fall back to schedule data only if opponent_stats is empty
+        if not opp_record:
+            opp_record = opponent.get('record', {})
 
-            # Team record
-            wins = record.get('wins', 0)
-            losses = record.get('losses', 0)
-            ties = record.get('ties', 0)
+        # Team record
+        wins = record.get('wins', 0)
+        losses = record.get('losses', 0)
+        ties = record.get('ties', 0)
 
-            if ties > 0:
-                variables['team_record'] = f"{wins}-{losses}-{ties}"
-            else:
-                variables['team_record'] = f"{wins}-{losses}"
+        if ties > 0:
+            variables['team_record'] = f"{wins}-{losses}-{ties}"
+        else:
+            variables['team_record'] = f"{wins}-{losses}"
 
-            variables['team_wins'] = str(wins)
-            variables['team_losses'] = str(losses)
-            variables['team_ties'] = str(ties)
-            variables['team_win_pct'] = f"{record.get('winPercent', 0):.3f}"
+        variables['team_wins'] = str(wins)
+        variables['team_losses'] = str(losses)
+        variables['team_ties'] = str(ties)
+        variables['team_win_pct'] = f"{record.get('winPercent', 0):.3f}"
 
-            # Opponent record
-            opp_wins = opp_record.get('wins', 0)
-            opp_losses = opp_record.get('losses', 0)
-            opp_ties = opp_record.get('ties', 0)
+        # Opponent record
+        opp_wins = opp_record.get('wins', 0)
+        opp_losses = opp_record.get('losses', 0)
+        opp_ties = opp_record.get('ties', 0)
 
-            if opp_ties > 0:
-                variables['opponent_record'] = f"{opp_wins}-{opp_losses}-{opp_ties}"
-            else:
-                variables['opponent_record'] = f"{opp_wins}-{opp_losses}"
+        if opp_ties > 0:
+            variables['opponent_record'] = f"{opp_wins}-{opp_losses}-{opp_ties}"
+        else:
+            variables['opponent_record'] = f"{opp_wins}-{opp_losses}"
 
-            variables['opponent_wins'] = str(opp_wins)
-            variables['opponent_losses'] = str(opp_losses)
-            variables['opponent_ties'] = str(opp_ties)
-            variables['opponent_win_pct'] = f"{opp_record.get('winPercent', 0):.3f}"
+        variables['opponent_wins'] = str(opp_wins)
+        variables['opponent_losses'] = str(opp_losses)
+        variables['opponent_ties'] = str(opp_ties)
+        variables['opponent_win_pct'] = f"{opp_record.get('winPercent', 0):.3f}"
 
         # =====================================================================
         # STREAKS (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_streaks', True):
-            # Get streak data from team_stats (fetched from team API)
-            streak_count_raw = team_stats.get('streak_count', 0)
-            streak_type = team_stats.get('streak_type', '')  # 'W' or 'L'
-            streak_count = abs(streak_count_raw)  # Always use positive value for display
+        # Get streak data from team_stats (fetched from team API)
+        # ESPN returns positive integers for win streaks, negative for loss streaks
+        streak_count_raw = team_stats.get('streak_count', 0)
+        streak_count = abs(streak_count_raw)  # Always use positive value for display
+        streak_type = 'W' if streak_count_raw > 0 else ('L' if streak_count_raw < 0 else '')
 
-            # Base streak variables
-            variables['streak'] = str(streak_count)
-            variables['streak_count'] = str(streak_count)
-            variables['streak_type'] = streak_type
+        # Base streak variables
+        variables['streak'] = str(streak_count)
+        variables['streak_count'] = str(streak_count)
+        variables['streak_type'] = streak_type
 
-            # Win streaks (only show if 2+ games)
-            if streak_type == 'W' and streak_count >= 2:
-                variables['has_win_streak'] = 'true'
-                variables['win_streak'] = str(streak_count)
-                variables['win_streak_text'] = f"{streak_count} game winning streak"
-                variables['has_loss_streak'] = 'false'
-                variables['loss_streak'] = '0'
-                variables['loss_streak_text'] = ''
-            # Loss streaks (only show if 2+ games)
-            elif streak_type == 'L' and streak_count >= 2:
-                variables['has_loss_streak'] = 'true'
-                variables['loss_streak'] = str(streak_count)
-                variables['loss_streak_text'] = f"{streak_count} game losing streak"
-                variables['has_win_streak'] = 'false'
-                variables['win_streak'] = '0'
-                variables['win_streak_text'] = ''
-            # No significant streak
-            else:
-                variables['has_win_streak'] = 'false'
-                variables['has_loss_streak'] = 'false'
-                variables['win_streak'] = '0'
-                variables['loss_streak'] = '0'
-                variables['win_streak_text'] = ''
-                variables['loss_streak_text'] = ''
+        # Win streaks (only show if 2+ games)
+        if streak_count_raw >= 2:
+            variables['has_win_streak'] = 'true'
+            variables['win_streak'] = str(streak_count)
+            variables['win_streak_text'] = f"{streak_count} game winning streak"
+            variables['has_loss_streak'] = 'false'
+            variables['loss_streak'] = '0'
+            variables['loss_streak_text'] = ''
+        # Loss streaks (only show if 2+ games)
+        elif streak_count_raw <= -2:
+            variables['has_loss_streak'] = 'true'
+            variables['loss_streak'] = str(streak_count)
+            variables['loss_streak_text'] = f"{streak_count} game losing streak"
+            variables['has_win_streak'] = 'false'
+            variables['win_streak'] = '0'
+            variables['win_streak_text'] = ''
+        # No significant streak
+        else:
+            variables['has_win_streak'] = 'false'
+            variables['has_loss_streak'] = 'false'
+            variables['win_streak'] = '0'
+            variables['loss_streak'] = '0'
+            variables['win_streak_text'] = ''
+            variables['loss_streak_text'] = ''
 
         # =====================================================================
         # HEAD-TO-HEAD (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_head_to_head', True):
-            season_series = h2h.get('season_series', {})
-            variables['season_series'] = f"{season_series.get('team_wins', 0)}-{season_series.get('opponent_wins', 0)}"
-            variables['season_series_team_wins'] = str(season_series.get('team_wins', 0))
-            variables['season_series_opponent_wins'] = str(season_series.get('opponent_wins', 0))
+        season_series = h2h.get('season_series', {})
+        variables['season_series'] = f"{season_series.get('team_wins', 0)}-{season_series.get('opponent_wins', 0)}"
+        variables['season_series_team_wins'] = str(season_series.get('team_wins', 0))
+        variables['season_series_opponent_wins'] = str(season_series.get('opponent_wins', 0))
 
-            team_series_wins = season_series.get('team_wins', 0)
-            opp_series_wins = season_series.get('opponent_wins', 0)
-            if team_series_wins > opp_series_wins:
-                variables['season_series_leader'] = variables['team_name']
-            elif opp_series_wins > team_series_wins:
-                variables['season_series_leader'] = variables['opponent']
-            else:
-                variables['season_series_leader'] = 'tied'
+        team_series_wins = season_series.get('team_wins', 0)
+        opp_series_wins = season_series.get('opponent_wins', 0)
+        if team_series_wins > opp_series_wins:
+            variables['season_series_leader'] = variables['team_name']
+        elif opp_series_wins > team_series_wins:
+            variables['season_series_leader'] = variables['opponent']
+        else:
+            variables['season_series_leader'] = 'tied'
 
-            # Rematch variables (previous matchup against same opponent)
-            previous = h2h.get('previous_game', {})
-            variables['rematch_date'] = previous.get('date', '')
-            variables['rematch_result'] = previous.get('result', '')
-            variables['rematch_score'] = previous.get('score', '')
-            variables['rematch_score_abbrev'] = previous.get('score_abbrev', '')
-            variables['rematch_winner'] = previous.get('winner', '')
-            variables['rematch_loser'] = previous.get('loser', '')
-            variables['rematch_location'] = previous.get('location', '')
-            variables['rematch_days_since'] = str(previous.get('days_since', 0))
-            variables['rematch_season_series'] = f"{season_series.get('team_wins', 0)}-{season_series.get('opponent_wins', 0)}"
+        # Rematch variables (previous matchup against same opponent)
+        previous = h2h.get('previous_game', {})
+        variables['rematch_date'] = previous.get('date', '')
+        variables['rematch_result'] = previous.get('result', '')
+        variables['rematch_score'] = previous.get('score', '')
+        variables['rematch_score_abbrev'] = previous.get('score_abbrev', '')
+        variables['rematch_winner'] = previous.get('winner', '')
+        variables['rematch_loser'] = previous.get('loser', '')
+        variables['rematch_location'] = previous.get('location', '')
+        variables['rematch_days_since'] = str(previous.get('days_since', 0))
+        variables['rematch_season_series'] = f"{season_series.get('team_wins', 0)}-{season_series.get('opponent_wins', 0)}"
 
         # =====================================================================
         # SERIES & PLAYOFFS (comprehensive)
@@ -411,109 +409,105 @@ class TemplateEngine:
         # STANDINGS (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_standings', True):
-            # Get standings data from team_stats API
-            playoff_seed = team_stats.get('playoff_seed', 0)
-            games_back = team_stats.get('games_back', 0.0)
+        # Get standings data from team_stats API
+        playoff_seed = team_stats.get('playoff_seed', 0)
+        games_back = team_stats.get('games_back', 0.0)
 
-            variables['playoff_seed'] = self._format_rank(playoff_seed)
-            variables['games_back'] = f"{games_back:.1f}" if games_back > 0 else "0.0"
+        variables['playoff_seed'] = self._format_rank(playoff_seed)
+        variables['games_back'] = f"{games_back:.1f}" if games_back > 0 else "0.0"
 
-            # Determine playoff position
-            # NBA/NHL: top 8 seeds make playoffs
-            # NFL: top 7 seeds make playoffs
-            # Simplified: if seed exists and <= 8, in playoffs
-            if playoff_seed > 0 and playoff_seed <= 8:
-                variables['playoff_position'] = 'in playoff position'
-            else:
-                variables['playoff_position'] = 'outside playoffs'
+        # Determine playoff position
+        # NBA/NHL: top 8 seeds make playoffs
+        # NFL: top 7 seeds make playoffs
+        # Simplified: if seed exists and <= 8, in playoffs
+        if playoff_seed > 0 and playoff_seed <= 8:
+            variables['playoff_position'] = 'in playoff position'
+        else:
+            variables['playoff_position'] = 'outside playoffs'
 
 
         # =====================================================================
         # RECENT PERFORMANCE (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_records', True):
-            # Home/away records from team_stats API
-            home_record = team_stats.get('home_record', '0-0')
-            away_record = team_stats.get('away_record', '0-0')
-            division_record = team_stats.get('division_record', '')
+        # Home/away records from team_stats API
+        home_record = team_stats.get('home_record', '0-0')
+        away_record = team_stats.get('away_record', '0-0')
+        division_record = team_stats.get('division_record', '')
 
-            variables['home_record'] = home_record
-            variables['away_record'] = away_record
-            variables['division_record'] = division_record
+        variables['home_record'] = home_record
+        variables['away_record'] = away_record
+        variables['division_record'] = division_record
 
-            # Calculate win percentages from records
-            def calc_win_pct(record_str):
-                """Calculate win percentage from 'W-L' string"""
-                if not record_str or record_str == '0-0':
-                    return '.000'
-                try:
-                    parts = record_str.split('-')
-                    if len(parts) >= 2:
-                        wins = int(parts[0])
-                        losses = int(parts[1])
-                        total = wins + losses
-                        if total > 0:
-                            return f"{wins / total:.3f}"
-                except:
-                    pass
+        # Calculate win percentages from records
+        def calc_win_pct(record_str):
+            """Calculate win percentage from 'W-L' string"""
+            if not record_str or record_str == '0-0':
                 return '.000'
+            try:
+                parts = record_str.split('-')
+                if len(parts) >= 2:
+                    wins = int(parts[0])
+                    losses = int(parts[1])
+                    total = wins + losses
+                    if total > 0:
+                        return f"{wins / total:.3f}"
+            except:
+                pass
+            return '.000'
 
-            variables['home_win_pct'] = calc_win_pct(home_record)
-            variables['away_win_pct'] = calc_win_pct(away_record)
+        variables['home_win_pct'] = calc_win_pct(home_record)
+        variables['away_win_pct'] = calc_win_pct(away_record)
 
-            # Conference record already available from schedule API competitor.records
-            # Last 5/10 would need historical calculation - future implementation
-            variables['last_5_record'] = ''
-            variables['last_10_record'] = ''
-            variables['recent_form'] = ''
-            variables['conference_record'] = ''
+        # Conference record already available from schedule API competitor.records
+        # Last 5/10 would need historical calculation - future implementation
+        variables['last_5_record'] = ''
+        variables['last_10_record'] = ''
+        variables['recent_form'] = ''
+        variables['conference_record'] = ''
 
         # =====================================================================
         # STATISTICS (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_statistics', True):
-            # Get PPG/PAPG from team_stats API data
-            variables['team_ppg'] = f"{team_stats.get('ppg', 0):.1f}"
-            variables['team_papg'] = f"{team_stats.get('papg', 0):.1f}"
+        # Get PPG/PAPG from team_stats API data
+        variables['team_ppg'] = f"{team_stats.get('ppg', 0):.1f}"
+        variables['team_papg'] = f"{team_stats.get('papg', 0):.1f}"
 
-            # Get opponent PPG/PAPG from opponent_stats API data
-            variables['opponent_ppg'] = f"{opponent_stats.get('ppg', 0):.1f}"
-            variables['opponent_papg'] = f"{opponent_stats.get('papg', 0):.1f}"
+        # Get opponent PPG/PAPG from opponent_stats API data
+        variables['opponent_ppg'] = f"{opponent_stats.get('ppg', 0):.1f}"
+        variables['opponent_papg'] = f"{opponent_stats.get('papg', 0):.1f}"
 
-            # Rankings not available from API - set empty
-            variables['team_ppg_rank'] = ''
-            variables['opponent_ppg_rank'] = ''
-            variables['team_papg_rank'] = ''
-            variables['opponent_papg_rank'] = ''
+        # Rankings not available from API - set empty
+        variables['team_ppg_rank'] = ''
+        variables['opponent_ppg_rank'] = ''
+        variables['team_papg_rank'] = ''
+        variables['opponent_papg_rank'] = ''
 
         # =====================================================================
         # PLAYERS (if enabled)
         # =====================================================================
 
-        if team_config.get('enable_players', True):
-            players = team_stats.get('players', {})
+        players = team_stats.get('players', {})
 
-            top_scorer = players.get('top_scorer', {})
-            variables['top_scorer_name'] = top_scorer.get('name', '')
-            variables['top_scorer_ppg'] = f"{top_scorer.get('ppg', 0):.1f}"
-            variables['top_scorer_position'] = top_scorer.get('position', '')
+        top_scorer = players.get('top_scorer', {})
+        variables['top_scorer_name'] = top_scorer.get('name', '')
+        variables['top_scorer_ppg'] = f"{top_scorer.get('ppg', 0):.1f}"
+        variables['top_scorer_position'] = top_scorer.get('position', '')
 
-            top_rebounder = players.get('top_rebounder', {})
-            variables['top_rebounder_name'] = top_rebounder.get('name', '')
-            variables['top_rebounder_rpg'] = f"{top_rebounder.get('rpg', 0):.1f}"
+        top_rebounder = players.get('top_rebounder', {})
+        variables['top_rebounder_name'] = top_rebounder.get('name', '')
+        variables['top_rebounder_rpg'] = f"{top_rebounder.get('rpg', 0):.1f}"
 
-            top_assist = players.get('top_assist', {})
-            variables['top_assist_name'] = top_assist.get('name', '')
-            variables['top_assist_apg'] = f"{top_assist.get('apg', 0):.1f}"
+        top_assist = players.get('top_assist', {})
+        variables['top_assist_name'] = top_assist.get('name', '')
+        variables['top_assist_apg'] = f"{top_assist.get('apg', 0):.1f}"
 
-            injuries = players.get('injuries', [])
-            variables['has_injuries'] = 'true' if injuries else 'false'
-            variables['injury_count'] = str(len(injuries))
-            variables['injury_list'] = ', '.join(injuries)
-            variables['injury_status'] = 'dealing with injuries' if injuries else 'healthy'
+        injuries = players.get('injuries', [])
+        variables['has_injuries'] = 'true' if injuries else 'false'
+        variables['injury_count'] = str(len(injuries))
+        variables['injury_list'] = ', '.join(injuries)
+        variables['injury_status'] = 'dealing with injuries' if injuries else 'healthy'
 
         # =====================================================================
         # GAME STATUS (for live games)
@@ -873,15 +867,14 @@ class TemplateEngine:
         opponent = away_team if is_home else home_team
 
         # Performance conditions
+        # ESPN returns positive integers for win streaks, negative for loss streaks
         if condition_type == 'win_streak':
-            streak_count = abs(team_stats.get('streak_count', 0))  # Use absolute value for comparison
-            streak_type = team_stats.get('streak_type', '')
-            return streak_type == 'W' and streak_count >= int(condition_value) if condition_value else False
+            streak_count = team_stats.get('streak_count', 0)
+            return streak_count >= int(condition_value) if condition_value else False
 
         elif condition_type == 'loss_streak':
-            streak_count = abs(team_stats.get('streak_count', 0))  # Use absolute value for comparison
-            streak_type = team_stats.get('streak_type', '')
-            return streak_type == 'L' and streak_count >= int(condition_value) if condition_value else False
+            streak_count = team_stats.get('streak_count', 0)
+            return streak_count <= -int(condition_value) if condition_value else False
 
         elif condition_type == 'is_top_ten_matchup':
             # Both our team and opponent ranked in top 10

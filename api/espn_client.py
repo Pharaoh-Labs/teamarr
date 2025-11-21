@@ -332,43 +332,6 @@ class ESPNClient:
 
         return stats
 
-    def get_streak_type(self, sport: str, league: str, team_id: str) -> str:
-        """
-        Determine if current streak is wins or losses by checking last game result
-
-        Args:
-            sport: Sport type
-            league: League identifier
-            team_id: Team ID
-
-        Returns:
-            str: 'W' for win streak, 'L' for loss streak, '' if unknown
-        """
-        # Check scoreboard for past 7 days to find the most recent completed game
-        from datetime import datetime, timedelta
-
-        for days_ago in range(7):
-            check_date = (datetime.now() - timedelta(days=days_ago)).strftime('%Y%m%d')
-            scoreboard = self.get_scoreboard(sport, league, check_date)
-
-            if not scoreboard or 'events' not in scoreboard:
-                continue
-
-            # Look for this team in today's scoreboard
-            for event in scoreboard['events']:
-                comp = event.get('competitions', [{}])[0]
-                status = comp.get('status', {}).get('type', {})
-
-                # Only check completed games
-                if not status.get('completed', False):
-                    continue
-
-                for competitor in comp.get('competitors', []):
-                    if str(competitor.get('team', {}).get('id')) == str(team_id):
-                        # Found the team's most recent completed game
-                        return 'W' if competitor.get('winner', False) else 'L'
-
-        return ''
 
     def get_scoreboard(self, sport: str, league: str, date: str = None) -> Optional[Dict]:
         """

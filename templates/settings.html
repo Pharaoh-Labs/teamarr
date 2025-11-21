@@ -30,8 +30,8 @@
             <div class="form-group">
                 <label for="auto_generate_frequency">Generation Frequency</label>
                 <select name="auto_generate_frequency" id="auto_generate_frequency">
-                    <option value="hourly" {% if settings.auto_generate_frequency == 'hourly' %}selected{% endif %}>Hourly</option>
-                    <option value="daily" {% if settings.auto_generate_frequency == 'daily' or not settings.auto_generate_frequency %}selected{% endif %}>Daily (Recommended)</option>
+                    <option value="hourly" {% if settings.auto_generate_frequency == 'hourly' or not settings.auto_generate_frequency %}selected{% endif %}>Hourly (Recommended)</option>
+                    <option value="daily" {% if settings.auto_generate_frequency == 'daily' %}selected{% endif %}>Daily</option>
                     <option value="weekly" {% if settings.auto_generate_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
                 </select>
                 <small class="help-text">How often to automatically regenerate the EPG file</small>
