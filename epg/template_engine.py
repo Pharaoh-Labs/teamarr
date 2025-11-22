@@ -949,11 +949,20 @@ class TemplateEngine:
             'MLS Season Pass'
         ]
 
+        # DEBUG: Log broadcast types
+        print(f"DEBUG _get_broadcast_network: broadcasts type = {type(broadcasts)}, len = {len(broadcasts) if isinstance(broadcasts, list) else 'N/A'}")
+        for i, b in enumerate(broadcasts):
+            print(f"  broadcasts[{i}] type = {type(b)}, value = {b}")
+
         # Filter out radio, subscription packages, and non-dict entries
         usable = [b for b in broadcasts
                   if isinstance(b, dict) and
                      b.get('type', {}).get('shortName', '').upper() != 'RADIO' and
                      b.get('media', {}).get('shortName', '') not in SKIP_PACKAGES]
+
+        print(f"DEBUG: After filter, usable len = {len(usable)}")
+        for i, b in enumerate(usable):
+            print(f"  usable[{i}] type = {type(b)}")
 
         if not usable:
             return ""
