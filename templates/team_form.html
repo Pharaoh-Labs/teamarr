@@ -1496,9 +1496,9 @@ async function applyCopyTemplates() {
                 return;
             }
 
-            // Get current team ID from the form (either from hidden field or URL)
-            const teamIdInput = document.querySelector('input[name="team_id"]');
-            const currentTeamId = teamIdInput ? teamIdInput.value : null;
+            // Get current team ID from the URL (e.g., /teams/2/edit)
+            const urlMatch = window.location.pathname.match(/\/teams\/(\d+)/);
+            const currentTeamId = urlMatch ? urlMatch[1] : null;
 
             if (!currentTeamId) {
                 showNotification('Cannot determine current team ID', 'error');
