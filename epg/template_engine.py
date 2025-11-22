@@ -949,9 +949,10 @@ class TemplateEngine:
             'MLS Season Pass'
         ]
 
-        # Filter out radio and subscription packages
+        # Filter out radio, subscription packages, and non-dict entries
         usable = [b for b in broadcasts
-                  if b.get('type', {}).get('shortName', '').upper() != 'RADIO' and
+                  if isinstance(b, dict) and
+                     b.get('type', {}).get('shortName', '').upper() != 'RADIO' and
                      b.get('media', {}).get('shortName', '') not in SKIP_PACKAGES]
 
         if not usable:
