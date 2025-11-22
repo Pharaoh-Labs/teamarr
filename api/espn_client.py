@@ -4,6 +4,9 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import time
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class ESPNClient:
     """Client for ESPN's public API"""
@@ -28,10 +31,11 @@ class ESPNClient:
                 return response.json()
             except requests.exceptions.RequestException as e:
                 if attempt < self.retry_count - 1:
+                    logger.warning(f"ESPN API request failed (attempt {attempt + 1}/{self.retry_count}): {e}")
                     time.sleep(self.retry_delay * (attempt + 1))
                     continue
                 else:
-                    print(f"❌ ESPN API request failed after {self.retry_count} attempts: {e}")
+                    logger.error(f"ESPN API request failed after {self.retry_count} attempts: {e}")
                     return None
 
     def _get_group_name(self, sport: str, league: str, group_id: str) -> tuple:
@@ -57,7 +61,7 @@ class ESPNClient:
                 return (name, abbrev)
             return ('', '')
         except Exception as e:
-            print(f"❌ Error fetching group name for ID {group_id}: {e}")
+            logger.error(f"Error fetching group name for ID {group_id}: {e}")
             return ('', '')
 
     def _extract_record(self, record_list: List) -> Dict:
@@ -387,7 +391,7 @@ class ESPNClient:
                     events.append(parsed_event)
 
             except Exception as e:
-                print(f"⚠️  Error parsing event: {e}")
+                logger.warning(f"Error parsing event: {e}")
                 continue
 
         return events
@@ -460,7 +464,7 @@ class ESPNClient:
             return parsed
 
         except Exception as e:
-            print(f"⚠️  Error parsing event details: {e}")
+            logger.warning(f"Error parsing event details: {e}")
             return None
 
     def get_league_standings(self, sport: str, league: str) -> Optional[Dict]:
@@ -515,6 +519,7 @@ class ESPNClient:
         # Map ESPN URL sport codes to API paths
         sport_mapping = {
             'nba': ('basketball', 'nba'),
+            'wnba': ('basketball', 'wnba'),
             'nfl': ('football', 'nfl'),
             'mlb': ('baseball', 'mlb'),
             'nhl': ('hockey', 'nhl'),
@@ -534,3 +539,164 @@ class ESPNClient:
             }
 
         return None
+
+    def get_league_teams(self, sport: str, league: str) -> Optional[List[Dict]]:
+        """
+        Fetch all teams in a league from ESPN API
+
+        Args:
+            sport: Sport type (basketball, football, etc.)
+            league: League code (nba, nfl, etc.)
+
+        Returns:
+            List of team dictionaries with id, name, abbreviation, logo, etc.
+        """
+        url = f"{self.base_url}/{sport}/{league}/teams"
+        logger.info(f"Fetching teams for {league.upper()}: {url}")
+
+        try:
+            response = self._make_request(url)
+            if not response or 'sports' not in response:
+                logger.warning(f"No teams data found for {league}")
+                return None
+
+            teams = []
+
+            # ESPN API structure: sports -> leagues -> teams
+            for sport_obj in response.get('sports', []):
+                for league_obj in sport_obj.get('leagues', []):
+                    for team in league_obj.get('teams', []):
+                        team_data = team.get('team', {})
+
+                        teams.append({
+                            'id': team_data.get('id'),
+                            'slug': team_data.get('slug'),
+                            'name': team_data.get('displayName') or team_data.get('name'),
+                            'abbreviation': team_data.get('abbreviation'),
+                            'shortName': team_data.get('shortDisplayName'),
+                            'logo': team_data.get('logos', [{}])[0].get('href') if team_data.get('logos') else None,
+                            'color': team_data.get('color'),
+                            'alternateColor': team_data.get('alternateColor')
+                        })
+
+            logger.info(f"Found {len(teams)} teams for {league.upper()}")
+            return teams
+
+        except Exception as e:
+            logger.error(f"Error fetching teams for {league}: {e}")
+            return None
+
+    def get_league_conferences(self, sport: str, league: str) -> Optional[List[Dict]]:
+        """
+        Fetch all conferences for a college league
+
+        This is primarily for college sports which are organized by conference.
+        Returns conference IDs, names, abbreviations, and logos.
+
+        For college football, includes an "Other FBS Teams" pseudo-conference
+        for any FBS teams not in the 11 main conferences.
+
+        Args:
+            sport: Sport type (e.g., 'football', 'basketball')
+            league: League code (e.g., 'college-football', 'mens-college-basketball')
+
+        Returns:
+            List of conference dictionaries with id, name, abbreviation, logo
+        """
+        # Hardcoded conference group IDs for college sports
+        # These are stable ESPN group IDs that don't change
+        if league == 'college-football':
+            # FBS conferences - Independents (18) will be sorted to bottom in UI
+            conference_ids = [1, 151, 4, 5, 12, 15, 17, 9, 8, 37, 18]
+        elif league == 'mens-college-basketball':
+            # All Division I conferences (32 conferences, ~360 teams)
+            # Excludes group 50 (aggregate Division I)
+            conference_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 43, 44, 45, 46, 49]
+        elif league == 'womens-college-basketball':
+            # All Division I conferences (32 conferences, ~345 teams)
+            # Excludes group 50 (aggregate Division I)
+            conference_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 43, 44, 45, 46, 47]
+        else:
+            return None
+
+        conferences = []
+        season_year = datetime.now().year
+
+        for conf_id in conference_ids:
+            try:
+                url = f"http://sports.core.api.espn.com/v2/sports/{sport}/leagues/{league}/seasons/{season_year}/types/2/groups/{conf_id}"
+                response = self._make_request(url)
+
+                if response:
+                    # Don't fetch team count upfront - it's fetched on-demand when user expands conference
+                    # This reduces initial load from 64 API calls (32 conferences x 2) to just 32
+                    conferences.append({
+                        'id': conf_id,
+                        'name': response.get('name'),
+                        'abbreviation': response.get('abbreviation'),
+                        'logo': response.get('logos', [{}])[0].get('href') if response.get('logos') else None,
+                        'team_count': None  # Will be fetched when user expands conference
+                    })
+            except Exception as e:
+                logger.warning(f"Error fetching conference {conf_id}: {e}")
+                continue
+
+        # Sort conferences alphabetically by name
+        conferences.sort(key=lambda x: x['name'])
+
+        logger.info(f"Found {len(conferences)} conferences for {league}")
+        return conferences if conferences else None
+
+    def get_conference_teams(self, sport: str, league: str, conference_id: int) -> Optional[List[Dict]]:
+        """
+        Fetch all teams in a specific conference
+
+        Args:
+            sport: Sport type (e.g., 'football', 'basketball')
+            league: League code (e.g., 'college-football')
+            conference_id: ESPN conference group ID
+
+        Returns:
+            List of team dictionaries with id, name, abbreviation, logo, etc.
+        """
+        season_year = datetime.now().year
+        url = f"http://sports.core.api.espn.com/v2/sports/{sport}/leagues/{league}/seasons/{season_year}/types/2/groups/{conference_id}/teams?limit=50"
+
+        logger.info(f"Fetching teams for conference {conference_id}")
+
+        try:
+            response = self._make_request(url)
+            if not response or 'items' not in response:
+                logger.warning(f"No teams data found for conference {conference_id}")
+                return None
+
+            teams = []
+
+            # ESPN Core API returns team references that need to be fetched individually
+            for item in response.get('items', []):
+                if '$ref' in item:
+                    try:
+                        team_url = item['$ref']
+                        team_data = self._make_request(team_url)
+
+                        if team_data:
+                            teams.append({
+                                'id': team_data.get('id'),
+                                'slug': team_data.get('slug'),
+                                'name': team_data.get('displayName') or team_data.get('name'),
+                                'abbreviation': team_data.get('abbreviation'),
+                                'shortName': team_data.get('shortDisplayName'),
+                                'logo': team_data.get('logos', [{}])[0].get('href') if team_data.get('logos') else None,
+                                'color': team_data.get('color'),
+                                'alternateColor': team_data.get('alternateColor')
+                            })
+                    except Exception as e:
+                        logger.warning(f"Error fetching team from {item.get('$ref')}: {e}")
+                        continue
+
+            logger.info(f"Found {len(teams)} teams in conference {conference_id}")
+            return teams
+
+        except Exception as e:
+            logger.error(f"Error fetching teams for conference {conference_id}: {e}")
+            return None

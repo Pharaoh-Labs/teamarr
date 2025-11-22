@@ -155,6 +155,13 @@ main {
     cursor: pointer;
     text-decoration: none;
     transition: all 0.15s;
+    line-height: 1.5;
+}
+
+/* Ensure button elements match anchor styling */
+button.btn {
+    font-family: inherit;
+    box-sizing: border-box;
 }
 
 .btn-primary {
@@ -196,6 +203,17 @@ main {
 .btn-sm {
     padding: 0.3rem 0.7rem;
     font-size: 0.8rem;
+}
+
+/* Version Badge */
+.version-badge {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-weight: 500;
 }
 
 /* Theme Toggle Button */
@@ -291,6 +309,12 @@ fieldset legend {
     padding: 0 0.5rem;
     color: var(--text-primary);
     font-size: 0.9rem;
+}
+
+.section-description {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: -0.5rem 0 1rem 0;
 }
 
 /* Tables - Compact */
@@ -819,3 +843,176 @@ footer p {
     color: var(--text-secondary);
     border-bottom: 2px solid var(--border);
 }
+
+/* ============================================================================
+   SUFFIX GUIDANCE UI
+   ============================================================================ */
+
+/* Suffix Guide */
+.suffix-guide {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.suffix-guide-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.5rem 0;
+}
+
+.suffix-guide-list li {
+    padding: 0.15rem 0;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.suffix-guide-list code {
+    font-family: 'Monaco', 'Courier New', monospace;
+    background: var(--bg-primary);
+    padding: 0.1rem 0.3rem;
+    border-radius: 2px;
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 0.7rem;
+}
+
+.suffix-legend {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+/* Suffix badge for legend */
+.suffix-badge {
+    display: inline-block;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge-all {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+.badge-base {
+    background: rgba(156, 163, 175, 0.2);
+    color: #9ca3af;
+}
+
+.badge-next {
+    background: rgba(34, 197, 94, 0.2);
+    color: #6ee7b7;
+}
+
+.badge-last {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+/* Light mode badge overrides */
+.light-theme .badge-all {
+    background: rgba(59, 130, 246, 0.2);
+    color: #2563eb;
+    border: 1px solid #3b82f6;
+}
+
+.light-theme .badge-base {
+    background: rgba(156, 163, 175, 0.25);
+    color: #4b5563;
+    border: 1px solid #9ca3af;
+}
+
+.light-theme .badge-next {
+    background: rgba(34, 197, 94, 0.2);
+    color: #059669;
+    border: 1px solid #10b981;
+}
+
+.light-theme .badge-last {
+    background: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+    border: 1px solid #ef4444;
+}
+
+/* Variable color classes for chips */
+.chip.var-all {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+}
+
+.chip.var-all:hover {
+    background: rgba(59, 130, 246, 0.3);
+    color: white;
+    border-color: var(--primary);
+}
+
+.chip.var-base {
+    background: rgba(156, 163, 175, 0.15);
+    border-color: rgba(156, 163, 175, 0.3);
+    color: #9ca3af;
+}
+
+.chip.var-base:hover {
+    background: rgba(156, 163, 175, 0.3);
+    color: white;
+    border-color: #9ca3af;
+}
+
+.chip.var-next {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #6ee7b7;
+}
+
+.chip.var-next:hover {
+    background: rgba(34, 197, 94, 0.3);
+    color: white;
+    border-color: var(--success);
+}
+
+.chip.var-last {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+}
+
+.chip.var-last:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: white;
+    border-color: var(--danger);
+}
+
+/* Light mode overrides */
+.light-theme .chip.var-all {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+}
+
+.light-theme .chip.var-base {
+    background: rgba(156, 163, 175, 0.15);
+    color: #4b5563;
+}
+
+.light-theme .chip.var-next {
+    background: rgba(34, 197, 94, 0.1);
+    color: #059669;
+}
+
+.light-theme .chip.var-last {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+}
+

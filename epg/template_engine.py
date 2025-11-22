@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 import random
 import json
+import re
 
 class TemplateEngine:
     """Resolves template variables in user-defined strings"""
@@ -12,10 +13,15 @@ class TemplateEngine:
 
     def resolve(self, template: str, context: Dict[str, Any]) -> str:
         """
-        Resolve all template variables in a string
+        Resolve all template variables in a string with support for .next and .last suffixes
+
+        Supports three variable formats:
+        - {variable} - base variable from current game
+        - {variable.next} - variable from next scheduled game
+        - {variable.last} - variable from last completed game
 
         Args:
-            template: String with {variable} placeholders
+            template: String with {variable} or {variable.suffix} placeholders
             context: Dictionary containing all data needed for resolution
 
         Returns:
@@ -24,26 +30,61 @@ class TemplateEngine:
         if not template:
             return ""
 
+        # Build all variables (base + .next + .last)
         variables = self._build_variable_dict(context)
 
-        result = template
-        for var_name, var_value in variables.items():
-            placeholder = f"{{{var_name}}}"
-            result = result.replace(placeholder, str(var_value))
+        # Use regex to find and replace all {variable} or {variable.suffix} patterns
+        # Pattern matches: {variable_name} or {variable_name.next} or {variable_name.last}
+        pattern = r'\{([a-z_][a-z0-9_]*(?:\.[a-z]+)?)\}'
+
+        def replace_variable(match):
+            """Replace function for re.sub()"""
+            var_name = match.group(1)  # e.g., "opponent" or "opponent.next"
+            var_value = variables.get(var_name, '')  # Get value or empty string if not found
+            return str(var_value)
+
+        result = re.sub(pattern, replace_variable, template, flags=re.IGNORECASE)
 
         return result
 
-    def _build_variable_dict(self, context: Dict[str, Any]) -> Dict[str, str]:
-        """Build complete dictionary of all available variables"""
+    def _build_variables_from_game_context(
+        self,
+        game: dict,
+        team_config: dict,
+        team_stats: dict,
+        opponent_stats: dict,
+        h2h: dict,
+        streaks: dict,
+        head_coach: str,
+        player_leaders: dict,
+        epg_timezone: str
+    ) -> Dict[str, str]:
+        """
+        Generate all 227 variables from a single game context
 
+        This helper is called 3 times by _build_variable_dict() to generate:
+        - Base variables (no suffix) - from current game
+        - .next variables - from next scheduled game
+        - .last variables - from last completed game
+
+        Args:
+            game: ESPN event data (or empty dict for filler programs)
+            team_config: Team configuration and identity
+            team_stats: Team season statistics
+            opponent_stats: Opponent season statistics
+            h2h: Head-to-head data (season series, previous matchup)
+            streaks: Calculated streak data (home/away/last5/last10)
+            head_coach: Head coach name
+            player_leaders: Sport-specific player leaders
+            epg_timezone: Timezone for date/time formatting
+
+        Returns:
+            Dictionary of 227 variable_name: value pairs
+        """
         variables = {}
 
-        # Extract context components
-        game = context.get('game', {})
-        team_stats = context.get('team_stats', {})
-        opponent_stats = context.get('opponent_stats', {})
-        h2h = context.get('h2h', {})
-        team_config = context.get('team_config', {})
+        # Ensure game is never None (use empty dict for filler programs)
+        game = game or {}
 
         # =====================================================================
         # BASIC GAME INFORMATION
@@ -65,7 +106,7 @@ class TemplateEngine:
         variables['team_abbrev'] = our_team.get('abbrev', '') or team_config.get('team_abbrev', '')
         variables['opponent'] = opponent.get('name', '')
         variables['opponent_abbrev'] = opponent.get('abbrev', '')
-        variables['matchup'] = f"{away_team.get('abbrev', '')} @ {home_team.get('abbrev', '')}"
+        variables['matchup_abbrev'] = f"{away_team.get('abbrev', '')} @ {home_team.get('abbrev', '')}"
 
         # Rankings (primarily for college sports - NFL/NBA don't have rankings)
         # Rank comes from team_stats/opponent_stats (fetched from team info API)
@@ -103,16 +144,22 @@ class TemplateEngine:
 
         # Conference/Division variables
         # - college_conference: Conference name for college sports (e.g., "Sun Belt", "ACC")
+        # - college_conference_abbrev: Conference abbreviation for college sports (e.g., "big10", "acc")
         # - pro_conference: Conference name for pro sports (e.g., "National Football Conference", "Eastern Conference")
         # - pro_conference_abbrev: Conference abbreviation for pro sports (e.g., "NFC", "AFC")
         # - pro_division: Division name for pro sports (e.g., "NFC North", "Southeast Division")
-        variables['college_conference'] = team_stats.get('conference_full_name', '') if 'college' in team_config.get('league', '').lower() else ''
-        variables['pro_conference'] = team_stats.get('conference_full_name', '') if 'college' not in team_config.get('league', '').lower() else ''
+        variables['college_conference'] = team_stats.get('conference_name', '') if 'college' in team_config.get('league', '').lower() else ''
+        variables['college_conference_abbrev'] = team_stats.get('conference_abbrev', '') if 'college' in team_config.get('league', '').lower() else ''
+        variables['pro_conference'] = team_stats.get('conference_name', '') if 'college' not in team_config.get('league', '').lower() else ''
         variables['pro_conference_abbrev'] = team_stats.get('conference_abbrev', '') if 'college' not in team_config.get('league', '').lower() else ''
         variables['pro_division'] = team_stats.get('division_name', '')
 
-        # Legacy variable (for backward compatibility)
-        variables['conference_or_division_name'] = team_stats.get('conference_name', '')
+        # Opponent Conference/Division variables (same logic as team, but from opponent_stats)
+        variables['opponent_college_conference'] = opponent_stats.get('conference_name', '') if 'college' in team_config.get('league', '').lower() else ''
+        variables['opponent_college_conference_abbrev'] = opponent_stats.get('conference_abbrev', '') if 'college' in team_config.get('league', '').lower() else ''
+        variables['opponent_pro_conference'] = opponent_stats.get('conference_name', '') if 'college' not in team_config.get('league', '').lower() else ''
+        variables['opponent_pro_conference_abbrev'] = opponent_stats.get('conference_abbrev', '') if 'college' not in team_config.get('league', '').lower() else ''
+        variables['opponent_pro_division'] = opponent_stats.get('division_name', '')
 
         # =====================================================================
         # DATE & TIME
@@ -125,8 +172,7 @@ class TemplateEngine:
                 game_datetime = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
 
                 # Convert to user's EPG timezone (from settings, not team timezone)
-                epg_tz = context.get('epg_timezone', 'America/New_York')
-                local_datetime = game_datetime.astimezone(ZoneInfo(epg_tz))
+                local_datetime = game_datetime.astimezone(ZoneInfo(epg_timezone))
 
                 variables['game_date'] = local_datetime.strftime('%A, %B %d, %Y')
                 variables['game_date_short'] = local_datetime.strftime('%b %d')
@@ -139,12 +185,8 @@ class TemplateEngine:
                 # Time until game
                 now = datetime.now(game_datetime.tzinfo)
                 time_diff = game_datetime - now
-                hours_until = int(time_diff.total_seconds() / 3600)
-                minutes_until = int(time_diff.total_seconds() / 60)
                 days_until = int(time_diff.total_seconds() / 86400)
 
-                variables['hours_until'] = str(max(0, hours_until))
-                variables['minutes_until'] = str(max(0, minutes_until))
                 variables['days_until'] = str(max(0, days_until))
 
             except Exception:
@@ -235,30 +277,8 @@ class TemplateEngine:
 
         # Base streak variables
         variables['streak'] = str(streak_count)
-        variables['streak_count'] = str(streak_count)
-        variables['streak_type'] = streak_type
 
-        # Win streaks (only show if 2+ games)
-        if streak_count_raw >= 2:
-            variables['has_win_streak'] = 'true'
-            variables['win_streak'] = str(streak_count)
-            variables['has_loss_streak'] = 'false'
-            variables['loss_streak'] = '0'
-        # Loss streaks (only show if 2+ games)
-        elif streak_count_raw <= -2:
-            variables['has_loss_streak'] = 'true'
-            variables['loss_streak'] = str(streak_count)
-            variables['has_win_streak'] = 'false'
-            variables['win_streak'] = '0'
-        # No significant streak
-        else:
-            variables['has_win_streak'] = 'false'
-            variables['has_loss_streak'] = 'false'
-            variables['win_streak'] = '0'
-            variables['loss_streak'] = '0'
-
-        # Home/Away Streaks (calculated in app.py, passed via context)
-        streaks = context.get('streaks', {})
+        # Home/Away Streaks (calculated in orchestrator, passed as parameter)
         variables['home_streak'] = streaks.get('home_streak', '')
         variables['away_streak'] = streaks.get('away_streak', '')
 
@@ -286,102 +306,19 @@ class TemplateEngine:
         variables['rematch_result'] = previous.get('result', '')
         variables['rematch_score'] = previous.get('score', '')
         variables['rematch_score_abbrev'] = previous.get('score_abbrev', '')
-        variables['rematch_winner'] = previous.get('winner', '')
-        variables['rematch_loser'] = previous.get('loser', '')
         variables['rematch_location'] = previous.get('location', '')
         variables['rematch_days_since'] = str(previous.get('days_since', 0))
         variables['rematch_season_series'] = f"{season_series.get('team_wins', 0)}-{season_series.get('opponent_wins', 0)}"
 
         # =====================================================================
-        # SERIES & PLAYOFFS (comprehensive)
+        # PLAYOFFS (simple flags only)
         # =====================================================================
 
-        # Check if this is a playoff/series game
-        series_data = game.get('series', {}) if game else {}
-        is_playoff = series_data.get('type') == 'playoff' or game.get('season', {}).get('type') == 3
+        # Check if this is a playoff game (simple boolean flag)
+        is_playoff = game.get('season', {}).get('type') == 3 if game else False
 
         variables['is_playoff'] = 'true' if is_playoff else 'false'
         variables['is_regular_season'] = 'true' if not is_playoff else 'false'
-
-        if is_playoff and series_data:
-            # Playoff series information
-            variables['series_type'] = series_data.get('title', 'Playoff Series')  # e.g., "First Round", "Conference Finals"
-            variables['series_round'] = series_data.get('round', '')
-            variables['series_summary'] = series_data.get('summary', '')  # e.g., "Series tied 2-2"
-
-            # Series record
-            team_series_wins = series_data.get('competitors', [{}])[0].get('wins', 0)
-            opp_series_wins = series_data.get('competitors', [{}])[1].get('wins', 0) if len(series_data.get('competitors', [])) > 1 else 0
-
-            variables['series_team_wins'] = str(team_series_wins)
-            variables['series_opponent_wins'] = str(opp_series_wins)
-            variables['series_record'] = f"{team_series_wins}-{opp_series_wins}"
-
-            # Series status
-            series_length = series_data.get('conference', {}).get('seriesLength', 7)
-            games_to_win = (series_length // 2) + 1  # 4 for best-of-7, 3 for best-of-5
-
-            variables['series_length'] = str(series_length)
-            variables['games_to_win_series'] = str(games_to_win)
-            variables['series_games_played'] = str(team_series_wins + opp_series_wins)
-            variables['series_games_remaining'] = str(series_length - (team_series_wins + opp_series_wins))
-
-            # Who's leading the series
-            if team_series_wins > opp_series_wins:
-                variables['series_leader'] = variables['team_name']
-                variables['series_leader_abbrev'] = variables['team_abbrev']
-                variables['series_lead'] = str(team_series_wins - opp_series_wins)
-            elif opp_series_wins > team_series_wins:
-                variables['series_leader'] = variables['opponent']
-                variables['series_leader_abbrev'] = variables['opponent_abbrev']
-                variables['series_lead'] = str(opp_series_wins - team_series_wins)
-            else:
-                variables['series_leader'] = 'tied'
-                variables['series_leader_abbrev'] = ''
-                variables['series_lead'] = '0'
-
-            # Elimination scenarios
-            variables['is_elimination_game'] = 'true' if (team_series_wins == games_to_win - 1 or opp_series_wins == games_to_win - 1) else 'false'
-            variables['is_clinch_game'] = 'true' if (team_series_wins == games_to_win - 1) else 'false'
-            variables['is_must_win'] = 'true' if (opp_series_wins == games_to_win - 1) else 'false'
-            variables['is_series_clinched'] = 'true' if (team_series_wins >= games_to_win or opp_series_wins >= games_to_win) else 'false'
-
-            # Series clinch/elimination text
-            if team_series_wins == games_to_win - 1:
-                variables['series_clinch_text'] = f"Win advances to next round"
-            else:
-                variables['series_clinch_text'] = ''
-
-            if opp_series_wins == games_to_win - 1:
-                variables['elimination_text'] = f"Loss eliminates {variables['team_name']}"
-            else:
-                variables['elimination_text'] = ''
-
-            # Series game number
-            variables['series_game_number'] = str(team_series_wins + opp_series_wins + 1)
-
-        else:
-            # Not a playoff series - set defaults
-            variables['series_type'] = ''
-            variables['series_round'] = ''
-            variables['series_summary'] = ''
-            variables['series_team_wins'] = '0'
-            variables['series_opponent_wins'] = '0'
-            variables['series_record'] = '0-0'
-            variables['series_length'] = '0'
-            variables['games_to_win_series'] = '0'
-            variables['series_games_played'] = '0'
-            variables['series_games_remaining'] = '0'
-            variables['series_leader'] = ''
-            variables['series_leader_abbrev'] = ''
-            variables['series_lead'] = '0'
-            variables['is_elimination_game'] = 'false'
-            variables['is_clinch_game'] = 'false'
-            variables['is_must_win'] = 'false'
-            variables['is_series_clinched'] = 'false'
-            variables['series_clinch_text'] = ''
-            variables['elimination_text'] = ''
-            variables['series_game_number'] = '0'
 
         # =====================================================================
         # STANDINGS (if enabled)
@@ -402,11 +339,9 @@ class TemplateEngine:
         # Home/away records from team_stats API
         home_record = team_stats.get('home_record', '0-0')
         away_record = team_stats.get('away_record', '0-0')
-        division_record = team_stats.get('division_record', '')
 
         variables['home_record'] = home_record
         variables['away_record'] = away_record
-        variables['division_record'] = division_record
 
         # Calculate win percentages from records
         def calc_win_pct(record_str):
@@ -429,62 +364,27 @@ class TemplateEngine:
         variables['away_win_pct'] = calc_win_pct(away_record)
 
         # Home team record and away team record (based on matchup position)
-        # For filler programs with no game context, use next_game or last_game is_home
-        filler_is_home = is_home
-        if not game:
-            # Check next_game first, then last_game for is_home info
-            next_game = context.get('next_game', {})
-            last_game = context.get('last_game', {})
-            if next_game.get('is_home') is not None:
-                filler_is_home = next_game['is_home']
-            elif last_game.get('is_home') is not None:
-                filler_is_home = last_game['is_home']
+        # For completed games: use record from game data (always populated)
+        # For future games: fall back to opponent_stats (fetched separately)
+        home_team_record_from_game = home_team.get('record', {}).get('displayValue', '')
+        away_team_record_from_game = away_team.get('record', {}).get('displayValue', '')
 
-        # Check if our team is home or away, then assign records accordingly
-        if filler_is_home:
-            # We are home team - use our overall record for home_team_record
+        # Determine which team is opponent to get their stats
+        opponent_record = opponent_stats.get('record', {}).get('summary', '0-0') if opponent_stats else '0-0'
+
+        # Assign records based on home/away position
+        if is_home:
+            # We are home team
             variables['home_team_record'] = variables.get('team_record', '0-0')
-            # Opponent is away team - use opponent's overall record for away_team_record
-            variables['away_team_record'] = variables.get('opponent_record', '0-0')
+            # Opponent is away - use game data if available (completed), else opponent_stats (future)
+            variables['away_team_record'] = away_team_record_from_game or opponent_record
         else:
-            # We are away team - use our overall record for away_team_record
+            # We are away team
             variables['away_team_record'] = variables.get('team_record', '0-0')
-            # Opponent is home team - use opponent's overall record for home_team_record
-            variables['home_team_record'] = variables.get('opponent_record', '0-0')
+            # Opponent is home - use game data if available (completed), else opponent_stats (future)
+            variables['home_team_record'] = home_team_record_from_game or opponent_record
 
-        # Add explicit next_game and last_game home/away team records
-        next_game = context.get('next_game', {})
-        last_game = context.get('last_game', {})
-
-        # Next game home/away team records
-        if next_game.get('is_home') is not None:
-            if next_game['is_home']:
-                # Next game is home - we are home team
-                variables['next_game_home_team_record'] = variables.get('team_record', '0-0')
-                variables['next_game_away_team_record'] = next_game.get('opponent_record', '0-0')
-            else:
-                # Next game is away - we are away team
-                variables['next_game_away_team_record'] = variables.get('team_record', '0-0')
-                variables['next_game_home_team_record'] = next_game.get('opponent_record', '0-0')
-        else:
-            variables['next_game_home_team_record'] = ''
-            variables['next_game_away_team_record'] = ''
-
-        # Last game home/away team records
-        if last_game.get('is_home') is not None:
-            if last_game['is_home']:
-                # Last game was home - we were home team
-                variables['last_game_home_team_record'] = variables.get('team_record', '0-0')
-                variables['last_game_away_team_record'] = last_game.get('opponent_record', '0-0')
-            else:
-                # Last game was away - we were away team
-                variables['last_game_away_team_record'] = variables.get('team_record', '0-0')
-                variables['last_game_home_team_record'] = last_game.get('opponent_record', '0-0')
-        else:
-            variables['last_game_home_team_record'] = ''
-            variables['last_game_away_team_record'] = ''
-
-        # Last 5/10 and recent form calculated in app.py, passed via context
+        # Last 5/10 and recent form from streaks parameter
         variables['last_5_record'] = streaks.get('last_5_record', '')
         variables['last_10_record'] = streaks.get('last_10_record', '')
         variables['recent_form'] = streaks.get('recent_form', '')
@@ -506,54 +406,28 @@ class TemplateEngine:
         # =====================================================================
 
         # Head Coach (all sports)
-        variables['head_coach'] = context.get('head_coach', '')
+        variables['head_coach'] = head_coach
 
-        # Player Leaders (sport-specific, from context)
-        player_leaders = context.get('player_leaders', {})
+        # Player Leaders (sport-specific, from parameter)
+        # player_leaders is passed as a parameter
 
         # Set all possible player leader variables to empty by default
-        # Basketball variables
-        for var in ['basketball_top_scorer_name', 'basketball_top_scorer_position',
-                    'basketball_top_scorer_ppg', 'basketball_top_scorer_total',
-                    'basketball_top_rebounder_name', 'basketball_top_rebounder_rpg',
-                    'basketball_top_rebounder_total',
-                    'basketball_top_assist_name', 'basketball_top_assist_apg',
-                    'basketball_top_assist_total']:
+        # Basketball variables (game leaders - .last only)
+        for var in ['basketball_scoring_leader_name', 'basketball_scoring_leader_points']:
             variables[var] = player_leaders.get(var, '')
 
-        # Football variables
-        for var in ['football_quarterback_name', 'football_quarterback_position',
-                    'football_quarterback_passing_yards', 'football_quarterback_passing_ypg',
-                    'football_top_rusher_name', 'football_top_rusher_position',
-                    'football_top_rusher_yards', 'football_top_rusher_ypg',
-                    'football_top_receiver_name', 'football_top_receiver_position',
-                    'football_top_receiver_yards', 'football_top_receiver_ypg']:
+        # Football variables (game leaders - .last only)
+        for var in ['football_passing_leader_name', 'football_passing_leader_stats',
+                    'football_rushing_leader_name', 'football_rushing_leader_stats',
+                    'football_receiving_leader_name', 'football_receiving_leader_stats']:
             variables[var] = player_leaders.get(var, '')
-
-        # Hockey variables
-        for var in ['hockey_top_scorer_name', 'hockey_top_scorer_position',
-                    'hockey_top_scorer_goals', 'hockey_top_scorer_gpg',
-                    'hockey_top_playmaker_name', 'hockey_top_playmaker_position',
-                    'hockey_top_playmaker_assists', 'hockey_top_playmaker_apg']:
-            variables[var] = player_leaders.get(var, '')
-
-        # Baseball variables
-        for var in ['baseball_top_hitter_name', 'baseball_top_hitter_position',
-                    'baseball_top_hitter_avg', 'baseball_top_hitter_hits',
-                    'baseball_power_hitter_name', 'baseball_power_hitter_position',
-                    'baseball_power_hitter_hrs', 'baseball_power_hitter_hr_rate']:
-            variables[var] = player_leaders.get(var, '')
-
 
         # =====================================================================
         # GAME STATUS (for live games)
         # =====================================================================
 
         status = game.get('status', {})
-        variables['game_status'] = status.get('name', 'Scheduled')
         variables['game_clock'] = status.get('detail', '')
-        variables['period'] = status.get('period', '')
-        variables['period_short'] = status.get('period_short', '')
 
         # Live/Final scores
         # Handle score being either a number or dict (from different API responses)
@@ -577,6 +451,10 @@ class TemplateEngine:
         score_diff = our_score - opp_score
         variables['score_diff'] = f"+{score_diff}" if score_diff > 0 else str(score_diff)
 
+        # final_score - only show if game is actually final, otherwise empty (gracefully disappears)
+        is_final = status.get('name', '') in ['STATUS_FINAL', 'Final']
+        variables['final_score'] = f"{our_score}-{opp_score}" if (is_final and our_score > 0 and opp_score > 0) else ''
+
         # =====================================================================
         # ATTENDANCE
         # =====================================================================
@@ -586,7 +464,6 @@ class TemplateEngine:
         attendance = competition.get('attendance', 0)
 
         variables['attendance'] = f"{attendance:,}" if attendance else ''
-        variables['has_attendance'] = 'true' if attendance else 'false'
 
         # =====================================================================
         # SCORE & OUTCOME (for postgame filler content)
@@ -594,7 +471,6 @@ class TemplateEngine:
 
         # Determine if game is final
         is_final = status.get('name', '') in ['STATUS_FINAL', 'Final']
-        variables['is_final'] = 'true' if is_final else 'false'
 
         if is_final and our_score > 0 and opp_score > 0:
             # Score differential
@@ -612,20 +488,6 @@ class TemplateEngine:
                 variables['result_text'] = 'lost to'
                 variables['result_verb'] = 'fell to'
 
-            # Game summary (blowout, close, overtime)
-            if abs_diff >= 20:
-                variables['game_summary'] = 'blowout'
-                variables['game_summary_text'] = 'in a blowout'
-            elif abs_diff <= 5:
-                variables['game_summary'] = 'close game'
-                variables['game_summary_text'] = 'in a close game'
-            elif abs_diff <= 10:
-                variables['game_summary'] = 'competitive game'
-                variables['game_summary_text'] = 'in a competitive matchup'
-            else:
-                variables['game_summary'] = 'game'
-                variables['game_summary_text'] = ''
-
             # Check for overtime
             periods = status.get('period', 0) or 0
             # NBA/NHL = 4 periods (regulation), NFL = 4 quarters, MLB = 9 innings
@@ -638,12 +500,8 @@ class TemplateEngine:
             overtime_threshold = overtime_thresholds.get(sport_code, 4)
 
             if periods > overtime_threshold:
-                variables['is_overtime'] = 'true'
                 variables['overtime_text'] = 'in overtime'
-                variables['game_summary'] = 'overtime game'
-                variables['game_summary_text'] = 'in overtime'
             else:
-                variables['is_overtime'] = 'false'
                 variables['overtime_text'] = ''
 
         else:
@@ -653,9 +511,6 @@ class TemplateEngine:
             variables['result'] = ''
             variables['result_text'] = ''
             variables['result_verb'] = ''
-            variables['game_summary'] = ''
-            variables['game_summary_text'] = ''
-            variables['is_overtime'] = 'false'
             variables['overtime_text'] = ''
 
         # =====================================================================
@@ -666,71 +521,7 @@ class TemplateEngine:
         season_type_id = season.get('type', 2)  # 1=preseason, 2=regular, 3=postseason
 
         variables['season_type'] = season.get('type', 'regular')
-        variables['season_year'] = str(season.get('year', ''))
         variables['is_preseason'] = 'true' if season_type_id == 1 else 'false'
-
-        # =====================================================================
-        # SPECIAL GAME FLAGS
-        # =====================================================================
-
-        variables['is_rivalry'] = 'true' if context.get('is_rivalry', False) else 'false'
-        variables['is_division_game'] = 'true' if context.get('is_division', False) else 'false'
-        variables['is_conference_game'] = 'true' if context.get('is_conference', False) else 'false'
-
-        # =====================================================================
-        # LAST GAME (most recent completed game)
-        # =====================================================================
-
-        last_game = context.get('last_game', {})
-        variables['last_opponent'] = last_game.get('opponent', '')
-        variables['last_opponent_record'] = last_game.get('opponent_record', '')
-        variables['last_date'] = last_game.get('date', '')
-        variables['last_matchup'] = last_game.get('matchup', '')
-        variables['last_result'] = last_game.get('result', '')  # "Win", "Loss", or "Tie"
-        variables['last_score'] = last_game.get('score', '')
-        variables['last_score_abbrev'] = last_game.get('score_abbrev', '')
-
-        # Last game player leaders (game-specific performance)
-        # Basketball
-        variables['last_game_top_scorer_name'] = last_game.get('last_game_top_scorer_name', '')
-        variables['last_game_top_scorer_points'] = last_game.get('last_game_top_scorer_points', '')
-        variables['last_game_top_rebounder_name'] = last_game.get('last_game_top_rebounder_name', '')
-        variables['last_game_top_rebounder_rebounds'] = last_game.get('last_game_top_rebounder_rebounds', '')
-        variables['last_game_top_assist_name'] = last_game.get('last_game_top_assist_name', '')
-        variables['last_game_top_assist_assists'] = last_game.get('last_game_top_assist_assists', '')
-
-        # Football
-        variables['last_game_passing_leader_name'] = last_game.get('last_game_passing_leader_name', '')
-        variables['last_game_passing_leader_yards'] = last_game.get('last_game_passing_leader_yards', '')
-        variables['last_game_rushing_leader_name'] = last_game.get('last_game_rushing_leader_name', '')
-        variables['last_game_rushing_leader_yards'] = last_game.get('last_game_rushing_leader_yards', '')
-        variables['last_game_receiving_leader_name'] = last_game.get('last_game_receiving_leader_name', '')
-        variables['last_game_receiving_leader_yards'] = last_game.get('last_game_receiving_leader_yards', '')
-
-        # =====================================================================
-        # TODAY'S GAME (completed game from today only - for postgame)
-        # =====================================================================
-
-        today_game = context.get('today_game', {})
-        variables['today_score_abbrev'] = today_game.get('score_abbrev', '')
-
-        # =====================================================================
-        # NEXT GAME (upcoming scheduled game)
-        # =====================================================================
-
-        next_game = context.get('next_game', {})
-        variables['next_opponent'] = next_game.get('opponent', '')
-        variables['next_opponent_record'] = next_game.get('opponent_record', '')
-        variables['next_date'] = next_game.get('date', '')
-        variables['next_time'] = next_game.get('time', '')
-        variables['next_datetime'] = next_game.get('datetime', '')
-        variables['next_matchup'] = next_game.get('matchup', '')
-        variables['next_venue'] = next_game.get('venue', '')
-
-        # Legacy/alias variables for backwards compatibility
-        variables['next_game_date'] = next_game.get('date', '')
-        variables['next_game_time'] = next_game.get('time', '')
-
 
         # =====================================================================
         # ODDS & BETTING
@@ -747,13 +538,11 @@ class TemplateEngine:
 
             # Over/Under
             over_under = odds.get('overUnder', 0)
-            variables['over_under'] = str(over_under) if over_under else ''
-            variables['has_over_under'] = 'true' if over_under else 'false'
+            variables['odds_over_under'] = str(over_under) if over_under else ''
 
             # Spread (absolute value)
             spread = abs(odds.get('spread', 0))
-            variables['spread'] = str(spread) if spread else ''
-            variables['has_spread'] = 'true' if spread else 'false'
+            variables['odds_spread'] = str(spread) if spread else ''
 
             # Details (e.g., "HOU -1.5")
             variables['odds_details'] = odds.get('details', '')
@@ -773,60 +562,25 @@ class TemplateEngine:
                 our_odds = odds.get('awayTeamOdds', {})
                 opp_odds = odds.get('homeTeamOdds', {})
 
-            # Favorite/Underdog status
-            variables['is_favorite'] = 'true' if our_odds.get('favorite', False) else 'false'
-            variables['is_underdog'] = 'true' if our_odds.get('underdog', False) else 'false'
-
             # Money line
             our_moneyline = our_odds.get('moneyLine', 0)
             opp_moneyline = opp_odds.get('moneyLine', 0)
-            variables['moneyline'] = str(our_moneyline) if our_moneyline else ''
-            variables['opponent_moneyline'] = str(opp_moneyline) if opp_moneyline else ''
+            variables['odds_moneyline'] = str(our_moneyline) if our_moneyline else ''
+            variables['odds_opponent_moneyline'] = str(opp_moneyline) if opp_moneyline else ''
 
             # Spread odds
-            our_spread_odds = our_odds.get('spreadOdds', 0)
             opp_spread_odds = opp_odds.get('spreadOdds', 0)
-            variables['spread_odds'] = str(our_spread_odds) if our_spread_odds else ''
-            variables['opponent_spread_odds'] = str(opp_spread_odds) if opp_spread_odds else ''
+            variables['odds_opponent_spread'] = str(opp_spread_odds) if opp_spread_odds else ''
 
-            # Favorite at open (line movement)
-            variables['was_favorite_at_open'] = 'true' if our_odds.get('favoriteAtOpen', False) else 'false'
-            variables['opponent_was_favorite_at_open'] = 'true' if opp_odds.get('favoriteAtOpen', False) else 'false'
-
-            # Spread category (close game, moderate, blowout prediction)
-            if spread > 0:
-                if spread <= 3:
-                    variables['spread_category'] = 'close'
-                    variables['spread_category_text'] = 'close game'
-                elif spread <= 7:
-                    variables['spread_category'] = 'moderate'
-                    variables['spread_category_text'] = 'moderate spread'
-                else:
-                    variables['spread_category'] = 'wide'
-                    variables['spread_category_text'] = 'large spread'
-            else:
-                variables['spread_category'] = ''
-                variables['spread_category_text'] = ''
         else:
             # No odds available - set defaults
             variables['odds_provider'] = ''
-            variables['over_under'] = ''
-            variables['has_over_under'] = 'false'
-            variables['spread'] = ''
-            variables['has_spread'] = 'false'
+            variables['odds_over_under'] = ''
+            variables['odds_spread'] = ''
             variables['odds_details'] = ''
-            variables['is_favorite'] = 'false'
-            variables['is_underdog'] = 'false'
-            variables['opponent_is_favorite'] = 'false'
-            variables['opponent_is_underdog'] = 'false'
-            variables['moneyline'] = ''
-            variables['opponent_moneyline'] = ''
-            variables['spread_odds'] = ''
-            variables['opponent_spread_odds'] = ''
-            variables['was_favorite_at_open'] = 'false'
-            variables['opponent_was_favorite_at_open'] = 'false'
-            variables['spread_category'] = ''
-            variables['spread_category_text'] = ''
+            variables['odds_moneyline'] = ''
+            variables['odds_opponent_moneyline'] = ''
+            variables['odds_opponent_spread'] = ''
 
         # =====================================================================
         # BROADCAST INFORMATION
@@ -846,6 +600,136 @@ class TemplateEngine:
         variables['is_national_broadcast'] = self._is_national_broadcast(broadcasts)
 
         return variables
+
+    def _build_variable_dict(self, context: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Build complete dictionary with base, .next, and .last variables
+
+        This method calls _build_variables_from_game_context() three times:
+        1. For current game (no suffix) - 227 base variables
+        2. For next game (.next suffix) - 227 variables with .next suffix
+        3. For last game (.last suffix) - 227 variables with .last suffix
+
+        Total: 681 variables available in templates
+
+        Args:
+            context: Full context dictionary from orchestrator containing:
+                - game: Current game event (None for filler programs)
+                - next_game: Next scheduled game context
+                - last_game: Last completed game context
+                - team_config, team_stats, opponent_stats, h2h, streaks, etc.
+
+        Returns:
+            Dictionary of all variables (base + suffixed)
+        """
+        # Variables that should ONLY have .last suffix (no base, no .next)
+        LAST_ONLY_VARS = {
+            'opponent_score', 'overtime_text', 'result', 'result_text', 'result_verb',
+            'score', 'score_diff', 'score_differential', 'score_differential_text',
+            'team_score'
+        }
+
+        # Variables that should have BASE + .next ONLY (no .last)
+        BASE_NEXT_ONLY_VARS = {
+            'odds_details', 'odds_provider', 'odds_moneyline', 'odds_opponent_moneyline',
+            'odds_opponent_spread', 'odds_over_under', 'odds_spread'
+        }
+
+        # Variables that should be BASE ONLY (no .next, no .last)
+        BASE_ONLY_VARS = {
+            'away_record', 'away_streak', 'away_win_pct', 'games_back', 'head_coach',
+            'home_record', 'home_streak', 'home_win_pct', 'is_national_broadcast', 'is_playoff',
+            'is_preseason', 'is_ranked', 'is_ranked_matchup', 'is_regular_season', 'last_10_record',
+            'last_5_record', 'league', 'league_name', 'opponent_is_ranked', 'playoff_seed',
+            'pro_conference', 'pro_conference_abbrev', 'pro_division', 'recent_form', 'sport',
+            'streak', 'team_abbrev', 'team_losses', 'team_name', 'team_papg', 'team_ppg',
+            'team_rank', 'team_record', 'team_ties', 'team_win_pct', 'team_wins'
+        }
+
+        all_variables = {}
+
+        # Extract common context components
+        team_config = context.get('team_config', {})
+        team_stats = context.get('team_stats', {})
+        epg_timezone = context.get('epg_timezone', 'America/New_York')
+
+        # =====================================================================
+        # BUILD CURRENT GAME VARIABLES (no suffix)
+        # =====================================================================
+
+        current_game = context.get('game', {}) or {}  # Handle None for fillers
+        current_opponent_stats = context.get('opponent_stats', {})
+        current_h2h = context.get('h2h', {})
+        current_streaks = context.get('streaks', {})
+        current_head_coach = context.get('head_coach', '')
+        current_player_leaders = context.get('player_leaders', {})
+
+        current_vars = self._build_variables_from_game_context(
+            game=current_game,
+            team_config=team_config,
+            team_stats=team_stats,
+            opponent_stats=current_opponent_stats,
+            h2h=current_h2h,
+            streaks=current_streaks,
+            head_coach=current_head_coach,
+            player_leaders=current_player_leaders,
+            epg_timezone=epg_timezone
+        )
+
+        # Add base variables (no suffix), excluding LAST_ONLY_VARS
+        for key, value in current_vars.items():
+            if key not in LAST_ONLY_VARS:
+                all_variables[key] = value
+
+        # =====================================================================
+        # BUILD NEXT GAME VARIABLES (.next suffix)
+        # =====================================================================
+
+        next_game_ctx = context.get('next_game', {})
+        if next_game_ctx and next_game_ctx.get('game'):
+            next_vars = self._build_variables_from_game_context(
+                game=next_game_ctx.get('game', {}),
+                team_config=team_config,
+                team_stats=team_stats,
+                opponent_stats=next_game_ctx.get('opponent_stats', {}),
+                h2h=next_game_ctx.get('h2h', {}),
+                streaks=next_game_ctx.get('streaks', {}),
+                head_coach=next_game_ctx.get('head_coach', ''),
+                player_leaders=next_game_ctx.get('player_leaders', {}),
+                epg_timezone=epg_timezone
+            )
+
+            # Add .next suffix only to allowed variables
+            for key, value in next_vars.items():
+                # Skip if BASE_ONLY or LAST_ONLY
+                if key not in BASE_ONLY_VARS and key not in LAST_ONLY_VARS:
+                    all_variables[f"{key}.next"] = value
+
+        # =====================================================================
+        # BUILD LAST GAME VARIABLES (.last suffix)
+        # =====================================================================
+
+        last_game_ctx = context.get('last_game', {})
+        if last_game_ctx and last_game_ctx.get('game'):
+            last_vars = self._build_variables_from_game_context(
+                game=last_game_ctx.get('game', {}),
+                team_config=team_config,
+                team_stats=team_stats,
+                opponent_stats=last_game_ctx.get('opponent_stats', {}),
+                h2h=last_game_ctx.get('h2h', {}),
+                streaks=last_game_ctx.get('streaks', {}),
+                head_coach=last_game_ctx.get('head_coach', ''),
+                player_leaders=last_game_ctx.get('player_leaders', {}),
+                epg_timezone=epg_timezone
+            )
+
+            # Add .last suffix only to allowed variables
+            for key, value in last_vars.items():
+                # Skip if BASE_ONLY or BASE_NEXT_ONLY
+                if key not in BASE_ONLY_VARS and key not in BASE_NEXT_ONLY_VARS:
+                    all_variables[f"{key}.last"] = value
+
+        return all_variables
 
     def _get_broadcast_simple(self, broadcasts: List[Dict], team_is_home: bool) -> str:
         """
@@ -1045,13 +929,13 @@ class TemplateEngine:
 
         return "true" if has_national else "false"
 
-    def select_description(self, default_description: str, description_options: Any, context: Dict[str, Any]) -> str:
+    def select_description(self, description_options: Any, context: Dict[str, Any]) -> str:
         """
-        Select the best description template based on conditional logic
+        Select the best description template based on conditional logic and fallbacks
 
         Args:
-            default_description: Fallback description if no conditions match
-            description_options: JSON string or list of conditional description options
+            description_options: JSON string or list of description options
+                                Includes both conditionals (priority 1-99) and fallbacks (priority 100)
             context: Game and team context for evaluation
 
         Returns:
@@ -1062,25 +946,37 @@ class TemplateEngine:
             try:
                 options = json.loads(description_options) if description_options else []
             except:
-                return default_description
+                return ''  # No fallback, return empty
         elif isinstance(description_options, list):
             options = description_options
         else:
-            return default_description
+            return ''  # No fallback, return empty
 
         if not options:
-            return default_description
+            return ''  # No descriptions configured
 
         # Group matching options by priority
         priority_groups = {}
 
         for option in options:
-            condition_type = option.get('condition', '')  # Fixed: was 'condition_type'
-            condition_value = option.get('condition_value')
             template = option.get('template', '')
             priority = option.get('priority', 50)
 
-            if not template or not condition_type:
+            if not template:
+                continue
+
+            # Priority 100 = fallback descriptions (always match)
+            if priority == 100:
+                if priority not in priority_groups:
+                    priority_groups[priority] = []
+                priority_groups[priority].append(template)
+                continue
+
+            # Priority 1-99 = conditional descriptions (evaluate condition)
+            condition_type = option.get('condition', '')
+            condition_value = option.get('condition_value')
+
+            if not condition_type:
                 continue
 
             # Evaluate if this condition matches
@@ -1089,11 +985,11 @@ class TemplateEngine:
                     priority_groups[priority] = []
                 priority_groups[priority].append(template)
 
-        # If no conditions matched, use default
+        # If no descriptions matched, return empty
         if not priority_groups:
-            return default_description
+            return ''
 
-        # Get the highest priority (lowest number)
+        # Get the highest priority (lowest number = highest priority)
         highest_priority = min(priority_groups.keys())
         matching_templates = priority_groups[highest_priority]
 
@@ -1161,13 +1057,6 @@ class TemplateEngine:
 
         elif condition_type == 'is_away':
             return not is_home
-
-        elif condition_type == 'is_conference_game':
-            # NOTE: College sports only. Same-day only (like has_odds).
-            # The conferenceCompetition field is only available in scoreboard API (today's games),
-            # not in schedule API (future games). Only works when event is enriched with scoreboard data.
-            competition = game.get('competitions', [{}])[0]
-            return competition.get('conferenceCompetition', False)
 
         # Odds availability condition
         elif condition_type == 'has_odds':

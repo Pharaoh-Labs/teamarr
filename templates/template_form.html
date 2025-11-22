@@ -1,0 +1,1815 @@
+{% extends "base.html" %}
+
+{% block title %}{% if template %}Edit Template{% else %}Create Template{% endif %} - Teamarr{% endblock %}
+
+{% block content %}
+<style>
+/* ============================================================================
+   TABBED INTERFACE STYLES
+   ============================================================================ */
+.tabs-container {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.tab-button {
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.tab-button:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.tab-button.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ============================================================================
+   STICKY SIDEBAR PREVIEW
+   ============================================================================ */
+.form-with-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 1200px) {
+    .form-with-sidebar {
+        grid-template-columns: 1fr;
+    }
+    .preview-sidebar {
+        display: none;
+    }
+}
+
+.preview-sidebar {
+    position: sticky;
+    top: 1rem;
+    margin-top: 5.7rem;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-height: calc(100vh - 7rem);
+    overflow-y: auto;
+    align-self: start;
+}
+
+.preview-sidebar h4 {
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.preview-item {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--success);
+    border-radius: 4px;
+}
+
+.preview-item strong {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.preview-item span {
+    color: var(--text-primary);
+    word-wrap: break-word;
+    display: block;
+}
+
+/* ============================================================================
+   INLINE PREVIEWS
+   ============================================================================ */
+.inline-preview {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--primary);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.inline-preview small {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+.inline-preview span {
+    color: var(--text-primary);
+    font-style: italic;
+}
+
+.inline-preview span:empty::before {
+    content: "(empty)";
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.6;
+}
+
+/* ============================================================================
+   CONDITIONAL DESCRIPTIONS - COLLAPSIBLE CARDS
+   ============================================================================ */
+.condition-card {
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.condition-card:hover {
+    border-color: var(--primary-light, #818cf8);
+}
+
+.condition-card-header {
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.condition-card-header:hover {
+    background: var(--bg-secondary);
+}
+
+.condition-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.condition-card-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.condition-card-summary {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.condition-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.condition-card-expand {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.condition-card.expanded .condition-card-expand {
+    transform: rotate(180deg);
+}
+
+.condition-card-body {
+    padding: 1rem;
+    display: none;
+    border-top: 1px solid var(--border);
+}
+
+.condition-card.expanded .condition-card-body {
+    display: block;
+}
+
+.condition-source-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.condition-source-custom {
+    background: var(--primary-light, rgba(99, 102, 241, 0.1));
+    color: var(--primary);
+}
+
+.condition-source-preset {
+    background: var(--success-light, rgba(34, 197, 94, 0.1));
+    color: var(--success);
+}
+
+/* ============================================================================
+   PRESET LIBRARY MODAL
+   ============================================================================ */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.6);
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: var(--bg-primary);
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.preset-library-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.preset-item {
+    padding: 1rem;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.preset-item:hover {
+    border-color: var(--primary);
+    background: var(--bg-tertiary);
+}
+
+.preset-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 0.5rem;
+}
+
+.preset-item-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.preset-item-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preset-delete-btn {
+    background: var(--danger, #ef4444);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.preset-delete-btn:hover {
+    opacity: 0.8;
+}
+
+.preset-item-usage {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.preset-item-condition {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.preset-item-template {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ============================================================================
+   BUTTON STYLES
+   ============================================================================ */
+.btn-icon {
+    padding: 0.5rem;
+    min-width: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.chip {
+    display: inline-block;
+    padding: 0.2rem 0.4rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chip:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* ============================================================================
+   HELP TEXT & INFO BOXES
+   ============================================================================ */
+.info-box {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid var(--primary);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-box strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+}
+
+.info-box ul {
+    margin: 0.5rem 0 0 1.25rem;
+    padding: 0;
+    color: var(--text-secondary);
+}
+
+.info-box li {
+    margin-bottom: 0.25rem;
+}
+</style>
+
+<div class="card">
+    <div class="card-header">
+        <h2>{% if template %}Edit Template: {{ template.name }}{% else %}Create New Template{% endif %}</h2>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('templates_list') }}" class="btn btn-secondary">← Back</a>
+        </div>
+    </div>
+
+    <form method="POST" id="template-form">
+        <div class="form-with-sidebar">
+            <!-- MAIN FORM CONTENT -->
+            <div>
+                <!-- Tabbed Navigation -->
+                <div class="tabs-container">
+                    <button type="button" class="tab-button active" data-tab="basic">📋 Basic Info</button>
+                    <button type="button" class="tab-button" data-tab="templates">✏️ Defaults</button>
+                    <button type="button" class="tab-button" data-tab="conditions">🎯 Conditions</button>
+                    <button type="button" class="tab-button" data-tab="fillers">📅 Fillers</button>
+                    <button type="button" class="tab-button" data-tab="xmltv">⚙️ Other EPG Options</button>
+                </div>
+
+                <!-- TAB 1: BASIC INFO -->
+                <div class="tab-content active" id="tab-basic">
+                    <!-- Name Subsection -->
+                    <fieldset>
+                        <legend><h3>Name</h3></legend>
+                        <div class="form-group">
+                            <label for="name">Template Name *</label>
+                            <input type="text" name="name" id="name" value="{{ template.name if template else '' }}" required>
+                        </div>
+                    </fieldset>
+
+                    <!-- Event Duration Subsection -->
+                    <fieldset style="margin-top: 2rem;">
+                        <legend><h3>Event Duration</h3></legend>
+                        <div class="form-group">
+                            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Global and Per-Sport Defaults can be changed in Settings</p>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="radio" name="game_duration_mode" value="default"
+                                           {% if not template or template.game_duration_mode == 'default' %}checked{% endif %}
+                                           onchange="updateGameDurationMode()">
+                                    <span>Use Global Default</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="radio" name="game_duration_mode" value="sport"
+                                           {% if template and template.game_duration_mode == 'sport' %}checked{% endif %}
+                                           onchange="updateGameDurationMode()">
+                                    <span>Use Per-Sport Default</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="radio" name="game_duration_mode" value="custom"
+                                           {% if template and template.game_duration_mode == 'custom' %}checked{% endif %}
+                                           onchange="updateGameDurationMode()">
+                                    <span>Custom:</span>
+                                    <input type="number" name="game_duration_override" id="game_duration_override"
+                                           step="0.25" min="1" max="8"
+                                           value="{{ template.game_duration_override if template and template.game_duration_override else '' }}"
+                                           placeholder="e.g., 3.5"
+                                           {% if not template or template.game_duration_mode != 'custom' %}disabled{% endif %}
+                                           style="width: 100px;">
+                                    <span>hours</span>
+                                </label>
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+
+                <!-- TAB 2: DEFAULTS -->
+                <div class="tab-content" id="tab-templates">
+                    <!-- Title & Subtitle Fieldset -->
+                    <fieldset>
+                        <legend><h3>Title & Subtitle</h3></legend>
+
+                        <div class="form-group">
+                            <label for="title_format">Program Title Template *</label>
+                            <input type="text" name="title_format" id="title_format" value="{{ template.title_format if template else '{team_name} {sport}' }}" required class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-title">Detroit Pistons Basketball</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="subtitle_template">Program Subtitle Template</label>
+                            <input type="text" name="subtitle_template" id="subtitle_template" value="{{ template.subtitle_template if template else '{venue_full}' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-subtitle">Kia Center, Orlando</span>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Program Art Fieldset -->
+                    <fieldset style="margin-top: 1.5rem;">
+                        <legend><h3>Program Art</h3></legend>
+
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+                            Provide URL for dynamically generated program-level art. Variables must be available in Teamarr. Will require a running <a href="https://github.com/sethwv/game-thumbs" target="_blank" style="color: var(--accent);">game-thumbs</a> instance for art generation.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="program_art_url">Program Art URL Template</label>
+                            <input type="text" name="program_art_url" id="program_art_url"
+                                   value="{{ template.program_art_url if template else '' }}"
+                                   placeholder="Optional. Leave blank to disable program level art"
+                                   class="template-field"
+                                   style="font-family: monospace; font-size: 0.9rem;">
+                        </div>
+                    </fieldset>
+
+                    <!-- Default Description Templates Fieldset -->
+                    <fieldset style="margin-top: 1.5rem;">
+                        <legend><h3>Default Description Templates</h3></legend>
+
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+                            Fallback descriptions used when no conditions match (Priority 100). Multiple fallbacks will be randomized.
+                        </p>
+
+                        <!-- Fallback Descriptions List -->
+                        <div id="fallback-descriptions-container">
+                            <!-- Dynamically populated via JavaScript -->
+                        </div>
+
+                        <button type="button" class="btn btn-secondary" onclick="addFallbackDescription()" style="margin-top: 0.5rem;">
+                            + Add Fallback Description
+                        </button>
+
+                        <!-- Hidden counter for form submission -->
+                        <input type="hidden" id="fallback-count" name="fallback_count" value="0">
+                    </fieldset>
+                </div>
+
+                <!-- TAB 3: CONDITIONAL DESCRIPTIONS -->
+                <div class="tab-content" id="tab-conditions">
+                    <fieldset>
+                        <legend><h3>🎯 Conditional Descriptions</h3></legend>
+
+                        <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                            Create dynamic descriptions based on specific conditions. Lower priority numbers are checked and matched first. If no matches, default descriptions are used. If multiple matches at the same priority, one will be selected at random.
+                        </p>
+
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                            <button type="button" class="btn btn-primary" onclick="conditionsAddNew()">+ Add Condition</button>
+                            <button type="button" class="btn btn-secondary" onclick="showPresetLibrary()">📚 Preset Library</button>
+                        </div>
+
+                        <div id="conditions-list">
+                            <!-- Conditions will be rendered here by JavaScript -->
+                        </div>
+                    </fieldset>
+                </div>
+
+                <!-- TAB 4: FILLER PROGRAMS -->
+                <div class="tab-content" id="tab-fillers">
+                    <!-- Pregame -->
+                    <fieldset>
+                        <legend><h3>⏰ Pregame</h3></legend>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="pregame_enabled" id="pregame_enabled" {% if not template or template.pregame_enabled %}checked{% endif %}>
+                                Enable Pregame EPG Entries
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="pregame_title">Title</label>
+                            <input type="text" name="pregame_title" id="pregame_title" value="{{ template.pregame_title if template else 'Pregame Coverage' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-pregame-title">Pregame Coverage</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pregame_subtitle">Subtitle</label>
+                            <input type="text" name="pregame_subtitle" id="pregame_subtitle" value="{{ template.pregame_subtitle if template else '' }}" placeholder="Optional" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-pregame-subtitle"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pregame_description">Description</label>
+                            <input type="text" name="pregame_description" id="pregame_description" value="{{ template.pregame_description if template else '{team_name} plays {opponent} today at {game_time}' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-pregame-description">Pistons play Magic today at 7:00 PM EST</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pregame_art_url">Program Art URL</label>
+                            <input type="text" name="pregame_art_url" id="pregame_art_url" value="{{ template.pregame_art_url if template else '' }}" placeholder="Optional. Leave blank to disable program level art" class="template-field" style="font-family: monospace; font-size: 0.9rem;">
+                        </div>
+                    </fieldset>
+
+                    <!-- Postgame -->
+                    <fieldset style="margin-top: 1.5rem;">
+                        <legend><h3>📺 Postgame</h3></legend>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="postgame_enabled" id="postgame_enabled" {% if not template or template.postgame_enabled %}checked{% endif %}>
+                                Enable Postgame EPG Entries
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="postgame_title">Title</label>
+                            <input type="text" name="postgame_title" id="postgame_title" value="{{ template.postgame_title if template else 'Postgame Recap' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-postgame-title">Postgame Recap</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="postgame_subtitle">Subtitle</label>
+                            <input type="text" name="postgame_subtitle" id="postgame_subtitle" value="{{ template.postgame_subtitle if template else '' }}" placeholder="Optional" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-postgame-subtitle"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="postgame_description">Description</label>
+                            <input type="text" name="postgame_description" id="postgame_description" value="{{ template.postgame_description if template else '{team_name} {result_text} {opponent} - Final: {final_score}' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-postgame-description">Pistons defeated Heat - Final: 125-124</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="postgame_art_url">Program Art URL</label>
+                            <input type="text" name="postgame_art_url" id="postgame_art_url" value="{{ template.postgame_art_url if template else '' }}" placeholder="Optional. Leave blank to disable program level art" class="template-field" style="font-family: monospace; font-size: 0.9rem;">
+                        </div>
+                    </fieldset>
+
+                    <!-- Idle Day -->
+                    <fieldset style="margin-top: 1.5rem;">
+                        <legend><h3>💤 Idle Day</h3></legend>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="idle_enabled" id="idle_enabled" {% if not template or template.idle_enabled %}checked{% endif %}>
+                                Enable Idle Day EPG Entries
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="idle_title">Title</label>
+                            <input type="text" name="idle_title" id="idle_title" value="{{ template.idle_title if template else '{team_name} Programming' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-idle-title">Pistons Programming</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="idle_subtitle">Subtitle</label>
+                            <input type="text" name="idle_subtitle" id="idle_subtitle" value="{{ template.idle_subtitle if template else '' }}" placeholder="Optional" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-idle-subtitle"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="idle_description">Description</label>
+                            <input type="text" name="idle_description" id="idle_description" value="{{ template.idle_description if template else 'Next game: {next_date} at {next_time} vs {next_opponent}' }}" class="template-field">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-idle-description">Next game: LA Clippers on November 25</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="idle_art_url">Program Art URL</label>
+                            <input type="text" name="idle_art_url" id="idle_art_url" value="{{ template.idle_art_url if template else '' }}" placeholder="Optional. Leave blank to disable program level art" class="template-field" style="font-family: monospace; font-size: 0.9rem;">
+                        </div>
+                    </fieldset>
+                </div>
+
+                <!-- TAB 5: OTHER EPG OPTIONS -->
+                <div class="tab-content" id="tab-xmltv">
+                    <!-- Categories -->
+                    <fieldset>
+                        <legend><h3>📂 Categories</h3></legend>
+
+                        <div class="form-group">
+                            <label>Common Categories</label>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" name="category_sports" id="category_sports"
+                                           {% if template and template.categories and 'Sports' in template.categories %}checked{% endif %}>
+                                    <span>Sports</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" name="category_sport_variable" id="category_sport_variable"
+                                           {% if template and template.categories and '{sport}' in template.categories %}checked{% endif %}>
+                                    <span><code>{sport}</code> - Auto-populates with team's sport (Basketball, Football, etc.)</span>
+                                </label>
+                            </div>
+                            <label for="categories_custom" style="font-weight: normal; margin-top: 0.5rem;">Custom Categories (comma-separated)</label>
+                            <input type="text" name="categories_custom" id="categories_custom"
+                                   value="{{ (template.categories | reject('in', ['Sports', '{sport}']) | join(', ')) if template and template.categories is not none else '' }}"
+                                   placeholder="e.g., Entertainment, Live Events">
+                            <small class="help-text">Categories shown in EPG guide. Check common ones above or add custom categories.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="categories_apply_to">Apply Categories To</label>
+                            <select name="categories_apply_to" id="categories_apply_to">
+                                <option value="all" {% if not template or template.categories_apply_to == 'all' %}selected{% endif %}>All Programs (Events + Filler)</option>
+                                <option value="events" {% if template and template.categories_apply_to == 'events' %}selected{% endif %}>Events Only</option>
+                            </select>
+                            <small class="help-text">Choose whether categories apply to all programs or only game events</small>
+                        </div>
+                    </fieldset>
+
+                    <!-- Tags -->
+                    <fieldset style="margin-top: 1.5rem;">
+                        <legend><h3>🏷️ Tags</h3></legend>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="include_new_tag" {% if template and template.flags and template.flags.new %}checked{% endif %}>
+                                Include New Tag
+                            </label>
+                            <small class="help-text">Adds &lt;new/&gt; tag to scheduled game events</small>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="include_live_tag" {% if template and template.flags and template.flags.live %}checked{% endif %}>
+                                Include Live Tag
+                            </label>
+                            <small class="help-text">Adds &lt;live/&gt; tag to scheduled game events</small>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="include_date_tag" {% if template and template.flags and template.flags.date %}checked{% endif %}>
+                                Include Date Tag
+                            </label>
+                            <small class="help-text">Adds &lt;date&gt; tag with program air date in YYYYMMDD format</small>
+                        </div>
+                    </fieldset>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="form-actions" style="margin-top: 2rem;">
+                    <button type="submit" class="btn btn-success">💾 Save Template</button>
+                    <a href="{{ url_for('templates_list') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </div>
+
+            <!-- STICKY SIDEBAR - VARIABLE HELPER -->
+            <div class="preview-sidebar">
+                <div id="sidebar-variable-helper"></div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- PRESET LIBRARY MODAL -->
+<div id="presetModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📚 Condition Preset Library</h3>
+            <button type="button" class="modal-close" onclick="closePresetModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-top: 0; color: var(--text-muted); font-size: 0.9rem;">
+                Click a preset to add it to your conditions. You can modify and save your own presets below.
+            </p>
+            <div id="preset-library-list" class="preset-library-grid">
+                <!-- Presets will be loaded here -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closePresetModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+let allDescriptions = {{ description_options_json | default('[]') | safe }};
+let conditions = [];  // Conditional descriptions (priority 1-99)
+let fallbacks = [];   // Fallback descriptions (priority 100)
+let TEMPLATE_VARIABLES = {};
+let sampleDataFromAPI = {};
+let recentlyUsedVars = [];
+let lastTemplateField = null;
+
+// Suffix strategy mapping
+const SUFFIX_STRATEGIES = {
+  'BASE': [
+    'away_record', 'away_streak', 'away_win_pct', 'games_back', 'head_coach',
+    'home_record', 'home_streak', 'home_win_pct', 'is_national_broadcast',
+    'is_playoff', 'is_preseason', 'is_ranked', 'is_ranked_matchup',
+    'is_regular_season', 'last_10_record', 'last_5_record', 'league',
+    'league_name', 'opponent_is_ranked', 'playoff_seed', 'pro_conference',
+    'pro_conference_abbrev', 'pro_division', 'recent_form', 'sport', 'streak',
+    'team_abbrev', 'team_losses', 'team_name', 'team_papg', 'team_ppg',
+    'team_rank', 'team_record', 'team_ties', 'team_win_pct', 'team_wins'
+  ],
+  'LAST': [
+    'opponent_score', 'overtime_text', 'result', 'result_text', 'result_verb',
+    'score', 'score_diff', 'score_differential', 'score_differential_text',
+    'team_score'
+  ],
+  'NEXT': [
+    'odds_details', 'odds_moneyline', 'odds_opponent_moneyline',
+    'odds_opponent_spread', 'odds_over_under', 'odds_provider', 'odds_spread'
+  ]
+};
+
+// Sample data for preview
+let sampleData = {
+    team_name: 'Detroit Pistons',
+    team_abbrev: 'DET',
+    team_record: '13-2',
+    sport: 'Basketball',
+    league: 'NBA',
+    opponent: 'Orlando Magic',
+    opponent_abbrev: 'ORL',
+    opponent_record: '9-7',
+    matchup: 'DET @ ORL',
+    venue: 'Kia Center',
+    venue_full: 'Kia Center, Orlando',
+    game_time: '7:00 PM EST',
+    game_date: 'November 23, 2025',
+    win_streak: '11',
+    last_5_record: '5-0',
+    playoff_seed: '1',
+    team_ppg: '118.9',
+    head_coach: 'J.B. Bickerstaff',
+    next_opponent: 'LA Clippers',
+    next_date: 'November 25, 2025',
+    next_time: '8:00 PM EST',
+    last_opponent: 'Miami Heat',
+    last_date: 'November 21, 2025',
+    last_result: 'Win',
+    last_score: '125-124',
+    result_text: 'defeated',
+    final_score: '125-124',
+    broadcast_simple: 'FanDuel SN DET',
+    spread: '-3.5',
+    over_under: '221.5'
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load variables from API first
+    await loadVariablesFromAPI();
+
+    // Merge API sample data with fallback
+    sampleData = { ...sampleDataFromAPI, ...sampleData };
+
+    // Initialize UI components
+    initTabs();
+    initTemplateVariables();
+    initTemplatePreview();
+    initFallbackDescriptions();
+    conditionsRender();
+
+    // Load recently used variables
+    loadRecentlyUsed();
+
+    // Update previews on input
+    document.querySelectorAll('.template-field').forEach(field => {
+        field.addEventListener('input', updatePreviews);
+        field.addEventListener('focus', function() {
+            lastTemplateField = this;
+        });
+    });
+});
+
+// ============================================================================
+// TABBED INTERFACE
+// ============================================================================
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabId = this.dataset.tab;
+
+            // Remove active class from all
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            // Add active class to clicked
+            this.classList.add('active');
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        });
+    });
+}
+
+// ============================================================================
+// GAME DURATION MODE TOGGLES
+// ============================================================================
+function updateGameDurationMode() {
+    const customRadio = document.querySelector('input[name="game_duration_mode"][value="custom"]');
+    const input = document.getElementById('game_duration_override');
+
+    if (customRadio && customRadio.checked) {
+        input.disabled = false;
+        input.focus();
+    } else {
+        input.disabled = true;
+    }
+}
+
+
+// ============================================================================
+// TEMPLATE PREVIEW
+// ============================================================================
+function initTemplatePreview() {
+    updatePreviews();
+}
+
+function updatePreviews() {
+    const title = document.getElementById('title_format')?.value || '';
+    const subtitle = document.getElementById('subtitle_template')?.value || '';
+
+    // Get first fallback description for preview (or from first fallback textarea if available)
+    const firstFallbackTextarea = document.querySelector('textarea[name^="fallback_template_"]');
+    const description = firstFallbackTextarea?.value || (fallbacks[0]?.template) || '';
+
+    const pregameTitle = document.getElementById('pregame_title')?.value || '';
+    const pregameSubtitle = document.getElementById('pregame_subtitle')?.value || '';
+    const pregameDesc = document.getElementById('pregame_description')?.value || '';
+    const postgameTitle = document.getElementById('postgame_title')?.value || '';
+    const postgameSubtitle = document.getElementById('postgame_subtitle')?.value || '';
+    const postgameDesc = document.getElementById('postgame_description')?.value || '';
+    const idleTitle = document.getElementById('idle_title')?.value || '';
+    const idleSubtitle = document.getElementById('idle_subtitle')?.value || '';
+    const idleDesc = document.getElementById('idle_description')?.value || '';
+
+    // Update inline previews for main program
+    const previewTitle = document.getElementById('preview-title');
+    if (previewTitle) previewTitle.textContent = replaceVariables(title);
+
+    const previewSubtitle = document.getElementById('preview-subtitle');
+    if (previewSubtitle) previewSubtitle.textContent = replaceVariables(subtitle);
+
+    // Update inline previews for pregame
+    const previewPregameTitle = document.getElementById('preview-pregame-title');
+    if (previewPregameTitle) previewPregameTitle.textContent = replaceVariables(pregameTitle);
+
+    const previewPregameSubtitle = document.getElementById('preview-pregame-subtitle');
+    if (previewPregameSubtitle) previewPregameSubtitle.textContent = replaceVariables(pregameSubtitle);
+
+    const previewPregameDesc = document.getElementById('preview-pregame-description');
+    if (previewPregameDesc) previewPregameDesc.textContent = replaceVariables(pregameDesc);
+
+    // Update inline previews for postgame
+    const previewPostgameTitle = document.getElementById('preview-postgame-title');
+    if (previewPostgameTitle) previewPostgameTitle.textContent = replaceVariables(postgameTitle);
+
+    const previewPostgameSubtitle = document.getElementById('preview-postgame-subtitle');
+    if (previewPostgameSubtitle) previewPostgameSubtitle.textContent = replaceVariables(postgameSubtitle);
+
+    const previewPostgameDesc = document.getElementById('preview-postgame-description');
+    if (previewPostgameDesc) previewPostgameDesc.textContent = replaceVariables(postgameDesc);
+
+    // Update inline previews for idle
+    const previewIdleTitle = document.getElementById('preview-idle-title');
+    if (previewIdleTitle) previewIdleTitle.textContent = replaceVariables(idleTitle);
+
+    const previewIdleSubtitle = document.getElementById('preview-idle-subtitle');
+    if (previewIdleSubtitle) previewIdleSubtitle.textContent = replaceVariables(idleSubtitle);
+
+    const previewIdleDesc = document.getElementById('preview-idle-description');
+    if (previewIdleDesc) previewIdleDesc.textContent = replaceVariables(idleDesc);
+
+    // Update inline previews for fallback descriptions
+    fallbacks.forEach((fallback, index) => {
+        const textarea = document.getElementById(`fallback_template_${index}`);
+        const preview = document.getElementById(`preview-fallback-${index}`);
+        if (textarea && preview) {
+            preview.textContent = replaceVariables(textarea.value);
+        }
+    });
+
+    // Update inline previews for conditional descriptions
+    conditions.forEach((condition, index) => {
+        const input = document.getElementById(`cond_template_${index}`);
+        const preview = document.getElementById(`preview-condition-${index}`);
+        if (input && preview) {
+            preview.textContent = replaceVariables(input.value);
+        }
+    });
+}
+
+function replaceVariables(template) {
+    let result = template;
+    for (const [key, value] of Object.entries(sampleData)) {
+        result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    }
+    return result;
+}
+
+// ============================================================================
+// TEMPLATE VARIABLES (Dynamically loaded from /api/variables)
+// ============================================================================
+async function loadVariablesFromAPI() {
+    try {
+        const response = await fetch('/api/variables');
+        if (!response.ok) {
+            throw new Error(`API returned ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Group variables by category
+        const categoryMap = {};
+        const sampleMap = {};
+
+        data.variables.forEach(variable => {
+            if (!categoryMap[variable.category]) {
+                categoryMap[variable.category] = {
+                    icon: variable.icon,
+                    variables: []
+                };
+            }
+            categoryMap[variable.category].variables.push(variable.name);
+            sampleMap[variable.name] = variable.example;
+        });
+
+        TEMPLATE_VARIABLES = categoryMap;
+        sampleDataFromAPI = sampleMap;
+
+        return true;
+    } catch (error) {
+        console.error('Failed to load variables from API:', error);
+        return false;
+    }
+}
+
+function getSuffixStrategy(variableName) {
+  if (SUFFIX_STRATEGIES.BASE.includes(variableName)) return 'BASE';
+  if (SUFFIX_STRATEGIES.LAST.includes(variableName)) return 'LAST';
+  if (SUFFIX_STRATEGIES.NEXT.includes(variableName)) return 'NEXT';
+  return 'ALL';
+}
+
+function getSuffixClass(variableName) {
+  const strategy = getSuffixStrategy(variableName);
+  const classes = {
+    'BASE': 'var-base',
+    'LAST': 'var-last',
+    'NEXT': 'var-next',
+    'ALL': 'var-all'
+  };
+  return classes[strategy] || classes['ALL'];
+}
+
+function generateTemplateVariablesHTML(containerId) {
+    const baseVarCount = Object.keys(sampleDataFromAPI).length;
+
+    let html = `
+        <div class="variable-helper">
+            <h4 style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 1rem;">📝 Template Variables</h4>
+
+            <!-- Suffix System Guide -->
+            <div class="suffix-guide">
+                <ul class="suffix-guide-list">
+                    <li><code>{variable}</code> current game</li>
+                    <li><code>{variable.next}</code> next game</li>
+                    <li><code>{variable.last}</code> last game</li>
+                </ul>
+                <div class="suffix-legend">
+                    <span class="suffix-badge badge-all">ALL</span> all contexts •
+                    <span class="suffix-badge badge-base">BASE</span> no suffix •
+                    <span class="suffix-badge badge-next">.next</span> base+.next •
+                    <span class="suffix-badge badge-last">.last</span> .last only
+                </div>
+            </div>
+
+            <!-- Search -->
+            <input type="text" class="variable-search-input" placeholder="Search variables..." style="width: 100%; margin-bottom: 0.75rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem;">
+
+            <!-- Recently Used -->
+            <div class="variable-category recently-used-category" style="display: none; margin-bottom: 0.75rem;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; font-weight: 600;">🕒 Recently Used</h4>
+                <div class="recently-used-vars" style="display: flex; flex-wrap: wrap; gap: 0.4rem;"></div>
+            </div>
+    `;
+
+    const categoryCount = Object.keys(TEMPLATE_VARIABLES).length;
+
+    if (categoryCount === 0) {
+        html += `<p style="color: orange; margin: 0.5rem 0; font-size: 0.85rem;">⚠️ Loading variables from API...</p>`;
+    }
+
+    for (const [categoryName, categoryData] of Object.entries(TEMPLATE_VARIABLES)) {
+        html += `
+            <details style="margin-bottom: 0.5rem;" class="variable-category">
+                <summary style="cursor: pointer; font-weight: 600; color: var(--text-primary); font-size: 0.85rem; padding: 0.25rem 0;">${categoryName}</summary>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem;">
+        `;
+
+        categoryData.variables.forEach(varName => {
+            const suffixClass = getSuffixClass(varName);
+            html += `<button type="button" class="chip ${suffixClass}" onclick="insertVariable('{${varName}}')">${varName}</button>`;
+        });
+
+        html += `
+                </div>
+            </details>
+        `;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function initTemplateVariables() {
+    // Initialize single variable helper in sidebar
+    const sidebarContainer = document.getElementById('sidebar-variable-helper');
+    if (sidebarContainer) {
+        sidebarContainer.innerHTML = generateTemplateVariablesHTML('sidebar-variable-helper');
+    }
+
+    // Set up search functionality
+    document.querySelectorAll('.variable-search-input').forEach(searchInput => {
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const parent = e.target.closest('.variable-helper');
+            const categories = parent.querySelectorAll('.variable-category');
+
+            categories.forEach(category => {
+                if (category.classList.contains('recently-used-category')) return;
+
+                const buttons = category.querySelectorAll('.chip');
+                let hasVisibleButtons = false;
+
+                buttons.forEach(button => {
+                    const variableName = button.textContent.toLowerCase();
+                    if (variableName.includes(searchTerm)) {
+                        button.style.display = '';
+                        hasVisibleButtons = true;
+                    } else {
+                        button.style.display = 'none';
+                    }
+                });
+
+                if (searchTerm && hasVisibleButtons) {
+                    category.setAttribute('open', '');
+                    category.style.display = '';
+                } else if (searchTerm && !hasVisibleButtons) {
+                    category.style.display = 'none';
+                } else {
+                    category.style.display = '';
+                    category.removeAttribute('open');
+                }
+            });
+        });
+    });
+
+    updateAllRecentlyUsedDisplays();
+}
+
+function insertVariable(variable) {
+    let targetElement = document.activeElement;
+
+    if (!targetElement || (targetElement.tagName !== 'INPUT' && targetElement.tagName !== 'TEXTAREA')) {
+        targetElement = lastTemplateField;
+    }
+
+    // Default to first fallback template field if no field is focused
+    if (!targetElement) {
+        targetElement = document.querySelector('textarea[name^="fallback_template_"]');
+    }
+
+    if (targetElement && (targetElement.tagName === 'INPUT' || targetElement.tagName === 'TEXTAREA')) {
+        const start = targetElement.selectionStart || 0;
+        const end = targetElement.selectionEnd || 0;
+        const text = targetElement.value || '';
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        targetElement.value = before + variable + after;
+        targetElement.selectionStart = targetElement.selectionEnd = start + variable.length;
+        targetElement.focus();
+        lastTemplateField = targetElement;
+
+        addToRecentlyUsed(variable);
+        updatePreviews();
+    }
+}
+
+// ============================================================================
+// RECENTLY USED VARIABLES
+// ============================================================================
+function loadRecentlyUsed() {
+    const stored = localStorage.getItem('teamarr_recent_vars');
+    if (stored) {
+        recentlyUsedVars = JSON.parse(stored);
+        updateAllRecentlyUsedDisplays();
+    }
+}
+
+function addToRecentlyUsed(variable) {
+    recentlyUsedVars = recentlyUsedVars.filter(v => v !== variable);
+    recentlyUsedVars.unshift(variable);
+    recentlyUsedVars = recentlyUsedVars.slice(0, 10);
+    localStorage.setItem('teamarr_recent_vars', JSON.stringify(recentlyUsedVars));
+    updateAllRecentlyUsedDisplays();
+}
+
+function updateAllRecentlyUsedDisplays() {
+    const containers = document.querySelectorAll('.recently-used-vars');
+    const categories = document.querySelectorAll('.recently-used-category');
+
+    if (recentlyUsedVars.length === 0) {
+        categories.forEach(cat => cat.style.display = 'none');
+        return;
+    }
+
+    categories.forEach(cat => cat.style.display = 'block');
+
+    const html = recentlyUsedVars.map(varName => {
+        const cleanVarName = varName.replace(/[{}]/g, '');
+        const suffixClass = getSuffixClass(cleanVarName);
+        return `<button type="button" class="chip ${suffixClass}" onclick="insertVariable('${varName}')">${cleanVarName}</button>`;
+    }).join('');
+
+    containers.forEach(container => {
+        container.innerHTML = html;
+    });
+}
+
+// ============================================================================
+// CONDITIONAL DESCRIPTIONS
+// ============================================================================
+function conditionsRender() {
+    const container = document.getElementById('conditions-list');
+    container.innerHTML = '';
+
+    if (conditions.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No conditions yet. Click "+ Add Condition" to get started.</p>';
+        return;
+    }
+
+    // Sort conditions array by priority (lower number = higher priority = checked first)
+    conditions.sort((a, b) => {
+        const priorityA = parseInt(a.priority) || 50;
+        const priorityB = parseInt(b.priority) || 50;
+        return priorityA - priorityB;
+    });
+
+    conditions.forEach((condition, index) => {
+        const card = document.createElement('div');
+        card.className = 'condition-card';
+        card.id = `cond-card-${index}`;
+
+        const condType = condition.condition || '';
+        const condSummary = getConditionSummaryText(condition);
+
+        card.innerHTML = `
+            <div class="condition-card-header" onclick="conditionsToggle(${index})">
+                <div class="condition-card-title">
+                    <div class="condition-card-name">${escapeHtml(condition.name || 'Condition ' + (index + 1))}</div>
+                    <div class="condition-card-summary">${condSummary} • Priority: ${condition.priority || 50}</div>
+                </div>
+                <div class="condition-card-actions">
+                    <button type="button" onclick="event.stopPropagation(); conditionsRemove(${index})" class="btn btn-sm btn-danger btn-icon" title="Delete">🗑️</button>
+                    <div class="condition-card-expand">▼</div>
+                </div>
+            </div>
+            <div class="condition-card-body">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="cond_name[]" value="${escapeHtml(condition.name || '')}">
+                </div>
+                <div class="form-group">
+                    <label>Condition Type</label>
+                    <select name="cond_type[]" onchange="updateConditionValueField(${index})">
+                        <option value="">Select...</option>
+                        <option value="is_home" ${condType === 'is_home' ? 'selected' : ''}>Is home</option>
+                        <option value="is_away" ${condType === 'is_away' ? 'selected' : ''}>Is away</option>
+                        <option value="win_streak" ${condType === 'win_streak' ? 'selected' : ''}>Streak (win) ≥ N</option>
+                        <option value="loss_streak" ${condType === 'loss_streak' ? 'selected' : ''}>Streak (loss) ≥ N</option>
+                        <option value="home_win_streak" ${condType === 'home_win_streak' ? 'selected' : ''}>Home Streak (win) ≥ N</option>
+                        <option value="home_loss_streak" ${condType === 'home_loss_streak' ? 'selected' : ''}>Home Streak (loss) ≥ N</option>
+                        <option value="away_win_streak" ${condType === 'away_win_streak' ? 'selected' : ''}>Away Streak (win) ≥ N</option>
+                        <option value="away_loss_streak" ${condType === 'away_loss_streak' ? 'selected' : ''}>Away Streak (loss) ≥ N</option>
+                        <option value="is_playoff" ${condType === 'is_playoff' ? 'selected' : ''}>Is playoff</option>
+                        <option value="is_preseason" ${condType === 'is_preseason' ? 'selected' : ''}>Is preseason</option>
+                        <option value="has_odds" ${condType === 'has_odds' ? 'selected' : ''}>Has odds</option>
+                        <option value="ranked_opponent" ${condType === 'ranked_opponent' ? 'selected' : ''}>Ranked opponent (opponent ranked top 25)</option>
+                        <option value="top_10_matchup" ${condType === 'top_10_matchup' ? 'selected' : ''}>Top 10 matchup (both teams ranked top 10)</option>
+                        <option value="opponent_name_contains" ${condType === 'opponent_name_contains' ? 'selected' : ''}>Opponent name contains</option>
+                        <option value="is_national_broadcast" ${condType === 'is_national_broadcast' ? 'selected' : ''}>Is National Broadcast</option>
+                    </select>
+                </div>
+                <div class="form-group" id="cond-value-group-${index}">
+                    <label>Value</label>
+                    <input type="${condType === 'opponent_name_contains' ? 'text' : 'number'}" name="cond_value[]" id="cond_value_${index}" value="${condition.condition_value || ''}" placeholder="${condType === 'opponent_name_contains' ? 'e.g., Lakers' : 'e.g., 3'}">
+                    <small class="help-text">${condType === 'opponent_name_contains' ? 'Text to match in opponent name' : 'For numerical conditions (streak length, etc.)'}</small>
+                </div>
+                <div class="form-group">
+                    <label>Priority (1-100, lower = higher)</label>
+                    <input type="number" name="cond_priority[]" min="1" max="100" value="${condition.priority || 50}">
+                </div>
+                <div class="form-group">
+                    <label>Description Template</label>
+                    <input type="text" name="cond_template[]" value="${escapeHtml(condition.template || '')}" class="template-field" id="cond_template_${index}">
+                    <div class="inline-preview">
+                        <small>Preview:</small>
+                        <span id="preview-condition-${index}"></span>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); saveConditionToPreset(${index})">
+                        📚 Save to Preset Library
+                    </button>
+                </div>
+                <input type="hidden" name="cond_source[]" value="${condition.source || 'custom'}">
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    // Re-attach event listeners for template fields
+    document.querySelectorAll('.template-field').forEach(field => {
+        field.addEventListener('input', updatePreviews);
+        field.addEventListener('focus', function() {
+            lastTemplateField = this;
+        });
+    });
+
+    // Update value field visibility for all conditions
+    conditions.forEach((_, index) => {
+        updateConditionValueField(index);
+    });
+
+    // Update previews for all conditional descriptions
+    updatePreviews();
+}
+
+function getConditionSummaryText(condition) {
+    const labels = {
+        'is_home': 'Is home',
+        'is_away': 'Is away',
+        'win_streak': `Streak (win) ≥ ${condition.condition_value || 'N'}`,
+        'loss_streak': `Streak (loss) ≥ ${condition.condition_value || 'N'}`,
+        'home_win_streak': `Home Streak (win) ≥ ${condition.condition_value || 'N'}`,
+        'home_loss_streak': `Home Streak (loss) ≥ ${condition.condition_value || 'N'}`,
+        'away_win_streak': `Away Streak (win) ≥ ${condition.condition_value || 'N'}`,
+        'away_loss_streak': `Away Streak (loss) ≥ ${condition.condition_value || 'N'}`,
+        'is_playoff': 'Is playoff',
+        'is_preseason': 'Is preseason',
+        'has_odds': 'Has odds',
+        'ranked_opponent': 'Ranked opponent (top 25)',
+        'top_10_matchup': 'Top 10 matchup',
+        'opponent_name_contains': `Opponent contains "${condition.condition_value || '...'}"`,
+        'is_national_broadcast': 'Is National Broadcast'
+    };
+    return labels[condition.condition] || 'No condition selected';
+}
+
+function updateConditionValueField(index) {
+    const select = document.querySelector(`select[name="cond_type[]"]:nth-of-type(${index + 1})`);
+    const valueInput = document.getElementById(`cond_value_${index}`);
+    const valueGroup = document.getElementById(`cond-value-group-${index}`);
+    const helpText = valueGroup.querySelector('.help-text');
+
+    if (!select || !valueInput) return;
+
+    const condType = select.value;
+
+    // Conditions that need a value
+    const needsValue = ['win_streak', 'loss_streak', 'home_win_streak', 'home_loss_streak',
+                        'away_win_streak', 'away_loss_streak', 'opponent_name_contains'];
+
+    if (needsValue.includes(condType)) {
+        valueGroup.style.display = 'block';
+
+        if (condType === 'opponent_name_contains') {
+            valueInput.type = 'text';
+            valueInput.placeholder = 'e.g., Lakers';
+            helpText.textContent = 'Text to match in opponent name';
+        } else {
+            valueInput.type = 'number';
+            valueInput.placeholder = 'e.g., 3';
+            helpText.textContent = 'For numerical conditions (streak length, etc.)';
+        }
+    } else {
+        valueGroup.style.display = 'none';
+    }
+}
+
+function conditionsToggle(index) {
+    const card = document.getElementById(`cond-card-${index}`);
+    if (card) {
+        card.classList.toggle('expanded');
+    }
+}
+
+function conditionsAddNew() {
+    conditions.push({
+        name: 'New Condition',
+        condition: '',
+        condition_value: '',
+        priority: 50,
+        template: '{team_name} faces {opponent}',
+        source: 'custom'
+    });
+    conditionsRender();
+}
+
+function conditionsRemove(index) {
+    if (confirm('Delete this condition?')) {
+        conditions.splice(index, 1);
+        conditionsRender();
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ============================================================================
+// FALLBACK DESCRIPTIONS
+// ============================================================================
+
+function initFallbackDescriptions() {
+    // Separate allDescriptions into fallbacks (priority 100) and conditions (priority 1-99)
+    fallbacks = allDescriptions.filter(desc => desc.priority === 100);
+    conditions = allDescriptions.filter(desc => desc.priority !== 100);
+
+    // If no fallbacks exist, add one default with a label
+    if (fallbacks.length === 0) {
+        fallbacks.push({
+            label: 'Default',
+            template: '{team_name} faces {opponent} at {venue}',
+            priority: 100
+        });
+    }
+
+    renderFallbacks();
+}
+
+function renderFallbacks() {
+    const container = document.getElementById('fallback-descriptions-container');
+    const countInput = document.getElementById('fallback-count');
+
+    container.innerHTML = '';
+
+    if (fallbacks.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No fallback descriptions yet. Click "+ Add Fallback Description" to get started.</p>';
+        return;
+    }
+
+    fallbacks.forEach((fallback, index) => {
+        const card = document.createElement('div');
+        card.className = 'condition-card';  // Reuse condition card styling
+        card.id = `fallback-card-${index}`;
+
+        const labelText = fallback.label || 'Untitled Fallback';
+
+        card.innerHTML = `
+            <div class="condition-card-header" onclick="fallbacksToggle(${index})">
+                <div class="condition-card-title">
+                    <div class="condition-card-name">${escapeHtml(labelText)}</div>
+                    <div class="condition-card-summary">Priority: 100 (Fallback)</div>
+                </div>
+                <div class="condition-card-actions">
+                    ${fallbacks.length > 1 ? `<button type="button" onclick="event.stopPropagation(); removeFallbackDescription(${index})" class="btn btn-sm btn-danger btn-icon" title="Delete">🗑️</button>` : ''}
+                    <div class="condition-card-expand">▼</div>
+                </div>
+            </div>
+            <div class="condition-card-body">
+                <div class="form-group">
+                    <label>Label *</label>
+                    <input type="text" name="fallback_label_${index}" value="${escapeHtml(fallback.label || '')}"
+                           placeholder="e.g., 'Generic', 'Exciting', 'Classic'" required>
+                </div>
+                <div class="form-group">
+                    <label>Description Template *</label>
+                    <textarea name="fallback_template_${index}" rows="3" required class="template-field" id="fallback_template_${index}">${escapeHtml(fallback.template || '')}</textarea>
+                    <div class="inline-preview">
+                        <small>Preview:</small>
+                        <span id="preview-fallback-${index}"></span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    // Update hidden counter
+    countInput.value = fallbacks.length;
+
+    // Re-attach event listeners for template fields
+    document.querySelectorAll('.template-field').forEach(field => {
+        field.addEventListener('input', updatePreviews);
+        field.addEventListener('focus', function() {
+            lastTemplateField = this;
+        });
+    });
+
+    // Update previews for all fallback descriptions
+    updatePreviews();
+}
+
+function fallbacksToggle(index) {
+    const card = document.getElementById(`fallback-card-${index}`);
+    if (card) {
+        card.classList.toggle('expanded');
+    }
+}
+
+function addFallbackDescription() {
+    const newNumber = fallbacks.length + 1;
+    const label = newNumber === 1 ? 'Default' : `Default ${newNumber}`;
+
+    fallbacks.push({
+        label: label,
+        template: '{team_name} faces {opponent}',
+        priority: 100
+    });
+    renderFallbacks();
+
+    // Auto-expand the newly added fallback
+    const newIndex = fallbacks.length - 1;
+    setTimeout(() => {
+        const card = document.getElementById(`fallback-card-${newIndex}`);
+        if (card) {
+            card.classList.add('expanded');
+        }
+    }, 10);
+}
+
+function removeFallbackDescription(index) {
+    if (fallbacks.length <= 1) {
+        alert('You must have at least one fallback description.');
+        return;
+    }
+
+    if (confirm('Delete this fallback description?')) {
+        fallbacks.splice(index, 1);
+        renderFallbacks();
+    }
+}
+
+// ============================================================================
+// PRESET LIBRARY
+// ============================================================================
+async function showPresetLibrary() {
+    const modal = document.getElementById('presetModal');
+    const list = document.getElementById('preset-library-list');
+
+    try {
+        const response = await fetch('/api/condition-presets');
+        const presets = await response.json();
+
+        list.innerHTML = '';
+        if (presets.length === 0) {
+            list.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No presets available yet. Create conditions and save them as presets!</p>';
+        } else {
+            presets.forEach(preset => {
+                const div = document.createElement('div');
+                div.className = 'preset-item';
+                div.innerHTML = `
+                    <div class="preset-item-header">
+                        <div class="preset-item-name">${escapeHtml(preset.name)}</div>
+                        <div class="preset-item-actions">
+                            <button class="preset-delete-btn" onclick="event.stopPropagation(); deletePreset(${preset.id})">Delete</button>
+                        </div>
+                    </div>
+                    <div class="preset-item-condition">${getConditionSummaryText({condition: preset.condition_type, condition_value: preset.condition_value})} • Priority: ${preset.priority}</div>
+                    <div class="preset-item-template">"${escapeHtml(preset.template)}"</div>
+                `;
+                div.onclick = () => addPresetToConditions(preset);
+                list.appendChild(div);
+            });
+        }
+
+        modal.classList.add('show');
+    } catch (error) {
+        console.error('Failed to load presets:', error);
+        showNotification('Failed to load preset library', 'error');
+    }
+}
+
+function closePresetModal() {
+    document.getElementById('presetModal').classList.remove('show');
+}
+
+function addPresetToConditions(preset) {
+    conditions.push({
+        name: preset.name,
+        condition: preset.condition_type,
+        condition_value: preset.condition_value,
+        priority: preset.priority,
+        template: preset.template,
+        source: 'preset',
+        preset_id: preset.id
+    });
+    conditionsRender();
+    closePresetModal();
+}
+
+async function deletePreset(presetId) {
+    if (!confirm('Delete this preset from the library? This cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/condition-presets/${presetId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            showPresetLibrary();
+            showNotification('Preset deleted successfully', 'success');
+        } else {
+            showNotification('Failed to delete preset', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to delete preset:', error);
+        showNotification('Failed to delete preset', 'error');
+    }
+}
+
+async function saveConditionToPreset(index) {
+    const condition = conditions[index];
+
+    if (!condition.condition) {
+        alert('Please select a condition type before saving to preset library.');
+        return;
+    }
+
+    const description = prompt('Enter a description for this preset (optional):');
+    if (description === null) return; // User cancelled
+
+    try {
+        const response = await fetch('/api/condition-presets', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: condition.name || 'Custom Condition',
+                description: description || '',
+                condition_type: condition.condition,
+                condition_value: condition.condition_value || '',
+                priority: condition.priority || 50,
+                template: condition.template || ''
+            })
+        });
+
+        if (response.ok) {
+            showNotification('Condition saved to preset library!', 'success');
+        } else {
+            const error = await response.json();
+            showNotification(error.error || 'Failed to save preset', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to save preset:', error);
+        showNotification('Failed to save preset', 'error');
+    }
+}
+
+// ============================================================================
+// FORM SUBMISSION
+// ============================================================================
+document.getElementById('template-form').addEventListener('submit', function(e) {
+    // Serialize fallback descriptions from form inputs
+    const fallbackCount = parseInt(document.getElementById('fallback-count').value) || 0;
+    const serializedFallbacks = [];
+
+    for (let i = 0; i < fallbackCount; i++) {
+        const labelInput = document.querySelector(`input[name="fallback_label_${i}"]`);
+        const templateInput = document.querySelector(`textarea[name="fallback_template_${i}"]`);
+
+        if (templateInput && templateInput.value.trim()) {
+            const label = labelInput?.value.trim() || '';
+            if (!label) {
+                e.preventDefault();
+                alert('All fallback descriptions must have a label.');
+                return false;
+            }
+            serializedFallbacks.push({
+                priority: 100,
+                template: templateInput.value,
+                label: label
+            });
+        }
+    }
+
+    // Ensure at least one fallback exists
+    if (serializedFallbacks.length === 0) {
+        e.preventDefault();
+        alert('At least one fallback description is required.');
+        return false;
+    }
+
+    // Serialize conditional descriptions from form inputs
+    const serializedConditions = conditions.map((cond, index) => {
+        const nameInput = document.querySelectorAll('input[name="cond_name[]"]')[index];
+        const typeSelect = document.querySelectorAll('select[name="cond_type[]"]')[index];
+        const valueInput = document.querySelectorAll('input[name="cond_value[]"]')[index];
+        const priorityInput = document.querySelectorAll('input[name="cond_priority[]"]')[index];
+        const templateInput = document.querySelectorAll('input[name="cond_template[]"]')[index];
+        const sourceInput = document.querySelectorAll('input[name="cond_source[]"]')[index];
+
+        return {
+            name: nameInput?.value || cond.name,
+            condition: typeSelect?.value || cond.condition,
+            condition_value: valueInput?.value || cond.condition_value,
+            priority: parseInt(priorityInput?.value) || cond.priority,
+            template: templateInput?.value || cond.template,
+            source: sourceInput?.value || cond.source
+        };
+    });
+
+    // Merge fallbacks + conditionals into single array
+    const allDescriptions = [...serializedFallbacks, ...serializedConditions];
+    const descriptionsJson = JSON.stringify(allDescriptions);
+
+    // Create a hidden field for all descriptions (fallbacks + conditionals)
+    const hiddenDescField = document.createElement('input');
+    hiddenDescField.type = 'hidden';
+    hiddenDescField.name = 'description_options';
+    hiddenDescField.value = descriptionsJson;
+    this.appendChild(hiddenDescField);
+
+    // Build flags JSON from checkboxes
+    const flags = {
+        new: document.querySelector('input[name="include_new_tag"]')?.checked || false,
+        live: document.querySelector('input[name="include_live_tag"]')?.checked || false,
+        date: document.querySelector('input[name="include_date_tag"]')?.checked || false
+    };
+    const flagsJson = JSON.stringify(flags);
+
+    const hiddenFlagsField = document.createElement('input');
+    hiddenFlagsField.type = 'hidden';
+    hiddenFlagsField.name = 'flags';
+    hiddenFlagsField.value = flagsJson;
+    this.appendChild(hiddenFlagsField);
+
+    // Build categories JSON from checkboxes and custom input
+    const categories = [];
+    if (document.getElementById('category_sports')?.checked) {
+        categories.push('Sports');
+    }
+    if (document.getElementById('category_sport_variable')?.checked) {
+        categories.push('{sport}');
+    }
+    const customCategories = document.getElementById('categories_custom')?.value || '';
+    if (customCategories.trim()) {
+        const customCats = customCategories.split(',').map(c => c.trim()).filter(c => c);
+        categories.push(...customCats);
+    }
+    const categoriesJson = JSON.stringify(categories);
+
+    const hiddenCategoriesField = document.createElement('input');
+    hiddenCategoriesField.type = 'hidden';
+    hiddenCategoriesField.name = 'categories';
+    hiddenCategoriesField.value = categoriesJson;
+    this.appendChild(hiddenCategoriesField);
+});
+</script>
+{% endblock %}

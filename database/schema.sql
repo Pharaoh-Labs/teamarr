@@ -1,54 +1,45 @@
--- TeamArr Sports EPG Generator Database Schema
+-- TeamArr - Template-Based Architecture Database Schema
 -- SQLite Database Structure
--- Last Updated: November 18, 2025
+-- Last Updated: November 22, 2025
 
 -- =============================================================================
--- TEAMS TABLE
--- Stores user-configured sports teams and all EPG generation settings
+-- TEMPLATES TABLE
+-- Stores reusable EPG generation templates (all formatting/filler settings)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS teams (
+CREATE TABLE IF NOT EXISTS templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    -- ESPN API Identification
-    espn_team_id TEXT NOT NULL,          -- ESPN's team ID or slug (e.g., "detroit-pistons")
-    league TEXT NOT NULL,                 -- League identifier (e.g., "nba", "nfl", "epl")
-    sport TEXT NOT NULL,                  -- Sport type (e.g., "basketball", "football", "soccer")
+    -- Template Identity
+    name TEXT NOT NULL UNIQUE,           -- User-defined template name (e.g., "NBA Standard", "Generic Sports")
+    sport TEXT,                           -- Optional sport filter (e.g., "basketball", "football")
+    league TEXT,                          -- Optional league filter (e.g., "nba", "nfl")
 
-    -- Team Information
-    team_name TEXT NOT NULL,              -- Full team name (e.g., "Detroit Pistons")
-    team_abbrev TEXT,                     -- Team abbreviation (e.g., "DET")
-    team_logo_url TEXT,                   -- URL to team logo
-    team_color TEXT,                      -- Team primary color (hex)
-
-    -- XMLTV Channel Configuration
-    channel_id TEXT NOT NULL UNIQUE,      -- XMLTV channel ID (e.g., "detroit-pistons")
-
-    -- Programme Metadata
-    title_format TEXT DEFAULT '{team_name} Basketball', -- Programme title template
-    description_template TEXT,            -- Programme description template with variables
+    -- Programme Metadata Templates
+    title_format TEXT DEFAULT '{team_name} {sport}', -- Programme title template
     subtitle_template TEXT DEFAULT '{venue_full}',    -- Programme subtitle template
+    program_art_url TEXT,                             -- Optional URL template for program art (e.g., game-thumbs integration)
 
     -- Game Timing
     game_duration_mode TEXT DEFAULT 'default', -- 'default', 'sport', or 'custom'
     game_duration_override REAL,          -- Custom override value (only used if mode='custom')
-    timezone TEXT DEFAULT 'America/New_York', -- User's preferred timezone
 
     -- XMLTV Flags
-    flags JSON DEFAULT '{"new": true, "live": false, "premiere": false}',
-    -- Structure: {"new": boolean, "live": boolean, "premiere": boolean, "subtitles": boolean}
+    flags JSON DEFAULT '{"new": true, "live": false, "date": false}',
+    -- Structure: {"new": boolean, "live": boolean, "date": boolean}
 
     -- XMLTV Categories
     categories JSON DEFAULT '["Sports"]',
     -- Array of category strings, e.g., ["Sports", "Basketball", "HD", "Live"]
+    categories_apply_to TEXT DEFAULT 'events', -- 'all' or 'events' - control category application
 
-    -- Schedule Filler: No Game Day
-    no_game_enabled BOOLEAN DEFAULT 1,
+    -- Schedule Filler: No Game Day (deprecated, kept for backwards compatibility)
+    no_game_enabled BOOLEAN DEFAULT 0,
     no_game_title TEXT DEFAULT 'No Game Today',
     no_game_description TEXT DEFAULT 'No {team_name} game scheduled today. Next game: {next_game_date} vs {next_opponent}',
-    no_game_duration REAL DEFAULT 24.0,   -- How many hours to show (24 = all day)
+    no_game_duration REAL DEFAULT 24.0,
 
     -- Schedule Filler: Pre-Game Periods
     pregame_enabled BOOLEAN DEFAULT 1,
@@ -72,6 +63,10 @@ CREATE TABLE IF NOT EXISTS teams (
             "description": "{team_name} vs {opponent} starts in {hours_until} hours at {venue_full}"
         }
     ]',
+    pregame_title TEXT DEFAULT 'Pregame Coverage',
+    pregame_subtitle TEXT,
+    pregame_description TEXT DEFAULT '{team_name} plays {opponent} today at {game_time}',
+    pregame_art_url TEXT,
 
     -- Schedule Filler: Post-Game Periods
     postgame_enabled BOOLEAN DEFAULT 1,
@@ -95,50 +90,73 @@ CREATE TABLE IF NOT EXISTS teams (
             "description": "Replay: {team_name} vs {opponent} - Final Score: {final_score}"
         }
     ]',
+    postgame_title TEXT DEFAULT 'Postgame Recap',
+    postgame_subtitle TEXT,
+    postgame_description TEXT DEFAULT '{team_name} {result_text} {opponent} - Final: {final_score}',
+    postgame_art_url TEXT,
 
     -- Schedule Filler: Idle Days (Between Games / No Game Days)
     idle_enabled BOOLEAN DEFAULT 1,
     idle_title TEXT DEFAULT '{team_name} Programming',
+    idle_subtitle TEXT,
     idle_description TEXT DEFAULT 'Next game: {next_date} at {next_time} vs {next_opponent}',
-
-    -- Simplified Pregame/Postgame Templates (alternative to complex JSON periods)
-    pregame_title TEXT DEFAULT 'Pregame Coverage',
-    pregame_description TEXT DEFAULT '{team_name} plays {opponent} today at {game_time}',
-    postgame_title TEXT DEFAULT 'Postgame Recap',
-    postgame_description TEXT DEFAULT '{team_name} {result_text} {opponent} - Final: {final_score}',
-
-    -- Template Variable Features
-    enable_records BOOLEAN DEFAULT 1,         -- Enable {team_record}, {opponent_record}
-    enable_streaks BOOLEAN DEFAULT 1,         -- Enable {win_streak}, {loss_streak}
-    enable_head_to_head BOOLEAN DEFAULT 1,    -- Enable {previous_score}, {season_series}
-    enable_standings BOOLEAN DEFAULT 1,       -- Enable {team_rank}, {playoff_seed}
-    enable_statistics BOOLEAN DEFAULT 1,      -- Enable {team_ppg}, {team_papg}
-    enable_players BOOLEAN DEFAULT 1,         -- Enable {top_scorer_name}, etc.
+    idle_art_url TEXT,
 
     -- Conditional Descriptions (Templates tab)
-    description_options JSON DEFAULT '[]',    -- Array of conditional description templates
-    -- Structure: [{"condition_type": "is_home", "template": "...", "priority": 50, "condition_value": "..."}]
+    description_options JSON DEFAULT '[]'    -- Array of conditional description templates
+    -- Structure: [{"condition": "is_home", "template": "...", "priority": 50, "condition_value": "..."}]
+);
 
-    -- Program Display Settings
-    midnight_crossover_mode TEXT DEFAULT 'postgame',  -- How to handle games crossing midnight
-    max_program_hours_mode TEXT DEFAULT 'default',    -- 'default' or 'custom'
-    max_program_hours REAL DEFAULT 6.0,       -- Maximum duration for a single program (used when mode='custom')
-    categories_apply_to TEXT DEFAULT 'events', -- 'all' or 'events' - control category application
+-- Index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_templates_name ON templates(name);
+CREATE INDEX IF NOT EXISTS idx_templates_sport ON templates(sport);
+CREATE INDEX IF NOT EXISTS idx_templates_league ON templates(league);
+
+-- =============================================================================
+-- TEAMS TABLE
+-- Stores team identity and template assignment (simplified from original)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- ESPN API Identification
+    espn_team_id TEXT NOT NULL,          -- ESPN's team ID or slug (e.g., "detroit-pistons")
+    league TEXT NOT NULL,                 -- League identifier (e.g., "nba", "nfl", "epl")
+    sport TEXT NOT NULL,                  -- Sport type (e.g., "basketball", "football", "soccer")
+
+    -- Team Information
+    team_name TEXT NOT NULL,              -- Full team name (e.g., "Detroit Pistons")
+    team_abbrev TEXT,                     -- Team abbreviation (e.g., "DET")
+    team_slug TEXT,                       -- Team slug (e.g., "detroit-pistons")
+    team_logo_url TEXT,                   -- URL to team logo
+    team_color TEXT,                      -- Team primary color (hex)
+
+    -- XMLTV Channel Configuration
+    channel_id TEXT NOT NULL UNIQUE,      -- XMLTV channel ID (e.g., "detroit-pistons")
+    channel_logo_url TEXT,                -- Optional: Override channel logo URL (uses team_logo_url if not set)
+
+    -- Template Assignment
+    template_id INTEGER,                  -- Foreign key to templates table (nullable - unassigned teams don't generate EPG)
 
     -- Active Status
-    active BOOLEAN DEFAULT 1,                 -- Is this team active for EPG generation?
+    active BOOLEAN DEFAULT 1,             -- Is this team active for EPG generation?
 
-    UNIQUE(espn_team_id, league)
+    UNIQUE(espn_team_id, league),
+    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL
 );
 
 -- Index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_teams_channel_id ON teams(channel_id);
 CREATE INDEX IF NOT EXISTS idx_teams_league ON teams(league);
 CREATE INDEX IF NOT EXISTS idx_teams_active ON teams(active);
+CREATE INDEX IF NOT EXISTS idx_teams_template ON teams(template_id);
 
 -- =============================================================================
 -- SETTINGS TABLE
--- Global application settings
+-- Global application settings (unchanged from original)
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -159,20 +177,31 @@ CREATE TABLE IF NOT EXISTS settings (
     cache_duration_hours INTEGER DEFAULT 24,
 
     -- XMLTV Settings
-    xmltv_generator_name TEXT DEFAULT 'Teamarr - Dynamic Sports Team EPG Generator',
+    xmltv_generator_name TEXT DEFAULT 'Teamarr - Dynamic EPG Generator for Sports Team Channels',
     xmltv_generator_url TEXT DEFAULT 'http://localhost:9195',
 
-    -- Timezone
+    -- Timezone (global EPG timezone - applies to all teams)
     default_timezone TEXT DEFAULT 'America/New_York',
 
-    -- Game Duration (global default in hours)
-    game_duration_default REAL DEFAULT 4.0,
+    -- Channel ID Format (template for auto-generating channel IDs)
+    default_channel_id_format TEXT DEFAULT '{team_abbrev}.{league}',
+
+    -- Midnight Crossover Mode (how to handle filler when game crosses midnight)
+    midnight_crossover_mode TEXT DEFAULT 'idle',  -- 'postgame' or 'idle'
+
+    -- Game Duration Defaults (in hours)
+    game_duration_default REAL DEFAULT 4.0,        -- Fallback if sport not specified
+    game_duration_basketball REAL DEFAULT 3.0,     -- NBA, college basketball
+    game_duration_football REAL DEFAULT 3.5,       -- NFL, college football
+    game_duration_hockey REAL DEFAULT 3.0,         -- NHL, college hockey
+    game_duration_baseball REAL DEFAULT 3.5,       -- MLB, college baseball
+    game_duration_soccer REAL DEFAULT 2.5,         -- MLS, soccer
 
     -- Max Program Hours (global default for filler program splitting)
     max_program_hours_default REAL DEFAULT 6.0,
 
     -- Web App Settings
-    web_port INTEGER DEFAULT 9195,
+    web_port INTEGER DEFAULT 9196,
     web_host TEXT DEFAULT '0.0.0.0',
 
     -- Logging
@@ -361,94 +390,33 @@ CREATE TABLE IF NOT EXISTS league_config (
     -- Record Format
     record_format TEXT DEFAULT 'wins-losses', -- 'wins-losses' or 'wins-losses-ties'
 
+    -- League Logo
+    logo_url TEXT,                          -- URL to league logo image
+
     -- Active Status
     active BOOLEAN DEFAULT 1
 );
 
 -- Pre-populate league configurations
-INSERT OR IGNORE INTO league_config (league_code, league_name, sport, api_path, default_game_duration, default_category, record_format) VALUES
-    ('nba', 'NBA', 'basketball', 'basketball/nba', 3.0, 'Basketball', 'wins-losses'),
-    ('nfl', 'NFL', 'football', 'football/nfl', 3.5, 'Football', 'wins-losses-ties'),
-    ('mlb', 'MLB', 'baseball', 'baseball/mlb', 3.5, 'Baseball', 'wins-losses'),
-    ('nhl', 'NHL', 'hockey', 'hockey/nhl', 3.0, 'Hockey', 'wins-losses-ties'),
-    ('mls', 'MLS', 'soccer', 'soccer/usa.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('nwsl', 'NWSL', 'soccer', 'soccer/usa.w.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('epl', 'English Premier League', 'soccer', 'soccer/eng.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('efl', 'EFL Championship', 'soccer', 'soccer/eng.2', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('laliga', 'La Liga', 'soccer', 'soccer/esp.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('bundesliga', 'Bundesliga', 'soccer', 'soccer/ger.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('seriea', 'Serie A', 'soccer', 'soccer/ita.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('ligue1', 'Ligue 1', 'soccer', 'soccer/fra.1', 2.0, 'Soccer', 'wins-losses-ties'),
-    ('ncaaf', 'NCAA Football', 'football', 'football/college-football', 4.0, 'College Football', 'wins-losses'),
-    ('ncaam', 'NCAA Men''s Basketball', 'basketball', 'basketball/mens-college-basketball', 2.5, 'College Basketball', 'wins-losses'),
-    ('ncaaw', 'NCAA Women''s Basketball', 'basketball', 'basketball/womens-college-basketball', 2.5, 'College Basketball', 'wins-losses');
+INSERT OR IGNORE INTO league_config (league_code, league_name, sport, api_path, default_game_duration, default_category, record_format, logo_url) VALUES
+    ('nba', 'NBA', 'basketball', 'basketball/nba', 3.0, 'Basketball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png'),
+    ('wnba', 'WNBA', 'basketball', 'basketball/wnba', 3.0, 'Basketball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png'),
+    ('nfl', 'NFL', 'football', 'football/nfl', 3.5, 'Football', 'wins-losses-ties', 'https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png'),
+    ('mlb', 'MLB', 'baseball', 'baseball/mlb', 3.5, 'Baseball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png'),
+    ('nhl', 'NHL', 'hockey', 'hockey/nhl', 3.0, 'Hockey', 'wins-losses-ties', 'https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png'),
+    ('mls', 'MLS', 'soccer', 'soccer/usa.1', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/19.png'),
+    ('nwsl', 'NWSL', 'soccer', 'soccer/usa.nwsl', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2323.png'),
+    ('epl', 'English Premier League', 'soccer', 'soccer/eng.1', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/23.png'),
+    ('efl', 'EFL Championship', 'soccer', 'soccer/eng.2', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/24.png'),
+    ('laliga', 'La Liga', 'soccer', 'soccer/esp.1', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/15.png'),
+    ('bundesliga', 'Bundesliga', 'soccer', 'soccer/ger.1', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/10.png'),
+    ('seriea', 'Serie A', 'soccer', 'soccer/ita.1', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/12.png'),
+    ('ligue1', 'Ligue 1', 'soccer', 'soccer/fra.1', 2.0, 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png'),
+    ('ncaaf', 'NCAA Football', 'football', 'football/college-football', 4.0, 'College Football', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/ncaa.png'),
+    ('ncaam', 'NCAA Men''s Basketball', 'basketball', 'basketball/mens-college-basketball', 2.5, 'College Basketball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/ncaa.png'),
+    ('ncaaw', 'NCAA Women''s Basketball', 'basketball', 'basketball/womens-college-basketball', 2.5, 'College Basketball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/ncaa.png');
 
 CREATE INDEX IF NOT EXISTS idx_league_code ON league_config(league_code);
-
--- =============================================================================
--- TRIGGERS
--- Automatic timestamp updates
--- =============================================================================
-
--- Update teams.updated_at on modification
-CREATE TRIGGER IF NOT EXISTS update_teams_timestamp
-AFTER UPDATE ON teams
-FOR EACH ROW
-BEGIN
-    UPDATE teams SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
-END;
-
--- Update settings.updated_at on modification
-CREATE TRIGGER IF NOT EXISTS update_settings_timestamp
-AFTER UPDATE ON settings
-FOR EACH ROW
-BEGIN
-    UPDATE settings SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
-END;
-
--- =============================================================================
--- VIEWS
--- Useful data views for reporting and querying
--- =============================================================================
-
--- Active teams with league information
-CREATE VIEW IF NOT EXISTS v_active_teams AS
-SELECT
-    t.id,
-    t.team_name,
-    t.channel_id,
-    t.league,
-    lc.league_name,
-    lc.sport,
-    t.active
-FROM teams t
-LEFT JOIN league_config lc ON t.league = lc.league_code
-WHERE t.active = 1;
-
--- EPG generation summary
-CREATE VIEW IF NOT EXISTS v_epg_summary AS
-SELECT
-    DATE(generated_at) as generation_date,
-    COUNT(*) as generations_count,
-    AVG(generation_time_seconds) as avg_generation_time,
-    SUM(num_programmes) as total_programmes,
-    SUM(api_calls_made) as total_api_calls
-FROM epg_history
-GROUP BY DATE(generated_at)
-ORDER BY generation_date DESC;
-
--- Recent errors
-CREATE VIEW IF NOT EXISTS v_recent_errors AS
-SELECT
-    timestamp,
-    level,
-    category,
-    message,
-    t.team_name
-FROM error_log el
-LEFT JOIN teams t ON el.team_id = t.id
-ORDER BY timestamp DESC
-LIMIT 100;
 
 -- =============================================================================
 -- CONDITION_PRESETS TABLE
@@ -490,22 +458,93 @@ INSERT OR IGNORE INTO condition_presets (id, name, description, condition_type, 
     (5, 'Has Betting Odds', 'Template when betting odds are available', 'has_odds', '', 80, '{team_name} vs {opponent} - {team_name} {odds_spread}, O/U {odds_over_under}');
 
 -- =============================================================================
--- SCHEMA MIGRATIONS
+-- TRIGGERS
+-- Automatic timestamp updates
 -- =============================================================================
 
--- NOTE: The following ALTER TABLE statements are for migrating existing databases.
--- They should NOT be executed on fresh databases (columns already exist in CREATE TABLE above).
--- Uncomment these lines ONLY when migrating an existing database.
+-- Update templates.updated_at on modification
+CREATE TRIGGER IF NOT EXISTS update_templates_timestamp
+AFTER UPDATE ON templates
+FOR EACH ROW
+BEGIN
+    UPDATE templates SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
 
--- ALTER TABLE teams ADD COLUMN pregame_title TEXT DEFAULT 'Pregame Coverage';
--- ALTER TABLE teams ADD COLUMN pregame_description TEXT DEFAULT '{team_name} plays {opponent} today at {game_time}';
--- ALTER TABLE teams ADD COLUMN postgame_title TEXT DEFAULT 'Postgame Recap';
--- ALTER TABLE teams ADD COLUMN postgame_description TEXT DEFAULT '{team_name} {result_text} {opponent} - Final: {final_score}';
--- ALTER TABLE teams ADD COLUMN midnight_crossover_mode TEXT DEFAULT 'postgame';
--- ALTER TABLE teams ADD COLUMN max_program_hours REAL DEFAULT 6.0;
--- ALTER TABLE teams ADD COLUMN categories_apply_to TEXT DEFAULT 'all';
--- ALTER TABLE settings ADD COLUMN max_program_hours_default REAL DEFAULT 6.0;
--- ALTER TABLE teams ADD COLUMN max_program_hours_mode TEXT DEFAULT 'default';
+-- Update teams.updated_at on modification
+CREATE TRIGGER IF NOT EXISTS update_teams_timestamp
+AFTER UPDATE ON teams
+FOR EACH ROW
+BEGIN
+    UPDATE teams SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
+
+-- Update settings.updated_at on modification
+CREATE TRIGGER IF NOT EXISTS update_settings_timestamp
+AFTER UPDATE ON settings
+FOR EACH ROW
+BEGIN
+    UPDATE settings SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
+
+-- =============================================================================
+-- VIEWS
+-- Useful data views for reporting and querying
+-- =============================================================================
+
+-- Active teams with template and league information
+CREATE VIEW IF NOT EXISTS v_active_teams AS
+SELECT
+    t.id,
+    t.team_name,
+    t.channel_id,
+    t.league,
+    lc.league_name,
+    lc.sport,
+    t.active,
+    t.template_id,
+    tp.name as template_name
+FROM teams t
+LEFT JOIN league_config lc ON t.league = lc.league_code
+LEFT JOIN templates tp ON t.template_id = tp.id
+WHERE t.active = 1;
+
+-- Template usage counts
+CREATE VIEW IF NOT EXISTS v_template_usage AS
+SELECT
+    tp.id,
+    tp.name,
+    tp.sport,
+    tp.league,
+    COUNT(t.id) as team_count
+FROM templates tp
+LEFT JOIN teams t ON tp.id = t.template_id
+GROUP BY tp.id, tp.name, tp.sport, tp.league
+ORDER BY team_count DESC;
+
+-- EPG generation summary
+CREATE VIEW IF NOT EXISTS v_epg_summary AS
+SELECT
+    DATE(generated_at) as generation_date,
+    COUNT(*) as generations_count,
+    AVG(generation_time_seconds) as avg_generation_time,
+    SUM(num_programmes) as total_programmes,
+    SUM(api_calls_made) as total_api_calls
+FROM epg_history
+GROUP BY DATE(generated_at)
+ORDER BY generation_date DESC;
+
+-- Recent errors
+CREATE VIEW IF NOT EXISTS v_recent_errors AS
+SELECT
+    timestamp,
+    level,
+    category,
+    message,
+    t.team_name
+FROM error_log el
+LEFT JOIN teams t ON el.team_id = t.id
+ORDER BY timestamp DESC
+LIMIT 100;
 
 -- =============================================================================
 -- END OF SCHEMA

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Teamarr - Sports Team EPG Generator{% endblock %}</title>
+    <title>{% block title %}Teamarr - Dynamic EPG Generator for Sports Team Channels{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -14,15 +14,17 @@
         <div class="container nav-container">
             <div class="nav-brand">
                 <h1>Teamarr 🏈⚾🏀🏒⚽</h1>
-                <span class="tagline">Sports Team EPG Generator</span>
+                <span class="tagline">Dynamic EPG Generator for Sports Team Channels</span>
             </div>
             <ul class="nav-menu">
                 <li><a href="{{ url_for('index') }}" class="nav-link">Dashboard</a></li>
+                <li><a href="{{ url_for('templates_list') }}" class="nav-link">Templates</a></li>
                 <li><a href="{{ url_for('teams_list') }}" class="nav-link">Teams</a></li>
-                <li><a href="{{ url_for('settings') }}" class="nav-link">Settings</a></li>
+                <li><a href="{{ url_for('epg_management') }}" class="nav-link">EPG</a></li>
+                <li><a href="{{ url_for('settings_form') }}" class="nav-link">Settings</a></li>
             </ul>
             <div class="nav-right">
-                <span style="color: #64748b; font-size: 0.85rem;">v{{ version }}</span>
+                <span class="version-badge">v{{ version }}</span>
                 <button onclick="toggleTheme()" class="theme-toggle" title="Toggle dark/light mode">
                     <span id="theme-icon">🌙</span>
                 </button>
@@ -31,16 +33,94 @@
     </nav>
 
     <main class="container">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button onclick="this.parentElement.remove()" class="alert-close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
     </main>
 
     <footer>
         <div class="container">
-            <p>Teamarr Sports Team EPG Generator | Port 9195</p>
+            <p>Teamarr - Dynamic EPG Generator for Sports Team Channels | v{{ version }} | Port 9196</p>
         </div>
     </footer>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
+
+    <style>
+    .flash-messages {
+        max-width: 1400px;
+        margin: 1rem auto 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .alert-success {
+        background: rgba(16, 185, 129, 0.15);
+        color: #6ee7b7;
+        border-left: 3px solid var(--success);
+    }
+
+    .alert-error {
+        background: rgba(239, 68, 68, 0.15);
+        color: #fca5a5;
+        border-left: 3px solid var(--danger);
+    }
+
+    .alert-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fcd34d;
+        border-left: 3px solid var(--warning);
+    }
+
+    .alert-info {
+        background: rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+        border-left: 3px solid var(--primary);
+    }
+
+    .alert-close {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 1.5rem;
+        line-height: 1;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+
+    .alert-close:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+    </style>
 </body>
 </html>

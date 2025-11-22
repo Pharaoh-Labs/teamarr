@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Templates - Teamarr{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Templates</h1>
+            <p class="page-subtitle">Manage EPG formatting templates</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('templates_add_form') }}" class="btn btn-primary">
+                ➕ Create Template
+            </a>
+            <label for="import-file" class="btn btn-secondary" style="cursor: pointer;">
+                📥 Import Template
+            </label>
+            <form id="import-form" method="POST" action="{{ url_for('templates_import') }}" enctype="multipart/form-data" style="display: none;">
+                <input type="file" id="import-file" name="file" accept=".json" onchange="document.getElementById('import-form').submit()">
+            </form>
+        </div>
+    </div>
+
+    {% if templates %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Teams Using</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for template in templates %}
+                        <tr>
+                            <td>
+                                <strong>{{ template.name }}</strong>
+                            </td>
+                            <td>
+                                {% if template.team_count > 0 %}
+                                    <span class="badge badge-success">{{ template.team_count }} team{% if template.team_count != 1 %}s{% endif %}</span>
+                                {% else %}
+                                    <span class="text-muted">No teams</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted">
+                                {{ template.created_at[:10] }}
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="{{ url_for('templates_edit_form', template_id=template.id) }}" class="btn btn-sm btn-primary" title="Edit">
+                                        ✏️ Edit
+                                    </a>
+                                    <form method="POST" action="{{ url_for('templates_duplicate', template_id=template.id) }}" style="display: inline;">
+                                        <button type="submit" class="btn btn-sm btn-secondary" title="Duplicate">
+                                            📋 Duplicate
+                                        </button>
+                                    </form>
+                                    <a href="{{ url_for('templates_export', template_id=template.id) }}" class="btn btn-sm btn-secondary" title="Export">
+                                        📥 Export
+                                    </a>
+                                    <form method="POST" action="{{ url_for('templates_delete', template_id=template.id) }}" style="display: inline;"
+                                          onsubmit="return confirmDelete('{{ template.name }}', {{ template.team_count }})">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                            🗑️ Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>No Templates Yet</h3>
+            <p>Templates define how your EPG programs will be formatted - titles, descriptions, filler content, and more.</p>
+            <p>Create your first template to get started!</p>
+            <a href="{{ url_for('templates_add_form') }}" class="btn btn-primary">
+                ➕ Create Template
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function confirmDelete(templateName, teamCount) {
+    let message = `Are you sure you want to delete the template "${templateName}"?`;
+
+    if (teamCount > 0) {
+        message += `\n\n⚠️ Warning: ${teamCount} team(s) are currently using this template. They will become unassigned and won't generate EPG data until you assign them a new template.`;
+    }
+
+    return confirm(message);
+}
+</script>
+
+<style>
+.page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 2rem;
+}
+
+.page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    color: var(--text-primary);
+}
+
+.page-subtitle {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.table-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table thead {
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border);
+}
+
+.table th {
+    text-align: left;
+    padding: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.table th:nth-child(1) { width: auto; }      /* Name - flexible */
+.table th:nth-child(2) { width: 140px; }     /* Teams Using */
+.table th:nth-child(3) { width: 120px; }     /* Created */
+.table th:nth-child(4) { width: 380px; }     /* Actions (4 buttons) */
+
+.table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    color: var(--text-secondary);
+}
+
+.table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.action-buttons form {
+    margin: 0;
+}
+
+.action-buttons .btn {
+    white-space: nowrap;
+    display: inline-block;
+    box-sizing: border-box;
+}
+
+.action-buttons button.btn {
+    height: auto;
+    line-height: inherit;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+}
+
+/* Light mode badge overrides */
+.light-theme .badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.light-theme .badge-success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #047857;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    margin: 2rem 0;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    color: var(--text-muted);
+    margin: 0.5rem 0;
+}
+
+.empty-state .btn {
+    margin-top: 1.5rem;
+}
+</style>
+{% endblock %}

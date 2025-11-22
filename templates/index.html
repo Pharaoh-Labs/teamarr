@@ -3,172 +3,374 @@
 {% block title %}Dashboard - Teamarr{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h2>Dashboard</h2>
+<div class="page-container">
+    <div class="page-header">
         <div>
-            <button onclick="generateEPG()" class="btn btn-success">🚀 Generate EPG</button>
-            <a href="{{ url_for('download_epg') }}" class="btn btn-primary">📥 Download EPG</a>
-            <button onclick="showEPGUrl()" class="btn btn-secondary">🔗 Get EPG URL</button>
+            <h1>Dashboard</h1>
+            <p class="page-subtitle">Overview of your EPG system</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('templates_add_form') }}" class="btn btn-primary">
+                ➕ Create Template
+            </a>
+            <a href="{{ url_for('teams_import') }}" class="btn btn-secondary">
+                📥 Import Teams
+            </a>
+            <form method="POST" action="{{ url_for('generate_epg') }}" style="display: inline; margin: 0;">
+                <button type="submit" class="btn btn-success" style="vertical-align: top;">
+                    🚀 Generate EPG
+                </button>
+            </form>
         </div>
     </div>
 
-    <!-- Stats Grid -->
-    <div class="stats-grid">
+    <!-- Templates and Teams Summary -->
+    <div class="section">
+        <h2>Templates and Teams Summary</h2>
+        <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-value">{{ teams|length }}</div>
-            <div class="stat-label">Active Teams</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">
-                {% if history and history[0].generated_at_local %}
-                    {{ history[0].generated_at_local }}
-                {% elif history and history[0].generated_at %}
-                    {{ history[0].generated_at }}
-                {% else %}
-                    Never
-                {% endif %}
+            <div class="stat-icon">📋</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ template_count }}</div>
+                <div class="stat-label">Templates</div>
             </div>
-            <div class="stat-label">Last EPG Generated</div>
         </div>
+
         <div class="stat-card">
-            <div class="stat-value" id="events-count">
-                {% if history %}
-                    {{ history[0].num_events if history[0].num_events else '—' }}
-                {% else %}
-                    0
-                {% endif %}
+            <div class="stat-icon">🏆</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ team_count }}</div>
+                <div class="stat-label">Total Teams</div>
             </div>
-            <div class="stat-label">Events in Last EPG</div>
         </div>
+
         <div class="stat-card">
-            <div class="stat-value" id="programs-count">
-                {% if history %}
-                    {{ history[0].num_programmes }}
-                {% else %}
-                    0
-                {% endif %}
+            <div class="stat-icon">✅</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ active_team_count }}</div>
+                <div class="stat-label">Active Teams</div>
             </div>
-            <div class="stat-label">Total Programs in Last EPG</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">🔗</div>
+            <div class="stat-content">
+                <div class="stat-value">{{ assigned_team_count }}</div>
+                <div class="stat-label">Assigned Teams</div>
+            </div>
+        </div>
         </div>
     </div>
-</div>
 
-<!-- Active Teams -->
-<div class="card">
-    <div class="card-header">
-        <h2>Active Teams</h2>
-        <a href="{{ url_for('add_team') }}" class="btn btn-primary">➕ Add Team</a>
-    </div>
+    <!-- Latest EPG Generation Stats -->
+    {% if latest_epg %}
+        <div class="section">
+            <h2>Latest EPG Generation</h2>
+            <div class="stats-grid">
+                <div class="stat-card epg-stat">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-content">
+                        <div class="stat-value-small">{{ latest_epg.generated_at[:16].replace('T', ' ') }}</div>
+                        <div class="stat-label">Last Generated</div>
+                    </div>
+                </div>
 
-    {% if teams %}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Team</th>
-                    <th>League</th>
-                    <th>Channel ID</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for team in teams %}
-                <tr>
-                    <td>
-                        <strong>{{ team.team_name }}</strong>
-                        <br>
-                        <small class="help-text">{{ team.team_abbrev }}</small>
-                    </td>
-                    <td>
-                        <span class="badge badge-info">{{ team.league_name }}</span>
-                    </td>
-                    <td><code>{{ team.channel_id }}</code></td>
-                    <td class="table-actions">
-                        <a href="{{ url_for('edit_team', team_id=team.id) }}" class="btn btn-sm btn-secondary">✏️ Edit</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <div class="empty-state">
-            <div class="empty-state-icon">🏀</div>
-            <h3>No Teams Yet</h3>
-            <p>Add your first team to get started generating EPG files.</p>
-            <a href="{{ url_for('add_team') }}" class="btn btn-primary">➕ Add Your First Team</a>
+                <div class="stat-card epg-stat">
+                    <div class="stat-icon">📺</div>
+                    <div class="stat-content">
+                        <div class="stat-value">{{ latest_epg.num_channels }}</div>
+                        <div class="stat-label">Channels</div>
+                    </div>
+                </div>
+
+                <div class="stat-card epg-stat">
+                    <div class="stat-icon">🎬</div>
+                    <div class="stat-content">
+                        <div class="stat-value">{{ latest_epg.num_events }}</div>
+                        <div class="stat-label">Events</div>
+                    </div>
+                </div>
+
+                <div class="stat-card epg-stat">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-content">
+                        <div class="stat-value">{{ latest_epg.num_programmes }}</div>
+                        <div class="stat-label">Total Programs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- EPG Generation History Table -->
+    {% if epg_history %}
+        <div class="section">
+            <h2>EPG Generation History</h2>
+            <div class="table-container">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Generated At</th>
+                            <th>Channels</th>
+                            <th>Events</th>
+                            <th>Programs</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in epg_history %}
+                            <tr>
+                                <td>{{ entry.generated_at[:19].replace('T', ' ') }}</td>
+                                <td class="text-center">{{ entry.num_channels }}</td>
+                                <td class="text-center">{{ entry.num_events }}</td>
+                                <td class="text-center">{{ entry.num_programmes }}</td>
+                                <td class="text-center">
+                                    {% if entry.generation_time_seconds %}
+                                        {{ "%.2f"|format(entry.generation_time_seconds) }}s
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if entry.status == 'success' %}
+                                        <span class="status-badge status-success">✓ Success</span>
+                                    {% elif entry.status == 'error' %}
+                                        <span class="status-badge status-error">✗ Error</span>
+                                    {% elif entry.status == 'partial' %}
+                                        <span class="status-badge status-warning">⚠ Partial</span>
+                                    {% else %}
+                                        <span class="status-badge">{{ entry.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Getting Started Guide -->
+    {% if template_count == 0 and team_count == 0 %}
+        <div class="section">
+            <div class="info-box">
+                <h3>🚀 Getting Started</h3>
+                <ol class="getting-started">
+                    <li>
+                        <strong>Create a template</strong> - Define how your EPG programs will look (titles, descriptions, filler content, etc.)
+                    </li>
+                    <li>
+                        <strong>Add teams</strong> - Add your favorite sports teams using their ESPN URLs
+                    </li>
+                    <li>
+                        <strong>Assign templates</strong> - Assign each team to a template (or use bulk assignment)
+                    </li>
+                    <li>
+                        <strong>Generate EPG</strong> - Click "Generate EPG" to create your XMLTV file
+                    </li>
+                </ol>
+            </div>
         </div>
     {% endif %}
 </div>
 
-<!-- Recent EPG Generations -->
-{% if history %}
-<div class="card">
-    <div class="card-header">
-        <h2>Recent EPG Generations</h2>
-    </div>
-
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Channels</th>
-                <th>Programs</th>
-                <th>Time</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in history %}
-            <tr>
-                <td>{{ item.generated_at_local }}</td>
-                <td>{{ item.num_channels }}</td>
-                <td>{{ item.num_programmes }}</td>
-                <td>{{ "%.2f"|format(item.generation_time_seconds) }}s</td>
-                <td>
-                    {% if item.status == 'success' %}
-                        <span class="badge badge-success">✓ Success</span>
-                    {% else %}
-                        <span class="badge badge-danger">✗ {{ item.status }}</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-
-{% endblock %}
-
-{% block scripts %}
-<script>
-function generateEPG() {
-    showNotification('Generating EPG... Please wait.', 'info', 0, 'Generating EPG');
-
-    fetch('/generate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            showNotification(data.error, 'error', 10000);
-        } else {
-            const message = `<strong>Channels:</strong> ${data.num_channels} | <strong>Events:</strong> ${data.num_events} | <strong>Total Programs:</strong> ${data.num_programmes} | <strong>Time:</strong> ${data.generation_time.toFixed(2)}s`;
-            showNotification(message, 'success', 10000, 'EPG Generated Successfully');
-
-            // Reload page after 2 seconds to show updated stats
-            setTimeout(() => location.reload(), 2000);
-        }
-    })
-    .catch(error => {
-        showNotification(error.message, 'error', 10000);
-    });
+<style>
+.page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 0;
 }
 
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 2rem;
+}
+
+.page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    color: var(--text-primary);
+}
+
+.page-subtitle {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.epg-stats {
+    margin-bottom: 2rem;
+}
+
+.epg-stats h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.stat-value-small {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary);
+    line-height: 1.2;
+}
+
+.epg-stat {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-light);
+}
+
+.section {
+    margin-bottom: 2rem;
+}
+
+.section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.info-box {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid var(--primary);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.info-box h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--primary);
+}
+
+.getting-started {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.getting-started li {
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* History Table Styles */
+.table-container {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.history-table thead {
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border);
+}
+
+.history-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.history-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.history-table tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.text-center {
+    text-align: center;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-success {
+    background: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+}
+
+.status-error {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.status-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+}
+</style>
+
+<script>
 function showEPGUrl() {
     const url = window.location.origin + '/teamarr.xml';
     const message = `

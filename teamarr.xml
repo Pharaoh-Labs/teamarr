@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Generated with Teamarr - Dynamic EPG Generator for Sports Team Channels
+  https://github.com/egyptiangio/teamarr
+-->
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<tv generator-info-name="Teamarr - Dynamic EPG Generator for Sports Team Channels" generator-info-url="http://localhost:9196">
+  <channel id="det.nba">
+    <display-name>Detroit Pistons</display-name>
+    <icon src="https://a.espncdn.com/i/teamlogos/nba/500/det.png"/>
+  </channel>
+  <programme start="20251122050000 +0000" stop="20251122110000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Milwaukee Bucks today at 08:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251122110000 +0000" stop="20251122170000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Milwaukee Bucks today at 08:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251122170000 +0000" stop="20251122230000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Milwaukee Bucks today at 08:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251122230000 +0000" stop="20251123010000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Milwaukee Bucks today at 08:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251123010000 +0000" stop="20251123040000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Basketball</title>
+    <sub-title lang="en">Fiserv Forum, Milwaukee</sub-title>
+    <desc lang="en">Detroit Pistons looks to extend their -game win streak against Milwaukee Bucks!</desc>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251123040000 +0000" stop="20251123050000 +0000" channel="det.nba">
+    <title lang="en">Postgame Recap</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons  Milwaukee Bucks - Final: 129-116</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251123050000 +0000" stop="20251123110000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251123110000 +0000" stop="20251123170000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251123170000 +0000" stop="20251123230000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251123230000 +0000" stop="20251124050000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251124050000 +0000" stop="20251124110000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Indiana Pacers today at 07:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251124110000 +0000" stop="20251124170000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Indiana Pacers today at 07:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251124170000 +0000" stop="20251124230000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Indiana Pacers today at 07:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251124230000 +0000" stop="20251125000000 +0000" channel="det.nba">
+    <title lang="en">Pregame Coverage</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons plays Indiana Pacers today at 07:00 PM EST</desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251125000000 +0000" stop="20251125030000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Basketball</title>
+    <sub-title lang="en">Gainbridge Fieldhouse, Indianapolis</sub-title>
+    <desc lang="en">Detroit Pistons looks to extend their -game win streak against Indiana Pacers!</desc>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251125030000 +0000" stop="20251125050000 +0000" channel="det.nba">
+    <title lang="en">Postgame Recap</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Detroit Pistons  Indiana Pacers - Final: </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251125050000 +0000" stop="20251125110000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251125110000 +0000" stop="20251125170000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251125170000 +0000" stop="20251125230000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251125230000 +0000" stop="20251126050000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Programming</title>
+    <sub-title lang="en">None</sub-title>
+    <desc lang="en">Next game:  at  vs </desc>
+    <icon src="None"/>
+  </programme>
+  <programme start="20251126220000 +0000" stop="20251127010000 +0000" channel="det.nba">
+    <title lang="en">Detroit Pistons Basketball</title>
+    <sub-title lang="en">TD Garden, Boston</sub-title>
+    <desc lang="en">Detroit Pistons looks to extend their -game win streak against Boston Celtics!</desc>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <icon src="None"/>
+  </programme>
+</tv>

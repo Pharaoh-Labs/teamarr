@@ -8,7 +8,7 @@ import hashlib
 class XMLTVGenerator:
     """Generate XMLTV format EPG files"""
 
-    def __init__(self, generator_name: str = "Teamarr - Dynamic Sports Team EPG Generator",
+    def __init__(self, generator_name: str = "Teamarr - Dynamic EPG Generator for Sports Team Channels",
                  generator_url: str = "http://localhost:9195"):
         self.generator_name = generator_name
         self.generator_url = generator_url
@@ -146,10 +146,11 @@ class XMLTVGenerator:
             local_dt = event['start_datetime'].astimezone(ZoneInfo(user_tz))
             date_elem.text = local_dt.strftime('%Y%m%d')
 
-        # Icon (team logo)
-        if team.get('team_logo_url'):
+        # Icon (program art URL takes priority, fallback to team logo)
+        icon_url = event.get('program_art_url') or team.get('team_logo_url')
+        if icon_url:
             icon = ET.SubElement(programme, 'icon')
-            icon.set('src', team['team_logo_url'])
+            icon.set('src', icon_url)
 
         # Flags (Gracenote: both new AND live for upcoming live events)
         game_status = event.get('status', 'scheduled')
@@ -164,9 +165,6 @@ class XMLTVGenerator:
         elif game_status in ['in_progress', 'halftime']:
             # Game currently happening
             ET.SubElement(programme, 'live')
-
-        if flags.get('premiere', False):
-            ET.SubElement(programme, 'premiere')
 
     def _add_category(self, programme: ET.Element, category: str):
         """Add category element"""
@@ -210,7 +208,7 @@ class XMLTVGenerator:
         declaration = '<?xml version="1.0" encoding="UTF-8"?>'
         watermark = (
             '<!--\n'
-            '  Generated with Teamarr - Dynamic Sports Team EPG Generator\n'
+            '  Generated with Teamarr - Dynamic EPG Generator for Sports Team Channels\n'
             '  https://github.com/egyptiangio/teamarr\n'
             '-->'
         )

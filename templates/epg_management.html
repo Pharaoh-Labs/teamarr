@@ -1,0 +1,876 @@
+{% extends "base.html" %}
+
+{% block title %}EPG Management - Teamarr{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>EPG Management</h1>
+            <p class="page-subtitle">Generate, download, and preview your EPG</p>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="epg-actions">
+        <div class="action-card">
+            <h3>📡 Generate EPG</h3>
+            <p>Create a fresh EPG file with current team schedules</p>
+            <form method="POST" action="{{ url_for('generate_epg', return_to='epg') }}" onsubmit="return confirmGenerate()">
+                <button type="submit" class="btn btn-primary btn-large">
+                    🚀 Generate EPG Now
+                </button>
+            </form>
+            <div class="action-info">
+                {% if latest_epg %}
+                Last generated: {{ latest_epg.generated_at[:16].replace('T', ' ') }}<br>
+                {{ latest_epg.num_channels }} channels • {{ latest_epg.num_events }} events • {{ latest_epg.num_programmes }} total programs
+                {% else %}
+                No EPG generated yet
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="action-card">
+            <h3>📥 Download EPG</h3>
+            <p>Download the generated XMLTV file to your computer</p>
+            <a href="{{ url_for('download_epg') }}" class="btn btn-success btn-large">
+                💾 Download EPG File
+            </a>
+            {% if epg_file_exists %}
+            <div class="action-info">
+                File: {{ epg_filename }}<br>
+                Size: {{ epg_file_size }}
+            </div>
+            {% else %}
+            <div class="action-info text-warning">
+                No EPG file found. Generate one first.
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="action-card">
+            <h3>🔗 EPG URL</h3>
+            <p>Direct URL for your IPTV applications</p>
+            <div class="url-box">
+                <input type="text"
+                       id="epg-url"
+                       value="{{ epg_url }}"
+                       readonly
+                       onclick="this.select()">
+                <button onclick="copyEPGUrl()" class="btn btn-secondary">
+                    📋 Copy
+                </button>
+            </div>
+            <div class="action-info">
+                Use this URL in TiviMate, IPTV Smarters, etc.
+            </div>
+        </div>
+    </div>
+
+    <!-- EPG Analysis -->
+    {% if epg_analysis %}
+    <div class="analysis-section">
+        <h2>📊 EPG Analysis</h2>
+        <div class="analysis-grid">
+            <div class="analysis-card">
+                <div class="analysis-label">Total Programs</div>
+                <div class="analysis-value">{{ epg_analysis.total_programs }}</div>
+            </div>
+            <div class="analysis-card">
+                <div class="analysis-label">Actual Events</div>
+                <div class="analysis-value">{{ epg_analysis.total_events }}</div>
+            </div>
+            <div class="analysis-card">
+                <div class="analysis-label">Channels</div>
+                <div class="analysis-value">{{ epg_analysis.channels }}</div>
+            </div>
+            <div class="analysis-card">
+                <div class="analysis-label">Date Range</div>
+                <div class="analysis-value-small">
+                    {% if epg_analysis.date_range %}
+                    {{ epg_analysis.date_range.start[:4] }}-{{ epg_analysis.date_range.start[4:6] }}-{{ epg_analysis.date_range.start[6:8] }}
+                    to
+                    {{ epg_analysis.date_range.end[:4] }}-{{ epg_analysis.date_range.end[4:6] }}-{{ epg_analysis.date_range.end[6:8] }}
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="analysis-details">
+            <div class="detail-section">
+                <h3>Filler Programs Breakdown</h3>
+                <div class="filler-breakdown">
+                    <div class="filler-item">
+                        <span class="filler-type">Pregame:</span>
+                        <span class="filler-count">{{ epg_analysis.filler_programs.pregame }}</span>
+                    </div>
+                    <div class="filler-item">
+                        <span class="filler-type">Postgame:</span>
+                        <span class="filler-count">{{ epg_analysis.filler_programs.postgame }}</span>
+                    </div>
+                    <div class="filler-item">
+                        <span class="filler-type">Idle:</span>
+                        <span class="filler-count">{{ epg_analysis.filler_programs.idle }}</span>
+                    </div>
+                    <div class="filler-item">
+                        <span class="filler-type">Other:</span>
+                        <span class="filler-count">{{ epg_analysis.filler_programs.other }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if epg_analysis.unreplaced_variables or epg_analysis.coverage_gaps %}
+            <div class="detail-section warning-section">
+                <h3>⚠️ Detected Issues</h3>
+
+                {% if epg_analysis.unreplaced_variables %}
+                <div class="issue-subsection">
+                    <h4>Unreplaced Variables ({{ epg_analysis.unreplaced_variables|length }})</h4>
+                    <div class="variables-list">
+                        {% for var in epg_analysis.unreplaced_variables %}
+                        <code>{{ var }}</code>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if epg_analysis.coverage_gaps %}
+                <div class="issue-subsection">
+                    <h4>Coverage Gaps ({{ epg_analysis.coverage_gaps|length }})</h4>
+                    <div class="gaps-list">
+                        {% for gap in epg_analysis.coverage_gaps[:10] %}
+                        <div class="gap-item">
+                            <strong>{{ gap.channel }}</strong>: {{ gap.gap_minutes }} minutes gap
+                            between "{{ gap.after_program }}" and "{{ gap.before_program }}"
+                        </div>
+                        {% endfor %}
+                        {% if epg_analysis.coverage_gaps|length > 10 %}
+                        <div class="gap-item text-muted">
+                            ... and {{ epg_analysis.coverage_gaps|length - 10 }} more gaps
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="detail-section success-section">
+                <h3>✓ No Issues Detected</h3>
+                <p style="margin: 0; color: var(--text-secondary); font-size: 0.875rem;">
+                    All template variables resolved successfully and no coverage gaps found.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- EPG Preview -->
+    {% if epg_content %}
+    <div class="epg-preview-section">
+        <div class="section-header">
+            <h2>📄 EPG Preview</h2>
+            <div class="preview-controls">
+                <input type="text"
+                       id="search-input"
+                       placeholder="Search XML..."
+                       onkeyup="searchXML()">
+                <button onclick="clearSearch()" class="btn btn-sm btn-secondary">
+                    Clear
+                </button>
+                <div class="search-results-container">
+                    <span id="search-results"></span>
+                    <span id="search-nav" class="search-nav" style="display: none;">
+                        <button onclick="previousMatch()" class="btn btn-sm btn-secondary">◀ Prev</button>
+                        <span id="match-position"></span>
+                        <button onclick="nextMatch()" class="btn btn-sm btn-secondary">Next ▶</button>
+                    </span>
+                </div>
+                <div style="flex-grow: 1;"></div>
+                <button onclick="toggleLineNumbers()" class="btn btn-sm btn-secondary">
+                    Toggle Line Numbers
+                </button>
+                <button onclick="toggleWrap()" class="btn btn-sm btn-secondary">
+                    Toggle Word Wrap
+                </button>
+            </div>
+        </div>
+        <div class="epg-preview-container">
+            <pre id="epg-preview" class="show-line-numbers">{{ epg_content | e }}</pre>
+        </div>
+        <div class="preview-footer">
+            Showing {{ epg_total_lines }} lines
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <h3>No EPG Generated Yet</h3>
+        <p>Click "Generate EPG Now" to create your first EPG file.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 2rem;
+}
+
+.page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    color: var(--text-primary);
+}
+
+.page-subtitle {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.epg-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Analysis Section */
+.analysis-section {
+    margin-bottom: 1.5rem;
+}
+
+.analysis-section h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.analysis-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.875rem;
+    text-align: center;
+}
+
+.analysis-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.375rem;
+}
+
+.analysis-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+}
+
+.analysis-value-small {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.analysis-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+
+.detail-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.875rem;
+}
+
+.detail-section h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.warning-section {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.05);
+}
+
+.success-section {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.05);
+}
+
+.issue-subsection {
+    margin-top: 0.75rem;
+}
+
+.issue-subsection:first-of-type {
+    margin-top: 0;
+}
+
+.issue-subsection h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.filler-breakdown {
+    display: grid;
+    gap: 0.375rem;
+}
+
+.filler-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.375rem 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.filler-type {
+    color: var(--text-secondary);
+}
+
+.filler-count {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.variables-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.variables-list code {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    padding: 0.1875rem 0.375rem;
+    border-radius: 3px;
+    font-size: 0.8125rem;
+}
+
+.gaps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.gap-item {
+    padding: 0.375rem 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.gap-item strong {
+    color: var(--text-primary);
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.action-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.action-card h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.action-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+}
+
+.action-card > p {
+    flex-grow: 0;
+}
+
+.action-card form {
+    margin: 0;
+}
+
+.btn-large {
+    width: 100%;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.action-info {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    padding: 0.375rem 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    line-height: 1.5;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+}
+
+.text-warning {
+    color: #fbbf24;
+}
+
+.url-box {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.url-box input {
+    flex: 1;
+    padding: 0.625rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: 'Courier New', monospace;
+    font-size: 0.9375rem;
+    margin: 0;
+    line-height: 1.5;
+    box-sizing: border-box;
+    height: auto;
+}
+
+.url-box button {
+    margin: 0;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    box-sizing: border-box;
+    border: none;
+}
+
+.url-box input:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+.epg-preview-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.section-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-tertiary);
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.preview-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.search-results-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 300px;
+    margin-left: -0.75rem;
+}
+
+#search-input {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    min-width: 250px;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.epg-preview-container {
+    max-height: 600px;
+    overflow: auto;
+    background: var(--bg-primary);
+}
+
+#epg-preview {
+    margin: 0;
+    padding: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+#epg-preview > div {
+    white-space: pre;
+}
+
+#epg-preview.wrap > div {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+#epg-preview.show-line-numbers {
+    counter-reset: line;
+}
+
+#epg-preview.show-line-numbers > div::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 3rem;
+    margin-right: 1rem;
+    padding-right: 0.5rem;
+    color: var(--text-muted);
+    text-align: right;
+    border-right: 1px solid var(--border);
+    user-select: none;
+}
+
+.search-nav {
+    display: inline-flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.search-nav button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    min-width: auto;
+}
+
+mark.current-match {
+    background: #f97316 !important;
+    color: #000 !important;
+    font-weight: bold;
+}
+
+.preview-footer {
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.preview-footer a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.preview-footer a:hover {
+    text-decoration: underline;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    margin: 0;
+    color: var(--text-muted);
+}
+</style>
+
+<script>
+function confirmGenerate() {
+    return confirm('Generate a fresh EPG file? This will update the XMLTV output with current data.');
+}
+
+function copyEPGUrl() {
+    const input = document.getElementById('epg-url');
+    input.select();
+    document.execCommand('copy');
+    showNotification('EPG URL copied to clipboard!', 'success');
+}
+
+function toggleLineNumbers() {
+    const preview = document.getElementById('epg-preview');
+    preview.classList.toggle('show-line-numbers');
+}
+
+function toggleWrap() {
+    const preview = document.getElementById('epg-preview');
+    preview.classList.toggle('wrap');
+}
+
+let originalContent = '';
+let currentMatches = [];
+let currentMatchIndex = 0;
+
+// Search XML content
+function searchXML() {
+    const searchInput = document.getElementById('search-input');
+    const preview = document.getElementById('epg-preview');
+    const resultsSpan = document.getElementById('search-results');
+    const searchNav = document.getElementById('search-nav');
+    const query = searchInput.value.trim();
+
+    if (!query) {
+        clearSearch();
+        return;
+    }
+
+    // Store original content if not already stored
+    if (!originalContent) {
+        originalContent = preview.textContent;
+    }
+
+    // Find all matches
+    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const matches = [...originalContent.matchAll(regex)];
+    currentMatches = matches;
+    currentMatchIndex = 0;
+
+    if (matches.length > 0) {
+        // Split content into lines first
+        const lines = originalContent.split('\n');
+        let globalMatchIndex = 0;
+        let charPosition = 0;
+
+        // Process each line
+        const processedLines = lines.map((line, lineIdx) => {
+            const lineStart = charPosition;
+            const lineEnd = charPosition + line.length;
+
+            // Find matches in this line
+            const lineMatches = matches.filter(m => m.index >= lineStart && m.index < lineEnd);
+
+            if (lineMatches.length === 0) {
+                // No matches in this line, just escape it
+                charPosition = lineEnd + 1; // +1 for newline
+                return escapeHtml(line);
+            }
+
+            // Build line with highlights
+            let result = '';
+            let lastIdx = 0;
+
+            lineMatches.forEach(match => {
+                const matchStart = match.index - lineStart;
+                const matchEnd = matchStart + match[0].length;
+
+                // Add text before match
+                result += escapeHtml(line.substring(lastIdx, matchStart));
+
+                // Add highlighted match
+                const markClass = globalMatchIndex === 0 ? ' class="current-match"' : '';
+                result += `<mark${markClass} data-match-idx="${globalMatchIndex}" style="background: #fbbf24; color: #000;">`;
+                result += escapeHtml(line.substring(matchStart, matchEnd));
+                result += '</mark>';
+
+                lastIdx = matchEnd;
+                globalMatchIndex++;
+            });
+
+            // Add remaining text after last match
+            result += escapeHtml(line.substring(lastIdx));
+
+            charPosition = lineEnd + 1; // +1 for newline
+            return result;
+        });
+
+        // Update preview with highlighted content - create actual div elements
+        preview.innerHTML = '';
+        processedLines.forEach(lineHtml => {
+            const lineDiv = document.createElement('div');
+            lineDiv.innerHTML = lineHtml;
+            preview.appendChild(lineDiv);
+        });
+
+        resultsSpan.textContent = `Found ${matches.length} match${matches.length > 1 ? 'es' : ''}`;
+        resultsSpan.style.color = 'var(--success)';
+
+        // Show navigation if multiple matches
+        if (matches.length > 1) {
+            searchNav.style.display = 'inline-flex';
+            updateMatchPosition();
+            scrollToCurrentMatch();
+        } else {
+            searchNav.style.display = 'none';
+        }
+    } else {
+        resultsSpan.textContent = 'No matches found';
+        resultsSpan.style.color = 'var(--text-muted)';
+        searchNav.style.display = 'none';
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function nextMatch() {
+    if (currentMatches.length === 0) return;
+    currentMatchIndex = (currentMatchIndex + 1) % currentMatches.length;
+    highlightCurrentMatch();
+}
+
+function previousMatch() {
+    if (currentMatches.length === 0) return;
+    currentMatchIndex = (currentMatchIndex - 1 + currentMatches.length) % currentMatches.length;
+    highlightCurrentMatch();
+}
+
+function highlightCurrentMatch() {
+    const preview = document.getElementById('epg-preview');
+    const marks = preview.querySelectorAll('mark');
+
+    marks.forEach((mark, idx) => {
+        if (idx === currentMatchIndex) {
+            mark.classList.add('current-match');
+        } else {
+            mark.classList.remove('current-match');
+        }
+    });
+
+    updateMatchPosition();
+    scrollToCurrentMatch();
+}
+
+function updateMatchPosition() {
+    const positionSpan = document.getElementById('match-position');
+    positionSpan.textContent = `${currentMatchIndex + 1} / ${currentMatches.length}`;
+}
+
+function scrollToCurrentMatch() {
+    const preview = document.getElementById('epg-preview');
+    const container = preview.closest('.epg-preview-container');
+    const marks = preview.querySelectorAll('mark');
+    if (marks[currentMatchIndex]) {
+        const mark = marks[currentMatchIndex];
+        const markRect = mark.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const relativeTop = markRect.top - containerRect.top + container.scrollTop;
+        const containerHeight = container.clientHeight;
+        const scrollPosition = relativeTop - (containerHeight / 2) + (markRect.height / 2);
+
+        container.scrollTo({
+            top: scrollPosition,
+            behavior: 'smooth'
+        });
+    }
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('search-input');
+    const preview = document.getElementById('epg-preview');
+    const resultsSpan = document.getElementById('search-results');
+    const searchNav = document.getElementById('search-nav');
+
+    searchInput.value = '';
+    resultsSpan.textContent = '';
+    searchNav.style.display = 'none';
+    currentMatches = [];
+    currentMatchIndex = 0;
+
+    if (originalContent) {
+        // Restore original content with div structure for line numbers
+        const lines = originalContent.split('\n');
+        preview.innerHTML = '';
+        lines.forEach(line => {
+            const lineDiv = document.createElement('div');
+            lineDiv.textContent = line;
+            preview.appendChild(lineDiv);
+        });
+
+        // Force scroll reset
+        const container = preview.closest('.epg-preview-container');
+        if (container) {
+            container.scrollTop = 0;
+            container.scrollLeft = 0;
+        }
+    }
+}
+
+// Initialize preview with div structure on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const preview = document.getElementById('epg-preview');
+    if (preview && preview.textContent.trim()) {
+        const content = preview.textContent;
+        const lines = content.split('\n');
+        preview.innerHTML = '';
+        lines.forEach(line => {
+            const lineDiv = document.createElement('div');
+            lineDiv.textContent = line;
+            preview.appendChild(lineDiv);
+        });
+
+        // Store original content for search
+        originalContent = content;
+    }
+});
+</script>
+{% endblock %}

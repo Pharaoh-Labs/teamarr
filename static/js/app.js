@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const savedTheme = localStorage.getItem('theme') || 'dark';
     document.body.classList.add(savedTheme + '-theme');
     updateThemeIcon(savedTheme);
+
+    // Convert Flask flash messages to notifications
+    convertFlashMessages();
 });
 
 // Theme toggle functionality
@@ -98,4 +101,25 @@ function closeNotification(button) {
     setTimeout(() => {
         notification.remove();
     }, 300); // Match animation duration
+}
+
+// Convert Flask flash messages to popup notifications
+function convertFlashMessages() {
+    const flashMessages = document.querySelector('.flash-messages');
+    if (!flashMessages) return;
+
+    const alerts = flashMessages.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        const message = alert.textContent.replace('×', '').trim();
+        let type = 'info';
+
+        if (alert.classList.contains('alert-success')) type = 'success';
+        else if (alert.classList.contains('alert-error')) type = 'error';
+        else if (alert.classList.contains('alert-warning')) type = 'warning';
+
+        showNotification(message, type);
+    });
+
+    // Hide the flash messages container
+    flashMessages.style.display = 'none';
 }
