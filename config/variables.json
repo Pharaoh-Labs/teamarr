@@ -1,12 +1,12 @@
 {
   "version": "3.0.2",
   "generated": "2025-11-23",
-  "total_variables": 255,
-  "base_variables": 118,
+  "total_variables": 259,
+  "base_variables": 120,
   "suffix_system": {
     "enabled": true,
     "description": "Optimized suffix system after comprehensive audit - only necessary suffixes are generated",
-    "total_with_suffixes": 449,
+    "total_with_suffixes": 259,
     "audit_summary": {
       "last_only": {
         "count": 10,
@@ -65,7 +65,7 @@
           "game_events": "Populated with current game data",
           "filler_programs": "Empty (no current game)"
         },
-        "count": 102
+        "count": 110
       },
       ".next": {
         "syntax": "{variable.next}",
@@ -77,7 +77,7 @@
           "postgame_filler": "Next scheduled game",
           "idle_filler": "Next scheduled game"
         },
-        "count": 66
+        "count": 73
       },
       ".last": {
         "syntax": "{variable.last}",
@@ -89,7 +89,7 @@
           "postgame_filler": "Just completed game (same as current)",
           "idle_filler": "Most recent completed game"
         },
-        "count": 69
+        "count": 76
       }
     },
     "examples": {
