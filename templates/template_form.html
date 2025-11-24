@@ -1239,8 +1239,7 @@ function generateTemplateVariablesHTML(containerId) {
                 }
             } else {
                 // Multiple suffixes: show popup selector
-                const suffixesJson = JSON.stringify(suffixes).replace(/"/g, "'");
-                clickHandler = `onclick="showSuffixSelector(event, '${varName}', ${suffixesJson})"`;
+                clickHandler = `onclick="showSuffixSelector(event, '${varName}')"`;
             }
 
             html += `<button type="button" class="chip ${suffixClass}" ${clickHandler}>${displayName}</button>`;
@@ -1330,8 +1329,11 @@ function insertVariable(variable) {
     }
 }
 
-function showSuffixSelector(event, varName, suffixes) {
+function showSuffixSelector(event, varName) {
     event.stopPropagation();
+
+    // Look up suffixes for this variable
+    const suffixes = window.variableSuffixMap?.[varName] || ['base', 'next', 'last'];
 
     // Remove any existing popup
     const existingPopup = document.querySelector('.suffix-selector-popup');
