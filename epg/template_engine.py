@@ -211,6 +211,8 @@ class TemplateEngine:
         variables['vs_at'] = 'vs' if is_home else '@'
         variables['home_team'] = home_team.get('name', '')
         variables['away_team'] = away_team.get('name', '')
+        variables['home_team_abbrev'] = home_team.get('abbrev', '')
+        variables['away_team_abbrev'] = away_team.get('abbrev', '')
 
         # =====================================================================
         # BROADCAST

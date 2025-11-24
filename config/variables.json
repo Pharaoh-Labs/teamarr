@@ -1,12 +1,12 @@
 {
-  "version": "3.0.1",
+  "version": "3.0.2",
   "generated": "2025-11-23",
-  "total_variables": 253,
+  "total_variables": 255,
   "base_variables": 118,
   "suffix_system": {
     "enabled": true,
     "description": "Optimized suffix system after comprehensive audit - only necessary suffixes are generated",
-    "total_with_suffixes": 443,
+    "total_with_suffixes": 449,
     "audit_summary": {
       "last_only": {
         "count": 10,
@@ -44,9 +44,9 @@
         ]
       },
       "all_three": {
-        "count": 64,
+        "count": 66,
         "description": "Game-specific variables that vary across contexts",
-        "total_instances": 192,
+        "total_instances": 198,
         "examples": [
           "opponent",
           "game_date",
@@ -1935,6 +1935,38 @@
       "description": "Away team name",
       "source": "`/schedule` → competitors",
       "example": "Detroit Pistons",
+      "category": "🏈 Teams",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "home_team_abbrev",
+      "description": "Home team abbreviation",
+      "source": "`/schedule` → competitors → abbrev",
+      "example": "ORL",
+      "category": "🏈 Teams",
+      "icon": "🏀",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ]
+    },
+    {
+      "name": "away_team_abbrev",
+      "description": "Away team abbreviation",
+      "source": "`/schedule` → competitors → abbrev",
+      "example": "DET",
       "category": "🏈 Teams",
       "icon": "🏀",
       "type": "string",
