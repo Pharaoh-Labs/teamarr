@@ -118,12 +118,15 @@ def scheduler_loop():
             if frequency == 'hourly':
                 # Run once per hour
                 if last_run_time is None:
+                    app.logger.debug(f"Scheduler: First run, triggering generation")
                     should_run = True
                 else:
                     # Check if we're in a different hour than last run
                     last_hour = last_run_time.replace(minute=0, second=0, microsecond=0)
                     current_hour = now.replace(minute=0, second=0, microsecond=0)
+                    app.logger.debug(f"Scheduler: Checking hourly - Last: {last_hour}, Current: {current_hour}")
                     if current_hour > last_hour:
+                        app.logger.info(f"⏰ New hour detected, triggering scheduled generation")
                         should_run = True
 
             elif frequency == 'daily':
