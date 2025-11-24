@@ -1441,6 +1441,30 @@ class EPGOrchestrator:
 
                     # Deep merge: scoreboard competitions have priority (they have scores)
                     if 'competitions' in scoreboard_event:
+                        # Normalize scoreboard broadcast format to match schedule format
+                        comp = scoreboard_event['competitions'][0] if scoreboard_event['competitions'] else {}
+                        if 'broadcasts' in comp:
+                            normalized_broadcasts = []
+                            for b in comp['broadcasts']:
+                                if isinstance(b, dict) and 'market' in b and isinstance(b['market'], str):
+                                    # This is scoreboard format - normalize it
+                                    market_str = b['market']
+                                    market_type = market_str.capitalize()
+                                    network_name = b.get('names', [None])[0]
+
+                                    # Convert to schedule format
+                                    normalized = {
+                                        'type': {'id': '1', 'shortName': 'TV'},
+                                        'market': {'type': market_type},
+                                        'media': {'shortName': network_name} if network_name else {}
+                                    }
+                                    normalized_broadcasts.append(normalized)
+                                else:
+                                    # Already in schedule format, keep as-is
+                                    normalized_broadcasts.append(b)
+
+                            comp['broadcasts'] = normalized_broadcasts
+
                         last_game['competitions'] = scoreboard_event['competitions']
 
                     return last_game
