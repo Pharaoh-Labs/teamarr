@@ -688,7 +688,7 @@ footer p {
     animation: slideIn 0.3s ease-out;
     pointer-events: auto;
     position: relative;
-    min-width: 320px;
+    width: 400px;
 }
 
 .notification.notification-success {
