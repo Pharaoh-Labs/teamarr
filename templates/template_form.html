@@ -1200,11 +1200,6 @@ function generateTemplateVariablesHTML(containerId) {
             const suffixClass = getSuffixClass(varName);
             const suffixes = window.variableSuffixMap?.[varName] || ['base', 'next', 'last'];
 
-            // Debug logging
-            if (varName === 'opponent') {
-                console.log('opponent suffixes:', suffixes, 'length:', suffixes.length);
-            }
-
             // Determine display name and behavior
             let displayName = varName;
             let clickHandler = '';
@@ -1320,9 +1315,16 @@ function showSuffixSelector(event, varName) {
     // Look up suffixes for this variable
     const suffixes = window.variableSuffixMap?.[varName] || ['base', 'next', 'last'];
 
-    // Remove any existing popup
+    // Check if popup already exists for this variable
     const existingPopup = document.querySelector('.suffix-selector-popup');
     if (existingPopup) {
+        const existingVarName = existingPopup.querySelector('.suffix-selector-header')?.textContent;
+        if (existingVarName === varName) {
+            // Clicking the same variable - just close the popup
+            existingPopup.remove();
+            return;
+        }
+        // Different variable - remove old popup and show new one
         existingPopup.remove();
     }
 
@@ -1339,7 +1341,7 @@ function showSuffixSelector(event, varName) {
 
     // Build popup content
     const suffixLabels = {
-        'base': { label: 'base', desc: 'current game' },
+        'base': { label: 'base', desc: 'current game OR not game-dependent' },
         'next': { label: '.next', desc: 'next game' },
         'last': { label: '.last', desc: 'last game' }
     };
@@ -1419,9 +1421,21 @@ function updateAllRecentlyUsedDisplays() {
     categories.forEach(cat => cat.style.display = 'block');
 
     const html = recentlyUsedVars.map(varName => {
+        // Extract base variable name (remove braces and suffix)
         const cleanVarName = varName.replace(/[{}]/g, '');
-        const suffixClass = getSuffixClass(cleanVarName);
-        return `<button type="button" class="chip ${suffixClass}" onclick="insertVariable('${varName}')">${cleanVarName}</button>`;
+        const baseVarName = cleanVarName.split('.')[0];
+        const suffixClass = getSuffixClass(baseVarName);
+
+        // Check if this variable has multiple suffixes
+        const suffixes = window.variableSuffixMap?.[baseVarName] || ['base', 'next', 'last'];
+
+        if (suffixes.length === 1) {
+            // Single suffix: insert directly with displayed suffix
+            return `<button type="button" class="chip ${suffixClass}" onclick="insertVariable('${varName}')">${cleanVarName}</button>`;
+        } else {
+            // Multiple suffixes: show popup selector
+            return `<button type="button" class="chip ${suffixClass}" onclick="showSuffixSelector(event, '${baseVarName}')">${baseVarName}</button>`;
+        }
     }).join('');
 
     containers.forEach(container => {
