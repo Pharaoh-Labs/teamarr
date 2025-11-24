@@ -1030,6 +1030,11 @@ class EPGOrchestrator:
                             extended_game_dates or game_dates
                         )
 
+                        # Enrich last game with scoreboard data to get final scores
+                        last_game = self._enrich_last_game_with_score(
+                            last_game, api_sport, api_league, api_calls_counter, epg_timezone
+                        )
+
                         pregame_entries = self._create_filler_chunks(
                             day_start, first_game_start, max_hours,
                             team, 'pregame', games_today[0]['event'], team_stats,
@@ -1118,6 +1123,11 @@ class EPGOrchestrator:
                         current_date,
                         extended_game_schedule or game_schedule,
                         extended_game_dates or game_dates
+                    )
+
+                    # Enrich last game with scoreboard data to get final scores
+                    last_game = self._enrich_last_game_with_score(
+                        last_game, api_sport, api_league, api_calls_counter, epg_timezone
                     )
 
                     # For idle days, create exactly 4 programs aligned to time blocks
@@ -1357,6 +1367,69 @@ class EPGOrchestrator:
                     # Return the latest game on that date
                     return sorted(past_games, key=lambda x: x['end'])[-1]['event']
         return None
+
+    def _enrich_last_game_with_score(self, last_game: Optional[dict], api_sport: str, api_league: str,
+                                      api_calls_counter: dict, epg_timezone: str = 'America/New_York') -> Optional[dict]:
+        """
+        Enrich last game event with scoreboard data to get final scores
+
+        Args:
+            last_game: The last game event from schedule (may not have scores)
+            api_sport: Sport type (e.g., 'basketball', 'football')
+            api_league: League code (e.g., 'nba', 'nfl')
+            api_calls_counter: Counter for API calls
+            epg_timezone: Timezone for date formatting
+
+        Returns:
+            Enriched game event with scores, or original if enrichment fails
+        """
+        if not last_game:
+            return None
+
+        try:
+            # Get the game date
+            game_date_str = last_game.get('date', '')
+            if not game_date_str:
+                logger.debug("Last game has no date, cannot enrich")
+                return last_game
+
+            # Parse game date to get the date string for scoreboard API
+            from zoneinfo import ZoneInfo
+            game_date_utc = datetime.fromisoformat(game_date_str.replace('Z', '+00:00'))
+            game_date_local = game_date_utc.astimezone(ZoneInfo(epg_timezone))
+            date_str = game_date_local.strftime('%Y%m%d')
+
+            # Fetch scoreboard for that date
+            logger.debug(f"Fetching scoreboard for last game on {date_str}")
+            scoreboard_data = self.espn.get_scoreboard(api_sport, api_league, date_str)
+            api_calls_counter['count'] += 1
+
+            if not scoreboard_data or 'events' not in scoreboard_data:
+                logger.debug("No scoreboard data found for last game")
+                return last_game
+
+            # Parse scoreboard events
+            scoreboard_events = self.espn.parse_schedule_events(scoreboard_data, 1)
+
+            # Find this specific game in the scoreboard by ID
+            game_id = last_game.get('id')
+            for scoreboard_event in scoreboard_events:
+                if scoreboard_event.get('id') == game_id:
+                    # Found it! Merge scoreboard data
+                    logger.debug(f"Enriched last game {game_id} with scoreboard data")
+
+                    # Deep merge: scoreboard competitions have priority (they have scores)
+                    if 'competitions' in scoreboard_event:
+                        last_game['competitions'] = scoreboard_event['competitions']
+
+                    return last_game
+
+            logger.debug(f"Last game {game_id} not found in scoreboard for {date_str}")
+            return last_game
+
+        except Exception as e:
+            logger.warning(f"Error enriching last game with score: {e}")
+            return last_game
 
     def _calculate_home_away_streaks(self, our_team_id: str, schedule_data: dict) -> dict:
         """Calculate current home and away win/loss streaks"""
