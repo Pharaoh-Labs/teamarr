@@ -1108,6 +1108,23 @@ class TemplateEngine:
         elif condition_type == 'is_away':
             return not is_home
 
+        # Conference game condition (college only)
+        elif condition_type == 'is_conference_game':
+            # Check if both teams are in the same conference
+            # Only applicable for college sports
+            league = team_config.get('league', '').lower()
+            if 'college' not in league:
+                return False  # Not a college league, so not a conference game
+
+            our_conference = team_stats.get('conference_abbrev', '') or team_stats.get('conference_name', '')
+            opp_conference = opponent_stats.get('conference_abbrev', '') or opponent_stats.get('conference_name', '')
+
+            # Both teams must have conference data and it must match
+            if not our_conference or not opp_conference:
+                return False
+
+            return our_conference.lower() == opp_conference.lower()
+
         # Odds availability condition
         elif condition_type == 'has_odds':
             # NOTE: Same-day only.
