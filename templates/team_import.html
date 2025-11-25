@@ -378,25 +378,13 @@ function renderLeaguesSidebar() {
             item.dataset.leagueCode = league.code;
             item.onclick = () => selectLeague(league);
 
-            // Handle logo with emoji fallback for college leagues
-            if (league.code === 'ncaaf') {
-                const emoji = document.createElement('div');
-                emoji.style.cssText = 'font-size: 18px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
-                emoji.textContent = '🏈';
-                item.appendChild(emoji);
-            } else if (league.code === 'ncaam' || league.code === 'ncaaw') {
-                const emoji = document.createElement('div');
-                emoji.style.cssText = 'font-size: 18px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;';
-                emoji.textContent = '🏀';
-                item.appendChild(emoji);
-            } else {
-                const logo = document.createElement('img');
-                logo.className = 'league-logo';
-                logo.src = league.logo || '';
-                logo.alt = league.name;
-                logo.onerror = () => logo.style.display = 'none';
-                item.appendChild(logo);
-            }
+            // League logo
+            const logo = document.createElement('img');
+            logo.className = 'league-logo';
+            logo.src = league.logo || '';
+            logo.alt = league.name;
+            logo.onerror = () => logo.style.display = 'none';
+            item.appendChild(logo);
 
             const name = document.createElement('div');
             name.className = 'league-name';
@@ -478,19 +466,11 @@ function renderCollapsedConferences(conferences) {
     // Show teams container
     document.getElementById('loading-state').style.display = 'none';
 
-    // Handle league logo with emoji fallback for college leagues
+    // Set league logo and title
     const leagueLogo = document.getElementById('league-logo');
-    if (currentLeague.code === 'ncaaf') {
-        leagueLogo.style.display = 'none';
-        document.getElementById('league-title').textContent = `🏈 ${currentLeague.name}`;
-    } else if (currentLeague.code === 'ncaam' || currentLeague.code === 'ncaaw') {
-        leagueLogo.style.display = 'none';
-        document.getElementById('league-title').textContent = `🏀 ${currentLeague.name}`;
-    } else {
-        leagueLogo.src = currentLeague.logo || '';
-        leagueLogo.style.display = currentLeague.logo ? 'block' : 'none';
-        document.getElementById('league-title').textContent = currentLeague.name;
-    }
+    leagueLogo.src = currentLeague.logo || '';
+    leagueLogo.style.display = currentLeague.logo ? 'block' : 'none';
+    document.getElementById('league-title').textContent = currentLeague.name;
 
     // Show conference count (team count will be shown when expanded)
     document.getElementById('teams-count').textContent = `${conferences.length} conferences`;
