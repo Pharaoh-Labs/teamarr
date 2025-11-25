@@ -136,25 +136,6 @@
             </div>
         </div>
 
-        <!-- Advanced Settings -->
-        <div class="form-section">
-            <h2>Advanced Settings</h2>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="xmltv_generator_name">XMLTV Generator Name</label>
-                    <input type="text" id="xmltv_generator_name" name="xmltv_generator_name" class="form-control"
-                           value="{{ settings.xmltv_generator_name }}">
-                </div>
-
-                <div class="form-group">
-                    <label for="xmltv_generator_url">XMLTV Generator URL</label>
-                    <input type="text" id="xmltv_generator_url" name="xmltv_generator_url" class="form-control"
-                           value="{{ settings.xmltv_generator_url }}">
-                </div>
-            </div>
-        </div>
-
         <!-- Dispatcharr Integration -->
         <div class="form-section">
             <h2>Dispatcharr Integration</h2>
@@ -231,6 +212,25 @@
                     Last sync: {{ settings.dispatcharr_last_sync }}
                 </div>
                 {% endif %}
+            </div>
+        </div>
+
+        <!-- Advanced Settings -->
+        <div class="form-section">
+            <h2>Advanced Settings</h2>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="xmltv_generator_name">XMLTV Generator Name</label>
+                    <input type="text" id="xmltv_generator_name" name="xmltv_generator_name" class="form-control"
+                           value="{{ settings.xmltv_generator_name }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="xmltv_generator_url">XMLTV Generator URL</label>
+                    <input type="text" id="xmltv_generator_url" name="xmltv_generator_url" class="form-control"
+                           value="{{ settings.xmltv_generator_url }}">
+                </div>
             </div>
         </div>
 
@@ -426,15 +426,15 @@ async function loginDispatcharr() {
         const result = await response.json();
 
         if (result.success && result.sources) {
-            // Filter to only show URL-based sources (not dummy)
-            const urlSources = result.sources.filter(s => s.source_type === 'url');
+            // Filter out dummy sources
+            const epgSources = result.sources.filter(s => s.source_type !== 'dummy');
 
             // Populate the dropdown
             select.innerHTML = '<option value="">-- Select an EPG source --</option>';
-            urlSources.forEach(s => {
+            epgSources.forEach(s => {
                 const option = document.createElement('option');
                 option.value = s.id;
-                option.textContent = `${s.name} (ID: ${s.id})`;
+                option.textContent = s.name;
                 select.appendChild(option);
             });
             select.style.opacity = '1';
