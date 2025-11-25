@@ -63,6 +63,26 @@ def run_migrations(conn):
         conn.commit()
         print(f"✅ Ran {migrations_run} migration(s)")
 
+    # Fix NCAA league logos (use NCAA.com sport banners)
+    ncaa_logo_fixes = [
+        ("ncaaf", "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.png"),
+        ("ncaam", "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png"),
+        ("ncaaw", "https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png"),
+    ]
+
+    for league_code, logo_url in ncaa_logo_fixes:
+        try:
+            cursor.execute(
+                "UPDATE league_config SET logo_url = ? WHERE league_code = ? AND logo_url != ?",
+                (logo_url, league_code, logo_url)
+            )
+            if cursor.rowcount > 0:
+                print(f"  ✅ Fixed logo for {league_code}")
+        except Exception:
+            pass
+
+    conn.commit()
+
     return migrations_run
 
 
