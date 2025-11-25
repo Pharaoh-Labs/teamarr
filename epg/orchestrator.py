@@ -8,7 +8,7 @@ This module orchestrates the EPG generation process:
 5. Generates filler content
 6. Returns data ready for XMLTV generation
 """
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from zoneinfo import ZoneInfo
 import json
