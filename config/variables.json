@@ -1,12 +1,12 @@
 {
-  "version": "3.0.2",
-  "generated": "2025-11-23",
-  "total_variables": 261,
-  "base_variables": 122,
+  "version": "3.3.0",
+  "generated": "2025-11-24",
+  "total_variables": 125,
+  "base_variables": 135,
   "suffix_system": {
     "enabled": true,
     "description": "Optimized suffix system after comprehensive audit - only necessary suffixes are generated",
-    "total_with_suffixes": 261,
+    "total_with_suffixes": 275,
     "audit_summary": {
       "last_only": {
         "count": 11,
@@ -304,10 +304,9 @@
     {
       "name": "team_name",
       "description": "Full team name",
-      "source": "`/teams/{id}` → `team.displayName`",
-      "example": "Detroit Pistons",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/teams/{id}` \u2192 `team.displayName`",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -318,15 +317,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Detroit Pistons",
+        "NFL": "Detroit Lions",
+        "MLB": "Detroit Tigers",
+        "NHL": "Detroit Red Wings",
+        "NCAAM": "Michigan Wolverines",
+        "NCAAF": "Michigan Wolverines",
+        "Soccer": "Liverpool"
+      }
     },
     {
       "name": "team_name_pascal",
       "description": "Team name in PascalCase for channel IDs",
       "source": "Calculated from team_name",
-      "example": "DetroitPistons",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "notes": "BASE_ONLY: No spaces, each word capitalized. Use with {league_id} for channel IDs like 'DetroitPistons.nhl'",
@@ -338,15 +345,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "DetroitPistons",
+        "NFL": "DetroitLions",
+        "MLB": "DetroitTigers",
+        "NHL": "DetroitRedWings",
+        "NCAAM": "MichiganWolverines",
+        "NCAAF": "MichiganWolverines",
+        "Soccer": "Liverpool"
+      }
     },
     {
       "name": "team_abbrev",
       "description": "Team abbreviation",
-      "source": "`/teams/{id}` → `team.abbreviation`",
-      "example": "DET",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/teams/{id}` \u2192 `team.abbreviation`",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -357,15 +372,50 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "DET",
+        "NFL": "DET",
+        "MLB": "DET",
+        "NHL": "DET",
+        "NCAAM": "MICH",
+        "NCAAF": "MICH",
+        "Soccer": "LIV"
+      }
+    },
+    {
+      "name": "team_abbrev_lower",
+      "description": "Team abbreviation (lowercase)",
+      "source": "`/teams/{id}` \u2192 `team.abbreviation` (lowercased)",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [
+        "base"
+      ],
+      "examples_by_sport": {
+        "NBA": "det",
+        "NFL": "det",
+        "MLB": "det",
+        "NHL": "det",
+        "NCAAM": "mich",
+        "NCAAF": "mich",
+        "Soccer": "liv"
+      }
     },
     {
       "name": "league",
       "description": "League abbreviation",
       "source": "Team config",
-      "example": "NBA",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -376,15 +426,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "NBA",
+        "NFL": "NFL",
+        "MLB": "MLB",
+        "NHL": "NHL",
+        "NCAAM": "NCAAM",
+        "NCAAF": "NCAAF",
+        "Soccer": "Premier League"
+      }
     },
     {
       "name": "league_name",
       "description": "Full league name",
       "source": "Team config",
-      "example": "National Basketball Association",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -395,15 +453,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "NBA",
+        "NFL": "NFL",
+        "MLB": "MLB",
+        "NHL": "NHL",
+        "NCAAM": "NCAAM",
+        "NCAAF": "NCAAF",
+        "Soccer": "Premier League"
+      }
     },
     {
       "name": "sport",
       "description": "Sport name",
       "source": "Team config",
-      "example": "Basketball",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -414,15 +480,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Basketball",
+        "NFL": "Football",
+        "MLB": "Baseball",
+        "NHL": "Hockey",
+        "NCAAM": "Basketball",
+        "NCAAF": "Football",
+        "Soccer": "Soccer"
+      }
     },
     {
       "name": "team_record",
       "description": "Win-loss record",
-      "source": "`/teams/{id}` → `team.record.items[0].summary`",
-      "example": "13-2",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 `team.record.items[0].summary`",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -433,15 +507,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "14-2",
+        "NFL": "10-1",
+        "MLB": "87-75",
+        "NHL": "13-8-1",
+        "NCAAM": "4-0",
+        "NCAAF": "9-2",
+        "Soccer": "11-1-2"
+      }
     },
     {
       "name": "team_wins",
       "description": "Number of wins",
-      "source": "`/teams/{id}` → stats `name=wins`",
-      "example": "13",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 stats `name=wins`",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -452,15 +534,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "14",
+        "NFL": "10",
+        "MLB": "87",
+        "NHL": "13",
+        "NCAAM": "4",
+        "NCAAF": "9",
+        "Soccer": "11"
+      }
     },
     {
       "name": "team_losses",
       "description": "Number of losses",
-      "source": "`/teams/{id}` → stats `name=losses`",
-      "example": "2",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 stats `name=losses`",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -471,15 +561,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "2",
+        "NFL": "1",
+        "MLB": "75",
+        "NHL": "8",
+        "NCAAM": "0",
+        "NCAAF": "2",
+        "Soccer": "2"
+      }
     },
     {
       "name": "team_ties",
       "description": "Number of ties",
-      "source": "`/teams/{id}` → stats `name=ties`",
-      "example": "0",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 stats `name=ties`",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -487,15 +585,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "0",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "0",
+        "Soccer": "1"
+      }
     },
     {
       "name": "team_win_pct",
       "description": "Win percentage",
-      "source": "`/teams/{id}` → stats `name=winPercent`",
-      "example": "0.867",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 stats `name=winPercent`",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -506,15 +612,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0.875",
+        "NFL": "0.909",
+        "MLB": "0.537",
+        "NHL": "0.614",
+        "NCAAM": "1.000",
+        "NCAAF": "0.818",
+        "Soccer": "0.786"
+      }
     },
     {
       "name": "playoff_seed",
       "description": "Current playoff seed",
-      "source": "`/teams/{id}` → stats `name=playoffSeed`",
-      "example": "1",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 stats `name=playoffSeed`",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -525,15 +639,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "1",
+        "NFL": "1",
+        "MLB": "6",
+        "NHL": "4",
+        "NCAAM": "0",
+        "NCAAF": "4",
+        "Soccer": "0"
+      }
     },
     {
       "name": "games_back",
       "description": "Games behind leader",
-      "source": "`/teams/{id}` → stats `name=gamesBehind`",
-      "example": "0.0",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 stats `name=gamesBehind`",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -544,15 +666,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0.0",
+        "NFL": "0.0",
+        "MLB": "0.0",
+        "NHL": "0.0",
+        "NCAAM": "0.0",
+        "NCAAF": "0.0",
+        "Soccer": "0.0"
+      }
     },
     {
       "name": "team_ppg",
       "description": "Points per game",
-      "source": "`/statistics` → `avgPoints`",
-      "example": "118.9",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "source": "`/statistics` \u2192 `avgPoints`",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udd25",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -563,15 +693,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "119.5",
+        "NFL": "31.5",
+        "MLB": "4.7",
+        "NHL": "3.0",
+        "NCAAM": "89.8",
+        "NCAAF": "29.3",
+        "Soccer": "2.4"
+      }
     },
     {
       "name": "team_papg",
       "description": "Points allowed per game",
-      "source": "`/statistics` → `avgPointsAgainst`",
-      "example": "112.1",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "source": "`/statistics` \u2192 `avgPointsAgainst`",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udd25",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -582,15 +720,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "112.4",
+        "NFL": "18.2",
+        "MLB": "4.3",
+        "NHL": "3.2",
+        "NCAAM": "71.5",
+        "NCAAF": "17.9",
+        "Soccer": "0.9"
+      }
     },
     {
       "name": "team_rank",
       "description": "National ranking",
-      "source": "`/scoreboard` → `curatedRank.current`",
-      "example": "#8",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/scoreboard` \u2192 `curatedRank.current`",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udcca",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -599,15 +745,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "#1",
+        "NCAAF": "#1",
+        "Soccer": ""
+      }
     },
     {
       "name": "is_ranked",
       "description": "Boolean if ranked",
       "source": "Calculated",
-      "example": "True",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udcca",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -616,15 +770,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "false",
+        "NFL": "false",
+        "MLB": "false",
+        "NHL": "false",
+        "NCAAM": "true",
+        "NCAAF": "true",
+        "Soccer": "false"
+      }
     },
     {
       "name": "streak",
       "description": "Current streak count (absolute value for display)",
       "source": "ESPN `/teams` API - streak_count field",
-      "example": "14",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udd25",
       "type": "string",
       "availability": "always",
       "notes": "Always positive. Use for display (e.g., '14-game losing streak')",
@@ -636,15 +798,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "W12",
+        "NFL": "W7",
+        "MLB": "W3",
+        "NHL": "W2",
+        "NCAAM": "W4",
+        "NCAAF": "W5",
+        "Soccer": "W4"
+      }
     },
     {
       "name": "streak_raw",
       "description": "Current streak count (signed value for conditional logic)",
       "source": "ESPN `/teams` API - streak_count field",
-      "example": "-14",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udd25",
       "type": "string",
       "availability": "always",
       "notes": "Negative for losses, positive for wins. Use in conditions (e.g., loss_streak >= 10)",
@@ -656,15 +826,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "12",
+        "NFL": "7",
+        "MLB": "3",
+        "NHL": "2",
+        "NCAAM": "4",
+        "NCAAF": "5",
+        "Soccer": "4"
+      }
     },
     {
       "name": "home_streak",
       "description": "Home win/loss streak (formatted with W/L prefix)",
       "source": "Calculated from `/schedule`",
-      "example": "W7",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udd25",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -675,15 +853,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "W5",
+        "NFL": "W5",
+        "MLB": "W2",
+        "NHL": "W3",
+        "NCAAM": "W2",
+        "NCAAF": "W4",
+        "Soccer": "W4"
+      }
     },
     {
       "name": "away_streak",
       "description": "Away win/loss streak (formatted with W/L prefix)",
       "source": "Calculated from `/schedule`",
-      "example": "L5",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udd25",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -694,15 +880,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "W7",
+        "NFL": "W2",
+        "MLB": "W1",
+        "NHL": "L1",
+        "NCAAM": "W1",
+        "NCAAF": "W1",
+        "Soccer": "W2"
+      }
     },
     {
       "name": "last_5_record",
       "description": "Last 5 games",
       "source": "Calculated from `/schedule`",
-      "example": "5-0",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udd25",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -713,15 +907,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "5-0",
+        "NFL": "5-0",
+        "MLB": "4-1",
+        "NHL": "3-2",
+        "NCAAM": "4-0",
+        "NCAAF": "5-0",
+        "Soccer": "5-0"
+      }
     },
     {
       "name": "last_10_record",
       "description": "Last 10 games",
       "source": "Calculated from `/schedule`",
-      "example": "10-0",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udd25",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -732,34 +934,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
-    },
-    {
-      "name": "recent_form",
-      "description": "Recent results",
-      "source": "Calculated",
-      "example": "WWWWW",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
-      "type": "string",
-      "availability": "always",
-      "sports": [
-        "basketball",
-        "football",
-        "hockey",
-        "baseball"
       ],
-      "available_suffixes": [
-        "base"
-      ]
+      "examples_by_sport": {
+        "NBA": "10-0",
+        "NFL": "9-1",
+        "MLB": "7-3",
+        "NHL": "6-4",
+        "NCAAM": "4-0",
+        "NCAAF": "8-2",
+        "Soccer": "9-0-1"
+      }
     },
     {
       "name": "pro_conference",
       "description": "Conference name",
-      "source": "`/teams/{id}` → groups",
-      "example": "Eastern Conference",
-      "category": "🏈 Teams",
-      "icon": "🏆",
+      "source": "`/teams/{id}` \u2192 groups",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -770,15 +961,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Eastern Conference",
+        "NFL": "National Football Conference",
+        "MLB": "American League",
+        "NHL": "Eastern Conference",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
     },
     {
       "name": "pro_conference_abbrev",
       "description": "Conference abbrev",
-      "source": "`/teams/{id}` → groups",
-      "example": "East",
-      "category": "🏈 Teams",
-      "icon": "🏆",
+      "source": "`/teams/{id}` \u2192 groups",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -789,15 +988,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "East",
+        "NFL": "NFC",
+        "MLB": "AL",
+        "NHL": "East",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
     },
     {
       "name": "pro_division",
       "description": "Division name",
-      "source": "`/teams/{id}` → groups",
-      "example": "Central",
-      "category": "🏈 Teams",
-      "icon": "🏆",
+      "source": "`/teams/{id}` \u2192 groups",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -808,15 +1015,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Central",
+        "NFL": "NFC North",
+        "MLB": "AL Central",
+        "NHL": "Atlantic Division",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": "English Premier League"
+      }
     },
     {
       "name": "college_conference",
       "description": "College conference",
-      "source": "`/teams/{id}` → groups",
-      "example": "Big Ten",
-      "category": "🏈 Teams",
-      "icon": "🏆",
+      "source": "`/teams/{id}` \u2192 groups",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -825,15 +1040,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "Big Ten",
+        "NCAAF": "Big Ten",
+        "Soccer": ""
+      }
     },
     {
       "name": "college_conference_abbrev",
       "description": "College conference abbreviation",
-      "source": "`/teams/{id}` → groups",
-      "example": "big10",
-      "category": "🏈 Teams",
-      "icon": "🏆",
+      "source": "`/teams/{id}` \u2192 groups",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -842,15 +1065,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "B1G",
+        "NCAAF": "B1G",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent",
       "description": "Opponent full name",
-      "source": "`/schedule` → event competitors",
-      "example": "Orlando Magic",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 event competitors",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -863,15 +1094,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Indiana Pacers",
+        "NFL": "Green Bay Packers",
+        "MLB": "Cleveland Guardians",
+        "NHL": "New Jersey Devils",
+        "NCAAM": "Ohio State Buckeyes",
+        "NCAAF": "Ohio State Buckeyes",
+        "Soccer": "Manchester City"
+      }
     },
     {
       "name": "opponent_abbrev",
       "description": "Opponent abbreviation",
-      "source": "`/schedule` → event competitors",
-      "example": "ORL",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 event competitors",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -884,15 +1123,52 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "IND",
+        "NFL": "GB",
+        "MLB": "CLE",
+        "NHL": "NJD",
+        "NCAAM": "OSU",
+        "NCAAF": "OSU",
+        "Soccer": "MCI"
+      }
+    },
+    {
+      "name": "opponent_abbrev_lower",
+      "description": "Opponent abbreviation (lowercase)",
+      "source": "`/schedule` \u2192 event competitors (lowercased)",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc0",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "ind",
+        "NFL": "gb",
+        "MLB": "cle",
+        "NHL": "njd",
+        "NCAAM": "osu",
+        "NCAAF": "osu",
+        "Soccer": "mci"
+      }
     },
     {
       "name": "opponent_record",
       "description": "Opponent W-L",
-      "source": "`/schedule` → competitor records",
-      "example": "9-7",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitor records",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -905,15 +1181,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "8-8",
+        "NFL": "7-4",
+        "MLB": "92-70",
+        "NHL": "15-7-2",
+        "NCAAM": "3-1",
+        "NCAAF": "10-1",
+        "Soccer": "7-4-3"
+      }
     },
     {
       "name": "opponent_wins",
       "description": "Opponent wins",
       "source": "Parsed from record",
-      "example": "9",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83c\udfc0",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -926,15 +1210,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "8",
+        "NFL": "7",
+        "MLB": "92",
+        "NHL": "15",
+        "NCAAM": "3",
+        "NCAAF": "10",
+        "Soccer": "7"
+      }
     },
     {
       "name": "opponent_losses",
       "description": "Opponent losses",
       "source": "Parsed from record",
-      "example": "7",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83c\udfc0",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -947,15 +1239,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "8",
+        "NFL": "4",
+        "MLB": "70",
+        "NHL": "7",
+        "NCAAM": "1",
+        "NCAAF": "1",
+        "Soccer": "3"
+      }
     },
     {
       "name": "opponent_ties",
       "description": "Opponent ties",
       "source": "Parsed from record",
-      "example": "0",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83c\udfc0",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -965,15 +1265,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "0",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "0",
+        "Soccer": "4"
+      }
     },
     {
       "name": "opponent_win_pct",
       "description": "Opponent win %",
       "source": "Calculated",
-      "example": "0.563",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83c\udfc0",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -986,15 +1294,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0.500",
+        "NFL": "0.636",
+        "MLB": "0.568",
+        "NHL": "0.667",
+        "NCAAM": "0.750",
+        "NCAAF": "0.909",
+        "Soccer": "0.500"
+      }
     },
     {
       "name": "opponent_rank",
       "description": "Opponent ranking",
-      "source": "`/scoreboard` → curatedRank",
-      "example": "#12",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "source": "`/scoreboard` \u2192 curatedRank",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1005,15 +1321,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "#25",
+        "NCAAF": "#2",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent_is_ranked",
       "description": "Boolean if ranked",
       "source": "Calculated",
-      "example": "True",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83c\udfc0",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -1024,15 +1348,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "false",
+        "NFL": "false",
+        "MLB": "false",
+        "NHL": "false",
+        "NCAAM": "true",
+        "NCAAF": "true",
+        "Soccer": "false"
+      }
     },
     {
       "name": "is_ranked_matchup",
       "description": "Both teams ranked",
       "source": "Calculated",
-      "example": "False",
-      "category": "📊 Team Stats",
-      "icon": "🏀",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83c\udfc0",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -1041,15 +1373,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "false",
+        "NFL": "false",
+        "MLB": "false",
+        "NHL": "false",
+        "NCAAM": "true",
+        "NCAAF": "true",
+        "Soccer": "false"
+      }
     },
     {
       "name": "opponent_ppg",
       "description": "Opponent PPG",
       "source": "`/teams/{opp_id}/statistics`",
-      "example": "108.3",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udd25",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -1062,15 +1402,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "115.2",
+        "NFL": "26.8",
+        "MLB": "5.1",
+        "NHL": "3.4",
+        "NCAAM": "76.3",
+        "NCAAF": "38.2",
+        "Soccer": "2.1"
+      }
     },
     {
       "name": "opponent_papg",
       "description": "Opponent PAPG",
       "source": "`/teams/{opp_id}/statistics`",
-      "example": "105.7",
-      "category": "📊 Team Stats",
-      "icon": "🔥",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udd25",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -1083,15 +1431,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "118.1",
+        "NFL": "23.5",
+        "MLB": "4.2",
+        "NHL": "2.8",
+        "NCAAM": "68.5",
+        "NCAAF": "14.8",
+        "Soccer": "1.4"
+      }
     },
     {
       "name": "game_date",
       "description": "Full game date",
-      "source": "`/schedule` → event.date",
-      "example": "November 21, 2025",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1104,15 +1460,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Monday, November 24, 2025",
+        "NFL": "Thursday, November 27, 2025",
+        "MLB": "Friday, April 04, 2025",
+        "NHL": "Saturday, November 29, 2025",
+        "NCAAM": "Tuesday, January 14, 2025",
+        "NCAAF": "Saturday, November 29, 2025",
+        "Soccer": "Sunday, December 01, 2025"
+      }
     },
     {
       "name": "game_date_short",
       "description": "Short date",
-      "source": "`/schedule` → event.date",
-      "example": "Nov 21",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1125,15 +1489,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Nov 24",
+        "NFL": "Nov 27",
+        "MLB": "Apr 04",
+        "NHL": "Nov 29",
+        "NCAAM": "Jan 14",
+        "NCAAF": "Nov 29",
+        "Soccer": "Dec 01"
+      }
     },
     {
       "name": "game_day",
       "description": "Full day name",
-      "source": "`/schedule` → event.date",
-      "example": "Friday",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1146,15 +1518,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Monday",
+        "NFL": "Thursday",
+        "MLB": "Friday",
+        "NHL": "Saturday",
+        "NCAAM": "Tuesday",
+        "NCAAF": "Saturday",
+        "Soccer": "Sunday"
+      }
     },
     {
       "name": "game_day_short",
       "description": "Short day name",
-      "source": "`/schedule` → event.date",
-      "example": "Fri",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1167,15 +1547,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Mon",
+        "NFL": "Thu",
+        "MLB": "Fri",
+        "NHL": "Sat",
+        "NCAAM": "Tue",
+        "NCAAF": "Sat",
+        "Soccer": "Sun"
+      }
     },
     {
       "name": "game_time",
       "description": "Game time",
-      "source": "`/schedule` → event.date",
-      "example": "7:00 PM EST",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1188,15 +1576,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "07:00 PM EST",
+        "NFL": "12:30 PM EST",
+        "MLB": "01:10 PM EDT",
+        "NHL": "07:00 PM EST",
+        "NCAAM": "07:00 PM EST",
+        "NCAAF": "12:00 PM EST",
+        "Soccer": "11:30 AM EST"
+      }
     },
     {
       "name": "game_time_12h",
       "description": "12-hour format",
-      "source": "`/schedule` → event.date",
-      "example": "7:00 PM",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1209,15 +1605,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "07:00 PM",
+        "NFL": "12:30 PM",
+        "MLB": "01:10 PM",
+        "NHL": "07:00 PM",
+        "NCAAM": "07:00 PM",
+        "NCAAF": "12:00 PM",
+        "Soccer": "11:30 AM"
+      }
     },
     {
       "name": "game_time_24h",
       "description": "24-hour format",
-      "source": "`/schedule` → event.date",
-      "example": "19:00",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1230,15 +1634,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "19:00",
+        "NFL": "12:30",
+        "MLB": "13:10",
+        "NHL": "19:00",
+        "NCAAM": "19:00",
+        "NCAAF": "12:00",
+        "Soccer": "11:30"
+      }
     },
     {
       "name": "matchup",
       "description": "Team matchup with full names",
       "source": "Calculated",
-      "example": "Detroit Pistons @ Orlando Magic",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1249,15 +1661,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Indiana Pacers @ Detroit Pistons",
+        "NFL": "Green Bay Packers @ Detroit Lions",
+        "MLB": "Cleveland Guardians @ Detroit Tigers",
+        "NHL": "New Jersey Devils @ Detroit Red Wings",
+        "NCAAM": "Ohio State Buckeyes @ Michigan Wolverines",
+        "NCAAF": "Ohio State Buckeyes @ Michigan Wolverines",
+        "Soccer": "Manchester City @ Liverpool"
+      }
     },
     {
       "name": "matchup_abbrev",
       "description": "Team matchup with abbreviations",
       "source": "Calculated",
-      "example": "DET @ ORL",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1270,15 +1690,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "IND @ DET",
+        "NFL": "GB @ DET",
+        "MLB": "CLE @ DET",
+        "NHL": "NJD @ DET",
+        "NCAAM": "OSU @ MICH",
+        "NCAAF": "OSU @ MICH",
+        "Soccer": "MCI @ LIV"
+      }
     },
     {
       "name": "vs_at",
       "description": "vs or @",
       "source": "Calculated",
-      "example": "@",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1289,15 +1717,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "vs",
+        "NFL": "vs",
+        "MLB": "vs",
+        "NHL": "vs",
+        "NCAAM": "vs",
+        "NCAAF": "vs",
+        "Soccer": "vs"
+      }
     },
     {
       "name": "home_away_text",
       "description": "Home/Away/Road",
       "source": "Calculated",
-      "example": "Road",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1308,15 +1744,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "at home",
+        "NFL": "at home",
+        "MLB": "at home",
+        "NHL": "at home",
+        "NCAAM": "at home",
+        "NCAAF": "at home",
+        "Soccer": "at home"
+      }
     },
     {
       "name": "is_home",
       "description": "Boolean home game",
       "source": "Calculated",
-      "example": "False",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfae",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -1327,15 +1771,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "true",
+        "NFL": "true",
+        "MLB": "true",
+        "NHL": "true",
+        "NCAAM": "true",
+        "NCAAF": "true",
+        "Soccer": "true"
+      }
     },
     {
       "name": "is_away",
       "description": "Boolean away game",
       "source": "Calculated",
-      "example": "True",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfae",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -1346,15 +1798,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "false",
+        "NFL": "false",
+        "MLB": "false",
+        "NHL": "false",
+        "NCAAM": "false",
+        "NCAAF": "false",
+        "Soccer": "false"
+      }
     },
     {
       "name": "venue",
       "description": "Venue name",
-      "source": "`/schedule` → venue.fullName",
-      "example": "Kia Center",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 venue.fullName",
+      "category": "\ud83d\udccd Venue",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1367,15 +1827,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Little Caesars Arena",
+        "NFL": "Ford Field",
+        "MLB": "Comerica Park",
+        "NHL": "Little Caesars Arena",
+        "NCAAM": "Crisler Center",
+        "NCAAF": "Michigan Stadium",
+        "Soccer": "Anfield"
+      }
     },
     {
       "name": "venue_city",
       "description": "Venue city",
-      "source": "`/schedule` → venue.address.city",
-      "example": "Orlando",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 venue.address.city",
+      "category": "\ud83d\udccd Venue",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1386,15 +1854,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Detroit",
+        "NFL": "Detroit",
+        "MLB": "Detroit",
+        "NHL": "Detroit",
+        "NCAAM": "Ann Arbor",
+        "NCAAF": "Ann Arbor",
+        "Soccer": "Liverpool"
+      }
     },
     {
       "name": "venue_state",
       "description": "Venue state",
-      "source": "`/schedule` → venue.address.state",
-      "example": "FL",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 venue.address.state",
+      "category": "\ud83d\udccd Venue",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1405,15 +1881,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "MI",
+        "NFL": "MI",
+        "MLB": "MI",
+        "NHL": "MI",
+        "NCAAM": "MI",
+        "NCAAF": "MI",
+        "Soccer": "ENG"
+      }
     },
     {
       "name": "venue_full",
       "description": "Full venue string",
       "source": "Calculated",
-      "example": "Kia Center, Orlando, FL",
-      "category": "🏈 Teams",
-      "icon": "🎮",
+      "category": "\ud83d\udccd Venue",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1424,15 +1908,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Little Caesars Arena, Detroit, MI",
+        "NFL": "Ford Field, Detroit, MI",
+        "MLB": "Comerica Park, Detroit, MI",
+        "NHL": "Little Caesars Arena, Detroit, MI",
+        "NCAAM": "Crisler Center, Ann Arbor, MI",
+        "NCAAF": "Michigan Stadium, Ann Arbor, MI",
+        "Soccer": "Anfield, Liverpool, ENG"
+      }
     },
     {
       "name": "days_until",
       "description": "Days until game",
       "source": "Calculated",
-      "example": "2",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -1445,15 +1937,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0",
+        "NFL": "3",
+        "MLB": "131",
+        "NHL": "5",
+        "NCAAM": "51",
+        "NCAAF": "5",
+        "Soccer": "7"
+      }
     },
     {
       "name": "overtime_text",
       "description": "OT description",
       "source": "Calculated",
-      "example": "OT",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1464,36 +1964,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
-    },
-    {
-      "name": "game_clock",
-      "description": "Game clock",
-      "source": "`/scoreboard` → status.displayClock",
-      "example": "5:42",
-      "category": "📅 Games",
-      "icon": "🎮",
-      "type": "string",
-      "availability": "live_only",
-      "sports": [
-        "basketball",
-        "football",
-        "hockey",
-        "baseball"
       ],
-      "available_suffixes": [
-        "base",
-        "next",
-        "last"
-      ]
+      "examples_by_sport": {
+        "NBA": "in overtime",
+        "NFL": "in overtime",
+        "MLB": "in overtime",
+        "NHL": "in overtime",
+        "NCAAM": "in overtime",
+        "NCAAF": "in overtime",
+        "Soccer": ""
+      }
     },
     {
       "name": "team_score",
       "description": "Team's score",
-      "source": "`/scoreboard` → competitor.score",
-      "example": "98",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "source": "`/scoreboard` \u2192 competitor.score",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "number",
       "availability": "final_only",
       "sports": [
@@ -1504,15 +1991,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "118",
+        "NFL": "31",
+        "MLB": "6",
+        "NHL": "4",
+        "NCAAM": "82",
+        "NCAAF": "24",
+        "Soccer": "2"
+      }
     },
     {
       "name": "opponent_score",
       "description": "Opponent's score",
-      "source": "`/scoreboard` → competitor.score",
-      "example": "102",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "source": "`/scoreboard` \u2192 competitor.score",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "number",
       "availability": "final_only",
       "sports": [
@@ -1523,15 +2018,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "105",
+        "NFL": "17",
+        "MLB": "3",
+        "NHL": "2",
+        "NCAAM": "68",
+        "NCAAF": "21",
+        "Soccer": "0"
+      }
     },
     {
       "name": "score",
       "description": "Combined score",
       "source": "Calculated",
-      "example": "98-102",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "final_only",
       "sports": [
@@ -1542,15 +2045,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "118-105",
+        "NFL": "31-17",
+        "MLB": "6-3",
+        "NHL": "4-2",
+        "NCAAM": "82-68",
+        "NCAAF": "24-21",
+        "Soccer": "2-0"
+      }
     },
     {
       "name": "final_score",
       "description": "Final score (only shows if game is final, otherwise empty)",
       "source": "Calculated",
-      "example": "98-102",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "final_only",
       "notes": "LAST_ONLY: Available only as {final_score.last} for completed games",
@@ -1562,15 +2073,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "118-105",
+        "NFL": "31-17",
+        "MLB": "6-3",
+        "NHL": "4-2",
+        "NCAAM": "82-68",
+        "NCAAF": "24-21",
+        "Soccer": "2-0"
+      }
     },
     {
       "name": "score_diff",
       "description": "Score difference",
       "source": "Calculated",
-      "example": "-4",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "number",
       "availability": "final_only",
       "sports": [
@@ -1581,15 +2100,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "+13",
+        "NFL": "+14",
+        "MLB": "+3",
+        "NHL": "+2",
+        "NCAAM": "+14",
+        "NCAAF": "+3",
+        "Soccer": "+2"
+      }
     },
     {
       "name": "score_differential",
       "description": "Absolute diff",
       "source": "Calculated",
-      "example": "4",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "number",
       "availability": "final_only",
       "sports": [
@@ -1600,15 +2127,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "13",
+        "NFL": "14",
+        "MLB": "3",
+        "NHL": "2",
+        "NCAAM": "14",
+        "NCAAF": "3",
+        "Soccer": "2"
+      }
     },
     {
       "name": "score_differential_text",
       "description": "Formatted diff",
       "source": "Calculated",
-      "example": "by 4 points",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "final_only",
       "sports": [
@@ -1619,15 +2154,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "by 13 points",
+        "NFL": "by 14 points",
+        "MLB": "by 3 runs",
+        "NHL": "by 2 goals",
+        "NCAAM": "by 14 points",
+        "NCAAF": "by 3 points",
+        "Soccer": "by 2 goals"
+      }
     },
     {
       "name": "result",
       "description": "Win/loss keyword",
       "source": "Calculated",
-      "example": "win\" or \"loss",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "final_only",
       "sports": [
@@ -1638,15 +2181,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "win",
+        "NFL": "win",
+        "MLB": "win",
+        "NHL": "win",
+        "NCAAM": "win",
+        "NCAAF": "win",
+        "Soccer": "win"
+      }
     },
     {
       "name": "result_text",
       "description": "Result verb",
       "source": "Calculated",
-      "example": "defeated\" or \"lost to",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "final_only",
       "sports": [
@@ -1657,15 +2208,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "defeated",
+        "NFL": "defeated",
+        "MLB": "defeated",
+        "NHL": "defeated",
+        "NCAAM": "defeated",
+        "NCAAF": "defeated",
+        "Soccer": "defeated"
+      }
     },
     {
       "name": "result_verb",
       "description": "Action verb",
       "source": "Calculated",
-      "example": "beat\" or \"fell to",
-      "category": "📊 Team Stats",
-      "icon": "🎮",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "final_only",
       "sports": [
@@ -1676,15 +2235,23 @@
       ],
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "beat",
+        "NFL": "beat",
+        "MLB": "beat",
+        "NHL": "beat",
+        "NCAAM": "beat",
+        "NCAAF": "beat",
+        "Soccer": "beat"
+      }
     },
     {
       "name": "attendance",
       "description": "Attendance count",
-      "source": "`/scoreboard` → attendance",
-      "example": "21381",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/scoreboard` \u2192 attendance",
+      "category": "\ud83d\udccd Venue",
+      "icon": "\ud83c\udfae",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -1697,15 +2264,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "20,332",
+        "NFL": "65,000",
+        "MLB": "41,083",
+        "NHL": "19,515",
+        "NCAAM": "12,707",
+        "NCAAF": "107,601",
+        "Soccer": "61,276"
+      }
     },
     {
       "name": "broadcast_simple",
       "description": "All networks (smart)",
-      "source": "`/schedule` → broadcasts",
-      "example": "ESPN, ABC",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 broadcasts",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1718,15 +2293,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "ESPN",
+        "NFL": "FOX",
+        "MLB": "FOX",
+        "NHL": "ESPN",
+        "NCAAM": "ESPN",
+        "NCAAF": "FOX",
+        "Soccer": "USA Network"
+      }
     },
     {
       "name": "broadcast_network",
       "description": "Primary network",
-      "source": "`/schedule` → broadcasts",
-      "example": "ESPN",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 broadcasts",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1739,15 +2322,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "ESPN",
+        "NFL": "FOX",
+        "MLB": "FOX",
+        "NHL": "ESPN",
+        "NCAAM": "ESPN",
+        "NCAAF": "FOX",
+        "Soccer": "USA Network"
+      }
     },
     {
       "name": "broadcast_national_network",
       "description": "National network(s)",
-      "source": "`/schedule` → broadcasts (National)",
-      "example": "ESPN, ABC",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 broadcasts (National)",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1760,15 +2351,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "ESPN",
+        "NFL": "FOX",
+        "MLB": "FOX",
+        "NHL": "ESPN",
+        "NCAAM": "ESPN",
+        "NCAAF": "FOX",
+        "Soccer": "USA Network"
+      }
     },
     {
       "name": "is_national_broadcast",
       "description": "Boolean flag",
-      "source": "`/schedule` → broadcasts",
-      "example": "true",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 broadcasts",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -1781,15 +2380,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "true",
+        "NFL": "true",
+        "MLB": "true",
+        "NHL": "true",
+        "NCAAM": "true",
+        "NCAAF": "true",
+        "Soccer": "true"
+      }
     },
     {
       "name": "odds_spread",
       "description": "Point spread",
-      "source": "`/scoreboard` → odds.details",
-      "example": "-3.5",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "source": "`/scoreboard` \u2192 odds.details",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "number",
       "availability": "same_day_only",
       "sports": [
@@ -1801,15 +2408,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "6.5",
+        "NFL": "7.5",
+        "MLB": "1.5",
+        "NHL": "1.5",
+        "NCAAM": "8.5",
+        "NCAAF": "7.0",
+        "Soccer": "0.5"
+      }
     },
     {
       "name": "odds_opponent_spread",
       "description": "Opponent spread odds",
-      "source": "`/scoreboard` → odds",
-      "example": "-110",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "source": "`/scoreboard` \u2192 odds",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "number",
       "availability": "same_day_only",
       "sports": [
@@ -1821,15 +2436,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "-110",
+        "NFL": "-110",
+        "MLB": "-120",
+        "NHL": "-130",
+        "NCAAM": "-110",
+        "NCAAF": "-110",
+        "Soccer": "-120"
+      }
     },
     {
       "name": "odds_moneyline",
       "description": "Team moneyline",
-      "source": "`/scoreboard` → odds.moneyLine",
-      "example": "-165",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "source": "`/scoreboard` \u2192 odds.moneyLine",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "number",
       "availability": "same_day_only",
       "sports": [
@@ -1841,15 +2464,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "-250",
+        "NFL": "-320",
+        "MLB": "-135",
+        "NHL": "+115",
+        "NCAAM": "-350",
+        "NCAAF": "+220",
+        "Soccer": "-140"
+      }
     },
     {
       "name": "odds_opponent_moneyline",
       "description": "Opponent moneyline",
-      "source": "`/scoreboard` → odds",
-      "example": "+140",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "source": "`/scoreboard` \u2192 odds",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "number",
       "availability": "same_day_only",
       "sports": [
@@ -1861,15 +2492,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "+200",
+        "NFL": "+260",
+        "MLB": "+115",
+        "NHL": "-135",
+        "NCAAM": "+280",
+        "NCAAF": "-275",
+        "Soccer": "+380"
+      }
     },
     {
       "name": "odds_over_under",
       "description": "Total points O/U",
-      "source": "`/scoreboard` → odds.overUnder",
-      "example": "221.5",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "source": "`/scoreboard` \u2192 odds.overUnder",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "number",
       "availability": "same_day_only",
       "sports": [
@@ -1881,15 +2520,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "221.5",
+        "NFL": "47.5",
+        "MLB": "8.5",
+        "NHL": "6.0",
+        "NCAAM": "145.5",
+        "NCAAF": "48.5",
+        "Soccer": "2.5"
+      }
     },
     {
       "name": "odds_provider",
       "description": "Sportsbook name",
-      "source": "`/scoreboard` → odds.provider.name",
-      "example": "ESPN BET",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "source": "`/scoreboard` \u2192 odds.provider.name",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "string",
       "availability": "same_day_only",
       "sports": [
@@ -1901,15 +2548,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "ESPN BET",
+        "NFL": "ESPN BET",
+        "MLB": "ESPN BET",
+        "NHL": "ESPN BET",
+        "NCAAM": "ESPN BET",
+        "NCAAF": "ESPN BET",
+        "Soccer": "ESPN BET"
+      }
     },
     {
       "name": "odds_details",
       "description": "Formatted odds",
       "source": "Calculated",
-      "example": "DET -3.5",
-      "category": "💰 Betting & Odds",
-      "icon": "💰",
+      "category": "\ud83d\udcb0 Betting & Odds",
+      "icon": "\ud83d\udcb0",
       "type": "string",
       "availability": "same_day_only",
       "sports": [
@@ -1921,15 +2576,23 @@
       "available_suffixes": [
         "base",
         "next"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "DET -6.5",
+        "NFL": "DET -7.5",
+        "MLB": "DET -1.5",
+        "NHL": "NJD -1.5",
+        "NCAAM": "MICH -8.5",
+        "NCAAF": "OSU -7.0",
+        "Soccer": "LIV -0.5"
+      }
     },
     {
       "name": "rematch_date",
       "description": "Last meeting date",
       "source": "`/schedule` history",
-      "example": "October 28, 2025",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1940,15 +2603,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "October 28, 2025",
+        "NFL": "September 14, 2025",
+        "MLB": "September 28, 2024",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "November 30, 2024",
+        "Soccer": "March 10, 2025"
+      }
     },
     {
-      "name": "rematch_location",
-      "description": "Where played",
+      "name": "rematch_venue",
+      "description": "Venue of last meeting",
       "source": "Calculated",
-      "example": "Orlando",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1959,15 +2630,50 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Indianapolis",
+        "NFL": "Green Bay",
+        "MLB": "Cleveland",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "Columbus",
+        "Soccer": "Manchester"
+      }
+    },
+    {
+      "name": "rematch_city",
+      "description": "City of last meeting",
+      "source": "Calculated",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [
+        "base"
+      ],
+      "examples_by_sport": {
+        "NBA": "Indianapolis",
+        "NFL": "Green Bay",
+        "MLB": "Cleveland",
+        "NHL": "Newark",
+        "NCAAM": "Columbus",
+        "NCAAF": "Columbus",
+        "Soccer": "Manchester"
+      }
     },
     {
       "name": "rematch_result",
       "description": "Game result",
       "source": "Calculated",
-      "example": "Win",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1978,15 +2684,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "win",
+        "NFL": "win",
+        "MLB": "win",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "win",
+        "Soccer": "win"
+      }
     },
     {
       "name": "rematch_score",
       "description": "Final score",
       "source": "`/scoreboard` historical",
-      "example": "112-103",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1997,15 +2711,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "112-103",
+        "NFL": "34-20",
+        "MLB": "5-3",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "13-10",
+        "Soccer": "2-1"
+      }
     },
     {
       "name": "rematch_score_abbrev",
       "description": "Short score",
       "source": "Calculated",
-      "example": "W 112-103",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2016,15 +2738,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "W 112-103",
+        "NFL": "W 34-20",
+        "MLB": "W 5-3",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "W 13-10",
+        "Soccer": "W 2-1"
+      }
     },
     {
       "name": "rematch_days_since",
       "description": "Days since meeting",
       "source": "Calculated",
-      "example": "24",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -2035,15 +2765,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "27",
+        "NFL": "74",
+        "MLB": "188",
+        "NHL": "0",
+        "NCAAM": "0",
+        "NCAAF": "364",
+        "Soccer": "266"
+      }
     },
     {
       "name": "rematch_season_series",
       "description": "Series record",
       "source": "Calculated",
-      "example": "1-0",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2054,15 +2792,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "1-0",
+        "NFL": "1-0",
+        "MLB": "10-9",
+        "NHL": "0-0",
+        "NCAAM": "0-0",
+        "NCAAF": "0-0",
+        "Soccer": "0-0"
+      }
     },
     {
       "name": "season_series",
       "description": "Overall series",
       "source": "Calculated from `/schedule`",
-      "example": "1-0",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2073,15 +2819,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "1-0",
+        "NFL": "1-0",
+        "MLB": "10-9",
+        "NHL": "0-0",
+        "NCAAM": "0-0",
+        "NCAAF": "0-0",
+        "Soccer": "0-0"
+      }
     },
     {
       "name": "season_series_leader",
       "description": "Leading team",
       "source": "Calculated",
-      "example": "Detroit Pistons",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2092,15 +2846,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Detroit Pistons",
+        "NFL": "Detroit Lions",
+        "MLB": "Detroit Tigers",
+        "NHL": "tied",
+        "NCAAM": "tied",
+        "NCAAF": "tied",
+        "Soccer": "tied"
+      }
     },
     {
       "name": "season_series_team_wins",
       "description": "Team's series wins",
       "source": "Calculated",
-      "example": "1",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -2111,15 +2873,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "1",
+        "NFL": "1",
+        "MLB": "10",
+        "NHL": "0",
+        "NCAAM": "0",
+        "NCAAF": "0",
+        "Soccer": "0"
+      }
     },
     {
       "name": "season_series_opponent_wins",
       "description": "Opp's series wins",
       "source": "Calculated",
-      "example": "0",
-      "category": "📊 Team Stats",
-      "icon": "🏆",
+      "category": "\ud83e\udd1d Head-to-Head",
+      "icon": "\ud83c\udfc6",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -2132,15 +2902,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0",
+        "NFL": "0",
+        "MLB": "9",
+        "NHL": "0",
+        "NCAAM": "0",
+        "NCAAF": "0",
+        "Soccer": "0"
+      }
     },
     {
       "name": "is_playoff",
       "description": "Playoff game",
-      "source": "`/schedule` → seasonType",
-      "example": "False",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 seasonType",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -2153,15 +2931,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "false",
+        "NFL": "false",
+        "MLB": "false",
+        "NHL": "false",
+        "NCAAM": "false",
+        "NCAAF": "false",
+        "Soccer": "false"
+      }
     },
     {
       "name": "is_preseason",
       "description": "Preseason game",
-      "source": "`/schedule` → seasonType",
-      "example": "False",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 seasonType",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -2174,15 +2960,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "false",
+        "NFL": "false",
+        "MLB": "false",
+        "NHL": "false",
+        "NCAAM": "false",
+        "NCAAF": "false",
+        "Soccer": "false"
+      }
     },
     {
       "name": "is_regular_season",
       "description": "Regular season",
-      "source": "`/schedule` → seasonType",
-      "example": "True",
-      "category": "📅 Games",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 seasonType",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "boolean",
       "availability": "always",
       "sports": [
@@ -2195,15 +2989,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "true",
+        "NFL": "true",
+        "MLB": "true",
+        "NHL": "true",
+        "NCAAM": "true",
+        "NCAAF": "true",
+        "Soccer": "true"
+      }
     },
     {
       "name": "season_type",
       "description": "Season type",
-      "source": "`/schedule` → seasonType",
-      "example": "Regular Season",
-      "category": "📅 Games",
-      "icon": "🏆",
+      "source": "`/schedule` \u2192 seasonType",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfc6",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2216,15 +3018,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "regular",
+        "NFL": "regular",
+        "MLB": "regular",
+        "NHL": "regular",
+        "NCAAM": "regular",
+        "NCAAF": "regular",
+        "Soccer": "regular"
+      }
     },
     {
       "name": "home_record",
       "description": "Home record",
-      "source": "`/teams/{id}` → records",
-      "example": "8-0",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 records",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2235,15 +3045,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "7-1",
+        "NFL": "5-0",
+        "MLB": "46-35",
+        "NHL": "8-4-1",
+        "NCAAM": "2-0",
+        "NCAAF": "5-1",
+        "Soccer": "6-0-1"
+      }
     },
     {
       "name": "away_record",
       "description": "Away record",
-      "source": "`/teams/{id}` → records",
-      "example": "5-2",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "source": "`/teams/{id}` \u2192 records",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2254,15 +3072,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "6-1",
+        "NFL": "5-1",
+        "MLB": "41-40",
+        "NHL": "5-4-0",
+        "NCAAM": "1-0",
+        "NCAAF": "4-1",
+        "Soccer": "5-1-1"
+      }
     },
     {
       "name": "home_team_record",
       "description": "If home today",
       "source": "Calculated",
-      "example": "8-0",
-      "category": "🏈 Teams",
-      "icon": "📊",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2273,15 +3099,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "14-2",
+        "NFL": "10-1",
+        "MLB": "87-75",
+        "NHL": "13-8-1",
+        "NCAAM": "4-0",
+        "NCAAF": "9-2",
+        "Soccer": "11-1-2"
+      }
     },
     {
       "name": "away_team_record",
       "description": "If away today",
       "source": "Calculated",
-      "example": "5-2",
-      "category": "🏈 Teams",
-      "icon": "📊",
+      "category": "\ud83d\udcca Records & Streaks",
+      "icon": "\ud83d\udcca",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2292,15 +3126,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "8-8",
+        "NFL": "7-4",
+        "MLB": "92-70",
+        "NHL": "15-7-2",
+        "NCAAM": "3-1",
+        "NCAAF": "10-1",
+        "Soccer": "7-4-3"
+      }
     },
     {
       "name": "home_win_pct",
       "description": "Home win %",
       "source": "Calculated",
-      "example": "1.000",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -2311,15 +3153,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0.875",
+        "NFL": "1.000",
+        "MLB": "0.568",
+        "NHL": "0.615",
+        "NCAAM": "1.000",
+        "NCAAF": "0.833",
+        "Soccer": "0.857"
+      }
     },
     {
       "name": "away_win_pct",
       "description": "Away win %",
       "source": "Calculated",
-      "example": "0.714",
-      "category": "📊 Team Stats",
-      "icon": "📊",
+      "category": "\ud83d\udcca Rankings & Stats",
+      "icon": "\ud83d\udcca",
       "type": "number",
       "availability": "always",
       "sports": [
@@ -2330,15 +3180,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "0.857",
+        "NFL": "0.833",
+        "MLB": "0.506",
+        "NHL": "0.556",
+        "NCAAM": "1.000",
+        "NCAAF": "0.800",
+        "Soccer": "0.714"
+      }
     },
     {
       "name": "home_team",
       "description": "Home team name",
-      "source": "`/schedule` → competitors",
-      "example": "Orlando Magic",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitors",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2349,15 +3207,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Detroit Pistons",
+        "NFL": "Detroit Lions",
+        "MLB": "Detroit Tigers",
+        "NHL": "Detroit Red Wings",
+        "NCAAM": "Michigan Wolverines",
+        "NCAAF": "Michigan Wolverines",
+        "Soccer": "Liverpool"
+      }
     },
     {
       "name": "away_team",
       "description": "Away team name",
-      "source": "`/schedule` → competitors",
-      "example": "Detroit Pistons",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitors",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2368,15 +3234,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Indiana Pacers",
+        "NFL": "Green Bay Packers",
+        "MLB": "Cleveland Guardians",
+        "NHL": "New Jersey Devils",
+        "NCAAM": "Ohio State Buckeyes",
+        "NCAAF": "Ohio State Buckeyes",
+        "Soccer": "Manchester City"
+      }
     },
     {
       "name": "home_team_abbrev",
       "description": "Home team abbreviation",
-      "source": "`/schedule` → competitors → abbrev",
-      "example": "ORL",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitors \u2192 abbrev",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2386,16 +3260,55 @@
         "baseball"
       ],
       "available_suffixes": [
-        "base"
-      ]
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "DET",
+        "NFL": "DET",
+        "MLB": "DET",
+        "NHL": "DET",
+        "NCAAM": "MICH",
+        "NCAAF": "MICH",
+        "Soccer": "LIV"
+      }
+    },
+    {
+      "name": "home_team_abbrev_lower",
+      "description": "Home team abbreviation (lowercase)",
+      "source": "`/schedule` \u2192 competitors \u2192 abbrev (lowercased)",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "det",
+        "NFL": "det",
+        "MLB": "det",
+        "NHL": "det",
+        "NCAAM": "mich",
+        "NCAAF": "mich",
+        "Soccer": "liv"
+      }
     },
     {
       "name": "away_team_abbrev",
       "description": "Away team abbreviation",
-      "source": "`/schedule` → competitors → abbrev",
-      "example": "DET",
-      "category": "🏈 Teams",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitors \u2192 abbrev",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2405,16 +3318,55 @@
         "baseball"
       ],
       "available_suffixes": [
-        "base"
-      ]
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "IND",
+        "NFL": "GB",
+        "MLB": "CLE",
+        "NHL": "NJD",
+        "NCAAM": "OSU",
+        "NCAAF": "OSU",
+        "Soccer": "MCI"
+      }
+    },
+    {
+      "name": "away_team_abbrev_lower",
+      "description": "Away team abbreviation (lowercase)",
+      "source": "`/schedule` \u2192 competitors \u2192 abbrev (lowercased)",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "ind",
+        "NFL": "gb",
+        "MLB": "cle",
+        "NHL": "njd",
+        "NCAAM": "osu",
+        "NCAAF": "osu",
+        "Soccer": "mci"
+      }
     },
     {
       "name": "head_coach",
       "description": "Team head coach name",
-      "source": "`/roster` → coach",
-      "example": "J.B. Bickerstaff",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/roster` \u2192 coach",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -2425,15 +3377,23 @@
       ],
       "available_suffixes": [
         "base"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "J.B. Bickerstaff",
+        "NFL": "Dan Campbell",
+        "MLB": "A.J. Hinch",
+        "NHL": "Derek Lalonde",
+        "NCAAM": "Dusty May",
+        "NCAAF": "Sherrone Moore",
+        "Soccer": "Arne Slot"
+      }
     },
     {
       "name": "football_passing_leader_name",
       "description": "Passing leader name from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.passingLeader",
-      "example": "Jared Goff",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.passingLeader",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2442,15 +3402,23 @@
       "notes": "Only available for completed games (.last suffix only). Shows top passer from the most recent game.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "Jared Goff",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "Davis Warren",
+        "Soccer": ""
+      }
     },
     {
       "name": "football_passing_leader_stats",
       "description": "Passing leader stats from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.passingLeader.displayValue",
-      "example": "31/39, 225 YDS, 1 TD, 1 INT",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.passingLeader.displayValue",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2459,15 +3427,23 @@
       "notes": "Only available for completed games (.last suffix only). Full stat line for passing leader.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "28/35, 312 YDS, 3 TD",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "18/29, 187 YDS, 2 TD",
+        "Soccer": ""
+      }
     },
     {
       "name": "football_rushing_leader_name",
       "description": "Rushing leader name from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.rushingLeader",
-      "example": "David Montgomery",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.rushingLeader",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2476,15 +3452,23 @@
       "notes": "Only available for completed games (.last suffix only). Shows top rusher from the most recent game.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "Jahmyr Gibbs",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "Donovan Edwards",
+        "Soccer": ""
+      }
     },
     {
       "name": "football_rushing_leader_stats",
       "description": "Rushing leader stats from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.rushingLeader.displayValue",
-      "example": "11 CAR, 25 YDS",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.rushingLeader.displayValue",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2493,15 +3477,23 @@
       "notes": "Only available for completed games (.last suffix only). Full stat line for rushing leader.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "18 CAR, 127 YDS, 1 TD",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "22 CAR, 98 YDS, 1 TD",
+        "Soccer": ""
+      }
     },
     {
       "name": "football_receiving_leader_name",
       "description": "Receiving leader name from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.receivingLeader",
-      "example": "Sam LaPorta",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.receivingLeader",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2510,15 +3502,23 @@
       "notes": "Only available for completed games (.last suffix only). Shows top receiver from the most recent game.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "Amon-Ra St. Brown",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "Colston Loveland",
+        "Soccer": ""
+      }
     },
     {
       "name": "football_receiving_leader_stats",
       "description": "Receiving leader stats from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.receivingLeader.displayValue",
-      "example": "6 REC, 79 YDS",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.receivingLeader.displayValue",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2527,15 +3527,23 @@
       "notes": "Only available for completed games (.last suffix only). Full stat line for receiving leader.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "9 REC, 118 YDS, 1 TD",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "",
+        "NCAAF": "7 REC, 85 YDS, 1 TD",
+        "Soccer": ""
+      }
     },
     {
       "name": "basketball_scoring_leader_name",
       "description": "Scoring leader name from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.points",
-      "example": "Morez Johnson Jr.",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.points",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "string",
       "availability": "last_game_only",
       "sports": [
@@ -2544,15 +3552,23 @@
       "notes": "Only available for completed games (.last suffix only). Shows top scorer from the most recent game. Works for NBA, WNBA, NCAAM, NCAAW.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Cade Cunningham",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "Tre Donaldson",
+        "NCAAF": "",
+        "Soccer": ""
+      }
     },
     {
       "name": "basketball_scoring_leader_points",
       "description": "Scoring leader points from last completed game",
-      "source": "`/schedule` → competition.competitors[].leaders.points.displayValue",
-      "example": "24",
-      "category": "👥 Roster & Players",
-      "icon": "👥",
+      "source": "`/schedule` \u2192 competition.competitors[].leaders.points.displayValue",
+      "category": "\ud83d\udc65 Roster & Players",
+      "icon": "\ud83d\udc65",
       "type": "number",
       "availability": "last_game_only",
       "sports": [
@@ -2561,15 +3577,23 @@
       "notes": "Only available for completed games (.last suffix only). Points scored by the scoring leader. Works for NBA, WNBA, NCAAM, NCAAW.",
       "available_suffixes": [
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "28",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "22",
+        "NCAAF": "",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent_college_conference",
       "description": "Opponent's conference name for college sports",
       "source": "Opponent stats from ESPN API -> conference_name (college only)",
-      "example": "Big Ten",
-      "category": "🏈 Teams",
-      "icon": "🏈",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc8",
       "type": "string",
       "availability": "when_opponent_exists",
       "sports": [
@@ -2581,15 +3605,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "Big Ten",
+        "NCAAF": "Big Ten",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent_college_conference_abbrev",
       "description": "Opponent's conference abbreviation for college sports",
       "source": "Opponent stats from ESPN API -> conference_abbrev (college only)",
-      "example": "big10",
-      "category": "🏈 Teams",
-      "icon": "🏈",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc8",
       "type": "string",
       "availability": "when_opponent_exists",
       "sports": [
@@ -2601,15 +3633,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "NCAAM": "B1G",
+        "NCAAF": "B1G",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent_pro_conference",
       "description": "Opponent's conference name for pro sports",
       "source": "Opponent stats from ESPN API -> conference_name (pro only)",
-      "example": "National Football Conference",
-      "category": "🏈 Teams",
-      "icon": "🏈",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc8",
       "type": "string",
       "availability": "when_opponent_exists",
       "sports": [
@@ -2622,15 +3662,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Eastern Conference",
+        "NFL": "National Football Conference",
+        "MLB": "American League",
+        "NHL": "Eastern Conference",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent_pro_conference_abbrev",
       "description": "Opponent's conference abbreviation for pro sports",
       "source": "Opponent stats from ESPN API -> conference_abbrev (pro only)",
-      "example": "NFC",
-      "category": "🏈 Teams",
-      "icon": "🏈",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc8",
       "type": "string",
       "availability": "when_opponent_exists",
       "sports": [
@@ -2643,15 +3691,23 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "East",
+        "NFL": "NFC",
+        "MLB": "AL",
+        "NHL": "East",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
     },
     {
       "name": "opponent_pro_division",
       "description": "Opponent's division name for pro sports",
       "source": "Opponent stats from ESPN API -> division_name",
-      "example": "NFC North",
-      "category": "🏈 Teams",
-      "icon": "🏈",
+      "category": "\ud83d\udc64 Opponent",
+      "icon": "\ud83c\udfc8",
       "type": "string",
       "availability": "when_opponent_exists",
       "sports": [
@@ -2664,9 +3720,237 @@
         "base",
         "next",
         "last"
-      ]
+      ],
+      "examples_by_sport": {
+        "NBA": "Central",
+        "NFL": "NFC North",
+        "MLB": "AL Central",
+        "NHL": "Metropolitan Division",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": "English Premier League"
+      }
+    },
+    {
+      "name": "home_team_college_conference",
+      "description": "Home team's college conference name",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "Soccer": "",
+        "NCAAM": "Big Ten",
+        "NCAAF": "Big Ten"
+      }
+    },
+    {
+      "name": "home_team_college_conference_abbrev",
+      "description": "Home team's college conference abbreviation",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "Soccer": "",
+        "NCAAM": "B1G",
+        "NCAAF": "B1G"
+      }
+    },
+    {
+      "name": "home_team_pro_conference",
+      "description": "Home team's professional conference name",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "Eastern Conference",
+        "NFL": "National Football Conference",
+        "MLB": "American League",
+        "NHL": "Eastern Conference",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
+    },
+    {
+      "name": "home_team_pro_conference_abbrev",
+      "description": "Home team's professional conference abbreviation",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "East",
+        "NFL": "NFC",
+        "MLB": "AL",
+        "NHL": "East",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
+    },
+    {
+      "name": "home_team_pro_division",
+      "description": "Home team's professional division name",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "Central",
+        "NFL": "NFC North",
+        "MLB": "AL Central",
+        "NHL": "Atlantic Division",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": "English Premier League"
+      }
+    },
+    {
+      "name": "away_team_college_conference",
+      "description": "Away team's college conference name",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "Soccer": "",
+        "NCAAM": "Big Ten",
+        "NCAAF": "Big Ten"
+      }
+    },
+    {
+      "name": "away_team_college_conference_abbrev",
+      "description": "Away team's college conference abbreviation",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "",
+        "NFL": "",
+        "MLB": "",
+        "NHL": "",
+        "Soccer": "",
+        "NCAAM": "B1G",
+        "NCAAF": "B1G"
+      }
+    },
+    {
+      "name": "away_team_pro_conference",
+      "description": "Away team's professional conference name",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "Eastern Conference",
+        "NFL": "National Football Conference",
+        "MLB": "American League",
+        "NHL": "Eastern Conference",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
+    },
+    {
+      "name": "away_team_pro_conference_abbrev",
+      "description": "Away team's professional conference abbreviation",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "East",
+        "NFL": "NFC",
+        "MLB": "AL",
+        "NHL": "East",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": ""
+      }
+    },
+    {
+      "name": "away_team_pro_division",
+      "description": "Away team's professional division name",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "Central",
+        "NFL": "NFC North",
+        "MLB": "AL Central",
+        "NHL": "Metropolitan Division",
+        "NCAAM": "",
+        "NCAAF": "",
+        "Soccer": "English Premier League"
+      }
     }
   ],
   "base_variables_count": 112,
-  "total_variables_count": 233
+  "total_variables_count": 233,
+  "examples_by_sport_info": {
+    "description": "Each variable has sport-specific example values representing realistic scenarios",
+    "sports": [
+      "NBA",
+      "NFL",
+      "MLB",
+      "NHL",
+      "NCAAM",
+      "NCAAF",
+      "Soccer"
+    ],
+    "sample_teams": {
+      "NBA": "Detroit Pistons",
+      "NFL": "Detroit Lions",
+      "MLB": "Detroit Tigers",
+      "NHL": "Detroit Red Wings",
+      "NCAAM": "Michigan Wolverines",
+      "NCAAF": "Michigan Wolverines",
+      "Soccer": "Liverpool"
+    },
+    "notes": {
+      "venues": "All venues are HOME venues with sellout attendance",
+      "broadcasts": "Networks reflect typical broadcasts for each team",
+      "odds": "Over/under values are sport-appropriate (NBA ~220, NFL ~48, etc.)",
+      "scores": "All final scores show our team winning",
+      "streaks": "Streak values are reasonable per sport"
+    },
+    "generated": "2025-11-24"
+  }
 }

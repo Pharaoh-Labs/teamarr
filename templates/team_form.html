@@ -279,9 +279,13 @@ function generateChannelId(format) {
         .replace('{league}', leagueName || league.toUpperCase())  // Use league_name (NBA) or fallback to league.upper()
         .replace('{sport}', sport.toLowerCase());
 
-    // Clean up any remaining special characters (only for old-style formats with dashes)
-    if (format.includes('-') || format.includes('{team_name}') || format.includes('{team_slug}')) {
-        channelId = channelId.replace(/[^a-z0-9.-]+/g, '-').replace(/^-|-$/g, '');
+    // Clean up channel ID - match Python logic in app.py
+    if (format.includes('{team_name_pascal}') || (format.includes('{league}') && !format.includes('{league_id}'))) {
+        // Allow uppercase letters (for PascalCase channel IDs)
+        channelId = channelId.replace(/[^a-zA-Z0-9.-]+/g, '');
+    } else {
+        // Traditional: lowercase only, replace special chars with dashes
+        channelId = channelId.replace(/[^a-z0-9.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     }
 
     return channelId;

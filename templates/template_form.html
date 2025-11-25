@@ -883,46 +883,39 @@ let allDescriptions = {{ description_options_json | default('[]') | safe }};
 let conditions = [];  // Conditional descriptions (priority 1-99)
 let fallbacks = [];   // Fallback descriptions (priority 100)
 let TEMPLATE_VARIABLES = {};
-let sampleDataFromAPI = {};
+let sampleDataFromAPI = {};  // All examples by sport: { varName: { NBA: 'value', NFL: 'value', ... } }
+let availableSports = ['NBA', 'NFL', 'MLB', 'NHL', 'NCAAM', 'NCAAF', 'Soccer'];
+let currentPreviewSport = 'NBA';  // Default sport for preview
 let recentlyUsedVars = [];
 let lastTemplateField = null;
 
 // Note: Suffix strategies are now loaded from variables.json via API
 // No more hardcoded arrays - everything uses window.variableSuffixMap
 
-// Sample data for preview
-let sampleData = {
-    team_name: 'Detroit Pistons',
-    team_abbrev: 'DET',
-    team_record: '13-2',
-    sport: 'Basketball',
-    league: 'NBA',
-    opponent: 'Orlando Magic',
-    opponent_abbrev: 'ORL',
-    opponent_record: '9-7',
-    matchup: 'DET @ ORL',
-    venue: 'Kia Center',
-    venue_full: 'Kia Center, Orlando',
-    game_time: '7:00 PM EST',
-    game_date: 'November 23, 2025',
-    win_streak: '11',
-    last_5_record: '5-0',
-    playoff_seed: '1',
-    team_ppg: '118.9',
-    head_coach: 'J.B. Bickerstaff',
-    next_opponent: 'LA Clippers',
-    next_date: 'November 25, 2025',
-    next_time: '8:00 PM EST',
-    last_opponent: 'Miami Heat',
-    last_date: 'November 21, 2025',
-    last_result: 'Win',
-    last_score: '125-124',
-    result_text: 'defeated',
-    final_score: '125-124',
-    broadcast_simple: 'FanDuel SN DET',
-    spread: '-3.5',
-    over_under: '221.5'
-};
+// Sample data for preview - dynamically populated based on selected sport
+let sampleData = {};
+
+// Get sample data for a specific sport from API data
+function getSampleDataForSport(sport) {
+    const data = {};
+    for (const [varName, sportExamples] of Object.entries(sampleDataFromAPI)) {
+        if (sportExamples && typeof sportExamples === 'object') {
+            // Use the sport-specific value, fallback to first available
+            data[varName] = sportExamples[sport] || Object.values(sportExamples)[0] || '';
+        } else {
+            // Legacy format: single example value
+            data[varName] = sportExamples || '';
+        }
+    }
+    return data;
+}
+
+// Update sample data when sport changes
+function updatePreviewSport(sport) {
+    currentPreviewSport = sport;
+    sampleData = getSampleDataForSport(sport);
+    updatePreviews();
+}
 
 // ============================================================================
 // INITIALIZATION
@@ -933,11 +926,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Load variables from API first
     try {
-        const success = await loadVariablesFromAPI();
-        if (success) {
-            // Merge API sample data with fallback
-            sampleData = { ...sampleDataFromAPI, ...sampleData };
-        }
+        await loadVariablesFromAPI();
+        // sampleData is now populated for currentPreviewSport in loadVariablesFromAPI()
     } catch (error) {
         console.error('Failed to load variables:', error);
     }
@@ -1102,7 +1092,7 @@ async function loadVariablesFromAPI() {
 
         // Group variables by category
         const categoryMap = {};
-        const sampleMap = {};
+        const sampleMap = {};  // Now stores { varName: { NBA: 'val', NFL: 'val', ... } }
         const suffixMap = {}; // Store suffix availability for each variable
 
         data.variables.forEach(variable => {
@@ -1113,13 +1103,37 @@ async function loadVariablesFromAPI() {
                 };
             }
             categoryMap[variable.category].variables.push(variable.name);
-            sampleMap[variable.name] = variable.example;
+
+            // Use examples_by_sport if available, fallback to example for legacy
+            if (variable.examples_by_sport) {
+                sampleMap[variable.name] = variable.examples_by_sport;
+            } else if (variable.example) {
+                // Legacy: wrap single example for all sports
+                sampleMap[variable.name] = {
+                    NBA: variable.example,
+                    NFL: variable.example,
+                    MLB: variable.example,
+                    NHL: variable.example,
+                    NCAAM: variable.example,
+                    NCAAF: variable.example,
+                    Soccer: variable.example
+                };
+            }
+
             suffixMap[variable.name] = variable.available_suffixes || ['base', 'next', 'last'];
         });
+
+        // Load available sports from metadata if present
+        if (data.examples_by_sport_info?.sports) {
+            availableSports = data.examples_by_sport_info.sports;
+        }
 
         TEMPLATE_VARIABLES = categoryMap;
         sampleDataFromAPI = sampleMap;
         window.variableSuffixMap = suffixMap; // Make globally available
+
+        // Initialize sampleData for current sport
+        sampleData = getSampleDataForSport(currentPreviewSport);
 
         return true;
     } catch (error) {
@@ -1154,9 +1168,22 @@ function generateTemplateVariablesHTML(containerId) {
         return '<div class="variable-helper"><p style="color: var(--text-muted); padding: 1rem;">Loading variables...</p></div>';
     }
 
+    // Build sport options
+    const sportOptions = availableSports.map(sport =>
+        `<option value="${sport}" ${sport === currentPreviewSport ? 'selected' : ''}>${sport}</option>`
+    ).join('');
+
     let html = `
         <div class="variable-helper">
             <h4 style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 1rem;">📝 Template Variables</h4>
+
+            <!-- Sport Selector for Preview -->
+            <div class="sport-preview-selector" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; border: 1px solid var(--border);">
+                <label for="preview-sport-select" style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">Preview as:</label>
+                <select id="preview-sport-select" onchange="updatePreviewSport(this.value)" style="flex: 1; padding: 0.25rem 0.5rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 3px; background: var(--bg-secondary); color: var(--text-primary); cursor: pointer;">
+                    ${sportOptions}
+                </select>
+            </div>
 
             <!-- Suffix System Guide -->
             <div class="suffix-guide">
@@ -1196,7 +1223,10 @@ function generateTemplateVariablesHTML(containerId) {
                 <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem;">
         `;
 
-        categoryData.variables.forEach(varName => {
+        // Sort variables alphabetically within category
+        const sortedVars = [...categoryData.variables].sort((a, b) => a.localeCompare(b));
+
+        sortedVars.forEach(varName => {
             const suffixClass = getSuffixClass(varName);
             const suffixes = window.variableSuffixMap?.[varName] || ['base', 'next', 'last'];
 

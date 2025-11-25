@@ -129,6 +129,7 @@ class TemplateEngine:
         # Use team_config as fallback when game data is not available
         variables['team_name'] = our_team.get('name', '') or team_config.get('team_name', '')
         variables['team_abbrev'] = our_team.get('abbrev', '') or team_config.get('team_abbrev', '')
+        variables['team_abbrev_lower'] = variables['team_abbrev'].lower()
 
         # Team name in PascalCase for channel IDs (e.g., "Anaheim Ducks" -> "AnaheimDucks")
         team_name = variables['team_name']
@@ -136,6 +137,7 @@ class TemplateEngine:
 
         variables['opponent'] = opponent.get('name', '')
         variables['opponent_abbrev'] = opponent.get('abbrev', '')
+        variables['opponent_abbrev_lower'] = variables['opponent_abbrev'].lower()
         variables['matchup_abbrev'] = f"{away_team.get('abbrev', '')} @ {home_team.get('abbrev', '')}"
         variables['matchup'] = f"{away_team.get('name', '')} @ {home_team.get('name', '')}"
 
@@ -193,6 +195,24 @@ class TemplateEngine:
         variables['opponent_pro_conference'] = opponent_stats.get('conference_name', '') if 'college' not in team_config.get('league', '').lower() else ''
         variables['opponent_pro_conference_abbrev'] = opponent_stats.get('conference_abbrev', '') if 'college' not in team_config.get('league', '').lower() else ''
         variables['opponent_pro_division'] = opponent_stats.get('division_name', '')
+
+        # Home/Away Team Conference/Division variables (positional - based on which team is home/away)
+        # Use team_stats or opponent_stats based on home/away position
+        home_team_stats = team_stats if is_home else opponent_stats
+        away_team_stats = opponent_stats if is_home else team_stats
+        is_college = 'college' in team_config.get('league', '').lower()
+
+        variables['home_team_college_conference'] = home_team_stats.get('conference_name', '') if is_college else ''
+        variables['home_team_college_conference_abbrev'] = home_team_stats.get('conference_abbrev', '') if is_college else ''
+        variables['home_team_pro_conference'] = home_team_stats.get('conference_name', '') if not is_college else ''
+        variables['home_team_pro_conference_abbrev'] = home_team_stats.get('conference_abbrev', '') if not is_college else ''
+        variables['home_team_pro_division'] = home_team_stats.get('division_name', '')
+
+        variables['away_team_college_conference'] = away_team_stats.get('conference_name', '') if is_college else ''
+        variables['away_team_college_conference_abbrev'] = away_team_stats.get('conference_abbrev', '') if is_college else ''
+        variables['away_team_pro_conference'] = away_team_stats.get('conference_name', '') if not is_college else ''
+        variables['away_team_pro_conference_abbrev'] = away_team_stats.get('conference_abbrev', '') if not is_college else ''
+        variables['away_team_pro_division'] = away_team_stats.get('division_name', '')
 
         # =====================================================================
         # DATE & TIME
@@ -261,7 +281,9 @@ class TemplateEngine:
         variables['home_team'] = home_team.get('name', '')
         variables['away_team'] = away_team.get('name', '')
         variables['home_team_abbrev'] = home_team.get('abbrev', '')
+        variables['home_team_abbrev_lower'] = variables['home_team_abbrev'].lower()
         variables['away_team_abbrev'] = away_team.get('abbrev', '')
+        variables['away_team_abbrev_lower'] = variables['away_team_abbrev'].lower()
 
         # =====================================================================
         # BROADCAST
@@ -360,7 +382,8 @@ class TemplateEngine:
         variables['rematch_result'] = previous.get('result', '')
         variables['rematch_score'] = previous.get('score', '')
         variables['rematch_score_abbrev'] = previous.get('score_abbrev', '')
-        variables['rematch_location'] = previous.get('location', '')
+        variables['rematch_venue'] = previous.get('venue', '')
+        variables['rematch_city'] = previous.get('venue_city', '')
         variables['rematch_days_since'] = str(previous.get('days_since', 0))
         variables['rematch_season_series'] = f"{season_series.get('team_wins', 0)}-{season_series.get('opponent_wins', 0)}"
 
@@ -441,7 +464,6 @@ class TemplateEngine:
         # Last 5/10 and recent form from streaks parameter
         variables['last_5_record'] = streaks.get('last_5_record', '')
         variables['last_10_record'] = streaks.get('last_10_record', '')
-        variables['recent_form'] = streaks.get('recent_form', '')
 
         # =====================================================================
         # STATISTICS (if enabled)
@@ -481,7 +503,6 @@ class TemplateEngine:
         # =====================================================================
 
         status = game.get('status', {})
-        variables['game_clock'] = status.get('detail', '')
 
         # Live/Final scores
         # Handle score being either a number or dict (from different API responses)
@@ -695,7 +716,7 @@ class TemplateEngine:
             'home_record', 'home_streak', 'home_win_pct', 'is_national_broadcast', 'is_playoff',
             'is_preseason', 'is_ranked', 'is_ranked_matchup', 'is_regular_season', 'last_10_record',
             'last_5_record', 'league', 'league_id', 'league_name', 'opponent_is_ranked', 'playoff_seed',
-            'pro_conference', 'pro_conference_abbrev', 'pro_division', 'recent_form', 'sport',
+            'pro_conference', 'pro_conference_abbrev', 'pro_division', 'sport',
             'streak', 'team_abbrev', 'team_losses', 'team_name', 'team_name_pascal', 'team_papg', 'team_ppg',
             'team_rank', 'team_record', 'team_ties', 'team_win_pct', 'team_wins'
         }

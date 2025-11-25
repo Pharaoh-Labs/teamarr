@@ -851,7 +851,7 @@ class EPGOrchestrator:
         if schedule_data:
             streaks = self._calculate_home_away_streaks(our_team_id, schedule_data)
         else:
-            streaks = {'home_streak': '', 'away_streak': '', 'last_5_record': '', 'last_10_record': '', 'recent_form': ''}
+            streaks = {'home_streak': '', 'away_streak': '', 'last_5_record': '', 'last_10_record': ''}
 
         # Get head coach
         head_coach = ''
@@ -1594,8 +1594,7 @@ class EPGOrchestrator:
                 'home_streak': '',
                 'away_streak': '',
                 'last_5_record': '',
-                'last_10_record': '',
-                'recent_form': ''
+                'last_10_record': ''
             }
 
         # Collect completed games by location and overall
@@ -1680,18 +1679,11 @@ class EPGOrchestrator:
         else:
             last_10_record = ''
 
-        # Recent form (last 5 as W/L string)
-        if len(last_5) >= 5:
-            recent_form = ''.join('W' if g['won'] else 'L' for g in reversed(last_5))
-        else:
-            recent_form = ''
-
         return {
             'home_streak': calc_streak(home_games, "at home"),
             'away_streak': calc_streak(away_games, "on road"),
             'last_5_record': last_5_record,
-            'last_10_record': last_10_record,
-            'recent_form': recent_form
+            'last_10_record': last_10_record
         }
 
     def _get_head_coach(self, team_id: str, league: str) -> str:
@@ -2010,7 +2002,8 @@ class EPGOrchestrator:
                         'winner': winner,
                         'loser': loser,
                         'date': date_formatted,
-                        'location': comp.get('venue', {}).get('fullName', ''),
+                        'venue': comp.get('venue', {}).get('fullName', ''),
+                        'venue_city': comp.get('venue', {}).get('address', {}).get('city', ''),
                         'days_since': days_since
                     }
             except:
