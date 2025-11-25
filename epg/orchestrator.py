@@ -80,6 +80,18 @@ class EPGOrchestrator:
         if 'venue' in competition:
             normalized['venue'] = competition['venue']
 
+        # Extract and normalize status from competition
+        # Template engine expects status.name to be 'STATUS_FINAL' or 'Final'
+        comp_status = competition.get('status', {})
+        status_type = comp_status.get('type', {})
+        normalized['status'] = {
+            'name': status_type.get('name', ''),
+            'state': status_type.get('state', ''),
+            'completed': status_type.get('completed', False),
+            'detail': status_type.get('detail', ''),
+            'period': comp_status.get('period', 0)
+        }
+
         return normalized
 
     def generate_epg(self, days_ahead: int = 14, epg_timezone: str = 'America/New_York', settings: dict = None, progress_callback=None, start_datetime: datetime = None) -> Dict[str, Any]:
