@@ -56,6 +56,11 @@ body {
     padding: 0 1rem;
 }
 
+/* Utility classes */
+.text-center {
+    text-align: center !important;
+}
+
 /* Navbar - Compact */
 .navbar {
     background: var(--bg-secondary);
