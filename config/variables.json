@@ -1,7 +1,7 @@
 {
-  "version": "3.3.0",
-  "generated": "2025-11-24",
-  "total_variables": 126,
+  "version": "3.4.0",
+  "generated": "2025-11-26",
+  "total_variables": 149,
   "base_variables": 136,
   "suffix_system": {
     "enabled": true,
@@ -298,7 +298,8 @@
         "The suffix strategy (BASE ONLY, LAST ONLY, etc.) determines which suffixes are available",
         "Empty values are returned gracefully if context is unavailable (e.g., no next game scheduled)"
       ]
-    }
+    },
+    "note": "Suffixes (.next, .last) only available for team context. Event context uses base variables only."
   },
   "variables": [
     {
@@ -326,7 +327,10 @@
         "NCAAM": "Michigan Wolverines",
         "NCAAF": "Michigan Wolverines",
         "Soccer": "Liverpool"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_name_pascal",
@@ -354,7 +358,10 @@
         "NCAAM": "MichiganWolverines",
         "NCAAF": "MichiganWolverines",
         "Soccer": "Liverpool"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_abbrev",
@@ -381,7 +388,10 @@
         "NCAAM": "MICH",
         "NCAAF": "MICH",
         "Soccer": "LIV"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_abbrev_lower",
@@ -408,7 +418,10 @@
         "NCAAM": "mich",
         "NCAAF": "mich",
         "Soccer": "liv"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "league",
@@ -435,7 +448,11 @@
         "NCAAM": "NCAAM",
         "NCAAF": "NCAAF",
         "Soccer": "Premier League"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "league_name",
@@ -462,7 +479,11 @@
         "NCAAM": "NCAAM",
         "NCAAF": "NCAAF",
         "Soccer": "Premier League"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "sport",
@@ -489,7 +510,11 @@
         "NCAAM": "Basketball",
         "NCAAF": "Football",
         "Soccer": "Soccer"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "team_record",
@@ -516,7 +541,10 @@
         "NCAAM": "4-0",
         "NCAAF": "9-2",
         "Soccer": "11-1-2"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_wins",
@@ -543,7 +571,10 @@
         "NCAAM": "4",
         "NCAAF": "9",
         "Soccer": "11"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_losses",
@@ -570,7 +601,10 @@
         "NCAAM": "0",
         "NCAAF": "2",
         "Soccer": "2"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_ties",
@@ -594,7 +628,10 @@
         "NCAAM": "",
         "NCAAF": "0",
         "Soccer": "1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_win_pct",
@@ -621,7 +658,10 @@
         "NCAAM": "1.000",
         "NCAAF": "0.818",
         "Soccer": "0.786"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "playoff_seed",
@@ -648,7 +688,10 @@
         "NCAAM": "0",
         "NCAAF": "4",
         "Soccer": "0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "games_back",
@@ -675,7 +718,10 @@
         "NCAAM": "0.0",
         "NCAAF": "0.0",
         "Soccer": "0.0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_ppg",
@@ -702,7 +748,10 @@
         "NCAAM": "89.8",
         "NCAAF": "29.3",
         "Soccer": "2.4"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_papg",
@@ -729,7 +778,10 @@
         "NCAAM": "71.5",
         "NCAAF": "17.9",
         "Soccer": "0.9"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_rank",
@@ -754,7 +806,10 @@
         "NCAAM": "#1",
         "NCAAF": "#1",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "is_ranked",
@@ -779,7 +834,10 @@
         "NCAAM": "true",
         "NCAAF": "true",
         "Soccer": "false"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "streak",
@@ -807,7 +865,10 @@
         "NCAAM": "4",
         "NCAAF": "5",
         "Soccer": "4"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "streak_raw",
@@ -835,7 +896,10 @@
         "NCAAM": "4",
         "NCAAF": "5",
         "Soccer": "4"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "home_streak",
@@ -862,7 +926,10 @@
         "NCAAM": "W2",
         "NCAAF": "W4",
         "Soccer": "W4"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "away_streak",
@@ -889,7 +956,10 @@
         "NCAAM": "W1",
         "NCAAF": "W1",
         "Soccer": "W2"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "last_5_record",
@@ -916,7 +986,10 @@
         "NCAAM": "4-0",
         "NCAAF": "5-0",
         "Soccer": "5-0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "last_10_record",
@@ -943,7 +1016,10 @@
         "NCAAM": "4-0",
         "NCAAF": "8-2",
         "Soccer": "9-0-1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "pro_conference",
@@ -970,7 +1046,10 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "pro_conference_abbrev",
@@ -997,7 +1076,10 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "pro_division",
@@ -1024,7 +1106,10 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": "English Premier League"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "college_conference",
@@ -1049,7 +1134,10 @@
         "NCAAM": "Big Ten",
         "NCAAF": "Big Ten",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "college_conference_abbrev",
@@ -1074,7 +1162,10 @@
         "NCAAM": "B1G",
         "NCAAF": "B1G",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent",
@@ -1103,7 +1194,10 @@
         "NCAAM": "Ohio State Buckeyes",
         "NCAAF": "Ohio State Buckeyes",
         "Soccer": "Manchester City"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_abbrev",
@@ -1132,7 +1226,10 @@
         "NCAAM": "OSU",
         "NCAAF": "OSU",
         "Soccer": "MCI"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_abbrev_lower",
@@ -1161,7 +1258,10 @@
         "NCAAM": "osu",
         "NCAAF": "osu",
         "Soccer": "mci"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_record",
@@ -1190,7 +1290,10 @@
         "NCAAM": "3-1",
         "NCAAF": "10-1",
         "Soccer": "7-4-3"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_wins",
@@ -1219,7 +1322,10 @@
         "NCAAM": "3",
         "NCAAF": "10",
         "Soccer": "7"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_losses",
@@ -1248,7 +1354,10 @@
         "NCAAM": "1",
         "NCAAF": "1",
         "Soccer": "3"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_ties",
@@ -1274,7 +1383,10 @@
         "NCAAM": "",
         "NCAAF": "0",
         "Soccer": "4"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_win_pct",
@@ -1303,7 +1415,10 @@
         "NCAAM": "0.750",
         "NCAAF": "0.909",
         "Soccer": "0.500"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_rank",
@@ -1330,7 +1445,10 @@
         "NCAAM": "#25",
         "NCAAF": "#2",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_is_ranked",
@@ -1357,7 +1475,10 @@
         "NCAAM": "true",
         "NCAAF": "true",
         "Soccer": "false"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "is_ranked_matchup",
@@ -1382,7 +1503,10 @@
         "NCAAM": "true",
         "NCAAF": "true",
         "Soccer": "false"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_ppg",
@@ -1411,7 +1535,10 @@
         "NCAAM": "76.3",
         "NCAAF": "38.2",
         "Soccer": "2.1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_papg",
@@ -1440,7 +1567,10 @@
         "NCAAM": "68.5",
         "NCAAF": "14.8",
         "Soccer": "1.4"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "game_date",
@@ -1469,7 +1599,11 @@
         "NCAAM": "Tuesday, January 14, 2025",
         "NCAAF": "Saturday, November 29, 2025",
         "Soccer": "Sunday, December 01, 2025"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "game_date_short",
@@ -1498,7 +1632,11 @@
         "NCAAM": "Jan 14",
         "NCAAF": "Nov 29",
         "Soccer": "Dec 01"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "game_day",
@@ -1527,7 +1665,11 @@
         "NCAAM": "Tuesday",
         "NCAAF": "Saturday",
         "Soccer": "Sunday"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "game_day_short",
@@ -1556,14 +1698,18 @@
         "NCAAM": "Tue",
         "NCAAF": "Sat",
         "Soccer": "Sun"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "today_tonight",
       "description": "Returns 'today' or 'tonight' based on game time (5pm cutoff)",
-      "source": "`/schedule` → event.date",
-      "category": "📅 Schedule & Broadcast",
-      "icon": "🎮",
+      "source": "`/schedule` \u2192 event.date",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83c\udfae",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -1584,7 +1730,11 @@
         "NCAAM": "tonight",
         "NCAAF": "today",
         "Soccer": "today"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "game_time",
@@ -1613,7 +1763,11 @@
         "NCAAM": "07:00 PM EST",
         "NCAAF": "12:00 PM EST",
         "Soccer": "11:30 AM EST"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "game_time_12h",
@@ -1642,7 +1796,11 @@
         "NCAAM": "07:00 PM",
         "NCAAF": "12:00 PM",
         "Soccer": "11:30 AM"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "game_time_24h",
@@ -1671,7 +1829,11 @@
         "NCAAM": "19:00",
         "NCAAF": "12:00",
         "Soccer": "11:30"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "matchup",
@@ -1698,7 +1860,11 @@
         "NCAAM": "Ohio State Buckeyes @ Michigan Wolverines",
         "NCAAF": "Ohio State Buckeyes @ Michigan Wolverines",
         "Soccer": "Manchester City @ Liverpool"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "matchup_abbrev",
@@ -1727,7 +1893,11 @@
         "NCAAM": "OSU @ MICH",
         "NCAAF": "OSU @ MICH",
         "Soccer": "MCI @ LIV"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "vs_at",
@@ -1754,7 +1924,11 @@
         "NCAAM": "vs",
         "NCAAF": "vs",
         "Soccer": "vs"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_away_text",
@@ -1781,7 +1955,11 @@
         "NCAAM": "at home",
         "NCAAF": "at home",
         "Soccer": "at home"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "is_home",
@@ -1808,7 +1986,11 @@
         "NCAAM": "true",
         "NCAAF": "true",
         "Soccer": "true"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "is_away",
@@ -1835,7 +2017,11 @@
         "NCAAM": "false",
         "NCAAF": "false",
         "Soccer": "false"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "venue",
@@ -1864,7 +2050,11 @@
         "NCAAM": "Crisler Center",
         "NCAAF": "Michigan Stadium",
         "Soccer": "Anfield"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "venue_city",
@@ -1893,7 +2083,11 @@
         "NCAAM": "Ann Arbor",
         "NCAAF": "Ann Arbor",
         "Soccer": "Liverpool"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "venue_state",
@@ -1922,7 +2116,11 @@
         "NCAAM": "MI",
         "NCAAF": "MI",
         "Soccer": "ENG"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "venue_full",
@@ -1951,7 +2149,11 @@
         "NCAAM": "Crisler Center, Ann Arbor, MI",
         "NCAAF": "Michigan Stadium, Ann Arbor, MI",
         "Soccer": "Anfield, Liverpool, ENG"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "days_until",
@@ -1980,7 +2182,11 @@
         "NCAAM": "51",
         "NCAAF": "5",
         "Soccer": "7"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "overtime_text",
@@ -2007,7 +2213,10 @@
         "NCAAM": "in overtime",
         "NCAAF": "in overtime",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "team_score",
@@ -2034,7 +2243,10 @@
         "NCAAM": "82",
         "NCAAF": "24",
         "Soccer": "2"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_score",
@@ -2061,7 +2273,10 @@
         "NCAAM": "68",
         "NCAAF": "21",
         "Soccer": "0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "score",
@@ -2088,7 +2303,11 @@
         "NCAAM": "82-68",
         "NCAAF": "24-21",
         "Soccer": "2-0"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "final_score",
@@ -2116,7 +2335,11 @@
         "NCAAM": "82-68",
         "NCAAF": "24-21",
         "Soccer": "2-0"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "score_diff",
@@ -2143,7 +2366,10 @@
         "NCAAM": "+14",
         "NCAAF": "+3",
         "Soccer": "+2"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "score_differential",
@@ -2170,7 +2396,10 @@
         "NCAAM": "14",
         "NCAAF": "3",
         "Soccer": "2"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "score_differential_text",
@@ -2197,7 +2426,10 @@
         "NCAAM": "by 14 points",
         "NCAAF": "by 3 points",
         "Soccer": "by 2 goals"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "result",
@@ -2224,7 +2456,10 @@
         "NCAAM": "win",
         "NCAAF": "win",
         "Soccer": "win"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "result_text",
@@ -2251,7 +2486,10 @@
         "NCAAM": "defeated",
         "NCAAF": "defeated",
         "Soccer": "defeated"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "result_verb",
@@ -2278,7 +2516,10 @@
         "NCAAM": "beat",
         "NCAAF": "beat",
         "Soccer": "beat"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "attendance",
@@ -2307,7 +2548,11 @@
         "NCAAM": "12,707",
         "NCAAF": "107,601",
         "Soccer": "61,276"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "broadcast_simple",
@@ -2336,7 +2581,11 @@
         "NCAAM": "ESPN",
         "NCAAF": "FOX",
         "Soccer": "USA Network"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "broadcast_network",
@@ -2365,7 +2614,11 @@
         "NCAAM": "ESPN",
         "NCAAF": "FOX",
         "Soccer": "USA Network"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "broadcast_national_network",
@@ -2394,7 +2647,11 @@
         "NCAAM": "ESPN",
         "NCAAF": "FOX",
         "Soccer": "USA Network"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "is_national_broadcast",
@@ -2423,7 +2680,11 @@
         "NCAAM": "true",
         "NCAAF": "true",
         "Soccer": "true"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_spread",
@@ -2451,7 +2712,11 @@
         "NCAAM": "8.5",
         "NCAAF": "7.0",
         "Soccer": "0.5"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_opponent_spread",
@@ -2479,7 +2744,11 @@
         "NCAAM": "-110",
         "NCAAF": "-110",
         "Soccer": "-120"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_moneyline",
@@ -2507,7 +2776,11 @@
         "NCAAM": "-350",
         "NCAAF": "+220",
         "Soccer": "-140"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_opponent_moneyline",
@@ -2535,7 +2808,11 @@
         "NCAAM": "+280",
         "NCAAF": "-275",
         "Soccer": "+380"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_over_under",
@@ -2563,7 +2840,11 @@
         "NCAAM": "145.5",
         "NCAAF": "48.5",
         "Soccer": "2.5"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_provider",
@@ -2591,7 +2872,11 @@
         "NCAAM": "ESPN BET",
         "NCAAF": "ESPN BET",
         "Soccer": "ESPN BET"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "odds_details",
@@ -2619,7 +2904,11 @@
         "NCAAM": "MICH -8.5",
         "NCAAF": "OSU -7.0",
         "Soccer": "LIV -0.5"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "rematch_date",
@@ -2646,7 +2935,10 @@
         "NCAAM": "",
         "NCAAF": "November 30, 2024",
         "Soccer": "March 10, 2025"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_venue",
@@ -2673,7 +2965,10 @@
         "NCAAM": "",
         "NCAAF": "Columbus",
         "Soccer": "Manchester"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_city",
@@ -2700,7 +2995,10 @@
         "NCAAM": "Columbus",
         "NCAAF": "Columbus",
         "Soccer": "Manchester"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_result",
@@ -2727,7 +3025,10 @@
         "NCAAM": "",
         "NCAAF": "win",
         "Soccer": "win"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_score",
@@ -2754,7 +3055,10 @@
         "NCAAM": "",
         "NCAAF": "13-10",
         "Soccer": "2-1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_score_abbrev",
@@ -2781,7 +3085,10 @@
         "NCAAM": "",
         "NCAAF": "W 13-10",
         "Soccer": "W 2-1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_days_since",
@@ -2808,7 +3115,10 @@
         "NCAAM": "0",
         "NCAAF": "364",
         "Soccer": "266"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "rematch_season_series",
@@ -2835,7 +3145,10 @@
         "NCAAM": "0-0",
         "NCAAF": "0-0",
         "Soccer": "0-0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "season_series",
@@ -2862,7 +3175,10 @@
         "NCAAM": "0-0",
         "NCAAF": "0-0",
         "Soccer": "0-0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "season_series_leader",
@@ -2889,7 +3205,10 @@
         "NCAAM": "tied",
         "NCAAF": "tied",
         "Soccer": "tied"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "season_series_team_wins",
@@ -2916,7 +3235,10 @@
         "NCAAM": "0",
         "NCAAF": "0",
         "Soccer": "0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "season_series_opponent_wins",
@@ -2945,7 +3267,10 @@
         "NCAAM": "0",
         "NCAAF": "0",
         "Soccer": "0"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "is_playoff",
@@ -2974,7 +3299,11 @@
         "NCAAM": "false",
         "NCAAF": "false",
         "Soccer": "false"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "is_preseason",
@@ -3003,7 +3332,11 @@
         "NCAAM": "false",
         "NCAAF": "false",
         "Soccer": "false"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "is_regular_season",
@@ -3032,7 +3365,11 @@
         "NCAAM": "true",
         "NCAAF": "true",
         "Soccer": "true"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "season_type",
@@ -3061,7 +3398,11 @@
         "NCAAM": "regular",
         "NCAAF": "regular",
         "Soccer": "regular"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_record",
@@ -3088,7 +3429,10 @@
         "NCAAM": "2-0",
         "NCAAF": "5-1",
         "Soccer": "6-0-1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "away_record",
@@ -3115,7 +3459,10 @@
         "NCAAM": "1-0",
         "NCAAF": "4-1",
         "Soccer": "5-1-1"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "home_team_record",
@@ -3144,7 +3491,11 @@
         "NCAAM": "4-0",
         "NCAAF": "9-2",
         "Soccer": "11-1-2"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_record",
@@ -3173,7 +3524,11 @@
         "NCAAM": "3-1",
         "NCAAF": "10-1",
         "Soccer": "7-4-3"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_win_pct",
@@ -3200,7 +3555,10 @@
         "NCAAM": "1.000",
         "NCAAF": "0.833",
         "Soccer": "0.857"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "away_win_pct",
@@ -3227,7 +3585,10 @@
         "NCAAM": "1.000",
         "NCAAF": "0.800",
         "Soccer": "0.714"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "home_team",
@@ -3256,7 +3617,11 @@
         "NCAAM": "Michigan Wolverines",
         "NCAAF": "Michigan Wolverines",
         "Soccer": "Liverpool"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team",
@@ -3285,14 +3650,18 @@
         "NCAAM": "Ohio State Buckeyes",
         "NCAAF": "Ohio State Buckeyes",
         "Soccer": "Manchester City"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_pascal",
       "description": "Home team name in PascalCase (for channel IDs)",
-      "source": "`/schedule` → competitors",
-      "category": "🏠 Teams (Home/Away)",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitors",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -3314,14 +3683,18 @@
         "NCAAM": "MichiganWolverines",
         "NCAAF": "MichiganWolverines",
         "Soccer": "Liverpool"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_pascal",
       "description": "Away team name in PascalCase (for channel IDs)",
-      "source": "`/schedule` → competitors",
-      "category": "🏠 Teams (Home/Away)",
-      "icon": "🏀",
+      "source": "`/schedule` \u2192 competitors",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfc0",
       "type": "string",
       "availability": "always",
       "sports": [
@@ -3343,7 +3716,11 @@
         "NCAAM": "OhioStateBuckeyes",
         "NCAAF": "OhioStateBuckeyes",
         "Soccer": "ManchesterCity"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_abbrev",
@@ -3372,7 +3749,11 @@
         "NCAAM": "MICH",
         "NCAAF": "MICH",
         "Soccer": "LIV"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_abbrev_lower",
@@ -3401,7 +3782,11 @@
         "NCAAM": "mich",
         "NCAAF": "mich",
         "Soccer": "liv"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_abbrev",
@@ -3430,7 +3815,11 @@
         "NCAAM": "OSU",
         "NCAAF": "OSU",
         "Soccer": "MCI"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_abbrev_lower",
@@ -3459,7 +3848,11 @@
         "NCAAM": "osu",
         "NCAAF": "osu",
         "Soccer": "mci"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "head_coach",
@@ -3486,7 +3879,10 @@
         "NCAAM": "Dusty May",
         "NCAAF": "Sherrone Moore",
         "Soccer": "Arne Slot"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "football_passing_leader_name",
@@ -3511,7 +3907,10 @@
         "NCAAM": "",
         "NCAAF": "Davis Warren",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "football_passing_leader_stats",
@@ -3536,7 +3935,10 @@
         "NCAAM": "",
         "NCAAF": "18/29, 187 YDS, 2 TD",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "football_rushing_leader_name",
@@ -3561,7 +3963,10 @@
         "NCAAM": "",
         "NCAAF": "Donovan Edwards",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "football_rushing_leader_stats",
@@ -3586,7 +3991,10 @@
         "NCAAM": "",
         "NCAAF": "22 CAR, 98 YDS, 1 TD",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "football_receiving_leader_name",
@@ -3611,7 +4019,10 @@
         "NCAAM": "",
         "NCAAF": "Colston Loveland",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "football_receiving_leader_stats",
@@ -3636,7 +4047,10 @@
         "NCAAM": "",
         "NCAAF": "7 REC, 85 YDS, 1 TD",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "basketball_scoring_leader_name",
@@ -3661,7 +4075,10 @@
         "NCAAM": "Tre Donaldson",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "basketball_scoring_leader_points",
@@ -3686,7 +4103,10 @@
         "NCAAM": "22",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_college_conference",
@@ -3714,7 +4134,10 @@
         "NCAAM": "Big Ten",
         "NCAAF": "Big Ten",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_college_conference_abbrev",
@@ -3742,7 +4165,10 @@
         "NCAAM": "B1G",
         "NCAAF": "B1G",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_pro_conference",
@@ -3771,7 +4197,10 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_pro_conference_abbrev",
@@ -3800,7 +4229,10 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "opponent_pro_division",
@@ -3829,7 +4261,10 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": "English Premier League"
-      }
+      },
+      "context": [
+        "team"
+      ]
     },
     {
       "name": "home_team_college_conference",
@@ -3848,7 +4283,11 @@
         "Soccer": "",
         "NCAAM": "Big Ten",
         "NCAAF": "Big Ten"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_college_conference_abbrev",
@@ -3867,7 +4306,11 @@
         "Soccer": "",
         "NCAAM": "B1G",
         "NCAAF": "B1G"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_pro_conference",
@@ -3886,7 +4329,11 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_pro_conference_abbrev",
@@ -3905,7 +4352,11 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "home_team_pro_division",
@@ -3924,7 +4375,11 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": "English Premier League"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_college_conference",
@@ -3943,7 +4398,11 @@
         "Soccer": "",
         "NCAAM": "Big Ten",
         "NCAAF": "Big Ten"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_college_conference_abbrev",
@@ -3962,7 +4421,11 @@
         "Soccer": "",
         "NCAAM": "B1G",
         "NCAAF": "B1G"
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_pro_conference",
@@ -3981,7 +4444,11 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_pro_conference_abbrev",
@@ -4000,7 +4467,11 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": ""
-      }
+      },
+      "context": [
+        "team",
+        "event"
+      ]
     },
     {
       "name": "away_team_pro_division",
@@ -4019,6 +4490,265 @@
         "NCAAM": "",
         "NCAAF": "",
         "Soccer": "English Premier League"
+      },
+      "context": [
+        "team",
+        "event"
+      ]
+    },
+    {
+      "name": "home_team_score",
+      "description": "Home team's final score",
+      "source": "ESPN API",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfe0",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NBA": "105",
+        "NFL": "24",
+        "MLB": "5",
+        "NHL": "3"
+      }
+    },
+    {
+      "name": "away_team_score",
+      "description": "Away team's final score",
+      "source": "ESPN API",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\u2708\ufe0f",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NBA": "98",
+        "NFL": "17",
+        "MLB": "3",
+        "NHL": "2"
+      }
+    },
+    {
+      "name": "home_team_logo",
+      "description": "Home team logo URL",
+      "source": "ESPN API",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83d\uddbc\ufe0f",
+      "type": "url",
+      "availability": "always",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "All": "https://a.espncdn.com/i/teamlogos/..."
+      }
+    },
+    {
+      "name": "away_team_logo",
+      "description": "Away team logo URL",
+      "source": "ESPN API",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83d\uddbc\ufe0f",
+      "type": "url",
+      "availability": "always",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "All": "https://a.espncdn.com/i/teamlogos/..."
+      }
+    },
+    {
+      "name": "event_name",
+      "description": "Full event name from ESPN",
+      "source": "ESPN API",
+      "category": "\ud83d\udcc5 Schedule & Broadcast",
+      "icon": "\ud83d\udccb",
+      "type": "string",
+      "availability": "always",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "New York Giants at New England Patriots",
+        "NBA": "Los Angeles Lakers at Boston Celtics"
+      }
+    },
+    {
+      "name": "event_result",
+      "description": "Full event result with team names and scores",
+      "source": "Calculated",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfc6",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "Giants 24 - Patriots 17",
+        "NBA": "Lakers 112 - Celtics 105"
+      }
+    },
+    {
+      "name": "event_result_abbrev",
+      "description": "Event result with abbreviated team names",
+      "source": "Calculated",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83c\udfc6",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "NYG 24 - NE 17",
+        "NBA": "LAL 112 - BOS 105"
+      }
+    },
+    {
+      "name": "winner",
+      "description": "Winning team full name",
+      "source": "Calculated",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83e\udd47",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "Giants",
+        "NBA": "Lakers"
+      }
+    },
+    {
+      "name": "winner_abbrev",
+      "description": "Winning team abbreviation",
+      "source": "Calculated",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83e\udd47",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "NYG",
+        "NBA": "LAL"
+      }
+    },
+    {
+      "name": "loser",
+      "description": "Losing team full name",
+      "source": "Calculated",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83e\udd48",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "Patriots",
+        "NBA": "Celtics"
+      }
+    },
+    {
+      "name": "loser_abbrev",
+      "description": "Losing team abbreviation",
+      "source": "Calculated",
+      "category": "\ud83c\udfc6 Scores & Results",
+      "icon": "\ud83e\udd48",
+      "type": "string",
+      "availability": "final_only",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "NE",
+        "NBA": "BOS"
       }
     }
   ],
@@ -4052,5 +4782,8 @@
       "streaks": "Streak values are reasonable per sport"
     },
     "generated": "2025-11-24"
-  }
+  },
+  "team_variables": 138,
+  "event_variables": 71,
+  "shared_variables": 60
 }

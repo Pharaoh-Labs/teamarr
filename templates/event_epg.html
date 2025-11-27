@@ -1,0 +1,1209 @@
+{% extends "base.html" %}
+
+{% block title %}Event Groups - Teamarr{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div>
+            <h1>Event Groups</h1>
+            <p class="page-subtitle">Manage event-based EPG from Dispatcharr M3U groups</p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('event_groups_import') }}" class="btn btn-success">
+                📺 Import Groups
+            </a>
+            <button onclick="refreshAllGroups()" class="btn btn-secondary" id="btn-refresh-all" {% if not groups %}disabled{% endif %}>
+                🔄 Refresh All
+            </button>
+        </div>
+    </div>
+
+    {% if groups %}
+        <!-- Batch Operations Toolbar -->
+        <div class="batch-toolbar">
+            <div class="batch-info">
+                <strong>Batch Operations</strong>
+                <span class="batch-count">(<span id="selected-count">0</span> selected)</span>
+            </div>
+            <div class="batch-actions">
+                <button onclick="bulkRefresh()" class="btn btn-sm btn-primary" id="btn-bulk-refresh" disabled>
+                    🔄 Refresh Selected
+                </button>
+                <button onclick="bulkDisable()" class="btn btn-sm btn-danger" id="btn-bulk-disable" disabled>
+                    🗑️ Disable Selected
+                </button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr class="header-row">
+                        <th style="width: 40px;">
+                            <input type="checkbox" id="select-all" onchange="toggleSelectAll(this)">
+                        </th>
+                        <th style="width: 28%;" class="sortable" onclick="sortTable('name')" data-sort="name">
+                            Group Name <span class="sort-indicator"></span>
+                        </th>
+                        <th style="width: 10%;" class="sortable" onclick="sortTable('league')" data-sort="league">
+                            League <span class="sort-indicator"></span>
+                        </th>
+                        <th style="width: 10%;" class="sortable" onclick="sortTable('sport')" data-sort="sport">
+                            Sport <span class="sort-indicator"></span>
+                        </th>
+                        <th style="width: 10%;">Streams</th>
+                        <th style="width: 12%;">Match Rate</th>
+                        <th style="width: 14%;" class="sortable" onclick="sortTable('refresh')" data-sort="refresh">
+                            Last Refresh <span class="sort-indicator"></span>
+                        </th>
+                        <th style="width: 140px;">Actions</th>
+                    </tr>
+                    <tr class="filter-row">
+                        <th></th>
+                        <th></th>
+                        <th>
+                            <select id="filter-league" class="filter-dropdown" onchange="applyFilters()">
+                                <option value="">All Leagues</option>
+                                {% for league in groups|map(attribute='assigned_league')|unique|sort %}
+                                    <option value="{{ league }}">{{ league.upper() }}</option>
+                                {% endfor %}
+                            </select>
+                        </th>
+                        <th>
+                            <select id="filter-sport" class="filter-dropdown" onchange="applyFilters()">
+                                <option value="">All Sports</option>
+                                {% for sport in groups|map(attribute='assigned_sport')|unique|sort %}
+                                    <option value="{{ sport }}">{{ sport|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in groups %}
+                        {% set match_rate = ((group.matched_count / group.stream_count * 100) | round | int) if group.stream_count > 0 else 0 %}
+                        <tr data-group-id="{{ group.id }}"
+                            data-name="{{ group.group_name }}"
+                            data-league="{{ group.assigned_league }}"
+                            data-sport="{{ group.assigned_sport }}"
+                            data-refresh="{{ group.last_refresh or '' }}">
+                            <td>
+                                <input type="checkbox" class="group-checkbox" value="{{ group.id }}"
+                                       onclick="handleCheckboxClick(event, this)" onchange="updateBulkToolbar()">
+                            </td>
+                            <td>
+                                <div>
+                                    <strong style="font-size: 0.9375rem;">{{ group.group_name }}</strong>
+                                    <div class="text-muted" style="font-size: 0.75rem;">Dispatcharr ID: {{ group.dispatcharr_group_id }}</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-primary">{{ group.assigned_league.upper() }}</span>
+                            </td>
+                            <td style="font-size: 1.5rem; text-align: center; vertical-align: middle;" title="{{ group.assigned_sport|title }}">
+                                {% if group.assigned_sport == 'basketball' %}🏀
+                                {% elif group.assigned_sport == 'football' %}🏈
+                                {% elif group.assigned_sport == 'baseball' %}⚾
+                                {% elif group.assigned_sport == 'hockey' %}🏒
+                                {% elif group.assigned_sport == 'soccer' %}⚽
+                                {% else %}🏆
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ group.stream_count or 0 }}</td>
+                            <td>
+                                <div class="match-rate-container">
+                                    <div class="match-rate-bar">
+                                        <div class="match-rate-fill {% if match_rate >= 80 %}rate-good{% elif match_rate >= 50 %}rate-warn{% else %}rate-bad{% endif %}"
+                                             style="width: {{ match_rate }}%;"></div>
+                                    </div>
+                                    <span class="match-rate-text">{{ group.matched_count or 0 }}/{{ group.stream_count or 0 }} ({{ match_rate }}%)</span>
+                                </div>
+                            </td>
+                            <td class="text-muted">
+                                {% if group.last_refresh %}
+                                    <span title="{{ group.last_refresh }}">{{ group.last_refresh | relative_time }}</span>
+                                {% else %}
+                                    <span class="text-warning">Never</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button onclick="refreshGroup({{ group.id }})" class="btn btn-sm btn-primary" title="Refresh EPG">
+                                        🔄
+                                    </button>
+                                    <button onclick="previewGroup({{ group.id }}, '{{ group.group_name | e }}')" class="btn btn-sm btn-secondary" title="Preview Streams">
+                                        👁
+                                    </button>
+                                    <button onclick="deleteGroup({{ group.id }}, '{{ group.group_name | e }}')" class="btn btn-sm btn-danger" title="Disable Group">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Team Aliases Section -->
+        <div class="aliases-section">
+            <div class="section-header">
+                <h2>Team Aliases</h2>
+                <span class="section-badge">{{ aliases|length }} aliases</span>
+                <button onclick="showAddAliasModal()" class="btn btn-sm btn-secondary" style="margin-left: auto;">+ Add Alias</button>
+            </div>
+            {% if aliases %}
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Alias</th>
+                                <th style="width: 15%;">League</th>
+                                <th style="width: 40%;">Maps To</th>
+                                <th style="width: 12%;">ESPN ID</th>
+                                <th style="width: 8%;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alias in aliases %}
+                                <tr>
+                                    <td><code>{{ alias.alias }}</code></td>
+                                    <td><span class="badge badge-primary">{{ alias.league.upper() }}</span></td>
+                                    <td>{{ alias.espn_team_name }}</td>
+                                    <td><code>{{ alias.espn_team_id }}</code></td>
+                                    <td>
+                                        <button onclick="deleteAlias({{ alias.id }})" class="btn btn-sm btn-danger" title="Delete">✕</button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="aliases-empty">
+                    <p class="text-muted">No team aliases defined. Aliases help match team names that differ from ESPN's official names.</p>
+                </div>
+            {% endif %}
+        </div>
+
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">📺</div>
+            <h3>No Event Groups Yet</h3>
+            <p>Import M3U groups from Dispatcharr to generate event-based EPG data.</p>
+            <p>Event groups match stream names like "NFL: Giants @ Patriots" to ESPN events.</p>
+            <a href="{{ url_for('event_groups_import') }}" class="btn btn-primary">
+                📺 Import Your First Group
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Stream Preview Modal -->
+<div id="preview-modal" class="modal-overlay" onclick="closePreviewModal(event)">
+    <div class="modal-content modal-large" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h2 id="preview-modal-title">Stream Preview</h2>
+            <button class="modal-close" onclick="closePreviewModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="preview-loading" class="loading-state">
+                <div class="spinner"></div>
+                <span>Loading streams and matching teams...</span>
+            </div>
+            <div id="preview-content" style="display: none;">
+                <div class="preview-summary">
+                    <span id="preview-total">0 streams</span>
+                    <span class="text-muted">|</span>
+                    <span id="preview-matched" class="text-success">0 matched</span>
+                    <span class="text-muted">|</span>
+                    <span id="preview-unmatched" class="text-warning">0 unmatched</span>
+                </div>
+                <div class="preview-table-container">
+                    <table class="table preview-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40%;">Stream Name</th>
+                                <th style="width: 25%;">Parsed Teams</th>
+                                <th style="width: 25%;">ESPN Match</th>
+                                <th style="width: 10%;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preview-streams-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closePreviewModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Alias Modal -->
+<div id="alias-modal" class="modal-overlay" onclick="closeAliasModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h2 id="alias-modal-title">Add Team Alias</h2>
+            <button class="modal-close" onclick="closeAliasModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="alias-context" style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                Create a new alias to map stream names to ESPN teams.
+            </p>
+
+            <div class="form-group">
+                <label for="alias-text">Alias Text *</label>
+                <input type="text" id="alias-text" class="form-control" placeholder="e.g., spurs" required>
+                <small class="form-help">The text that appears in stream names (case-insensitive)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="alias-league">League *</label>
+                <select id="alias-league" class="form-control" onchange="loadTeamsForAlias()" required>
+                    <option value="">Select league...</option>
+                    {% for league in leagues %}
+                        <option value="{{ league.league_code }}">{{ league.league_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="alias-team">ESPN Team *</label>
+                <select id="alias-team" class="form-control" required>
+                    <option value="">Select league first...</option>
+                </select>
+                <small class="form-help">The actual ESPN team this alias should map to</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAliasModal()">Cancel</button>
+            <button class="btn btn-success" onclick="submitAlias()">Save Alias</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Sorting state
+let currentSort = { column: null, direction: 'asc' };
+let lastChecked = null;
+
+// ============================================================================
+// Checkbox & Batch Operations
+// ============================================================================
+
+function toggleSelectAll(checkbox) {
+    const rows = document.querySelectorAll('.table tbody tr');
+    rows.forEach(row => {
+        if (row.style.display !== 'none') {
+            const cb = row.querySelector('.group-checkbox');
+            if (cb) cb.checked = checkbox.checked;
+        }
+    });
+    updateBulkToolbar();
+}
+
+function updateBulkToolbar() {
+    const checkboxes = document.querySelectorAll('.group-checkbox:checked');
+    const hasSelection = checkboxes.length > 0;
+
+    document.getElementById('btn-bulk-refresh').disabled = !hasSelection;
+    document.getElementById('btn-bulk-disable').disabled = !hasSelection;
+    document.getElementById('selected-count').textContent = checkboxes.length;
+}
+
+function getSelectedGroupIds() {
+    const checkboxes = document.querySelectorAll('.group-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function handleCheckboxClick(event, checkbox) {
+    const checkboxes = Array.from(document.querySelectorAll('.group-checkbox'));
+
+    if (event.shiftKey && lastChecked && lastChecked !== checkbox) {
+        const start = checkboxes.indexOf(lastChecked);
+        const end = checkboxes.indexOf(checkbox);
+        const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
+        range.forEach(cb => cb.checked = lastChecked.checked);
+    }
+
+    lastChecked = checkbox;
+}
+
+// ============================================================================
+// Filtering & Sorting
+// ============================================================================
+
+function applyFilters() {
+    const leagueFilter = document.getElementById('filter-league').value;
+    const sportFilter = document.getElementById('filter-sport').value;
+
+    const rows = document.querySelectorAll('.table tbody tr');
+
+    rows.forEach(row => {
+        let show = true;
+
+        if (leagueFilter && row.dataset.league !== leagueFilter) show = false;
+        if (sportFilter && row.dataset.sport !== sportFilter) show = false;
+
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function sortTable(column) {
+    const tbody = document.querySelector('.table tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+    }
+
+    rows.sort((a, b) => {
+        let aVal, bVal;
+
+        switch(column) {
+            case 'name':
+                aVal = a.dataset.name.toLowerCase();
+                bVal = b.dataset.name.toLowerCase();
+                break;
+            case 'league':
+                aVal = a.dataset.league.toLowerCase();
+                bVal = b.dataset.league.toLowerCase();
+                break;
+            case 'sport':
+                aVal = a.dataset.sport.toLowerCase();
+                bVal = b.dataset.sport.toLowerCase();
+                break;
+            case 'refresh':
+                aVal = a.dataset.refresh || '0';
+                bVal = b.dataset.refresh || '0';
+                break;
+        }
+
+        if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+
+    // Update sort indicators
+    document.querySelectorAll('.sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.parentElement.classList.remove('sort-asc', 'sort-desc');
+    });
+
+    const activeHeader = document.querySelector(`th[data-sort="${column}"]`);
+    if (activeHeader) {
+        activeHeader.classList.add(`sort-${currentSort.direction}`);
+        activeHeader.querySelector('.sort-indicator').textContent = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+    }
+}
+
+// ============================================================================
+// Group Actions
+// ============================================================================
+
+async function refreshGroup(groupId) {
+    const row = document.querySelector(`tr[data-group-id="${groupId}"]`);
+    if (row) row.classList.add('refreshing');
+
+    try {
+        const response = await fetch(`/api/event-epg/refresh/${groupId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            showNotification(`EPG refreshed: ${data.matched_count}/${data.stream_count} streams matched`, 'success');
+            location.reload();
+        } else {
+            showNotification(`Refresh failed: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error.message}`, 'error');
+    } finally {
+        if (row) row.classList.remove('refreshing');
+    }
+}
+
+async function refreshAllGroups() {
+    const btn = document.getElementById('btn-refresh-all');
+    btn.disabled = true;
+    btn.innerHTML = '🔄 Refreshing...';
+
+    const groupIds = Array.from(document.querySelectorAll('tr[data-group-id]'))
+        .map(row => row.dataset.groupId);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const groupId of groupIds) {
+        try {
+            const response = await fetch(`/api/event-epg/refresh/${groupId}`, { method: 'POST' });
+            if (response.ok) successCount++;
+            else errorCount++;
+        } catch (error) {
+            errorCount++;
+        }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '🔄 Refresh All';
+
+    if (errorCount === 0) {
+        showNotification(`All ${successCount} groups refreshed successfully`, 'success');
+    } else {
+        showNotification(`Refreshed ${successCount} groups, ${errorCount} failed`, 'warning');
+    }
+
+    location.reload();
+}
+
+async function bulkRefresh() {
+    const groupIds = getSelectedGroupIds();
+    if (!groupIds.length) return;
+
+    if (!confirm(`Refresh EPG for ${groupIds.length} group(s)?`)) return;
+
+    let successCount = 0;
+
+    for (const groupId of groupIds) {
+        try {
+            const response = await fetch(`/api/event-epg/refresh/${groupId}`, { method: 'POST' });
+            if (response.ok) successCount++;
+        } catch (error) {
+            // continue
+        }
+    }
+
+    showNotification(`Refreshed ${successCount} of ${groupIds.length} groups`, 'success');
+    location.reload();
+}
+
+async function bulkDisable() {
+    const groupIds = getSelectedGroupIds();
+    if (!groupIds.length) return;
+
+    if (!confirm(`Disable ${groupIds.length} group(s)? This will stop EPG generation for these groups.`)) return;
+
+    let successCount = 0;
+
+    for (const groupId of groupIds) {
+        try {
+            const response = await fetch(`/api/event-epg/groups/${groupId}`, { method: 'DELETE' });
+            if (response.ok) successCount++;
+        } catch (error) {
+            // continue
+        }
+    }
+
+    showNotification(`Disabled ${successCount} of ${groupIds.length} groups`, 'success');
+    location.reload();
+}
+
+async function deleteGroup(groupId, groupName) {
+    if (!confirm(`Disable "${groupName}"? This will stop EPG generation for this group.`)) return;
+
+    try {
+        const response = await fetch(`/api/event-epg/groups/${groupId}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (response.ok) {
+            showNotification(`Group disabled`, 'success');
+            location.reload();
+        } else {
+            showNotification(`Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================================
+// Stream Preview Modal
+// ============================================================================
+
+async function previewGroup(groupId, groupName) {
+    const modal = document.getElementById('preview-modal');
+    const titleEl = document.getElementById('preview-modal-title');
+    const loadingEl = document.getElementById('preview-loading');
+    const contentEl = document.getElementById('preview-content');
+
+    titleEl.textContent = `Preview: ${groupName}`;
+    loadingEl.style.display = 'flex';
+    contentEl.style.display = 'none';
+    modal.classList.add('active');
+
+    // Get league from row data
+    const row = document.querySelector(`tr[data-group-id="${groupId}"]`);
+    const league = row?.dataset.league;
+
+    try {
+        let url = `/api/event-epg/dispatcharr/groups/${
+            row?.querySelector('td:nth-child(2) .text-muted')?.textContent.replace('Dispatcharr ID: ', '') || groupId
+        }/streams?limit=50&match=true`;
+        if (league) url += `&league=${league}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+
+        if (response.ok) {
+            renderPreviewStreams(data.streams, data.total_streams);
+        } else {
+            document.getElementById('preview-streams-body').innerHTML =
+                `<tr><td colspan="4" class="text-danger">Error: ${data.error}</td></tr>`;
+        }
+    } catch (error) {
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        document.getElementById('preview-streams-body').innerHTML =
+            `<tr><td colspan="4" class="text-danger">Error: ${error.message}</td></tr>`;
+    }
+}
+
+function renderPreviewStreams(streams, totalCount) {
+    const tbody = document.getElementById('preview-streams-body');
+    const totalEl = document.getElementById('preview-total');
+    const matchedEl = document.getElementById('preview-matched');
+    const unmatchedEl = document.getElementById('preview-unmatched');
+
+    let matchedCount = 0;
+    let unmatchedCount = 0;
+
+    tbody.innerHTML = '';
+
+    streams.forEach(stream => {
+        const teamMatch = stream.team_match || {};
+        const eventMatch = stream.event_match || {};
+
+        if (eventMatch.found) matchedCount++;
+        else unmatchedCount++;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(stream.name)}">
+                ${escapeHtml(stream.name)}
+            </td>
+            <td>
+                ${teamMatch.matched
+                    ? `<span class="text-success">${escapeHtml(teamMatch.away_team_name?.split(' ').pop() || '?')} @ ${escapeHtml(teamMatch.home_team_name?.split(' ').pop() || '?')}</span>`
+                    : `<span class="text-warning">${teamMatch.reason || 'Not matched'}</span>`
+                }
+            </td>
+            <td>
+                ${eventMatch.found
+                    ? `<span class="text-success">✓ ${eventMatch.event_id}</span>`
+                    : `<span class="text-danger">✗ ${eventMatch.reason || 'No event'}</span>`
+                }
+            </td>
+            <td>
+                ${!teamMatch.matched && teamMatch.unmatched_text
+                    ? `<button onclick="showFixMatchModal('${escapeHtml(teamMatch.unmatched_text)}')" class="btn btn-sm btn-warning">Fix</button>`
+                    : ''
+                }
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    totalEl.textContent = `${totalCount} streams (showing ${streams.length})`;
+    matchedEl.textContent = `${matchedCount} matched`;
+    unmatchedEl.textContent = `${unmatchedCount} unmatched`;
+}
+
+function closePreviewModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('preview-modal').classList.remove('active');
+}
+
+// ============================================================================
+// Team Aliases
+// ============================================================================
+
+function showAddAliasModal() {
+    document.getElementById('alias-modal-title').textContent = 'Add Team Alias';
+    document.getElementById('alias-context').textContent = 'Create a new alias to map stream names to ESPN teams.';
+    document.getElementById('alias-text').value = '';
+    document.getElementById('alias-league').value = '';
+    document.getElementById('alias-team').innerHTML = '<option value="">Select league first...</option>';
+
+    document.getElementById('alias-modal').classList.add('active');
+}
+
+function showFixMatchModal(unmatchedText) {
+    document.getElementById('alias-modal-title').textContent = 'Fix Team Match';
+    document.getElementById('alias-context').innerHTML =
+        `The text "<strong>${escapeHtml(unmatchedText)}</strong>" was not recognized. Select the correct ESPN team to create an alias.`;
+    document.getElementById('alias-text').value = unmatchedText.toLowerCase();
+
+    document.getElementById('alias-modal').classList.add('active');
+}
+
+function closeAliasModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('alias-modal').classList.remove('active');
+}
+
+async function loadTeamsForAlias() {
+    const league = document.getElementById('alias-league').value;
+    const teamSelect = document.getElementById('alias-team');
+
+    if (!league) {
+        teamSelect.innerHTML = '<option value="">Select league first...</option>';
+        return;
+    }
+
+    teamSelect.innerHTML = '<option value="">Loading teams...</option>';
+
+    try {
+        const response = await fetch(`/api/event-epg/teams?league=${league}`);
+        const data = await response.json();
+
+        teamSelect.innerHTML = '<option value="">Select team...</option>';
+
+        if (response.ok && data.teams) {
+            data.teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = JSON.stringify({ id: team.id, name: team.name });
+                option.textContent = team.name;
+                teamSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        teamSelect.innerHTML = '<option value="">Error loading teams</option>';
+    }
+}
+
+async function submitAlias() {
+    const aliasText = document.getElementById('alias-text').value.trim();
+    const league = document.getElementById('alias-league').value;
+    const teamJson = document.getElementById('alias-team').value;
+
+    if (!aliasText || !league || !teamJson) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+
+    let team;
+    try {
+        team = JSON.parse(teamJson);
+    } catch (e) {
+        showNotification('Please select a valid team', 'error');
+        return;
+    }
+
+    const payload = {
+        alias: aliasText.toLowerCase(),
+        league: league,
+        espn_team_id: String(team.id),
+        espn_team_name: team.name
+    };
+
+    try {
+        const response = await fetch('/api/event-epg/aliases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showNotification(`Alias "${aliasText}" created for ${team.name}`, 'success');
+            closeAliasModal();
+            location.reload();
+        } else {
+            showNotification(`Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function deleteAlias(aliasId) {
+    if (!confirm('Delete this alias?')) return;
+
+    try {
+        const response = await fetch(`/api/event-epg/aliases/${aliasId}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (response.ok) {
+            showNotification('Alias deleted', 'success');
+            location.reload();
+        } else {
+            showNotification(`Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        showNotification(`Error: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showNotification(message, type = 'info') {
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+        return;
+    }
+    alert(message);
+}
+</script>
+
+<style>
+.page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 2rem;
+}
+
+.page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    color: var(--text-primary);
+}
+
+.page-subtitle {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+/* Table styles */
+.table-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table thead {
+    background: var(--bg-tertiary);
+    border-bottom: 2px solid var(--border);
+}
+
+.table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table td {
+    padding: 0.625rem 0.75rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+}
+
+.table tbody tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-danger { color: var(--danger); }
+
+/* Batch toolbar */
+.batch-toolbar {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.batch-info {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.batch-count {
+    color: var(--text-muted);
+    font-weight: normal;
+    font-size: 0.875rem;
+}
+
+.batch-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.batch-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Filter row */
+.filter-row th {
+    padding: 0.125rem 0.75rem 0.5rem 0.75rem !important;
+    border-bottom: 2px solid var(--border);
+}
+
+.filter-dropdown {
+    width: 100%;
+    padding: 0.25rem 0.375rem;
+    font-size: 0.75rem;
+    font-style: italic;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+/* Sortable headers */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sort-indicator {
+    font-size: 0.75rem;
+    opacity: 0.5;
+}
+
+/* Match rate */
+.match-rate-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.match-rate-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.match-rate-fill {
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.match-rate-fill.rate-good { background: var(--success); }
+.match-rate-fill.rate-warn { background: var(--warning); }
+.match-rate-fill.rate-bad { background: var(--danger); }
+
+.match-rate-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 0.375rem;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 0.1875rem 0.4375rem;
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border-radius: 3px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+}
+
+.badge-primary {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+code {
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+}
+
+.empty-state .empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    color: var(--text-muted);
+    margin: 0.5rem 0;
+}
+
+.empty-state .btn {
+    margin-top: 1.5rem;
+}
+
+/* Aliases section */
+.aliases-section {
+    margin-top: 2rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.aliases-section .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.aliases-section h2 {
+    margin: 0;
+    font-size: 1.125rem;
+}
+
+.section-badge {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    padding: 0.25rem 0.625rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.aliases-empty {
+    padding: 1.5rem;
+}
+
+.aliases-section .table-container {
+    border: none;
+    border-radius: 0;
+}
+
+/* Modal styles */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-large {
+    max-width: 900px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+/* Preview modal */
+.preview-summary {
+    display: flex;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.preview-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.preview-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    z-index: 1;
+}
+
+/* Loading state */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    color: var(--text-muted);
+    gap: 1rem;
+}
+
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Refreshing state */
+.refreshing {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Form styles */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.375rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.form-help {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Light mode overrides */
+.light-theme .badge-primary {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+}
+
+.light-theme .section-badge {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+}
+</style>
+{% endblock %}

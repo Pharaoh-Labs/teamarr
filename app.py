@@ -21,7 +21,11 @@ from database import (
     get_all_templates, get_template, create_template, update_template, delete_template, get_template_team_count,
     get_all_teams, get_team, create_team, update_team, delete_team,
     bulk_assign_template, bulk_delete_teams, bulk_set_active,
-    get_active_teams_with_templates
+    get_active_teams_with_templates,
+    # Event EPG functions
+    get_all_aliases, get_aliases_for_league, get_alias, create_alias, update_alias, delete_alias,
+    get_all_event_epg_groups, get_event_epg_group, get_event_epg_group_by_dispatcharr_id,
+    create_event_epg_group, update_event_epg_group, delete_event_epg_group, update_event_epg_group_stats
 )
 from api.espn_client import ESPNClient
 from epg.orchestrator import EPGOrchestrator
@@ -36,6 +40,42 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 # Setup logging system
 log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
 setup_logging(app, log_level)
+
+
+# Custom Jinja filter for relative time display
+@app.template_filter('relative_time')
+def relative_time_filter(value):
+    """Convert datetime string to relative time (e.g., '5 mins ago')"""
+    if not value:
+        return 'Never'
+
+    from datetime import datetime
+
+    try:
+        if isinstance(value, str):
+            # Try parsing ISO format
+            dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        else:
+            dt = value
+
+        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+        diff = now - dt
+
+        seconds = diff.total_seconds()
+        if seconds < 0:
+            return 'Just now'
+        if seconds < 60:
+            return 'Just now'
+        if seconds < 3600:
+            mins = int(seconds / 60)
+            return f'{mins} min{"s" if mins != 1 else ""} ago'
+        if seconds < 86400:
+            hours = int(seconds / 3600)
+            return f'{hours} hour{"s" if hours != 1 else ""} ago'
+        days = int(seconds / 86400)
+        return f'{days} day{"s" if days != 1 else ""} ago'
+    except Exception:
+        return str(value)
 
 # Initialize database on startup
 if not os.path.exists(os.path.join(os.path.dirname(__file__), 'teamarr.db')):
@@ -320,6 +360,11 @@ def templates_edit(template_id):
     """Update an existing template"""
     try:
         data = _extract_template_form_data(request.form)
+
+        # Ensure template_type is never changed after creation (immutable)
+        # _extract_template_form_data doesn't include it, but safeguard anyway
+        data.pop('template_type', None)
+
         if update_template(template_id, data):
             flash(f"Template '{data['name']}' updated successfully!", 'success')
         else:
@@ -539,6 +584,14 @@ def teams_bulk_assign_template():
         # Convert to integers
         team_ids = [int(tid) for tid in team_ids]
         template_id = int(template_id) if template_id and template_id != '' else None
+
+        # Validate template type - only 'team' templates can be assigned to teams
+        if template_id:
+            template = get_template(template_id)
+            if not template:
+                return jsonify({'success': False, 'message': 'Template not found'})
+            if template.get('template_type', 'team') != 'team':
+                return jsonify({'success': False, 'message': 'Cannot assign event template to teams. Use a team template.'})
 
         template_name = get_template(template_id)['name'] if template_id else 'Unassigned'
         app.logger.info(f"🔗 Bulk assigning {len(team_ids)} team(s) to template: {template_name}")
@@ -798,6 +851,51 @@ def epg_management():
                          epg_url=epg_url)
 
 # =============================================================================
+# EVENT GROUPS UI
+# =============================================================================
+
+@app.route('/event-groups')
+def event_groups_list():
+    """List all enabled event groups"""
+    groups = get_all_event_epg_groups()
+    aliases = get_all_aliases()
+
+    # Get leagues for alias modal dropdown
+    conn = get_connection()
+    cursor = conn.cursor()
+    leagues = cursor.execute("""
+        SELECT league_code, league_name, sport
+        FROM league_config
+        WHERE active = 1
+        ORDER BY sport, league_name
+    """).fetchall()
+    conn.close()
+
+    leagues = [dict(row) for row in leagues]
+
+    return render_template('event_epg.html',
+                          groups=groups,
+                          aliases=aliases,
+                          leagues=leagues)
+
+
+@app.route('/event-groups/import')
+def event_groups_import():
+    """Import event groups from Dispatcharr"""
+    # Get event templates for the configure modal
+    conn = get_connection()
+    cursor = conn.cursor()
+    templates = cursor.execute("""
+        SELECT id, name FROM templates WHERE template_type = 'event' ORDER BY name
+    """).fetchall()
+    conn.close()
+
+    event_templates = [dict(row) for row in templates]
+
+    return render_template('event_groups_import.html', event_templates=event_templates)
+
+
+# =============================================================================
 # SETTINGS
 # =============================================================================
 
@@ -996,12 +1094,12 @@ def generate_epg():
             settings
         )
 
-        # Save to file
-        output_path = settings.get('epg_output_path', '/app/data/teamarr.xml')
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        # Save to teams.xml and merge into final output (from settings)
+        from epg.epg_consolidator import after_team_epg_generation
 
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(xml_content)
+        final_output_path = settings.get('epg_output_path', '/app/data/teamarr.xml')
+        consolidate_result = after_team_epg_generation(xml_content, final_output_path)
+        output_path = consolidate_result['combined_path']
 
         # Calculate stats
         file_size = os.path.getsize(output_path)
@@ -1705,6 +1803,972 @@ def api_teams_bulk_import():
     except Exception as e:
         app.logger.error(f"Bulk import failed: {e}")
         return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# EVENT EPG API ENDPOINTS
+# =============================================================================
+
+def _get_m3u_manager():
+    """Get M3UManager instance with credentials from settings."""
+    from api.dispatcharr_client import M3UManager
+
+    conn = get_connection()
+    settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+    conn.close()
+
+    url = settings.get('dispatcharr_url')
+    username = settings.get('dispatcharr_username')
+    password = settings.get('dispatcharr_password')
+
+    if not all([url, username, password]):
+        return None
+
+    return M3UManager(url, username, password)
+
+
+@app.route('/api/event-epg/dispatcharr/accounts', methods=['GET'])
+def api_event_epg_dispatcharr_accounts():
+    """List M3U accounts from Dispatcharr."""
+    try:
+        manager = _get_m3u_manager()
+        if not manager:
+            return jsonify({'error': 'Dispatcharr credentials not configured'}), 400
+
+        accounts = manager.list_m3u_accounts()
+
+        # Filter out "Custom" M3U accounts - they're auto-created by Dispatcharr
+        accounts = [a for a in accounts if 'custom' not in a.get('name', '').lower()]
+
+        # Sort alphabetically by name
+        accounts.sort(key=lambda a: a.get('name', '').lower())
+
+        return jsonify({'accounts': accounts})
+
+    except Exception as e:
+        app.logger.error(f"Error fetching M3U accounts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/dispatcharr/groups', methods=['GET'])
+def api_event_epg_dispatcharr_groups():
+    """
+    List channel groups from Dispatcharr.
+
+    Query params:
+        account_id: Filter by M3U account ID
+        search: Filter by group name (substring match)
+    """
+    try:
+        manager = _get_m3u_manager()
+        if not manager:
+            return jsonify({'error': 'Dispatcharr credentials not configured'}), 400
+
+        account_id = request.args.get('account_id', type=int)
+        search = request.args.get('search', '')
+
+        groups = manager.list_channel_groups(search=search if search else None)
+
+        # If account_id provided, filter groups that belong to that account
+        if account_id:
+            # Get the account to find which groups it contains
+            account = manager.get_account(account_id)
+            if account:
+                # Extract group IDs from the account's channel_groups list
+                account_group_ids = {cg['channel_group'] for cg in account.get('channel_groups', [])}
+                groups = [g for g in groups if g['id'] in account_group_ids]
+            else:
+                groups = []  # Account not found
+
+        # Enrich with enabled status from our database
+        enabled_groups = {g['dispatcharr_group_id']: g for g in get_all_event_epg_groups()}
+        for group in groups:
+            db_group = enabled_groups.get(group['id'])
+            group['event_epg_enabled'] = db_group is not None
+            group['event_epg_id'] = db_group['id'] if db_group else None
+            group['assigned_league'] = db_group['assigned_league'] if db_group else None
+
+        return jsonify({'groups': groups})
+
+    except Exception as e:
+        app.logger.error(f"Error fetching channel groups: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/dispatcharr/groups/<int:group_id>/streams', methods=['GET'])
+def api_event_epg_dispatcharr_streams(group_id):
+    """
+    Preview streams in a Dispatcharr group.
+
+    Returns streams with team matching preview.
+
+    Query params:
+        limit: Max streams to return (default: 50)
+        match: If 'true', attempt to match teams and find ESPN events
+    """
+    try:
+        manager = _get_m3u_manager()
+        if not manager:
+            return jsonify({'error': 'Dispatcharr credentials not configured'}), 400
+
+        limit = request.args.get('limit', 50, type=int)
+        do_match = request.args.get('match', 'false').lower() == 'true'
+
+        # Get group info and streams
+        result = manager.get_group_with_streams(group_id, stream_limit=limit)
+        if not result:
+            return jsonify({'error': 'Group not found'}), 404
+
+        streams = result['streams']
+
+        # If matching requested, add team extraction preview
+        if do_match:
+            # Get assigned league from query params or from existing config
+            league = request.args.get('league')
+            if not league:
+                # Check if group is already configured
+                db_group = get_event_epg_group_by_dispatcharr_id(group_id)
+                if db_group:
+                    league = db_group['assigned_league']
+
+            if league:
+                from epg.team_matcher import create_matcher
+                from epg.event_matcher import create_event_matcher
+
+                team_matcher = create_matcher()
+                event_matcher = create_event_matcher()
+
+                for stream in streams:
+                    try:
+                        # Extract teams from stream name
+                        team_result = team_matcher.extract_teams(stream['name'], league)
+                        stream['team_match'] = team_result
+
+                        # If teams matched, try to find ESPN event
+                        if team_result.get('matched'):
+                            event_result = event_matcher.find_event(
+                                team_result['away_team_id'],
+                                team_result['home_team_id'],
+                                league,
+                                game_date=team_result.get('game_date'),
+                                game_time=team_result.get('game_time')
+                            )
+                            stream['event_match'] = {
+                                'found': event_result['found'],
+                                'event_id': event_result.get('event_id'),
+                                'event_name': event_result.get('event', {}).get('name') if event_result['found'] else None,
+                                'event_date': event_result.get('event_date')
+                            }
+                        else:
+                            stream['event_match'] = {'found': False, 'reason': team_result.get('reason')}
+
+                    except Exception as e:
+                        stream['team_match'] = {'matched': False, 'reason': str(e)}
+                        stream['event_match'] = {'found': False}
+
+        # Sort streams alphabetically by name
+        streams.sort(key=lambda s: s.get('name', '').lower())
+
+        return jsonify({
+            'group': result['group'],
+            'streams': streams,
+            'total_streams': result['total_streams']
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error fetching streams for group {group_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/groups', methods=['GET'])
+def api_event_epg_groups_list():
+    """List all event EPG groups configured in Teamarr."""
+    try:
+        enabled_only = request.args.get('enabled_only', 'false').lower() == 'true'
+        groups = get_all_event_epg_groups(enabled_only=enabled_only)
+        return jsonify({'groups': groups})
+    except Exception as e:
+        app.logger.error(f"Error listing event EPG groups: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/groups', methods=['POST'])
+def api_event_epg_groups_create():
+    """
+    Create/enable a new event EPG group.
+
+    Body:
+        dispatcharr_group_id: int (required)
+        dispatcharr_account_id: int (required)
+        group_name: str (required) - exact name from Dispatcharr
+        assigned_league: str (required) - league code (e.g., 'nfl', 'epl')
+        assigned_sport: str (required) - sport type (e.g., 'football', 'soccer')
+        refresh_interval_minutes: int (optional, default: 60)
+        event_template_id: int (optional, must be an event template)
+    """
+    try:
+        data = request.get_json()
+
+        required = ['dispatcharr_group_id', 'dispatcharr_account_id', 'group_name', 'assigned_league', 'assigned_sport']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        # Check if already exists
+        existing = get_event_epg_group_by_dispatcharr_id(data['dispatcharr_group_id'])
+        if existing:
+            return jsonify({'error': 'Group already configured', 'existing_id': existing['id']}), 409
+
+        # Validate template type - only 'event' templates can be assigned to event groups
+        event_template_id = data.get('event_template_id')
+        if event_template_id is not None:
+            template = get_template(event_template_id)
+            if not template:
+                return jsonify({'error': 'Template not found'}), 404
+            if template.get('template_type', 'team') != 'event':
+                return jsonify({
+                    'error': 'Cannot assign team template to event group. Use an event template.',
+                    'template_type': template.get('template_type', 'team')
+                }), 400
+
+        group_id = create_event_epg_group(
+            dispatcharr_group_id=data['dispatcharr_group_id'],
+            dispatcharr_account_id=data['dispatcharr_account_id'],
+            group_name=data['group_name'],
+            assigned_league=data['assigned_league'],
+            assigned_sport=data['assigned_sport'],
+            refresh_interval_minutes=data.get('refresh_interval_minutes', 60),
+            event_template_id=event_template_id
+        )
+
+        app.logger.info(f"Created event EPG group: {data['group_name']} (ID: {group_id})")
+
+        return jsonify({
+            'success': True,
+            'id': group_id,
+            'message': f"Event EPG group '{data['group_name']}' created"
+        }), 201
+
+    except Exception as e:
+        app.logger.error(f"Error creating event EPG group: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/groups/<int:group_id>', methods=['GET'])
+def api_event_epg_groups_get(group_id):
+    """Get a specific event EPG group."""
+    try:
+        group = get_event_epg_group(group_id)
+        if not group:
+            return jsonify({'error': 'Group not found'}), 404
+        return jsonify(group)
+    except Exception as e:
+        app.logger.error(f"Error fetching event EPG group {group_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/groups/<int:group_id>', methods=['PATCH'])
+def api_event_epg_groups_update(group_id):
+    """
+    Update an event EPG group.
+
+    Body (all optional):
+        assigned_league: str
+        assigned_sport: str
+        enabled: bool
+        refresh_interval_minutes: int
+        event_template_id: int (must be an event template, not team template)
+    """
+    try:
+        data = request.get_json()
+
+        group = get_event_epg_group(group_id)
+        if not group:
+            return jsonify({'error': 'Group not found'}), 404
+
+        # Validate template type - only 'event' templates can be assigned to event groups
+        if 'event_template_id' in data and data['event_template_id'] is not None:
+            template = get_template(data['event_template_id'])
+            if not template:
+                return jsonify({'error': 'Template not found'}), 404
+            if template.get('template_type', 'team') != 'event':
+                return jsonify({
+                    'error': 'Cannot assign team template to event group. Use an event template.',
+                    'template_type': template.get('template_type', 'team')
+                }), 400
+
+        # Convert enabled to int if present
+        if 'enabled' in data:
+            data['enabled'] = 1 if data['enabled'] else 0
+
+        if update_event_epg_group(group_id, data):
+            return jsonify({'success': True, 'message': 'Group updated'})
+        else:
+            return jsonify({'error': 'Update failed'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error updating event EPG group {group_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/groups/<int:group_id>', methods=['DELETE'])
+def api_event_epg_groups_delete(group_id):
+    """Delete/disable an event EPG group."""
+    try:
+        group = get_event_epg_group(group_id)
+        if not group:
+            return jsonify({'error': 'Group not found'}), 404
+
+        if delete_event_epg_group(group_id):
+            app.logger.info(f"Deleted event EPG group: {group['group_name']} (ID: {group_id})")
+            return jsonify({'success': True, 'message': 'Group deleted'})
+        else:
+            return jsonify({'error': 'Delete failed'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error deleting event EPG group {group_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/refresh/<int:group_id>', methods=['POST'])
+def api_event_epg_refresh(group_id):
+    """
+    Trigger refresh and EPG generation for an event EPG group.
+
+    This will:
+    1. Refresh M3U data from Dispatcharr
+    2. Fetch streams for the group
+    3. Match streams to ESPN events
+    4. Generate XMLTV file
+
+    Query params:
+        wait_for_m3u: If 'true', wait for M3U refresh to complete (default: true)
+    """
+    try:
+        group = get_event_epg_group(group_id)
+        if not group:
+            return jsonify({'error': 'Group not found'}), 404
+
+        manager = _get_m3u_manager()
+        if not manager:
+            return jsonify({'error': 'Dispatcharr credentials not configured'}), 400
+
+        wait_for_m3u = request.args.get('wait_for_m3u', 'true').lower() == 'true'
+
+        # Step 1: Refresh M3U data
+        app.logger.info(f"Refreshing M3U account {group['dispatcharr_account_id']} for event EPG group {group_id}")
+
+        if wait_for_m3u:
+            refresh_result = manager.wait_for_refresh(group['dispatcharr_account_id'], timeout=120)
+            if not refresh_result.get('success'):
+                return jsonify({
+                    'error': f"M3U refresh failed: {refresh_result.get('message')}",
+                    'step': 'refresh'
+                }), 500
+        else:
+            manager.refresh_m3u_account(group['dispatcharr_account_id'])
+
+        # Step 2: Fetch streams
+        streams = manager.list_streams(group_name=group['group_name'])
+        app.logger.info(f"Fetched {len(streams)} streams for group '{group['group_name']}'")
+
+        # Step 3: Match streams to ESPN events
+        from epg.team_matcher import create_matcher
+        from epg.event_matcher import create_event_matcher
+
+        team_matcher = create_matcher()
+        event_matcher = create_event_matcher()
+
+        matched_count = 0
+        matched_streams = []
+
+        for stream in streams:
+            try:
+                team_result = team_matcher.extract_teams(stream['name'], group['assigned_league'])
+
+                if team_result.get('matched'):
+                    event_result = event_matcher.find_and_enrich(
+                        team_result['away_team_id'],
+                        team_result['home_team_id'],
+                        group['assigned_league'],
+                        game_date=team_result.get('game_date'),
+                        game_time=team_result.get('game_time')
+                    )
+
+                    if event_result.get('found'):
+                        matched_count += 1
+                        matched_streams.append({
+                            'stream': stream,
+                            'teams': team_result,
+                            'event': event_result['event']
+                        })
+
+            except Exception as e:
+                app.logger.warning(f"Error matching stream '{stream['name']}': {e}")
+                continue
+
+        # Update stats
+        update_event_epg_group_stats(group_id, len(streams), matched_count)
+
+        app.logger.info(f"Matched {matched_count}/{len(streams)} streams for group '{group['group_name']}'")
+
+        # Step 4: Generate XMLTV first (so EPG is current when channels are created)
+        if matched_streams:
+            from epg.event_epg_generator import generate_event_epg
+
+            epg_result = generate_event_epg(
+                matched_streams=matched_streams,
+                group_info=group,
+                save=True,
+                data_dir=os.path.join(os.path.dirname(__file__), 'data')
+            )
+
+            if not epg_result.get('success'):
+                return jsonify({
+                    'error': f"EPG generation failed: {epg_result.get('error')}",
+                    'step': 'generate',
+                    'matched_count': matched_count
+                }), 500
+
+            app.logger.info(f"Generated event EPG: {epg_result.get('file_path')}")
+
+            # Consolidate all event EPGs and merge into final output
+            from epg.epg_consolidator import after_event_epg_generation
+
+            # Get final output path from settings
+            conn = get_connection()
+            settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+            conn.close()
+            final_output_path = settings.get('epg_output_path', '/app/data/teamarr.xml')
+
+            consolidate_result = after_event_epg_generation(group_id, final_output_path)
+
+            # Step 5: Channel Lifecycle Management (after EPG is generated)
+            channel_results = None
+            if group.get('channel_start'):
+                from epg.channel_lifecycle import get_lifecycle_manager
+                from database import get_template
+
+                lifecycle_mgr = get_lifecycle_manager()
+                if lifecycle_mgr:
+                    app.logger.info(f"Processing channel lifecycle for group {group_id}")
+
+                    # Load event template if configured
+                    event_template = None
+                    if group.get('event_template_id'):
+                        event_template = get_template(group['event_template_id'])
+
+                    # Create channels for matched streams (EPG already generated, so set-epg will find programs)
+                    channel_results = lifecycle_mgr.process_matched_streams(
+                        matched_streams=matched_streams,
+                        group=group,
+                        template=event_template
+                    )
+
+                    if channel_results['created']:
+                        app.logger.info(f"Created {len(channel_results['created'])} channels")
+                    if channel_results['errors']:
+                        app.logger.warning(f"Channel creation errors: {channel_results['errors']}")
+
+                    # Clean up channels for removed streams
+                    stream_ids = [s['id'] for s in streams]
+                    cleanup_results = lifecycle_mgr.cleanup_deleted_streams(group, stream_ids)
+                    if cleanup_results['deleted']:
+                        app.logger.info(f"Cleaned up {len(cleanup_results['deleted'])} removed channels")
+
+                    # Process any scheduled deletions
+                    deletion_results = lifecycle_mgr.process_scheduled_deletions()
+                    if deletion_results['deleted']:
+                        app.logger.info(f"Processed {len(deletion_results['deleted'])} scheduled deletions")
+
+            response = {
+                'success': True,
+                'group_id': group_id,
+                'stream_count': len(streams),
+                'matched_count': matched_count,
+                'match_rate': f"{(matched_count / len(streams) * 100):.1f}%" if streams else "0%",
+                'epg_file': epg_result.get('file_path'),
+                'combined_epg': consolidate_result.get('combined_path'),
+                'message': f"Generated EPG for {matched_count} of {len(streams)} streams"
+            }
+
+            # Add channel lifecycle info if available
+            if channel_results:
+                response['channels'] = {
+                    'created': len(channel_results.get('created', [])),
+                    'existing': len(channel_results.get('existing', [])),
+                    'skipped': len(channel_results.get('skipped', [])),
+                    'errors': len(channel_results.get('errors', []))
+                }
+                if channel_results.get('created'):
+                    response['message'] += f", created {len(channel_results['created'])} channels"
+
+            return jsonify(response)
+        else:
+            return jsonify({
+                'success': True,
+                'group_id': group_id,
+                'stream_count': len(streams),
+                'matched_count': 0,
+                'match_rate': "0%",
+                'message': "No streams matched - EPG not generated"
+            })
+
+    except Exception as e:
+        app.logger.error(f"Error refreshing event EPG group {group_id}: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/event-epg/<int:group_id>.xml', methods=['GET'])
+def serve_event_epg(group_id):
+    """
+    Serve generated XMLTV file for an event EPG group.
+
+    This endpoint is called by Dispatcharr to fetch the EPG data.
+    """
+    try:
+        group = get_event_epg_group(group_id)
+        if not group:
+            return "Event EPG group not found", 404
+
+        # Check if EPG file exists
+        epg_path = os.path.join(
+            os.path.dirname(__file__), 'data', f'event_epg_{group_id}.xml'
+        )
+
+        if not os.path.exists(epg_path):
+            # EPG not generated yet - return minimal valid XMLTV
+            app.logger.warning(f"Event EPG file not found for group {group_id}, returning empty XMLTV")
+            empty_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<tv generator-info-name="Teamarr Event EPG">
+</tv>'''
+            return Response(empty_xml, mimetype='application/xml')
+
+        app.logger.debug(f"Serving event EPG file for group {group_id}")
+        return send_file(epg_path, mimetype='application/xml')
+
+    except Exception as e:
+        app.logger.error(f"Error serving event EPG for group {group_id}: {e}")
+        return f"Error: {str(e)}", 500
+
+
+# =============================================================================
+# TEAM ALIAS API ENDPOINTS
+# =============================================================================
+
+@app.route('/api/event-epg/aliases', methods=['GET'])
+def api_event_epg_aliases_list():
+    """
+    List team aliases.
+
+    Query params:
+        league: Filter by league code (optional)
+    """
+    try:
+        league = request.args.get('league')
+
+        if league:
+            aliases = get_aliases_for_league(league)
+        else:
+            aliases = get_all_aliases()
+
+        return jsonify({'aliases': aliases})
+
+    except Exception as e:
+        app.logger.error(f"Error listing aliases: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/aliases', methods=['POST'])
+def api_event_epg_aliases_create():
+    """
+    Create a new team alias.
+
+    Body:
+        alias: str (required) - the alias string (e.g., "spurs")
+        league: str (required) - league code (e.g., "epl")
+        espn_team_id: str (required) - ESPN team ID
+        espn_team_name: str (required) - ESPN team display name
+    """
+    try:
+        data = request.get_json()
+
+        required = ['alias', 'league', 'espn_team_id', 'espn_team_name']
+        for field in required:
+            if not data.get(field):
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        alias_id = create_alias(
+            alias=data['alias'],
+            league=data['league'],
+            espn_team_id=str(data['espn_team_id']),
+            espn_team_name=data['espn_team_name']
+        )
+
+        app.logger.info(f"Created alias: '{data['alias']}' -> {data['espn_team_name']} ({data['league']})")
+
+        return jsonify({
+            'success': True,
+            'id': alias_id,
+            'message': f"Alias '{data['alias']}' created for {data['espn_team_name']}"
+        }), 201
+
+    except Exception as e:
+        # Check for unique constraint violation
+        if 'UNIQUE constraint' in str(e):
+            return jsonify({'error': 'Alias already exists for this league'}), 409
+        app.logger.error(f"Error creating alias: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/aliases/<int:alias_id>', methods=['GET'])
+def api_event_epg_aliases_get(alias_id):
+    """Get a specific alias."""
+    try:
+        alias = get_alias(alias_id)
+        if not alias:
+            return jsonify({'error': 'Alias not found'}), 404
+        return jsonify(alias)
+    except Exception as e:
+        app.logger.error(f"Error fetching alias {alias_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/aliases/<int:alias_id>', methods=['PATCH'])
+def api_event_epg_aliases_update(alias_id):
+    """
+    Update an alias.
+
+    Body (all optional):
+        alias: str
+        league: str
+        espn_team_id: str
+        espn_team_name: str
+    """
+    try:
+        data = request.get_json()
+
+        alias = get_alias(alias_id)
+        if not alias:
+            return jsonify({'error': 'Alias not found'}), 404
+
+        if update_alias(alias_id, data):
+            return jsonify({'success': True, 'message': 'Alias updated'})
+        else:
+            return jsonify({'error': 'Update failed'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error updating alias {alias_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/aliases/<int:alias_id>', methods=['DELETE'])
+def api_event_epg_aliases_delete(alias_id):
+    """Delete an alias."""
+    try:
+        alias = get_alias(alias_id)
+        if not alias:
+            return jsonify({'error': 'Alias not found'}), 404
+
+        if delete_alias(alias_id):
+            app.logger.info(f"Deleted alias: '{alias['alias']}' ({alias['league']})")
+            return jsonify({'success': True, 'message': 'Alias deleted'})
+        else:
+            return jsonify({'error': 'Delete failed'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error deleting alias {alias_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/teams', methods=['GET'])
+def api_event_epg_teams_search():
+    """
+    Search teams for alias creation.
+
+    This is a convenience endpoint that wraps the existing league teams API
+    for use in the alias creation UI.
+
+    Query params:
+        league: League code (required)
+        search: Search term (optional)
+    """
+    try:
+        league = request.args.get('league')
+        search = request.args.get('search', '').lower()
+
+        if not league:
+            return jsonify({'error': 'league parameter required'}), 400
+
+        # Get league config
+        conn = get_connection()
+        cursor = conn.cursor()
+        league_info = cursor.execute("""
+            SELECT sport, api_path, league_name
+            FROM league_config
+            WHERE league_code = ?
+        """, (league.lower(),)).fetchone()
+        conn.close()
+
+        if not league_info:
+            return jsonify({'error': 'League not found'}), 404
+
+        sport = league_info[0]
+        api_path = league_info[1]
+        league_identifier = api_path.split('/')[-1]
+
+        # Fetch teams
+        espn = ESPNClient()
+        teams_data = espn.get_league_teams(sport, league_identifier)
+
+        if not teams_data:
+            return jsonify({'teams': []})
+
+        # Filter by search term if provided
+        if search:
+            teams_data = [
+                t for t in teams_data
+                if search in t.get('name', '').lower()
+                or search in t.get('shortName', '').lower()
+                or search in t.get('abbreviation', '').lower()
+            ]
+
+        # Return simplified team data for dropdown
+        teams = [
+            {
+                'id': t.get('id'),
+                'name': t.get('name'),
+                'shortName': t.get('shortName'),
+                'abbreviation': t.get('abbreviation'),
+                'logo': t.get('logo')
+            }
+            for t in teams_data
+        ]
+
+        return jsonify({'teams': teams})
+
+    except Exception as e:
+        app.logger.error(f"Error searching teams: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# CHANNEL LIFECYCLE MANAGEMENT API
+# =============================================================================
+
+@app.route('/api/channel-lifecycle/status', methods=['GET'])
+def api_channel_lifecycle_status():
+    """
+    Get status of channel lifecycle management.
+
+    Returns counts of managed channels, pending deletions, scheduler status, etc.
+    """
+    try:
+        from database import (
+            get_all_managed_channels,
+            get_channels_pending_deletion
+        )
+        from epg.channel_lifecycle import is_scheduler_running
+
+        all_channels = get_all_managed_channels(include_deleted=False)
+        pending_deletions = get_channels_pending_deletion()
+
+        # Group by event_epg_group
+        by_group = {}
+        for ch in all_channels:
+            gid = ch['event_epg_group_id']
+            if gid not in by_group:
+                by_group[gid] = []
+            by_group[gid].append(ch)
+
+        return jsonify({
+            'total_managed_channels': len(all_channels),
+            'pending_deletions': len(pending_deletions),
+            'groups': len(by_group),
+            'channels_by_group': {
+                str(gid): len(channels) for gid, channels in by_group.items()
+            },
+            'scheduler_running': is_scheduler_running()
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error getting lifecycle status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/channel-lifecycle/channels', methods=['GET'])
+def api_channel_lifecycle_list():
+    """
+    List all managed channels.
+
+    Query params:
+        group_id: Filter by event EPG group (optional)
+        include_deleted: Include soft-deleted channels (default: false)
+    """
+    try:
+        from database import (
+            get_all_managed_channels,
+            get_managed_channels_for_group
+        )
+
+        group_id = request.args.get('group_id', type=int)
+        include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
+
+        if group_id:
+            channels = get_managed_channels_for_group(group_id, include_deleted=include_deleted)
+        else:
+            channels = get_all_managed_channels(include_deleted=include_deleted)
+
+        return jsonify({
+            'channels': channels,
+            'count': len(channels)
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error listing managed channels: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/channel-lifecycle/channels/<int:channel_id>', methods=['DELETE'])
+def api_channel_lifecycle_delete(channel_id):
+    """
+    Manually delete a managed channel.
+
+    This will:
+    1. Delete the channel from Dispatcharr
+    2. Mark it as deleted in local database
+    """
+    try:
+        from database import get_managed_channel, mark_managed_channel_deleted
+        from epg.channel_lifecycle import get_lifecycle_manager
+
+        channel = get_managed_channel(channel_id)
+        if not channel:
+            return jsonify({'error': 'Channel not found'}), 404
+
+        if channel.get('deleted_at'):
+            return jsonify({'error': 'Channel already deleted'}), 400
+
+        lifecycle_mgr = get_lifecycle_manager()
+        if not lifecycle_mgr:
+            return jsonify({'error': 'Dispatcharr not configured'}), 400
+
+        # Delete from Dispatcharr
+        result = lifecycle_mgr.channel_api.delete_channel(channel['dispatcharr_channel_id'])
+
+        if result.get('success') or 'not found' in str(result.get('error', '')).lower():
+            # Mark as deleted locally
+            mark_managed_channel_deleted(channel_id)
+            return jsonify({
+                'success': True,
+                'message': f"Deleted channel {channel['channel_number']} '{channel['channel_name']}'"
+            })
+        else:
+            return jsonify({
+                'error': f"Failed to delete from Dispatcharr: {result.get('error')}"
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"Error deleting channel {channel_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/channel-lifecycle/process-deletions', methods=['POST'])
+def api_channel_lifecycle_process_deletions():
+    """
+    Process all pending scheduled deletions.
+
+    This endpoint can be called manually or via cron/scheduler to clean up
+    channels that have passed their scheduled deletion time.
+    """
+    try:
+        from epg.channel_lifecycle import get_lifecycle_manager
+
+        lifecycle_mgr = get_lifecycle_manager()
+        if not lifecycle_mgr:
+            return jsonify({'error': 'Dispatcharr not configured'}), 400
+
+        results = lifecycle_mgr.process_scheduled_deletions()
+
+        return jsonify({
+            'success': True,
+            'deleted': len(results.get('deleted', [])),
+            'errors': len(results.get('errors', [])),
+            'deleted_channels': results.get('deleted', []),
+            'error_details': results.get('errors', [])
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error processing deletions: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/channel-lifecycle/cleanup-old', methods=['POST'])
+def api_channel_lifecycle_cleanup_old():
+    """
+    Hard delete old soft-deleted channel records.
+
+    Query params:
+        days: Delete records older than N days (default: 30)
+    """
+    try:
+        from database import cleanup_old_deleted_channels
+
+        days = request.args.get('days', 30, type=int)
+        deleted_count = cleanup_old_deleted_channels(days)
+
+        return jsonify({
+            'success': True,
+            'deleted_records': deleted_count,
+            'message': f"Cleaned up {deleted_count} records older than {days} days"
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error cleaning up old records: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/channel-lifecycle/scheduler', methods=['POST'])
+def api_channel_lifecycle_scheduler():
+    """
+    Start or stop the background lifecycle scheduler.
+
+    JSON body:
+        action: 'start' or 'stop'
+        interval: Interval in minutes (only for start, default: 15)
+    """
+    try:
+        from epg.channel_lifecycle import (
+            start_lifecycle_scheduler,
+            stop_lifecycle_scheduler,
+            is_scheduler_running
+        )
+
+        data = request.get_json() or {}
+        action = data.get('action', 'start')
+
+        if action == 'start':
+            interval = data.get('interval', 15)
+            start_lifecycle_scheduler(interval_minutes=interval)
+            return jsonify({
+                'success': True,
+                'message': f'Scheduler started with {interval} minute interval',
+                'running': is_scheduler_running()
+            })
+        elif action == 'stop':
+            stop_lifecycle_scheduler()
+            return jsonify({
+                'success': True,
+                'message': 'Scheduler stopped',
+                'running': is_scheduler_running()
+            })
+        else:
+            return jsonify({'error': f"Unknown action: {action}"}), 400
+
+    except Exception as e:
+        app.logger.error(f"Error controlling scheduler: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 # =============================================================================
 # HELPER FUNCTIONS

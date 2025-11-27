@@ -652,3 +652,315 @@ class M3UManager:
             }
         except Exception as e:
             return {"success": False, "message": str(e)}
+
+
+class ChannelManager:
+    """
+    Channel management for Dispatcharr.
+
+    Handles channel CRUD operations for the Channel Lifecycle Management feature.
+    Creates, updates, and deletes channels in Dispatcharr when event streams are matched.
+
+    Usage:
+        manager = ChannelManager("http://localhost:9191", "admin", "password")
+        channel = manager.create_channel(
+            name="Giants @ Cowboys",
+            channel_number=5001,
+            stream_ids=[456],
+            tvg_id="teamarr-event-12345"
+        )
+        manager.delete_channel(channel['id'])
+    """
+
+    def __init__(self, url: str, username: str, password: str):
+        self.auth = DispatcharrAuth(url, username, password)
+
+    def get_channels(self, page_size: int = 1000) -> List[Dict]:
+        """
+        Get all channels from Dispatcharr.
+
+        Handles pagination automatically.
+
+        Returns:
+            List of channel dicts
+        """
+        all_channels = []
+        next_page = f"/api/channels/channels/?page_size={page_size}"
+
+        while next_page:
+            response = self.auth.get(next_page)
+            if not response or response.status_code != 200:
+                logger.error(f"Failed to get channels: {response.status_code if response else 'No response'}")
+                break
+
+            data = response.json()
+
+            if isinstance(data, dict) and 'results' in data:
+                all_channels.extend(data['results'])
+                # Handle relative or absolute next URL
+                next_url = data.get('next')
+                if next_url:
+                    if next_url.startswith('http'):
+                        # Extract just the path
+                        from urllib.parse import urlparse
+                        parsed = urlparse(next_url)
+                        next_page = f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
+                    else:
+                        next_page = next_url
+                else:
+                    next_page = None
+            elif isinstance(data, list):
+                all_channels.extend(data)
+                next_page = None
+            else:
+                next_page = None
+
+        return all_channels
+
+    def get_channel(self, channel_id: int) -> Optional[Dict]:
+        """
+        Get a single channel by ID.
+
+        Args:
+            channel_id: Dispatcharr channel ID
+
+        Returns:
+            Channel dict or None if not found
+        """
+        response = self.auth.get(f"/api/channels/channels/{channel_id}/")
+        if response and response.status_code == 200:
+            return response.json()
+        return None
+
+    def create_channel(
+        self,
+        name: str,
+        channel_number: int,
+        stream_ids: List[int] = None,
+        tvg_id: str = None,
+        channel_group_id: int = None,
+        logo_id: int = None
+    ) -> Dict[str, Any]:
+        """
+        Create a new channel in Dispatcharr.
+
+        Args:
+            name: Channel name (e.g., "Giants @ Cowboys")
+            channel_number: Channel number
+            stream_ids: List of stream IDs to attach (order = priority)
+            tvg_id: TVG ID for XMLTV EPG matching
+            channel_group_id: Optional group to assign channel to
+            logo_id: Optional logo ID
+
+        Returns:
+            Result dict with:
+            - success: bool
+            - channel: dict (created channel data) if successful
+            - error: str if failed
+        """
+        payload = {
+            'name': name,
+            'channel_number': str(channel_number),
+            'streams': stream_ids or []
+        }
+
+        if tvg_id:
+            payload['tvg_id'] = tvg_id
+
+        if channel_group_id:
+            payload['channel_group_id'] = channel_group_id
+
+        if logo_id:
+            payload['logo_id'] = logo_id
+
+        response = self.auth.post("/api/channels/channels/", payload)
+
+        if not response:
+            return {"success": False, "error": "Request failed - no response"}
+
+        if response.status_code in (200, 201):
+            return {"success": True, "channel": response.json()}
+
+        # Parse error
+        try:
+            error_data = response.json()
+            if isinstance(error_data, dict):
+                # Format field errors
+                errors = []
+                for field, msgs in error_data.items():
+                    if isinstance(msgs, list):
+                        errors.append(f"{field}: {', '.join(msgs)}")
+                    else:
+                        errors.append(f"{field}: {msgs}")
+                error_msg = "; ".join(errors) if errors else str(error_data)
+            else:
+                error_msg = str(error_data)
+        except Exception:
+            error_msg = f"HTTP {response.status_code}"
+
+        return {"success": False, "error": error_msg}
+
+    def update_channel(self, channel_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update an existing channel.
+
+        Args:
+            channel_id: Dispatcharr channel ID
+            data: Fields to update (name, channel_number, tvg_id, streams, etc.)
+
+        Returns:
+            Result dict with success, channel (if successful), or error
+        """
+        # Convert channel_number to string if present
+        if 'channel_number' in data:
+            data['channel_number'] = str(data['channel_number'])
+
+        response = self.auth.request("PATCH", f"/api/channels/channels/{channel_id}/", data)
+
+        if not response:
+            return {"success": False, "error": "Request failed - no response"}
+
+        if response.status_code == 200:
+            return {"success": True, "channel": response.json()}
+
+        try:
+            error_msg = response.json()
+        except Exception:
+            error_msg = f"HTTP {response.status_code}"
+
+        return {"success": False, "error": str(error_msg)}
+
+    def delete_channel(self, channel_id: int) -> Dict[str, Any]:
+        """
+        Delete a channel from Dispatcharr.
+
+        Args:
+            channel_id: Dispatcharr channel ID
+
+        Returns:
+            Result dict with success or error
+        """
+        response = self.auth.request("DELETE", f"/api/channels/channels/{channel_id}/")
+
+        if not response:
+            return {"success": False, "error": "Request failed - no response"}
+
+        if response.status_code in (200, 204):
+            return {"success": True}
+
+        if response.status_code == 404:
+            return {"success": False, "error": "Channel not found"}
+
+        try:
+            error_msg = response.json()
+        except Exception:
+            error_msg = f"HTTP {response.status_code}"
+
+        return {"success": False, "error": str(error_msg)}
+
+    def assign_streams(self, channel_id: int, stream_ids: List[int]) -> Dict[str, Any]:
+        """
+        Assign streams to a channel (replaces existing streams).
+
+        Args:
+            channel_id: Dispatcharr channel ID
+            stream_ids: List of stream IDs (order = priority)
+
+        Returns:
+            Result dict with success, channel, or error
+        """
+        return self.update_channel(channel_id, {'streams': stream_ids})
+
+    def get_channel_streams(self, channel_id: int) -> List[Dict]:
+        """
+        Get streams assigned to a channel.
+
+        Args:
+            channel_id: Dispatcharr channel ID
+
+        Returns:
+            List of stream dicts
+        """
+        response = self.auth.get(f"/api/channels/channels/{channel_id}/streams/")
+        if response and response.status_code == 200:
+            return response.json()
+        return []
+
+    def find_channel_by_number(self, channel_number: int) -> Optional[Dict]:
+        """
+        Find a channel by its channel number.
+
+        Args:
+            channel_number: Channel number to search for
+
+        Returns:
+            Channel dict or None if not found
+        """
+        channels = self.get_channels()
+        for channel in channels:
+            if str(channel.get('channel_number')) == str(channel_number):
+                return channel
+        return None
+
+    def find_channel_by_tvg_id(self, tvg_id: str) -> Optional[Dict]:
+        """
+        Find a channel by its TVG ID.
+
+        Args:
+            tvg_id: TVG ID to search for
+
+        Returns:
+            Channel dict or None if not found
+        """
+        channels = self.get_channels()
+        for channel in channels:
+            if channel.get('tvg_id') == tvg_id:
+                return channel
+        return None
+
+    def set_channel_epg(self, channel_id: int, epg_data_id: int) -> Dict[str, Any]:
+        """
+        Set EPG data source for a channel and trigger refresh.
+
+        This links the channel to a specific EPG source in Dispatcharr,
+        which can be useful for direct EPG assignment rather than tvg_id matching.
+
+        Args:
+            channel_id: Dispatcharr channel ID
+            epg_data_id: EPG data/source ID to link
+
+        Returns:
+            Result dict with success or error
+        """
+        response = self.auth.post(
+            f"/api/channels/channels/{channel_id}/set-epg/",
+            {"epg_data_id": epg_data_id}
+        )
+
+        if not response:
+            return {"success": False, "error": "Request failed - no response"}
+
+        if response.status_code == 200:
+            return {"success": True}
+
+        try:
+            error_msg = response.json()
+        except Exception:
+            error_msg = f"HTTP {response.status_code}"
+
+        return {"success": False, "error": str(error_msg)}
+
+    def test_connection(self) -> Dict[str, Any]:
+        """Test connection to Dispatcharr."""
+        try:
+            if not self.auth.get_token():
+                return {"success": False, "message": "Authentication failed"}
+
+            channels = self.get_channels()
+            return {
+                "success": True,
+                "message": f"Connected. Found {len(channels)} channel(s).",
+                "channel_count": len(channels)
+            }
+        except Exception as e:
+            return {"success": False, "message": str(e)}

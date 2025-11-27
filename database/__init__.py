@@ -187,6 +187,107 @@ def run_migrations(conn):
 
     conn.commit()
 
+    # Template type column (added for Event EPG templates)
+    cursor.execute("PRAGMA table_info(templates)")
+    template_columns = {row[1] for row in cursor.fetchall()}
+
+    if 'template_type' not in template_columns:
+        try:
+            cursor.execute("""
+                ALTER TABLE templates ADD COLUMN template_type TEXT DEFAULT 'team'
+                CHECK(template_type IN ('team', 'event'))
+            """)
+            migrations_run += 1
+            print("  ✅ Added column: templates.template_type")
+        except Exception as e:
+            print(f"  ⚠️ Could not add template_type column: {e}")
+
+    conn.commit()
+
+    # Event template assignment column (added for Event EPG groups)
+    cursor.execute("PRAGMA table_info(event_epg_groups)")
+    event_group_columns = {row[1] for row in cursor.fetchall()}
+
+    if 'event_template_id' not in event_group_columns:
+        try:
+            cursor.execute("""
+                ALTER TABLE event_epg_groups ADD COLUMN event_template_id INTEGER
+                REFERENCES templates(id) ON DELETE SET NULL
+            """)
+            migrations_run += 1
+            print("  ✅ Added column: event_epg_groups.event_template_id")
+        except Exception as e:
+            print(f"  ⚠️ Could not add event_template_id column: {e}")
+
+    conn.commit()
+
+    # ==========================================================================
+    # Channel Lifecycle Management (Phase 8)
+    # ==========================================================================
+
+    # Refresh event_group_columns after commit
+    cursor.execute("PRAGMA table_info(event_epg_groups)")
+    event_group_columns = {row[1] for row in cursor.fetchall()}
+
+    # Channel lifecycle columns for event_epg_groups
+    lifecycle_columns = [
+        ("channel_start", "INTEGER"),  # Starting channel number for this group
+        ("channel_create_timing", "TEXT DEFAULT 'day_of'"),  # When to create: day_of, day_before, 2_days_before, week_before
+        ("channel_delete_timing", "TEXT DEFAULT 'stream_removed'"),  # When to delete: stream_removed, end_of_day, end_of_next_day, manual
+    ]
+
+    for col_name, col_def in lifecycle_columns:
+        if col_name not in event_group_columns:
+            try:
+                cursor.execute(f"ALTER TABLE event_epg_groups ADD COLUMN {col_name} {col_def}")
+                migrations_run += 1
+                print(f"  ✅ Added column: event_epg_groups.{col_name}")
+            except Exception as e:
+                print(f"  ⚠️ Could not add column {col_name}: {e}")
+
+    conn.commit()
+
+    # Managed Channels table (tracks channels Teamarr creates in Dispatcharr)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='managed_channels'")
+    if not cursor.fetchone():
+        try:
+            cursor.execute("""
+                CREATE TABLE managed_channels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    event_epg_group_id INTEGER NOT NULL REFERENCES event_epg_groups(id) ON DELETE CASCADE,
+                    dispatcharr_channel_id INTEGER NOT NULL UNIQUE,
+                    dispatcharr_stream_id INTEGER NOT NULL,
+                    channel_number INTEGER NOT NULL,
+                    channel_name TEXT NOT NULL,
+                    tvg_id TEXT,
+                    espn_event_id TEXT,
+                    event_date TEXT,
+                    home_team TEXT,
+                    away_team TEXT,
+                    scheduled_delete_at TIMESTAMP,
+                    deleted_at TIMESTAMP
+                )
+            """)
+            cursor.execute("CREATE INDEX idx_managed_channels_group ON managed_channels(event_epg_group_id)")
+            cursor.execute("CREATE INDEX idx_managed_channels_event ON managed_channels(espn_event_id)")
+            cursor.execute("CREATE INDEX idx_managed_channels_delete ON managed_channels(scheduled_delete_at)")
+            cursor.execute("""
+                CREATE TRIGGER update_managed_channels_timestamp
+                AFTER UPDATE ON managed_channels
+                FOR EACH ROW
+                BEGIN
+                    UPDATE managed_channels SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+                END
+            """)
+            migrations_run += 1
+            print("  ✅ Created table: managed_channels")
+        except Exception as e:
+            print(f"  ⚠️ Could not create managed_channels table: {e}")
+
+    conn.commit()
+
     return migrations_run
 
 
@@ -827,10 +928,14 @@ def create_event_epg_group(
     assigned_league: str,
     assigned_sport: str,
     enabled: bool = True,
-    refresh_interval_minutes: int = 60
+    refresh_interval_minutes: int = 60,
+    event_template_id: int = None
 ) -> int:
     """
     Create a new event EPG group.
+
+    Args:
+        event_template_id: Optional template ID (must be an 'event' type template)
 
     Returns:
         ID of created group
@@ -845,13 +950,15 @@ def create_event_epg_group(
             """
             INSERT INTO event_epg_groups
             (dispatcharr_group_id, dispatcharr_account_id, group_name,
-             assigned_league, assigned_sport, enabled, refresh_interval_minutes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+             assigned_league, assigned_sport, enabled, refresh_interval_minutes,
+             event_template_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dispatcharr_group_id, dispatcharr_account_id, group_name,
                 assigned_league.lower(), assigned_sport.lower(),
-                1 if enabled else 0, refresh_interval_minutes
+                1 if enabled else 0, refresh_interval_minutes,
+                event_template_id
             )
         )
         conn.commit()
@@ -922,5 +1029,272 @@ def update_event_epg_group_stats(
         )
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+# =============================================================================
+# Managed Channels Functions (for Channel Lifecycle Management)
+# =============================================================================
+
+def get_managed_channel(channel_id: int) -> Optional[Dict[str, Any]]:
+    """Get a managed channel by ID."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        result = cursor.execute(
+            "SELECT * FROM managed_channels WHERE id = ?",
+            (channel_id,)
+        ).fetchone()
+        return dict(result) if result else None
+    finally:
+        conn.close()
+
+
+def get_managed_channel_by_dispatcharr_id(dispatcharr_channel_id: int) -> Optional[Dict[str, Any]]:
+    """Get a managed channel by Dispatcharr channel ID."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        result = cursor.execute(
+            "SELECT * FROM managed_channels WHERE dispatcharr_channel_id = ?",
+            (dispatcharr_channel_id,)
+        ).fetchone()
+        return dict(result) if result else None
+    finally:
+        conn.close()
+
+
+def get_managed_channel_by_event(espn_event_id: str, group_id: int = None) -> Optional[Dict[str, Any]]:
+    """Get a managed channel by ESPN event ID, optionally filtered by group."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        if group_id:
+            result = cursor.execute(
+                "SELECT * FROM managed_channels WHERE espn_event_id = ? AND event_epg_group_id = ? AND deleted_at IS NULL",
+                (espn_event_id, group_id)
+            ).fetchone()
+        else:
+            result = cursor.execute(
+                "SELECT * FROM managed_channels WHERE espn_event_id = ? AND deleted_at IS NULL",
+                (espn_event_id,)
+            ).fetchone()
+        return dict(result) if result else None
+    finally:
+        conn.close()
+
+
+def get_managed_channels_for_group(group_id: int, include_deleted: bool = False) -> List[Dict[str, Any]]:
+    """Get all managed channels for an event EPG group."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        query = "SELECT * FROM managed_channels WHERE event_epg_group_id = ?"
+        if not include_deleted:
+            query += " AND deleted_at IS NULL"
+        query += " ORDER BY channel_number"
+
+        results = cursor.execute(query, (group_id,)).fetchall()
+        return [dict(row) for row in results]
+    finally:
+        conn.close()
+
+
+def get_all_managed_channels(include_deleted: bool = False) -> List[Dict[str, Any]]:
+    """Get all managed channels."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        query = "SELECT * FROM managed_channels"
+        if not include_deleted:
+            query += " WHERE deleted_at IS NULL"
+        query += " ORDER BY event_epg_group_id, channel_number"
+
+        results = cursor.execute(query).fetchall()
+        return [dict(row) for row in results]
+    finally:
+        conn.close()
+
+
+def get_channels_pending_deletion() -> List[Dict[str, Any]]:
+    """Get channels that are scheduled for deletion and past their delete time."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        results = cursor.execute(
+            """
+            SELECT * FROM managed_channels
+            WHERE scheduled_delete_at IS NOT NULL
+            AND scheduled_delete_at <= CURRENT_TIMESTAMP
+            AND deleted_at IS NULL
+            ORDER BY scheduled_delete_at
+            """
+        ).fetchall()
+        return [dict(row) for row in results]
+    finally:
+        conn.close()
+
+
+def create_managed_channel(
+    event_epg_group_id: int,
+    dispatcharr_channel_id: int,
+    dispatcharr_stream_id: int,
+    channel_number: int,
+    channel_name: str,
+    tvg_id: str = None,
+    espn_event_id: str = None,
+    event_date: str = None,
+    home_team: str = None,
+    away_team: str = None,
+    scheduled_delete_at: str = None
+) -> int:
+    """
+    Create a new managed channel record.
+
+    Returns:
+        ID of created record
+
+    Raises:
+        sqlite3.IntegrityError if dispatcharr_channel_id already exists
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO managed_channels
+            (event_epg_group_id, dispatcharr_channel_id, dispatcharr_stream_id,
+             channel_number, channel_name, tvg_id, espn_event_id, event_date,
+             home_team, away_team, scheduled_delete_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_epg_group_id, dispatcharr_channel_id, dispatcharr_stream_id,
+                channel_number, channel_name, tvg_id, espn_event_id, event_date,
+                home_team, away_team, scheduled_delete_at
+            )
+        )
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
+
+def update_managed_channel(channel_id: int, data: Dict[str, Any]) -> bool:
+    """Update a managed channel record."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+
+        fields = [k for k in data.keys() if k != 'id']
+        if not fields:
+            return False
+
+        set_clause = ', '.join([f"{f} = ?" for f in fields])
+        values = [data[f] for f in fields] + [channel_id]
+
+        cursor.execute(f"""
+            UPDATE managed_channels
+            SET {set_clause}
+            WHERE id = ?
+        """, values)
+
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def mark_managed_channel_deleted(channel_id: int) -> bool:
+    """Mark a managed channel as deleted (soft delete)."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE managed_channels SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (channel_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def delete_managed_channel(channel_id: int) -> bool:
+    """Hard delete a managed channel record."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM managed_channels WHERE id = ?", (channel_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_next_channel_number(group_id: int) -> Optional[int]:
+    """
+    Get the next available channel number for a group.
+
+    Uses the group's channel_start and finds the next unused number.
+    Returns None if the group has no channel_start configured.
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+
+        # Get the group's channel_start
+        group = cursor.execute(
+            "SELECT channel_start FROM event_epg_groups WHERE id = ?",
+            (group_id,)
+        ).fetchone()
+
+        if not group or not group['channel_start']:
+            return None
+
+        channel_start = group['channel_start']
+
+        # Get all active channel numbers for this group
+        used_numbers = cursor.execute(
+            """
+            SELECT channel_number FROM managed_channels
+            WHERE event_epg_group_id = ? AND deleted_at IS NULL
+            ORDER BY channel_number
+            """,
+            (group_id,)
+        ).fetchall()
+
+        used_set = {row['channel_number'] for row in used_numbers}
+
+        # Find the first available number starting from channel_start
+        next_num = channel_start
+        while next_num in used_set:
+            next_num += 1
+
+        return next_num
+    finally:
+        conn.close()
+
+
+def cleanup_old_deleted_channels(days_old: int = 30) -> int:
+    """
+    Hard delete managed channel records that were soft-deleted more than N days ago.
+
+    Returns count of records deleted.
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM managed_channels
+            WHERE deleted_at IS NOT NULL
+            AND deleted_at < datetime('now', ? || ' days')
+            """,
+            (f"-{days_old}",)
+        )
+        conn.commit()
+        return cursor.rowcount
     finally:
         conn.close()

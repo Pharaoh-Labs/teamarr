@@ -28,6 +28,7 @@
                 <thead>
                     <tr>
                         <th>Name</th>
+                        <th>Type</th>
                         <th>Teams Using</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -38,6 +39,13 @@
                         <tr>
                             <td>
                                 <strong>{{ template.name }}</strong>
+                            </td>
+                            <td>
+                                {% if template.template_type == 'event' %}
+                                    <span class="badge badge-event">Event</span>
+                                {% else %}
+                                    <span class="badge badge-team">Team</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if template.team_count > 0 %}
@@ -160,9 +168,10 @@ function confirmDelete(templateName, teamCount) {
 }
 
 .table th:nth-child(1) { width: auto; }      /* Name - flexible */
-.table th:nth-child(2) { width: 140px; }     /* Teams Using */
-.table th:nth-child(3) { width: 120px; }     /* Created */
-.table th:nth-child(4) { width: 380px; }     /* Actions (4 buttons) */
+.table th:nth-child(2) { width: 80px; }      /* Type */
+.table th:nth-child(3) { width: 140px; }     /* Teams Using */
+.table th:nth-child(4) { width: 120px; }     /* Created */
+.table th:nth-child(5) { width: 380px; }     /* Actions (4 buttons) */
 
 .table td {
     padding: 1rem;
@@ -216,6 +225,16 @@ function confirmDelete(templateName, teamCount) {
     color: #6ee7b7;
 }
 
+.badge-team {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+.badge-event {
+    background: rgba(168, 85, 247, 0.2);
+    color: #d8b4fe;
+}
+
 /* Light mode badge overrides */
 .light-theme .badge {
     background: rgba(59, 130, 246, 0.15);
@@ -227,6 +246,18 @@ function confirmDelete(templateName, teamCount) {
     background: rgba(16, 185, 129, 0.15);
     color: #047857;
     border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.light-theme .badge-team {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.light-theme .badge-event {
+    background: rgba(168, 85, 247, 0.15);
+    color: #7c3aed;
+    border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
 .text-muted {

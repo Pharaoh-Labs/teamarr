@@ -521,12 +521,34 @@
 
                 <!-- TAB 1: BASIC INFO -->
                 <div class="tab-content active" id="tab-basic">
-                    <!-- Name Subsection -->
+                    <!-- Name & Type Subsection -->
                     <fieldset>
-                        <legend><h3>Name</h3></legend>
+                        <legend><h3>Name & Type</h3></legend>
                         <div class="form-group">
                             <label for="name">Template Name *</label>
                             <input type="text" name="name" id="name" value="{{ template.name if template else '' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="template_type">Template Type *</label>
+                            {% if template %}
+                                <input type="hidden" name="template_type" value="{{ template.template_type or 'team' }}">
+                                <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: 4px; border: 1px solid var(--border);">
+                                    {% if template.template_type == 'event' %}
+                                        <span style="font-size: 1.25rem;">📺</span>
+                                        <span><strong>Event Template</strong> - For event-based groups (Dispatcharr M3U streams)</span>
+                                    {% else %}
+                                        <span style="font-size: 1.25rem;">👤</span>
+                                        <span><strong>Team Template</strong> - For individual teams</span>
+                                    {% endif %}
+                                    <span style="margin-left: auto; font-size: 0.75rem; color: var(--text-muted);">Type cannot be changed after creation</span>
+                                </div>
+                            {% else %}
+                                <select name="template_type" id="template_type" onchange="updateTemplateTypeDefaults()" required>
+                                    <option value="team" selected>👤 Team Template - For individual teams</option>
+                                    <option value="event">📺 Event Template - For event-based groups (Dispatcharr)</option>
+                                </select>
+                                <small class="help-text">Choose "Event Template" for Dispatcharr stream groups. Template type cannot be changed after creation.</small>
+                            {% endif %}
                         </div>
                     </fieldset>
 
@@ -609,8 +631,8 @@
                         </div>
                     </fieldset>
 
-                    <!-- Default Description Templates Fieldset -->
-                    <fieldset style="margin-top: 1.5rem;">
+                    <!-- Default Description Templates Fieldset (Team templates - multiple with randomization) -->
+                    <fieldset id="team-description-section" style="margin-top: 1.5rem;">
                         <legend><h3>Default Description Templates</h3></legend>
 
                         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
@@ -628,6 +650,20 @@
 
                         <!-- Hidden counter for form submission -->
                         <input type="hidden" id="fallback-count" name="fallback_count" value="0">
+                    </fieldset>
+
+                    <!-- Simple Description Field (Event templates - single description only) -->
+                    <fieldset id="event-description-section" style="margin-top: 1.5rem; display: none;">
+                        <legend><h3>Program Description</h3></legend>
+
+                        <div class="form-group">
+                            <label for="event_description">Description Template</label>
+                            <input type="text" name="event_description" id="event_description" class="template-field" placeholder="e.g., {away_team} vs {home_team} - {league} {sport}" value="{away_team} vs {home_team} - {league} {sport}">
+                            <div class="inline-preview">
+                                <small>Preview:</small>
+                                <span id="preview-event-description"></span>
+                            </div>
+                        </div>
                     </fieldset>
                 </div>
 
@@ -763,8 +799,8 @@
                         </div>
                     </fieldset>
 
-                    <!-- Idle Day -->
-                    <fieldset style="margin-top: 1.5rem;">
+                    <!-- Idle Day (hidden for event templates) -->
+                    <fieldset id="idle-day-section" style="margin-top: 1.5rem;">
                         <legend><h3>💤 Idle Day</h3></legend>
                         <div class="form-group">
                             <label>
@@ -953,6 +989,10 @@ let currentPreviewSport = 'NBA';  // Default sport for preview
 let recentlyUsedVars = [];
 let lastTemplateField = null;
 
+// Template type filtering
+let currentTemplateType = '{{ template.template_type if template else 'team' }}';  // 'team' or 'event'
+let variableContextMap = {};  // Map of varName -> ['team', 'event'] contexts
+
 // Note: Suffix strategies are now loaded from variables.json via API
 // No more hardcoded arrays - everything uses window.variableSuffixMap
 
@@ -1000,6 +1040,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     initTemplateVariables();
     initTemplatePreview();
     initFallbackDescriptions();
+    initEventDescription();  // Populate event description for event templates
     conditionsRender();
 
     // Load recently used variables
@@ -1016,6 +1057,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Initialize conditional toggle states on page load
     togglePostgameConditional();
     toggleIdleConditional();
+
+    // Apply template type visibility (hide conditions tab and idle section for event templates)
+    updateTemplateTypeDefaults();
 });
 
 // ============================================================================
@@ -1190,6 +1234,11 @@ function updatePreviews() {
         }
     });
 
+    // Update inline preview for event description (single description for event templates)
+    const eventDesc = document.getElementById('event_description')?.value || '';
+    const previewEventDesc = document.getElementById('preview-event-description');
+    if (previewEventDesc) previewEventDesc.textContent = replaceVariables(eventDesc);
+
     // Update inline previews for conditional descriptions
     conditions.forEach((condition, index) => {
         const input = document.getElementById(`cond_template_${index}`);
@@ -1238,6 +1287,7 @@ async function loadVariablesFromAPI() {
         const categoryMap = {};
         const sampleMap = {};  // Now stores { varName: { NBA: 'val', NFL: 'val', ... } }
         const suffixMap = {}; // Store suffix availability for each variable
+        const contextMap = {}; // Store context (team/event) for each variable
 
         data.variables.forEach(variable => {
             if (!categoryMap[variable.category]) {
@@ -1265,6 +1315,9 @@ async function loadVariablesFromAPI() {
             }
 
             suffixMap[variable.name] = variable.available_suffixes || ['base', 'next', 'last'];
+
+            // Store context for filtering (default to both if not specified)
+            contextMap[variable.name] = variable.context || ['team', 'event'];
         });
 
         // Load available sports from metadata if present
@@ -1275,6 +1328,7 @@ async function loadVariablesFromAPI() {
         TEMPLATE_VARIABLES = categoryMap;
         sampleDataFromAPI = sampleMap;
         window.variableSuffixMap = suffixMap; // Make globally available
+        variableContextMap = contextMap; // Store for filtering
 
         // Initialize sampleData for current sport
         sampleData = getSampleDataForSport(currentPreviewSport);
@@ -1284,6 +1338,120 @@ async function loadVariablesFromAPI() {
         console.error('Failed to load variables from API:', error);
         return false;
     }
+}
+
+// ============================================================================
+// TEMPLATE TYPE HANDLING
+// ============================================================================
+function updateTemplateTypeDefaults() {
+    const select = document.getElementById('template_type');
+    if (!select) return;
+
+    currentTemplateType = select.value;
+
+    // Update default values based on template type
+    if (currentTemplateType === 'event') {
+        // Event template defaults
+        const titleField = document.getElementById('title_format');
+        const subtitleField = document.getElementById('subtitle_template');
+
+        if (titleField && titleField.value === '{team_name} {sport}') {
+            titleField.value = '{away_team} @ {home_team}';
+        }
+        if (subtitleField && subtitleField.value === '{venue_full}') {
+            subtitleField.value = '{venue}';
+        }
+
+        // Update first fallback description if it's the default
+        const firstFallbackTextarea = document.querySelector('textarea[name^="fallback_template_"]');
+        if (firstFallbackTextarea && firstFallbackTextarea.value === '{team_name} faces {opponent} at {venue}') {
+            firstFallbackTextarea.value = '{away_team} vs {home_team} - {league} {sport}';
+        }
+
+        // Update pregame defaults
+        const pregameTitle = document.getElementById('pregame_title');
+        const pregameDesc = document.getElementById('pregame_description');
+        if (pregameTitle && pregameTitle.value === 'Pregame Coverage') {
+            pregameTitle.value = '{away_team} @ {home_team} Pregame';
+        }
+        if (pregameDesc && pregameDesc.value === '{team_name} plays {opponent} today at {game_time}') {
+            pregameDesc.value = '{away_team} takes on {home_team} at {game_time}';
+        }
+
+        // Update postgame defaults
+        const postgameTitle = document.getElementById('postgame_title');
+        if (postgameTitle && postgameTitle.value === 'Postgame Recap') {
+            postgameTitle.value = '{away_team} @ {home_team} Postgame';
+        }
+
+        // Update idle defaults
+        const idleTitle = document.getElementById('idle_title');
+        if (idleTitle && idleTitle.value === '{team_name} Programming') {
+            idleTitle.value = '{league} Programming';
+        }
+    } else {
+        // Team template defaults (restore if changed)
+        const titleField = document.getElementById('title_format');
+        const subtitleField = document.getElementById('subtitle_template');
+
+        if (titleField && titleField.value === '{away_team} @ {home_team}') {
+            titleField.value = '{team_name} {sport}';
+        }
+        if (subtitleField && subtitleField.value === '{venue}') {
+            subtitleField.value = '{venue_full}';
+        }
+
+        const firstFallbackTextarea = document.querySelector('textarea[name^="fallback_template_"]');
+        if (firstFallbackTextarea && firstFallbackTextarea.value === '{away_team} vs {home_team} - {league} {sport}') {
+            firstFallbackTextarea.value = '{team_name} faces {opponent} at {venue}';
+        }
+    }
+
+    // Re-render variables sidebar with filtered variables
+    initTemplateVariables();
+
+    // Update previews
+    updatePreviews();
+
+    // Hide/show sections based on template type
+    const conditionsTab = document.querySelector('.tab-button[data-tab="conditions"]');
+    const conditionsContent = document.getElementById('tab-conditions');
+    const idleDaySection = document.getElementById('idle-day-section');
+    const teamDescriptionSection = document.getElementById('team-description-section');
+    const eventDescriptionSection = document.getElementById('event-description-section');
+
+    if (currentTemplateType === 'event') {
+        // Hide Conditions tab for event templates
+        if (conditionsTab) conditionsTab.style.display = 'none';
+        if (conditionsContent) conditionsContent.style.display = 'none';
+        // Hide Idle Day section for event templates
+        if (idleDaySection) idleDaySection.style.display = 'none';
+        // Hide team description (multiple fallbacks), show event description (single)
+        if (teamDescriptionSection) teamDescriptionSection.style.display = 'none';
+        if (eventDescriptionSection) eventDescriptionSection.style.display = '';
+        // If currently on conditions tab, switch to basic
+        if (conditionsTab && conditionsTab.classList.contains('active')) {
+            document.querySelector('.tab-button[data-tab="basic"]').click();
+        }
+    } else {
+        // Show sections for team templates
+        if (conditionsTab) conditionsTab.style.display = '';
+        if (conditionsContent) conditionsContent.style.display = '';
+        if (idleDaySection) idleDaySection.style.display = '';
+        // Show team description (multiple fallbacks), hide event description (single)
+        if (teamDescriptionSection) teamDescriptionSection.style.display = '';
+        if (eventDescriptionSection) eventDescriptionSection.style.display = 'none';
+    }
+}
+
+// Check if a variable is available for the current template type
+function isVariableAvailableForType(varName) {
+    const context = variableContextMap[varName];
+    if (!context || context.length === 0) {
+        // No context specified - available for both
+        return true;
+    }
+    return context.includes(currentTemplateType);
 }
 
 function getSuffixClass(variableName) {
@@ -1317,9 +1485,18 @@ function generateTemplateVariablesHTML(containerId) {
         `<option value="${sport}" ${sport === currentPreviewSport ? 'selected' : ''}>${sport}</option>`
     ).join('');
 
+    // Template type indicator
+    const typeLabel = currentTemplateType === 'event' ? '📺 Event' : '👤 Team';
+
     let html = `
         <div class="variable-helper">
             <h4 style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 1rem;">📝 Template Variables</h4>
+
+            <!-- Template Type Indicator -->
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.375rem 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.8rem;">
+                <span style="color: var(--text-muted);">Showing vars for:</span>
+                <span style="font-weight: 600; color: var(--primary);">${typeLabel}</span>
+            </div>
 
             <!-- Suffix System Guide -->
             <div class="suffix-guide">
@@ -1353,6 +1530,12 @@ function generateTemplateVariablesHTML(containerId) {
     }
 
     for (const [categoryName, categoryData] of Object.entries(TEMPLATE_VARIABLES)) {
+        // Filter variables by current template type
+        const filteredVars = categoryData.variables.filter(varName => isVariableAvailableForType(varName));
+
+        // Skip category if no variables are available for this template type
+        if (filteredVars.length === 0) continue;
+
         html += `
             <details style="margin-bottom: 0.5rem;" class="variable-category">
                 <summary style="cursor: pointer; font-weight: 600; color: var(--text-primary); font-size: 0.85rem; padding: 0.25rem 0;">${categoryName}</summary>
@@ -1360,7 +1543,7 @@ function generateTemplateVariablesHTML(containerId) {
         `;
 
         // Sort variables alphabetically within category
-        const sortedVars = [...categoryData.variables].sort((a, b) => a.localeCompare(b));
+        const sortedVars = [...filteredVars].sort((a, b) => a.localeCompare(b));
 
         sortedVars.forEach(varName => {
             const suffixClass = getSuffixClass(varName);
@@ -1379,7 +1562,7 @@ function generateTemplateVariablesHTML(containerId) {
                     displayName = `${varName}.next`;
                     clickHandler = `onclick="insertVariable('{${varName}.next}')"`;
                 } else {
-                    // base only
+                    // base only - insert directly
                     displayName = varName;
                     clickHandler = `onclick="insertVariable('{${varName}}')"`;
                 }
@@ -1837,6 +2020,17 @@ function initFallbackDescriptions() {
     renderFallbacks();
 }
 
+function initEventDescription() {
+    // For event templates editing: populate event_description from first fallback
+    const templateType = document.getElementById('template_type')?.value || 'team';
+    const eventDescInput = document.getElementById('event_description');
+
+    if (templateType === 'event' && eventDescInput && fallbacks.length > 0) {
+        // Use the first fallback's template as the event description
+        eventDescInput.value = fallbacks[0].template || '';
+    }
+}
+
 function renderFallbacks() {
     const container = document.getElementById('fallback-descriptions-container');
     const countInput = document.getElementById('fallback-count');
@@ -2064,57 +2258,80 @@ async function saveConditionToPreset(index) {
 // FORM SUBMISSION
 // ============================================================================
 document.getElementById('template-form').addEventListener('submit', function(e) {
-    // Serialize fallback descriptions from form inputs
-    const fallbackCount = parseInt(document.getElementById('fallback-count').value) || 0;
-    const serializedFallbacks = [];
+    const templateType = document.getElementById('template_type')?.value || 'team';
+    let allDescriptions = [];
 
-    for (let i = 0; i < fallbackCount; i++) {
-        const labelInput = document.querySelector(`input[name="fallback_label_${i}"]`);
-        const templateInput = document.querySelector(`textarea[name="fallback_template_${i}"]`);
+    if (templateType === 'event') {
+        // Event templates: single description only, no fallbacks or conditions
+        const eventDescInput = document.getElementById('event_description');
+        const eventDescValue = eventDescInput?.value.trim() || '';
 
-        if (templateInput && templateInput.value.trim()) {
-            const label = labelInput?.value.trim() || '';
-            if (!label) {
-                e.preventDefault();
-                alert('All fallback descriptions must have a label.');
-                return false;
-            }
-            serializedFallbacks.push({
-                priority: 100,
-                template: templateInput.value,
-                label: label
-            });
+        if (!eventDescValue) {
+            e.preventDefault();
+            alert('A description is required.');
+            return false;
         }
+
+        // Store as a single description entry (no priority/fallback system)
+        allDescriptions = [{
+            priority: 100,
+            template: eventDescValue,
+            label: 'Default'
+        }];
+    } else {
+        // Team templates: multiple fallbacks + conditional descriptions
+        const fallbackCount = parseInt(document.getElementById('fallback-count').value) || 0;
+        const serializedFallbacks = [];
+
+        for (let i = 0; i < fallbackCount; i++) {
+            const labelInput = document.querySelector(`input[name="fallback_label_${i}"]`);
+            const templateInput = document.querySelector(`textarea[name="fallback_template_${i}"]`);
+
+            if (templateInput && templateInput.value.trim()) {
+                const label = labelInput?.value.trim() || '';
+                if (!label) {
+                    e.preventDefault();
+                    alert('All fallback descriptions must have a label.');
+                    return false;
+                }
+                serializedFallbacks.push({
+                    priority: 100,
+                    template: templateInput.value,
+                    label: label
+                });
+            }
+        }
+
+        // Ensure at least one fallback exists for team templates
+        if (serializedFallbacks.length === 0) {
+            e.preventDefault();
+            alert('At least one fallback description is required.');
+            return false;
+        }
+
+        // Serialize conditional descriptions from form inputs
+        const serializedConditions = conditions.map((cond, index) => {
+            const nameInput = document.querySelectorAll('input[name="cond_name[]"]')[index];
+            const typeSelect = document.querySelectorAll('select[name="cond_type[]"]')[index];
+            const valueInput = document.querySelectorAll('input[name="cond_value[]"]')[index];
+            const priorityInput = document.querySelectorAll('input[name="cond_priority[]"]')[index];
+            const templateInput = document.querySelectorAll('input[name="cond_template[]"]')[index];
+            const sourceInput = document.querySelectorAll('input[name="cond_source[]"]')[index];
+
+            return {
+                name: nameInput?.value || cond.name,
+                condition: typeSelect?.value || cond.condition,
+                condition_value: valueInput?.value || cond.condition_value,
+                priority: parseInt(priorityInput?.value) || cond.priority,
+                template: templateInput?.value || cond.template,
+                source: sourceInput?.value || cond.source
+            };
+        });
+
+        // Merge fallbacks + conditionals into single array
+        allDescriptions = [...serializedFallbacks, ...serializedConditions];
     }
 
-    // Ensure at least one fallback exists
-    if (serializedFallbacks.length === 0) {
-        e.preventDefault();
-        alert('At least one fallback description is required.');
-        return false;
-    }
-
-    // Serialize conditional descriptions from form inputs
-    const serializedConditions = conditions.map((cond, index) => {
-        const nameInput = document.querySelectorAll('input[name="cond_name[]"]')[index];
-        const typeSelect = document.querySelectorAll('select[name="cond_type[]"]')[index];
-        const valueInput = document.querySelectorAll('input[name="cond_value[]"]')[index];
-        const priorityInput = document.querySelectorAll('input[name="cond_priority[]"]')[index];
-        const templateInput = document.querySelectorAll('input[name="cond_template[]"]')[index];
-        const sourceInput = document.querySelectorAll('input[name="cond_source[]"]')[index];
-
-        return {
-            name: nameInput?.value || cond.name,
-            condition: typeSelect?.value || cond.condition,
-            condition_value: valueInput?.value || cond.condition_value,
-            priority: parseInt(priorityInput?.value) || cond.priority,
-            template: templateInput?.value || cond.template,
-            source: sourceInput?.value || cond.source
-        };
-    });
-
-    // Merge fallbacks + conditionals into single array
-    const allDescriptions = [...serializedFallbacks, ...serializedConditions];
     const descriptionsJson = JSON.stringify(allDescriptions);
 
     // Create a hidden field for all descriptions (fallbacks + conditionals)

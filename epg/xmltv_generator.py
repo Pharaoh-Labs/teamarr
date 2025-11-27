@@ -28,18 +28,8 @@ class XMLTVGenerator:
         Returns:
             XMLTV XML string
         """
-        # Create root element
+        # Create root element (no watermark - consolidator handles that)
         tv = ET.Element('tv')
-
-        # Get generator info from settings (can be overridden/excluded)
-        generator_name = settings.get('xmltv_generator_name', self.generator_name)
-        generator_url = settings.get('xmltv_generator_url', self.generator_url)
-
-        # Only add attributes if not empty
-        if generator_name:
-            tv.set('generator-info-name', generator_name)
-        if generator_url:
-            tv.set('generator-info-url', generator_url)
 
         # Add channels (one per team)
         for team in teams:
@@ -207,17 +197,11 @@ class XMLTVGenerator:
         return '\n'.join(lines)
 
     def _add_doctype(self, xml_str: str) -> str:
-        """Add XML declaration, watermark comment, and DOCTYPE"""
+        """Add XML declaration and DOCTYPE (watermark added by consolidator)"""
         declaration = '<?xml version="1.0" encoding="UTF-8"?>'
-        watermark = (
-            '<!--\n'
-            f'  Generated with Teamarr v{self.version} - Dynamic EPG Generator for Sports Team Channels\n'
-            '  https://github.com/egyptiangio/teamarr\n'
-            '-->'
-        )
         doctype = '<!DOCTYPE tv SYSTEM "xmltv.dtd">'
 
-        return f"{declaration}\n{watermark}\n{doctype}\n{xml_str}"
+        return f"{declaration}\n{doctype}\n{xml_str}"
 
     def calculate_file_hash(self, xml_content: str) -> str:
         """Calculate SHA256 hash of XML content for change detection"""

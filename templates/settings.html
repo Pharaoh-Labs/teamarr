@@ -141,7 +141,7 @@
         <div class="form-section">
             <h2>Dispatcharr Integration</h2>
             <p style="color: var(--text-muted); font-size: 0.8125rem; margin: 0 0 1rem 0;">
-                Automatically refresh your EPG source in Dispatcharr after Teamarr generates new EPG data.
+                Connect to Dispatcharr for event-based EPG generation from M3U stream groups, and automatically sync EPG updates when new data is generated.
             </p>
 
             <div class="form-group" style="margin-bottom: 1rem;">
@@ -149,7 +149,7 @@
                     <input type="checkbox" name="dispatcharr_enabled" id="dispatcharr_enabled"
                            {% if settings.dispatcharr_enabled %}checked{% endif %}
                            onchange="toggleDispatcharrFields()">
-                    <span>Enable Dispatcharr Auto-Refresh</span>
+                    <span>Enable Dispatcharr Integration</span>
                 </label>
             </div>
 
