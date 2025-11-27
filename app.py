@@ -503,10 +503,19 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
         try:
             lifecycle_mgr = get_lifecycle_manager()
             if lifecycle_mgr:
+                # 3a: Clean up channels from disabled groups
+                disabled_cleanup = lifecycle_mgr.cleanup_disabled_groups()
+                disabled_deleted = len(disabled_cleanup.get('deleted', []))
+                if disabled_deleted:
+                    app.logger.info(f"🗑️ Cleaned up {disabled_deleted} channel(s) from disabled groups")
+
+                # 3b: Process scheduled deletions
                 deletion_results = lifecycle_mgr.process_scheduled_deletions()
-                lifecycle_stats['channels_deleted'] = len(deletion_results.get('deleted', []))
-                if lifecycle_stats['channels_deleted']:
-                    app.logger.info(f"🗑️ Processed {lifecycle_stats['channels_deleted']} scheduled channel deletions")
+                scheduled_deleted = len(deletion_results.get('deleted', []))
+                if scheduled_deleted:
+                    app.logger.info(f"🗑️ Processed {scheduled_deleted} scheduled channel deletions")
+
+                lifecycle_stats['channels_deleted'] = disabled_deleted + scheduled_deleted
         except Exception as e:
             app.logger.warning(f"Channel lifecycle processing error: {e}")
 
@@ -2949,15 +2958,79 @@ def api_event_epg_groups_update(group_id):
 
 @app.route('/api/event-epg/groups/<int:group_id>', methods=['DELETE'])
 def api_event_epg_groups_delete(group_id):
-    """Delete/disable an event EPG group."""
+    """
+    Delete an event EPG group and its associated managed channels.
+
+    When a group is DELETED (not disabled):
+    - All associated managed channels are immediately deleted from Dispatcharr
+    - Channels are marked as deleted in Teamarr database
+    - Group record is deleted
+    - EPG will be cleaned up at next generation
+    """
+    from database import get_managed_channels_for_group, mark_managed_channel_deleted
+    from epg.channel_lifecycle import get_lifecycle_manager
+
     try:
         group = get_event_epg_group(group_id)
         if not group:
             return jsonify({'error': 'Group not found'}), 404
 
+        group_name = group['group_name']
+        channels_deleted = 0
+        channels_failed = 0
+
+        # Delete all associated managed channels IMMEDIATELY
+        managed_channels = get_managed_channels_for_group(group_id)
+        if managed_channels:
+            app.logger.info(f"Deleting {len(managed_channels)} managed channels for group '{group_name}'...")
+
+            lifecycle_mgr = get_lifecycle_manager()
+            if lifecycle_mgr:
+                for channel in managed_channels:
+                    try:
+                        # Delete from Dispatcharr
+                        delete_result = lifecycle_mgr.channel_api.delete_channel(
+                            channel['dispatcharr_channel_id']
+                        )
+
+                        if delete_result.get('success') or 'not found' in str(delete_result.get('error', '')).lower():
+                            # Mark as deleted in database
+                            mark_managed_channel_deleted(channel['id'])
+
+                            # Clean up logo if present
+                            logo_id = channel.get('dispatcharr_logo_id')
+                            if logo_id:
+                                lifecycle_mgr.channel_api.delete_logo(logo_id)
+
+                            channels_deleted += 1
+                            app.logger.debug(f"Deleted channel '{channel['channel_name']}'")
+                        else:
+                            channels_failed += 1
+                            app.logger.warning(
+                                f"Failed to delete channel '{channel['channel_name']}': "
+                                f"{delete_result.get('error')}"
+                            )
+                    except Exception as e:
+                        channels_failed += 1
+                        app.logger.error(f"Error deleting channel '{channel['channel_name']}': {e}")
+            else:
+                app.logger.warning("Could not get lifecycle manager - channels may be orphaned in Dispatcharr")
+
+        # Delete the group record
         if delete_event_epg_group(group_id):
-            app.logger.info(f"Deleted event EPG group: {group['group_name']} (ID: {group_id})")
-            return jsonify({'success': True, 'message': 'Group deleted'})
+            message = f"Group '{group_name}' deleted"
+            if channels_deleted > 0:
+                message += f" with {channels_deleted} channel(s)"
+            if channels_failed > 0:
+                message += f" ({channels_failed} channel deletion(s) failed)"
+
+            app.logger.info(f"Deleted event EPG group: {group_name} (ID: {group_id})")
+            return jsonify({
+                'success': True,
+                'message': message,
+                'channels_deleted': channels_deleted,
+                'channels_failed': channels_failed
+            })
         else:
             return jsonify({'error': 'Delete failed'}), 500
 

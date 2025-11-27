@@ -604,6 +604,89 @@ class ChannelLifecycleManager:
 
         return results
 
+    def cleanup_disabled_groups(self) -> Dict[str, Any]:
+        """
+        Clean up channels from disabled event groups.
+
+        When a group is DISABLED (not deleted), channels are cleaned up at
+        the next EPG generation rather than immediately. This allows users
+        to re-enable the group without losing channels.
+
+        Returns:
+            Dict with 'deleted' and 'errors' lists
+        """
+        from database import (
+            get_all_event_epg_groups,
+            get_managed_channels_for_group,
+            mark_managed_channel_deleted
+        )
+
+        results = {
+            'deleted': [],
+            'errors': []
+        }
+
+        # Get all disabled groups
+        all_groups = get_all_event_epg_groups(enabled_only=False)
+        disabled_groups = [g for g in all_groups if not g.get('enabled', True)]
+
+        if not disabled_groups:
+            return results
+
+        logger.info(f"Checking {len(disabled_groups)} disabled group(s) for channel cleanup...")
+
+        for group in disabled_groups:
+            group_id = group['id']
+            group_name = group.get('group_name', f'Group {group_id}')
+
+            # Get active managed channels for this disabled group
+            channels = get_managed_channels_for_group(group_id)
+            if not channels:
+                continue
+
+            logger.info(f"Cleaning up {len(channels)} channel(s) from disabled group '{group_name}'...")
+
+            for channel in channels:
+                try:
+                    # Delete from Dispatcharr
+                    delete_result = self.channel_api.delete_channel(
+                        channel['dispatcharr_channel_id']
+                    )
+
+                    if delete_result.get('success') or 'not found' in str(delete_result.get('error', '')).lower():
+                        # Mark as deleted in database
+                        mark_managed_channel_deleted(channel['id'])
+
+                        # Clean up logo if present
+                        logo_id = channel.get('dispatcharr_logo_id')
+                        if logo_id:
+                            self.channel_api.delete_logo(logo_id)
+
+                        results['deleted'].append({
+                            'group_name': group_name,
+                            'channel_id': channel['dispatcharr_channel_id'],
+                            'channel_name': channel['channel_name']
+                        })
+                        logger.debug(f"Deleted channel '{channel['channel_name']}' (disabled group)")
+                    else:
+                        results['errors'].append({
+                            'group_name': group_name,
+                            'channel_id': channel['dispatcharr_channel_id'],
+                            'error': delete_result.get('error')
+                        })
+
+                except Exception as e:
+                    results['errors'].append({
+                        'group_name': group_name,
+                        'channel_id': channel.get('dispatcharr_channel_id'),
+                        'error': str(e)
+                    })
+
+        if results['deleted']:
+            logger.info(f"Cleaned up {len(results['deleted'])} channel(s) from disabled groups")
+
+        return results
+
     def process_scheduled_deletions(self) -> Dict[str, Any]:
         """
         Process channels that are past their scheduled deletion time.
