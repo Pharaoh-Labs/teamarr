@@ -130,6 +130,17 @@
                     <small class="form-help">Will delete by this time, even if stream still exists</small>
                 </div>
             </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="include_final_events">Completed Events (Today)</label>
+                    <select id="include_final_events" name="include_final_events" class="form-control">
+                        <option value="0" {% if not settings.include_final_events %}selected{% endif %}>Exclude</option>
+                        <option value="1" {% if settings.include_final_events %}selected{% endif %}>Include</option>
+                    </select>
+                    <small class="form-help">Whether to create channels/EPG for events from today that are already final</small>
+                </div>
+            </div>
         </div>
 
         <!-- EPG Generation Settings -->

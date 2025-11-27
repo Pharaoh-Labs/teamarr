@@ -515,6 +515,7 @@ def run_migrations(conn):
     global_lifecycle_columns = [
         ("channel_create_timing", "TEXT DEFAULT 'same_day'"),  # Global default: stream_available, same_day, day_before, 2_days_before, manual
         ("channel_delete_timing", "TEXT DEFAULT 'same_day'"),  # Global default: stream_removed, same_day, day_after, 2_days_after, manual
+        ("include_final_events", "INTEGER DEFAULT 0"),  # Whether to include completed/final events from today: 0=exclude, 1=include
     ]
 
     for col_name, col_def in global_lifecycle_columns:

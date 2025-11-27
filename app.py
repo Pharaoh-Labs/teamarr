@@ -155,6 +155,12 @@ def refresh_event_group_core(group, m3u_manager, wait_for_m3u=True):
 
     group_id = group['id']
 
+    # Fetch settings early for use throughout the function
+    conn = get_connection()
+    settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+    conn.close()
+    include_final_events = bool(settings.get('include_final_events', 0))
+
     try:
         # Step 1: Refresh M3U data
         app.logger.debug(f"Refreshing M3U account {group['dispatcharr_account_id']} for event EPG group {group_id}")
@@ -191,7 +197,8 @@ def refresh_event_group_core(group, m3u_manager, wait_for_m3u=True):
                         team_result['home_team_id'],
                         group['assigned_league'],
                         game_date=team_result.get('game_date'),
-                        game_time=team_result.get('game_time')
+                        game_time=team_result.get('game_time'),
+                        include_final_events=include_final_events
                     )
 
                     if event_result.get('found'):
@@ -226,11 +233,7 @@ def refresh_event_group_core(group, m3u_manager, wait_for_m3u=True):
         channel_results = None
 
         if matched_streams:
-            # Fetch settings and template BEFORE generating EPG
-            conn = get_connection()
-            settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
-            conn.close()
-
+            # Settings already fetched at start of function
             event_template = None
             if group.get('event_template_id'):
                 event_template = get_template(group['event_template_id'])
@@ -1650,7 +1653,7 @@ def settings_update():
             'auto_generate_enabled', 'auto_generate_frequency',
             'dispatcharr_enabled', 'dispatcharr_url', 'dispatcharr_username',
             'dispatcharr_password', 'dispatcharr_epg_id',
-            'channel_create_timing', 'channel_delete_timing'
+            'channel_create_timing', 'channel_delete_timing', 'include_final_events'
         ]
 
         for field in fields:
@@ -1659,8 +1662,8 @@ def settings_update():
                 # Handle boolean fields (checkboxes)
                 if field in ['cache_enabled', 'auto_generate_enabled', 'dispatcharr_enabled']:
                     value = 1 if value == 'on' else 0
-                # Handle radio button boolean fields (value is '1' or '0')
-                elif field == 'show_timezone':
+                # Handle radio button / select boolean fields (value is '1' or '0')
+                elif field in ['show_timezone', 'include_final_events']:
                     value = int(value)
                 # Validate timezone before saving
                 elif field == 'default_timezone':
@@ -2563,6 +2566,12 @@ def api_event_epg_dispatcharr_streams(group_id):
                 from epg.team_matcher import create_matcher
                 from epg.event_matcher import create_event_matcher
 
+                # Fetch settings to get include_final_events preference
+                conn = get_connection()
+                settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+                conn.close()
+                include_final_events = bool(settings.get('include_final_events', 0))
+
                 team_matcher = create_matcher()
                 event_matcher = create_event_matcher()
 
@@ -2579,7 +2588,8 @@ def api_event_epg_dispatcharr_streams(group_id):
                                 team_result['home_team_id'],
                                 league,
                                 game_date=team_result.get('game_date'),
-                                game_time=team_result.get('game_time')
+                                game_time=team_result.get('game_time'),
+                                include_final_events=include_final_events
                             )
                             stream['event_match'] = {
                                 'found': event_result['found'],
@@ -3147,6 +3157,12 @@ def api_event_epg_refresh_stream(group_id):
             from epg.team_matcher import create_matcher
             from epg.event_matcher import create_event_matcher
 
+            # Fetch settings early for use in matching and EPG generation
+            conn = get_connection()
+            settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+            conn.close()
+            include_final_events = bool(settings.get('include_final_events', 0))
+
             team_matcher = create_matcher()
             event_matcher = create_event_matcher()
             matched_count = 0
@@ -3161,7 +3177,8 @@ def api_event_epg_refresh_stream(group_id):
                             team_result['home_team_id'],
                             group['assigned_league'],
                             game_date=team_result.get('game_date'),
-                            game_time=team_result.get('game_time')
+                            game_time=team_result.get('game_time'),
+                            include_final_events=include_final_events
                         )
                         if event_result.get('found'):
                             matched_count += 1
@@ -3182,10 +3199,7 @@ def api_event_epg_refresh_stream(group_id):
                 from epg.event_epg_generator import generate_event_epg
                 from epg.epg_consolidator import get_data_dir, after_event_epg_generation
 
-                # Get settings first to derive consistent data directory
-                conn = get_connection()
-                settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
-                conn.close()
+                # Settings already fetched at start of step 3
                 final_output_path = settings.get('epg_output_path', '/app/data/teamarr.xml')
 
                 epg_result = generate_event_epg(

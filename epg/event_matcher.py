@@ -117,7 +117,8 @@ class EventMatcher:
         team2_id: str,
         league: str,
         game_date: datetime = None,
-        game_time: datetime = None
+        game_time: datetime = None,
+        include_final_events: bool = False
     ) -> Dict[str, Any]:
         """
         Find an ESPN event between two teams.
@@ -136,6 +137,7 @@ class EventMatcher:
             league: League code (e.g., 'nfl', 'epl')
             game_date: Optional target date extracted from stream name
             game_time: Optional target time for double-header disambiguation
+            include_final_events: Whether to include completed events from today (default False)
 
         Returns:
             Dict with:
@@ -219,12 +221,18 @@ class EventMatcher:
                 if str(team2_id) not in team_ids_in_game:
                     continue
 
-                # If completed, only include if game date is today or later
+                # Filter completed games based on settings
                 if is_completed:
                     today = datetime.now(ZoneInfo('UTC')).date()
-                    if event_date.date() < today:
-                        skipped_completed_game = True  # Mark that we found but skipped a completed game
-                        continue  # Skip completed games from previous days
+                    event_day = event_date.date()
+                    if event_day < today:
+                        # Always skip completed games from previous days
+                        skipped_completed_game = True
+                        continue
+                    elif event_day == today and not include_final_events:
+                        # Skip completed games from today unless include_final_events is True
+                        skipped_completed_game = True
+                        continue
 
                 # Found a matching game!
                 matching_events.append({
@@ -239,7 +247,7 @@ class EventMatcher:
 
         if not matching_events:
             if skipped_completed_game:
-                result['reason'] = 'Game completed (previous day)'
+                result['reason'] = 'Game completed (excluded)'
             else:
                 result['reason'] = f'No game found between teams'
             return result
@@ -531,7 +539,8 @@ class EventMatcher:
         team2_id: str,
         league: str,
         game_date: datetime = None,
-        game_time: datetime = None
+        game_time: datetime = None,
+        include_final_events: bool = False
     ) -> Dict[str, Any]:
         """
         Find event and enrich with scoreboard data in one call.
@@ -544,6 +553,7 @@ class EventMatcher:
             league: League code
             game_date: Optional target date from stream name
             game_time: Optional target time for double-header disambiguation
+            include_final_events: Whether to include completed events from today (default False)
 
         Returns:
             Result dict with enriched event (if found)
@@ -551,7 +561,8 @@ class EventMatcher:
         result = self.find_event(
             team1_id, team2_id, league,
             game_date=game_date,
-            game_time=game_time
+            game_time=game_time,
+            include_final_events=include_final_events
         )
 
         if result['found']:
