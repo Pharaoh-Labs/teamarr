@@ -209,6 +209,40 @@ class EventMatcher:
 
         return matching_events[-1]
 
+    def _search_team_schedule(
+        self,
+        primary_team_id: str,
+        opponent_team_id: str,
+        sport: str,
+        api_league: str,
+        include_final_events: bool
+    ) -> Tuple[List[Dict], bool, Optional[str]]:
+        """
+        Search a team's schedule for games against an opponent.
+
+        Args:
+            primary_team_id: Team whose schedule to fetch
+            opponent_team_id: Opponent to search for
+            sport: Sport type for API call
+            api_league: League code for API call
+            include_final_events: Whether to include completed events
+
+        Returns:
+            Tuple of (matching_events, skipped_completed, error_reason)
+        """
+        schedule_data = self.espn.get_team_schedule(sport, api_league, primary_team_id)
+
+        if not schedule_data or 'events' not in schedule_data:
+            return [], False, f'Could not fetch schedule for team {primary_team_id}'
+
+        matching_events, skipped_completed = self._filter_matching_events(
+            schedule_data.get('events', []),
+            opponent_team_id,
+            include_final_events
+        )
+
+        return matching_events, skipped_completed, None
+
     def find_event(
         self,
         team1_id: str,
@@ -221,8 +255,9 @@ class EventMatcher:
         """
         Find an ESPN event between two teams.
 
-        Searches team1's schedule for any game against team2, regardless
-        of which team is home or away.
+        Searches team1's schedule first, then falls back to team2's schedule
+        if no game is found. This handles edge cases where one team's schedule
+        might be incomplete in ESPN's API.
 
         Args:
             team1_id: ESPN team ID for first team (from stream name)
@@ -253,20 +288,24 @@ class EventMatcher:
             result['reason'] = f'Invalid api_path for league: {league}'
             return result
 
-        # Fetch team1's schedule
+        # Try team1's schedule first
         logger.debug(f"Fetching schedule for team {team1_id} in {league}")
-        schedule_data = self.espn.get_team_schedule(sport, api_league, team1_id)
-
-        if not schedule_data or 'events' not in schedule_data:
-            result['reason'] = f'Could not fetch schedule for team {team1_id}'
-            return result
-
-        # Filter to matching events
-        matching_events, skipped_completed = self._filter_matching_events(
-            schedule_data.get('events', []),
-            team2_id,
-            include_final_events
+        matching_events, skipped_completed, error = self._search_team_schedule(
+            team1_id, team2_id, sport, api_league, include_final_events
         )
+
+        # If no match found on team1's schedule, try team2's schedule as fallback
+        if not matching_events and not skipped_completed:
+            logger.debug(f"No match on team {team1_id} schedule, trying team {team2_id}")
+            matching_events, skipped_completed, error = self._search_team_schedule(
+                team2_id, team1_id, sport, api_league, include_final_events
+            )
+            if matching_events:
+                logger.info(f"Found game via team2 ({team2_id}) schedule fallback")
+
+        if error and not matching_events:
+            result['reason'] = error
+            return result
 
         if not matching_events:
             result['reason'] = 'Game completed (excluded)' if skipped_completed else 'No game found between teams'

@@ -194,8 +194,7 @@ class TeamMatcher:
         #     'away_team_id': '19',
         #     'away_team_name': 'New York Giants',
         #     'home_team_id': '17',
-        #     'home_team_name': 'New England Patriots',
-        #     'confidence': 1.0
+        #     'home_team_name': 'New England Patriots'
         # }
     """
 
@@ -511,23 +510,22 @@ class TeamMatcher:
 
         Matching priority:
         1. Exact match (text == search_name)
-        2. Text starts with search_name or vice versa (word boundary)
+        2. Text starts with search_name or vice versa
         3. Whole word match (search_name appears as complete word in text)
-        4. Substring match (less preferred, lower confidence)
+        4. Substring match (fallback)
 
         Args:
             text: Normalized text to search in
             teams: List of team dicts with _search_names
 
         Returns:
-            Team dict with added 'confidence' key, or None
+            Team dict or None
         """
         text = text.strip().lower()
         if not text:
             return None
 
         # Track best matches by priority
-        exact_match = None
         prefix_match = None
         prefix_length = 0
         word_match = None
@@ -544,7 +542,7 @@ class TeamMatcher:
 
                 # Priority 1: Exact match
                 if text == search_lower:
-                    return {**team, 'confidence': 1.0}
+                    return team
 
                 # Priority 2: Prefix match (text starts with search_name or vice versa)
                 if text.startswith(search_lower) or search_lower.startswith(text):
@@ -554,21 +552,18 @@ class TeamMatcher:
                         prefix_length = match_len
 
                 # Priority 3: Whole word match (with word boundaries)
-                # Check if search_name appears as a complete word in text
                 elif len(search_lower) >= 3:
-                    # Build regex pattern for word boundary matching
                     pattern = r'\b' + re.escape(search_lower) + r'\b'
                     if re.search(pattern, text):
                         if len(search_lower) > word_length:
                             word_match = team
                             word_length = len(search_lower)
-                    # Also check if text appears as word in search_name
                     elif re.search(r'\b' + re.escape(text) + r'\b', search_lower):
                         if len(text) > word_length:
                             word_match = team
                             word_length = len(text)
 
-                # Priority 4: Substring match (fallback, lower confidence)
+                # Priority 4: Substring match (fallback)
                 elif search_lower in text and len(search_lower) >= 4:
                     if len(search_lower) > substring_length:
                         substring_match = team
@@ -576,13 +571,97 @@ class TeamMatcher:
 
         # Return best match by priority
         if prefix_match:
-            return {**prefix_match, 'confidence': 0.95}
+            return prefix_match
         if word_match:
-            return {**word_match, 'confidence': 0.9}
+            return word_match
         if substring_match:
-            return {**substring_match, 'confidence': 0.7}
+            return substring_match
 
         return None
+
+    def _find_all_teams_in_text(self, text: str, teams: List[Dict]) -> List[Tuple[Dict, int, int]]:
+        """
+        Find all team matches in the given text with their positions.
+
+        Used for separator-less matching where we need to find two teams
+        anywhere in the stream name.
+
+        Args:
+            text: Normalized text to search in
+            teams: List of team dicts with _search_names
+
+        Returns:
+            List of (team_dict, start_pos, match_length) tuples, sorted by position
+        """
+        text_lower = text.lower()
+        matches = []
+        seen_team_ids = set()
+
+        for team in teams:
+            for search_name in team.get('_search_names', []):
+                if not search_name or len(search_name) < 3:
+                    continue
+
+                search_lower = search_name.lower()
+
+                # Look for whole word matches using word boundaries
+                pattern = r'\b' + re.escape(search_lower) + r'\b'
+                for match in re.finditer(pattern, text_lower):
+                    team_id = team.get('id')
+                    # Avoid duplicate matches for same team (different search names)
+                    if team_id not in seen_team_ids:
+                        matches.append((team, match.start(), len(search_lower)))
+                        seen_team_ids.add(team_id)
+                        break  # Found this team, move to next
+
+        # Sort by position in text
+        matches.sort(key=lambda x: x[1])
+        return matches
+
+    def _extract_teams_without_separator(
+        self,
+        normalized: str,
+        league: str,
+        teams: List[Dict]
+    ) -> Tuple[Optional[Dict], Optional[Dict], Optional[str]]:
+        """
+        Extract two teams from text without a separator.
+
+        Fallback for streams that don't use vs/at/@ separators.
+        Uses positional order: first team found = away, second = home.
+
+        Args:
+            normalized: Normalized stream name
+            league: League code
+            teams: Team list for the league
+
+        Returns:
+            Tuple of (away_team, home_team, error_reason)
+        """
+        # Find all team mentions in the text
+        all_matches = self._find_all_teams_in_text(normalized, teams)
+
+        if len(all_matches) == 0:
+            return None, None, f'No teams found in: {normalized}'
+
+        if len(all_matches) == 1:
+            team_name = all_matches[0][0].get('name', 'unknown')
+            return None, None, f'Only one team found ({team_name}), need two for matchup'
+
+        if len(all_matches) > 2:
+            # Take the two longest matches to handle cases like
+            # "NY Giants vs New England Patriots" where "Giants" and "Patriots" also match
+            all_matches.sort(key=lambda x: x[2], reverse=True)  # Sort by match length
+            all_matches = all_matches[:2]
+            all_matches.sort(key=lambda x: x[1])  # Re-sort by position
+
+        # First team = away, second team = home
+        away_team = all_matches[0][0]
+        home_team = all_matches[1][0]
+
+        logger.debug(f"Separator-less match: {away_team.get('name')} vs {home_team.get('name')}")
+
+        return away_team, home_team, None
 
     def _lookup_alias(self, text: str, league: str) -> Optional[Dict]:
         """
@@ -618,7 +697,6 @@ class TeamMatcher:
                 return {
                     'id': result[0],
                     'name': result[1],
-                    'confidence': 1.0,
                     'source': 'alias'
                 }
             return None
@@ -637,7 +715,7 @@ class TeamMatcher:
             teams: Cached team list for the league
 
         Returns:
-            Team dict with id, name, confidence, or None
+            Team dict with id, name, or None
         """
         normalized = self._normalize_text(text)
 
@@ -718,7 +796,6 @@ class TeamMatcher:
             - matched: bool - whether both teams were found
             - away_team_id, away_team_name: Away team info (if matched)
             - home_team_id, home_team_name: Home team info (if matched)
-            - confidence: float - match confidence (1.0 = exact)
             - reason: str - error reason if not matched
             - raw_away, raw_home: Raw extracted strings (for debugging)
             - game_date: datetime or None - extracted date from stream name
@@ -746,26 +823,34 @@ class TeamMatcher:
             return result
 
         away_part, home_part, split_error = self._split_matchup(normalized)
+
         if split_error:
-            result['reason'] = split_error
-            return result
+            # No separator found - try separator-less matching as fallback
+            logger.debug(f"No separator found, trying separator-less matching for: {normalized}")
+            away_team, home_team, fallback_error = self._extract_teams_without_separator(
+                normalized, league, teams
+            )
 
-        result['raw_away'] = away_part
-        result['raw_home'] = home_part
+            if fallback_error:
+                result['reason'] = fallback_error
+                return result
+        else:
+            result['raw_away'] = away_part
+            result['raw_home'] = home_part
 
-        # Find both teams
-        away_team = self._find_team(away_part, league, teams)
-        home_team = self._find_team(home_part, league, teams)
+            # Find both teams using separator-based parts
+            away_team = self._find_team(away_part, league, teams)
+            home_team = self._find_team(home_part, league, teams)
 
-        if not away_team:
-            result['reason'] = f'Away team not found: {away_part}'
-            result['unmatched_team'] = away_part
-            return result
+            if not away_team:
+                result['reason'] = f'Away team not found: {away_part}'
+                result['unmatched_team'] = away_part
+                return result
 
-        if not home_team:
-            result['reason'] = f'Home team not found: {home_part}'
-            result['unmatched_team'] = home_part
-            return result
+            if not home_team:
+                result['reason'] = f'Home team not found: {home_part}'
+                result['unmatched_team'] = home_part
+                return result
 
         # Both teams found - populate result
         result['matched'] = True
@@ -775,10 +860,6 @@ class TeamMatcher:
         result['home_team_id'] = home_team.get('id')
         result['home_team_name'] = home_team.get('name')
         result['home_team_abbrev'] = home_team.get('abbreviation', '')
-        result['confidence'] = min(
-            away_team.get('confidence', 1.0),
-            home_team.get('confidence', 1.0)
-        )
 
         return result
 
