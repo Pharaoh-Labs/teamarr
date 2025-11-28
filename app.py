@@ -184,9 +184,20 @@ def refresh_event_group_core(group, m3u_manager):
         matched_count = 0
         matched_streams = []
 
+        # Check if custom regex is enabled for this group
+        use_custom_regex = group.get('custom_regex_enabled') and group.get('custom_regex')
+
         for stream in streams:
             try:
-                team_result = team_matcher.extract_teams(stream['name'], group['assigned_league'])
+                # Use custom regex if enabled, otherwise use built-in matching
+                if use_custom_regex:
+                    team_result = team_matcher.extract_teams_with_regex(
+                        stream['name'],
+                        group['custom_regex'],
+                        group['assigned_league']
+                    )
+                else:
+                    team_result = team_matcher.extract_teams(stream['name'], group['assigned_league'])
 
                 if team_result.get('matched'):
                     event_result = event_matcher.find_and_enrich(
@@ -2807,7 +2818,9 @@ def api_event_epg_groups_create():
             event_template_id=event_template_id,
             account_name=data.get('account_name'),
             channel_start=data.get('channel_start'),
-            channel_group_id=data.get('channel_group_id')
+            channel_group_id=data.get('channel_group_id'),
+            custom_regex=data.get('custom_regex'),
+            custom_regex_enabled=bool(data.get('custom_regex_enabled'))
         )
 
         app.logger.info(f"Created event EPG group: {data['group_name']} (ID: {group_id})")
@@ -3038,6 +3051,103 @@ def api_event_epg_groups_delete(group_id):
 
     except Exception as e:
         app.logger.error(f"Error deleting event EPG group {group_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/groups/<int:group_id>/test-regex', methods=['POST'])
+def api_event_epg_test_regex(group_id):
+    """
+    Test a custom regex pattern against streams in a group.
+
+    Request body:
+        {
+            "regex": "(?P<team1>\\w+)\\s*@\\s*(?P<team2>\\w+)",
+            "limit": 5  // optional, default 5
+        }
+
+    Returns results for each stream showing:
+        - Whether regex matched
+        - Extracted team1/team2 values
+        - Whether teams resolved to ESPN IDs
+    """
+    from epg.team_matcher import create_matcher
+
+    try:
+        group = get_event_epg_group(group_id)
+        if not group:
+            return jsonify({'error': 'Group not found'}), 404
+
+        data = request.get_json() or {}
+        regex_pattern = data.get('regex', '').strip()
+        limit = min(data.get('limit', 5), 20)  # Cap at 20
+
+        if not regex_pattern:
+            return jsonify({'error': 'regex is required'}), 400
+
+        # Validate regex has required groups
+        if '(?P<team1>' not in regex_pattern or '(?P<team2>' not in regex_pattern:
+            return jsonify({
+                'error': 'Regex must contain named groups: (?P<team1>...) and (?P<team2>...)'
+            }), 400
+
+        # Validate regex syntax
+        import re
+        try:
+            re.compile(regex_pattern)
+        except re.error as e:
+            return jsonify({'error': f'Invalid regex syntax: {e}'}), 400
+
+        # Get streams for this group from Dispatcharr
+        conn = get_connection()
+        settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+        conn.close()
+
+        from api.dispatcharr_client import M3UManager
+        m3u = M3UManager(
+            settings['dispatcharr_url'],
+            settings.get('dispatcharr_username', ''),
+            settings.get('dispatcharr_password', '')
+        )
+
+        result = m3u.get_group_streams(group['dispatcharr_group_id'])
+        if not result.get('success'):
+            return jsonify({'error': 'Could not fetch streams from Dispatcharr'}), 500
+
+        streams = result.get('streams', [])[:limit]
+
+        # Test regex against each stream
+        team_matcher = create_matcher()
+        league = group['assigned_league']
+        results = []
+
+        for stream in streams:
+            stream_name = stream.get('name', '')
+            test_result = team_matcher.extract_teams_with_regex(stream_name, regex_pattern, league)
+
+            results.append({
+                'stream_name': stream_name,
+                'matched': test_result['matched'],
+                'raw_team1': test_result.get('raw_away'),
+                'raw_team2': test_result.get('raw_home'),
+                'resolved_team1': test_result.get('away_team_name'),
+                'resolved_team2': test_result.get('home_team_name'),
+                'error': test_result.get('reason') if not test_result['matched'] else None
+            })
+
+        # Summary stats
+        matched_count = sum(1 for r in results if r['matched'])
+
+        return jsonify({
+            'success': True,
+            'regex': regex_pattern,
+            'league': league,
+            'tested': len(results),
+            'matched': matched_count,
+            'results': results
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error testing regex for group {group_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
 

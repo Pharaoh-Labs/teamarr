@@ -537,6 +537,30 @@
                 </select>
                 <small class="form-help">Dispatcharr group to assign created channels to. Only non-M3U groups shown.</small>
             </div>
+
+            <hr style="border-color: var(--border); margin: 1rem 0;">
+            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--text-secondary);">Custom Team Matching (Advanced)</h4>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="config-regex-enabled" onchange="toggleRegexFields()">
+                    <span>Use custom regex for team extraction</span>
+                </label>
+                <small class="form-help">Override built-in matching with your own regex pattern.</small>
+            </div>
+
+            <div id="config-regex-fields" style="display: none;">
+                <div class="form-group">
+                    <label for="config-regex">Regex Pattern</label>
+                    <input type="text" id="config-regex" class="form-control"
+                           placeholder="(?P<team1>\w+)\s*[@vs]+\s*(?P<team2>\w+)"
+                           style="font-family: monospace;">
+                    <small class="form-help">
+                        Required groups: <code>(?P&lt;team1&gt;...)</code> and <code>(?P&lt;team2&gt;...)</code><br>
+                        Optional: <code>(?P&lt;game_date&gt;...)</code> and <code>(?P&lt;game_time&gt;...)</code>
+                    </small>
+                </div>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeConfigureModal()">Cancel</button>
@@ -959,12 +983,20 @@ async function createGroupInline() {
     }
 }
 
+function toggleRegexFields() {
+    const enabled = document.getElementById('config-regex-enabled').checked;
+    const fieldsDiv = document.getElementById('config-regex-fields');
+    fieldsDiv.style.display = enabled ? 'block' : 'none';
+}
+
 async function enableSelectedGroups() {
     const sport = document.getElementById('config-sport').value;
     const league = document.getElementById('config-league').value;
     const templateId = document.getElementById('config-template').value;
     const channelStart = document.getElementById('config-channel-start').value;
     const channelGroupId = document.getElementById('config-channel-group').value;
+    const regexEnabled = document.getElementById('config-regex-enabled').checked;
+    const regex = document.getElementById('config-regex').value.trim();
 
     if (!sport || !league) {
         alert('Please select sport and league');
@@ -997,6 +1029,11 @@ async function enableSelectedGroups() {
 
         if (channelGroupId) {
             payload.channel_group_id = parseInt(channelGroupId);
+        }
+
+        if (regexEnabled && regex) {
+            payload.custom_regex_enabled = 1;
+            payload.custom_regex = regex;
         }
 
         try {

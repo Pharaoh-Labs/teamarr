@@ -122,6 +122,8 @@
                             data-template-id="{{ group.event_template_id or '' }}"
                             data-channel-start="{{ group.channel_start or 0 }}"
                             data-channel-group-id="{{ group.channel_group_id or '' }}"
+                            data-custom-regex="{{ group.custom_regex or '' }}"
+                            data-custom-regex-enabled="{{ group.custom_regex_enabled or 0 }}"
                             data-streams="{{ group.stream_count or 0 }}"
                             data-matched="{{ group.matched_count or 0 }}"
                             data-enabled="{{ group.enabled }}"
@@ -387,6 +389,36 @@
                     <option value="">Loading groups...</option>
                 </select>
                 <small class="form-help">Dispatcharr group to assign created channels to. Only non-M3U groups shown.</small>
+            </div>
+
+            <hr style="border-color: var(--border); margin: 1rem 0;">
+            <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--text-secondary);">Custom Team Matching (Advanced)</h4>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="edit-regex-enabled" onchange="toggleRegexFields()">
+                    <span>Use custom regex for team extraction</span>
+                </label>
+                <small class="form-help">Override built-in matching with your own regex pattern.</small>
+            </div>
+
+            <div id="edit-regex-fields" style="display: none;">
+                <div class="form-group">
+                    <label for="edit-regex">Regex Pattern</label>
+                    <input type="text" id="edit-regex" class="form-control"
+                           placeholder="(?P<team1>\w+)\s*[@vs]+\s*(?P<team2>\w+)"
+                           style="font-family: monospace;">
+                    <small class="form-help">
+                        Required groups: <code>(?P&lt;team1&gt;...)</code> and <code>(?P&lt;team2&gt;...)</code><br>
+                        Optional: <code>(?P&lt;game_date&gt;...)</code> and <code>(?P&lt;game_time&gt;...)</code>
+                    </small>
+                </div>
+                <div class="form-group">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="testRegex()" id="test-regex-btn">
+                        🧪 Test Regex
+                    </button>
+                    <div id="regex-test-results" style="margin-top: 0.5rem; font-size: 0.85rem;"></div>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -934,6 +966,16 @@ async function editGroup(groupId) {
     // Clear filter
     document.getElementById('edit-group-filter').value = '';
 
+    // Set custom regex fields
+    const regexEnabled = row.dataset.customRegexEnabled === '1';
+    const regex = row.dataset.customRegex || '';
+    document.getElementById('edit-regex-enabled').checked = regexEnabled;
+    document.getElementById('edit-regex').value = regex;
+    toggleRegexFields();
+
+    // Clear previous test results
+    document.getElementById('regex-test-results').innerHTML = '';
+
     document.getElementById('edit-modal').classList.add('active');
 }
 
@@ -947,11 +989,15 @@ async function saveGroupSettings() {
     const templateId = document.getElementById('edit-template').value;
     const channelStart = document.getElementById('edit-channel-start').value;
     const channelGroupId = document.getElementById('edit-channel-group').value;
+    const regexEnabled = document.getElementById('edit-regex-enabled').checked;
+    const regex = document.getElementById('edit-regex').value.trim();
 
     const payload = {
         event_template_id: templateId ? parseInt(templateId) : null,
         channel_start: channelStart ? parseInt(channelStart) : null,
-        channel_group_id: channelGroupId ? parseInt(channelGroupId) : null
+        channel_group_id: channelGroupId ? parseInt(channelGroupId) : null,
+        custom_regex_enabled: regexEnabled ? 1 : 0,
+        custom_regex: regex || null
     };
 
     try {
@@ -1078,6 +1124,89 @@ async function createEditGroupInline() {
         }
     } catch (error) {
         statusDiv.innerHTML = `<span style="color: var(--danger);">Error: ${error.message}</span>`;
+    }
+}
+
+// ============================================================================
+// Custom Regex Functions
+// ============================================================================
+
+function toggleRegexFields() {
+    const enabled = document.getElementById('edit-regex-enabled').checked;
+    const fieldsDiv = document.getElementById('edit-regex-fields');
+    fieldsDiv.style.display = enabled ? 'block' : 'none';
+
+    // Clear test results when toggling
+    document.getElementById('regex-test-results').innerHTML = '';
+}
+
+async function testRegex() {
+    const groupId = document.getElementById('edit-group-id').value;
+    const regex = document.getElementById('edit-regex').value.trim();
+    const resultsDiv = document.getElementById('regex-test-results');
+    const testBtn = document.getElementById('test-regex-btn');
+
+    if (!regex) {
+        resultsDiv.innerHTML = '<span style="color: var(--warning);">Please enter a regex pattern first.</span>';
+        return;
+    }
+
+    // Disable button and show loading
+    testBtn.disabled = true;
+    testBtn.textContent = 'Testing...';
+    resultsDiv.innerHTML = '<span style="color: var(--text-muted);">Testing regex against streams...</span>';
+
+    try {
+        const response = await fetch(`/api/event-epg/groups/${groupId}/test-regex`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ regex: regex })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            resultsDiv.innerHTML = `<span style="color: var(--danger);">Error: ${escapeHtml(data.error)}</span>`;
+            return;
+        }
+
+        // Build results display
+        let html = '';
+
+        if (data.regex_error) {
+            html = `<span style="color: var(--danger);">Invalid regex: ${escapeHtml(data.regex_error)}</span>`;
+        } else {
+            const matched = data.matched_count || 0;
+            const total = data.total_streams || 0;
+            const percentage = total > 0 ? Math.round((matched / total) * 100) : 0;
+
+            html = `<div style="margin-bottom: 0.5rem;">
+                <strong>${matched}/${total}</strong> streams matched (${percentage}%)
+            </div>`;
+
+            // Show sample results
+            if (data.samples && data.samples.length > 0) {
+                html += '<div style="font-size: 0.8rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; background: var(--bg-tertiary);">';
+                data.samples.forEach(sample => {
+                    const icon = sample.matched ? '✓' : '✗';
+                    const color = sample.matched ? 'var(--success)' : 'var(--danger)';
+                    html += `<div style="margin-bottom: 0.25rem; color: ${color};">
+                        ${icon} <code style="font-size: 0.75rem;">${escapeHtml(sample.stream_name)}</code>`;
+                    if (sample.matched && sample.team1) {
+                        html += `<br><span style="margin-left: 1rem; color: var(--text-muted);">→ ${escapeHtml(sample.team1)} vs ${escapeHtml(sample.team2)}</span>`;
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+        }
+
+        resultsDiv.innerHTML = html;
+    } catch (error) {
+        resultsDiv.innerHTML = `<span style="color: var(--danger);">Error: ${escapeHtml(error.message)}</span>`;
+    } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = '🧪 Test Regex';
     }
 }
 
