@@ -338,10 +338,13 @@ def calculate_delete_time(
                 f"ends ~{event_end.strftime('%m/%d %I:%M %p')} (crosses midnight)"
             )
 
-        # Return as datetime at 23:59:59 on the delete date
+        # Return as datetime at 23:59:59 on the delete date, converted to UTC
+        # This ensures SQLite CURRENT_TIMESTAMP comparisons work correctly
         from datetime import time
         end_of_day = time(23, 59, 59)
-        return datetime.combine(delete_date, end_of_day).replace(tzinfo=tz)
+        local_delete_time = datetime.combine(delete_date, end_of_day).replace(tzinfo=tz)
+        # Convert to UTC for consistent database storage
+        return local_delete_time.astimezone(ZoneInfo('UTC'))
 
     except Exception as e:
         logger.warning(f"Error calculating delete time: {e}")
