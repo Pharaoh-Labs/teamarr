@@ -1600,6 +1600,51 @@ function confirmTemplateType() {
     if (nameField) nameField.focus();
 }
 
+// Event template defaults (no suffixes - single-game context)
+const EVENT_TEMPLATE_DEFAULTS = {
+    'title_format': '{away_team} @ {home_team}',
+    'subtitle_template': '{venue}',
+    'channel_name': '{away_team} @ {home_team}',
+    'pregame_title': '{away_team} @ {home_team} Pregame',
+    'pregame_subtitle': '',
+    'pregame_description': '{away_team} takes on {home_team} at {game_time}',
+    'postgame_title': '{away_team} @ {home_team} Postgame',
+    'postgame_subtitle': '',
+    'postgame_description': '{winner} defeated {loser}. Final: {event_result_abbrev}',
+    'postgame_description_final': 'Game ended: {event_result}',
+    'postgame_description_not_final': '{matchup} has not yet ended.',
+    'event_description': '{away_team} vs {home_team} - {league} {sport}'
+};
+
+// Team template defaults (with suffixes for filler context)
+const TEAM_TEMPLATE_DEFAULTS = {
+    'title_format': '{team_name} {sport}',
+    'subtitle_template': '{venue_full}',
+    'pregame_title': 'Coming up: {league} {sport} starting at {game_time.next}',
+    'pregame_subtitle': '{away_team.next} at {home_team.next}',
+    'pregame_description': 'The {away_team_record.next} {away_team.next} travel to {venue_city}, {venue_state} to play the {home_team_record.next} {home_team.next} today at {game_time.next}.',
+    'postgame_title': '{league} {sport}: {team_name} Postgame Recap',
+    'postgame_subtitle': '{away_team.last} at {home_team.last}',
+    'postgame_description': '{team_name} {result_text.last} the {opponent.last} {final_score.last} {overtime_text.last}',
+    'postgame_description_final': 'The {team_name} {result_text.last} the {opponent.last} {final_score.last} {overtime_text.last}',
+    'postgame_description_not_final': 'The game between the {team_name} and the {opponent.last} on {game_date.last} has not yet ended as of the last update.',
+    'idle_title': 'No {team_name} Game Today',
+    'idle_subtitle': 'Next game: {game_date.next} at {game_time.next} {vs_at.next} the {opponent.next}',
+    'idle_description': 'Next game: {game_date.next} at {game_time.next} vs {opponent.next}',
+    'idle_description_final': 'The {team_name} {result_text.last} the {opponent.last} on {game_date.last} {final_score.last} {overtime_text.last}',
+    'idle_description_not_final': 'The {team_name} last played against the {opponent.last} on {game_date.last}.'
+};
+
+function applyTemplateDefaults(templateType) {
+    const defaults = templateType === 'event' ? EVENT_TEMPLATE_DEFAULTS : TEAM_TEMPLATE_DEFAULTS;
+    for (const [fieldId, value] of Object.entries(defaults)) {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.value = value;
+        }
+    }
+}
+
 function updateTemplateTypeDefaults() {
     // Get template type from radio button (new) or hidden input (existing)
     const radioChecked = document.querySelector('input[name="template_type"]:checked');
@@ -1613,10 +1658,11 @@ function updateTemplateTypeDefaults() {
         return;
     }
 
-    // For event templates, strip .next/.last suffixes from all template fields
-    // Event context is single-game, so suffixes don't apply
-    if (currentTemplateType === 'event') {
-        stripSuffixesFromTemplateFields();
+    // For NEW templates, apply type-specific defaults
+    // Only apply if this is a new template (radio buttons visible, not hidden input)
+    const isNewTemplate = radioChecked !== null;
+    if (isNewTemplate) {
+        applyTemplateDefaults(currentTemplateType);
     }
 
     // Re-render variables sidebar with filtered variables
@@ -1674,20 +1720,6 @@ function updateTemplateTypeDefaults() {
     }
 }
 
-// Strip .next and .last suffixes from all template field values
-// Used for event templates where single-game context means no suffixes needed
-function stripSuffixesFromTemplateFields() {
-    const templateFields = document.querySelectorAll('.template-field');
-    templateFields.forEach(field => {
-        if (field.value) {
-            // Replace {var.next} and {var.last} with {var}
-            field.value = field.value
-                .replace(/\{([a-z_]+)\.next\}/g, '{$1}')
-                .replace(/\{([a-z_]+)\.last\}/g, '{$1}');
-        }
-    });
-}
-
 // Check if a variable is available for the current template type
 function isVariableAvailableForType(varName) {
     const context = variableContextMap[varName];
@@ -1742,7 +1774,8 @@ function generateTemplateVariablesHTML(containerId) {
                 <span style="font-weight: 600; color: var(--primary);">${typeLabel}</span>
             </div>
 
-            <!-- Suffix System Guide -->
+            <!-- Suffix System Guide (team templates only) -->
+            ${currentTemplateType === 'team' ? `
             <div class="suffix-guide">
                 <ul class="suffix-guide-list">
                     <li><code>{variable}</code> current game OR not game-dependent</li>
@@ -1756,6 +1789,11 @@ function generateTemplateVariablesHTML(containerId) {
                     <span class="suffix-badge badge-last">.last</span> .last only
                 </div>
             </div>
+            ` : `
+            <div class="suffix-guide" style="padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; margin-bottom: 0.75rem;">
+                <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Event templates use single-game context. No suffixes needed.</p>
+            </div>
+            `}
 
             <!-- Search -->
             <input type="text" class="variable-search-input" placeholder="Search variables..." style="width: 100%; margin-bottom: 0.75rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem;">
@@ -1797,7 +1835,11 @@ function generateTemplateVariablesHTML(containerId) {
             let displayName = varName;
             let clickHandler = '';
 
-            if (suffixes.length === 1) {
+            // Event templates: always insert base variable (no suffixes)
+            if (currentTemplateType === 'event') {
+                displayName = varName;
+                clickHandler = `onclick="insertVariable('{${varName}}')"`;
+            } else if (suffixes.length === 1) {
                 // Single suffix: show it in the display and insert immediately
                 if (suffixes[0] === 'last') {
                     displayName = `${varName}.last`;
@@ -1815,7 +1857,9 @@ function generateTemplateVariablesHTML(containerId) {
                 clickHandler = `onclick="showSuffixSelector(event, '${varName}')"`;
             }
 
-            html += `<button type="button" class="chip ${suffixClass}" ${clickHandler}>${displayName}</button>`;
+            // For event templates, use neutral styling (no suffix color coding)
+            const chipClass = currentTemplateType === 'event' ? 'var-base' : suffixClass;
+            html += `<button type="button" class="chip ${chipClass}" ${clickHandler}>${displayName}</button>`;
         });
 
         html += `

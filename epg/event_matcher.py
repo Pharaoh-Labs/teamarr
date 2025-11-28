@@ -280,13 +280,22 @@ class EventMatcher:
                 logger.debug(f"No game on target date {target_date}, using nearest")
 
         if not best_match:
-            # No date provided or no date match - use nearest upcoming
+            # No date provided or no date match - prioritize today's games, then nearest upcoming
             now = datetime.now(ZoneInfo('UTC'))
-            upcoming = [e for e in matching_events if e['event_date'] >= now]
-            if upcoming:
-                best_match = upcoming[0]  # Nearest upcoming
+            today = now.date()
+
+            # First, check for any games TODAY (even if already started)
+            todays_games = [e for e in matching_events if e['event_date'].date() == today]
+            if todays_games:
+                best_match = todays_games[0]  # First game today
+                logger.debug(f"Selected today's game: {best_match['event_id']}")
             else:
-                best_match = matching_events[-1]  # Most recent (shouldn't happen with FINAL filter)
+                # No games today - use nearest upcoming
+                upcoming = [e for e in matching_events if e['event_date'] >= now]
+                if upcoming:
+                    best_match = upcoming[0]  # Nearest upcoming
+                else:
+                    best_match = matching_events[-1]  # Most recent (shouldn't happen with FINAL filter)
 
         # Parse the event into our standard format
         parsed_event = self._parse_event(best_match['event'], sport, api_league)
