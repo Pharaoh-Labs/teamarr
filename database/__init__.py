@@ -1586,6 +1586,11 @@ def get_epg_stats_summary() -> Dict[str, Any]:
             'last_generated': None,
             'total_channels': 0,
             'total_programmes': 0,
+            'channels': {
+                'total': 0,
+                'team_based': 0,
+                'event_based': 0,
+            },
             'events': {
                 'total': 0,
                 'team_based': 0,
