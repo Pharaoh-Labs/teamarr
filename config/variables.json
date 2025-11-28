@@ -1877,6 +1877,38 @@
     },
     {
       "name": "vs_at",
+      "description": "vs or at",
+      "source": "Calculated",
+      "category": "\ud83c\udfe0 Teams (Home/Away)",
+      "icon": "\ud83c\udfae",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "NBA": "vs",
+        "NFL": "vs",
+        "MLB": "vs",
+        "NHL": "vs",
+        "NCAAM": "vs",
+        "NCAAF": "vs",
+        "Soccer": "vs"
+      },
+      "context": [
+        "team"
+      ]
+    },
+    {
+      "name": "vs_@",
       "description": "vs or @",
       "source": "Calculated",
       "category": "\ud83c\udfe0 Teams (Home/Away)",
@@ -1904,8 +1936,7 @@
         "Soccer": "vs"
       },
       "context": [
-        "team",
-        "event"
+        "team"
       ]
     },
     {

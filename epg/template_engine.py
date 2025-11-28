@@ -66,7 +66,8 @@ class TemplateEngine:
 
         # Use regex to find and replace all {variable} or {variable.suffix} patterns
         # Pattern matches: {variable_name} or {variable_name.next} or {variable_name.last}
-        pattern = r'\{([a-z_][a-z0-9_]*(?:\.[a-z]+)?)\}'
+        # Note: @ is allowed to support {vs_@} variable
+        pattern = r'\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)\}'
 
         def replace_variable(match):
             """Replace function for re.sub()"""
@@ -319,7 +320,8 @@ class TemplateEngine:
         variables['is_home'] = 'true' if is_home else 'false'
         variables['is_away'] = 'false' if is_home else 'true'
         variables['home_away_text'] = 'at home' if is_home else 'on the road'
-        variables['vs_at'] = 'vs' if is_home else '@'
+        variables['vs_at'] = 'vs' if is_home else 'at'
+        variables['vs_@'] = 'vs' if is_home else '@'
         variables['home_team'] = home_team.get('name', '')
         variables['away_team'] = away_team.get('name', '')
         variables['home_team_pascal'] = to_pascal_case(variables['home_team'])
