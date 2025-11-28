@@ -1048,6 +1048,11 @@ def templates_edit(template_id):
         # _extract_template_form_data doesn't include it, but safeguard anyway
         data.pop('template_type', None)
 
+        # Get existing template_type for idle field clearing logic
+        existing_template = get_template(template_id)
+        if existing_template:
+            data['template_type'] = existing_template.get('template_type', 'team')
+
         if update_template(template_id, data):
             flash(f"Template '{data['name']}' updated successfully!", 'success')
         else:
@@ -4011,8 +4016,9 @@ def _extract_template_form_data(form):
         # Conditional descriptions
         'description_options': form.get('description_options'),  # JSON string
 
-        # Event template channel naming
-        'channel_name': form.get('channel_name')
+        # Event template channel naming and logo
+        'channel_name': form.get('channel_name'),
+        'channel_logo_url': form.get('channel_logo_url')
     }
 
     return data
