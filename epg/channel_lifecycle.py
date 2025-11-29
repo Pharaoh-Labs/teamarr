@@ -604,23 +604,39 @@ class ChannelLifecycleManager:
         template_engine = None
     ) -> None:
         """
-        Sync channel settings (name, channel_group_id, stream_profile_id, streams) from group to channel.
+        Sync channel settings from group/template configuration to Dispatcharr.
 
-        If group settings differ from the channel's current settings in Dispatcharr,
-        update the channel to match the group configuration.
+        Called for each existing channel during EPG generation to ensure any
+        configuration changes are propagated to Dispatcharr.
 
-        Also syncs:
-        - Channel name (if template changed)
-        - Stream assignment (M3U stream IDs can change on refresh)
+        SYNCED FIELDS (update this list when adding new fields):
+        +---------------------+-------------------+-----------------------------+
+        | Source              | Dispatcharr Field | Handling                    |
+        +---------------------+-------------------+-----------------------------+
+        | template            | name              | Template resolution         |
+        | group.channel_start | channel_number    | Range validation/reassign   |
+        | group               | channel_group_id  | Simple compare              |
+        | group               | stream_profile_id | Simple compare              |
+        | current_stream      | streams           | M3U ID lookup               |
+        | group               | channel_profile_id| Add/remove via profile API  |
+        | template            | logo_id           | Separate method (below)     |
+        +---------------------+-------------------+-----------------------------+
+
+        When adding a new synced field:
+        1. Add comparison logic in this method
+        2. Add to update_data dict (for Dispatcharr channel update)
+        3. Update managed_channels DB record if we track it locally
+        4. Track changes in results dict for logging/UI feedback
+        5. Update the table above
 
         Args:
-            existing: Existing managed channel record
+            existing: Existing managed channel record from our DB
             group: Event EPG group configuration
-            results: Results dict to append updates
-            current_stream: Current matched stream from M3U (optional, for stream sync)
-            event: ESPN event data (optional, for channel name resolution)
-            template: Event template (optional, for channel name resolution)
-            template_engine: EventTemplateEngine instance (optional, for channel name resolution)
+            results: Results dict to append updates (name_updated, number_updated, etc.)
+            current_stream: Current matched stream from M3U (for stream ID sync)
+            event: ESPN event data (for channel name resolution)
+            template: Event template (for channel name resolution)
+            template_engine: EventTemplateEngine instance (for variable substitution)
         """
         try:
             dispatcharr_channel_id = existing['dispatcharr_channel_id']
