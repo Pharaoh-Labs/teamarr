@@ -45,7 +45,7 @@
                         <th style="width: 60px;">Ch #</th>
                         <th style="width: 50px;">Logo</th>
                         <th>Channel Name</th>
-                        <th style="width: 160px;">Event Group</th>
+                        <th style="width: 200px;">Event Group</th>
                         <th style="width: 160px;">Channel Group</th>
                         <th style="width: 160px;">Created</th>
                         <th style="width: 160px;">Scheduled Delete</th>
@@ -82,7 +82,7 @@
                             <th style="width: 60px;">Ch #</th>
                             <th style="width: 50px;">Logo</th>
                             <th style="min-width: 200px;">Channel Name</th>
-                            <th style="width: 140px;">Event Group</th>
+                            <th style="width: 200px;">Event Group</th>
                             <th style="width: 160px;">Channel Group</th>
                             <th style="width: 150px;">Deleted</th>
                             <th style="width: 100px; text-align: center;">Logo Deleted</th>
@@ -284,10 +284,19 @@ async function loadDeletionHistory() {
                     ? `<span class="badge badge-info">${escapeHtml(channel.channel_group_name)}</span>`
                     : '<span class="text-muted">—</span>';
 
+                // Format event date+time for subtext
+                const eventDateText = channel.event_date ? formatChannelDateTime(channel.event_date) : '';
+                const eventSubtext = (channel.away_team && channel.home_team)
+                    ? `${escapeHtml(channel.away_team)} @ ${escapeHtml(channel.home_team)}${eventDateText ? ' · ' + eventDateText : ''}`
+                    : '';
+
                 row.innerHTML = `
                     <td class="text-muted">${channel.channel_number || '—'}</td>
                     <td>${logoHtml}</td>
-                    <td class="text-muted">${escapeHtml(channel.channel_name || 'Unnamed')}</td>
+                    <td>
+                        <div class="text-muted">${escapeHtml(channel.channel_name || 'Unnamed')}</div>
+                        ${eventSubtext ? `<div class="text-muted" style="font-size: 0.75rem; opacity: 0.7;">${eventSubtext}</div>` : ''}
+                    </td>
                     <td><span class="badge badge-secondary">${escapeHtml(channel.group_name || '—')}</span></td>
                     <td>${channelGroupHtml}</td>
                     <td class="text-muted" style="font-size: 0.875rem;">${deletedText}</td>

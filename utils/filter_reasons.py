@@ -64,7 +64,7 @@ class FilterReason:
 
 # Display text for user-facing UI (preview modal, etc.)
 DISPLAY_TEXT = {
-    FilterReason.NO_GAME_INDICATOR: 'No game indicator (vs, @, at)',
+    FilterReason.NO_GAME_INDICATOR: 'Excluded by filter',
     FilterReason.EXCLUDE_REGEX_MATCHED: 'Matched exclusion pattern',
     FilterReason.GAME_PAST: 'Event already passed',
     FilterReason.GAME_FINAL_EXCLUDED: 'Event is final (excluded)',
