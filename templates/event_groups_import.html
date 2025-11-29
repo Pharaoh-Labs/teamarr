@@ -538,12 +538,10 @@ async function selectAccount(account) {
     document.querySelector(`[data-account-id="${account.id}"]`)?.classList.add('active');
 
     currentAccount = account;
-    selectedGroups.clear();
 
     // Show loading state
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('groups-container').style.display = 'none';
-    document.getElementById('import-actions').style.display = 'none';
     document.getElementById('loading-state').style.display = 'block';
 
     await loadGroups();
