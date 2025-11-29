@@ -153,14 +153,23 @@
         <!-- Stream Filtering Section -->
         <div class="form-section">
             <h2>Stream Filtering</h2>
-            <p class="section-description">Streams are automatically filtered to only include game streams (those with vs, @, or at). Use the exclusion pattern below to filter out additional streams.</p>
+            <p class="section-description">Streams are automatically filtered to only include game streams (those with vs, @, or at). Use the options below to customize filtering.</p>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="skip_builtin_filter" name="skip_builtin_filter"
+                           {% if group and group.skip_builtin_filter %}checked{% endif %}>
+                    <span>Skip built-in game detection</span>
+                </label>
+                <small class="form-help">Disable automatic filtering. Use when custom regex handles all matching or stream names don't use standard separators.</small>
+            </div>
 
             <div class="form-group">
                 <label for="stream_exclude_regex">Exclusion Pattern <span class="optional">(optional)</span></label>
                 <input type="text" id="stream_exclude_regex" name="stream_exclude_regex" class="form-control mono regex-input"
                        placeholder="e.g., \(ES\)|\(ALT\)|All.?Star"
                        value="{{ group.stream_exclude_regex if group else '' }}">
-                <small class="form-help">Regex pattern to exclude streams that match. Applied after built-in game detection.</small>
+                <small class="form-help">Regex pattern to exclude streams that match.</small>
             </div>
         </div>
 
@@ -606,7 +615,7 @@ document.getElementById('event-group-form').addEventListener('submit', async fun
             // Convert numeric fields
             if (['channel_start', 'channel_group_id', 'stream_profile_id', 'event_template_id', 'dispatcharr_group_id', 'dispatcharr_account_id'].includes(key)) {
                 data[key] = value ? parseInt(value) : null;
-            } else if (key === 'custom_regex_enabled') {
+            } else if (key === 'custom_regex_enabled' || key === 'skip_builtin_filter') {
                 data[key] = true;
             } else {
                 data[key] = value;
@@ -614,9 +623,12 @@ document.getElementById('event-group-form').addEventListener('submit', async fun
         }
     });
 
-    // Handle unchecked checkbox
+    // Handle unchecked checkboxes
     if (!formData.has('custom_regex_enabled')) {
         data['custom_regex_enabled'] = false;
+    }
+    if (!formData.has('skip_builtin_filter')) {
+        data['skip_builtin_filter'] = false;
     }
 
     {% if mode == 'edit' %}

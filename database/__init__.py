@@ -310,6 +310,7 @@ def run_migrations(conn):
             ("custom_regex_date", "TEXT"),
             ("custom_regex_time", "TEXT"),
             ("stream_exclude_regex", "TEXT"),  # User regex to exclude streams from matching
+            ("skip_builtin_filter", "INTEGER DEFAULT 0"),  # Skip built-in game indicator filter
         ]
         add_columns_if_missing("event_epg_groups", event_group_columns)
 

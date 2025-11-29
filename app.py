@@ -180,16 +180,25 @@ def refresh_event_group_core(group, m3u_manager):
         total_stream_count = len(all_streams)
         app.logger.debug(f"Fetched {total_stream_count} streams for group '{group['group_name']}'")
 
-        # Step 2.5: Filter to game streams only (must have vs/@/at indicator)
-        filter_result = filter_game_streams(
-            all_streams,
-            exclude_regex=group.get('stream_exclude_regex')
-        )
-        streams = filter_result['game_streams']
-        filtered_count = len(filter_result['filtered_streams'])
+        # Step 2.5: Filter to game streams only (unless skip_builtin_filter is enabled)
+        skip_builtin_filter = bool(group.get('skip_builtin_filter', 0))
 
-        if filtered_count > 0:
-            app.logger.debug(f"Filtered {filtered_count} non-game streams, {len(streams)} game streams remain")
+        if skip_builtin_filter:
+            # Skip built-in game indicator filter - user is using custom regex or wants all streams
+            streams = all_streams
+            filtered_count = 0
+            app.logger.debug(f"Skipping built-in filter (skip_builtin_filter enabled)")
+        else:
+            # Apply built-in filter (must have vs/@/at indicator)
+            filter_result = filter_game_streams(
+                all_streams,
+                exclude_regex=group.get('stream_exclude_regex')
+            )
+            streams = filter_result['game_streams']
+            filtered_count = len(filter_result['filtered_streams'])
+
+            if filtered_count > 0:
+                app.logger.debug(f"Filtered {filtered_count} non-game streams, {len(streams)} game streams remain")
 
         # Step 3: Match streams to ESPN events
         team_matcher = create_matcher()
