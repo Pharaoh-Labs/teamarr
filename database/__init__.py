@@ -269,6 +269,10 @@ def run_migrations(conn):
                     channel_group_id INTEGER,
                     custom_regex TEXT,
                     custom_regex_enabled INTEGER DEFAULT 0,
+                    custom_regex_team1 TEXT,
+                    custom_regex_team2 TEXT,
+                    custom_regex_date TEXT,
+                    custom_regex_time TEXT,
                     last_refresh TIMESTAMP,
                     stream_count INTEGER DEFAULT 0,
                     matched_count INTEGER DEFAULT 0
@@ -297,6 +301,10 @@ def run_migrations(conn):
             ("channel_group_id", "INTEGER"),
             ("custom_regex", "TEXT"),
             ("custom_regex_enabled", "INTEGER DEFAULT 0"),
+            ("custom_regex_team1", "TEXT"),
+            ("custom_regex_team2", "TEXT"),
+            ("custom_regex_date", "TEXT"),
+            ("custom_regex_time", "TEXT"),
         ]
         add_columns_if_missing("event_epg_groups", event_group_columns)
 
@@ -1043,7 +1051,11 @@ def create_event_epg_group(
     channel_start: int = None,
     channel_group_id: int = None,
     custom_regex: str = None,
-    custom_regex_enabled: bool = False
+    custom_regex_enabled: bool = False,
+    custom_regex_team1: str = None,
+    custom_regex_team2: str = None,
+    custom_regex_date: str = None,
+    custom_regex_time: str = None
 ) -> int:
     """
     Create a new event EPG group.
@@ -1053,8 +1065,12 @@ def create_event_epg_group(
         account_name: Optional M3U account name for display purposes
         channel_start: Starting channel number for auto-created channels
         channel_group_id: Dispatcharr channel group ID to assign created channels to
-        custom_regex: Optional regex pattern for team extraction (named groups: team1, team2, game_date, game_time)
+        custom_regex: Legacy single regex pattern (deprecated, use separate fields)
         custom_regex_enabled: Whether to use custom regex instead of built-in matching
+        custom_regex_team1: Regex pattern to extract first team name
+        custom_regex_team2: Regex pattern to extract second team name
+        custom_regex_date: Optional regex pattern to extract game date
+        custom_regex_time: Optional regex pattern to extract game time
 
     Returns:
         ID of created group
@@ -1071,8 +1087,9 @@ def create_event_epg_group(
             (dispatcharr_group_id, dispatcharr_account_id, group_name,
              assigned_league, assigned_sport, enabled, refresh_interval_minutes,
              event_template_id, account_name, channel_start, channel_group_id,
-             custom_regex, custom_regex_enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             custom_regex, custom_regex_enabled,
+             custom_regex_team1, custom_regex_team2, custom_regex_date, custom_regex_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dispatcharr_group_id, dispatcharr_account_id, group_name,
@@ -1080,7 +1097,8 @@ def create_event_epg_group(
                 1 if enabled else 0, refresh_interval_minutes,
                 event_template_id, account_name, channel_start,
                 channel_group_id, custom_regex,
-                1 if custom_regex_enabled else 0
+                1 if custom_regex_enabled else 0,
+                custom_regex_team1, custom_regex_team2, custom_regex_date, custom_regex_time
             )
         )
         conn.commit()

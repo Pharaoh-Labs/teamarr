@@ -354,49 +354,51 @@ class TeamMatcher:
         Returns:
             List of lowercase normalized search strings
         """
-        names = set()
+        primary = set()    # Team-specific names (nickname, full name, abbreviation)
+        secondary = set()  # Location-only names (city/region)
 
-        # Full display name
+        # Full display name - PRIMARY (team-specific)
+        if team.get('displayName'):
+            primary.add(self._normalize_text(team['displayName']))
+
+        # Team name (often just nickname like "Lakers") - PRIMARY
         if team.get('name'):
-            names.add(self._normalize_text(team['name']))
+            primary.add(self._normalize_text(team['name']))
 
-        # Short name (usually just nickname)
+        # Short name (usually just nickname) - PRIMARY
         if team.get('shortName'):
-            names.add(self._normalize_text(team['shortName']))
+            primary.add(self._normalize_text(team['shortName']))
 
-        # Abbreviation
+        # Abbreviation - PRIMARY
         if team.get('abbreviation'):
-            names.add(team['abbreviation'].lower())
+            primary.add(team['abbreviation'].lower())
 
-        # Slug
+        # Slug - PRIMARY
         if team.get('slug'):
-            names.add(team['slug'].lower().replace('-', ' '))
+            primary.add(team['slug'].lower().replace('-', ' '))
 
-        # Extract city and nickname from full name
-        if team.get('name'):
-            # Try to split "City/Region Team" -> add both parts
-            full_name = team['name']
+        # Location - SECONDARY (can be shared between teams like LA Lakers/Clippers)
+        if team.get('location'):
+            secondary.add(self._normalize_text(team['location']))
 
-            # Common patterns: "New York Giants", "Los Angeles Lakers", etc.
-            # The nickname is usually the last word(s)
+        # Extract city from displayName if it has multiple words
+        if team.get('displayName'):
+            full_name = team['displayName']
             words = full_name.split()
-            if len(words) >= 2:
-                # Add just the nickname (last word usually)
-                # But handle multi-word nicknames like "Red Sox", "Blue Jays"
-                short = team.get('shortName', '')
-                if short:
-                    names.add(self._normalize_text(short))
-                else:
-                    # Guess nickname is last 1-2 words
-                    names.add(self._normalize_text(words[-1]))
+            if len(words) > 2:
+                # City is everything except the last word (nickname)
+                potential_city = ' '.join(words[:-1])
+                secondary.add(self._normalize_text(potential_city))
 
-                # Add city/region (first part)
-                # Handle "New York", "Los Angeles", "San Francisco", etc.
-                if len(words) > 2:
-                    potential_city = ' '.join(words[:-1])
-                    names.add(self._normalize_text(potential_city))
+        # Store both lists - primary names searched first
+        # Combine into single list with primary names first (order matters for tie-breaking)
+        all_names = list(primary) + list(secondary)
 
-        return list(names)
+        # Also store separately for priority matching
+        team['_primary_names'] = list(primary)
+        team['_secondary_names'] = list(secondary)
+
+        return all_names
 
     def _normalize_text(self, text: str) -> str:
         """
@@ -509,14 +511,18 @@ class TeamMatcher:
         Find a team match in the given text.
 
         Matching priority:
-        1. Exact match (text == search_name)
-        2. Text starts with search_name or vice versa
-        3. Whole word match (search_name appears as complete word in text)
-        4. Substring match (fallback)
+        1. Exact match with primary name (team-specific: nickname, full name, abbrev)
+        2. Exact match with secondary name (location-only)
+        3. Primary name appears as whole word in text
+        4. Secondary name appears as whole word in text
+        5. Prefix/substring matches (fallback)
+
+        This ensures "los angeles clippers" matches Clippers (via "clippers")
+        rather than Lakers (via "los angeles" location).
 
         Args:
             text: Normalized text to search in
-            teams: List of team dicts with _search_names
+            teams: List of team dicts with _search_names, _primary_names, _secondary_names
 
         Returns:
             Team dict or None
@@ -525,57 +531,71 @@ class TeamMatcher:
         if not text:
             return None
 
-        # Track best matches by priority
-        prefix_match = None
-        prefix_length = 0
-        word_match = None
-        word_length = 0
-        substring_match = None
-        substring_length = 0
+        # Track matches by priority tier
+        primary_word_match = None
+        primary_word_length = 0
+        secondary_word_match = None
+        secondary_word_length = 0
+        fallback_match = None
+        fallback_length = 0
 
         for team in teams:
-            for search_name in team.get('_search_names', []):
+            # Check primary names first (team-specific: nickname, displayName, abbreviation)
+            for search_name in team.get('_primary_names', []):
                 if not search_name:
                     continue
-
                 search_lower = search_name.lower()
 
-                # Priority 1: Exact match
+                # Exact match - immediate return
                 if text == search_lower:
                     return team
 
-                # Priority 2: Prefix match (text starts with search_name or vice versa)
-                if text.startswith(search_lower) or search_lower.startswith(text):
-                    match_len = min(len(text), len(search_lower))
-                    if match_len > prefix_length:
-                        prefix_match = team
-                        prefix_length = match_len
-
-                # Priority 3: Whole word match (with word boundaries)
-                elif len(search_lower) >= 3:
+                # Whole word match with primary name
+                if len(search_lower) >= 3:
                     pattern = r'\b' + re.escape(search_lower) + r'\b'
                     if re.search(pattern, text):
-                        if len(search_lower) > word_length:
-                            word_match = team
-                            word_length = len(search_lower)
-                    elif re.search(r'\b' + re.escape(text) + r'\b', search_lower):
-                        if len(text) > word_length:
-                            word_match = team
-                            word_length = len(text)
+                        if len(search_lower) > primary_word_length:
+                            primary_word_match = team
+                            primary_word_length = len(search_lower)
 
-                # Priority 4: Substring match (fallback)
-                elif search_lower in text and len(search_lower) >= 4:
-                    if len(search_lower) > substring_length:
-                        substring_match = team
-                        substring_length = len(search_lower)
+            # Check secondary names (location-only, can be shared between teams)
+            for search_name in team.get('_secondary_names', []):
+                if not search_name:
+                    continue
+                search_lower = search_name.lower()
 
-        # Return best match by priority
-        if prefix_match:
-            return prefix_match
-        if word_match:
-            return word_match
-        if substring_match:
-            return substring_match
+                # Exact match - immediate return
+                if text == search_lower:
+                    return team
+
+                # Whole word match with secondary name
+                if len(search_lower) >= 3:
+                    pattern = r'\b' + re.escape(search_lower) + r'\b'
+                    if re.search(pattern, text):
+                        if len(search_lower) > secondary_word_length:
+                            secondary_word_match = team
+                            secondary_word_length = len(search_lower)
+
+            # Fallback: check all search names for prefix/substring matches
+            for search_name in team.get('_search_names', []):
+                if not search_name:
+                    continue
+                search_lower = search_name.lower()
+
+                # Prefix match
+                if text.startswith(search_lower) or search_lower.startswith(text):
+                    match_len = max(len(search_lower), len(text))
+                    if match_len > fallback_length:
+                        fallback_match = team
+                        fallback_length = match_len
+
+        # Return by priority: primary word match beats secondary, which beats fallback
+        if primary_word_match:
+            return primary_word_match
+        if secondary_word_match:
+            return secondary_word_match
+        if fallback_match:
+            return fallback_match
 
         return None
 
@@ -930,6 +950,125 @@ class TeamMatcher:
 
         if groups.get('game_time'):
             result['game_time'] = extract_time_from_text(groups['game_time'])
+
+        # Get teams for this league
+        teams = self._get_teams_for_league(league)
+        if not teams:
+            result['reason'] = f'No team data available for league: {league}'
+            return result
+
+        # Resolve team names to ESPN IDs
+        away_team = self._find_team(team1_text, league, teams)
+        home_team = self._find_team(team2_text, league, teams)
+
+        if not away_team:
+            result['reason'] = f'Team not found in ESPN database: {team1_text}'
+            result['unmatched_team'] = team1_text
+            return result
+
+        if not home_team:
+            result['reason'] = f'Team not found in ESPN database: {team2_text}'
+            result['unmatched_team'] = team2_text
+            return result
+
+        # Both teams found
+        result['matched'] = True
+        result['away_team_id'] = away_team.get('id')
+        result['away_team_name'] = away_team.get('name')
+        result['away_team_abbrev'] = away_team.get('abbreviation', '')
+        result['home_team_id'] = home_team.get('id')
+        result['home_team_name'] = home_team.get('name')
+        result['home_team_abbrev'] = home_team.get('abbreviation', '')
+
+        return result
+
+    def extract_teams_with_separate_regex(
+        self,
+        stream_name: str,
+        league: str,
+        team1_pattern: str,
+        team2_pattern: str,
+        date_pattern: str = None,
+        time_pattern: str = None
+    ) -> Dict[str, Any]:
+        """
+        Extract team matchup using separate regex patterns for each field.
+
+        Each pattern should be a simple regex that captures the desired text.
+        The first capture group (or entire match if no group) is used.
+
+        Args:
+            stream_name: Raw stream/channel name
+            league: League code for team resolution
+            team1_pattern: Regex to extract first team (required)
+            team2_pattern: Regex to extract second team (required)
+            date_pattern: Regex to extract game date (optional)
+            time_pattern: Regex to extract game time (optional)
+
+        Returns:
+            Dict with same structure as extract_teams()
+        """
+        result = {
+            'matched': False,
+            'stream_name': stream_name,
+            'league': league,
+            'game_date': None,
+            'game_time': None
+        }
+
+        def extract_with_pattern(pattern: str, name: str) -> tuple:
+            """Apply pattern and return (extracted_text, error_msg)"""
+            if not pattern:
+                return (None, None)
+            try:
+                match = re.search(pattern, stream_name, re.IGNORECASE)
+                if not match:
+                    return (None, f'{name} pattern did not match')
+                # Use first capture group if available, otherwise full match
+                if match.groups():
+                    return (match.group(1).strip(), None)
+                return (match.group(0).strip(), None)
+            except re.error as e:
+                return (None, f'Invalid {name} pattern: {e}')
+
+        # Extract team1 (required)
+        team1_text, err = extract_with_pattern(team1_pattern, 'team1')
+        if err:
+            result['reason'] = err
+            return result
+        if not team1_text:
+            result['reason'] = 'Team 1 pattern matched but captured empty text'
+            return result
+
+        # Extract team2 (required)
+        team2_text, err = extract_with_pattern(team2_pattern, 'team2')
+        if err:
+            result['reason'] = err
+            return result
+        if not team2_text:
+            result['reason'] = 'Team 2 pattern matched but captured empty text'
+            return result
+
+        result['raw_away'] = team1_text
+        result['raw_home'] = team2_text
+
+        # Extract optional date
+        if date_pattern:
+            date_text, err = extract_with_pattern(date_pattern, 'date')
+            if err:
+                result['reason'] = err
+                return result
+            if date_text:
+                result['game_date'] = extract_date_from_text(date_text)
+
+        # Extract optional time
+        if time_pattern:
+            time_text, err = extract_with_pattern(time_pattern, 'time')
+            if err:
+                result['reason'] = err
+                return result
+            if time_text:
+                result['game_time'] = extract_time_from_text(time_text)
 
         # Get teams for this league
         teams = self._get_teams_for_league(league)

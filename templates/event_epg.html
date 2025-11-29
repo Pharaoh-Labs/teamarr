@@ -124,6 +124,10 @@
                             data-channel-group-id="{{ group.channel_group_id or '' }}"
                             data-custom-regex="{{ group.custom_regex or '' }}"
                             data-custom-regex-enabled="{{ group.custom_regex_enabled or 0 }}"
+                            data-custom-regex-team1="{{ group.custom_regex_team1 or '' }}"
+                            data-custom-regex-team2="{{ group.custom_regex_team2 or '' }}"
+                            data-custom-regex-date="{{ group.custom_regex_date or '' }}"
+                            data-custom-regex-time="{{ group.custom_regex_time or '' }}"
                             data-streams="{{ group.stream_count or 0 }}"
                             data-matched="{{ group.matched_count or 0 }}"
                             data-enabled="{{ group.enabled }}"
@@ -404,18 +408,36 @@
 
             <div id="edit-regex-fields" style="display: none;">
                 <div class="form-group">
-                    <label for="edit-regex">Regex Pattern</label>
-                    <input type="text" id="edit-regex" class="form-control"
-                           placeholder="(?P<team1>\w+)\s*[@vs]+\s*(?P<team2>\w+)"
+                    <label for="edit-regex-team1">Team 1 Pattern <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="edit-regex-team1" class="form-control"
+                           placeholder="^([A-Z]{2,3})"
                            style="font-family: monospace;">
-                    <small class="form-help">
-                        Required groups: <code>(?P&lt;team1&gt;...)</code> and <code>(?P&lt;team2&gt;...)</code><br>
-                        Optional: <code>(?P&lt;game_date&gt;...)</code> and <code>(?P&lt;game_time&gt;...)</code>
-                    </small>
+                    <small class="form-help">Regex to extract the first team. Use a capture group <code>(...)</code> for the team name.</small>
+                </div>
+                <div class="form-group">
+                    <label for="edit-regex-team2">Team 2 Pattern <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="edit-regex-team2" class="form-control"
+                           placeholder="[@vs]+\s*([A-Z]{2,3})"
+                           style="font-family: monospace;">
+                    <small class="form-help">Regex to extract the second team. Use a capture group <code>(...)</code> for the team name.</small>
+                </div>
+                <div class="form-group">
+                    <label for="edit-regex-date">Date Pattern <span style="color: var(--text-muted);">(optional)</span></label>
+                    <input type="text" id="edit-regex-date" class="form-control"
+                           placeholder="(\d{1,2}/\d{1,2})"
+                           style="font-family: monospace;">
+                    <small class="form-help">Regex to extract game date (e.g., 11/29, Nov 29).</small>
+                </div>
+                <div class="form-group">
+                    <label for="edit-regex-time">Time Pattern <span style="color: var(--text-muted);">(optional)</span></label>
+                    <input type="text" id="edit-regex-time" class="form-control"
+                           placeholder="(\d{1,2}:\d{2}\s*(?:AM|PM)?)"
+                           style="font-family: monospace;">
+                    <small class="form-help">Regex to extract game time (e.g., 7:05PM, 19:05).</small>
                 </div>
                 <div class="form-group">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="testRegex()" id="test-regex-btn">
-                        🧪 Test Regex
+                        🧪 Test Patterns
                     </button>
                     <div id="regex-test-results" style="margin-top: 0.5rem; font-size: 0.85rem;"></div>
                 </div>
@@ -968,9 +990,11 @@ async function editGroup(groupId) {
 
     // Set custom regex fields
     const regexEnabled = row.dataset.customRegexEnabled === '1';
-    const regex = row.dataset.customRegex || '';
     document.getElementById('edit-regex-enabled').checked = regexEnabled;
-    document.getElementById('edit-regex').value = regex;
+    document.getElementById('edit-regex-team1').value = row.dataset.customRegexTeam1 || '';
+    document.getElementById('edit-regex-team2').value = row.dataset.customRegexTeam2 || '';
+    document.getElementById('edit-regex-date').value = row.dataset.customRegexDate || '';
+    document.getElementById('edit-regex-time').value = row.dataset.customRegexTime || '';
     toggleRegexFields();
 
     // Clear previous test results
@@ -990,14 +1014,26 @@ async function saveGroupSettings() {
     const channelStart = document.getElementById('edit-channel-start').value;
     const channelGroupId = document.getElementById('edit-channel-group').value;
     const regexEnabled = document.getElementById('edit-regex-enabled').checked;
-    const regex = document.getElementById('edit-regex').value.trim();
+    const regexTeam1 = document.getElementById('edit-regex-team1').value.trim();
+    const regexTeam2 = document.getElementById('edit-regex-team2').value.trim();
+    const regexDate = document.getElementById('edit-regex-date').value.trim();
+    const regexTime = document.getElementById('edit-regex-time').value.trim();
+
+    // Validate required fields when regex is enabled
+    if (regexEnabled && (!regexTeam1 || !regexTeam2)) {
+        showNotification('Team 1 and Team 2 patterns are required when custom regex is enabled', 'error');
+        return;
+    }
 
     const payload = {
         event_template_id: templateId ? parseInt(templateId) : null,
         channel_start: channelStart ? parseInt(channelStart) : null,
         channel_group_id: channelGroupId ? parseInt(channelGroupId) : null,
         custom_regex_enabled: regexEnabled ? 1 : 0,
-        custom_regex: regex || null
+        custom_regex_team1: regexTeam1 || null,
+        custom_regex_team2: regexTeam2 || null,
+        custom_regex_date: regexDate || null,
+        custom_regex_time: regexTime || null
     };
 
     try {
@@ -1142,25 +1178,33 @@ function toggleRegexFields() {
 
 async function testRegex() {
     const groupId = document.getElementById('edit-group-id').value;
-    const regex = document.getElementById('edit-regex').value.trim();
+    const team1Pattern = document.getElementById('edit-regex-team1').value.trim();
+    const team2Pattern = document.getElementById('edit-regex-team2').value.trim();
+    const datePattern = document.getElementById('edit-regex-date').value.trim();
+    const timePattern = document.getElementById('edit-regex-time').value.trim();
     const resultsDiv = document.getElementById('regex-test-results');
     const testBtn = document.getElementById('test-regex-btn');
 
-    if (!regex) {
-        resultsDiv.innerHTML = '<span style="color: var(--warning);">Please enter a regex pattern first.</span>';
+    if (!team1Pattern || !team2Pattern) {
+        resultsDiv.innerHTML = '<span style="color: var(--warning);">Team 1 and Team 2 patterns are required.</span>';
         return;
     }
 
     // Disable button and show loading
     testBtn.disabled = true;
     testBtn.textContent = 'Testing...';
-    resultsDiv.innerHTML = '<span style="color: var(--text-muted);">Testing regex against streams...</span>';
+    resultsDiv.innerHTML = '<span style="color: var(--text-muted);">Testing patterns against streams...</span>';
 
     try {
         const response = await fetch(`/api/event-epg/groups/${groupId}/test-regex`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ regex: regex })
+            body: JSON.stringify({
+                team1_pattern: team1Pattern,
+                team2_pattern: team2Pattern,
+                date_pattern: datePattern || null,
+                time_pattern: timePattern || null
+            })
         });
 
         const data = await response.json();
@@ -1173,32 +1217,38 @@ async function testRegex() {
         // Build results display
         let html = '';
 
-        if (data.regex_error) {
-            html = `<span style="color: var(--danger);">Invalid regex: ${escapeHtml(data.regex_error)}</span>`;
-        } else {
-            const matched = data.matched_count || 0;
-            const total = data.total_streams || 0;
-            const percentage = total > 0 ? Math.round((matched / total) * 100) : 0;
+        const matched = data.matched || 0;
+        const total = data.tested || 0;
+        const percentage = total > 0 ? Math.round((matched / total) * 100) : 0;
 
-            html = `<div style="margin-bottom: 0.5rem;">
-                <strong>${matched}/${total}</strong> streams matched (${percentage}%)
-            </div>`;
+        html = `<div style="margin-bottom: 0.5rem;">
+            <strong>${matched}/${total}</strong> streams matched (${percentage}%)
+        </div>`;
 
-            // Show sample results
-            if (data.samples && data.samples.length > 0) {
-                html += '<div style="font-size: 0.8rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; background: var(--bg-tertiary);">';
-                data.samples.forEach(sample => {
-                    const icon = sample.matched ? '✓' : '✗';
-                    const color = sample.matched ? 'var(--success)' : 'var(--danger)';
-                    html += `<div style="margin-bottom: 0.25rem; color: ${color};">
-                        ${icon} <code style="font-size: 0.75rem;">${escapeHtml(sample.stream_name)}</code>`;
-                    if (sample.matched && sample.team1) {
-                        html += `<br><span style="margin-left: 1rem; color: var(--text-muted);">→ ${escapeHtml(sample.team1)} vs ${escapeHtml(sample.team2)}</span>`;
+        // Show sample results
+        if (data.results && data.results.length > 0) {
+            html += '<div style="font-size: 0.8rem; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; background: var(--bg-tertiary);">';
+            data.results.forEach(result => {
+                const icon = result.matched ? '✓' : '✗';
+                const color = result.matched ? 'var(--success)' : 'var(--danger)';
+                html += `<div style="margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+                    <div style="color: ${color};">
+                        ${icon} <code style="font-size: 0.75rem;">${escapeHtml(result.stream_name)}</code>
+                    </div>`;
+                if (result.matched) {
+                    html += `<div style="margin-left: 1rem; color: var(--text-muted); font-size: 0.75rem;">
+                        Raw: "${escapeHtml(result.raw_team1)}" vs "${escapeHtml(result.raw_team2)}"<br>
+                        Resolved: ${escapeHtml(result.resolved_team1)} vs ${escapeHtml(result.resolved_team2)}`;
+                    if (result.game_date || result.game_time) {
+                        html += `<br>Date/Time: ${result.game_date || '-'} ${result.game_time || '-'}`;
                     }
                     html += '</div>';
-                });
+                } else if (result.error) {
+                    html += `<div style="margin-left: 1rem; color: var(--danger); font-size: 0.75rem;">${escapeHtml(result.error)}</div>`;
+                }
                 html += '</div>';
-            }
+            });
+            html += '</div>';
         }
 
         resultsDiv.innerHTML = html;
@@ -1206,7 +1256,7 @@ async function testRegex() {
         resultsDiv.innerHTML = `<span style="color: var(--danger);">Error: ${escapeHtml(error.message)}</span>`;
     } finally {
         testBtn.disabled = false;
-        testBtn.textContent = '🧪 Test Regex';
+        testBtn.textContent = '🧪 Test Patterns';
     }
 }
 
