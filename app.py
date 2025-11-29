@@ -2833,6 +2833,8 @@ def api_dispatcharr_stream_profiles():
     Query params:
         active_only: If 'true', only return active profiles
     """
+    from api.dispatcharr_client import ChannelManager
+
     try:
         conn = get_connection()
         settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
@@ -2870,6 +2872,8 @@ def api_dispatcharr_stream_profiles_create():
         command: str (optional) - Command to execute
         parameters: str (optional) - Command-line parameters
     """
+    from api.dispatcharr_client import ChannelManager
+
     try:
         conn = get_connection()
         settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
