@@ -1119,6 +1119,12 @@ def create_event_epg_group(
     Raises:
         sqlite3.IntegrityError if dispatcharr_group_id already exists
     """
+    # Auto-assign channel_start if not provided
+    if not channel_start:
+        channel_start = get_next_available_channel_range()
+        if channel_start:
+            logger.info(f"Auto-assigned channel_start {channel_start} for new group '{group_name}'")
+
     conn = get_connection()
     try:
         cursor = conn.cursor()
