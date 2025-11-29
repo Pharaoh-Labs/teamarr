@@ -43,22 +43,24 @@ class EventMatcher:
             print(f"Venue: {result['event']['venue']['name']}")
     """
 
-    # How many days ahead to search for games (30 days covers most scheduling)
-    SEARCH_DAYS_AHEAD = 30
+    # Default days ahead to search for games (can be overridden via setting)
+    DEFAULT_SEARCH_DAYS_AHEAD = 7
 
     # How many days back to search (only for in-progress games, not final)
     SEARCH_DAYS_BACK = 1
 
-    def __init__(self, espn_client, db_connection_func=None):
+    def __init__(self, espn_client, db_connection_func=None, lookahead_days: int = None):
         """
         Initialize EventMatcher.
 
         Args:
             espn_client: ESPNClient instance for API calls
             db_connection_func: Function that returns DB connection (for league config)
+            lookahead_days: How many days ahead to search for events (default from setting or 7)
         """
         self.espn = espn_client
         self.db_connection_func = db_connection_func
+        self.lookahead_days = lookahead_days or self.DEFAULT_SEARCH_DAYS_AHEAD
 
         # Cache for league config
         self._league_config: Dict[str, Dict] = {}
@@ -88,7 +90,7 @@ class EventMatcher:
         """
         now = datetime.now(ZoneInfo('UTC'))
         cutoff_past = now - timedelta(days=self.SEARCH_DAYS_BACK)
-        cutoff_future = now + timedelta(days=self.SEARCH_DAYS_AHEAD)
+        cutoff_future = now + timedelta(days=self.lookahead_days)
         today = now.date()
 
         matching_events = []
@@ -768,10 +770,16 @@ class EventMatcher:
 
 
 # Convenience function for standalone use
-def create_event_matcher() -> EventMatcher:
-    """Create an EventMatcher instance with default configuration."""
+def create_event_matcher(lookahead_days: int = None) -> EventMatcher:
+    """
+    Create an EventMatcher instance with default configuration.
+
+    Args:
+        lookahead_days: How many days ahead to search for events.
+                        If not provided, uses DEFAULT_SEARCH_DAYS_AHEAD (7).
+    """
     from api.espn_client import ESPNClient
     from database import get_connection
 
     espn = ESPNClient()
-    return EventMatcher(espn, db_connection_func=get_connection)
+    return EventMatcher(espn, db_connection_func=get_connection, lookahead_days=lookahead_days)

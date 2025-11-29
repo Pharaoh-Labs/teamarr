@@ -160,6 +160,7 @@ def refresh_event_group_core(group, m3u_manager):
     settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
     conn.close()
     include_final_events = bool(settings.get('include_final_events', 0))
+    lookahead_days = settings.get('event_lookahead_days', 7)
 
     try:
         # Step 1: Refresh M3U data and wait for completion
@@ -179,7 +180,7 @@ def refresh_event_group_core(group, m3u_manager):
 
         # Step 3: Match streams to ESPN events
         team_matcher = create_matcher()
-        event_matcher = create_event_matcher()
+        event_matcher = create_event_matcher(lookahead_days=lookahead_days)
 
         matched_count = 0
         matched_streams = []
@@ -2671,14 +2672,15 @@ def api_event_epg_dispatcharr_streams(group_id):
                 from epg.team_matcher import create_matcher
                 from epg.event_matcher import create_event_matcher
 
-                # Fetch settings to get include_final_events preference
+                # Fetch settings to get include_final_events and lookahead preferences
                 conn = get_connection()
                 settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
                 conn.close()
                 include_final_events = bool(settings.get('include_final_events', 0))
+                lookahead_days = settings.get('event_lookahead_days', 7)
 
                 team_matcher = create_matcher()
-                event_matcher = create_event_matcher()
+                event_matcher = create_event_matcher(lookahead_days=lookahead_days)
 
                 for stream in streams:
                     try:
@@ -3490,9 +3492,10 @@ def api_event_epg_refresh_stream(group_id):
             settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
             conn.close()
             include_final_events = bool(settings.get('include_final_events', 0))
+            lookahead_days = settings.get('event_lookahead_days', 7)
 
             team_matcher = create_matcher()
-            event_matcher = create_event_matcher()
+            event_matcher = create_event_matcher(lookahead_days=lookahead_days)
             matched_count = 0
             matched_streams = []
 

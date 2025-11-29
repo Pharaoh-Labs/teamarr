@@ -195,6 +195,8 @@ def run_migrations(conn):
         ("channel_create_timing", "TEXT DEFAULT 'same_day'"),
         ("channel_delete_timing", "TEXT DEFAULT 'same_day'"),
         ("include_final_events", "INTEGER DEFAULT 0"),
+        # Event matching
+        ("event_lookahead_days", "INTEGER DEFAULT 7"),
     ]
     add_columns_if_missing("settings", settings_columns)
 

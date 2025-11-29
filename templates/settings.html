@@ -140,6 +140,18 @@
                     </select>
                     <small class="form-help">Whether to create channels/EPG for events from today that are already final</small>
                 </div>
+
+                <div class="form-group">
+                    <label for="event_lookahead_days">Event Lookahead</label>
+                    <select id="event_lookahead_days" name="event_lookahead_days" class="form-control">
+                        <option value="1" {% if settings.event_lookahead_days == 1 %}selected{% endif %}>1 day</option>
+                        <option value="3" {% if settings.event_lookahead_days == 3 %}selected{% endif %}>3 days</option>
+                        <option value="7" {% if settings.event_lookahead_days == 7 or not settings.event_lookahead_days %}selected{% endif %}>7 days</option>
+                        <option value="14" {% if settings.event_lookahead_days == 14 %}selected{% endif %}>14 days</option>
+                        <option value="30" {% if settings.event_lookahead_days == 30 %}selected{% endif %}>30 days</option>
+                    </select>
+                    <small class="form-help">Only match events within this many days from now</small>
+                </div>
             </div>
         </div>
 

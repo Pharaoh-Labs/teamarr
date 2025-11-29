@@ -597,18 +597,23 @@ class ChannelLifecycleManager:
         self,
         existing: Dict,
         group: Dict,
-        results: Dict
+        results: Dict,
+        current_stream: Dict = None
     ) -> None:
         """
-        Sync channel settings (channel_group_id, stream_profile_id) from group to channel.
+        Sync channel settings (channel_group_id, stream_profile_id, streams) from group to channel.
 
         If group settings differ from the channel's current settings in Dispatcharr,
         update the channel to match the group configuration.
+
+        Also syncs the stream assignment - M3U stream IDs can change when the provider
+        refreshes their playlist, so we always ensure the current matched stream is assigned.
 
         Args:
             existing: Existing managed channel record
             group: Event EPG group configuration
             results: Results dict to append updates
+            current_stream: Current matched stream from M3U (optional, for stream sync)
         """
         try:
             dispatcharr_channel_id = existing['dispatcharr_channel_id']
@@ -634,6 +639,19 @@ class ChannelLifecycleManager:
             current_stream_profile_id = current_channel.get('stream_profile_id')
             if group_stream_profile_id != current_stream_profile_id:
                 update_data['stream_profile_id'] = group_stream_profile_id
+
+            # Check stream assignment - M3U stream IDs can change on refresh
+            if current_stream:
+                new_stream_id = current_stream.get('id')
+                current_streams = current_channel.get('streams', [])
+
+                # Check if the stream is missing or different
+                if not current_streams or (len(current_streams) == 1 and current_streams[0] != new_stream_id):
+                    update_data['streams'] = [new_stream_id]
+
+                    # Also update our managed_channels record with the new stream ID
+                    from database import update_managed_channel
+                    update_managed_channel(existing['id'], {'dispatcharr_stream_id': new_stream_id})
 
             if not update_data:
                 return  # No changes needed
@@ -741,8 +759,9 @@ class ChannelLifecycleManager:
                     'channel_number': existing['channel_number']
                 })
 
-                # Sync channel settings (group, profile) if they've changed
-                self._sync_channel_settings(existing, group, results)
+                # Sync channel settings (group, profile, stream) if they've changed
+                # Pass current_stream to handle M3U stream ID changes
+                self._sync_channel_settings(existing, group, results, current_stream=stream)
 
                 # Check if logo needs updating for existing channel
                 if template and template.get('channel_logo_url'):
