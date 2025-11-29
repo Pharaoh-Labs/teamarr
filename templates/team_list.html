@@ -654,13 +654,17 @@ async function loadLiveStats() {
                 liveNowList.innerHTML = '<div class="tooltip-row"><span class="tooltip-name" style="font-style: italic;">No games live</span></div>';
             }
         } else {
-            document.getElementById('games-today-value').textContent = '0';
-            document.getElementById('live-now-value').textContent = '0';
+            document.getElementById('games-today-value').textContent = '--';
+            document.getElementById('live-now-value').textContent = '--';
+            document.getElementById('games-today-list').innerHTML = '<div class="tooltip-row"><span class="tooltip-name" style="font-style: italic;">Run EPG generation first</span></div>';
+            document.getElementById('live-now-list').innerHTML = '<div class="tooltip-row"><span class="tooltip-name" style="font-style: italic;">Run EPG generation first</span></div>';
         }
     } catch (error) {
         console.error('Error loading live stats:', error);
-        document.getElementById('games-today-value').textContent = '0';
-        document.getElementById('live-now-value').textContent = '0';
+        document.getElementById('games-today-value').textContent = '--';
+        document.getElementById('live-now-value').textContent = '--';
+        document.getElementById('games-today-list').innerHTML = '<div class="tooltip-row"><span class="tooltip-name" style="font-style: italic;">Run EPG generation first</span></div>';
+        document.getElementById('live-now-list').innerHTML = '<div class="tooltip-row"><span class="tooltip-name" style="font-style: italic;">Run EPG generation first</span></div>';
     }
 }
 
