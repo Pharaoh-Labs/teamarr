@@ -1684,6 +1684,10 @@ function updateTemplateTypeDefaults() {
     const eventProgramArtSection = document.getElementById('event-program-art-section');
     const titleSubtitleSection = document.getElementById('title-subtitle-section');
 
+    // Get the program_art_url input fields (both have same name, need to disable hidden one)
+    const teamProgramArtInput = document.getElementById('program_art_url');
+    const eventProgramArtInput = document.getElementById('program_art_url_event');
+
     if (currentTemplateType === 'event') {
         // Hide Conditions tab for event templates
         if (conditionsTab) conditionsTab.style.display = 'none';
@@ -1704,6 +1708,10 @@ function updateTemplateTypeDefaults() {
         if (conditionsTab && conditionsTab.classList.contains('active')) {
             document.querySelector('.tab-button[data-tab="basic"]').click();
         }
+        // Disable team program art input (hidden), enable event one
+        // This prevents duplicate form field submission
+        if (teamProgramArtInput) teamProgramArtInput.disabled = true;
+        if (eventProgramArtInput) eventProgramArtInput.disabled = false;
     } else {
         // Show sections for team templates
         if (conditionsTab) conditionsTab.style.display = '';
@@ -1719,6 +1727,10 @@ function updateTemplateTypeDefaults() {
         if (eventProgramArtSection) eventProgramArtSection.style.display = 'none';
         // Remove top margin from Title & Subtitle since it's now first
         if (titleSubtitleSection) titleSubtitleSection.style.marginTop = '0';
+        // Enable team program art input, disable event one (hidden)
+        // This prevents duplicate form field submission
+        if (teamProgramArtInput) teamProgramArtInput.disabled = false;
+        if (eventProgramArtInput) eventProgramArtInput.disabled = true;
     }
 }
 
