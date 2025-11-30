@@ -1261,11 +1261,13 @@ def get_event_epg_group_by_dispatcharr_id(dispatcharr_group_id: int) -> Optional
 
 
 def get_all_event_epg_groups(enabled_only: bool = False) -> List[Dict[str, Any]]:
-    """Get all event EPG groups with template names."""
+    """Get all event EPG groups with template names and parent info."""
     query = """
-        SELECT g.*, t.name as event_template_name
+        SELECT g.*, t.name as event_template_name,
+               pg.group_name as parent_group_name
         FROM event_epg_groups g
         LEFT JOIN templates t ON g.event_template_id = t.id
+        LEFT JOIN event_epg_groups pg ON g.parent_group_id = pg.id
     """
     if enabled_only:
         query += " WHERE g.enabled = 1"
@@ -1297,7 +1299,8 @@ def create_event_epg_group(
     custom_regex_time_enabled: bool = False,
     stream_exclude_regex: str = None,
     stream_exclude_regex_enabled: bool = False,
-    skip_builtin_filter: bool = False
+    skip_builtin_filter: bool = False,
+    parent_group_id: int = None
 ) -> int:
     """
     Create a new event EPG group.
@@ -1349,8 +1352,8 @@ def create_event_epg_group(
              custom_regex_date, custom_regex_date_enabled,
              custom_regex_time, custom_regex_time_enabled,
              stream_exclude_regex, stream_exclude_regex_enabled,
-             skip_builtin_filter)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             skip_builtin_filter, parent_group_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dispatcharr_group_id, dispatcharr_account_id, group_name,
@@ -1363,7 +1366,7 @@ def create_event_epg_group(
                 custom_regex_date, 1 if custom_regex_date_enabled else 0,
                 custom_regex_time, 1 if custom_regex_time_enabled else 0,
                 stream_exclude_regex, 1 if stream_exclude_regex_enabled else 0,
-                1 if skip_builtin_filter else 0
+                1 if skip_builtin_filter else 0, parent_group_id
             )
         )
         conn.commit()

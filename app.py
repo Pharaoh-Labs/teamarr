@@ -2353,7 +2353,8 @@ def settings_update():
             'auto_generate_enabled', 'auto_generate_frequency', 'schedule_time',
             'dispatcharr_enabled', 'dispatcharr_url', 'dispatcharr_username',
             'dispatcharr_password', 'dispatcharr_epg_id',
-            'channel_create_timing', 'channel_delete_timing', 'include_final_events'
+            'channel_create_timing', 'channel_delete_timing', 'include_final_events',
+            'default_duplicate_event_handling'
         ]
 
         for field in fields:
@@ -4170,7 +4171,8 @@ def api_event_epg_groups_create():
             custom_regex_time_enabled=bool(data.get('custom_regex_time_enabled')),
             stream_exclude_regex=data.get('stream_exclude_regex'),
             stream_exclude_regex_enabled=bool(data.get('stream_exclude_regex_enabled')),
-            skip_builtin_filter=bool(data.get('skip_builtin_filter'))
+            skip_builtin_filter=bool(data.get('skip_builtin_filter')),
+            parent_group_id=data.get('parent_group_id')
         )
 
         app.logger.info(f"Created event EPG group: {data['group_name']} (ID: {group_id})")

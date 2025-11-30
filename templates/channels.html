@@ -100,6 +100,42 @@
     </div>
 </div>
 
+<!-- Channel Info Modal -->
+<div id="channel-info-modal" class="modal-overlay" onclick="closeChannelInfoModal(event)">
+    <div class="modal-content modal-large" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h2 id="channel-info-title">Channel Info</h2>
+            <button class="modal-close" onclick="closeChannelInfoModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="channel-info-loading" class="loading-state">
+                <div class="spinner"></div>
+                <span>Loading...</span>
+            </div>
+            <div id="channel-info-content" style="display: none;">
+                <!-- Streams Tab -->
+                <div class="info-section">
+                    <h3>Streams</h3>
+                    <div id="channel-streams-content">
+                        <p class="text-muted">No streams</p>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div class="info-section">
+                    <h3>History</h3>
+                    <div id="channel-history-content">
+                        <p class="text-muted">No history</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeChannelInfoModal()">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // Shift-click support
 let lastChecked = null;
@@ -203,10 +239,16 @@ async function loadChannels() {
                     <td class="text-muted" style="font-size: 0.875rem;">${createdText}</td>
                     <td style="font-size: 0.875rem;">${deleteText}</td>
                     <td>
-                        <button onclick="deleteChannel(${channel.id}, '${escapeHtml(channel.channel_name || 'this channel')}')"
-                                class="btn btn-sm btn-danger" title="Delete channel" style="white-space: nowrap;">
-                            🗑️ Delete
-                        </button>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button onclick="showChannelInfo(${channel.id}, '${escapeHtml(channel.channel_name || 'Channel')}')"
+                                    class="btn btn-sm btn-secondary" title="View history & streams">
+                                ℹ️
+                            </button>
+                            <button onclick="deleteChannel(${channel.id}, '${escapeHtml(channel.channel_name || 'this channel')}')"
+                                    class="btn btn-sm btn-danger" title="Delete channel">
+                                🗑️
+                            </button>
+                        </div>
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -335,6 +377,133 @@ async function deleteChannel(channelId, channelName) {
     } catch (error) {
         showNotification(`Error: ${error.message}`, 'error');
     }
+}
+
+// ============================================================================
+// Channel Info Modal
+// ============================================================================
+
+async function showChannelInfo(channelId, channelName) {
+    const modal = document.getElementById('channel-info-modal');
+    const titleEl = document.getElementById('channel-info-title');
+    const loadingEl = document.getElementById('channel-info-loading');
+    const contentEl = document.getElementById('channel-info-content');
+    const streamsEl = document.getElementById('channel-streams-content');
+    const historyEl = document.getElementById('channel-history-content');
+
+    titleEl.textContent = channelName;
+    loadingEl.style.display = 'flex';
+    contentEl.style.display = 'none';
+    modal.classList.add('active');
+
+    try {
+        // Fetch streams and history in parallel
+        const [streamsRes, historyRes] = await Promise.all([
+            fetch(`/api/channel-lifecycle/streams/${channelId}`),
+            fetch(`/api/channel-lifecycle/history/${channelId}`)
+        ]);
+
+        const streamsData = await streamsRes.json();
+        const historyData = await historyRes.json();
+
+        // Render streams
+        if (streamsRes.ok && streamsData.streams && streamsData.streams.length > 0) {
+            let streamsHtml = '<div class="streams-list">';
+            streamsData.streams.forEach(stream => {
+                const addedAt = stream.added_at ? formatChannelDateTime(stream.added_at) : '—';
+                const sourceGroup = stream.source_group_name || '—';
+                const isPrimary = stream.is_primary ? ' <span class="badge badge-primary">Primary</span>' : '';
+
+                streamsHtml += `
+                    <div class="stream-item">
+                        <div class="stream-name">${escapeHtml(stream.stream_name || 'Stream ' + stream.dispatcharr_stream_id)}${isPrimary}</div>
+                        <div class="stream-meta">
+                            <span>ID: ${stream.dispatcharr_stream_id}</span>
+                            <span>Source: ${escapeHtml(sourceGroup)}</span>
+                            <span>Added: ${addedAt}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            streamsHtml += '</div>';
+            streamsEl.innerHTML = streamsHtml;
+        } else {
+            streamsEl.innerHTML = '<p class="text-muted">No streams assigned to this channel.</p>';
+        }
+
+        // Render history
+        if (historyRes.ok && historyData.history && historyData.history.length > 0) {
+            let historyHtml = '<div class="history-list">';
+            historyData.history.forEach(entry => {
+                const changedAt = entry.changed_at ? formatChannelDateTime(entry.changed_at) : '—';
+                const changeType = entry.change_type || 'unknown';
+                const source = entry.change_source || '';
+
+                // Format change type with icon
+                let typeIcon = '📝';
+                let typeClass = '';
+                if (changeType === 'created') {
+                    typeIcon = '✨';
+                    typeClass = 'text-success';
+                } else if (changeType === 'deleted') {
+                    typeIcon = '🗑️';
+                    typeClass = 'text-danger';
+                } else if (changeType === 'stream_added') {
+                    typeIcon = '➕';
+                } else if (changeType === 'stream_removed') {
+                    typeIcon = '➖';
+                } else if (changeType === 'updated' || changeType === 'synced') {
+                    typeIcon = '🔄';
+                }
+
+                // Parse details JSON if present
+                let detailsHtml = '';
+                if (entry.details) {
+                    try {
+                        const details = typeof entry.details === 'string' ? JSON.parse(entry.details) : entry.details;
+                        if (Object.keys(details).length > 0) {
+                            detailsHtml = '<div class="history-details">';
+                            for (const [key, value] of Object.entries(details)) {
+                                detailsHtml += `<span class="detail-item">${escapeHtml(key)}: ${escapeHtml(String(value))}</span>`;
+                            }
+                            detailsHtml += '</div>';
+                        }
+                    } catch (e) {
+                        // Ignore JSON parse errors
+                    }
+                }
+
+                historyHtml += `
+                    <div class="history-item">
+                        <div class="history-header">
+                            <span class="${typeClass}">${typeIcon} ${escapeHtml(changeType.replace(/_/g, ' '))}</span>
+                            <span class="history-time">${changedAt}</span>
+                        </div>
+                        ${source ? `<div class="history-source">Source: ${escapeHtml(source)}</div>` : ''}
+                        ${detailsHtml}
+                    </div>
+                `;
+            });
+            historyHtml += '</div>';
+            historyEl.innerHTML = historyHtml;
+        } else {
+            historyEl.innerHTML = '<p class="text-muted">No history available for this channel.</p>';
+        }
+
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+
+    } catch (error) {
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+        streamsEl.innerHTML = `<p class="text-danger">Error loading data: ${escapeHtml(error.message)}</p>`;
+        historyEl.innerHTML = '';
+    }
+}
+
+function closeChannelInfoModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('channel-info-modal').classList.remove('active');
 }
 
 // ============================================================================
@@ -761,6 +930,169 @@ document.addEventListener('DOMContentLoaded', loadChannels);
 
 .text-danger {
     color: #ef4444;
+}
+
+/* Modal styles */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-large {
+    max-width: 700px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+/* Info section styles */
+.info-section {
+    margin-bottom: 1.5rem;
+}
+
+.info-section:last-child {
+    margin-bottom: 0;
+}
+
+.info-section h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+/* Streams list */
+.streams-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stream-item {
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 0.75rem;
+}
+
+.stream-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.stream-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* History list */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.history-item {
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 0.75rem;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+}
+
+.history-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+.history-source {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.history-details {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.detail-item {
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.text-success {
+    color: #22c55e;
 }
 </style>
 {% endblock %}

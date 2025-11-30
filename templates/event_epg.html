@@ -231,8 +231,13 @@
                                        onclick="handleCheckboxClick(event, this)" onchange="updateBulkToolbar()">
                             </td>
                             <td>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                     <strong style="font-size: 0.9375rem;">{{ group.group_name }}</strong>
+                                    {% if group.parent_group_id %}
+                                        <span class="badge badge-child" title="Child group: adds streams to parent's channels">
+                                            ↳ {{ group.parent_group_name|truncate(15) }}
+                                        </span>
+                                    {% endif %}
                                     {% if group.account_name %}
                                         <span class="badge badge-secondary">{{ group.account_name }}</span>
                                     {% endif %}
@@ -1477,6 +1482,18 @@ code {
 .badge-warning {
     background: rgba(245, 158, 11, 0.2);
     color: #fcd34d;
+}
+
+.badge-child {
+    background: rgba(168, 85, 247, 0.2);
+    color: #c4b5fd;
+    font-style: italic;
+}
+
+.light-theme .badge-child {
+    background: rgba(168, 85, 247, 0.15);
+    color: #7c3aed;
+    border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
 .light-theme .badge-success {

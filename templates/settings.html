@@ -157,6 +157,21 @@
                     <small class="form-help">Only match events within this many days from now</small>
                 </div>
             </div>
+
+            <div class="form-row" style="margin-top: 0.75rem;">
+                <div class="form-group">
+                    <label for="default_duplicate_event_handling">Duplicate Stream Handling</label>
+                    <select id="default_duplicate_event_handling" name="default_duplicate_event_handling" class="form-control">
+                        <option value="consolidate" {% if settings.default_duplicate_event_handling == 'consolidate' or not settings.default_duplicate_event_handling %}selected{% endif %}>Consolidate</option>
+                        <option value="ignore" {% if settings.default_duplicate_event_handling == 'ignore' %}selected{% endif %}>Ignore</option>
+                        <option value="separate" {% if settings.default_duplicate_event_handling == 'separate' %}selected{% endif %}>Separate</option>
+                    </select>
+                    <small class="form-help">When multiple streams match the same event:<br>
+                        <strong>Consolidate</strong> = add all streams to one channel<br>
+                        <strong>Ignore</strong> = keep first stream only<br>
+                        <strong>Separate</strong> = create separate channel per stream</small>
+                </div>
+            </div>
         </div>
 
         <!-- EPG Generation Settings -->

@@ -90,6 +90,14 @@
                 </select>
                 <small class="form-help">Required. Controls EPG title, description, and channel naming.</small>
             </div>
+
+            <div class="form-group">
+                <label for="parent_group_id">Parent Group <span class="optional">(optional)</span></label>
+                <select id="parent_group_id" name="parent_group_id" class="form-control">
+                    <option value="">None (independent group)</option>
+                </select>
+                <small class="form-help">If set, this group's matched streams will be added to the parent's channels instead of creating new ones.</small>
+            </div>
         </div>
 
         <!-- Channel Settings Section -->
@@ -275,9 +283,12 @@ let allStreamProfiles = [];
 // Channel profiles data
 let channelProfiles = [];
 
+// Event groups for parent selection
+let eventGroups = [];
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async function() {
-    await Promise.all([loadLeagues(), loadChannelGroups(), loadStreamProfiles(), loadChannelProfiles()]);
+    await Promise.all([loadLeagues(), loadChannelGroups(), loadStreamProfiles(), loadChannelProfiles(), loadEventGroups()]);
     {% if mode == 'edit' and group.channel_group_id %}
     document.getElementById('channel_group_id').value = '{{ group.channel_group_id }}';
     {% endif %}
@@ -286,6 +297,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     {% endif %}
     {% if mode == 'edit' and group.channel_profile_id %}
     document.getElementById('channel_profile_id').value = '{{ group.channel_profile_id }}';
+    {% endif %}
+    {% if mode == 'edit' and group.parent_group_id %}
+    document.getElementById('parent_group_id').value = '{{ group.parent_group_id }}';
     {% endif %}
 });
 
@@ -582,6 +596,60 @@ function filterChannelProfiles() {
     }
 }
 
+// ============================================================================
+// Event Groups (for parent selection)
+// ============================================================================
+
+async function loadEventGroups() {
+    try {
+        const response = await fetch('/api/event-epg/groups');
+        const data = await response.json();
+
+        if (response.ok && data.groups) {
+            eventGroups = data.groups || [];
+            renderEventGroups();
+        } else {
+            console.error('Failed to load event groups:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading event groups:', error);
+    }
+}
+
+function renderEventGroups() {
+    const select = document.getElementById('parent_group_id');
+    const currentValue = select.value;
+
+    // Keep the "None" option
+    select.innerHTML = '<option value="">None (independent group)</option>';
+
+    {% if mode == 'edit' %}
+    const currentGroupId = {{ group.id }};
+    {% else %}
+    const currentGroupId = null;
+    {% endif %}
+
+    eventGroups.forEach(group => {
+        // Don't show current group as potential parent (avoid circular reference)
+        if (currentGroupId && group.id === currentGroupId) {
+            return;
+        }
+        // Don't show groups that are already children (no multi-level nesting)
+        if (group.parent_group_id) {
+            return;
+        }
+
+        const option = document.createElement('option');
+        option.value = group.id;
+        option.textContent = `${group.group_name} (${group.assigned_league.toUpperCase()})`;
+        select.appendChild(option);
+    });
+
+    if (currentValue) {
+        select.value = currentValue;
+    }
+}
+
 {% if mode == 'edit' %}
 async function testRegexPatterns() {
     const teamsPattern = document.getElementById('custom_regex_teams').value.trim();
@@ -697,7 +765,7 @@ document.getElementById('event-group-form').addEventListener('submit', async fun
     formData.forEach((value, key) => {
         if (value !== '' && value !== null) {
             // Convert numeric fields
-            if (['channel_start', 'channel_group_id', 'stream_profile_id', 'channel_profile_id', 'event_template_id', 'dispatcharr_group_id', 'dispatcharr_account_id'].includes(key)) {
+            if (['channel_start', 'channel_group_id', 'stream_profile_id', 'channel_profile_id', 'event_template_id', 'dispatcharr_group_id', 'dispatcharr_account_id', 'parent_group_id'].includes(key)) {
                 data[key] = value ? parseInt(value) : null;
             } else if (checkboxFields.includes(key)) {
                 data[key] = true;
