@@ -559,18 +559,21 @@ class M3UManager:
         self,
         account_id: int,
         timeout: int = 120,
-        poll_interval: int = 2
+        poll_interval: int = 2,
+        skip_if_recent_minutes: int = 60
     ) -> Dict[str, Any]:
         """
         Trigger M3U refresh and wait for completion.
 
         This ensures streams are updated before we fetch them for EPG generation.
         Uses polling to detect when refresh completes by monitoring updated_at.
+        Skips refresh if account was updated within skip_if_recent_minutes.
 
         Args:
             account_id: M3U account ID to refresh
             timeout: Maximum seconds to wait (default: 120)
             poll_interval: Seconds between status checks (default: 2)
+            skip_if_recent_minutes: Skip refresh if updated within this many minutes (default: 60)
 
         Returns:
             Result dict with:
@@ -578,8 +581,10 @@ class M3UManager:
             - message: str
             - duration: float (seconds taken)
             - account: dict (final account state if successful)
+            - skipped: bool (True if refresh was skipped due to recent update)
         """
         import time
+        from datetime import datetime, timezone
 
         # Get current state
         before = self.get_account(account_id)
@@ -587,6 +592,27 @@ class M3UManager:
             return {"success": False, "message": f"Account {account_id} not found"}
 
         before_updated = before.get('updated_at')
+
+        # Check if recently refreshed - skip if within threshold
+        if skip_if_recent_minutes > 0 and before_updated:
+            try:
+                # Parse ISO timestamp (handle both Z and +00:00 formats)
+                updated_str = before_updated.replace('Z', '+00:00')
+                updated_dt = datetime.fromisoformat(updated_str)
+                now = datetime.now(timezone.utc)
+                age_minutes = (now - updated_dt).total_seconds() / 60
+
+                if age_minutes < skip_if_recent_minutes:
+                    logger.info(f"M3U account {account_id} refreshed {age_minutes:.1f} min ago, skipping refresh")
+                    return {
+                        "success": True,
+                        "message": f"Skipped - refreshed {age_minutes:.0f} min ago",
+                        "duration": 0,
+                        "skipped": True,
+                        "account": before
+                    }
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Could not parse updated_at '{before_updated}': {e}")
 
         # Trigger refresh
         trigger_result = self.refresh_m3u_account(account_id)
@@ -642,19 +668,21 @@ class M3UManager:
         self,
         account_ids: List[int],
         timeout: int = 120,
-        poll_interval: int = 2
+        poll_interval: int = 2,
+        skip_if_recent_minutes: int = 60
     ) -> Dict[str, Any]:
         """
         Refresh multiple M3U accounts in parallel and wait for all to complete.
 
         Triggers all accounts simultaneously, then polls until all complete or timeout.
         This is more efficient than sequential refreshes when multiple event groups
-        share the same M3U provider.
+        share the same M3U provider. Skips accounts refreshed within skip_if_recent_minutes.
 
         Args:
             account_ids: List of unique M3U account IDs to refresh
             timeout: Maximum seconds to wait for all (default: 120)
             poll_interval: Seconds between status checks (default: 2)
+            skip_if_recent_minutes: Skip refresh if updated within this many minutes (default: 60)
 
         Returns:
             Result dict with:
@@ -663,9 +691,11 @@ class M3UManager:
             - duration: float (total seconds taken)
             - failed_count: int
             - succeeded_count: int
+            - skipped_count: int
         """
         import time
         from concurrent.futures import ThreadPoolExecutor
+        from datetime import datetime, timezone
 
         if not account_ids:
             return {
@@ -673,28 +703,68 @@ class M3UManager:
                 "results": {},
                 "duration": 0,
                 "failed_count": 0,
-                "succeeded_count": 0
+                "succeeded_count": 0,
+                "skipped_count": 0
             }
 
         # Deduplicate account IDs
         unique_ids = list(set(account_ids))
 
-        # Get initial state for all accounts
+        # Get initial state for all accounts and check which need refresh
         initial_states = {}
+        results = {}
+        ids_needing_refresh = []
+        now = datetime.now(timezone.utc)
+
         for account_id in unique_ids:
             account = self.get_account(account_id)
-            if account:
-                initial_states[account_id] = account.get('updated_at')
-            else:
+            if not account:
                 initial_states[account_id] = None
+                ids_needing_refresh.append(account_id)
+                continue
 
-        # Trigger all refreshes in parallel
+            initial_states[account_id] = account.get('updated_at')
+
+            # Check if recently refreshed
+            if skip_if_recent_minutes > 0 and account.get('updated_at'):
+                try:
+                    updated_str = account['updated_at'].replace('Z', '+00:00')
+                    updated_dt = datetime.fromisoformat(updated_str)
+                    age_minutes = (now - updated_dt).total_seconds() / 60
+
+                    if age_minutes < skip_if_recent_minutes:
+                        logger.info(f"M3U account {account_id} refreshed {age_minutes:.1f} min ago, skipping")
+                        results[account_id] = {
+                            "success": True,
+                            "message": f"Skipped - refreshed {age_minutes:.0f} min ago",
+                            "duration": 0,
+                            "skipped": True
+                        }
+                        continue
+                except (ValueError, TypeError):
+                    pass
+
+            ids_needing_refresh.append(account_id)
+
+        # If all accounts were skipped, return early
+        if not ids_needing_refresh:
+            skipped_count = len(results)
+            return {
+                "success": True,
+                "results": results,
+                "duration": 0,
+                "failed_count": 0,
+                "succeeded_count": skipped_count,
+                "skipped_count": skipped_count
+            }
+
+        # Trigger refreshes in parallel (only for accounts that need it)
         def trigger_refresh(account_id):
             return (account_id, self.refresh_m3u_account(account_id))
 
         trigger_results = {}
-        with ThreadPoolExecutor(max_workers=len(unique_ids)) as executor:
-            futures = {executor.submit(trigger_refresh, aid): aid for aid in unique_ids}
+        with ThreadPoolExecutor(max_workers=len(ids_needing_refresh)) as executor:
+            futures = {executor.submit(trigger_refresh, aid): aid for aid in ids_needing_refresh}
             for future in futures:
                 try:
                     account_id, result = future.result()
@@ -705,9 +775,8 @@ class M3UManager:
 
         # Track which accounts we're waiting for
         pending = set()
-        results = {}
 
-        for account_id in unique_ids:
+        for account_id in ids_needing_refresh:
             trigger_result = trigger_results.get(account_id, {"success": False, "message": "Trigger failed"})
 
             if trigger_result.get('success'):
@@ -778,6 +847,7 @@ class M3UManager:
 
         # Calculate summary
         total_duration = time.time() - start_time
+        skipped = sum(1 for r in results.values() if r.get('skipped'))
         succeeded = sum(1 for r in results.values() if r.get('success'))
         failed = len(results) - succeeded
 
@@ -786,7 +856,8 @@ class M3UManager:
             "results": results,
             "duration": total_duration,
             "failed_count": failed,
-            "succeeded_count": succeeded
+            "succeeded_count": succeeded,
+            "skipped_count": skipped
         }
 
     def test_connection(self) -> Dict[str, Any]:

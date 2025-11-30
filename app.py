@@ -783,19 +783,28 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
                     )
 
                     if batch_refresh_result.get('success'):
-                        app.logger.info(
-                            f"✅ M3U batch refresh completed in {batch_refresh_result.get('duration', 0):.1f}s "
-                            f"({batch_refresh_result.get('succeeded_count', 0)} succeeded)"
-                        )
+                        skipped = batch_refresh_result.get('skipped_count', 0)
+                        refreshed = batch_refresh_result.get('succeeded_count', 0) - skipped
+                        if skipped > 0:
+                            app.logger.info(
+                                f"✅ M3U batch refresh: {refreshed} refreshed, {skipped} skipped (recently updated) "
+                                f"in {batch_refresh_result.get('duration', 0):.1f}s"
+                            )
+                        else:
+                            app.logger.info(
+                                f"✅ M3U batch refresh completed in {batch_refresh_result.get('duration', 0):.1f}s "
+                                f"({batch_refresh_result.get('succeeded_count', 0)} succeeded)"
+                            )
                     else:
                         failed = batch_refresh_result.get('failed_count', 0)
                         succeeded = batch_refresh_result.get('succeeded_count', 0)
+                        skipped = batch_refresh_result.get('skipped_count', 0)
                         app.logger.warning(
-                            f"⚠️ M3U batch refresh partial: {succeeded} succeeded, {failed} failed"
+                            f"⚠️ M3U batch refresh partial: {succeeded} succeeded, {failed} failed, {skipped} skipped"
                         )
                         # Log individual failures
                         for account_id, result in batch_refresh_result.get('results', {}).items():
-                            if not result.get('success'):
+                            if not result.get('success') and not result.get('skipped'):
                                 app.logger.warning(f"  Account {account_id}: {result.get('message')}")
 
                 # Step 2b: Process all groups in parallel (M3U already refreshed)
@@ -3593,13 +3602,19 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
         preview_thread = threading.Thread(target=run_preview)
         preview_thread.start()
 
+        # JSON encoder that handles datetime objects
+        def json_serial(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
         # Stream progress updates
         while True:
             try:
                 data = progress_queue.get(timeout=0.1)
                 if data.get('status') == '_done':
                     break
-                yield f"data: {json.dumps(data)}\n\n"
+                yield f"data: {json.dumps(data, default=json_serial)}\n\n"
             except queue.Empty:
                 yield f": heartbeat\n\n"
 
