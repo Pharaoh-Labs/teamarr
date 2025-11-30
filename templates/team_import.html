@@ -435,10 +435,12 @@ async function selectLeague(league) {
 }
 
 let loadedConferences = new Set();  // Track which conferences have been loaded
+let conferenceTeams = {};  // Store teams by conference name for quick access
 
 async function loadConferences(league) {
     try {
-        const response = await fetch(`/api/leagues/${league.code}/conferences`);
+        // Use the fast batch endpoint that returns conferences WITH teams
+        const response = await fetch(`/api/leagues/${league.code}/conferences/batch`);
         const data = await response.json();
 
         if (!data.conferences || data.conferences.length === 0) {
@@ -447,7 +449,20 @@ async function loadConferences(league) {
             return;
         }
 
+        // Store all teams and conference mappings
         allTeams = [];
+        conferenceTeams = {};
+
+        data.conferences.forEach(conf => {
+            conferenceTeams[conf.name] = conf.teams || [];
+            // Add to allTeams with conference info
+            conf.teams.forEach(team => {
+                team.conference = { name: conf.name };
+                allTeams.push(team);
+            });
+        });
+
+        console.log(`Loaded ${allTeams.length} teams across ${data.conferences.length} conferences (batch)`);
         renderCollapsedConferences(data.conferences);
 
     } catch (error) {
@@ -472,21 +487,22 @@ function renderCollapsedConferences(conferences) {
     leagueLogo.style.display = currentLeague.logo ? 'block' : 'none';
     document.getElementById('league-title').textContent = currentLeague.name;
 
-    // Show conference count (team count will be shown when expanded)
-    document.getElementById('teams-count').textContent = `${conferences.length} conferences`;
+    // Show conference count and total teams
+    const totalTeams = conferences.reduce((sum, c) => sum + (c.teams?.length || 0), 0);
+    document.getElementById('teams-count').textContent = `${conferences.length} conferences, ${totalTeams} teams`;
     document.getElementById('teams-container').style.display = 'block';
     document.getElementById('import-actions').style.display = 'flex';
 
-    // Sort conferences: Independents at the bottom, rest alphabetically
+    // Sort conferences: "Other Teams" at the bottom, rest alphabetically
     const sortedConferences = [...conferences].sort((a, b) => {
-        // Check if either is an Independents conference
-        const aIsIndependent = a.name.toLowerCase().includes('independent');
-        const bIsIndependent = b.name.toLowerCase().includes('independent');
+        // Check if either is "Other Teams" or Independents
+        const aIsOther = a.name.toLowerCase().includes('other') || a.name.toLowerCase().includes('independent');
+        const bIsOther = b.name.toLowerCase().includes('other') || b.name.toLowerCase().includes('independent');
 
-        if (aIsIndependent && !bIsIndependent) return 1;  // a goes to bottom
-        if (!aIsIndependent && bIsIndependent) return -1; // b goes to bottom
+        if (aIsOther && !bIsOther) return 1;  // a goes to bottom
+        if (!aIsOther && bIsOther) return -1; // b goes to bottom
 
-        // Both independent or both not - sort alphabetically
+        // Both other or both not - sort alphabetically
         return a.name.localeCompare(b.name);
     });
 
@@ -494,7 +510,7 @@ function renderCollapsedConferences(conferences) {
     sortedConferences.forEach(conf => {
         const confCard = document.createElement('div');
         confCard.style.cssText = 'grid-column: 1 / -1; margin-bottom: 0.5rem;';
-        confCard.dataset.conferenceId = conf.id;
+        confCard.dataset.conferenceName = conf.name;  // Use name as identifier
 
         const confHeader = document.createElement('div');
         confHeader.style.cssText = `
@@ -519,7 +535,7 @@ function renderCollapsedConferences(conferences) {
         icon.style.cssText = 'transition: transform 0.2s; color: var(--text-muted); font-size: 0.75rem;';
         confHeader.appendChild(icon);
 
-        // Conference logo
+        // Conference logo (if available)
         if (conf.logo) {
             const logo = document.createElement('img');
             logo.src = conf.logo;
@@ -535,16 +551,16 @@ function renderCollapsedConferences(conferences) {
         name.textContent = conf.name;
         confHeader.appendChild(name);
 
-        // Team count (will be populated when expanded)
+        // Team count (show immediately since we have the data)
         const count = document.createElement('div');
         count.className = 'team-count';
         count.style.cssText = 'color: var(--text-muted); font-size: 0.85rem; min-width: 20px;';
-        count.textContent = '';  // Empty initially, shown after expansion
+        count.textContent = conf.teams?.length || 0;
         confHeader.appendChild(count);
 
         confCard.appendChild(confHeader);
 
-        // Teams container (initially empty)
+        // Teams container (initially empty, will be populated on expand)
         const teamsContainer = document.createElement('div');
         teamsContainer.className = 'conference-teams';
         teamsContainer.style.cssText = 'display: none; margin-top: 0.5rem;';
@@ -556,11 +572,16 @@ function renderCollapsedConferences(conferences) {
     updateSelectionCount();
 }
 
-async function toggleConference(conf) {
-    const confCard = document.querySelector(`[data-conference-id="${conf.id}"]`);
+function toggleConference(conf) {
+    // Use conference name as identifier (batch endpoint doesn't have IDs)
+    const confCard = document.querySelector(`[data-conference-name="${CSS.escape(conf.name)}"]`);
+    if (!confCard) {
+        console.error(`Conference card not found for: ${conf.name}`);
+        return;
+    }
+
     const teamsContainer = confCard.querySelector('.conference-teams');
     const icon = confCard.querySelector('.expand-icon');
-    const teamCount = confCard.querySelector('.team-count');
 
     // If already expanded, collapse it
     if (teamsContainer.style.display === 'grid') {
@@ -569,45 +590,16 @@ async function toggleConference(conf) {
         return;
     }
 
-    // If not loaded yet, fetch teams
-    if (!loadedConferences.has(conf.id)) {
-        // Show loading state
-        teamsContainer.style.display = 'block';
-        teamsContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading teams...</div>';
+    // Teams are pre-loaded from batch endpoint - just render them
+    const teams = conferenceTeams[conf.name] || conf.teams || [];
 
-        try {
-            const response = await fetch(`/api/leagues/${currentLeague.code}/teams?conference=${conf.id}`);
-            const data = await response.json();
-
-            if (data.teams && data.teams.length > 0) {
-                // Update team count display
-                teamCount.textContent = data.teams.length;
-
-                // Add teams to global list with conference tag
-                data.teams.forEach(team => {
-                    team.conference = conf;
-                    // Remove if already exists (in case of re-expansion)
-                    const existingIndex = allTeams.findIndex(t => String(t.id) === String(team.id));
-                    if (existingIndex === -1) {
-                        allTeams.push(team);
-                    }
-                });
-
-                loadedConferences.add(conf.id);
-                renderConferenceTeams(conf, data.teams, teamsContainer);
-            } else {
-                teamsContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No teams found</div>';
-                teamCount.textContent = '0';
-            }
-        } catch (error) {
-            console.error(`Failed to load teams for ${conf.name}:`, error);
-            teamsContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--danger);">Error loading teams</div>';
-        }
+    if (teams.length > 0) {
+        renderConferenceTeams(conf, teams, teamsContainer);
     } else {
-        // Already loaded, just show it
-        teamsContainer.style.display = 'grid';
+        teamsContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No teams found</div>';
     }
 
+    teamsContainer.style.display = 'grid';
     icon.style.transform = 'rotate(90deg)';
 }
 

@@ -2982,6 +2982,72 @@ def api_league_conferences(league_code):
         app.logger.error(f"Error fetching conferences for league {league_code}: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/leagues/<league_code>/conferences/batch', methods=['GET'])
+def api_league_conferences_batch(league_code):
+    """
+    Fetch all conferences WITH their teams in a SINGLE API call.
+
+    Much faster than fetching conferences then teams per conference.
+    Also includes "Other Teams" for independents not in any conference.
+
+    Returns:
+        {
+            "league": {...},
+            "conferences": [
+                {"name": "Big 12", "teams": [...]},
+                {"name": "SEC", "teams": [...]},
+                {"name": "— Other Teams —", "teams": [...]}  // independents
+            ],
+            "total_teams": 362
+        }
+    """
+    try:
+        # Get league config
+        conn = get_connection()
+        cursor = conn.cursor()
+        league_info = cursor.execute("""
+            SELECT sport, api_path, league_name
+            FROM league_config
+            WHERE league_code = ?
+        """, (league_code,)).fetchone()
+        conn.close()
+
+        if not league_info:
+            return jsonify({'error': 'League not found'}), 404
+
+        sport = league_info[0]
+        api_path = league_info[1]
+        league_name = league_info[2]
+        league_identifier = api_path.split('/')[-1]
+
+        espn = ESPNClient()
+
+        # Use the helper function that handles everything
+        conferences = espn.get_all_teams_by_conference(sport, league_identifier)
+
+        if not conferences:
+            # Fall back to flat team list for non-college or on error
+            all_teams = espn.get_league_teams(sport, league_identifier)
+            if all_teams:
+                conferences = [{
+                    'name': 'All Teams',
+                    'teams': sorted(all_teams, key=lambda x: x.get('name', ''))
+                }]
+            else:
+                return jsonify({'conferences': [], 'total_teams': 0})
+
+        total_teams = sum(len(c['teams']) for c in conferences)
+
+        return jsonify({
+            'league': {'code': league_code, 'name': league_name, 'sport': sport},
+            'conferences': conferences,
+            'total_teams': total_teams
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error fetching conferences batch for {league_code}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/leagues/<league_code>/teams', methods=['GET'])
 def api_league_teams(league_code):
     """Fetch all teams for a given league from ESPN API"""
@@ -4704,9 +4770,24 @@ def api_event_epg_teams_search():
     This is a convenience endpoint that wraps the existing league teams API
     for use in the alias creation UI.
 
+    For college leagues, returns teams organized by conference using the
+    /groups endpoint. Non-college leagues return a flat list.
+
     Query params:
         league: League code (required)
         search: Search term (optional)
+
+    Returns:
+        For college leagues:
+            {
+                "teams": [...],  // flat list of all teams (for search)
+                "conferences": {  // teams grouped by conference (for dropdown)
+                    "Big 12 Conference": [...],
+                    "SEC": [...]
+                }
+            }
+        For pro leagues:
+            {"teams": [...]}
     """
     try:
         league = request.args.get('league')
@@ -4732,12 +4813,18 @@ def api_event_epg_teams_search():
         api_path = league_info[1]
         league_identifier = api_path.split('/')[-1]
 
-        # Fetch teams
         espn = ESPNClient()
+
+        # For college leagues, use the helper to get all teams by conference
+        conferences_list = None
+        if 'college' in league_identifier.lower():
+            conferences_list = espn.get_all_teams_by_conference(sport, league_identifier)
+
+        # Always get flat team list (includes independents for college)
         teams_data = espn.get_league_teams(sport, league_identifier)
 
         if not teams_data:
-            return jsonify({'teams': []})
+            return jsonify({'teams': [], 'conferences': {}})
 
         # Filter by search term if provided
         if search:
@@ -4747,6 +4834,22 @@ def api_event_epg_teams_search():
                 or search in t.get('shortName', '').lower()
                 or search in t.get('abbreviation', '').lower()
             ]
+            # Also filter conferences if we have them
+            if conferences_list:
+                filtered_conferences = []
+                for conf in conferences_list:
+                    filtered = [
+                        t for t in conf.get('teams', [])
+                        if search in t.get('name', '').lower()
+                        or search in t.get('shortName', '').lower()
+                        or search in t.get('abbreviation', '').lower()
+                    ]
+                    if filtered:
+                        filtered_conferences.append({
+                            'name': conf['name'],
+                            'teams': filtered
+                        })
+                conferences_list = filtered_conferences
 
         # Return simplified team data for dropdown
         teams = [
@@ -4760,7 +4863,25 @@ def api_event_epg_teams_search():
             for t in teams_data
         ]
 
-        return jsonify({'teams': teams})
+        result = {'teams': teams}
+
+        # Add conference grouping for college leagues (dict format for dropdown optgroups)
+        if conferences_list:
+            formatted_conferences = {}
+            for conf in conferences_list:
+                formatted_conferences[conf['name']] = [
+                    {
+                        'id': t.get('id'),
+                        'name': t.get('name'),
+                        'shortName': t.get('shortName'),
+                        'abbreviation': t.get('abbreviation'),
+                        'logo': t.get('logo')
+                    }
+                    for t in conf.get('teams', [])
+                ]
+            result['conferences'] = formatted_conferences
+
+        return jsonify(result)
 
     except Exception as e:
         app.logger.error(f"Error searching teams: {e}")
