@@ -197,6 +197,8 @@ def run_migrations(conn):
         ("include_final_events", "INTEGER DEFAULT 0"),
         # Event matching
         ("event_lookahead_days", "INTEGER DEFAULT 7"),
+        # Scheduler time configuration
+        ("schedule_time", "TEXT DEFAULT '00'"),  # For hourly: minute (00-59), for daily: HH:MM
     ]
     add_columns_if_missing("settings", settings_columns)
 

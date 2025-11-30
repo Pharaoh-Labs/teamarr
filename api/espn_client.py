@@ -1,6 +1,7 @@
 """ESPN API Client for fetching sports schedules and team data"""
 import requests
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import time
@@ -22,6 +23,11 @@ class ESPNClient:
         # Cache for team stats (refreshes every 6 hours)
         self._stats_cache = {}
         self._cache_duration = timedelta(hours=6)
+
+        # Cache for team schedules (cleared each EPG generation run)
+        # Key: (sport, league, team_slug), Value: schedule data
+        self._schedule_cache = {}
+        self._schedule_cache_lock = threading.Lock()  # Thread-safe cache access
 
     def _make_request(self, url: str) -> Optional[Dict]:
         """Make HTTP request with retry logic"""
@@ -105,7 +111,11 @@ class ESPNClient:
 
     def get_team_schedule(self, sport: str, league: str, team_slug: str, days_ahead: int = 14) -> Optional[Dict]:
         """
-        Fetch team schedule from ESPN API
+        Fetch team schedule from ESPN API with caching.
+
+        Schedule data is cached per-generation to avoid redundant API calls
+        when the same team is referenced multiple times (e.g., opponent lookups).
+        Thread-safe via double-checked locking.
 
         Args:
             sport: Sport type (e.g., 'basketball', 'football', 'soccer')
@@ -116,8 +126,33 @@ class ESPNClient:
         Returns:
             Dict with team schedule data or None if failed
         """
-        url = f"{self.base_url}/{sport}/{league}/teams/{team_slug}/schedule"
-        return self._make_request(url)
+        cache_key = (sport, league, str(team_slug))
+
+        # Fast path: check cache without lock
+        if cache_key in self._schedule_cache:
+            logger.debug(f"Schedule cache hit for {sport}/{league}/{team_slug}")
+            return self._schedule_cache[cache_key]
+
+        # Slow path: acquire lock for cache miss
+        with self._schedule_cache_lock:
+            # Double-check after acquiring lock (another thread may have populated)
+            if cache_key in self._schedule_cache:
+                logger.debug(f"Schedule cache hit (after lock) for {sport}/{league}/{team_slug}")
+                return self._schedule_cache[cache_key]
+
+            # Fetch from API
+            url = f"{self.base_url}/{sport}/{league}/teams/{team_slug}/schedule"
+            result = self._make_request(url)
+
+            # Cache the result (even if None to avoid re-fetching failures)
+            self._schedule_cache[cache_key] = result
+            return result
+
+    def clear_schedule_cache(self):
+        """Clear the schedule cache. Call this at the start of each EPG generation."""
+        with self._schedule_cache_lock:
+            self._schedule_cache.clear()
+        logger.debug("Schedule cache cleared")
 
     def get_team_info(self, sport: str, league: str, team_id: str) -> Optional[Dict]:
         """
@@ -410,16 +445,23 @@ class ESPNClient:
         from datetime import timezone as tz
         now = datetime.now(tz.utc)
 
-        # Calculate future cutoff as end of the Nth day
-        cutoff_date = now.date() + timedelta(days=days_ahead - 1)
-        cutoff_future = datetime.combine(cutoff_date, datetime.max.time()).replace(tzinfo=tz.utc)
-
         # Use provided cutoff_past_datetime or default to 6 hours ago
         if cutoff_past_datetime:
             # Convert to UTC for comparison
             cutoff_past = cutoff_past_datetime.astimezone(tz.utc) if cutoff_past_datetime.tzinfo else cutoff_past_datetime.replace(tzinfo=tz.utc)
+            # Calculate future cutoff from cutoff_past_datetime to ensure consistent date range
+            # IMPORTANT: Use the date in the ORIGINAL timezone (not UTC) to match filler's
+            # start_date calculation in _generate_filler_entries. Otherwise, early morning
+            # UTC times (e.g., 3 AM UTC = 10 PM EST previous day) create a 1-day mismatch
+            # where events include day N but filler only processes up to day N-1.
+            reference_date = cutoff_past_datetime.date()
         else:
             cutoff_past = now - timedelta(hours=6)
+            reference_date = now.date()
+
+        # Calculate future cutoff as end of the Nth day from reference date
+        cutoff_date = reference_date + timedelta(days=days_ahead - 1)
+        cutoff_future = datetime.combine(cutoff_date, datetime.max.time()).replace(tzinfo=tz.utc)
 
         for event in schedule_data.get('events', []):
             try:
@@ -596,7 +638,9 @@ class ESPNClient:
         Returns:
             List of team dictionaries with id, name, abbreviation, logo, etc.
         """
-        url = f"{self.base_url}/{sport}/{league}/teams"
+        # ESPN defaults to 50 teams, but college sports have 300+
+        # Use limit=500 to get all teams
+        url = f"{self.base_url}/{sport}/{league}/teams?limit=500"
         logger.info(f"Fetching teams for {league.upper()}: {url}")
 
         try:
@@ -749,3 +793,225 @@ class ESPNClient:
         except Exception as e:
             logger.error(f"Error fetching teams for conference {conference_id}: {e}")
             return None
+
+    def get_teams_by_conference_batch(self, sport: str, league: str) -> Optional[Dict[str, List[Dict]]]:
+        """
+        Fetch all teams organized by conference in a SINGLE API call using /groups endpoint.
+
+        Much faster than iterating through conferences individually. Returns teams
+        organized by conference name for filtering purposes.
+
+        Note: The /groups endpoint returns ~299 of ~362 teams for NCAAM. Teams not
+        in any conference (independents, transitioning teams) won't be included.
+        Use get_league_teams() with limit=500 if you need ALL teams.
+
+        Args:
+            sport: Sport type (e.g., 'basketball', 'football')
+            league: League code (e.g., 'mens-college-basketball', 'college-football')
+
+        Returns:
+            Dictionary mapping conference names to lists of team dicts:
+            {
+                "Big 12 Conference": [{"id": "...", "name": "...", ...}, ...],
+                "SEC": [...],
+                ...
+            }
+            Returns None on error (including for non-college leagues).
+        """
+        # College leagues have "college" in their api_path - detect dynamically
+        # This covers: college-football, mens-college-basketball, womens-college-basketball,
+        # and any future college sports
+        if 'college' not in league.lower():
+            logger.debug(f"get_teams_by_conference_batch only supports college leagues, not {league}")
+            return None
+
+        url = f"{self.base_url}/{sport}/{league}/groups"
+        logger.info(f"Fetching teams by conference for {league} via /groups endpoint")
+
+        try:
+            response = self._make_request(url)
+            if not response or 'groups' not in response:
+                logger.warning(f"No groups data found for {league}")
+                return None
+
+            conferences = {}
+
+            # Structure: groups[].children[].teams[]
+            for group in response.get('groups', []):
+                for child in group.get('children', []):
+                    conf_name = child.get('name', 'Unknown')
+                    teams_data = child.get('teams', [])
+
+                    if not teams_data:
+                        continue
+
+                    teams = []
+                    for t in teams_data:
+                        teams.append({
+                            'id': t.get('id'),
+                            'slug': t.get('slug'),
+                            'name': t.get('displayName') or t.get('name'),
+                            'abbreviation': t.get('abbreviation'),
+                            'shortName': t.get('shortDisplayName'),
+                            'logo': t.get('logos', [{}])[0].get('href') if t.get('logos') else None,
+                            'color': t.get('color'),
+                            'alternateColor': t.get('alternateColor')
+                        })
+
+                    if teams:
+                        conferences[conf_name] = teams
+
+            total_teams = sum(len(t) for t in conferences.values())
+            logger.info(f"Found {total_teams} teams across {len(conferences)} conferences for {league}")
+            return conferences
+
+        except Exception as e:
+            logger.error(f"Error fetching teams by conference for {league}: {e}")
+            return None
+
+    def get_all_teams_by_conference(self, sport: str, league: str) -> Optional[List[Dict]]:
+        """
+        Get ALL teams for a college league, organized by conference, with independents included.
+
+        This is the recommended helper for college team imports. It:
+        - For basketball: Uses /groups endpoint (has conferences with teams)
+        - For football: Uses standings API (FBS conferences with teams)
+        - Adds any teams not in conferences to "Other Teams"
+        - Returns a sorted list of conference dicts ready for UI display
+
+        Args:
+            sport: Sport type (e.g., 'basketball', 'football')
+            league: League code (e.g., 'mens-college-basketball', 'college-football')
+
+        Returns:
+            List of conference dicts sorted alphabetically (Other Teams at end):
+            [
+                {"name": "Big 12 Conference", "teams": [...]},
+                {"name": "SEC", "teams": [...]},
+                {"name": "— Other Teams —", "teams": [...]}
+            ]
+            Returns None on error or for non-college leagues.
+        """
+        # Only works for college leagues
+        if 'college' not in league.lower():
+            logger.debug(f"get_all_teams_by_conference only supports college leagues, not {league}")
+            return None
+
+        try:
+            # College football uses standings API (FBS only, has full team data)
+            # College basketball uses /groups endpoint (has conferences with teams)
+            if league == 'college-football':
+                return self._get_football_teams_by_conference(sport, league)
+            else:
+                return self._get_basketball_teams_by_conference(sport, league)
+
+        except Exception as e:
+            logger.error(f"Error in get_all_teams_by_conference for {league}: {e}")
+            return None
+
+    def _get_football_teams_by_conference(self, sport: str, league: str) -> Optional[List[Dict]]:
+        """
+        Get FBS football teams organized by conference using standings API.
+
+        The /groups endpoint for football doesn't have conference-level data,
+        but the standings API provides FBS conferences with full team data.
+        """
+        standings_url = f"https://site.api.espn.com/apis/v2/sports/{sport}/{league}/standings"
+        logger.info(f"Fetching FBS teams by conference from standings API")
+
+        try:
+            standings_data = self._make_request(standings_url)
+            if not standings_data or 'children' not in standings_data:
+                logger.warning(f"No standings data found for {league}")
+                return None
+
+            result = []
+
+            for child in standings_data.get('children', []):
+                conf_name = child.get('name', 'Unknown')
+                entries = child.get('standings', {}).get('entries', [])
+
+                if not entries:
+                    continue
+
+                teams = []
+                for entry in entries:
+                    team_data = entry.get('team', {})
+                    teams.append({
+                        'id': team_data.get('id'),
+                        'slug': team_data.get('slug'),
+                        'name': team_data.get('displayName') or team_data.get('name'),
+                        'abbreviation': team_data.get('abbreviation'),
+                        'shortName': team_data.get('shortDisplayName'),
+                        'logo': team_data.get('logos', [{}])[0].get('href') if team_data.get('logos') else None,
+                        'color': team_data.get('color'),
+                        'alternateColor': team_data.get('alternateColor')
+                    })
+
+                if teams:
+                    result.append({
+                        'name': conf_name,
+                        'teams': sorted(teams, key=lambda x: x.get('name', ''))
+                    })
+
+            # Sort conferences alphabetically, but keep Independents at end
+            result.sort(key=lambda x: ('zzz' if 'independent' in x['name'].lower() else x['name'].lower()))
+
+            total = sum(len(c['teams']) for c in result)
+            logger.info(f"_get_football_teams_by_conference: {len(result)} conferences, {total} FBS teams")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error fetching football teams by conference: {e}")
+            return None
+
+    def _get_basketball_teams_by_conference(self, sport: str, league: str) -> Optional[List[Dict]]:
+        """
+        Get basketball teams organized by conference using /groups endpoint.
+        Also includes independents not in any conference.
+        """
+        # Get teams organized by conference (single API call)
+        conferences_data = self.get_teams_by_conference_batch(sport, league)
+
+        # Get ALL teams (includes independents not in conferences)
+        all_teams = self.get_league_teams(sport, league)
+
+        if not all_teams:
+            return None
+
+        result = []
+
+        if conferences_data:
+            # Track which teams are in conferences
+            conf_team_ids = set()
+
+            # Add each conference with its teams (sorted alphabetically)
+            for conf_name in sorted(conferences_data.keys()):
+                conf_teams = conferences_data[conf_name]
+                for t in conf_teams:
+                    conf_team_ids.add(str(t.get('id')))
+
+                result.append({
+                    'name': conf_name,
+                    'teams': sorted(conf_teams, key=lambda x: x.get('name', ''))
+                })
+
+            # Find teams not in any conference (independents/transitioning)
+            other_teams = [t for t in all_teams if str(t.get('id')) not in conf_team_ids]
+            if other_teams:
+                result.append({
+                    'name': '— Other Teams —',
+                    'teams': sorted(other_teams, key=lambda x: x.get('name', ''))
+                })
+
+            total = sum(len(c['teams']) for c in result)
+            logger.info(f"_get_basketball_teams_by_conference: {len(result)} conferences, {total} teams for {league}")
+        else:
+            # No conference data available - return flat list
+            result.append({
+                'name': 'All Teams',
+                'teams': sorted(all_teams, key=lambda x: x.get('name', ''))
+            })
+            logger.info(f"_get_basketball_teams_by_conference: no conference data, {len(all_teams)} teams for {league}")
+
+        return result

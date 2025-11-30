@@ -222,12 +222,23 @@
                 </label>
             </div>
 
-            <div class="form-group">
-                <label for="auto_generate_frequency">Frequency</label>
-                <select id="auto_generate_frequency" name="auto_generate_frequency" class="form-control">
-                    <option value="hourly" {% if settings.auto_generate_frequency == 'hourly' %}selected{% endif %}>Hourly</option>
-                    <option value="daily" {% if settings.auto_generate_frequency == 'daily' %}selected{% endif %}>Daily</option>
-                </select>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="auto_generate_frequency">Frequency</label>
+                    <select id="auto_generate_frequency" name="auto_generate_frequency" class="form-control" onchange="updateScheduleTimeUI()">
+                        <option value="hourly" {% if settings.auto_generate_frequency == 'hourly' %}selected{% endif %}>Hourly</option>
+                        <option value="daily" {% if settings.auto_generate_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="schedule_time" id="schedule_time_label">Run at minute</label>
+                    <input type="text" id="schedule_time" name="schedule_time" class="form-control"
+                           value="{{ settings.schedule_time or '00' }}"
+                           placeholder="00"
+                           style="max-width: 80px;"
+                           oninput="validateScheduleTime(this)">
+                    <small id="schedule_time_help" class="form-text text-muted">0-59</small>
+                </div>
             </div>
         </div>
 
@@ -510,6 +521,63 @@ select.form-control {
 </style>
 
 <script>
+// Schedule time UI based on frequency selection
+function updateScheduleTimeUI() {
+    const frequency = document.getElementById('auto_generate_frequency').value;
+    const label = document.getElementById('schedule_time_label');
+    const input = document.getElementById('schedule_time');
+    const help = document.getElementById('schedule_time_help');
+
+    if (frequency === 'hourly') {
+        label.textContent = 'Run at minute';
+        input.placeholder = '00';
+        help.textContent = '0-59 (e.g., 15 = run at :15 each hour)';
+        input.style.maxWidth = '80px';
+        // Convert HH:MM to just minutes if needed
+        if (input.value.includes(':')) {
+            input.value = input.value.split(':')[1] || '00';
+        }
+    } else {
+        label.textContent = 'Run at time';
+        input.placeholder = '00:00';
+        help.textContent = 'HH:MM in 24h format (e.g., 03:00 = 3am)';
+        input.style.maxWidth = '100px';
+        // Convert minutes to HH:MM if needed
+        if (!input.value.includes(':') && input.value.length <= 2) {
+            input.value = '00:' + input.value.padStart(2, '0');
+        }
+    }
+    validateScheduleTime(input);
+}
+
+function validateScheduleTime(input) {
+    const frequency = document.getElementById('auto_generate_frequency').value;
+    let value = input.value.trim();
+    let isValid = false;
+
+    if (frequency === 'hourly') {
+        // Should be 0-59
+        const num = parseInt(value, 10);
+        isValid = !isNaN(num) && num >= 0 && num <= 59;
+    } else {
+        // Should be HH:MM format
+        const match = value.match(/^(\d{1,2}):(\d{2})$/);
+        if (match) {
+            const hour = parseInt(match[1], 10);
+            const minute = parseInt(match[2], 10);
+            isValid = hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+        }
+    }
+
+    input.style.borderColor = isValid ? '' : 'var(--danger)';
+    return isValid;
+}
+
+// Initialize schedule time UI on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateScheduleTimeUI();
+});
+
 function toggleDispatcharrFields() {
     const enabled = document.getElementById('dispatcharr_enabled').checked;
     const fields = document.getElementById('dispatcharr-fields');

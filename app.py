@@ -220,16 +220,18 @@ def inject_globals():
 # CORE EPG GENERATION FUNCTIONS
 # =============================================================================
 
-def refresh_event_group_core(group, m3u_manager):
+def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_start_datetime=None):
     """
     Core function to refresh a single event EPG group.
 
     This is the shared logic used by both manual API refresh and scheduled generation.
-    Always waits for M3U refresh to complete before fetching streams.
+    By default waits for M3U refresh to complete before fetching streams.
 
     Args:
         group: The event EPG group dict from database
         m3u_manager: M3UAccountManager instance
+        skip_m3u_refresh: If True, skip M3U refresh (use when already refreshed in batch)
+        epg_start_datetime: Optional datetime for EPG start (for multi-day filler)
 
     Returns:
         dict with keys: success, stream_count, matched_count, matched_streams,
@@ -252,16 +254,19 @@ def refresh_event_group_core(group, m3u_manager):
     lookahead_days = settings.get('event_lookahead_days', 7)
 
     try:
-        # Step 1: Refresh M3U data and wait for completion
-        app.logger.debug(f"Refreshing M3U account {group['dispatcharr_account_id']} for event EPG group {group_id}")
+        # Step 1: Refresh M3U data and wait for completion (unless already done in batch)
+        if not skip_m3u_refresh:
+            app.logger.debug(f"Refreshing M3U account {group['dispatcharr_account_id']} for event EPG group {group_id}")
 
-        refresh_result = m3u_manager.wait_for_refresh(group['dispatcharr_account_id'], timeout=120)
-        if not refresh_result.get('success'):
-            return {
-                'success': False,
-                'error': f"M3U refresh failed: {refresh_result.get('message')}",
-                'step': 'refresh'
-            }
+            refresh_result = m3u_manager.wait_for_refresh(group['dispatcharr_account_id'], timeout=120)
+            if not refresh_result.get('success'):
+                return {
+                    'success': False,
+                    'error': f"M3U refresh failed: {refresh_result.get('message')}",
+                    'step': 'refresh'
+                }
+        else:
+            app.logger.debug(f"Skipping M3U refresh for group {group_id} (already refreshed in batch)")
 
         # Step 2: Fetch streams
         all_streams = m3u_manager.list_streams(group_name=group['group_name'])
@@ -298,14 +303,8 @@ def refresh_event_group_core(group, m3u_manager):
             if filtered_count > 0:
                 app.logger.debug(f"Filtered {filtered_count} non-game streams ({filtered_no_indicator} no indicator, {filtered_exclude_regex} exclude regex), {len(streams)} game streams remain")
 
-        # Step 3: Match streams to ESPN events
-        team_matcher = create_matcher()
-        event_matcher = create_event_matcher(lookahead_days=lookahead_days)
-
-        matched_count = 0
-        matched_streams = []
-        filtered_outside_lookahead = 0  # Past games (from previous days)
-        filtered_final = 0  # Today's games that are final (when setting excludes)
+        # Step 3: Match streams to ESPN events (PARALLEL for speed)
+        from concurrent.futures import ThreadPoolExecutor
 
         # Check if any individual custom regex fields are enabled
         teams_enabled = bool(group.get('custom_regex_teams_enabled'))
@@ -316,11 +315,16 @@ def refresh_event_group_core(group, m3u_manager):
         # Legacy support: check old global enable flag
         use_legacy_regex = bool(group.get('custom_regex_enabled')) and group.get('custom_regex') and not any_custom_enabled
 
-        for stream in streams:
+        def match_single_stream(stream):
+            """Match a single stream to ESPN event - called in parallel"""
+            # Create matchers per-thread for thread safety
+            thread_team_matcher = create_matcher()
+            thread_event_matcher = create_event_matcher(lookahead_days=lookahead_days)
+
             try:
                 # Use selective regex if any individual field is enabled
                 if any_custom_enabled:
-                    team_result = team_matcher.extract_teams_with_selective_regex(
+                    team_result = thread_team_matcher.extract_teams_with_selective_regex(
                         stream['name'],
                         group['assigned_league'],
                         teams_pattern=group.get('custom_regex_teams'),
@@ -331,16 +335,16 @@ def refresh_event_group_core(group, m3u_manager):
                         time_enabled=time_enabled
                     )
                 elif use_legacy_regex:
-                    team_result = team_matcher.extract_teams_with_regex(
+                    team_result = thread_team_matcher.extract_teams_with_regex(
                         stream['name'],
                         group['custom_regex'],
                         group['assigned_league']
                     )
                 else:
-                    team_result = team_matcher.extract_teams(stream['name'], group['assigned_league'])
+                    team_result = thread_team_matcher.extract_teams(stream['name'], group['assigned_league'])
 
                 if team_result.get('matched'):
-                    event_result = event_matcher.find_and_enrich(
+                    event_result = thread_event_matcher.find_and_enrich(
                         team_result['away_team_id'],
                         team_result['home_team_id'],
                         group['assigned_league'],
@@ -350,29 +354,50 @@ def refresh_event_group_core(group, m3u_manager):
                     )
 
                     if event_result.get('found'):
-                        matched_count += 1
-                        matched_streams.append({
+                        return {
+                            'type': 'matched',
                             'stream': stream,
                             'teams': team_result,
                             'event': event_result['event']
-                        })
+                        }
                     else:
-                        # Check if this is an excluded event
+                        # Return filter reason for counting
                         reason = event_result.get('reason', '')
                         normalized = INTERNAL_REASONS.get(reason, reason)
-                        if normalized == FilterReason.GAME_FINAL_EXCLUDED:
-                            # Today's game is final, excluded by setting
-                            filtered_final += 1
-                        elif normalized == FilterReason.GAME_PAST:
-                            # Game from a previous day
-                            filtered_outside_lookahead += 1
-                        elif normalized == FilterReason.NO_GAME_FOUND:
-                            # No event found for these teams in lookahead window
-                            filtered_outside_lookahead += 1
+                        return {'type': 'filtered', 'reason': normalized, 'stream': stream}
+                else:
+                    return {'type': 'no_teams', 'stream': stream}
 
             except Exception as e:
                 app.logger.warning(f"Error matching stream '{stream['name']}': {e}")
-                continue
+                return {'type': 'error', 'stream': stream, 'error': str(e)}
+
+        # Process streams in parallel (max 10 workers to avoid overwhelming ESPN API)
+        matched_streams = []
+        filtered_outside_lookahead = 0
+        filtered_final = 0
+        results = []
+
+        if streams:  # Only use ThreadPoolExecutor if there are streams to process
+            with ThreadPoolExecutor(max_workers=min(len(streams), 50)) as executor:
+                results = list(executor.map(match_single_stream, streams))
+
+        # Process results
+        for result in results:
+            if result['type'] == 'matched':
+                matched_streams.append({
+                    'stream': result['stream'],
+                    'teams': result['teams'],
+                    'event': result['event']
+                })
+            elif result['type'] == 'filtered':
+                reason = result.get('reason')
+                if reason == FilterReason.GAME_FINAL_EXCLUDED:
+                    filtered_final += 1
+                elif reason in (FilterReason.GAME_PAST, FilterReason.NO_GAME_FOUND):
+                    filtered_outside_lookahead += 1
+
+        matched_count = len(matched_streams)
 
         # Step 3.5: Include existing managed channels that weren't matched
         # This ensures EPG continues for channels until they're actually deleted
@@ -484,7 +509,8 @@ def refresh_event_group_core(group, m3u_manager):
                 save=True,
                 data_dir=get_data_dir(output_path),
                 settings=settings,
-                template=event_template
+                template=event_template,
+                epg_start_datetime=epg_start_datetime
             )
 
             if not epg_result.get('success'):
@@ -679,7 +705,18 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
         epg_timezone = settings.get('default_timezone', 'America/Detroit')
         output_path = settings.get('epg_output_path', '/app/data/teamarr.xml')
 
+        # Calculate EPG start datetime (used for event-based filler spanning multiple days)
+        try:
+            tz = ZoneInfo(epg_timezone)
+        except Exception:
+            tz = ZoneInfo('America/Detroit')
+        epg_start_datetime = datetime.now(tz).replace(minute=0, second=0, microsecond=0)
+
         report_progress('starting', 'Initializing EPG generation...', 0)
+
+        # Clear caches and reset counters for fresh generation
+        epg_orchestrator.espn.clear_schedule_cache()
+        epg_orchestrator.api_calls = 0
 
         # ============================================
         # PHASE 1: Team-based EPG
@@ -736,38 +773,98 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
 
             if m3u_manager:
                 total_groups = len(event_groups_with_templates)
-                report_progress('progress', f'Refreshing {total_groups} event group(s)...', 55)
 
-                for idx, group in enumerate(event_groups_with_templates):
+                # Step 2a: Batch refresh all unique M3U accounts in parallel
+                unique_account_ids = list(set(
+                    g['dispatcharr_account_id']
+                    for g in event_groups_with_templates
+                    if g.get('dispatcharr_account_id')
+                ))
+
+                if unique_account_ids:
+                    account_count = len(unique_account_ids)
+                    report_progress('progress', f'Refreshing {account_count} M3U provider(s)...', 52)
+                    app.logger.info(f"🔄 Batch refreshing {account_count} unique M3U account(s) for {total_groups} event group(s)")
+
+                    batch_refresh_result = m3u_manager.refresh_multiple_accounts(
+                        unique_account_ids,
+                        timeout=120
+                    )
+
+                    if batch_refresh_result.get('success'):
+                        skipped = batch_refresh_result.get('skipped_count', 0)
+                        refreshed = batch_refresh_result.get('succeeded_count', 0) - skipped
+                        if skipped > 0:
+                            app.logger.info(
+                                f"✅ M3U batch refresh: {refreshed} refreshed, {skipped} skipped (recently updated) "
+                                f"in {batch_refresh_result.get('duration', 0):.1f}s"
+                            )
+                        else:
+                            app.logger.info(
+                                f"✅ M3U batch refresh completed in {batch_refresh_result.get('duration', 0):.1f}s "
+                                f"({batch_refresh_result.get('succeeded_count', 0)} succeeded)"
+                            )
+                    else:
+                        failed = batch_refresh_result.get('failed_count', 0)
+                        succeeded = batch_refresh_result.get('succeeded_count', 0)
+                        skipped = batch_refresh_result.get('skipped_count', 0)
+                        app.logger.warning(
+                            f"⚠️ M3U batch refresh partial: {succeeded} succeeded, {failed} failed, {skipped} skipped"
+                        )
+                        # Log individual failures
+                        for account_id, result in batch_refresh_result.get('results', {}).items():
+                            if not result.get('success') and not result.get('skipped'):
+                                app.logger.warning(f"  Account {account_id}: {result.get('message')}")
+
+                # Step 2b: Process all groups in parallel (M3U already refreshed)
+                report_progress('progress', f'Processing {total_groups} event group(s)...', 55)
+
+                def process_single_group(group):
+                    """Process a single event group - called in parallel. Exact same logic."""
                     try:
-                        # Calculate progress (55% to 85%)
-                        progress_pct = 55 + int(((idx + 1) / total_groups) * 30)
-                        group_name = group['group_name']
-                        report_progress('progress', f'Processing: {group_name}...', progress_pct,
-                                       group_name=group_name, current=idx + 1, total=total_groups)
+                        # Skip M3U refresh since we did batch refresh above
+                        # Pass epg_start_datetime for multi-day filler support
+                        refresh_result = refresh_event_group_core(
+                            group, m3u_manager,
+                            skip_m3u_refresh=True,
+                            epg_start_datetime=epg_start_datetime
+                        )
+                        return (group, refresh_result, None)
+                    except Exception as e:
+                        app.logger.warning(f"Error refreshing event group '{group['group_name']}': {e}")
+                        return (group, None, str(e))
 
-                        refresh_result = refresh_event_group_core(group, m3u_manager)
+                # Process all groups in parallel with progress updates as each completes
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                with ThreadPoolExecutor(max_workers=min(len(event_groups_with_templates), 50)) as executor:
+                    # Submit all tasks
+                    futures = {executor.submit(process_single_group, g): g for g in event_groups_with_templates}
 
-                        if refresh_result.get('success'):
+                    # Collect results as they complete, updating progress (55% to 85% range)
+                    group_results = []
+                    for i, future in enumerate(as_completed(futures), 1):
+                        group, refresh_result, error = future.result()
+                        group_results.append((group, refresh_result, error))
+
+                        # Aggregate stats immediately
+                        if refresh_result and refresh_result.get('success'):
                             event_stats['groups_refreshed'] += 1
                             event_stats['streams_matched'] += refresh_result.get('matched_count', 0)
                             event_stats['programmes'] += refresh_result.get('programmes_generated', 0)
                             event_stats['events'] += refresh_result.get('events_count', 0)
                             event_stats['pregame'] += refresh_result.get('pregame_count', 0)
                             event_stats['postgame'] += refresh_result.get('postgame_count', 0)
-
-                            # Aggregate filtering stats
                             event_stats['total_streams'] += refresh_result.get('total_stream_count', 0)
                             event_stats['filtered_no_indicator'] += refresh_result.get('filtered_no_indicator', 0)
                             event_stats['filtered_exclude_regex'] += refresh_result.get('filtered_exclude_regex', 0)
                             event_stats['filtered_outside_lookahead'] += refresh_result.get('filtered_outside_lookahead', 0)
                             event_stats['filtered_final'] += refresh_result.get('filtered_final', 0)
                             event_stats['eligible_streams'] += refresh_result.get('stream_count', 0)
-
-                            # Update last refresh timestamp for this group
                             update_event_epg_group_last_refresh(group['id'])
-                    except Exception as e:
-                        app.logger.warning(f"Error refreshing event group '{group['group_name']}': {e}")
+
+                        # Progress: 55% to 85% range
+                        pct = 55 + int((i / total_groups) * 30)
+                        report_progress('progress', f'Processed {i}/{total_groups} event groups...', pct)
             else:
                 report_progress('progress', 'M3U manager not available, skipping event groups...', 85)
                 app.logger.warning("M3U manager not available - skipping event groups")
@@ -1068,6 +1165,7 @@ def scheduler_loop():
                 continue
 
             frequency = settings.get('auto_generate_frequency', 'daily')
+            schedule_time = settings.get('schedule_time', '00')
             # Use UTC for all comparisons to avoid timezone issues
             now = datetime.now(timezone.utc)
 
@@ -1084,29 +1182,54 @@ def scheduler_loop():
             should_run = False
 
             if frequency == 'hourly':
-                # Run once per hour
+                # Run once per hour at the specified minute
+                # schedule_time should be "00" to "59"
+                try:
+                    target_minute = int(schedule_time) if schedule_time else 0
+                    target_minute = max(0, min(59, target_minute))  # Clamp to valid range
+                except ValueError:
+                    target_minute = 0
+
                 if effective_last_run is None:
-                    app.logger.debug(f"Scheduler: No previous run found, triggering generation")
-                    should_run = True
+                    # Never run before - check if we're past the target minute this hour
+                    if now.minute >= target_minute:
+                        app.logger.debug(f"Scheduler: No previous run, past target minute {target_minute}")
+                        should_run = True
                 else:
-                    # Check if we're in a different hour than last run (both in UTC)
+                    # Check if we're in a new hour AND past the target minute
                     last_hour = effective_last_run.replace(minute=0, second=0, microsecond=0)
                     current_hour = now.replace(minute=0, second=0, microsecond=0)
-                    app.logger.debug(f"Scheduler: Checking hourly - Last: {last_hour.isoformat()}, Current: {current_hour.isoformat()}")
-                    if current_hour > last_hour:
-                        app.logger.info(f"⏰ New hour detected, triggering scheduled generation")
+                    if current_hour > last_hour and now.minute >= target_minute:
+                        app.logger.info(f"⏰ New hour detected, past minute {target_minute}, triggering scheduled generation")
                         should_run = True
 
             elif frequency == 'daily':
-                # Run once per day at midnight
+                # Run once per day at the specified time
+                # schedule_time should be "HH:MM" format (e.g., "03:00")
+                try:
+                    if ':' in (schedule_time or ''):
+                        parts = schedule_time.split(':')
+                        target_hour = int(parts[0])
+                        target_minute = int(parts[1]) if len(parts) > 1 else 0
+                    else:
+                        target_hour = int(schedule_time) if schedule_time else 0
+                        target_minute = 0
+                    target_hour = max(0, min(23, target_hour))
+                    target_minute = max(0, min(59, target_minute))
+                except ValueError:
+                    target_hour = 0
+                    target_minute = 0
+
                 if effective_last_run is None:
-                    # Never run before, run if past midnight
-                    if now.hour >= 0:
+                    # Never run before - check if we're past the target time today
+                    if now.hour > target_hour or (now.hour == target_hour and now.minute >= target_minute):
                         should_run = True
                 else:
-                    # Check if we're in a different day (both in UTC)
+                    # Check if we're on a new day AND past the target time
                     if now.date() > effective_last_run.date():
-                        should_run = True
+                        if now.hour > target_hour or (now.hour == target_hour and now.minute >= target_minute):
+                            app.logger.info(f"⏰ New day detected, past {target_hour:02d}:{target_minute:02d}, triggering scheduled generation")
+                            should_run = True
 
             if should_run:
                 run_scheduled_generation()
@@ -2066,7 +2189,7 @@ def settings_update():
             'game_duration_baseball', 'game_duration_soccer',
             'cache_enabled', 'cache_duration_hours',
             'xmltv_generator_name', 'xmltv_generator_url',
-            'auto_generate_enabled', 'auto_generate_frequency',
+            'auto_generate_enabled', 'auto_generate_frequency', 'schedule_time',
             'dispatcharr_enabled', 'dispatcharr_url', 'dispatcharr_username',
             'dispatcharr_password', 'dispatcharr_epg_id',
             'channel_create_timing', 'channel_delete_timing', 'include_final_events'
@@ -2516,7 +2639,7 @@ def api_epg_stats_live():
         settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
         conn.close()
 
-        epg_path = settings.get('epg_output_path', './data/teamarr.xml')
+        epg_path = settings.get('epg_output_path', '/app/data/teamarr.xml')
         user_tz_name = settings.get('default_timezone', 'America/Detroit')
         user_tz = ZoneInfo(user_tz_name)
         time_fmt, show_tz = get_time_settings(settings)
@@ -2857,6 +2980,72 @@ def api_league_conferences(league_code):
 
     except Exception as e:
         app.logger.error(f"Error fetching conferences for league {league_code}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/leagues/<league_code>/conferences/batch', methods=['GET'])
+def api_league_conferences_batch(league_code):
+    """
+    Fetch all conferences WITH their teams in a SINGLE API call.
+
+    Much faster than fetching conferences then teams per conference.
+    Also includes "Other Teams" for independents not in any conference.
+
+    Returns:
+        {
+            "league": {...},
+            "conferences": [
+                {"name": "Big 12", "teams": [...]},
+                {"name": "SEC", "teams": [...]},
+                {"name": "— Other Teams —", "teams": [...]}  // independents
+            ],
+            "total_teams": 362
+        }
+    """
+    try:
+        # Get league config
+        conn = get_connection()
+        cursor = conn.cursor()
+        league_info = cursor.execute("""
+            SELECT sport, api_path, league_name
+            FROM league_config
+            WHERE league_code = ?
+        """, (league_code,)).fetchone()
+        conn.close()
+
+        if not league_info:
+            return jsonify({'error': 'League not found'}), 404
+
+        sport = league_info[0]
+        api_path = league_info[1]
+        league_name = league_info[2]
+        league_identifier = api_path.split('/')[-1]
+
+        espn = ESPNClient()
+
+        # Use the helper function that handles everything
+        conferences = espn.get_all_teams_by_conference(sport, league_identifier)
+
+        if not conferences:
+            # Fall back to flat team list for non-college or on error
+            all_teams = espn.get_league_teams(sport, league_identifier)
+            if all_teams:
+                conferences = [{
+                    'name': 'All Teams',
+                    'teams': sorted(all_teams, key=lambda x: x.get('name', ''))
+                }]
+            else:
+                return jsonify({'conferences': [], 'total_teams': 0})
+
+        total_teams = sum(len(c['teams']) for c in conferences)
+
+        return jsonify({
+            'league': {'code': league_code, 'name': league_name, 'sport': sport},
+            'conferences': conferences,
+            'total_teams': total_teams
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error fetching conferences batch for {league_code}: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/leagues/<league_code>/teams', methods=['GET'])
@@ -3274,6 +3463,247 @@ def api_event_epg_dispatcharr_streams(group_id):
     except Exception as e:
         app.logger.error(f"Error fetching streams for group {group_id}: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/event-epg/dispatcharr/groups/<int:group_id>/streams/stream', methods=['GET'])
+def api_event_epg_dispatcharr_streams_sse(group_id):
+    """
+    Stream preview of streams in a Dispatcharr group with progress updates.
+
+    Uses Server-Sent Events to report progress during M3U refresh and matching.
+    Returns stream data incrementally for real-time UI updates.
+
+    Query params:
+        limit: Max streams to process (default: 50)
+        league: League code for team matching
+    """
+    import threading
+    import queue
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Capture request args NOW, before generator executes (request context gone during streaming)
+    limit = request.args.get('limit', 50, type=int)
+    league = request.args.get('league')
+
+    def generate():
+        """Generator function for SSE stream"""
+        nonlocal league  # Allow modification from captured outer scope
+        progress_queue = queue.Queue()
+
+        def send_progress(status, message, **extra):
+            """Send a progress update"""
+            data = {'status': status, 'message': message}
+            data.update(extra)
+            progress_queue.put(data)
+
+        def run_preview():
+            """Run preview in background thread"""
+            nonlocal league  # Allow modification of league from outer scope
+            try:
+                # Step 1: Check credentials
+                send_progress('progress', 'Connecting to Dispatcharr...', percent=5)
+                manager = _get_m3u_manager()
+                if not manager:
+                    send_progress('error', 'Dispatcharr credentials not configured')
+                    return
+
+                # Step 2: Check if we need to refresh M3U
+                db_group = get_event_epg_group_by_dispatcharr_id(group_id)
+                if db_group:
+                    if not league:
+                        league = db_group.get('assigned_league')
+
+                    if db_group.get('dispatcharr_account_id'):
+                        send_progress('progress', 'Refreshing M3U provider...', percent=10)
+                        refresh_result = manager.wait_for_refresh(db_group['dispatcharr_account_id'], timeout=120)
+                        if not refresh_result.get('success'):
+                            app.logger.warning(f"M3U refresh failed: {refresh_result.get('message')} - continuing with potentially stale data")
+
+                # Step 3: Fetch streams
+                send_progress('progress', 'Fetching streams...', percent=40)
+                result = manager.get_group_with_streams(group_id, stream_limit=limit)
+                if not result:
+                    send_progress('error', 'Group not found')
+                    return
+
+                streams = result['streams']
+                filtered_count = 0
+
+                # Step 4: Match teams if league specified
+                if league:
+                    from epg.team_matcher import create_matcher
+                    from epg.event_matcher import create_event_matcher
+                    from utils.stream_filter import has_game_indicator
+
+                    # Fetch settings
+                    conn = get_connection()
+                    settings = dict(conn.execute("SELECT * FROM settings WHERE id = 1").fetchone())
+                    conn.close()
+                    include_final_events = bool(settings.get('include_final_events', 0))
+                    lookahead_days = settings.get('event_lookahead_days', 7)
+
+                    # Get filtering settings
+                    skip_builtin_filter = bool(db_group.get('skip_builtin_filter', 0)) if db_group else False
+                    exclude_regex = None
+                    if db_group and bool(db_group.get('stream_exclude_regex_enabled')) and db_group.get('stream_exclude_regex'):
+                        try:
+                            import re
+                            exclude_regex = re.compile(db_group['stream_exclude_regex'], re.IGNORECASE)
+                        except re.error:
+                            pass
+
+                    send_progress('progress', f'Matching {len(streams)} streams...', percent=50)
+
+                    def match_single_stream(stream):
+                        """Match a single stream - called in parallel"""
+                        # Create matchers per-thread for thread safety
+                        thread_team_matcher = create_matcher()
+                        thread_event_matcher = create_event_matcher(lookahead_days=lookahead_days)
+
+                        try:
+                            stream_name = stream['name']
+
+                            # Check if stream is filtered/excluded
+                            if not skip_builtin_filter and not has_game_indicator(stream_name):
+                                return {
+                                    'stream': stream,
+                                    'filtered': True,
+                                    'filter_reason': get_display_text(FilterReason.NO_GAME_INDICATOR)
+                                }
+                            if exclude_regex and exclude_regex.search(stream_name):
+                                return {
+                                    'stream': stream,
+                                    'filtered': True,
+                                    'filter_reason': get_display_text(FilterReason.EXCLUDE_REGEX_MATCHED)
+                                }
+
+                            # Extract teams
+                            team_result = thread_team_matcher.extract_teams(stream_name, league)
+
+                            # If teams matched, find ESPN event
+                            if team_result.get('matched'):
+                                event_result = thread_event_matcher.find_event(
+                                    team_result['away_team_id'],
+                                    team_result['home_team_id'],
+                                    league,
+                                    game_date=team_result.get('game_date'),
+                                    game_time=team_result.get('game_time'),
+                                    include_final_events=include_final_events
+                                )
+                                return {
+                                    'stream': stream,
+                                    'team_result': team_result,
+                                    'event_result': event_result
+                                }
+                            else:
+                                return {
+                                    'stream': stream,
+                                    'team_result': team_result,
+                                    'event_result': None
+                                }
+
+                        except Exception as e:
+                            return {
+                                'stream': stream,
+                                'error': str(e)
+                            }
+
+                    # Process streams in parallel (max 10 workers)
+                    match_results = []
+                    if streams:
+                        with ThreadPoolExecutor(max_workers=min(len(streams), 50)) as executor:
+                            match_results = list(executor.map(match_single_stream, streams))
+
+                    # Process results
+                    for match_data in match_results:
+                        stream = match_data['stream']
+
+                        if match_data.get('filtered'):
+                            filtered_count += 1
+                            stream['team_match'] = {
+                                'matched': False,
+                                'filtered': True,
+                                'reason': match_data['filter_reason']
+                            }
+                            stream['event_match'] = {'found': False, 'filtered': True}
+
+                        elif match_data.get('error'):
+                            stream['team_match'] = {'matched': False, 'reason': match_data['error']}
+                            stream['event_match'] = {'found': False}
+
+                        else:
+                            team_result = match_data.get('team_result', {})
+                            event_result = match_data.get('event_result')
+                            stream['team_match'] = team_result
+
+                            if event_result:
+                                event_match_data = {
+                                    'found': event_result['found'],
+                                    'event_id': event_result.get('event_id'),
+                                    'event_name': event_result.get('event', {}).get('name') if event_result['found'] else None,
+                                    'event_date': event_result.get('event_date')
+                                }
+
+                                if not event_result['found']:
+                                    reason = event_result.get('reason', 'No event found')
+                                    normalized = INTERNAL_REASONS.get(reason, reason)
+                                    if normalized == FilterReason.GAME_FINAL_EXCLUDED:
+                                        event_match_data['is_final'] = True
+                                        event_match_data['reason'] = get_display_text(FilterReason.GAME_FINAL_EXCLUDED)
+                                    elif normalized == FilterReason.GAME_PAST:
+                                        event_match_data['is_past'] = True
+                                        event_match_data['reason'] = get_display_text(FilterReason.GAME_PAST)
+                                    elif normalized == FilterReason.NO_GAME_FOUND:
+                                        event_match_data['reason'] = get_display_text(FilterReason.NO_GAME_FOUND, lookahead_days)
+                                    else:
+                                        event_match_data['reason'] = reason
+
+                                stream['event_match'] = event_match_data
+                            else:
+                                stream['event_match'] = {'found': False, 'reason': team_result.get('reason')}
+
+                # Sort streams alphabetically
+                streams.sort(key=lambda s: s.get('name', '').lower())
+
+                # Send final result
+                send_progress('complete', 'Preview complete', percent=100,
+                              group=result['group'],
+                              streams=streams,
+                              total_streams=result['total_streams'],
+                              filtered_count=filtered_count)
+
+            except Exception as e:
+                app.logger.error(f"Error in preview stream for group {group_id}: {e}")
+                send_progress('error', str(e))
+            finally:
+                progress_queue.put({'status': '_done'})
+
+        # Start preview thread
+        preview_thread = threading.Thread(target=run_preview)
+        preview_thread.start()
+
+        # JSON encoder that handles datetime objects
+        def json_serial(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
+        # Stream progress updates
+        while True:
+            try:
+                data = progress_queue.get(timeout=0.1)
+                if data.get('status') == '_done':
+                    break
+                yield f"data: {json.dumps(data, default=json_serial)}\n\n"
+            except queue.Empty:
+                yield f": heartbeat\n\n"
+
+        preview_thread.join()
+
+    return Response(generate(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no'
+    })
 
 
 # =============================================================================
@@ -4340,9 +4770,24 @@ def api_event_epg_teams_search():
     This is a convenience endpoint that wraps the existing league teams API
     for use in the alias creation UI.
 
+    For college leagues, returns teams organized by conference using the
+    /groups endpoint. Non-college leagues return a flat list.
+
     Query params:
         league: League code (required)
         search: Search term (optional)
+
+    Returns:
+        For college leagues:
+            {
+                "teams": [...],  // flat list of all teams (for search)
+                "conferences": {  // teams grouped by conference (for dropdown)
+                    "Big 12 Conference": [...],
+                    "SEC": [...]
+                }
+            }
+        For pro leagues:
+            {"teams": [...]}
     """
     try:
         league = request.args.get('league')
@@ -4368,12 +4813,18 @@ def api_event_epg_teams_search():
         api_path = league_info[1]
         league_identifier = api_path.split('/')[-1]
 
-        # Fetch teams
         espn = ESPNClient()
+
+        # For college leagues, use the helper to get all teams by conference
+        conferences_list = None
+        if 'college' in league_identifier.lower():
+            conferences_list = espn.get_all_teams_by_conference(sport, league_identifier)
+
+        # Always get flat team list (includes independents for college)
         teams_data = espn.get_league_teams(sport, league_identifier)
 
         if not teams_data:
-            return jsonify({'teams': []})
+            return jsonify({'teams': [], 'conferences': {}})
 
         # Filter by search term if provided
         if search:
@@ -4383,6 +4834,22 @@ def api_event_epg_teams_search():
                 or search in t.get('shortName', '').lower()
                 or search in t.get('abbreviation', '').lower()
             ]
+            # Also filter conferences if we have them
+            if conferences_list:
+                filtered_conferences = []
+                for conf in conferences_list:
+                    filtered = [
+                        t for t in conf.get('teams', [])
+                        if search in t.get('name', '').lower()
+                        or search in t.get('shortName', '').lower()
+                        or search in t.get('abbreviation', '').lower()
+                    ]
+                    if filtered:
+                        filtered_conferences.append({
+                            'name': conf['name'],
+                            'teams': filtered
+                        })
+                conferences_list = filtered_conferences
 
         # Return simplified team data for dropdown
         teams = [
@@ -4396,7 +4863,25 @@ def api_event_epg_teams_search():
             for t in teams_data
         ]
 
-        return jsonify({'teams': teams})
+        result = {'teams': teams}
+
+        # Add conference grouping for college leagues (dict format for dropdown optgroups)
+        if conferences_list:
+            formatted_conferences = {}
+            for conf in conferences_list:
+                formatted_conferences[conf['name']] = [
+                    {
+                        'id': t.get('id'),
+                        'name': t.get('name'),
+                        'shortName': t.get('shortName'),
+                        'abbreviation': t.get('abbreviation'),
+                        'logo': t.get('logo')
+                    }
+                    for t in conf.get('teams', [])
+                ]
+            result['conferences'] = formatted_conferences
+
+        return jsonify(result)
 
     except Exception as e:
         app.logger.error(f"Error searching teams: {e}")
@@ -4542,8 +5027,8 @@ def api_channel_lifecycle_list():
                 # Get logo URL if logo_id is present
                 logo_id = channel.get('dispatcharr_logo_id')
                 if logo_id and dispatcharr_url:
-                    # Construct logo URL (Dispatcharr serves logos at /api/channels/logos/<id>/)
-                    channel['logo_url'] = f"{dispatcharr_url}/api/channels/logos/{logo_id}/"
+                    # Construct logo URL (Dispatcharr serves cached images at /api/channels/logos/<id>/cache/)
+                    channel['logo_url'] = f"{dispatcharr_url}/api/channels/logos/{logo_id}/cache/"
                 else:
                     channel['logo_url'] = None
 

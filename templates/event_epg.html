@@ -369,7 +369,7 @@
         <div class="modal-body">
             <div id="preview-loading" class="loading-state">
                 <div class="spinner"></div>
-                <span>Loading streams and matching teams...</span>
+                <span id="preview-status">Loading streams...</span>
             </div>
             <div id="preview-content" style="display: none;">
                 <div class="preview-summary">
@@ -486,7 +486,6 @@ function updateBulkToolbar() {
     const checkboxes = document.querySelectorAll('.group-checkbox:checked');
     const hasSelection = checkboxes.length > 0;
 
-    document.getElementById('btn-bulk-refresh').disabled = !hasSelection;
     document.getElementById('btn-bulk-activate').disabled = !hasSelection;
     document.getElementById('btn-bulk-deactivate').disabled = !hasSelection;
     document.getElementById('btn-bulk-delete').disabled = !hasSelection;
@@ -735,15 +734,20 @@ async function deleteGroup(groupId, groupName) {
 // Stream Preview Modal
 // ============================================================================
 
-// Test stream matching (lightweight - no EPG generation)
-async function testMatchGroup(groupId, groupName) {
+// Active EventSource for preview (for cleanup on close)
+let previewEventSource = null;
+
+// Test stream matching with SSE progress updates
+function testMatchGroup(groupId, groupName) {
     const modal = document.getElementById('preview-modal');
     const titleEl = document.getElementById('preview-modal-title');
     const loadingEl = document.getElementById('preview-loading');
+    const statusEl = document.getElementById('preview-status');
     const contentEl = document.getElementById('preview-content');
 
     titleEl.textContent = `Test Match: ${groupName}`;
     loadingEl.style.display = 'flex';
+    statusEl.textContent = 'Connecting...';
     contentEl.style.display = 'none';
     modal.classList.add('active');
 
@@ -752,28 +756,54 @@ async function testMatchGroup(groupId, groupName) {
     const league = row?.dataset.league;
     const dispatcharrGroupId = row?.dataset.dispatcharrGroupId;
 
-    try {
-        let url = `/api/event-epg/dispatcharr/groups/${dispatcharrGroupId}/streams?limit=50&match=true`;
-        if (league) url += `&league=${league}`;
+    // Build SSE URL
+    let url = `/api/event-epg/dispatcharr/groups/${dispatcharrGroupId}/streams/stream?limit=50`;
+    if (league) url += `&league=${league}`;
 
-        const response = await fetch(url);
-        const data = await response.json();
+    // Close any existing EventSource
+    if (previewEventSource) {
+        previewEventSource.close();
+        previewEventSource = null;
+    }
 
-        loadingEl.style.display = 'none';
-        contentEl.style.display = 'block';
+    // Create EventSource for SSE
+    previewEventSource = new EventSource(url);
 
-        if (response.ok) {
-            renderPreviewStreams(data.streams, data.total_streams, data.filtered_count || 0);
-        } else {
-            document.getElementById('preview-streams-body').innerHTML =
-                `<tr><td colspan="4" class="text-danger">Error: ${data.error}</td></tr>`;
+    previewEventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+
+            // Update status text based on progress
+            if (data.status === 'progress') {
+                statusEl.textContent = data.message;
+            } else if (data.status === 'complete') {
+                // Hide loading, show content
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                renderPreviewStreams(data.streams, data.total_streams, data.filtered_count || 0);
+                previewEventSource.close();
+                previewEventSource = null;
+            } else if (data.status === 'error') {
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                document.getElementById('preview-streams-body').innerHTML =
+                    `<tr><td colspan="4" class="text-danger">Error: ${data.message}</td></tr>`;
+                previewEventSource.close();
+                previewEventSource = null;
+            }
+        } catch (e) {
+            console.error('Error parsing SSE data:', e);
         }
-    } catch (error) {
+    };
+
+    previewEventSource.onerror = function(event) {
         loadingEl.style.display = 'none';
         contentEl.style.display = 'block';
         document.getElementById('preview-streams-body').innerHTML =
-            `<tr><td colspan="4" class="text-danger">Error: ${error.message}</td></tr>`;
-    }
+            `<tr><td colspan="4" class="text-danger">Connection error - please try again</td></tr>`;
+        previewEventSource.close();
+        previewEventSource = null;
+    };
 }
 
 function renderPreviewStreams(streams, totalCount, filteredCount) {
@@ -864,6 +894,11 @@ function renderPreviewStreams(streams, totalCount, filteredCount) {
 
 function closePreviewModal(event) {
     if (event && event.target !== event.currentTarget) return;
+    // Clean up EventSource if still running
+    if (previewEventSource) {
+        previewEventSource.close();
+        previewEventSource = null;
+    }
     document.getElementById('preview-modal').classList.remove('active');
 }
 
@@ -912,13 +947,61 @@ async function loadTeamsForAlias() {
 
         teamSelect.innerHTML = '<option value="">Select team...</option>';
 
-        if (response.ok && data.teams) {
-            data.teams.forEach(team => {
-                const option = document.createElement('option');
-                option.value = JSON.stringify({ id: team.id, name: team.name });
-                option.textContent = team.name;
-                teamSelect.appendChild(option);
-            });
+        if (response.ok) {
+            // For college leagues, show teams grouped by conference
+            if (data.conferences && Object.keys(data.conferences).length > 0) {
+                // Sort conference names alphabetically
+                const confNames = Object.keys(data.conferences).sort();
+
+                for (const confName of confNames) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = confName;
+
+                    // Teams within conference are already sorted by API
+                    data.conferences[confName].forEach(team => {
+                        const option = document.createElement('option');
+                        option.value = JSON.stringify({ id: team.id, name: team.name });
+                        option.textContent = team.name;
+                        optgroup.appendChild(option);
+                    });
+
+                    teamSelect.appendChild(optgroup);
+                }
+
+                // Add "Other Teams" group for teams not in any conference
+                // (independents, teams in transition)
+                if (data.teams) {
+                    const confTeamIds = new Set();
+                    Object.values(data.conferences).forEach(teams => {
+                        teams.forEach(t => confTeamIds.add(String(t.id)));
+                    });
+
+                    const otherTeams = data.teams.filter(t => !confTeamIds.has(String(t.id)));
+                    if (otherTeams.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = '— Other Teams —';
+
+                        otherTeams.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                        otherTeams.forEach(team => {
+                            const option = document.createElement('option');
+                            option.value = JSON.stringify({ id: team.id, name: team.name });
+                            option.textContent = team.name;
+                            optgroup.appendChild(option);
+                        });
+
+                        teamSelect.appendChild(optgroup);
+                    }
+                }
+            } else if (data.teams) {
+                // For pro leagues, just list teams alphabetically
+                data.teams.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                data.teams.forEach(team => {
+                    const option = document.createElement('option');
+                    option.value = JSON.stringify({ id: team.id, name: team.name });
+                    option.textContent = team.name;
+                    teamSelect.appendChild(option);
+                });
+            }
         }
     } catch (error) {
         teamSelect.innerHTML = '<option value="">Error loading teams</option>';

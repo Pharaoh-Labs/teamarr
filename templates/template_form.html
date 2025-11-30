@@ -1684,6 +1684,10 @@ function updateTemplateTypeDefaults() {
     const eventProgramArtSection = document.getElementById('event-program-art-section');
     const titleSubtitleSection = document.getElementById('title-subtitle-section');
 
+    // Get the program_art_url input fields (both have same name, need to disable hidden one)
+    const teamProgramArtInput = document.getElementById('program_art_url');
+    const eventProgramArtInput = document.getElementById('program_art_url_event');
+
     if (currentTemplateType === 'event') {
         // Hide Conditions tab for event templates
         if (conditionsTab) conditionsTab.style.display = 'none';
@@ -1704,6 +1708,10 @@ function updateTemplateTypeDefaults() {
         if (conditionsTab && conditionsTab.classList.contains('active')) {
             document.querySelector('.tab-button[data-tab="basic"]').click();
         }
+        // Disable team program art input (hidden), enable event one
+        // This prevents duplicate form field submission
+        if (teamProgramArtInput) teamProgramArtInput.disabled = true;
+        if (eventProgramArtInput) eventProgramArtInput.disabled = false;
     } else {
         // Show sections for team templates
         if (conditionsTab) conditionsTab.style.display = '';
@@ -1719,6 +1727,10 @@ function updateTemplateTypeDefaults() {
         if (eventProgramArtSection) eventProgramArtSection.style.display = 'none';
         // Remove top margin from Title & Subtitle since it's now first
         if (titleSubtitleSection) titleSubtitleSection.style.marginTop = '0';
+        // Enable team program art input, disable event one (hidden)
+        // This prevents duplicate form field submission
+        if (teamProgramArtInput) teamProgramArtInput.disabled = false;
+        if (eventProgramArtInput) eventProgramArtInput.disabled = true;
     }
 }
 
@@ -2529,9 +2541,20 @@ async function deletePreset(presetId) {
 }
 
 async function saveConditionToPreset(index) {
-    const condition = conditions[index];
+    // Read current values from form fields (not the stale conditions array)
+    const nameInputs = document.querySelectorAll('input[name="cond_name[]"]');
+    const typeSelects = document.querySelectorAll('select[name="cond_type[]"]');
+    const valueInputs = document.querySelectorAll('input[name="cond_value[]"]');
+    const priorityInputs = document.querySelectorAll('input[name="cond_priority[]"]');
+    const templateInputs = document.querySelectorAll('input[name="cond_template[]"]');
 
-    if (!condition.condition) {
+    const conditionType = typeSelects[index]?.value || '';
+    const conditionName = nameInputs[index]?.value || 'Custom Condition';
+    const conditionValue = valueInputs[index]?.value || '';
+    const conditionPriority = parseInt(priorityInputs[index]?.value) || 50;
+    const conditionTemplate = templateInputs[index]?.value || '';
+
+    if (!conditionType) {
         alert('Please select a condition type before saving to preset library.');
         return;
     }
@@ -2546,12 +2569,12 @@ async function saveConditionToPreset(index) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                name: condition.name || 'Custom Condition',
+                name: conditionName,
                 description: description || '',
-                condition_type: condition.condition,
-                condition_value: condition.condition_value || '',
-                priority: condition.priority || 50,
-                template: condition.template || ''
+                condition_type: conditionType,
+                condition_value: conditionValue,
+                priority: conditionPriority,
+                template: conditionTemplate
             })
         });
 

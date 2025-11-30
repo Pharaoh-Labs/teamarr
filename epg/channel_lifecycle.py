@@ -13,6 +13,7 @@ EPG Association Flow (matching Dispatcharr's internal pattern):
 """
 
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -433,6 +434,9 @@ class ChannelLifecycleManager:
         self.epg_data_id = epg_data_id
         self.timezone = timezone
         self.settings = settings or {}
+        # Lock to serialize Dispatcharr channel operations (create/update/delete)
+        # Prevents race conditions when multiple groups are processed in parallel
+        self._dispatcharr_lock = threading.Lock()
 
     def delete_managed_channel(
         self,
@@ -480,40 +484,42 @@ class ChannelLifecycleManager:
             return result
 
         try:
-            # Step 1: Delete channel from Dispatcharr
-            delete_result = self.channel_api.delete_channel(dispatcharr_channel_id)
+            # Serialize Dispatcharr operations to prevent race conditions
+            with self._dispatcharr_lock:
+                # Step 1: Delete channel from Dispatcharr
+                delete_result = self.channel_api.delete_channel(dispatcharr_channel_id)
 
-            # Consider success if deleted OR already not found
-            if delete_result.get('success') or 'not found' in str(delete_result.get('error', '')).lower():
-                result['channel_deleted'] = True
+                # Consider success if deleted OR already not found
+                if delete_result.get('success') or 'not found' in str(delete_result.get('error', '')).lower():
+                    result['channel_deleted'] = True
 
-                # Step 2: Delete logo if present
-                if logo_id:
-                    logo_result = self.channel_api.delete_logo(logo_id)
-                    if logo_result.get('status') == 'deleted' or logo_result.get('success'):
-                        result['logo_deleted'] = True
-                        logger.debug(f"Deleted logo {logo_id} for channel '{channel_name}'")
-
-                # Step 3: Mark as deleted in database
-                # Pass logo_deleted status: True if deleted, False if failed, None if no logo
-                if channel_id:
-                    logo_deleted_status = None  # No logo was present
+                    # Step 2: Delete logo if present
                     if logo_id:
-                        logo_deleted_status = result['logo_deleted']  # True or False based on deletion result
+                        logo_result = self.channel_api.delete_logo(logo_id)
+                        if logo_result.get('status') == 'deleted' or logo_result.get('success'):
+                            result['logo_deleted'] = True
+                            logger.debug(f"Deleted logo {logo_id} for channel '{channel_name}'")
 
-                    if mark_managed_channel_deleted(channel_id, logo_deleted=logo_deleted_status):
-                        result['db_updated'] = True
+                    # Step 3: Mark as deleted in database
+                    # Pass logo_deleted status: True if deleted, False if failed, None if no logo
+                    if channel_id:
+                        logo_deleted_status = None  # No logo was present
+                        if logo_id:
+                            logo_deleted_status = result['logo_deleted']  # True or False based on deletion result
 
-                result['success'] = True
+                        if mark_managed_channel_deleted(channel_id, logo_deleted=logo_deleted_status):
+                            result['db_updated'] = True
 
-                log_msg = f"Deleted channel '{channel_name}'"
-                if reason:
-                    log_msg += f" ({reason})"
-                logger.info(log_msg)
+                    result['success'] = True
 
-            else:
-                result['error'] = delete_result.get('error', 'Unknown error')
-                logger.warning(f"Failed to delete channel '{channel_name}': {result['error']}")
+                    log_msg = f"Deleted channel '{channel_name}'"
+                    if reason:
+                        log_msg += f" ({reason})"
+                    logger.info(log_msg)
+
+                else:
+                    result['error'] = delete_result.get('error', 'Unknown error')
+                    logger.warning(f"Failed to delete channel '{channel_name}': {result['error']}")
 
         except Exception as e:
             result['error'] = str(e)
@@ -557,37 +563,39 @@ class ChannelLifecycleManager:
             if not new_logo_url:
                 return
 
-            # Get current logo URL from Dispatcharr
-            current_logo_id = existing.get('dispatcharr_logo_id')
-            current_logo_url = None
+            # Serialize Dispatcharr operations to prevent race conditions
+            with self._dispatcharr_lock:
+                # Get current logo URL from Dispatcharr
+                current_logo_id = existing.get('dispatcharr_logo_id')
+                current_logo_url = None
 
-            if current_logo_id:
-                current_logo = self.channel_api.get_logo(current_logo_id)
-                if current_logo:
-                    current_logo_url = current_logo.get('url')
+                if current_logo_id:
+                    current_logo = self.channel_api.get_logo(current_logo_id)
+                    if current_logo:
+                        current_logo_url = current_logo.get('url')
 
-            # Compare URLs - if same, no update needed
-            if current_logo_url == new_logo_url:
-                return
+                # Compare URLs - if same, no update needed
+                if current_logo_url == new_logo_url:
+                    return
 
-            # Upload new logo (or find existing by URL)
-            channel_name = existing.get('channel_name', 'Unknown')
-            logo_name = f"{channel_name} Logo"
-            logo_result = self.channel_api.upload_logo(logo_name, new_logo_url)
+                # Upload new logo (or find existing by URL)
+                channel_name = existing.get('channel_name', 'Unknown')
+                logo_name = f"{channel_name} Logo"
+                logo_result = self.channel_api.upload_logo(logo_name, new_logo_url)
 
-            if not logo_result.get('success'):
-                logger.warning(f"Failed to upload logo for '{channel_name}': {logo_result.get('error')}")
-                return
+                if not logo_result.get('success'):
+                    logger.warning(f"Failed to upload logo for '{channel_name}': {logo_result.get('error')}")
+                    return
 
-            new_logo_id = logo_result.get('logo_id')
+                new_logo_id = logo_result.get('logo_id')
 
-            # Update channel in Dispatcharr with new logo
-            dispatcharr_channel_id = existing.get('dispatcharr_channel_id')
-            update_result = self.channel_api.update_channel(dispatcharr_channel_id, {'logo_id': new_logo_id})
+                # Update channel in Dispatcharr with new logo
+                dispatcharr_channel_id = existing.get('dispatcharr_channel_id')
+                update_result = self.channel_api.update_channel(dispatcharr_channel_id, {'logo_id': new_logo_id})
 
-            if not update_result.get('success'):
-                logger.warning(f"Failed to update channel logo for '{channel_name}': {update_result.get('error')}")
-                return
+                if not update_result.get('success'):
+                    logger.warning(f"Failed to update channel logo for '{channel_name}': {update_result.get('error')}")
+                    return
 
             # Update managed_channels record with new logo_id
             update_managed_channel(existing['id'], {'dispatcharr_logo_id': new_logo_id})
@@ -655,11 +663,13 @@ class ChannelLifecycleManager:
             dispatcharr_channel_id = existing['dispatcharr_channel_id']
             stored_channel_name = existing.get('channel_name', 'Unknown')
 
-            # Get current channel data from Dispatcharr
-            current_channel = self.channel_api.get_channel(dispatcharr_channel_id)
-            if not current_channel:
-                logger.debug(f"Could not fetch channel {dispatcharr_channel_id} for settings sync")
-                return
+            # Serialize Dispatcharr operations to prevent race conditions
+            with self._dispatcharr_lock:
+                # Get current channel data from Dispatcharr
+                current_channel = self.channel_api.get_channel(dispatcharr_channel_id)
+                if not current_channel:
+                    logger.debug(f"Could not fetch channel {dispatcharr_channel_id} for settings sync")
+                    return
 
             # Build update payload if there are differences
             update_data = {}
@@ -762,33 +772,35 @@ class ChannelLifecycleManager:
                 from database import update_managed_channel
                 profile_changed = False
 
-                # Remove from old profile if there was one
-                if stored_channel_profile_id:
-                    remove_result = self.channel_api.remove_channel_from_profile(
-                        stored_channel_profile_id, dispatcharr_channel_id
-                    )
-                    if remove_result.get('success'):
-                        logger.debug(f"Removed channel {dispatcharr_channel_id} from profile {stored_channel_profile_id}")
-                        profile_changed = True
-                    else:
-                        logger.warning(
-                            f"Failed to remove channel {dispatcharr_channel_id} from profile {stored_channel_profile_id}: "
-                            f"{remove_result.get('error')}"
+                # Serialize Dispatcharr profile operations
+                with self._dispatcharr_lock:
+                    # Remove from old profile if there was one
+                    if stored_channel_profile_id:
+                        remove_result = self.channel_api.remove_channel_from_profile(
+                            stored_channel_profile_id, dispatcharr_channel_id
                         )
+                        if remove_result.get('success'):
+                            logger.debug(f"Removed channel {dispatcharr_channel_id} from profile {stored_channel_profile_id}")
+                            profile_changed = True
+                        else:
+                            logger.warning(
+                                f"Failed to remove channel {dispatcharr_channel_id} from profile {stored_channel_profile_id}: "
+                                f"{remove_result.get('error')}"
+                            )
 
-                # Add to new profile if there is one
-                if group_channel_profile_id:
-                    add_result = self.channel_api.add_channel_to_profile(
-                        group_channel_profile_id, dispatcharr_channel_id
-                    )
-                    if add_result.get('success'):
-                        logger.debug(f"Added channel {dispatcharr_channel_id} to profile {group_channel_profile_id}")
-                        profile_changed = True
-                    else:
-                        logger.warning(
-                            f"Failed to add channel {dispatcharr_channel_id} to profile {group_channel_profile_id}: "
-                            f"{add_result.get('error')}"
+                    # Add to new profile if there is one
+                    if group_channel_profile_id:
+                        add_result = self.channel_api.add_channel_to_profile(
+                            group_channel_profile_id, dispatcharr_channel_id
                         )
+                        if add_result.get('success'):
+                            logger.debug(f"Added channel {dispatcharr_channel_id} to profile {group_channel_profile_id}")
+                            profile_changed = True
+                        else:
+                            logger.warning(
+                                f"Failed to add channel {dispatcharr_channel_id} to profile {group_channel_profile_id}: "
+                                f"{add_result.get('error')}"
+                            )
 
                 # Update our record with the new profile ID
                 if profile_changed:
@@ -807,8 +819,9 @@ class ChannelLifecycleManager:
             if not update_data:
                 return  # No channel property changes needed
 
-            # Update channel in Dispatcharr
-            update_result = self.channel_api.update_channel(dispatcharr_channel_id, update_data)
+            # Update channel in Dispatcharr (serialized)
+            with self._dispatcharr_lock:
+                update_result = self.channel_api.update_channel(dispatcharr_channel_id, update_data)
 
             if update_result.get('success'):
                 changes = ', '.join(f"{k}={v}" for k, v in update_data.items())
@@ -967,22 +980,6 @@ class ChannelLifecycleManager:
                 timezone=self.timezone
             )
 
-            # Generate and upload channel logo if template has channel_logo_url
-            logo_id = None
-            if template and template.get('channel_logo_url'):
-                from epg.event_template_engine import build_event_context
-                logo_ctx = build_event_context(event, stream, group, self.timezone)
-                logo_url = template_engine.resolve(template['channel_logo_url'], logo_ctx)
-
-                if logo_url:
-                    logo_name = f"{channel_name} Logo"
-                    logo_result = self.channel_api.upload_logo(logo_name, logo_url)
-                    if logo_result.get('success'):
-                        logo_id = logo_result.get('logo_id')
-                        logger.debug(f"Logo for '{channel_name}': {logo_result.get('status')}")
-                    else:
-                        logger.warning(f"Failed to upload logo for '{channel_name}': {logo_result.get('error')}")
-
             # Calculate scheduled delete time (uses template duration if custom)
             delete_at = calculate_delete_time(event, delete_timing, self.timezone, sport, self.settings, template)
 
@@ -990,39 +987,57 @@ class ChannelLifecycleManager:
             # This must match the channel id in the generated XMLTV
             tvg_id = generate_event_tvg_id(espn_event_id)
 
-            # Create channel in Dispatcharr with tvg_id
-            create_result = self.channel_api.create_channel(
-                name=channel_name,
-                channel_number=channel_number,
-                stream_ids=[stream['id']],
-                tvg_id=tvg_id,
-                channel_group_id=channel_group_id,
-                logo_id=logo_id,
-                stream_profile_id=stream_profile_id
-            )
+            # Serialize all Dispatcharr operations to prevent race conditions
+            with self._dispatcharr_lock:
+                # Generate and upload channel logo if template has channel_logo_url
+                logo_id = None
+                if template and template.get('channel_logo_url'):
+                    from epg.event_template_engine import build_event_context
+                    logo_ctx = build_event_context(event, stream, group, self.timezone)
+                    logo_url = template_engine.resolve(template['channel_logo_url'], logo_ctx)
 
-            if not create_result.get('success'):
-                results['errors'].append({
-                    'stream': stream['name'],
-                    'error': create_result.get('error', 'Unknown error')
-                })
-                continue
+                    if logo_url:
+                        logo_name = f"{channel_name} Logo"
+                        logo_result = self.channel_api.upload_logo(logo_name, logo_url)
+                        if logo_result.get('success'):
+                            logo_id = logo_result.get('logo_id')
+                            logger.debug(f"Logo for '{channel_name}': {logo_result.get('status')}")
+                        else:
+                            logger.warning(f"Failed to upload logo for '{channel_name}': {logo_result.get('error')}")
 
-            dispatcharr_channel = create_result['channel']
-            dispatcharr_channel_id = dispatcharr_channel['id']
-
-            # Add to channel profile if configured
-            if channel_profile_id:
-                profile_result = self.channel_api.add_channel_to_profile(
-                    channel_profile_id, dispatcharr_channel_id
+                # Create channel in Dispatcharr with tvg_id
+                create_result = self.channel_api.create_channel(
+                    name=channel_name,
+                    channel_number=channel_number,
+                    stream_ids=[stream['id']],
+                    tvg_id=tvg_id,
+                    channel_group_id=channel_group_id,
+                    logo_id=logo_id,
+                    stream_profile_id=stream_profile_id
                 )
-                if not profile_result.get('success'):
-                    logger.warning(
-                        f"Failed to add channel {dispatcharr_channel_id} to profile {channel_profile_id}: "
-                        f"{profile_result.get('error')}"
+
+                if not create_result.get('success'):
+                    results['errors'].append({
+                        'stream': stream['name'],
+                        'error': create_result.get('error', 'Unknown error')
+                    })
+                    continue
+
+                dispatcharr_channel = create_result['channel']
+                dispatcharr_channel_id = dispatcharr_channel['id']
+
+                # Add to channel profile if configured
+                if channel_profile_id:
+                    profile_result = self.channel_api.add_channel_to_profile(
+                        channel_profile_id, dispatcharr_channel_id
                     )
-                else:
-                    logger.debug(f"Added channel {dispatcharr_channel_id} to profile {channel_profile_id}")
+                    if not profile_result.get('success'):
+                        logger.warning(
+                            f"Failed to add channel {dispatcharr_channel_id} to profile {channel_profile_id}: "
+                            f"{profile_result.get('error')}"
+                        )
+                    else:
+                        logger.debug(f"Added channel {dispatcharr_channel_id} to profile {channel_profile_id}")
 
             # Note: EPG association happens AFTER EPG refresh in Dispatcharr
             # See associate_epg_with_channels() method
@@ -1069,7 +1084,8 @@ class ChannelLifecycleManager:
             except Exception as e:
                 # Channel was created but tracking failed - try to delete it
                 logger.error(f"Failed to track channel {dispatcharr_channel_id}: {e}")
-                self.channel_api.delete_channel(dispatcharr_channel_id)
+                with self._dispatcharr_lock:
+                    self.channel_api.delete_channel(dispatcharr_channel_id)
                 results['errors'].append({
                     'stream': stream['name'],
                     'error': f'Database error: {e}'
@@ -1502,26 +1518,28 @@ class ChannelLifecycleManager:
                     })
                     continue
 
-            # Look up EPGData by tvg_id in the Teamarr EPG source
-            epg_data = self.channel_api.find_epg_data_by_tvg_id(
-                tvg_id,
-                epg_source_id=self.epg_data_id
-            )
+            # Serialize Dispatcharr operations to prevent race conditions
+            with self._dispatcharr_lock:
+                # Look up EPGData by tvg_id in the Teamarr EPG source
+                epg_data = self.channel_api.find_epg_data_by_tvg_id(
+                    tvg_id,
+                    epg_source_id=self.epg_data_id
+                )
 
-            if not epg_data:
-                results['skipped'].append({
-                    'channel_name': channel_name,
-                    'tvg_id': tvg_id,
-                    'reason': f'EPGData not found for tvg_id={tvg_id}'
-                })
-                continue
+                if not epg_data:
+                    results['skipped'].append({
+                        'channel_name': channel_name,
+                        'tvg_id': tvg_id,
+                        'reason': f'EPGData not found for tvg_id={tvg_id}'
+                    })
+                    continue
 
-            # Associate EPG with channel
-            epg_data_id = epg_data['id']
-            epg_result = self.channel_api.set_channel_epg(
-                dispatcharr_channel_id,
-                epg_data_id
-            )
+                # Associate EPG with channel
+                epg_data_id = epg_data['id']
+                epg_result = self.channel_api.set_channel_epg(
+                    dispatcharr_channel_id,
+                    epg_data_id
+                )
 
             if epg_result.get('success'):
                 results['associated'].append({

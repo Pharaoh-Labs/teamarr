@@ -293,10 +293,10 @@ class TeamMatcher:
 
     def _fetch_college_teams(self, sport: str, league: str) -> List[Dict]:
         """
-        Fetch all teams for a college league by iterating through conferences.
+        Fetch all teams for a college league using the teams endpoint with limit=500.
 
-        College sports have 300+ teams organized by conference, so we need
-        to fetch each conference's teams separately.
+        This is much faster than the old conference-by-conference approach.
+        ESPN's /teams?limit=500 returns all teams in a single call.
 
         Args:
             sport: Sport (e.g., 'basketball', 'football')
@@ -305,36 +305,16 @@ class TeamMatcher:
         Returns:
             List of all team dicts
         """
-        logger.info(f"Fetching college teams for {league} via conferences")
+        logger.info(f"Fetching college teams for {league} via get_league_teams")
 
-        # Get all conferences
-        conferences = self.espn.get_league_conferences(sport, league)
-        if not conferences:
-            logger.warning(f"No conferences found for {league}")
+        # Use the fast endpoint - get_league_teams now includes ?limit=500
+        teams = self.espn.get_league_teams(sport, league)
+        if not teams:
+            logger.warning(f"No teams found for {league}")
             return []
 
-        all_teams = []
-        seen_ids = set()
-
-        for conf in conferences:
-            conf_id = conf.get('id')
-            conf_name = conf.get('name', 'Unknown')
-
-            if not conf_id:
-                continue
-
-            logger.debug(f"Fetching teams for conference: {conf_name}")
-            conf_teams = self.espn.get_conference_teams(sport, league, conf_id)
-
-            if conf_teams:
-                for team in conf_teams:
-                    team_id = team.get('id')
-                    if team_id and team_id not in seen_ids:
-                        seen_ids.add(team_id)
-                        all_teams.append(team)
-
-        logger.info(f"Fetched {len(all_teams)} college teams from {len(conferences)} conferences")
-        return all_teams
+        logger.info(f"Fetched {len(teams)} college teams for {league}")
+        return teams
 
     def _build_search_names(self, team: Dict) -> List[str]:
         """
