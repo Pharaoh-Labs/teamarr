@@ -111,7 +111,7 @@
                 <div class="notice-icon">↳</div>
                 <div class="notice-content">
                     <strong>Child Group Mode</strong>
-                    <p>This group will add its matched streams to the parent group's channels. Template and channel settings are inherited from the parent. Custom regex settings remain available to match your provider's stream names.</p>
+                    <p>This group inherits template and channel settings from its parent. Only custom regex settings are editable below.</p>
                 </div>
             </div>
             {% endif %}
@@ -722,6 +722,14 @@ function handleParentGroupChange() {
         independentSettings.classList.add('hidden');
         // Template not required for child groups
         templateSelect.removeAttribute('required');
+
+        // Auto-expand the regex section for child groups (it's the only thing they can edit)
+        const regexContent = document.getElementById('custom-regex-content');
+        const regexArrow = document.getElementById('custom-regex-arrow');
+        if (regexContent && regexContent.style.display === 'none') {
+            regexContent.style.display = 'block';
+            if (regexArrow) regexArrow.textContent = '▼';
+        }
 
         // In add mode: populate and disable sport/league from parent
         if (sportSelect && leagueSelect) {

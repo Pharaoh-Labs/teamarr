@@ -5638,7 +5638,7 @@ def api_find_orphan_channels():
         # Find orphans
         orphans = []
         for ch in all_channels:
-            tvg_id = ch.get('tvg_id', '')
+            tvg_id = ch.get('tvg_id') or ''
             if not tvg_id.startswith('teamarr-event-'):
                 continue
 
@@ -5725,7 +5725,7 @@ def api_cleanup_orphan_channels():
         errors = []
 
         for ch in all_channels:
-            tvg_id = ch.get('tvg_id', '')
+            tvg_id = ch.get('tvg_id') or ''
             if not tvg_id.startswith('teamarr-event-'):
                 continue
 

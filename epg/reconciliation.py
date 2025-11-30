@@ -259,7 +259,7 @@ class ChannelReconciler:
         for channel in all_channels:
             channel_id = channel.get('id')
             channel_uuid = channel.get('uuid')
-            tvg_id = channel.get('tvg_id', '')
+            tvg_id = channel.get('tvg_id') or ''
 
             # Check if this is a Teamarr channel (either by UUID or tvg_id pattern)
             is_ours_by_uuid = channel_uuid and channel_uuid in known_uuids
