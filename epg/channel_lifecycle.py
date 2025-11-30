@@ -500,26 +500,26 @@ class ChannelLifecycleManager:
                             result['logo_deleted'] = True
                             logger.debug(f"Deleted logo {logo_id} for channel '{channel_name}'")
 
-                # Step 3: Mark as deleted in database
-                # Pass logo_deleted status: True if deleted, False if failed, None if no logo
-                if channel_id:
-                    logo_deleted_status = None  # No logo was present
-                    if logo_id:
-                        logo_deleted_status = result['logo_deleted']  # True or False based on deletion result
+                    # Step 3: Mark as deleted in database
+                    # Pass logo_deleted status: True if deleted, False if failed, None if no logo
+                    if channel_id:
+                        logo_deleted_status = None  # No logo was present
+                        if logo_id:
+                            logo_deleted_status = result['logo_deleted']  # True or False based on deletion result
 
-                    if mark_managed_channel_deleted(channel_id, logo_deleted=logo_deleted_status):
-                        result['db_updated'] = True
+                        if mark_managed_channel_deleted(channel_id, logo_deleted=logo_deleted_status):
+                            result['db_updated'] = True
 
-                result['success'] = True
+                    result['success'] = True
 
-                log_msg = f"Deleted channel '{channel_name}'"
-                if reason:
-                    log_msg += f" ({reason})"
-                logger.info(log_msg)
+                    log_msg = f"Deleted channel '{channel_name}'"
+                    if reason:
+                        log_msg += f" ({reason})"
+                    logger.info(log_msg)
 
-            else:
-                result['error'] = delete_result.get('error', 'Unknown error')
-                logger.warning(f"Failed to delete channel '{channel_name}': {result['error']}")
+                else:
+                    result['error'] = delete_result.get('error', 'Unknown error')
+                    logger.warning(f"Failed to delete channel '{channel_name}': {result['error']}")
 
         except Exception as e:
             result['error'] = str(e)
