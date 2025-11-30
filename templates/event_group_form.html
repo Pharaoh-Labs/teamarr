@@ -61,16 +61,34 @@
                     </div>
                 </div>
 
-                <div class="form-row">
+                <!-- Parent Group Selection - FIRST before sport/league -->
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="parent_group_id">Group Type</label>
+                    <select id="parent_group_id" name="parent_group_id" class="form-control" onchange="handleParentGroupChange()">
+                        <option value="">Independent Group (creates its own channels)</option>
+                    </select>
+                    <small class="form-help">Child groups add streams to their parent's channels instead of creating new ones.</small>
+                </div>
+
+                <!-- Child Group Notice - shown when parent selected -->
+                <div id="child-group-notice" class="child-group-notice" style="display: none;">
+                    <div class="notice-icon">↳</div>
+                    <div class="notice-content">
+                        <strong>Child Group Mode</strong>
+                        <p>This group will add its matched streams to the parent group's channels. Sport, league, template and channel settings are inherited from the parent. Custom regex settings remain available to match your provider's stream names.</p>
+                    </div>
+                </div>
+
+                <div class="form-row" id="sport-league-row">
                     <div class="form-group">
-                        <label for="assigned_sport">Sport <span class="required">*</span></label>
+                        <label for="assigned_sport">Sport <span class="required" id="sport-required">*</span></label>
                         <select id="assigned_sport" name="assigned_sport" class="form-control" onchange="updateLeagueOptions()" required>
                             <option value="">Loading sports...</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="assigned_league">League <span class="required">*</span></label>
+                        <label for="assigned_league">League <span class="required" id="league-required">*</span></label>
                         <select id="assigned_league" name="assigned_league" class="form-control" required>
                             <option value="">Select sport first...</option>
                         </select>
@@ -78,7 +96,8 @@
                 </div>
             {% endif %}
 
-            <!-- Parent Group Selection - FIRST setting -->
+            {% if mode == 'edit' %}
+            <!-- Parent Group Selection for edit mode -->
             <div class="form-group" style="margin-top: 1rem;">
                 <label for="parent_group_id">Group Type</label>
                 <select id="parent_group_id" name="parent_group_id" class="form-control" onchange="handleParentGroupChange()">
@@ -95,6 +114,7 @@
                     <p>This group will add its matched streams to the parent group's channels. Template and channel settings are inherited from the parent. Custom regex settings remain available to match your provider's stream names.</p>
                 </div>
             </div>
+            {% endif %}
         </div>
 
         <!-- Independent Group Settings (hidden for child groups) -->
@@ -689,18 +709,64 @@ function handleParentGroupChange() {
     const independentSettings = document.getElementById('independent-settings');
     const templateSelect = document.getElementById('event_template_id');
 
+    // Sport/league elements (only exist in add mode)
+    const sportSelect = document.getElementById('assigned_sport');
+    const leagueSelect = document.getElementById('assigned_league');
+    const sportLeagueRow = document.getElementById('sport-league-row');
+    const sportRequired = document.getElementById('sport-required');
+    const leagueRequired = document.getElementById('league-required');
+
     if (isChildGroup) {
         // Show child notice, hide independent settings
         notice.style.display = 'flex';
         independentSettings.classList.add('hidden');
         // Template not required for child groups
         templateSelect.removeAttribute('required');
+
+        // In add mode: populate and disable sport/league from parent
+        if (sportSelect && leagueSelect) {
+            const parentId = parseInt(parentSelect.value);
+            const parentGroup = eventGroups.find(g => g.id === parentId);
+
+            if (parentGroup) {
+                // Set sport and trigger league population
+                sportSelect.value = parentGroup.assigned_sport;
+                sportSelect.disabled = true;
+                updateLeagueOptions();
+
+                // Set league after options are populated
+                setTimeout(() => {
+                    leagueSelect.value = parentGroup.assigned_league;
+                    leagueSelect.disabled = true;
+                }, 50);
+
+                // Hide required asterisks (values enforced from parent)
+                if (sportRequired) sportRequired.style.display = 'none';
+                if (leagueRequired) leagueRequired.style.display = 'none';
+
+                // Grey out the row visually
+                if (sportLeagueRow) sportLeagueRow.style.opacity = '0.6';
+            }
+        }
     } else {
         // Hide child notice, show independent settings
         notice.style.display = 'none';
         independentSettings.classList.remove('hidden');
         // Template required for independent groups
         templateSelect.setAttribute('required', 'required');
+
+        // In add mode: re-enable sport/league selection
+        if (sportSelect && leagueSelect) {
+            sportSelect.disabled = false;
+            leagueSelect.disabled = false;
+
+            // Show required asterisks
+            if (sportRequired) sportRequired.style.display = 'inline';
+            if (leagueRequired) leagueRequired.style.display = 'inline';
+
+            // Remove grey out
+            if (sportLeagueRow) sportLeagueRow.style.opacity = '1';
+        }
     }
 }
 
