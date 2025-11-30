@@ -78,33 +78,44 @@
                 </div>
             {% endif %}
 
-            <div class="form-group">
-                <label for="event_template_id">Event Template <span class="required">*</span></label>
-                <select id="event_template_id" name="event_template_id" class="form-control" required>
-                    <option value="" disabled>Select a template...</option>
-                    {% for template in event_templates %}
-                    <option value="{{ template.id }}" {% if group and group.event_template_id == template.id %}selected{% endif %}>
-                        {{ template.name }}
-                    </option>
-                    {% endfor %}
+            <!-- Parent Group Selection - FIRST setting -->
+            <div class="form-group" style="margin-top: 1rem;">
+                <label for="parent_group_id">Group Type</label>
+                <select id="parent_group_id" name="parent_group_id" class="form-control" onchange="handleParentGroupChange()">
+                    <option value="">Independent Group (creates its own channels)</option>
                 </select>
-                <small class="form-help">Required. Controls EPG title, description, and channel naming.</small>
+                <small class="form-help">Child groups add streams to their parent's channels instead of creating new ones.</small>
             </div>
 
-            <div class="form-group">
-                <label for="parent_group_id">Parent Group <span class="optional">(optional)</span></label>
-                <select id="parent_group_id" name="parent_group_id" class="form-control">
-                    <option value="">None (independent group)</option>
-                </select>
-                <small class="form-help">If set, this group's matched streams will be added to the parent's channels instead of creating new ones.</small>
+            <!-- Child Group Notice - shown when parent selected -->
+            <div id="child-group-notice" class="child-group-notice" style="display: none;">
+                <div class="notice-icon">↳</div>
+                <div class="notice-content">
+                    <strong>Child Group Mode</strong>
+                    <p>This group will add its matched streams to the parent group's channels. Template and channel settings are inherited from the parent. Custom regex settings remain available to match your provider's stream names.</p>
+                </div>
             </div>
         </div>
 
-        <!-- Channel Settings Section -->
-        <div class="form-section">
-            <h2>Channel Settings</h2>
+        <!-- Independent Group Settings (hidden for child groups) -->
+        <div id="independent-settings">
+            <div class="form-section">
+                <h2>Template & Channel Settings</h2>
 
-            <div class="form-group">
+                <div class="form-group">
+                    <label for="event_template_id">Event Template <span class="required">*</span></label>
+                    <select id="event_template_id" name="event_template_id" class="form-control" required>
+                        <option value="" disabled>Select a template...</option>
+                        {% for template in event_templates %}
+                        <option value="{{ template.id }}" {% if group and group.event_template_id == template.id %}selected{% endif %}>
+                            {{ template.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-help">Required. Controls EPG title, description, and channel naming.</small>
+                </div>
+
+                <div class="form-group">
                 <label for="channel_start">Channel Start Number</label>
                 <input type="number" id="channel_start" name="channel_start" class="form-control"
                        placeholder="Auto-calculated if empty" min="1" max="9999"
@@ -152,10 +163,11 @@
                     <option value="">Loading profiles...</option>
                 </select>
                 <small class="form-help">Add created channels to this profile. Leave blank to skip.</small>
+                </div>
             </div>
-        </div>
+        </div><!-- end independent-settings -->
 
-        <!-- Custom Regex Section (Collapsible) -->
+        <!-- Custom Regex Section (Collapsible) - Available for both parent and child groups -->
         <div class="form-section collapsible-section">
             <h2 class="collapsible-header" onclick="toggleSection('custom-regex')">
                 <span class="collapse-arrow" id="custom-regex-arrow">▶</span>
@@ -300,6 +312,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     {% endif %}
     {% if mode == 'edit' and group.parent_group_id %}
     document.getElementById('parent_group_id').value = '{{ group.parent_group_id }}';
+    handleParentGroupChange();  // Update UI based on parent selection
     {% endif %}
 });
 
@@ -621,13 +634,28 @@ function renderEventGroups() {
     const currentValue = select.value;
 
     // Keep the "None" option
-    select.innerHTML = '<option value="">None (independent group)</option>';
+    select.innerHTML = '<option value="">Independent Group (creates its own channels)</option>';
 
     {% if mode == 'edit' %}
     const currentGroupId = {{ group.id }};
     {% else %}
     const currentGroupId = null;
     {% endif %}
+
+    // Add a separator if there are parent groups available
+    let hasParentOptions = false;
+    eventGroups.forEach(group => {
+        if (currentGroupId && group.id === currentGroupId) return;
+        if (group.parent_group_id) return;
+        hasParentOptions = true;
+    });
+
+    if (hasParentOptions) {
+        const separator = document.createElement('option');
+        separator.disabled = true;
+        separator.textContent = '── Child of: ──';
+        select.appendChild(separator);
+    }
 
     eventGroups.forEach(group => {
         // Don't show current group as potential parent (avoid circular reference)
@@ -641,12 +669,38 @@ function renderEventGroups() {
 
         const option = document.createElement('option');
         option.value = group.id;
-        option.textContent = `${group.group_name} (${group.assigned_league.toUpperCase()})`;
+        option.textContent = `↳ ${group.group_name} (${group.assigned_league.toUpperCase()})`;
         select.appendChild(option);
     });
 
     if (currentValue) {
         select.value = currentValue;
+    }
+
+    // Trigger UI update based on current value
+    handleParentGroupChange();
+}
+
+function handleParentGroupChange() {
+    const parentSelect = document.getElementById('parent_group_id');
+    const isChildGroup = parentSelect.value !== '';
+
+    const notice = document.getElementById('child-group-notice');
+    const independentSettings = document.getElementById('independent-settings');
+    const templateSelect = document.getElementById('event_template_id');
+
+    if (isChildGroup) {
+        // Show child notice, hide independent settings
+        notice.style.display = 'flex';
+        independentSettings.classList.add('hidden');
+        // Template not required for child groups
+        templateSelect.removeAttribute('required');
+    } else {
+        // Hide child notice, show independent settings
+        notice.style.display = 'none';
+        independentSettings.classList.remove('hidden');
+        // Template required for independent groups
+        templateSelect.setAttribute('required', 'required');
     }
 }
 
@@ -868,6 +922,48 @@ document.getElementById('event-group-form').addEventListener('submit', async fun
     border-radius: 6px;
     padding: 1rem;
     margin-bottom: 1.25rem;
+}
+
+/* Child Group Notice */
+.child-group-notice {
+    display: flex;
+    gap: 1rem;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.child-group-notice .notice-icon {
+    font-size: 1.5rem;
+    color: #a855f7;
+    flex-shrink: 0;
+}
+
+.child-group-notice .notice-content strong {
+    display: block;
+    color: #c4b5fd;
+    margin-bottom: 0.25rem;
+}
+
+.child-group-notice .notice-content p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.light-theme .child-group-notice {
+    background: rgba(168, 85, 247, 0.08);
+}
+
+.light-theme .child-group-notice .notice-content strong {
+    color: #7c3aed;
+}
+
+/* Independent settings hidden state */
+#independent-settings.hidden {
+    display: none;
 }
 
 .form-group {
