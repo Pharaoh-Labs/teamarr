@@ -1194,8 +1194,9 @@ class ChannelLifecycleManager:
 
                 home_team = home_team_obj.get('name', '')
                 away_team = away_team_obj.get('name', '')
-                home_team_abbrev = home_team_obj.get('abbreviation', '')
-                away_team_abbrev = away_team_obj.get('abbreviation', '')
+                # ESPN client uses 'abbrev', not 'abbreviation'
+                home_team_abbrev = home_team_obj.get('abbrev', '') or home_team_obj.get('abbreviation', '')
+                away_team_abbrev = away_team_obj.get('abbrev', '') or away_team_obj.get('abbreviation', '')
                 home_team_logo = home_team_obj.get('logo', '')
                 away_team_logo = away_team_obj.get('logo', '')
 
@@ -1206,8 +1207,11 @@ class ChannelLifecycleManager:
                 event_name = f"{away_team_abbrev or away_team} @ {home_team_abbrev or home_team}"
 
                 # Get venue and broadcast info if available
-                venue = event.get('venue', {}).get('fullName', '') if event.get('venue') else ''
-                broadcast = event.get('broadcast', '')
+                # ESPN client returns venue.name (not fullName) and broadcasts as a list
+                venue_obj = event.get('venue', {})
+                venue = venue_obj.get('name', '') or venue_obj.get('fullName', '') if venue_obj else ''
+                broadcasts = event.get('broadcasts', [])
+                broadcast = broadcasts[0] if broadcasts else ''
 
                 # Get logo URL from template if present
                 logo_url_source = None
