@@ -426,6 +426,68 @@ class ESPNClient:
         url = f"{self.base_url}/{sport}/{league}/scoreboard?dates={date}"
         return self._make_request(url)
 
+    def get_event_summary(self, sport: str, league: str, event_id: str) -> Optional[Dict]:
+        """
+        Fetch a single event by ID using the event summary endpoint.
+
+        This is more reliable than scoreboard for finished games since the
+        scoreboard only shows current day's games.
+
+        Args:
+            sport: Sport type (e.g., 'football', 'hockey')
+            league: League identifier (e.g., 'nfl', 'nhl')
+            event_id: ESPN event ID
+
+        Returns:
+            Dict with event data (same structure as scoreboard events)
+        """
+        url = f"{self.base_url}/{sport}/{league}/summary?event={event_id}"
+        data = self._make_request(url)
+
+        if not data:
+            return None
+
+        # The summary endpoint returns a different structure than scoreboard
+        # We need to reconstruct a scoreboard-like event object
+        try:
+            header = data.get('header', {})
+            competitions = header.get('competitions', [{}])
+            competition = competitions[0] if competitions else {}
+
+            # Build event structure matching scoreboard format
+            event = {
+                'id': str(event_id),
+                'uid': header.get('uid', ''),
+                'date': competition.get('date', header.get('gameDate', '')),
+                'name': header.get('gameNote', ''),
+                'shortName': '',
+                'competitions': [{
+                    'id': competition.get('id', event_id),
+                    'date': competition.get('date', ''),
+                    'competitors': competition.get('competitors', []),
+                    'venue': competition.get('venue', {}),
+                    'broadcasts': competition.get('broadcasts', []),
+                    'status': competition.get('status', {}),
+                    'odds': data.get('predictor', {}).get('odds', [])
+                }]
+            }
+
+            # Build name from competitors if not available
+            competitors = competition.get('competitors', [])
+            if len(competitors) >= 2:
+                home = next((c for c in competitors if c.get('homeAway') == 'home'), competitors[0])
+                away = next((c for c in competitors if c.get('homeAway') == 'away'), competitors[1])
+                home_name = home.get('team', {}).get('displayName', '')
+                away_name = away.get('team', {}).get('displayName', '')
+                event['name'] = f"{away_name} at {home_name}"
+                event['shortName'] = f"{away.get('team', {}).get('abbreviation', '')} @ {home.get('team', {}).get('abbreviation', '')}"
+
+            return event
+
+        except Exception as e:
+            logger.warning(f"Error parsing event summary for {event_id}: {e}")
+            return None
+
     def parse_schedule_events(self, schedule_data: Dict, days_ahead: int = 14, cutoff_past_datetime: datetime = None) -> List[Dict]:
         """
         Parse schedule data and extract relevant event information

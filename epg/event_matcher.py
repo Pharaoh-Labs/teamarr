@@ -730,6 +730,9 @@ class EventMatcher:
         event wouldn't normally be matched (e.g., game is final but
         channel hasn't been deleted yet).
 
+        Tries scoreboard first (faster), then falls back to event summary
+        endpoint for finished games that rolled off the scoreboard.
+
         Args:
             event_id: ESPN event ID
             league: League code
@@ -740,24 +743,28 @@ class EventMatcher:
         try:
             config = get_league_config(league)
             api_path = config['api_path']
+            sport = config.get('sport', api_path.split('/')[0])
 
-            # Use scoreboard API to get the event
+            # Use scoreboard API to get the event (faster)
             scoreboard = self.espn_client.get_scoreboard(api_path)
-            if not scoreboard:
-                return None
-
-            # Find the event by ID
-            events = scoreboard.get('events', [])
             event = None
-            for e in events:
-                if str(e.get('id')) == str(event_id):
-                    event = e
-                    break
+
+            if scoreboard:
+                # Find the event by ID
+                events = scoreboard.get('events', [])
+                for e in events:
+                    if str(e.get('id')) == str(event_id):
+                        event = e
+                        break
 
             if not event:
-                # Event not on today's scoreboard - might be from another day
-                # For now just return None, EPG generation will handle gracefully
-                logger.debug(f"Event {event_id} not found on scoreboard for {league}")
+                # Event not on today's scoreboard - try event summary endpoint
+                # This works for finished games that rolled off the scoreboard
+                logger.debug(f"Event {event_id} not on scoreboard, trying summary endpoint")
+                event = self.espn_client.get_event_summary(sport, league, event_id)
+
+            if not event:
+                logger.debug(f"Event {event_id} not found for {league}")
                 return None
 
             # Enrich with team stats
