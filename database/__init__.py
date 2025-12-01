@@ -155,7 +155,7 @@ def db_insert(query: str, params: tuple = ()) -> int:
 #   8: Channel Lifecycle V2 (multi-stream, history, reconciliation, parent groups)
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 9
+CURRENT_SCHEMA_VERSION = 10
 
 
 def get_schema_version(conn) -> int:
@@ -594,7 +594,7 @@ def run_migrations(conn):
     # 7c. Add new columns to managed_channels
     managed_channels_v2_columns = [
         # Identity
-        ("dispatcharr_uuid", "TEXT UNIQUE"),  # Immutable UUID from Dispatcharr
+        ("dispatcharr_uuid", "TEXT"),  # Immutable UUID from Dispatcharr
         ("primary_stream_id", "INTEGER"),
         ("logo_url", "TEXT"),
 

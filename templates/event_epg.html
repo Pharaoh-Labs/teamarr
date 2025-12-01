@@ -339,6 +339,9 @@
                                     <div class="child-group-indent">
                                         <span class="child-connector">└</span>
                                         <strong style="font-size: 0.875rem;">{{ child.group_name }}</strong>
+                                        <span class="badge badge-child" title="Child group: adds streams to parent's channels">
+                                            child of {{ group.group_name|truncate(15) }}
+                                        </span>
                                         {% if child.account_name %}
                                             <span class="badge badge-secondary" style="font-size: 0.65rem;">{{ child.account_name }}</span>
                                         {% endif %}
