@@ -860,8 +860,8 @@ function testMatchGroup(groupId, groupName) {
     const dispatcharrGroupId = row?.dataset.dispatcharrGroupId;
 
     // Build SSE URL
-    let url = `/api/event-epg/dispatcharr/groups/${dispatcharrGroupId}/streams/stream?limit=50`;
-    if (league) url += `&league=${league}`;
+    let url = `/api/event-epg/dispatcharr/groups/${dispatcharrGroupId}/streams/stream`;
+    if (league) url += `?league=${league}`;
 
     // Close any existing EventSource
     if (previewEventSource) {

@@ -595,9 +595,13 @@ class M3UManager:
 
         return streams
 
-    def get_group_with_streams(self, group_id: int, stream_limit: int = 50) -> Optional[Dict]:
+    def get_group_with_streams(self, group_id: int, stream_limit: int = None) -> Optional[Dict]:
         """
         Get group info with its streams for UI preview.
+
+        Args:
+            group_id: Dispatcharr group ID
+            stream_limit: Max streams to return (None = no limit)
 
         Returns:
             {"group": {...}, "streams": [...], "total_streams": int}
@@ -613,7 +617,7 @@ class M3UManager:
 
         return {
             "group": group,
-            "streams": streams[:stream_limit],
+            "streams": streams[:stream_limit] if stream_limit else streams,
             "total_streams": len(streams)
         }
 

@@ -3550,7 +3550,7 @@ def api_event_epg_dispatcharr_streams(group_id):
     If the group is configured in our database, refreshes M3U first.
 
     Query params:
-        limit: Max streams to return (default: 50)
+        limit: Max streams to return (default: no limit)
         match: If 'true', attempt to match teams and find ESPN events
     """
     try:
@@ -3558,7 +3558,7 @@ def api_event_epg_dispatcharr_streams(group_id):
         if not manager:
             return jsonify({'error': 'Dispatcharr credentials not configured'}), 400
 
-        limit = request.args.get('limit', 50, type=int)
+        limit = request.args.get('limit', None, type=int)
         do_match = request.args.get('match', 'false').lower() == 'true'
 
         # Check if group is configured in our database - if so, refresh M3U first
@@ -3710,7 +3710,7 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
     Returns stream data incrementally for real-time UI updates.
 
     Query params:
-        limit: Max streams to process (default: 50)
+        limit: Max streams to process (default: no limit)
         league: League code for team matching
     """
     import threading
@@ -3718,7 +3718,7 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
     from concurrent.futures import ThreadPoolExecutor
 
     # Capture request args NOW, before generator executes (request context gone during streaming)
-    limit = request.args.get('limit', 50, type=int)
+    limit = request.args.get('limit', None, type=int)
     league = request.args.get('league')
 
     def generate():

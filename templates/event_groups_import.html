@@ -670,7 +670,7 @@ async function previewGroup(groupId, groupName) {
     document.getElementById('preview-modal').classList.add('active');
 
     try {
-        const response = await fetch(`/api/event-epg/dispatcharr/groups/${groupId}/streams?limit=50`);
+        const response = await fetch(`/api/event-epg/dispatcharr/groups/${groupId}/streams`);
         const data = await response.json();
 
         document.getElementById('preview-loading').style.display = 'none';
