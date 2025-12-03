@@ -194,16 +194,16 @@ def run_migrations(conn):
 
     Migrations are versioned and only run if current version < migration version.
     Each migration is idempotent (safe to run multiple times).
+
+    IMPORTANT: Idempotent column additions run ALWAYS (regardless of version) to
+    handle cases where schema.sql is missing columns. Version checks are only used
+    for one-time data migrations or table creation.
     """
     cursor = conn.cursor()
     current_version = get_schema_version(conn)
     migrations_run = 0
 
     print(f"  📊 Current schema version: {current_version}, target: {CURRENT_SCHEMA_VERSION}")
-
-    if current_version >= CURRENT_SCHEMA_VERSION:
-        print(f"  ✅ Schema is up to date (version {current_version})")
-        return 0
 
     # Helper functions for migrations
     def add_columns_if_missing(table_name, columns):
@@ -697,43 +697,43 @@ def run_migrations(conn):
     # =========================================================================
     # 11. MULTI-CHANNEL PROFILE SUPPORT
     # =========================================================================
-    if current_version < 11:
-        # Add channel_profile_ids column to event_epg_groups (JSON array of profile IDs)
-        add_columns_if_missing("event_epg_groups", [
-            ("channel_profile_ids", "TEXT"),  # JSON array, e.g. "[1, 2, 3]"
-        ])
+    # Add channel_profile_ids column to event_epg_groups (JSON array of profile IDs)
+    # Note: add_columns_if_missing is idempotent, runs always
+    add_columns_if_missing("event_epg_groups", [
+        ("channel_profile_ids", "TEXT"),  # JSON array, e.g. "[1, 2, 3]"
+    ])
 
-        # Add channel_profile_ids column to managed_channels (tracks which profiles channel was added to)
-        add_columns_if_missing("managed_channels", [
-            ("channel_profile_ids", "TEXT"),  # JSON array, e.g. "[1, 2, 3]"
-        ])
+    # Add channel_profile_ids column to managed_channels (tracks which profiles channel was added to)
+    add_columns_if_missing("managed_channels", [
+        ("channel_profile_ids", "TEXT"),  # JSON array, e.g. "[1, 2, 3]"
+    ])
 
-        # Migrate existing single channel_profile_id to channel_profile_ids array
-        try:
-            # For event_epg_groups
-            cursor.execute("""
-                UPDATE event_epg_groups
-                SET channel_profile_ids = '[' || channel_profile_id || ']'
-                WHERE channel_profile_id IS NOT NULL
-                  AND (channel_profile_ids IS NULL OR channel_profile_ids = '')
-            """)
-            if cursor.rowcount > 0:
-                print(f"  ✅ Migrated {cursor.rowcount} event group(s) to multi-profile format")
+    # Migrate existing single channel_profile_id to channel_profile_ids array
+    # Note: This is idempotent (only updates rows where channel_profile_ids is NULL/empty)
+    try:
+        # For event_epg_groups
+        cursor.execute("""
+            UPDATE event_epg_groups
+            SET channel_profile_ids = '[' || channel_profile_id || ']'
+            WHERE channel_profile_id IS NOT NULL
+              AND (channel_profile_ids IS NULL OR channel_profile_ids = '')
+        """)
+        if cursor.rowcount > 0:
+            print(f"  ✅ Migrated {cursor.rowcount} event group(s) to multi-profile format")
 
-            # For managed_channels
-            cursor.execute("""
-                UPDATE managed_channels
-                SET channel_profile_ids = '[' || channel_profile_id || ']'
-                WHERE channel_profile_id IS NOT NULL
-                  AND (channel_profile_ids IS NULL OR channel_profile_ids = '')
-            """)
-            if cursor.rowcount > 0:
-                print(f"  ✅ Migrated {cursor.rowcount} managed channel(s) to multi-profile format")
+        # For managed_channels
+        cursor.execute("""
+            UPDATE managed_channels
+            SET channel_profile_ids = '[' || channel_profile_id || ']'
+            WHERE channel_profile_id IS NOT NULL
+              AND (channel_profile_ids IS NULL OR channel_profile_ids = '')
+        """)
+        if cursor.rowcount > 0:
+            print(f"  ✅ Migrated {cursor.rowcount} managed channel(s) to multi-profile format")
 
-            conn.commit()
-            migrations_run += 1
-        except Exception as e:
-            print(f"  ⚠️ Could not migrate channel profiles: {e}")
+        conn.commit()
+    except Exception as e:
+        print(f"  ⚠️ Could not migrate channel profiles: {e}")
 
     # =========================================================================
     # UPDATE SCHEMA VERSION

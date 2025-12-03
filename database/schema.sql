@@ -241,6 +241,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
     -- Event-based EPG Settings
     include_final_events INTEGER DEFAULT 0,          -- Include completed/final events from today: 0=exclude, 1=include
+    event_lookahead_days INTEGER DEFAULT 7,          -- How many days ahead to look for events (1-30)
 
     -- Time Format Settings
     time_format TEXT DEFAULT '12h',                  -- '12h' or '24h'
