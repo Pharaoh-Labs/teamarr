@@ -287,15 +287,8 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             app.logger.debug(f"Skipping built-in filter (skip_builtin_filter enabled)")
         else:
             # Apply built-in filter (must have vs/@/at indicator)
-            # Only use include_regex if enabled
-            include_regex = None
-            if bool(group.get('stream_include_regex_enabled')) and group.get('stream_include_regex'):
-                include_regex = group['stream_include_regex']
-
-            # Only use exclude_regex if enabled
-            exclude_regex = None
-            if bool(group.get('stream_exclude_regex_enabled')) and group.get('stream_exclude_regex'):
-                exclude_regex = group['stream_exclude_regex']
+            from utils.regex_helper import get_group_filter_patterns
+            include_regex, exclude_regex = get_group_filter_patterns(group)
 
             filter_result = filter_game_streams(
                 all_streams,
@@ -3736,20 +3729,8 @@ def api_event_epg_dispatcharr_streams(group_id):
 
                 # Get filtering settings from db_group if configured
                 skip_builtin_filter = bool(db_group.get('skip_builtin_filter', 0)) if db_group else False
-                include_regex = None
-                if db_group and bool(db_group.get('stream_include_regex_enabled')) and db_group.get('stream_include_regex'):
-                    try:
-                        import re
-                        include_regex = re.compile(db_group['stream_include_regex'], re.IGNORECASE)
-                    except re.error:
-                        pass
-                exclude_regex = None
-                if db_group and bool(db_group.get('stream_exclude_regex_enabled')) and db_group.get('stream_exclude_regex'):
-                    try:
-                        import re
-                        exclude_regex = re.compile(db_group['stream_exclude_regex'], re.IGNORECASE)
-                    except re.error:
-                        pass
+                from utils.regex_helper import compile_group_filters
+                include_regex, exclude_regex = compile_group_filters(db_group)
 
                 for stream in streams:
                     try:
@@ -3922,20 +3903,8 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
 
                     # Get filtering settings
                     skip_builtin_filter = bool(db_group.get('skip_builtin_filter', 0)) if db_group else False
-                    include_regex = None
-                    if db_group and bool(db_group.get('stream_include_regex_enabled')) and db_group.get('stream_include_regex'):
-                        try:
-                            import re
-                            include_regex = re.compile(db_group['stream_include_regex'], re.IGNORECASE)
-                        except re.error:
-                            pass
-                    exclude_regex = None
-                    if db_group and bool(db_group.get('stream_exclude_regex_enabled')) and db_group.get('stream_exclude_regex'):
-                        try:
-                            import re
-                            exclude_regex = re.compile(db_group['stream_exclude_regex'], re.IGNORECASE)
-                        except re.error:
-                            pass
+                    from utils.regex_helper import compile_group_filters
+                    include_regex, exclude_regex = compile_group_filters(db_group)
 
                     # Check for custom regex configuration (same logic as refresh_event_group_core)
                     teams_enabled = bool(db_group.get('custom_regex_teams_enabled')) if db_group else False
@@ -4756,7 +4725,7 @@ def api_event_epg_test_regex(group_id):
         - Whether teams resolved to ESPN IDs
     """
     from epg.team_matcher import create_matcher
-    import re
+    from utils.regex_helper import compile_pattern, validate_pattern
 
     try:
         group = get_event_epg_group(group_id)
@@ -4781,15 +4750,14 @@ def api_event_epg_test_regex(group_id):
                 'error': 'teams_pattern must contain named groups: (?P<team1>...) and (?P<team2>...)'
             }), 400
 
-        # Validate all provided patterns
+        # Validate all provided patterns (uses regex module for advanced pattern support)
         for name, pattern in [('teams_pattern', teams_pattern),
                               ('date_pattern', date_pattern), ('time_pattern', time_pattern),
                               ('exclude_pattern', exclude_pattern)]:
             if pattern:
-                try:
-                    re.compile(pattern)
-                except re.error as e:
-                    return jsonify({'error': f'Invalid {name} syntax: {e}'}), 400
+                is_valid, error_msg = validate_pattern(pattern)
+                if not is_valid:
+                    return jsonify({'error': f'Invalid {name} syntax: {error_msg}'}), 400
 
         # Get streams for this group from Dispatcharr
         conn = get_connection()
@@ -4811,9 +4779,7 @@ def api_event_epg_test_regex(group_id):
             streams = streams[:limit]
 
         # Compile exclude pattern if provided
-        exclude_regex = None
-        if exclude_pattern:
-            exclude_regex = re.compile(exclude_pattern, re.IGNORECASE)
+        exclude_regex = compile_pattern(exclude_pattern) if exclude_pattern else None
 
         # Test regex against each stream
         team_matcher = create_matcher()

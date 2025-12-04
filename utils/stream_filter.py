@@ -12,6 +12,8 @@ This ensures match rate calculations reflect reality:
 import re
 from typing import Dict, List, Tuple
 
+from utils.regex_helper import compile_pattern
+
 # Pattern to detect game indicators in stream names
 # Matches: vs, vs., at (as word), v (as word), x (as word), @
 GAME_INDICATOR_PATTERN = re.compile(
@@ -101,23 +103,9 @@ def filter_game_streams(
     filtered_include_regex = 0
     filtered_exclude_regex = 0
 
-    # Compile user inclusion pattern if provided
-    include_pattern = None
-    if include_regex:
-        try:
-            include_pattern = re.compile(include_regex, re.IGNORECASE)
-        except re.error:
-            # Invalid regex - log and continue without it
-            pass
-
-    # Compile user exclusion pattern if provided
-    exclude_pattern = None
-    if exclude_regex:
-        try:
-            exclude_pattern = re.compile(exclude_regex, re.IGNORECASE)
-        except re.error:
-            # Invalid regex - log and continue without it
-            pass
+    # Compile user patterns using regex helper (supports variable-width lookbehind)
+    include_pattern = compile_pattern(include_regex) if include_regex else None
+    exclude_pattern = compile_pattern(exclude_regex) if exclude_regex else None
 
     for stream in streams:
         name = stream.get('name', '')

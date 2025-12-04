@@ -18,6 +18,7 @@ from typing import Optional, Dict, List, Any, Tuple
 
 from epg.league_config import get_league_config, parse_api_path, is_college_league
 from utils.logger import get_logger
+from utils.regex_helper import REGEX_MODULE
 
 logger = get_logger(__name__)
 
@@ -971,13 +972,13 @@ class TeamMatcher:
             'game_time': None
         }
 
-        # Apply teams pattern
+        # Apply teams pattern (uses regex module for advanced pattern support like variable-width lookbehind)
         try:
-            teams_match = re.search(teams_pattern, stream_name, re.IGNORECASE)
+            teams_match = REGEX_MODULE.search(teams_pattern, stream_name, REGEX_MODULE.IGNORECASE)
             if not teams_match:
                 result['reason'] = 'Teams pattern did not match stream name'
                 return result
-        except re.error as e:
+        except Exception as e:
             result['reason'] = f'Invalid teams pattern: {e}'
             return result
 
@@ -1005,10 +1006,10 @@ class TeamMatcher:
         result['raw_away'] = team1_text
         result['raw_home'] = team2_text
 
-        # Extract optional date
+        # Extract optional date (uses regex module for advanced pattern support)
         if date_pattern:
             try:
-                date_match = re.search(date_pattern, stream_name, re.IGNORECASE)
+                date_match = REGEX_MODULE.search(date_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if date_match:
                     # Try named group first, then first capture group, then full match
                     try:
@@ -1017,14 +1018,14 @@ class TeamMatcher:
                         date_text = date_match.group(1) if date_match.groups() else date_match.group(0)
                     if date_text:
                         result['game_date'] = extract_date_from_text(date_text.strip())
-            except re.error as e:
+            except Exception as e:
                 result['reason'] = f'Invalid date pattern: {e}'
                 return result
 
-        # Extract optional time
+        # Extract optional time (uses regex module for advanced pattern support)
         if time_pattern:
             try:
-                time_match = re.search(time_pattern, stream_name, re.IGNORECASE)
+                time_match = REGEX_MODULE.search(time_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if time_match:
                     # Try named group first, then first capture group, then full match
                     try:
@@ -1033,7 +1034,7 @@ class TeamMatcher:
                         time_text = time_match.group(1) if time_match.groups() else time_match.group(0)
                     if time_text:
                         result['game_time'] = extract_time_from_text(time_text.strip())
-            except re.error as e:
+            except Exception as e:
                 result['reason'] = f'Invalid time pattern: {e}'
                 return result
 
@@ -1110,13 +1111,14 @@ class TeamMatcher:
                 return result
 
         # Now handle date/time - override with custom if enabled, otherwise keep defaults
+        # Uses REGEX_MODULE for advanced pattern support like variable-width lookbehind
         if date_enabled and date_pattern:
             try:
-                date_match = re.search(date_pattern, stream_name, re.IGNORECASE)
+                date_match = REGEX_MODULE.search(date_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if date_match:
                     try:
                         date_text = date_match.group('date')
-                    except (IndexError, re.error):
+                    except (IndexError, Exception):
                         date_text = date_match.group(1) if date_match.groups() else date_match.group(0)
                     if date_text:
                         result['game_date'] = extract_date_from_text(date_text.strip())
@@ -1124,18 +1126,18 @@ class TeamMatcher:
                         result['game_date'] = None
                 else:
                     result['game_date'] = None
-            except re.error as e:
+            except Exception as e:
                 logger.warning(f"Invalid custom date pattern: {e}")
                 # Fall back to default
                 result['game_date'] = extract_date_from_text(stream_name)
 
         if time_enabled and time_pattern:
             try:
-                time_match = re.search(time_pattern, stream_name, re.IGNORECASE)
+                time_match = REGEX_MODULE.search(time_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if time_match:
                     try:
                         time_text = time_match.group('time')
-                    except (IndexError, re.error):
+                    except (IndexError, Exception):
                         time_text = time_match.group(1) if time_match.groups() else time_match.group(0)
                     if time_text:
                         result['game_time'] = extract_time_from_text(time_text.strip())
@@ -1143,7 +1145,7 @@ class TeamMatcher:
                         result['game_time'] = None
                 else:
                     result['game_time'] = None
-            except re.error as e:
+            except Exception as e:
                 logger.warning(f"Invalid custom time pattern: {e}")
                 # Fall back to default
                 result['game_time'] = extract_time_from_text(stream_name)
@@ -1169,12 +1171,13 @@ class TeamMatcher:
             'game_time': extract_time_from_text(stream_name)
         }
 
+        # Uses REGEX_MODULE for advanced pattern support like variable-width lookbehind
         try:
-            teams_match = re.search(teams_pattern, stream_name, re.IGNORECASE)
+            teams_match = REGEX_MODULE.search(teams_pattern, stream_name, REGEX_MODULE.IGNORECASE)
             if not teams_match:
                 result['reason'] = 'Teams pattern did not match stream name'
                 return result
-        except re.error as e:
+        except Exception as e:
             result['reason'] = f'Invalid teams pattern: {e}'
             return result
 
