@@ -4706,43 +4706,22 @@ def api_event_epg_groups_delete(group_id):
 
 
 # =============================================================================
-# CONSOLIDATION EXCEPTION KEYWORDS API
+# CONSOLIDATION EXCEPTION KEYWORDS API (Global Settings)
 # =============================================================================
 
-@app.route('/api/event-epg/groups/<int:group_id>/exception-keywords', methods=['GET'])
-def api_get_exception_keywords(group_id):
-    """Get all exception keywords for a group (includes inherited from parent)."""
+@app.route('/api/settings/exception-keywords', methods=['GET'])
+def api_get_exception_keywords():
+    """Get all global exception keywords."""
     from database import get_consolidation_exception_keywords
 
-    group = get_event_epg_group(group_id)
-    if not group:
-        return jsonify({'error': 'Group not found'}), 404
-
-    keywords = get_consolidation_exception_keywords(group_id)
-
-    # Check if inherited
-    is_inherited = bool(group.get('parent_group_id'))
-
-    return jsonify({
-        'group_id': group_id,
-        'inherited': is_inherited,
-        'inherited_from': group.get('parent_group_id'),
-        'keywords': keywords
-    })
+    keywords = get_consolidation_exception_keywords()
+    return jsonify({'keywords': keywords})
 
 
-@app.route('/api/event-epg/groups/<int:group_id>/exception-keywords', methods=['POST'])
-def api_add_exception_keyword(group_id):
-    """Add a new exception keyword entry."""
+@app.route('/api/settings/exception-keywords', methods=['POST'])
+def api_add_exception_keyword():
+    """Add a new global exception keyword entry."""
     from database import add_consolidation_exception_keyword
-
-    group = get_event_epg_group(group_id)
-    if not group:
-        return jsonify({'error': 'Group not found'}), 404
-
-    # Child groups can't have their own keywords
-    if group.get('parent_group_id'):
-        return jsonify({'error': 'Child groups inherit keywords from parent'}), 400
 
     data = request.get_json() or {}
     keywords = (data.get('keywords') or '').strip()
@@ -4755,16 +4734,16 @@ def api_add_exception_keyword(group_id):
         return jsonify({'error': 'behavior must be consolidate, separate, or ignore'}), 400
 
     try:
-        new_id = add_consolidation_exception_keyword(group_id, keywords, behavior)
-        app.logger.info(f"Added exception keyword '{keywords}' ({behavior}) to group {group_id}")
+        new_id = add_consolidation_exception_keyword(keywords, behavior)
+        app.logger.info(f"Added global exception keyword '{keywords}' ({behavior})")
         return jsonify({'success': True, 'id': new_id})
     except Exception as e:
         app.logger.error(f"Error adding exception keyword: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/event-epg/groups/<int:group_id>/exception-keywords/<int:keyword_id>', methods=['PUT'])
-def api_update_exception_keyword(group_id, keyword_id):
+@app.route('/api/settings/exception-keywords/<int:keyword_id>', methods=['PUT'])
+def api_update_exception_keyword(keyword_id):
     """Update an exception keyword entry."""
     from database import update_consolidation_exception_keyword
 
@@ -4788,8 +4767,8 @@ def api_update_exception_keyword(group_id, keyword_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/event-epg/groups/<int:group_id>/exception-keywords/<int:keyword_id>', methods=['DELETE'])
-def api_delete_exception_keyword(group_id, keyword_id):
+@app.route('/api/settings/exception-keywords/<int:keyword_id>', methods=['DELETE'])
+def api_delete_exception_keyword(keyword_id):
     """Delete an exception keyword entry."""
     from database import delete_consolidation_exception_keyword
 

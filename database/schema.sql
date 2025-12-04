@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS settings (
     soccer_cache_refresh_frequency TEXT DEFAULT 'weekly',  -- daily, every_3_days, weekly, manual
 
     -- Schema versioning for migrations
-    schema_version INTEGER DEFAULT 13,  -- Current schema version (increment with each migration)
+    schema_version INTEGER DEFAULT 14,  -- Current schema version (increment with each migration)
 
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -914,19 +914,15 @@ INSERT OR IGNORE INTO soccer_cache_meta (id) VALUES (1);
 
 -- =============================================================================
 -- CONSOLIDATION EXCEPTION KEYWORDS TABLE
--- Per-group keywords that override default duplicate_event_handling
+-- Global keywords that override default duplicate_event_handling when matched
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS consolidation_exception_keywords (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    group_id INTEGER NOT NULL,
     keywords TEXT NOT NULL,              -- Comma-separated variants, case-insensitive
     behavior TEXT NOT NULL DEFAULT 'consolidate',  -- 'consolidate', 'separate', 'ignore'
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (group_id) REFERENCES event_epg_groups(id) ON DELETE CASCADE
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE INDEX IF NOT EXISTS idx_cek_group ON consolidation_exception_keywords(group_id);
 
 -- =============================================================================
 -- END OF SCHEMA

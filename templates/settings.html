@@ -161,7 +161,7 @@
             <div class="form-row" style="margin-top: 0.75rem;">
                 <div class="form-group">
                     <label for="default_duplicate_event_handling">Duplicate Stream Handling</label>
-                    <select id="default_duplicate_event_handling" name="default_duplicate_event_handling" class="form-control">
+                    <select id="default_duplicate_event_handling" name="default_duplicate_event_handling" class="form-control" onchange="handleDuplicateHandlingChange()">
                         <option value="consolidate" {% if settings.default_duplicate_event_handling == 'consolidate' or not settings.default_duplicate_event_handling %}selected{% endif %}>Consolidate</option>
                         <option value="ignore" {% if settings.default_duplicate_event_handling == 'ignore' %}selected{% endif %}>Ignore</option>
                         <option value="separate" {% if settings.default_duplicate_event_handling == 'separate' %}selected{% endif %}>Separate</option>
@@ -170,6 +170,52 @@
                         <strong>Consolidate</strong> = add all streams to one channel<br>
                         <strong>Ignore</strong> = keep first stream only<br>
                         <strong>Separate</strong> = create separate channel per stream</small>
+                </div>
+            </div>
+
+            <!-- Exception Keywords Section (only visible when consolidate selected) -->
+            <div id="exception-keywords-section" class="form-row" style="margin-top: 0.75rem; display: none;">
+                <div class="form-group" style="width: 100%;">
+                    <label>
+                        <strong>Exception Keywords</strong>
+                        <small class="text-muted" style="margin-left: 0.5rem;">Streams matching these keywords get special handling</small>
+                    </label>
+
+                    <!-- Keywords table -->
+                    <div class="exception-keywords-table-wrapper">
+                        <table class="exception-keywords-table" id="exception-keywords-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50%">Keywords (comma-separated variants)</th>
+                                    <th style="width: 35%">Behavior</th>
+                                    <th style="width: 15%"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="exception-keywords-body">
+                                <!-- Rows populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add new keyword row -->
+                    <div class="exception-keyword-add-row" id="exception-keyword-add-row">
+                        <input type="text" id="new-keyword-input" class="form-control"
+                               placeholder="e.g., Prime Vision, Primevision">
+                        <select id="new-keyword-behavior" class="form-control" style="max-width: 150px;">
+                            <option value="consolidate">Consolidate</option>
+                            <option value="separate">Separate</option>
+                            <option value="ignore">Ignore</option>
+                        </select>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addExceptionKeyword()">
+                            + Add
+                        </button>
+                    </div>
+
+                    <small class="form-help" style="margin-top: 0.5rem;">
+                        <strong>Consolidate:</strong> Group streams with same keyword on one channel (separate from main consolidation)<br>
+                        <strong>Separate:</strong> Create new channel for each matching stream<br>
+                        <strong>Ignore:</strong> Skip streams with this keyword entirely
+                    </small>
                 </div>
             </div>
         </div>
@@ -631,6 +677,57 @@ select.form-control {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Exception Keywords Section */
+.exception-keywords-table-wrapper {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.exception-keywords-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.exception-keywords-table thead {
+    background: var(--bg-tertiary);
+}
+
+.exception-keywords-table th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+}
+
+.exception-keywords-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.exception-keywords-table tr:last-child td {
+    border-bottom: none;
+}
+
+.exception-keywords-table .form-control-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.exception-keyword-add-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.exception-keyword-add-row .form-control {
+    flex: 1;
+}
 </style>
 
 <script>
@@ -915,5 +1012,147 @@ async function refreshSoccerCache() {
 
 // Load soccer cache status on page load
 document.addEventListener('DOMContentLoaded', loadSoccerCacheStatus);
+
+// ============================================================================
+// Exception Keywords (Consolidation Exceptions) - Global Settings
+// ============================================================================
+
+let exceptionKeywordsData = [];
+
+function handleDuplicateHandlingChange() {
+    const handling = document.getElementById('default_duplicate_event_handling');
+    const section = document.getElementById('exception-keywords-section');
+
+    if (handling && handling.value === 'consolidate') {
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+async function loadExceptionKeywords() {
+    try {
+        const response = await fetch('/api/settings/exception-keywords');
+        const data = await response.json();
+        exceptionKeywordsData = data.keywords || [];
+        renderExceptionKeywords();
+    } catch (error) {
+        console.error('Failed to load exception keywords:', error);
+    }
+}
+
+function renderExceptionKeywords() {
+    const tbody = document.getElementById('exception-keywords-body');
+    tbody.innerHTML = '';
+
+    if (exceptionKeywordsData.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="3" class="text-muted text-center" style="padding: 1rem;">
+            No exception keywords defined
+        </td>`;
+        tbody.appendChild(row);
+        return;
+    }
+
+    exceptionKeywordsData.forEach(kw => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="text" class="form-control form-control-sm"
+                       value="${escapeHtml(kw.keywords)}"
+                       onchange="updateExceptionKeyword(${kw.id}, this.value, null)">
+            </td>
+            <td>
+                <select class="form-control form-control-sm"
+                        onchange="updateExceptionKeyword(${kw.id}, null, this.value)">
+                    <option value="consolidate" ${kw.behavior === 'consolidate' ? 'selected' : ''}>Consolidate</option>
+                    <option value="separate" ${kw.behavior === 'separate' ? 'selected' : ''}>Separate</option>
+                    <option value="ignore" ${kw.behavior === 'ignore' ? 'selected' : ''}>Ignore</option>
+                </select>
+            </td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        onclick="deleteExceptionKeyword(${kw.id})" title="Delete">
+                    &times;
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function addExceptionKeyword() {
+    const keywords = document.getElementById('new-keyword-input').value.trim();
+    const behavior = document.getElementById('new-keyword-behavior').value;
+
+    if (!keywords) {
+        alert('Please enter at least one keyword');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/settings/exception-keywords', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keywords, behavior})
+        });
+
+        if (response.ok) {
+            document.getElementById('new-keyword-input').value = '';
+            await loadExceptionKeywords();
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Failed to add keyword');
+        }
+    } catch (error) {
+        console.error('Failed to add keyword:', error);
+        alert('Failed to add keyword');
+    }
+}
+
+async function updateExceptionKeyword(keywordId, keywords, behavior) {
+    const body = {};
+    if (keywords !== null) body.keywords = keywords;
+    if (behavior !== null) body.behavior = behavior;
+
+    try {
+        await fetch(`/api/settings/exception-keywords/${keywordId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+    } catch (error) {
+        console.error('Failed to update keyword:', error);
+    }
+}
+
+async function deleteExceptionKeyword(keywordId) {
+    if (!confirm('Delete this keyword?')) return;
+
+    try {
+        const response = await fetch(`/api/settings/exception-keywords/${keywordId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            await loadExceptionKeywords();
+        }
+    } catch (error) {
+        console.error('Failed to delete keyword:', error);
+    }
+}
+
+// Initialize exception keywords on page load
+document.addEventListener('DOMContentLoaded', function() {
+    handleDuplicateHandlingChange();
+    loadExceptionKeywords();
+});
 </script>
 {% endblock %}

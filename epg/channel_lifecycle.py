@@ -948,8 +948,8 @@ class ChannelLifecycleManager:
         # Create template engine for channel name resolution
         template_engine = EventTemplateEngine()
 
-        # Load exception keywords for this group (may be inherited from parent)
-        exception_keywords = get_consolidation_exception_keywords(group['id'])
+        # Load global exception keywords
+        exception_keywords = get_consolidation_exception_keywords()
 
         results = {
             'created': [],

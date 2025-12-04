@@ -157,7 +157,7 @@ def db_insert(query: str, params: tuple = ()) -> int:
 #   12: Soccer multi-league cache tables (with league_tags JSON array)
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 13
+CURRENT_SCHEMA_VERSION = 14
 
 
 def get_schema_version(conn) -> int:
@@ -853,7 +853,7 @@ def run_migrations(conn):
         ])
 
     # =========================================================================
-    # 13. CONSOLIDATION EXCEPTION KEYWORDS
+    # 13. CONSOLIDATION EXCEPTION KEYWORDS (per-group version - deprecated)
     # =========================================================================
     if current_version < 13:
         print("  🔄 Running migration 13: Consolidation exception keywords...")
@@ -889,6 +889,45 @@ def run_migrations(conn):
         ])
 
         conn.commit()
+
+    # =========================================================================
+    # 14. MAKE EXCEPTION KEYWORDS GLOBAL (remove group_id)
+    # =========================================================================
+    if current_version < 14:
+        print("  🔄 Running migration 14: Make exception keywords global...")
+
+        # Drop group_id column by recreating the table (SQLite doesn't support DROP COLUMN directly)
+        if table_exists("consolidation_exception_keywords"):
+            try:
+                # Create new table without group_id
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS consolidation_exception_keywords_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        keywords TEXT NOT NULL,
+                        behavior TEXT NOT NULL DEFAULT 'consolidate',
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Copy data (ignoring duplicates since keywords are now global)
+                cursor.execute("""
+                    INSERT INTO consolidation_exception_keywords_new (keywords, behavior, created_at)
+                    SELECT DISTINCT keywords, behavior, created_at
+                    FROM consolidation_exception_keywords
+                """)
+
+                # Drop old table and rename
+                cursor.execute("DROP TABLE consolidation_exception_keywords")
+                cursor.execute("ALTER TABLE consolidation_exception_keywords_new RENAME TO consolidation_exception_keywords")
+
+                # Drop old index (no longer needed)
+                cursor.execute("DROP INDEX IF EXISTS idx_cek_group")
+
+                migrations_run += 1
+                print("    ✅ Migrated consolidation_exception_keywords to global (removed group_id)")
+            except Exception as e:
+                print(f"    ⚠️ Could not migrate exception keywords table: {e}")
+            conn.commit()
 
     # =========================================================================
     # UPDATE SCHEMA VERSION
@@ -2942,40 +2981,26 @@ def get_potential_parents_for_sport(sport: str, exclude_group_id: int = None) ->
 
 
 # =============================================================================
-# CONSOLIDATION EXCEPTION KEYWORDS
+# CONSOLIDATION EXCEPTION KEYWORDS (Global)
 # =============================================================================
 
-def get_consolidation_exception_keywords(group_id: int) -> List[Dict[str, Any]]:
+def get_consolidation_exception_keywords() -> List[Dict[str, Any]]:
     """
-    Get exception keywords for a group, including inherited from parent.
-
-    Args:
-        group_id: Event EPG group ID
+    Get all global exception keywords.
 
     Returns:
         List of dicts: [{'id': 1, 'keywords': 'Prime Vision, Primevision', 'behavior': 'separate'}, ...]
     """
-    # Check if this is a child group
-    group = db_fetch_one(
-        "SELECT parent_group_id FROM event_epg_groups WHERE id = ?",
-        (group_id,)
-    )
-
-    # Use parent's keywords if child group
-    effective_group_id = group['parent_group_id'] if group and group.get('parent_group_id') else group_id
-
     return db_fetch_all(
-        "SELECT id, keywords, behavior FROM consolidation_exception_keywords WHERE group_id = ? ORDER BY id",
-        (effective_group_id,)
+        "SELECT id, keywords, behavior FROM consolidation_exception_keywords ORDER BY id"
     )
 
 
-def add_consolidation_exception_keyword(group_id: int, keywords: str, behavior: str = 'consolidate') -> int:
+def add_consolidation_exception_keyword(keywords: str, behavior: str = 'consolidate') -> int:
     """
-    Add a new exception keyword entry.
+    Add a new global exception keyword entry.
 
     Args:
-        group_id: Event EPG group ID
         keywords: Comma-separated keyword variants
         behavior: 'consolidate', 'separate', or 'ignore'
 
@@ -2986,8 +3011,8 @@ def add_consolidation_exception_keyword(group_id: int, keywords: str, behavior: 
         raise ValueError(f"Invalid behavior: {behavior}")
 
     return db_insert(
-        "INSERT INTO consolidation_exception_keywords (group_id, keywords, behavior) VALUES (?, ?, ?)",
-        (group_id, keywords.strip(), behavior)
+        "INSERT INTO consolidation_exception_keywords (keywords, behavior) VALUES (?, ?)",
+        (keywords.strip(), behavior)
     )
 
 
@@ -3046,22 +3071,3 @@ def delete_consolidation_exception_keyword(keyword_id: int) -> bool:
         )
         conn.commit()
         return cursor.rowcount > 0
-
-
-def delete_all_consolidation_exception_keywords(group_id: int) -> int:
-    """
-    Delete all exception keywords for a group.
-
-    Args:
-        group_id: Event EPG group ID
-
-    Returns:
-        Number of entries deleted
-    """
-    with db_connection() as conn:
-        cursor = conn.execute(
-            "DELETE FROM consolidation_exception_keywords WHERE group_id = ?",
-            (group_id,)
-        )
-        conn.commit()
-        return cursor.rowcount
