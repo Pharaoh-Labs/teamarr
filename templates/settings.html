@@ -202,7 +202,7 @@
                         <input type="text" id="new-keyword-input" class="form-control"
                                placeholder="e.g., Prime Vision, Primevision">
                         <select id="new-keyword-behavior" class="form-control" style="max-width: 150px;">
-                            <option value="consolidate">Consolidate</option>
+                            <option value="consolidate">Sub-Consolidate</option>
                             <option value="separate">Separate</option>
                             <option value="ignore">Ignore</option>
                         </select>
@@ -212,7 +212,7 @@
                     </div>
 
                     <small class="form-help" style="margin-top: 0.5rem;">
-                        <strong>Consolidate:</strong> Group streams with same keyword on one channel (separate from main consolidation)<br>
+                        <strong>Sub-Consolidate:</strong> Group streams with same keyword on one channel (separate from main consolidation)<br>
                         <strong>Separate:</strong> Create new channel for each matching stream<br>
                         <strong>Ignore:</strong> Skip streams with this keyword entirely
                     </small>
@@ -1065,7 +1065,7 @@ function renderExceptionKeywords() {
             <td>
                 <select class="form-control form-control-sm"
                         onchange="updateExceptionKeyword(${kw.id}, null, this.value)">
-                    <option value="consolidate" ${kw.behavior === 'consolidate' ? 'selected' : ''}>Consolidate</option>
+                    <option value="consolidate" ${kw.behavior === 'consolidate' ? 'selected' : ''}>Sub-Consolidate</option>
                     <option value="separate" ${kw.behavior === 'separate' ? 'selected' : ''}>Separate</option>
                     <option value="ignore" ${kw.behavior === 'ignore' ? 'selected' : ''}>Ignore</option>
                 </select>
