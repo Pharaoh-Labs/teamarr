@@ -221,12 +221,6 @@
                             data-template-id="{{ group.event_template_id or '' }}"
                             data-channel-start="{{ group.channel_start or 0 }}"
                             data-channel-group-id="{{ group.channel_group_id or '' }}"
-                            data-custom-regex="{{ group.custom_regex or '' }}"
-                            data-custom-regex-enabled="{{ group.custom_regex_enabled or 0 }}"
-                            data-custom-regex-team1="{{ group.custom_regex_team1 or '' }}"
-                            data-custom-regex-team2="{{ group.custom_regex_team2 or '' }}"
-                            data-custom-regex-date="{{ group.custom_regex_date or '' }}"
-                            data-custom-regex-time="{{ group.custom_regex_time or '' }}"
                             data-streams="{{ group.stream_count or 0 }}"
                             data-matched="{{ group.matched_count or 0 }}"
                             data-enabled="{{ group.enabled }}"
@@ -240,6 +234,9 @@
                                     <strong style="font-size: 0.9375rem;">{{ group.group_name }}</strong>
                                     {% if group.account_name %}
                                         <span class="badge badge-secondary">{{ group.account_name }}</span>
+                                    {% endif %}
+                                    {% if group.custom_regex_teams_enabled or group.custom_regex_date_enabled or group.custom_regex_time_enabled or group.stream_exclude_regex_enabled %}
+                                        <span class="badge badge-info" title="Custom regex patterns configured">Regex</span>
                                     {% endif %}
                                 </div>
                             </td>
@@ -321,12 +318,6 @@
                                 data-template-id="{{ child.event_template_id or '' }}"
                                 data-channel-start="{{ child.channel_start or 0 }}"
                                 data-channel-group-id="{{ child.channel_group_id or '' }}"
-                                data-custom-regex="{{ child.custom_regex or '' }}"
-                                data-custom-regex-enabled="{{ child.custom_regex_enabled or 0 }}"
-                                data-custom-regex-team1="{{ child.custom_regex_team1 or '' }}"
-                                data-custom-regex-team2="{{ child.custom_regex_team2 or '' }}"
-                                data-custom-regex-date="{{ child.custom_regex_date or '' }}"
-                                data-custom-regex-time="{{ child.custom_regex_time or '' }}"
                                 data-streams="{{ child.stream_count or 0 }}"
                                 data-matched="{{ child.matched_count or 0 }}"
                                 data-enabled="{{ child.enabled }}"
@@ -344,6 +335,9 @@
                                         </span>
                                         {% if child.account_name %}
                                             <span class="badge badge-secondary" style="font-size: 0.65rem;">{{ child.account_name }}</span>
+                                        {% endif %}
+                                        {% if child.custom_regex_teams_enabled or child.custom_regex_date_enabled or child.custom_regex_time_enabled or child.stream_exclude_regex_enabled %}
+                                            <span class="badge badge-info" style="font-size: 0.65rem;" title="Custom regex patterns configured">Regex</span>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -883,7 +877,7 @@ function testMatchGroup(groupId, groupName) {
                 // Hide loading, show content
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
-                renderPreviewStreams(data.streams, data.total_streams, data.filtered_count || 0);
+                renderPreviewStreams(data.streams, data.total_streams, data.filtered_count || 0, data.custom_regex_info);
                 previewEventSource.close();
                 previewEventSource = null;
             } else if (data.status === 'error') {
@@ -909,7 +903,7 @@ function testMatchGroup(groupId, groupName) {
     };
 }
 
-function renderPreviewStreams(streams, totalCount, filteredCount) {
+function renderPreviewStreams(streams, totalCount, filteredCount, customRegexInfo) {
     const tbody = document.getElementById('preview-streams-body');
     const totalEl = document.getElementById('preview-total');
     const matchedEl = document.getElementById('preview-matched');
@@ -920,6 +914,53 @@ function renderPreviewStreams(streams, totalCount, filteredCount) {
     let filteredDisplayCount = 0;
 
     tbody.innerHTML = '';
+
+    // Show/hide custom regex indicator with granular details
+    let regexIndicator = document.getElementById('preview-regex-indicator');
+    if (!regexIndicator) {
+        // Create the indicator element if it doesn't exist
+        const summaryDiv = document.querySelector('.preview-summary');
+        if (summaryDiv) {
+            const indicator = document.createElement('span');
+            indicator.id = 'preview-regex-indicator';
+            indicator.style.cssText = 'margin-left: 0.5rem; font-size: 0.75rem;';
+            summaryDiv.appendChild(indicator);
+            regexIndicator = indicator;
+        }
+    }
+    if (regexIndicator) {
+        const badgeStyle = 'display: inline-block; padding: 0.15rem 0.4rem; border-radius: 3px; margin-right: 0.25rem; font-size: 0.7rem;';
+
+        if (customRegexInfo) {
+            // Build badges for each enabled custom regex component
+            let badges = [];
+
+            if (customRegexInfo.teams) {
+                badges.push(`<span style="${badgeStyle} background: var(--info); color: white;" title="Custom teams extraction pattern">Teams</span>`);
+            }
+            if (customRegexInfo.date) {
+                badges.push(`<span style="${badgeStyle} background: var(--info); color: white;" title="Custom date extraction pattern">Date</span>`);
+            }
+            if (customRegexInfo.time) {
+                badges.push(`<span style="${badgeStyle} background: var(--info); color: white;" title="Custom time extraction pattern">Time</span>`);
+            }
+            if (customRegexInfo.exclude) {
+                badges.push(`<span style="${badgeStyle} background: var(--warning); color: black;" title="Custom exclusion pattern active">Exclude</span>`);
+            }
+
+            if (badges.length > 0) {
+                regexIndicator.innerHTML = '<span style="color: var(--text-muted); margin-right: 0.25rem;">Custom:</span>' + badges.join('');
+                regexIndicator.style.display = 'inline';
+            } else {
+                regexIndicator.innerHTML = `<span style="${badgeStyle} background: var(--bg-tertiary); color: var(--text-secondary);" title="Using built-in team matching">Built-in</span>`;
+                regexIndicator.style.display = 'inline';
+            }
+        } else {
+            // No custom regex - show built-in indicator
+            regexIndicator.innerHTML = `<span style="${badgeStyle} background: var(--bg-tertiary); color: var(--text-secondary);" title="Using built-in team matching">Built-in</span>`;
+            regexIndicator.style.display = 'inline';
+        }
+    }
 
     streams.forEach(stream => {
         const teamMatch = stream.team_match || {};
@@ -1580,6 +1621,11 @@ code {
 .badge-warning {
     background: rgba(245, 158, 11, 0.2);
     color: #fcd34d;
+}
+
+.badge-info {
+    background: rgba(6, 182, 212, 0.2);
+    color: #67e8f9;
 }
 
 .badge-child {

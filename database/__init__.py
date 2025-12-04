@@ -1443,8 +1443,6 @@ def create_event_epg_group(
     channel_group_name: str = None,
     stream_profile_id: int = None,
     channel_profile_ids: list = None,
-    custom_regex: str = None,
-    custom_regex_enabled: bool = False,
     custom_regex_teams: str = None,
     custom_regex_teams_enabled: bool = False,
     custom_regex_date: str = None,
@@ -1467,8 +1465,6 @@ def create_event_epg_group(
         channel_group_name: Dispatcharr channel group name (for UI display)
         stream_profile_id: Dispatcharr stream profile ID to assign to created channels
         channel_profile_ids: List of Dispatcharr channel profile IDs to add created channels to
-        custom_regex: Legacy single regex pattern (deprecated)
-        custom_regex_enabled: Legacy flag (deprecated - use individual enables)
         custom_regex_teams: Combined regex with (?P<team1>...) and (?P<team2>...) groups
         custom_regex_teams_enabled: Enable custom teams regex
         custom_regex_date: Optional regex pattern to extract game date
@@ -1504,13 +1500,12 @@ def create_event_epg_group(
              assigned_league, assigned_sport, enabled,
              event_template_id, account_name, channel_start, channel_group_id,
              channel_group_name, stream_profile_id, channel_profile_ids,
-             custom_regex, custom_regex_enabled,
              custom_regex_teams, custom_regex_teams_enabled,
              custom_regex_date, custom_regex_date_enabled,
              custom_regex_time, custom_regex_time_enabled,
              stream_exclude_regex, stream_exclude_regex_enabled,
              skip_builtin_filter, parent_group_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dispatcharr_group_id, dispatcharr_account_id, group_name,
@@ -1518,7 +1513,6 @@ def create_event_epg_group(
                 1 if enabled else 0,
                 event_template_id, account_name, channel_start,
                 channel_group_id, channel_group_name, stream_profile_id, channel_profile_ids_json,
-                custom_regex, 1 if custom_regex_enabled else 0,
                 custom_regex_teams, 1 if custom_regex_teams_enabled else 0,
                 custom_regex_date, 1 if custom_regex_date_enabled else 0,
                 custom_regex_time, 1 if custom_regex_time_enabled else 0,

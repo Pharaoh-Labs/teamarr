@@ -312,9 +312,6 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
         time_enabled = bool(group.get('custom_regex_time_enabled'))
         any_custom_enabled = teams_enabled or date_enabled or time_enabled
 
-        # Legacy support: check old global enable flag
-        use_legacy_regex = bool(group.get('custom_regex_enabled')) and group.get('custom_regex') and not any_custom_enabled
-
         def match_single_stream(stream):
             """Match a single stream to ESPN event - called in parallel"""
             # Create matchers per-thread for thread safety
@@ -333,12 +330,6 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         date_enabled=date_enabled,
                         time_pattern=group.get('custom_regex_time'),
                         time_enabled=time_enabled
-                    )
-                elif use_legacy_regex:
-                    team_result = thread_team_matcher.extract_teams_with_regex(
-                        stream['name'],
-                        group['custom_regex'],
-                        group['assigned_league']
                     )
                 else:
                     team_result = thread_team_matcher.extract_teams(stream['name'], group['assigned_league'])
@@ -3788,6 +3779,12 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                         except re.error:
                             pass
 
+                    # Check for custom regex configuration (same logic as refresh_event_group_core)
+                    teams_enabled = bool(db_group.get('custom_regex_teams_enabled')) if db_group else False
+                    date_enabled = bool(db_group.get('custom_regex_date_enabled')) if db_group else False
+                    time_enabled = bool(db_group.get('custom_regex_time_enabled')) if db_group else False
+                    any_custom_enabled = teams_enabled or date_enabled or time_enabled
+
                     send_progress('progress', f'Matching {len(streams)} streams...', percent=50)
 
                     def match_single_stream(stream):
@@ -3813,8 +3810,20 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                                     'filter_reason': get_display_text(FilterReason.EXCLUDE_REGEX_MATCHED)
                                 }
 
-                            # Extract teams
-                            team_result = thread_team_matcher.extract_teams(stream_name, league)
+                            # Extract teams - use custom regex if configured (same logic as refresh_event_group_core)
+                            if any_custom_enabled:
+                                team_result = thread_team_matcher.extract_teams_with_selective_regex(
+                                    stream_name,
+                                    league,
+                                    teams_pattern=db_group.get('custom_regex_teams'),
+                                    teams_enabled=teams_enabled,
+                                    date_pattern=db_group.get('custom_regex_date'),
+                                    date_enabled=date_enabled,
+                                    time_pattern=db_group.get('custom_regex_time'),
+                                    time_enabled=time_enabled
+                                )
+                            else:
+                                team_result = thread_team_matcher.extract_teams(stream_name, league)
 
                             # If teams matched, find ESPN event
                             if team_result.get('matched'):
@@ -3901,12 +3910,27 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                 # Sort streams alphabetically
                 streams.sort(key=lambda s: s.get('name', '').lower())
 
-                # Send final result
+                # Build custom regex info for UI display
+                custom_regex_info = None
+                if league and db_group:
+                    exclude_enabled = bool(db_group.get('stream_exclude_regex_enabled')) and bool(db_group.get('stream_exclude_regex'))
+                    # Show info if any custom pattern is enabled
+                    if any_custom_enabled or exclude_enabled:
+                        custom_regex_info = {
+                            'teams': teams_enabled,
+                            'date': date_enabled,
+                            'time': time_enabled,
+                            'exclude': exclude_enabled
+                        }
+
+                # Send final result with custom regex indicator
                 send_progress('complete', 'Preview complete', percent=100,
                               group=result['group'],
                               streams=streams,
                               total_streams=result['total_streams'],
-                              filtered_count=filtered_count)
+                              filtered_count=filtered_count,
+                              using_custom_regex=any_custom_enabled if league else False,
+                              custom_regex_info=custom_regex_info)
 
             except Exception as e:
                 app.logger.error(f"Error in preview stream for group {group_id}: {e}")
@@ -4300,8 +4324,6 @@ def api_event_epg_groups_create():
             channel_group_name=data.get('channel_group_name'),
             stream_profile_id=data.get('stream_profile_id'),
             channel_profile_ids=data.get('channel_profile_ids'),
-            custom_regex=data.get('custom_regex'),
-            custom_regex_enabled=bool(data.get('custom_regex_enabled')),
             custom_regex_teams=data.get('custom_regex_teams'),
             custom_regex_teams_enabled=bool(data.get('custom_regex_teams_enabled')),
             custom_regex_date=data.get('custom_regex_date'),
@@ -4553,19 +4575,13 @@ def api_event_epg_test_regex(group_id):
     """
     Test custom regex patterns against streams in a group.
 
-    Request body (separate patterns - preferred):
+    Request body:
         {
-            "team1_pattern": "^([A-Z]{2,3})",
-            "team2_pattern": "@\\s*([A-Z]{2,3})",
+            "teams_pattern": "(?P<team1>\\w+)\\s*@\\s*(?P<team2>\\w+)",  // required
             "date_pattern": "(\\d{1,2}/\\d{1,2})",  // optional
             "time_pattern": "(\\d{1,2}:\\d{2}(?:AM|PM)?)",  // optional
-            "limit": 5  // optional, default 5
-        }
-
-    Request body (legacy single pattern):
-        {
-            "regex": "(?P<team1>\\w+)\\s*@\\s*(?P<team2>\\w+)",
-            "limit": 5
+            "exclude_pattern": "...",  // optional
+            "limit": 5  // optional, default tests all streams
         }
 
     Returns results for each stream showing:
@@ -4584,53 +4600,30 @@ def api_event_epg_test_regex(group_id):
         data = request.get_json() or {}
         limit = data.get('limit')  # None = test all streams
 
-        # Determine which mode we're using
         # Handle None values explicitly (can happen if frontend sends null)
         teams_pattern = (data.get('teams_pattern') or '').strip()
         date_pattern = (data.get('date_pattern') or '').strip() or None
         time_pattern = (data.get('time_pattern') or '').strip() or None
         exclude_pattern = (data.get('exclude_pattern') or '').strip() or None
-        legacy_regex = (data.get('regex') or '').strip()
 
-        use_combined = bool(teams_pattern)
-        use_legacy = bool(legacy_regex) and not use_combined
-
-        if not use_combined and not use_legacy:
+        if not teams_pattern:
             return jsonify({'error': 'teams_pattern is required'}), 400
 
-        # Validate patterns
-        if use_combined:
-            # Combined pattern must have team1 and team2 named groups
-            if '(?P<team1>' not in teams_pattern or '(?P<team2>' not in teams_pattern:
-                return jsonify({
-                    'error': 'teams_pattern must contain named groups: (?P<team1>...) and (?P<team2>...)'
-                }), 400
+        # Validate teams pattern has required named groups
+        if '(?P<team1>' not in teams_pattern or '(?P<team2>' not in teams_pattern:
+            return jsonify({
+                'error': 'teams_pattern must contain named groups: (?P<team1>...) and (?P<team2>...)'
+            }), 400
 
-            # Validate all provided patterns
-            for name, pattern in [('teams_pattern', teams_pattern),
-                                  ('date_pattern', date_pattern), ('time_pattern', time_pattern),
-                                  ('exclude_pattern', exclude_pattern)]:
-                if pattern:
-                    try:
-                        re.compile(pattern)
-                    except re.error as e:
-                        return jsonify({'error': f'Invalid {name} syntax: {e}'}), 400
-        else:
-            # Legacy validation
-            if '(?P<team1>' not in legacy_regex or '(?P<team2>' not in legacy_regex:
-                return jsonify({
-                    'error': 'Legacy regex must contain named groups: (?P<team1>...) and (?P<team2>...)'
-                }), 400
-            try:
-                re.compile(legacy_regex)
-            except re.error as e:
-                return jsonify({'error': f'Invalid regex syntax: {e}'}), 400
-            # Also validate exclude pattern in legacy mode
-            if exclude_pattern:
+        # Validate all provided patterns
+        for name, pattern in [('teams_pattern', teams_pattern),
+                              ('date_pattern', date_pattern), ('time_pattern', time_pattern),
+                              ('exclude_pattern', exclude_pattern)]:
+            if pattern:
                 try:
-                    re.compile(exclude_pattern)
+                    re.compile(pattern)
                 except re.error as e:
-                    return jsonify({'error': f'Invalid exclude_pattern syntax: {e}'}), 400
+                    return jsonify({'error': f'Invalid {name} syntax: {e}'}), 400
 
         # Get streams for this group from Dispatcharr
         conn = get_connection()
@@ -4682,12 +4675,9 @@ def api_event_epg_test_regex(group_id):
                 excluded_count += 1
                 continue
 
-            if use_combined:
-                test_result = team_matcher.extract_teams_with_combined_regex(
-                    stream_name, league, teams_pattern, date_pattern, time_pattern
-                )
-            else:
-                test_result = team_matcher.extract_teams_with_regex(stream_name, legacy_regex, league)
+            test_result = team_matcher.extract_teams_with_combined_regex(
+                stream_name, league, teams_pattern, date_pattern, time_pattern
+            )
 
             results.append({
                 'stream_name': stream_name,
@@ -4707,7 +4697,6 @@ def api_event_epg_test_regex(group_id):
 
         return jsonify({
             'success': True,
-            'mode': 'combined' if use_combined else 'legacy',
             'league': league,
             'tested': len(results),
             'matched': matched_count,
