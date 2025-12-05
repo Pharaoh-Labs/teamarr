@@ -104,6 +104,51 @@ class EventEPGGenerator:
         # Final fallback to hardcoded values
         return self.FALLBACK_DURATIONS.get(sport, 3.0)
 
+    def _build_effective_group_info(
+        self,
+        group_info: Dict,
+        matched: Dict
+    ) -> Dict:
+        """
+        Build effective group_info with per-stream overrides for multi-sport groups.
+
+        For multi-sport groups, the group's assigned_league is empty and assigned_sport
+        is 'multi'. This method overrides those with per-stream detected values so that
+        template variables {league} and {sport} resolve correctly.
+
+        For single-sport groups, returns group_info unchanged.
+
+        Args:
+            group_info: Event EPG group configuration
+            matched: Matched stream data with 'teams' containing 'detected_league'
+
+        Returns:
+            Effective group_info dict (copy with overrides, or original)
+        """
+        # Only apply overrides for multi-sport groups
+        if group_info.get('assigned_sport') != 'multi':
+            return group_info
+
+        # Extract detected league from matched data
+        # detected_league is stored in teams dict or at top level of matched
+        teams = matched.get('teams', {})
+        detected_league = matched.get('detected_league') or teams.get('detected_league')
+
+        if not detected_league:
+            return group_info
+
+        # Derive sport from league
+        from epg.league_detector import LEAGUE_TO_SPORT
+        detected_sport = LEAGUE_TO_SPORT.get(detected_league)
+
+        # Build effective group_info with overrides
+        effective = dict(group_info)
+        effective['assigned_league'] = detected_league
+        if detected_sport:
+            effective['assigned_sport'] = detected_sport
+
+        return effective
+
     def generate(
         self,
         matched_streams: List[Dict],
@@ -156,27 +201,31 @@ class EventEPGGenerator:
             stream = matched['stream']
             event = matched['event']
 
+            # For multi-sport groups, build effective group_info with per-stream league/sport
+            # This ensures {league} and {sport} template variables resolve to detected values
+            effective_group_info = self._build_effective_group_info(group_info, matched)
+
             channel_id = self._get_channel_id(stream, event)
 
             # Add channel if not already added
             if channel_id not in added_channels:
-                self._add_channel(tv, stream, event, group_info, settings, template)
+                self._add_channel(tv, stream, event, effective_group_info, settings, template)
                 added_channels.add(channel_id)
 
             # Add pregame filler if enabled in template (EPG start to event start)
             if template and template.get('pregame_enabled'):
                 self._add_pregame_programmes(
-                    tv, stream, event, group_info, settings, template,
+                    tv, stream, event, effective_group_info, settings, template,
                     epg_start_datetime, days_ahead
                 )
 
             # Add programme for the event
-            self._add_programme(tv, stream, event, group_info, settings, template)
+            self._add_programme(tv, stream, event, effective_group_info, settings, template)
 
             # Add postgame filler if enabled in template (event end to EPG end)
             if template and template.get('postgame_enabled'):
                 self._add_postgame_programmes(
-                    tv, stream, event, group_info, settings, template,
+                    tv, stream, event, effective_group_info, settings, template,
                     epg_start_datetime, days_ahead
                 )
 
