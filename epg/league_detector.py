@@ -80,6 +80,21 @@ LEAGUE_INDICATORS = {
     r'\bMen\'?s College Volleyball\b': 'ncaavb-m',
     r'\bNCAA Women\'?s Volleyball\b': 'ncaavb-w',
     r'\bWomen\'?s College Volleyball\b': 'ncaavb-w',
+
+    # Soccer - Major Leagues
+    r'\bEPL\b': 'epl',
+    r'\bPremier League\b': 'epl',
+    r'\bEnglish Premier League\b': 'epl',
+    r'\bLa Liga\b': 'laliga',
+    r'\bLaLiga\b': 'laliga',
+    r'\bBundesliga\b': 'bundesliga',
+    r'\bSerie A\b': 'seriea',
+    r'\bLigue 1\b': 'ligue1',
+    r'\bMLS\b': 'mls',
+    r'\bMajor League Soccer\b': 'mls',
+    r'\bNWSL\b': 'nwsl',
+    r'\bEFL\b': 'efl',
+    r'\bEFL Championship\b': 'efl',
 }
 
 # Sport indicator patterns - maps to list of leagues for that sport
@@ -106,6 +121,16 @@ LEAGUE_TO_SPORT = {
     'mlb': 'baseball',
     'ncaavb-m': 'volleyball',
     'ncaavb-w': 'volleyball',
+    # Soccer
+    'epl': 'soccer',
+    'laliga': 'soccer',
+    'bundesliga': 'soccer',
+    'seriea': 'soccer',
+    'ligue1': 'soccer',
+    'mls': 'soccer',
+    'nwsl': 'soccer',
+    'efl': 'soccer',
+    'efl1': 'soccer',
 }
 
 # Time tolerance for schedule matching (±30 minutes)
