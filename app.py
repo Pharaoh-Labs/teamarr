@@ -4775,7 +4775,11 @@ def api_event_epg_groups_create():
             stream_exclude_regex=data.get('stream_exclude_regex'),
             stream_exclude_regex_enabled=bool(data.get('stream_exclude_regex_enabled')),
             skip_builtin_filter=bool(data.get('skip_builtin_filter')),
-            parent_group_id=data.get('parent_group_id')
+            parent_group_id=data.get('parent_group_id'),
+            is_multi_sport=bool(data.get('is_multi_sport')),
+            enabled_leagues=data.get('enabled_leagues'),
+            channel_sort_order=data.get('channel_sort_order', 'time'),
+            overlap_handling=data.get('overlap_handling', 'add_stream')
         )
 
         app.logger.info(f"Created event EPG group: {data['group_name']} (ID: {group_id})")

@@ -474,12 +474,12 @@ function updateLeagueOptions() {
         // Multi-sport mode selected
         isMultiSportInput.value = '1';
 
-        // Hide league dropdown
+        // Hide league dropdown and set it to 'multi' for backend validation
         if (leagueGroup) {
             leagueGroup.style.display = 'none';
         }
         leagueSelect.removeAttribute('required');
-        leagueSelect.innerHTML = '<option value="">N/A - Multi-league mode</option>';
+        leagueSelect.innerHTML = '<option value="multi" selected>N/A - Multi-league mode</option>';
 
         // Show multi-sport settings
         if (multiSportSettings) {
@@ -1200,42 +1200,11 @@ const multiSportLeagues = {
     'volleyball': [
         { value: 'ncaavb-m', label: 'NCAA Men\'s Volleyball' },
         { value: 'ncaavb-w', label: 'NCAA Women\'s Volleyball' },
-    ],
-    'soccer': [
-        { value: 'eng.1', label: 'English Premier League' },
-        { value: 'eng.2', label: 'English Championship' },
-        { value: 'eng.fa', label: 'FA Cup' },
-        { value: 'eng.league_cup', label: 'EFL Cup' },
-        { value: 'esp.1', label: 'La Liga' },
-        { value: 'esp.2', label: 'La Liga 2' },
-        { value: 'esp.copa_del_rey', label: 'Copa del Rey' },
-        { value: 'ger.1', label: 'Bundesliga' },
-        { value: 'ger.2', label: '2. Bundesliga' },
-        { value: 'ger.dfb_pokal', label: 'DFB Pokal' },
-        { value: 'ita.1', label: 'Serie A' },
-        { value: 'ita.2', label: 'Serie B' },
-        { value: 'ita.coppa_italia', label: 'Coppa Italia' },
-        { value: 'fra.1', label: 'Ligue 1' },
-        { value: 'fra.2', label: 'Ligue 2' },
-        { value: 'fra.coupe_de_france', label: 'Coupe de France' },
-        { value: 'ned.1', label: 'Eredivisie' },
-        { value: 'por.1', label: 'Primeira Liga' },
-        { value: 'usa.1', label: 'MLS' },
-        { value: 'usa.nwsl', label: 'NWSL' },
-        { value: 'usa.usl.1', label: 'USL Championship' },
-        { value: 'usa.open', label: 'US Open Cup' },
-        { value: 'mex.1', label: 'Liga MX' },
-        { value: 'mex.2', label: 'Liga de Expansion' },
-        { value: 'uefa.champions', label: 'UEFA Champions League' },
-        { value: 'uefa.europa', label: 'UEFA Europa League' },
-        { value: 'uefa.europa.conf', label: 'UEFA Conference League' },
-        { value: 'concacaf.champions', label: 'CONCACAF Champions League' },
-        { value: 'conmebol.libertadores', label: 'Copa Libertadores' },
-        { value: 'fifa.world', label: 'FIFA World Cup' },
-        { value: 'fifa.world.u20', label: 'FIFA U-20 World Cup' },
-        { value: 'fifa.friendly', label: 'International Friendlies' },
     ]
 };
+
+// Soccer is all-or-nothing (uses SoccerMultiLeague cache with 240+ leagues)
+const SOCCER_ENABLED_VALUE = 'soccer_all';
 
 function loadLeaguesPicker() {
     const pickerDiv = document.getElementById('enabled-leagues-picker');
@@ -1249,9 +1218,13 @@ function loadLeaguesPicker() {
         selected = [];
     }
 
-    // Count total leagues
+    // Count total leagues (non-soccer)
     let totalLeagues = 0;
     Object.values(multiSportLeagues).forEach(leagues => totalLeagues += leagues.length);
+    totalLeagues += 1; // +1 for soccer (all-or-nothing)
+
+    // Check if soccer is enabled
+    const soccerEnabled = selected.includes(SOCCER_ENABLED_VALUE);
 
     // Build the picker HTML with Select All / Clear buttons
     let html = `
@@ -1263,6 +1236,7 @@ function loadLeaguesPicker() {
 
     html += '<div class="leagues-picker-grid">';
 
+    // Add non-soccer sports
     Object.entries(multiSportLeagues).forEach(([sport, leagues]) => {
         html += `<div class="leagues-sport-group">`;
         html += `<div class="leagues-sport-header">${sport.charAt(0).toUpperCase() + sport.slice(1)}</div>`;
@@ -1281,10 +1255,28 @@ function loadLeaguesPicker() {
         html += `</div></div>`;
     });
 
+    // Add soccer as single checkbox
+    html += `<div class="leagues-sport-group">`;
+    html += `<div class="leagues-sport-header">Soccer</div>`;
+    html += `<div class="leagues-list">`;
+    html += `
+        <label class="league-checkbox">
+            <input type="checkbox" value="${SOCCER_ENABLED_VALUE}" ${soccerEnabled ? 'checked' : ''} onchange="updateEnabledLeagues()">
+            <span>All Soccer Leagues</span>
+        </label>
+        <small style="color: var(--text-muted); font-size: 0.7rem; margin-top: 0.25rem; display: block;">
+            Includes 240+ leagues via cache
+        </small>
+    `;
+    html += `</div></div>`;
+
     html += '</div>';
+
+    // Count selected
+    const selectedCount = selected.filter(s => s !== SOCCER_ENABLED_VALUE).length + (soccerEnabled ? 1 : 0);
     html += `<div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
-        Selected: <span id="selected-leagues-count">${selected.length}</span> / ${totalLeagues} leagues
-        ${selected.length === 0 ? '(all leagues will be searched)' : ''}
+        Selected: <span id="selected-leagues-count">${selectedCount}</span> / ${totalLeagues} sports/leagues
+        ${selectedCount === 0 ? '(all will be searched)' : ''}
     </div>`;
 
     pickerDiv.innerHTML = html;

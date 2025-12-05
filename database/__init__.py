@@ -994,7 +994,7 @@ def run_migrations(conn):
             ('is_multi_sport', 'INTEGER DEFAULT 0'),
             ('enabled_leagues', 'TEXT'),  # JSON array, NULL = all leagues
             ('channel_sort_order', "TEXT DEFAULT 'time'"),  # time, sport_time, league_time
-            ('overlap_handling', "TEXT DEFAULT 'consolidate'"),  # consolidate, create_all
+            ('overlap_handling', "TEXT DEFAULT 'add_stream'"),  # add_stream, skip, create_all
         ])
         migrations_run += 1
         print("    ✅ Added multi-sport columns to event_epg_groups")
@@ -1729,7 +1729,11 @@ def create_event_epg_group(
     stream_exclude_regex: str = None,
     stream_exclude_regex_enabled: bool = False,
     skip_builtin_filter: bool = False,
-    parent_group_id: int = None
+    parent_group_id: int = None,
+    is_multi_sport: bool = False,
+    enabled_leagues: str = None,
+    channel_sort_order: str = 'time',
+    overlap_handling: str = 'add_stream'
 ) -> int:
     """
     Create a new event EPG group.
@@ -1784,8 +1788,9 @@ def create_event_epg_group(
              custom_regex_time, custom_regex_time_enabled,
              stream_include_regex, stream_include_regex_enabled,
              stream_exclude_regex, stream_exclude_regex_enabled,
-             skip_builtin_filter, parent_group_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             skip_builtin_filter, parent_group_id,
+             is_multi_sport, enabled_leagues, channel_sort_order, overlap_handling)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dispatcharr_group_id, dispatcharr_account_id, group_name,
@@ -1798,7 +1803,8 @@ def create_event_epg_group(
                 custom_regex_time, 1 if custom_regex_time_enabled else 0,
                 stream_include_regex, 1 if stream_include_regex_enabled else 0,
                 stream_exclude_regex, 1 if stream_exclude_regex_enabled else 0,
-                1 if skip_builtin_filter else 0, parent_group_id
+                1 if skip_builtin_filter else 0, parent_group_id,
+                1 if is_multi_sport else 0, enabled_leagues, channel_sort_order, overlap_handling
             )
         )
         conn.commit()
