@@ -944,6 +944,7 @@ class ChannelLifecycleManager:
             get_next_channel_number,
             create_managed_channel,
             add_stream_to_channel,
+            remove_stream_from_channel,
             find_existing_channel,
             stream_exists_on_channel,
             log_channel_history
@@ -1025,6 +1026,35 @@ class ChannelLifecycleManager:
                         f"Stream '{stream['name']}' matched exception keyword '{keyword}' "
                         f"→ behavior: {exception_behavior}"
                     )
+
+                    # Remove stream from any non-keyword channel for this event
+                    # (handles case where stream was added before keyword was configured)
+                    non_keyword_channel = find_existing_channel(
+                        group_id=group['id'],
+                        event_id=espn_event_id,
+                        exception_keyword=None,
+                        mode='consolidate'
+                    )
+                    if non_keyword_channel and stream_exists_on_channel(non_keyword_channel['id'], stream['id']):
+                        try:
+                            remove_stream_from_channel(non_keyword_channel['id'], stream['id'])
+                            # Also remove from Dispatcharr
+                            with self._dispatcharr_lock:
+                                current_channel = self.channel_api.get_channel(non_keyword_channel['dispatcharr_channel_id'])
+                                if current_channel:
+                                    current_streams = current_channel.get('streams', [])
+                                    if stream['id'] in current_streams:
+                                        current_streams.remove(stream['id'])
+                                        self.channel_api.update_channel(
+                                            non_keyword_channel['dispatcharr_channel_id'],
+                                            {'streams': current_streams}
+                                        )
+                            logger.info(
+                                f"Removed stream '{stream['name']}' from non-keyword channel "
+                                f"'{non_keyword_channel['channel_name']}' (now using keyword '{keyword}')"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to remove stream from non-keyword channel: {e}")
 
             # V2: Check for existing channel based on duplicate handling mode
             # For keyword-based consolidation, we need a different lookup strategy
