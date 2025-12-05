@@ -316,16 +316,25 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
         # Check for multi-sport mode
         is_multi_sport = bool(group.get('is_multi_sport', 0))
         enabled_leagues = None
+        soccer_enabled = False
         if is_multi_sport:
             # Parse enabled_leagues JSON if present
             import json
             enabled_leagues_json = group.get('enabled_leagues', '[]')
             try:
-                enabled_leagues = json.loads(enabled_leagues_json) if enabled_leagues_json else []
+                raw_leagues = json.loads(enabled_leagues_json) if enabled_leagues_json else []
             except (json.JSONDecodeError, TypeError):
-                enabled_leagues = []
-            if enabled_leagues:
-                app.logger.debug(f"Multi-sport mode enabled with leagues: {enabled_leagues}")
+                raw_leagues = []
+
+            # Handle soccer_all marker - means include all soccer leagues from cache
+            if 'soccer_all' in raw_leagues:
+                soccer_enabled = True
+                enabled_leagues = [l for l in raw_leagues if l != 'soccer_all']
+            else:
+                enabled_leagues = raw_leagues
+
+            if enabled_leagues or soccer_enabled:
+                app.logger.debug(f"Multi-sport mode enabled with leagues: {enabled_leagues}, soccer_enabled: {soccer_enabled}")
             else:
                 app.logger.warning(f"Multi-sport mode enabled but no leagues configured")
                 is_multi_sport = False  # Fall back to single-league mode
@@ -382,8 +391,16 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                 return {'type': 'error', 'stream': stream, 'error': str(e)}
 
         def match_single_stream_multi_sport(stream):
-            """Match a single stream using multi-sport league detection - called in parallel"""
-            from epg.league_detector import LeagueDetector
+            """Match a single stream using multi-sport league detection - called in parallel.
+
+            Uses tiered detection flow:
+              Tier 1: League indicator + Teams → Direct match
+              Tier 2: Sport indicator + Teams → Match within sport's leagues
+              Tier 3a: Teams + Date + Time → Exact schedule match
+              Tier 3b: Teams + Time only → Infer today, schedule match
+              Tier 3c: Teams only → Closest game to now
+            """
+            from epg.league_detector import LeagueDetector, LEAGUE_TO_SPORT
             from database import find_any_channel_for_event
 
             # Create per-thread instances
@@ -396,68 +413,115 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             )
 
             try:
-                # Step 1: Extract teams without assuming a league
-                # Try each enabled league until we find matching teams
+                # Step 1: Extract raw matchup data (teams, date, time, league indicator)
+                # Pass custom regex settings if enabled
+                raw_matchup = thread_team_matcher.extract_raw_matchup(
+                    stream['name'],
+                    custom_regex_teams=group.get('custom_regex_teams'),
+                    custom_regex_teams_enabled=teams_enabled,
+                    custom_regex_date=group.get('custom_regex_date'),
+                    custom_regex_date_enabled=date_enabled,
+                    custom_regex_time=group.get('custom_regex_time'),
+                    custom_regex_time_enabled=time_enabled
+                )
+
+                if not raw_matchup.get('success'):
+                    return {'type': 'no_teams', 'stream': stream, 'reason': raw_matchup.get('reason')}
+
+                raw_team1 = raw_matchup['team1']
+                raw_team2 = raw_matchup['team2']
+                game_date = raw_matchup['game_date']
+                game_time = raw_matchup['game_time']
+                indicator_league = raw_matchup['detected_league']
+                indicator_sport = raw_matchup['detected_sport']
+
                 team_result = None
                 detected_league = None
 
-                # First, try to detect league from stream name indicators
-                detection = thread_league_detector.detect(
-                    stream_name=stream['name'],
-                    team1=None,  # Don't have teams yet
-                    team2=None,
-                    team1_id=None,
-                    team2_id=None,
-                    game_date=None,
-                    game_time=None
-                )
-
-                if detection.detected and detection.tier == 1:
-                    # Tier 1: Explicit league indicator found (e.g., "NHL:", "NBA:")
-                    # Try to match teams in that league directly
-                    detected_league = detection.league
+                # Step 2: Tier 1 - If league indicator found, try that league directly
+                if indicator_league and indicator_league in (enabled_leagues + (['soccer'] if soccer_enabled else [])):
                     if any_custom_enabled:
                         team_result = thread_team_matcher.extract_teams_with_selective_regex(
-                            stream['name'],
-                            detected_league,
-                            teams_pattern=group.get('custom_regex_teams'),
-                            teams_enabled=teams_enabled,
-                            date_pattern=group.get('custom_regex_date'),
-                            date_enabled=date_enabled,
-                            time_pattern=group.get('custom_regex_time'),
-                            time_enabled=time_enabled
+                            stream['name'], indicator_league,
+                            teams_pattern=group.get('custom_regex_teams'), teams_enabled=teams_enabled,
+                            date_pattern=group.get('custom_regex_date'), date_enabled=date_enabled,
+                            time_pattern=group.get('custom_regex_time'), time_enabled=time_enabled
                         )
                     else:
-                        team_result = thread_team_matcher.extract_teams(stream['name'], detected_league)
+                        team_result = thread_team_matcher.extract_teams(stream['name'], indicator_league)
 
-                # If no Tier 1 detection or no team match, try each enabled league
-                if not team_result or not team_result.get('matched'):
-                    for league in enabled_leagues:
+                    if team_result.get('matched'):
+                        detected_league = indicator_league
+
+                # Step 3: Tier 2 - If sport indicator found, try leagues within that sport
+                if (not team_result or not team_result.get('matched')) and indicator_sport:
+                    if indicator_sport == 'soccer' and soccer_enabled:
+                        # Soccer uses dedicated SoccerMultiLeague cache (240+ leagues)
+                        soccer_slugs = thread_league_detector._find_soccer_leagues_for_teams(raw_team1, raw_team2)
+                        from database import get_soccer_slug_mapping
+                        slug_to_code = get_soccer_slug_mapping()
+                        sport_leagues = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
+                        sport_leagues = [c for c in sport_leagues if c]  # Remove None values
+                    else:
+                        sport_leagues = [l for l in enabled_leagues if LEAGUE_TO_SPORT.get(l) == indicator_sport]
+
+                    for league in sport_leagues:
                         if any_custom_enabled:
-                            candidate_result = thread_team_matcher.extract_teams_with_selective_regex(
-                                stream['name'],
-                                league,
-                                teams_pattern=group.get('custom_regex_teams'),
-                                teams_enabled=teams_enabled,
-                                date_pattern=group.get('custom_regex_date'),
-                                date_enabled=date_enabled,
-                                time_pattern=group.get('custom_regex_time'),
-                                time_enabled=time_enabled
+                            candidate = thread_team_matcher.extract_teams_with_selective_regex(
+                                stream['name'], league,
+                                teams_pattern=group.get('custom_regex_teams'), teams_enabled=teams_enabled,
+                                date_pattern=group.get('custom_regex_date'), date_enabled=date_enabled,
+                                time_pattern=group.get('custom_regex_time'), time_enabled=time_enabled
                             )
                         else:
-                            candidate_result = thread_team_matcher.extract_teams(stream['name'], league)
+                            candidate = thread_team_matcher.extract_teams(stream['name'], league)
 
-                        if candidate_result.get('matched'):
-                            team_result = candidate_result
+                        if candidate.get('matched'):
+                            team_result = candidate
+                            detected_league = league
+                            break
+
+                # Step 4: Tier 3 - Use caches to find candidate leagues from team names
+                if not team_result or not team_result.get('matched'):
+                    # Find candidate leagues from TeamLeagueCache (non-soccer)
+                    candidate_leagues = thread_league_detector.find_candidate_leagues(
+                        raw_team1, raw_team2, include_soccer=False
+                    )
+                    # Filter to enabled leagues
+                    candidate_leagues = [l for l in candidate_leagues if l in enabled_leagues]
+
+                    # Also check soccer cache if enabled
+                    if soccer_enabled:
+                        soccer_slugs = thread_league_detector._find_soccer_leagues_for_teams(raw_team1, raw_team2)
+                        # Map ESPN slugs (esp.1) to league_config codes (laliga)
+                        from database import get_soccer_slug_mapping
+                        slug_to_code = get_soccer_slug_mapping()
+                        soccer_codes = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
+                        candidate_leagues.extend([c for c in soccer_codes if c])  # Add mapped codes
+
+                    # Try each candidate league
+                    for league in candidate_leagues:
+                        if any_custom_enabled:
+                            candidate = thread_team_matcher.extract_teams_with_selective_regex(
+                                stream['name'], league,
+                                teams_pattern=group.get('custom_regex_teams'), teams_enabled=teams_enabled,
+                                date_pattern=group.get('custom_regex_date'), date_enabled=date_enabled,
+                                time_pattern=group.get('custom_regex_time'), time_enabled=time_enabled
+                            )
+                        else:
+                            candidate = thread_team_matcher.extract_teams(stream['name'], league)
+
+                        if candidate.get('matched'):
+                            team_result = candidate
                             detected_league = league
                             break
 
                 if not team_result or not team_result.get('matched'):
                     return {'type': 'no_teams', 'stream': stream}
 
-                # Step 2: If multiple leagues could match these teams, use disambiguation
-                # (Only needed if we found teams but no clear league indicator)
-                if not detection.detected or detection.tier != 1:
+                # Step 5: If multiple candidate leagues, use schedule disambiguation (Tier 3a/3b/3c)
+                # This happens inside the LeagueDetector when we have team IDs
+                if not detected_league:
                     # Try full detection with team info
                     full_detection = thread_league_detector.detect(
                         stream_name=stream['name'],

@@ -2386,6 +2386,54 @@ def cleanup_old_deleted_channels(days_old: int = 30) -> int:
     )
 
 
+# Module-level cache for soccer slug mapping (built once per session)
+_soccer_slug_mapping_cache = None
+
+
+def get_soccer_slug_mapping() -> Dict[str, str]:
+    """
+    Get mapping from ESPN soccer league slugs (esp.1) to league_config codes (laliga).
+
+    This is used by multi-sport mode to translate soccer_team_leagues cache results
+    to codes that TeamMatcher can use.
+
+    Returns:
+        Dict mapping ESPN slug to league_config code, e.g.:
+        {'esp.1': 'laliga', 'eng.1': 'epl', 'ger.1': 'bundesliga', ...}
+    """
+    global _soccer_slug_mapping_cache
+
+    if _soccer_slug_mapping_cache is not None:
+        return _soccer_slug_mapping_cache
+
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT league_code, api_path
+            FROM league_config
+            WHERE sport = 'soccer' AND api_path IS NOT NULL
+        """).fetchall()
+
+        mapping = {}
+        for row in rows:
+            # api_path is like "soccer/esp.1", extract "esp.1"
+            api_path = row['api_path']
+            if '/' in api_path:
+                slug = api_path.split('/')[-1]
+                mapping[slug] = row['league_code']
+
+        _soccer_slug_mapping_cache = mapping
+        return mapping
+    finally:
+        conn.close()
+
+
+def clear_soccer_slug_mapping_cache():
+    """Clear the soccer slug mapping cache. Call when soccer cache is refreshed."""
+    global _soccer_slug_mapping_cache
+    _soccer_slug_mapping_cache = None
+
+
 # =============================================================================
 # EPG Generation Stats Functions (Single Source of Truth)
 # =============================================================================

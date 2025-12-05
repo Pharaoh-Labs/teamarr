@@ -1242,6 +1242,137 @@ class TeamMatcher:
 
         return result
 
+    def extract_raw_matchup(
+        self,
+        stream_name: str,
+        custom_regex_teams: str = None,
+        custom_regex_teams_enabled: bool = False,
+        custom_regex_date: str = None,
+        custom_regex_date_enabled: bool = False,
+        custom_regex_time: str = None,
+        custom_regex_time_enabled: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Extract raw matchup data from a stream name WITHOUT resolving to ESPN teams.
+
+        This is useful for multi-sport mode where we don't know the league yet.
+        Extracts: team1, team2, date, time, and detected league indicator.
+
+        Supports custom regex patterns for teams/date/time extraction, shared with
+        regular event groups.
+
+        Args:
+            stream_name: Raw stream/channel name
+            custom_regex_teams: Custom regex pattern with (?P<team1>...) and (?P<team2>...)
+            custom_regex_teams_enabled: Whether to use custom teams pattern
+            custom_regex_date: Custom regex pattern for date
+            custom_regex_date_enabled: Whether to use custom date pattern
+            custom_regex_time: Custom regex pattern for time
+            custom_regex_time_enabled: Whether to use custom time pattern
+
+        Returns:
+            Dict with:
+            - success: bool - whether team names were extracted
+            - team1, team2: Raw team name strings (if found)
+            - game_date: datetime or None
+            - game_time: datetime or None
+            - detected_league: str or None - league code if indicator found
+            - detected_sport: str or None - sport if indicator found
+            - reason: str - error reason if not successful
+        """
+        result = {
+            'success': False,
+            'stream_name': stream_name,
+            'team1': None,
+            'team2': None,
+            'game_date': None,
+            'game_time': None,
+            'detected_league': None,
+            'detected_sport': None,
+            'reason': None
+        }
+
+        # Extract date using custom or default pattern
+        if custom_regex_date_enabled and custom_regex_date:
+            try:
+                date_match = REGEX_MODULE.search(custom_regex_date, stream_name, REGEX_MODULE.IGNORECASE)
+                if date_match:
+                    date_str = date_match.group('date') if 'date' in date_match.groupdict() else date_match.group(1)
+                    if date_str:
+                        result['game_date'] = extract_date_from_text(date_str)
+            except Exception as e:
+                logger.warning(f"Custom date regex failed: {e}")
+                result['game_date'] = extract_date_from_text(stream_name)
+        else:
+            result['game_date'] = extract_date_from_text(stream_name)
+
+        # Extract time using custom or default pattern
+        if custom_regex_time_enabled and custom_regex_time:
+            try:
+                time_match = REGEX_MODULE.search(custom_regex_time, stream_name, REGEX_MODULE.IGNORECASE)
+                if time_match:
+                    time_str = time_match.group('time') if 'time' in time_match.groupdict() else time_match.group(1)
+                    if time_str:
+                        result['game_time'] = extract_time_from_text(time_str)
+            except Exception as e:
+                logger.warning(f"Custom time regex failed: {e}")
+                result['game_time'] = extract_time_from_text(stream_name)
+        else:
+            result['game_time'] = extract_time_from_text(stream_name)
+
+        # Try to detect league from indicators in stream name
+        from epg.league_detector import LEAGUE_INDICATORS, SPORT_INDICATORS, LEAGUE_TO_SPORT
+        import re
+
+        for pattern, league in LEAGUE_INDICATORS.items():
+            if re.search(pattern, stream_name, re.IGNORECASE):
+                result['detected_league'] = league
+                result['detected_sport'] = LEAGUE_TO_SPORT.get(league)
+                break
+
+        if not result['detected_league']:
+            for pattern, leagues in SPORT_INDICATORS.items():
+                if re.search(pattern, stream_name, re.IGNORECASE):
+                    result['detected_sport'] = pattern.strip(r'\b').lower()
+                    break
+
+        # Extract teams using custom or default pattern
+        if custom_regex_teams_enabled and custom_regex_teams:
+            try:
+                teams_match = REGEX_MODULE.search(custom_regex_teams, stream_name, REGEX_MODULE.IGNORECASE)
+                if teams_match:
+                    result['team1'] = teams_match.group('team1').strip() if 'team1' in teams_match.groupdict() else None
+                    result['team2'] = teams_match.group('team2').strip() if 'team2' in teams_match.groupdict() else None
+                    if result['team1'] and result['team2']:
+                        result['success'] = True
+                        return result
+                    else:
+                        result['reason'] = 'Custom teams regex matched but missing team1 or team2 groups'
+                else:
+                    result['reason'] = 'Custom teams regex did not match stream name'
+                return result
+            except Exception as e:
+                logger.warning(f"Custom teams regex failed: {e}")
+                result['reason'] = f'Custom teams regex error: {e}'
+                return result
+        else:
+            # Use default extraction
+            normalized = self._normalize_for_stream(stream_name)
+            if not normalized:
+                result['reason'] = 'Stream name empty after normalization'
+                return result
+
+            away_part, home_part, split_error = self._split_matchup(normalized)
+            if split_error:
+                result['reason'] = split_error
+                return result
+
+            result['team1'] = away_part
+            result['team2'] = home_part
+            result['success'] = True
+
+        return result
+
     def clear_cache(self, league: str = None) -> None:
         """
         Clear the team cache.

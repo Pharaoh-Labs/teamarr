@@ -487,6 +487,10 @@ class SoccerMultiLeague:
             duration = time.time() - start_time
             cls._update_cache_meta(len(league_slugs), len(team_to_leagues), duration)
 
+            # Step 5: Clear the slug-to-code mapping cache so it gets rebuilt
+            from database import clear_soccer_slug_mapping_cache
+            clear_soccer_slug_mapping_cache()
+
             report(f"Cache refresh complete: {len(team_to_leagues)} teams in {duration:.1f}s", 100)
 
             return {
