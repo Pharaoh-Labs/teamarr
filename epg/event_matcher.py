@@ -96,6 +96,9 @@ class EventMatcher:
         matching_events = []
         skip_reason = None  # 'past_game' or 'today_final'
 
+        # TRACE: Log search window
+        logger.debug(f"[TRACE] _filter_matching_events | looking for opponent={team2_id} | window={cutoff_past.date()} to {cutoff_future.date()} | include_final={include_final_events}")
+
         for event in events:
             try:
                 # Parse event date
@@ -104,9 +107,12 @@ class EventMatcher:
                     continue
 
                 event_date = datetime.fromisoformat(event_date_str.replace('Z', '+00:00'))
+                event_name = event.get('name', 'N/A')
+                event_id = event.get('id', 'N/A')
 
                 # Skip events outside search window
                 if event_date < cutoff_past or event_date > cutoff_future:
+                    logger.debug(f"[TRACE]   Skipping event {event_id} ({event_name}) - outside window ({event_date.date()})")
                     continue
 
                 # Check if this game involves team2
@@ -130,6 +136,12 @@ class EventMatcher:
                 ]
 
                 if str(team2_id) not in team_ids_in_game:
+                    # TRACE: Log what teams ARE in this game (to help debug wrong team matches)
+                    team_names_in_game = [
+                        c.get('team', {}).get('displayName', c.get('team', {}).get('name', 'Unknown'))
+                        for c in competitors
+                    ]
+                    logger.debug(f"[TRACE]   Event {event_id} on {event_date.date()}: {' vs '.join(team_names_in_game)} - opponent {team2_id} NOT in game (teams: {team_ids_in_game})")
                     continue
 
                 # Filter completed games based on settings
@@ -137,12 +149,15 @@ class EventMatcher:
                     event_day = event_date.date()
                     if event_day < today:
                         skip_reason = 'past_game'  # Game from a previous day
+                        logger.debug(f"[TRACE]   Event {event_id} ({event_name}) - skipped: past completed game ({event_day})")
                         continue
                     elif event_day == today and not include_final_events:
                         skip_reason = 'today_final'  # Today's game, but finals excluded
+                        logger.debug(f"[TRACE]   Event {event_id} ({event_name}) - skipped: today's final (excluded)")
                         continue
 
                 # Found a matching game!
+                logger.debug(f"[TRACE]   MATCH! Event {event_id} ({event_name}) on {event_date.strftime('%Y-%m-%d %H:%M')} | completed={is_completed}")
                 matching_events.append({
                     'event': event,
                     'event_date': event_date,
@@ -252,13 +267,19 @@ class EventMatcher:
         schedule_data = self.espn.get_team_schedule(sport, api_league, primary_team_id)
 
         if not schedule_data or 'events' not in schedule_data:
+            logger.debug(f"[TRACE] _search_team_schedule | team={primary_team_id} | no schedule data returned")
             return [], None, f'Could not fetch schedule for team {primary_team_id}'
 
+        events = schedule_data.get('events', [])
+        logger.debug(f"[TRACE] _search_team_schedule | team={primary_team_id} | {len(events)} total events in schedule")
+
         matching_events, skip_reason = self._filter_matching_events(
-            schedule_data.get('events', []),
+            events,
             opponent_team_id,
             include_final_events
         )
+
+        logger.debug(f"[TRACE] _search_team_schedule | team={primary_team_id} vs opponent={opponent_team_id} | {len(matching_events)} matches found | skip_reason={skip_reason}")
 
         return matching_events, skip_reason, None
 
@@ -289,6 +310,9 @@ class EventMatcher:
         Returns:
             Dict with found, event, event_id, reason (if not found)
         """
+        # TRACE: Log the search parameters
+        logger.debug(f"[TRACE] find_event START | team1={team1_id} vs team2={team2_id} | league={league} | target_date={game_date.date() if game_date else None} | include_final={include_final_events}")
+
         result = {
             'found': False,
             'team1_id': team1_id,
@@ -300,30 +324,33 @@ class EventMatcher:
         config = self._get_league_config(league)
         if not config:
             result['reason'] = f'Unknown league: {league}'
+            logger.debug(f"[TRACE] find_event FAIL | reason=unknown league {league}")
             return result
 
         sport, api_league = parse_api_path(config['api_path'])
         if not sport or not api_league:
             result['reason'] = f'Invalid api_path for league: {league}'
+            logger.debug(f"[TRACE] find_event FAIL | reason=invalid api_path")
             return result
 
         # Try team1's schedule first
-        logger.debug(f"Fetching schedule for team {team1_id} in {league}")
+        logger.debug(f"[TRACE] Searching team1 ({team1_id}) schedule for opponent {team2_id}")
         matching_events, skip_reason, error = self._search_team_schedule(
             team1_id, team2_id, sport, api_league, include_final_events
         )
 
         # If no match found on team1's schedule, try team2's schedule as fallback
         if not matching_events and not skip_reason:
-            logger.debug(f"No match on team {team1_id} schedule, trying team {team2_id}")
+            logger.debug(f"[TRACE] No match on team1 schedule, trying team2 ({team2_id}) schedule for opponent {team1_id}")
             matching_events, skip_reason, error = self._search_team_schedule(
                 team2_id, team1_id, sport, api_league, include_final_events
             )
             if matching_events:
-                logger.info(f"Found game via team2 ({team2_id}) schedule fallback")
+                logger.info(f"[TRACE] Found game via team2 ({team2_id}) schedule fallback")
 
         if error and not matching_events:
             result['reason'] = error
+            logger.debug(f"[TRACE] find_event FAIL | reason={error}")
             return result
 
         if not matching_events:
@@ -334,10 +361,19 @@ class EventMatcher:
                 result['reason'] = 'Game completed (excluded)'
             else:
                 result['reason'] = 'No game found between teams'
+            logger.debug(f"[TRACE] find_event FAIL | team1={team1_id} vs team2={team2_id} | reason={result['reason']} | skip_reason={skip_reason}")
             return result
 
         # Sort by date and select best match
         matching_events.sort(key=lambda x: x['event_date'])
+
+        # TRACE: Log all matching events found
+        logger.debug(f"[TRACE] Found {len(matching_events)} matching event(s):")
+        for i, evt in enumerate(matching_events):
+            evt_date = evt['event_date'].strftime('%Y-%m-%d %H:%M')
+            evt_name = evt['event'].get('name', 'N/A')
+            logger.debug(f"[TRACE]   [{i+1}] {evt_date} - {evt_name} (id={evt['event_id']})")
+
         best_match = self._select_best_match(matching_events, game_date, game_time)
 
         # Parse and return
@@ -345,6 +381,9 @@ class EventMatcher:
         result['event'] = self._parse_event(best_match['event'], sport, api_league)
         result['event_id'] = best_match['event_id']
         result['event_date'] = best_match['event_date'].isoformat()
+
+        # TRACE: Log successful match
+        logger.debug(f"[TRACE] find_event OK | selected event_id={best_match['event_id']} on {best_match['event_date'].strftime('%Y-%m-%d %H:%M')}")
 
         return result
 
