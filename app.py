@@ -499,7 +499,9 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         soccer_codes = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
                         candidate_leagues.extend([c for c in soccer_codes if c])  # Add mapped codes
 
-                    # Try each candidate league
+                    # Try each candidate league - collect all matches first
+                    # Then disambiguate by checking which has an actual game in the window
+                    matched_candidates = []
                     for league in candidate_leagues:
                         if any_custom_enabled:
                             candidate = thread_team_matcher.extract_teams_with_selective_regex(
@@ -512,9 +514,54 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                             candidate = thread_team_matcher.extract_teams(stream['name'], league)
 
                         if candidate.get('matched'):
-                            team_result = candidate
-                            detected_league = league
-                            break
+                            matched_candidates.append((league, candidate))
+
+                    # If only one match, use it directly
+                    if len(matched_candidates) == 1:
+                        detected_league, team_result = matched_candidates[0]
+                    elif len(matched_candidates) > 1:
+                        # Multiple leagues have these teams - check ALL for games
+                        # Then pick the one with the best time match (Tier 3 disambiguation)
+                        leagues_with_games = []
+                        for league, candidate in matched_candidates:
+                            test_result = thread_event_matcher.find_event(
+                                candidate['away_team_id'],
+                                candidate['home_team_id'],
+                                league,
+                                game_date=candidate.get('game_date'),
+                                game_time=candidate.get('game_time'),
+                                include_final_events=include_final_events
+                            )
+                            if test_result.get('found'):
+                                # Calculate time difference if we have target time
+                                time_diff = float('inf')
+                                if candidate.get('game_time') and test_result.get('event_date'):
+                                    from datetime import datetime
+                                    from zoneinfo import ZoneInfo
+                                    try:
+                                        event_dt = datetime.fromisoformat(test_result['event_date'].replace('Z', '+00:00'))
+                                        target_time = candidate['game_time']
+                                        # Convert both to minutes from midnight for comparison
+                                        event_mins = event_dt.hour * 60 + event_dt.minute
+                                        target_mins = target_time.hour * 60 + target_time.minute
+                                        time_diff = abs(event_mins - target_mins)
+                                    except Exception:
+                                        pass
+                                leagues_with_games.append((league, candidate, test_result, time_diff))
+
+                        if len(leagues_with_games) == 1:
+                            # Only one league has a game - use it
+                            detected_league, team_result, _, _ = leagues_with_games[0]
+                        elif len(leagues_with_games) > 1:
+                            # Multiple leagues have games - pick best time match
+                            leagues_with_games.sort(key=lambda x: x[3])  # Sort by time_diff
+                            detected_league, team_result, _, _ = leagues_with_games[0]
+                            logger.debug(f"Multi-league disambiguation: {len(leagues_with_games)} leagues have games, "
+                                       f"selected {detected_league} (time_diff={leagues_with_games[0][3]} mins)")
+
+                        # If no game found in any league, fall back to first match
+                        if not detected_league and matched_candidates:
+                            detected_league, team_result = matched_candidates[0]
 
                 if not team_result or not team_result.get('matched'):
                     return {'type': 'no_teams', 'stream': stream}
@@ -4502,7 +4549,9 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                                     soccer_codes = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
                                     candidate_leagues.extend([c for c in soccer_codes if c])  # Add mapped codes
 
-                                # Try each candidate league
+                                # Try each candidate league - collect all matches first
+                                # Then disambiguate by checking which has an actual game in the window
+                                matched_candidates = []
                                 for try_league in candidate_leagues:
                                     if any_custom_enabled:
                                         candidate = thread_team_matcher.extract_teams_with_selective_regex(
@@ -4515,9 +4564,54 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                                         candidate = thread_team_matcher.extract_teams(stream_name, try_league)
 
                                     if candidate.get('matched'):
-                                        team_result = candidate
-                                        detected_league = try_league
-                                        break
+                                        matched_candidates.append((try_league, candidate))
+
+                                # If only one match, use it directly
+                                if len(matched_candidates) == 1:
+                                    detected_league, team_result = matched_candidates[0]
+                                elif len(matched_candidates) > 1:
+                                    # Multiple leagues have these teams - check ALL for games
+                                    # Then pick the one with the best time match (Tier 3 disambiguation)
+                                    leagues_with_games = []
+                                    for try_league, candidate in matched_candidates:
+                                        test_result = thread_event_matcher.find_event(
+                                            candidate['away_team_id'],
+                                            candidate['home_team_id'],
+                                            try_league,
+                                            game_date=candidate.get('game_date'),
+                                            game_time=candidate.get('game_time'),
+                                            include_final_events=include_final_events
+                                        )
+                                        if test_result.get('found'):
+                                            # Calculate time difference if we have target time
+                                            time_diff = float('inf')
+                                            if candidate.get('game_time') and test_result.get('event_date'):
+                                                from datetime import datetime
+                                                from zoneinfo import ZoneInfo
+                                                try:
+                                                    event_dt = datetime.fromisoformat(test_result['event_date'].replace('Z', '+00:00'))
+                                                    target_time = candidate['game_time']
+                                                    # Convert both to minutes from midnight for comparison
+                                                    event_mins = event_dt.hour * 60 + event_dt.minute
+                                                    target_mins = target_time.hour * 60 + target_time.minute
+                                                    time_diff = abs(event_mins - target_mins)
+                                                except Exception:
+                                                    pass
+                                            leagues_with_games.append((try_league, candidate, test_result, time_diff))
+
+                                    if len(leagues_with_games) == 1:
+                                        # Only one league has a game - use it
+                                        detected_league, team_result, _, _ = leagues_with_games[0]
+                                    elif len(leagues_with_games) > 1:
+                                        # Multiple leagues have games - pick best time match
+                                        leagues_with_games.sort(key=lambda x: x[3])  # Sort by time_diff
+                                        detected_league, team_result, _, _ = leagues_with_games[0]
+                                        logger.debug(f"Multi-league disambiguation: {len(leagues_with_games)} leagues have games, "
+                                                   f"selected {detected_league} (time_diff={leagues_with_games[0][3]} mins)")
+
+                                    # If no game found in any league, fall back to first match
+                                    if not detected_league and matched_candidates:
+                                        detected_league, team_result = matched_candidates[0]
 
                             if not team_result or not team_result.get('matched'):
                                 return {
