@@ -672,6 +672,22 @@ class EPGOrchestrator:
             epg_start_datetime
         )
 
+        # For soccer leagues, also discover future games for .next context (beyond EPG window)
+        # Soccer schedule API returns no future games, so we need scoreboard for extended_events too
+        # Non-soccer uses schedule API for 30 days; soccer needs scoreboard for same coverage
+        if is_soccer_league(team_league):
+            # Discover future games for extended_events (30 days from now, consistent with non-soccer)
+            # This ensures .next variables work for soccer teams
+            epg_tz = ZoneInfo(epg_timezone)
+            now_local = datetime.now(epg_tz)
+            extended_events = self._discover_and_enrich_from_scoreboard(
+                extended_events,
+                team,
+                30,  # Look 30 days ahead for extended context (same as non-soccer)
+                epg_timezone,
+                now_local  # Start from now (same as non-soccer extended schedule)
+            )
+
         # Enrich past events with scoreboard data to get actual scores
         if extended_events:
             extended_events = self._enrich_past_events_with_scores(
