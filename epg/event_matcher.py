@@ -374,7 +374,8 @@ class EventMatcher:
         league: str,
         game_date: datetime = None,
         game_time: datetime = None,
-        include_final_events: bool = False
+        include_final_events: bool = False,
+        api_path_override: str = None
     ) -> Dict[str, Any]:
         """
         Find an ESPN event between two teams.
@@ -386,16 +387,18 @@ class EventMatcher:
         Args:
             team1_id: ESPN team ID for first team (from stream name)
             team2_id: ESPN team ID for second team (from stream name)
-            league: League code (e.g., 'nfl', 'epl')
+            league: League code (e.g., 'nfl', 'epl') or ESPN slug (e.g., 'eng.w.1')
             game_date: Optional target date extracted from stream name
             game_time: Optional target time for double-header disambiguation
             include_final_events: Whether to include completed events from today
+            api_path_override: Optional API path override for leagues not in
+                              league_config (e.g., 'soccer/eng.w.1')
 
         Returns:
             Dict with found, event, event_id, reason (if not found)
         """
         # TRACE: Log the search parameters
-        logger.debug(f"[TRACE] find_event START | team1={team1_id} vs team2={team2_id} | league={league} | target_date={game_date.date() if game_date else None} | include_final={include_final_events}")
+        logger.debug(f"[TRACE] find_event START | team1={team1_id} vs team2={team2_id} | league={league} | target_date={game_date.date() if game_date else None} | include_final={include_final_events} | api_override={api_path_override}")
 
         result = {
             'found': False,
@@ -404,18 +407,26 @@ class EventMatcher:
             'league': league
         }
 
-        # Get league config
-        config = self._get_league_config(league)
-        if not config:
-            result['reason'] = f'Unknown league: {league}'
-            logger.debug(f"[TRACE] find_event FAIL | reason=unknown league {league}")
-            return result
+        # Use api_path override if provided (for unmapped soccer leagues)
+        if api_path_override:
+            sport, api_league = parse_api_path(api_path_override)
+            if not sport or not api_league:
+                result['reason'] = f'Invalid api_path_override: {api_path_override}'
+                logger.debug(f"[TRACE] find_event FAIL | reason=invalid api_path_override")
+                return result
+        else:
+            # Get league config from database
+            config = self._get_league_config(league)
+            if not config:
+                result['reason'] = f'Unknown league: {league}'
+                logger.debug(f"[TRACE] find_event FAIL | reason=unknown league {league}")
+                return result
 
-        sport, api_league = parse_api_path(config['api_path'])
-        if not sport or not api_league:
-            result['reason'] = f'Invalid api_path for league: {league}'
-            logger.debug(f"[TRACE] find_event FAIL | reason=invalid api_path")
-            return result
+            sport, api_league = parse_api_path(config['api_path'])
+            if not sport or not api_league:
+                result['reason'] = f'Invalid api_path for league: {league}'
+                logger.debug(f"[TRACE] find_event FAIL | reason=invalid api_path")
+                return result
 
         # Try team1's schedule first
         logger.debug(f"[TRACE] Searching team1 ({team1_id}) schedule for opponent {team2_id}")
@@ -543,8 +554,8 @@ class EventMatcher:
 
             # Odds
             odds = comp.get('odds', [])
-            if odds:
-                primary_odds = odds[0]
+            primary_odds = odds[0] if odds else None
+            if primary_odds:
                 event['odds'] = {
                     'spread': primary_odds.get('details'),
                     'over_under': primary_odds.get('overUnder'),
@@ -636,7 +647,7 @@ class EventMatcher:
             Enriched event dict or None if not found
         """
         try:
-            config = get_league_config(league)
+            config = self._get_league_config(league)
             if not config:
                 logger.warning(f"No config for league {league}")
                 return None
@@ -688,7 +699,8 @@ class EventMatcher:
         league: str,
         game_date: datetime = None,
         game_time: datetime = None,
-        include_final_events: bool = False
+        include_final_events: bool = False,
+        api_path_override: str = None
     ) -> Dict[str, Any]:
         """
         Find event and enrich with scoreboard and team stats data.
@@ -704,6 +716,8 @@ class EventMatcher:
             game_date: Optional target date from stream name
             game_time: Optional target time for double-header disambiguation
             include_final_events: Whether to include completed events from today (default False)
+            api_path_override: Optional API path override for leagues not in
+                              league_config (e.g., 'soccer/eng.w.1')
 
         Returns:
             Result dict with enriched event (if found)
@@ -712,7 +726,8 @@ class EventMatcher:
             team1_id, team2_id, league,
             game_date=game_date,
             game_time=game_time,
-            include_final_events=include_final_events
+            include_final_events=include_final_events,
+            api_path_override=api_path_override
         )
 
         if result['found'] and self.enricher:
