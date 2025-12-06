@@ -39,6 +39,26 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def strip_team_numbers(name: str) -> str:
+    """
+    Strip standalone numbers from team name for fuzzy matching.
+    Handles cases like "SV 07 Elversberg" -> "SV Elversberg"
+    """
+    stripped = re.sub(r'\b\d+\b', '', name)
+    stripped = re.sub(r'\s+', ' ', stripped).strip()
+    return stripped
+
+
+# SQL expression to strip numbers and normalize spaces from team_name
+# Used in WHERE clauses for fuzzy matching
+SQL_STRIP_NUMBERS = """
+    TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+            LOWER(team_name), '0', ''), '1', ''), '2', ''), '3', ''), '4', ''),
+        '5', ''), '6', ''), '7', ''), '8', ''), '9', ''), '  ', ' '))
+"""
+
+
 # =============================================================================
 # CONSTANTS
 # =============================================================================
@@ -330,7 +350,6 @@ class LeagueDetector:
         Returns:
             List of league codes where both teams exist
         """
-        from epg.team_league_cache import TeamLeagueCache
         from database import get_connection
 
         # Query by team ID
@@ -338,19 +357,33 @@ class LeagueDetector:
         try:
             cursor = conn.cursor()
 
-            # Find leagues for team1
+            # Find leagues for team1 in team_league_cache (US sports)
             cursor.execute("""
                 SELECT DISTINCT league_code FROM team_league_cache
                 WHERE espn_team_id = ?
             """, (str(team1_id),))
             leagues1 = {row[0] for row in cursor.fetchall()}
 
-            # Find leagues for team2
+            # Also check soccer_team_leagues
+            cursor.execute("""
+                SELECT DISTINCT league_slug FROM soccer_team_leagues
+                WHERE espn_team_id = ?
+            """, (str(team1_id),))
+            leagues1.update(row[0] for row in cursor.fetchall())
+
+            # Find leagues for team2 in team_league_cache (US sports)
             cursor.execute("""
                 SELECT DISTINCT league_code FROM team_league_cache
                 WHERE espn_team_id = ?
             """, (str(team2_id),))
             leagues2 = {row[0] for row in cursor.fetchall()}
+
+            # Also check soccer_team_leagues
+            cursor.execute("""
+                SELECT DISTINCT league_slug FROM soccer_team_leagues
+                WHERE espn_team_id = ?
+            """, (str(team2_id),))
+            leagues2.update(row[0] for row in cursor.fetchall())
 
             # Intersection filtered by enabled leagues
             candidates = leagues1 & leagues2
@@ -390,26 +423,54 @@ class LeagueDetector:
             cursor = conn.cursor()
 
             # Normalize team names for fuzzy matching
-            # Use LIKE for partial matching since team names may vary
             team1_lower = team1.lower().strip()
             team2_lower = team2.lower().strip()
 
-            # Find leagues for team1 (case-insensitive match)
-            cursor.execute("""
-                SELECT DISTINCT league_slug FROM soccer_team_leagues
-                WHERE LOWER(team_name) LIKE ? OR LOWER(team_name) LIKE ?
-            """, (f"%{team1_lower}%", f"{team1_lower}%"))
-            leagues1 = {row[0] for row in cursor.fetchall()}
+            def find_leagues_for_team(team_name: str) -> set:
+                """Find leagues for a team with fallback to number-stripped search"""
+                # Primary search: direct match
+                cursor.execute("""
+                    SELECT DISTINCT league_slug FROM soccer_team_leagues
+                    WHERE LOWER(team_name) LIKE ?
+                       OR LOWER(team_name) LIKE ?
+                       OR INSTR(?, LOWER(team_name)) > 0
+                """, (f"%{team_name}%", f"{team_name}%", team_name))
+                leagues = {row[0] for row in cursor.fetchall()}
+
+                if leagues:
+                    return leagues
+
+                # Fallback: strip numbers from DB values and search again
+                # Handles "SV Elversberg" matching "SV 07 Elversberg"
+                # Also strip numbers from search term for consistency
+                import re
+                stripped = re.sub(r'\b\d+\b', '', team_name)
+                stripped = re.sub(r'\s+', ' ', stripped).strip()
+
+                if stripped:
+                    # Use TRIM and REPLACE to normalize double spaces after digit removal
+                    cursor.execute("""
+                        SELECT DISTINCT league_slug FROM soccer_team_leagues
+                        WHERE TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                    LOWER(team_name), '0', ''), '1', ''), '2', ''), '3', ''), '4', ''),
+                                '5', ''), '6', ''), '7', ''), '8', ''), '9', ''), '  ', ' '))
+                              LIKE ?
+                    """, (f"%{stripped}%",))
+                    leagues = {row[0] for row in cursor.fetchall()}
+                    if leagues:
+                        logger.debug(f"Found leagues via number-stripped search: '{team_name}' -> '{stripped}'")
+
+                return leagues
+
+            # Find leagues for team1
+            leagues1 = find_leagues_for_team(team1_lower)
 
             if not leagues1:
                 return []
 
             # Find leagues for team2
-            cursor.execute("""
-                SELECT DISTINCT league_slug FROM soccer_team_leagues
-                WHERE LOWER(team_name) LIKE ? OR LOWER(team_name) LIKE ?
-            """, (f"%{team2_lower}%", f"{team2_lower}%"))
-            leagues2 = {row[0] for row in cursor.fetchall()}
+            leagues2 = find_leagues_for_team(team2_lower)
 
             if not leagues2:
                 return []
@@ -428,6 +489,308 @@ class LeagueDetector:
         except Exception as e:
             logger.debug(f"Error querying soccer_team_leagues: {e}")
             return []
+        finally:
+            conn.close()
+
+    def get_soccer_team_ids_for_league(
+        self,
+        team1: str,
+        team2: str,
+        league_slug: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get ESPN team IDs for a team pair in a specific soccer league.
+
+        This is used for disambiguation when teams with the same name exist
+        in multiple leagues with different IDs (e.g., Arsenal in EPL vs WSL).
+
+        Args:
+            team1: First team name
+            team2: Second team name
+            league_slug: ESPN soccer league slug (e.g., 'eng.w.1', 'eng.1')
+
+        Returns:
+            Dict with team1_id, team1_name, team2_id, team2_name or None if not found
+        """
+        from database import get_connection
+
+        if not team1 or not team2 or not league_slug:
+            return None
+
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+
+            team1_lower = team1.lower().strip()
+            team2_lower = team2.lower().strip()
+            team1_stripped = strip_team_numbers(team1_lower)
+            team2_stripped = strip_team_numbers(team2_lower)
+
+            # Find team1 in this league (bidirectional match)
+            # Handles "Central Coast Mariners FC" matching "Central Coast Mariners"
+            cursor.execute("""
+                SELECT espn_team_id, team_name FROM soccer_team_leagues
+                WHERE league_slug = ? AND (
+                    LOWER(team_name) LIKE ?
+                    OR LOWER(team_name) LIKE ?
+                    OR INSTR(?, LOWER(team_name)) > 0
+                )
+                ORDER BY LENGTH(team_name) ASC
+                LIMIT 1
+            """, (league_slug, f"%{team1_lower}%", f"{team1_lower}%", team1_lower))
+            row1 = cursor.fetchone()
+
+            # Fallback: try with numbers stripped from DB values
+            # Handles "SV Elversberg" matching "SV 07 Elversberg" in DB
+            if not row1:
+                cursor.execute(f"""
+                    SELECT espn_team_id, team_name FROM soccer_team_leagues
+                    WHERE league_slug = ? AND (
+                        {SQL_STRIP_NUMBERS} LIKE ?
+                        OR {SQL_STRIP_NUMBERS} LIKE ?
+                        OR INSTR(?, {SQL_STRIP_NUMBERS}) > 0
+                    )
+                    ORDER BY LENGTH(team_name) ASC
+                    LIMIT 1
+                """, (league_slug, f"%{team1_stripped}%", f"{team1_stripped}%", team1_stripped))
+                row1 = cursor.fetchone()
+                if row1:
+                    logger.debug(f"Team '{team1}' matched via number-stripping: {row1[1]}")
+
+            if not row1:
+                logger.debug(f"Team '{team1}' not found in {league_slug}")
+                return None
+
+            # Find team2 in this league (bidirectional match)
+            cursor.execute("""
+                SELECT espn_team_id, team_name FROM soccer_team_leagues
+                WHERE league_slug = ? AND (
+                    LOWER(team_name) LIKE ?
+                    OR LOWER(team_name) LIKE ?
+                    OR INSTR(?, LOWER(team_name)) > 0
+                )
+                ORDER BY LENGTH(team_name) ASC
+                LIMIT 1
+            """, (league_slug, f"%{team2_lower}%", f"{team2_lower}%", team2_lower))
+            row2 = cursor.fetchone()
+
+            # Fallback: try with numbers stripped from DB values
+            if not row2:
+                cursor.execute(f"""
+                    SELECT espn_team_id, team_name FROM soccer_team_leagues
+                    WHERE league_slug = ? AND (
+                        {SQL_STRIP_NUMBERS} LIKE ?
+                        OR {SQL_STRIP_NUMBERS} LIKE ?
+                        OR INSTR(?, {SQL_STRIP_NUMBERS}) > 0
+                    )
+                    ORDER BY LENGTH(team_name) ASC
+                    LIMIT 1
+                """, (league_slug, f"%{team2_stripped}%", f"{team2_stripped}%", team2_stripped))
+                row2 = cursor.fetchone()
+                if row2:
+                    logger.debug(f"Team '{team2}' matched via number-stripping: {row2[1]}")
+
+            if not row2:
+                logger.debug(f"Team '{team2}' not found in {league_slug}")
+                return None
+
+            logger.debug(
+                f"Soccer team IDs for '{team1}' vs '{team2}' in {league_slug}: "
+                f"{row1[0]} ({row1[1]}) vs {row2[0]} ({row2[1]})"
+            )
+
+            return {
+                'team1_id': str(row1[0]),
+                'team1_name': row1[1],
+                'team2_id': str(row2[0]),
+                'team2_name': row2[1],
+                'league_slug': league_slug
+            }
+
+        except Exception as e:
+            logger.debug(f"Error getting soccer team IDs: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def get_soccer_candidates_with_team_ids(
+        self,
+        team1: str,
+        team2: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all soccer league candidates with league-specific team IDs.
+
+        This is the key method for soccer disambiguation. It finds all leagues
+        where both teams exist and returns the correct team IDs for each league.
+        This handles cases like Arsenal in EPL (ID 359) vs WSL (ID 19973).
+
+        Args:
+            team1: First team name from stream
+            team2: Second team name from stream
+
+        Returns:
+            List of dicts with:
+                - league_slug: ESPN slug (e.g., 'eng.w.1')
+                - league_code: Mapped code if in league_config, else None
+                - api_path_override: For unmapped leagues, the API path (e.g., 'soccer/eng.w.1')
+                - team1_id, team1_name: First team info for this league
+                - team2_id, team2_name: Second team info for this league
+        """
+        from database import get_soccer_slug_mapping
+
+        if not team1 or not team2:
+            return []
+
+        # Find all leagues where both teams exist
+        soccer_slugs = self._find_soccer_leagues_for_teams(team1, team2)
+        if not soccer_slugs:
+            return []
+
+        # Get mapping from slug to league_config code
+        slug_to_code = get_soccer_slug_mapping()
+
+        candidates = []
+        for slug in soccer_slugs[:10]:  # Limit to first 10
+            # Get league-specific team IDs
+            team_ids = self.get_soccer_team_ids_for_league(team1, team2, slug)
+            if not team_ids:
+                continue
+
+            # Check if this slug is mapped to a league_config code
+            league_code = slug_to_code.get(slug)
+
+            candidates.append({
+                'league_slug': slug,
+                'league_code': league_code,  # None if not in league_config
+                'api_path_override': None if league_code else f"soccer/{slug}",
+                'team1_id': team_ids['team1_id'],
+                'team1_name': team_ids['team1_name'],
+                'team2_id': team_ids['team2_id'],
+                'team2_name': team_ids['team2_name']
+            })
+
+        logger.debug(
+            f"Soccer candidates for '{team1}' vs '{team2}': "
+            f"{len(candidates)} leagues with team IDs"
+        )
+
+        return candidates
+
+    def diagnose_team_match_failure(
+        self,
+        team1: str,
+        team2: str
+    ) -> Dict[str, Any]:
+        """
+        Diagnose why teams couldn't be matched to a common league.
+
+        Provides detailed info about which teams were found, in which leagues,
+        and why no common league exists.
+
+        Args:
+            team1: First team name from stream
+            team2: Second team name from stream
+
+        Returns:
+            Dict with diagnostic info:
+                - team1_found: bool
+                - team1_leagues: list of leagues team1 exists in
+                - team2_found: bool
+                - team2_leagues: list of leagues team2 exists in
+                - common_leagues: list of common leagues (should be empty if called)
+                - reason: FilterReason constant
+                - detail: Human-readable explanation
+        """
+        from database import get_connection
+        from utils.filter_reasons import FilterReason
+
+        if not team1 or not team2:
+            return {
+                'team1_found': False,
+                'team2_found': False,
+                'team1_leagues': [],
+                'team2_leagues': [],
+                'common_leagues': [],
+                'reason': FilterReason.TEAMS_NOT_PARSED,
+                'detail': 'Team names not provided'
+            }
+
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            team1_lower = team1.lower().strip()
+            team2_lower = team2.lower().strip()
+
+            # Find leagues for team1 (check both soccer_team_leagues and team_league_cache)
+            cursor.execute("""
+                SELECT DISTINCT league_slug, team_name FROM soccer_team_leagues
+                WHERE LOWER(team_name) LIKE ?
+                   OR LOWER(team_name) LIKE ?
+                   OR INSTR(?, LOWER(team_name)) > 0
+                UNION
+                SELECT DISTINCT league_code, team_name FROM team_league_cache
+                WHERE LOWER(team_name) LIKE ?
+                   OR LOWER(team_name) LIKE ?
+                   OR LOWER(team_short_name) LIKE ?
+                   OR INSTR(?, LOWER(team_name)) > 0
+                   OR INSTR(?, LOWER(team_short_name)) > 0
+            """, (f"%{team1_lower}%", f"{team1_lower}%", team1_lower,
+                  f"%{team1_lower}%", f"{team1_lower}%", f"%{team1_lower}%", team1_lower, team1_lower))
+            team1_results = cursor.fetchall()
+            team1_leagues = list(set(r[0] for r in team1_results))
+            team1_found = len(team1_leagues) > 0
+
+            # Find leagues for team2 (check both soccer_team_leagues and team_league_cache)
+            cursor.execute("""
+                SELECT DISTINCT league_slug, team_name FROM soccer_team_leagues
+                WHERE LOWER(team_name) LIKE ?
+                   OR LOWER(team_name) LIKE ?
+                   OR INSTR(?, LOWER(team_name)) > 0
+                UNION
+                SELECT DISTINCT league_code, team_name FROM team_league_cache
+                WHERE LOWER(team_name) LIKE ?
+                   OR LOWER(team_name) LIKE ?
+                   OR LOWER(team_short_name) LIKE ?
+                   OR INSTR(?, LOWER(team_name)) > 0
+                   OR INSTR(?, LOWER(team_short_name)) > 0
+            """, (f"%{team2_lower}%", f"{team2_lower}%", team2_lower,
+                  f"%{team2_lower}%", f"{team2_lower}%", f"%{team2_lower}%", team2_lower, team2_lower))
+            team2_results = cursor.fetchall()
+            team2_leagues = list(set(r[0] for r in team2_results))
+            team2_found = len(team2_leagues) > 0
+
+            # Find common leagues
+            common_leagues = list(set(team1_leagues) & set(team2_leagues))
+
+            # Determine reason and detail
+            if not team1_found and not team2_found:
+                reason = FilterReason.TEAMS_NOT_IN_ESPN
+                detail = f"Neither '{team1}' nor '{team2}' found in ESPN database"
+            elif not team1_found:
+                reason = FilterReason.TEAMS_NOT_IN_ESPN
+                detail = f"'{team1}' not found in ESPN database"
+            elif not team2_found:
+                reason = FilterReason.TEAMS_NOT_IN_ESPN
+                detail = f"'{team2}' not found in ESPN database"
+            elif not common_leagues:
+                reason = FilterReason.NO_COMMON_LEAGUE
+                detail = (f"'{team1}' in [{', '.join(team1_leagues[:3])}{'...' if len(team1_leagues) > 3 else ''}], "
+                         f"'{team2}' in [{', '.join(team2_leagues[:3])}{'...' if len(team2_leagues) > 3 else ''}] - no common league")
+            else:
+                # Shouldn't happen if this is called for failure diagnosis
+                reason = None
+                detail = f"Common leagues found: {common_leagues}"
+
+            return {
+                'team1_found': team1_found,
+                'team1_leagues': team1_leagues[:5],  # Limit to 5
+                'team2_found': team2_found,
+                'team2_leagues': team2_leagues[:5],  # Limit to 5
+                'common_leagues': common_leagues,
+                'reason': reason,
+                'detail': detail
+            }
         finally:
             conn.close()
 
@@ -815,13 +1178,31 @@ class LeagueDetector:
 
         for league in candidates:
             try:
-                config = get_league_config(league)
-                if not config:
-                    continue
+                from database import get_connection
+                config = get_league_config(league, get_connection)
+                if config:
+                    sport, api_league = parse_api_path(config['api_path'])
+                    if not sport:
+                        continue
+                else:
+                    # Fallback for soccer leagues not in league_config but in soccer cache
+                    # ESPN soccer API path is simply "soccer/{league_slug}"
+                    from database import get_connection
+                    conn_check = get_connection()
+                    cursor_check = conn_check.cursor()
+                    cursor_check.execute(
+                        "SELECT 1 FROM soccer_leagues_cache WHERE league_slug = ?",
+                        (league,)
+                    )
+                    is_soccer = cursor_check.fetchone() is not None
+                    conn_check.close()
 
-                sport, api_league = parse_api_path(config['api_path'])
-                if not sport:
-                    continue
+                    if is_soccer:
+                        sport = 'soccer'
+                        api_league = league
+                        logger.debug(f"Using soccer fallback for league {league}")
+                    else:
+                        continue
 
                 # Search team1's schedule
                 schedule = self.espn.get_team_schedule(sport, api_league, str(team1))
