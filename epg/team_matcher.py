@@ -551,9 +551,15 @@ class TeamMatcher:
         # Remove standalone league prefixes like "NCAA Basketball:", "NCAAM:", "College Basketball:"
         text = re.sub(r'^(ncaa[mfwb]?|college)\s*(basketball|football|hockey)?\s*:?\s*', '', text, flags=re.I)
 
-        # Strip metadata prefix at colon (e.g., "B 14: Team vs Team" -> "Team vs Team")
-        # This handles stream names like "NCAAW B 14: Washington State vs BYU"
+        # Strip metadata prefix at colon FIRST (e.g., "ESPN+ 10: Team vs Team" -> "Team vs Team")
+        # This must happen before language prefix stripping so "En Español-" is at start of string
         text = self._strip_prefix_at_colon(text)
+
+        # Remove language broadcast prefixes like "En Español-", "En Espanol-", "Spanish-"
+        text = re.sub(r'^(?:En\s+Espa[ñn]ol|Spanish|Espa[ñn]ol|French|Portuguese|German)\s*[-:]\s*', '', text, flags=re.I)
+
+        # Remove parenthesized language codes like "(ESP)", "(SPA)", "(FRA)", "(GER)", "(POR)", "(ITA)", "(ARA)"
+        text = re.sub(r'^\((?:ESP|SPA|FRA|GER|POR|ITA|ARA)\)\s*[-:]?\s*', '', text, flags=re.I)
 
         # Now apply standard normalization
         return self._normalize_text(text)
