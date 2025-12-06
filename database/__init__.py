@@ -1120,8 +1120,8 @@ def run_migrations(conn):
             ('college-football', 'ncaaf'),
             ('mens-college-hockey', 'ncaah'),
             ('nba-development', 'nbag'),
-            ('mens-college-volleyball', 'ncaavbm'),
-            ('womens-college-volleyball', 'ncaavbw'),
+            ('mens-college-volleyball', 'ncaavb'),
+            ('womens-college-volleyball', 'ncaawvb'),
             ('usa.ncaa.m.1', 'ncaas'),
             ('usa.ncaa.w.1', 'ncaaws'),
         ]
