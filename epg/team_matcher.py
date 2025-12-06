@@ -484,41 +484,174 @@ class TeamMatcher:
 
         return text.strip()
 
-    def _strip_prefix_at_colon(self, text: str) -> str:
+    def _mask_times_in_text(self, text: str) -> Tuple[str, List[Tuple[str, int, int]]]:
+        """
+        Find and mask all time patterns in text, returning masked text and positions.
+
+        Handles:
+        - 12-hour with minutes: 8:15pm, 8:15 PM, 1:30 PM ET (NOT 01:12pm - leading zeros only for 24h)
+        - 12-hour hour-only: 12pm, 4pm, 8am (hour followed immediately by am/pm)
+        - 24-hour: 18:00, 20:15
+
+        Args:
+            text: Raw text that may contain times
+
+        Returns:
+            Tuple of (masked_text, list of (original, start, end) tuples)
+        """
+        masked = text
+        found_times = []
+
+        # Pattern 1: 12-hour with minutes (8:15pm, 8:15 PM, 1:00 PM ET)
+        # Key insight: 12-hour times don't use leading zeros on hour (1:30pm not 01:30pm)
+        # Leading zeros are only used in 24-hour format (01:30 = 1:30 AM)
+        # So we need to ensure hour is 1-12 (valid 12h) and NOT preceded by another digit
+        time_12h_pattern = re.compile(
+            r'(?<!\d)(\d{1,2}):(\d{2})\s*(am|pm)(\s*(et|est|pt|pst|ct|cst|mt|mst))?',
+            re.IGNORECASE
+        )
+        for match in time_12h_pattern.finditer(text):
+            hour = int(match.group(1))
+            # Valid 12-hour times: 1-12 (not 0, not >12)
+            # Also reject if it looks like "01:12pm" (leading zero on single-digit hour)
+            # In 12h format, you write "1:12pm" not "01:12pm"
+            if 1 <= hour <= 12:
+                # Check for leading zero anomaly: if hour < 10 and starts with '0', skip
+                hour_str = match.group(1)
+                if hour < 10 and hour_str.startswith('0'):
+                    # This is like "01:12pm" - not a valid 12h time, skip
+                    continue
+                found_times.append((match.group(0), match.start(), match.end()))
+
+        # Pattern 2: 12-hour hour-only (12pm, 4pm, 8am) - hour directly followed by am/pm
+        # This catches "CB01:12pm" -> the "12pm" part, and standalone "4pm"
+        hour_only_pattern = re.compile(r'\b(\d{1,2})(am|pm)\b', re.IGNORECASE)
+        for match in hour_only_pattern.finditer(text):
+            # Avoid duplicating times already found (like the minutes part of 8:15pm)
+            overlap = False
+            for _, start, end in found_times:
+                if match.start() >= start and match.end() <= end:
+                    overlap = True
+                    break
+            if not overlap:
+                found_times.append((match.group(0), match.start(), match.end()))
+
+        # Pattern 3: 24-hour format (18:00, 20:15)
+        time_24h_pattern = re.compile(r'\b(\d{2}:\d{2})\b')
+        for match in time_24h_pattern.finditer(text):
+            # Check if it's a valid 24-hour time (not already captured)
+            time_str = match.group(1)
+            parts = time_str.split(':')
+            if len(parts) == 2:
+                hour, minute = int(parts[0]), int(parts[1])
+                if 0 <= hour < 24 and 0 <= minute < 60:
+                    overlap = False
+                    for _, start, end in found_times:
+                        if match.start() >= start and match.end() <= end:
+                            overlap = True
+                            break
+                    if not overlap:
+                        found_times.append((match.group(0), match.start(), match.end()))
+
+        # Sort by position (reverse) so we can replace from end to start without offset issues
+        found_times.sort(key=lambda x: x[1], reverse=True)
+
+        # Replace each time with a placeholder
+        for original, start, end in found_times:
+            masked = masked[:start] + ('_' * (end - start)) + masked[end:]
+
+        return masked, found_times
+
+    def _mask_dates_in_text(self, text: str) -> Tuple[str, List[Tuple[str, int, int]]]:
+        """
+        Find and mask all date patterns in text, returning masked text and positions.
+
+        Handles:
+        - ISO: 2025-11-30
+        - US with year: 11/30/2025, 11/30/25
+        - US without year: 11/30
+        - Text month: Nov 30, November 30
+
+        Args:
+            text: Raw text that may contain dates
+
+        Returns:
+            Tuple of (masked_text, list of (original, start, end) tuples)
+        """
+        masked = text
+        found_dates = []
+
+        # Pattern 1: ISO format (2025-11-30)
+        iso_pattern = re.compile(r'\d{4}-\d{2}-\d{2}')
+        for match in iso_pattern.finditer(text):
+            found_dates.append((match.group(0), match.start(), match.end()))
+
+        # Pattern 2: US format with year (11/30/2025 or 11/30/25)
+        us_full_pattern = re.compile(r'\d{1,2}/\d{1,2}/\d{2,4}')
+        for match in us_full_pattern.finditer(text):
+            found_dates.append((match.group(0), match.start(), match.end()))
+
+        # Pattern 3: US format without year (11/30) - avoid matching if already part of longer pattern
+        us_short_pattern = re.compile(r'\d{1,2}/\d{1,2}(?!/)')
+        for match in us_short_pattern.finditer(text):
+            overlap = False
+            for _, start, end in found_dates:
+                if match.start() >= start and match.end() <= end:
+                    overlap = True
+                    break
+            if not overlap:
+                found_dates.append((match.group(0), match.start(), match.end()))
+
+        # Pattern 4: Text month format (Nov 30, November 30)
+        text_month_pattern = re.compile(
+            r'(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+            r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+            r'\s+\d{1,2}\b',
+            re.IGNORECASE
+        )
+        for match in text_month_pattern.finditer(text):
+            found_dates.append((match.group(0), match.start(), match.end()))
+
+        # Sort by position (reverse) for replacement
+        found_dates.sort(key=lambda x: x[1], reverse=True)
+
+        # Replace each date with a placeholder
+        for original, start, end in found_dates:
+            masked = masked[:start] + ('_' * (end - start)) + masked[end:]
+
+        return masked, found_dates
+
+    def _strip_prefix_at_colon(self, text: str, masked_text: str = None) -> str:
         """
         Strip everything before first colon, if the colon appears before the game separator.
 
         This handles stream names like "NCAAW B 14: Washington State vs BYU" where
         everything before the colon is metadata (league, sport code, stream number).
 
-        Avoids stripping at time colons (e.g., "8:15 PM") by checking if the colon
-        has digits on both sides (digit:digit pattern).
+        When masked_text is provided, uses it to detect colons (times already masked),
+        making the logic simple: any colon in masked text is a metadata colon.
 
         Args:
-            text: Stream name text
+            text: Original stream name text
+            masked_text: Text with times/dates masked (optional, for simpler detection)
 
         Returns:
             Text with prefix stripped, or original if no valid prefix colon found
         """
-        # Find game separator position
+        # Use masked text for colon detection if provided
+        detect_text = masked_text if masked_text else text
+
+        # Find game separator position in original text
         sep_pos = len(text)
         for sep in self.SEPARATORS:
             pos = text.lower().find(sep)
             if pos > 0 and pos < sep_pos:
                 sep_pos = pos
 
-        # Find first colon that's NOT part of a time (digit:digit)
-        colon_pos = -1
-        for i, char in enumerate(text):
-            if char == ':':
-                has_digit_before = i > 0 and text[i-1].isdigit()
-                has_digit_after = i < len(text)-1 and text[i+1].isdigit()
-                if has_digit_before and has_digit_after:
-                    continue  # This is a time like "8:15", skip it
-                colon_pos = i
-                break
+        # Find first colon in masked text (times already masked, so any colon is metadata)
+        colon_pos = detect_text.find(':')
 
-        # Only strip if valid colon found before separator
+        # Only strip if colon found before separator
         if colon_pos > 0 and colon_pos < sep_pos:
             return text[colon_pos + 1:].strip()
 
@@ -530,6 +663,12 @@ class TeamMatcher:
 
         More aggressive than _normalize_text - removes more noise
         that's common in IPTV stream names.
+
+        Architecture (mask-then-strip):
+        1. Apply simple prefix removals that don't affect colon positions
+        2. Mask times (so colons in times don't confuse prefix detection)
+        3. Strip prefix at colon (now simple - any remaining colon is metadata)
+        4. Apply standard normalization
 
         Args:
             stream_name: Raw stream/channel name
@@ -551,9 +690,13 @@ class TeamMatcher:
         # Remove standalone league prefixes like "NCAA Basketball:", "NCAAM:", "College Basketball:"
         text = re.sub(r'^(ncaa[mfwb]?|college)\s*(basketball|football|hockey)?\s*:?\s*', '', text, flags=re.I)
 
-        # Strip metadata prefix at colon FIRST (e.g., "ESPN+ 10: Team vs Team" -> "Team vs Team")
-        # This must happen before language prefix stripping so "En Español-" is at start of string
-        text = self._strip_prefix_at_colon(text)
+        # NOW mask times on the cleaned text (so text and masked_text stay in sync)
+        # This makes colon detection trivial - any remaining colon is metadata
+        masked_text, _ = self._mask_times_in_text(text)
+
+        # Strip metadata prefix at colon using masked text for detection
+        # "CB01:12pm 10 ISU @ 1 PUR" -> masked "CB01:____ 10 ISU @ 1 PUR" -> strips at colon
+        text = self._strip_prefix_at_colon(text, masked_text)
 
         # Remove language broadcast prefixes like "En Español-", "En Espanol-", "Spanish-"
         text = re.sub(r'^(?:En\s+Espa[ñn]ol|Spanish|Espa[ñn]ol|French|Portuguese|German)\s*[-:]\s*', '', text, flags=re.I)
