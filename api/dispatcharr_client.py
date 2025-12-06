@@ -399,15 +399,29 @@ class EPGManager:
 
         # Poll until status changes to success/error or updated_at changes
         start_time = time.time()
+        last_logged_status = None
+        last_status = None
+        last_message = None
+
         while time.time() - start_time < timeout:
             time.sleep(poll_interval)
 
             current = self.get_source(epg_id)
             if not current:
+                logger.debug(f"EPG refresh poll: could not get source {epg_id}")
                 continue
 
             current_status = current.get('status', '')
             current_updated = current.get('updated_at')
+            current_message = current.get('last_message', '')
+            last_status = current_status
+            last_message = current_message
+
+            # Log status changes
+            if current_status != last_logged_status:
+                elapsed = time.time() - start_time
+                logger.debug(f"EPG refresh poll: status={current_status}, message='{current_message}', elapsed={elapsed:.1f}s")
+                last_logged_status = current_status
 
             # Check if refresh completed (status is success and updated_at changed)
             if current_status == 'success' and current_updated != before_updated:
@@ -430,11 +444,13 @@ class EPGManager:
             # Still in progress (fetching, parsing, idle)
             # Continue polling
 
-        # Timeout
+        # Timeout - include final status for debugging
         return {
             "success": False,
-            "message": f"EPG refresh timed out after {timeout} seconds",
-            "duration": timeout
+            "message": f"EPG refresh timed out after {timeout} seconds (last status: {last_status}, message: {last_message})",
+            "duration": timeout,
+            "last_status": last_status,
+            "last_message": last_message
         }
 
     def refresh_by_name(self, name: str) -> Dict[str, Any]:

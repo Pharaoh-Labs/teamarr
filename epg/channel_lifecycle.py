@@ -107,7 +107,11 @@ def generate_channel_name(
     event: Dict,
     template: Optional[Dict] = None,
     template_engine = None,
-    timezone: str = None
+    timezone: str = None,
+    exception_keyword: str = None,
+    group_info: Dict = None,
+    detected_league: str = None,
+    detected_sport: str = None
 ) -> str:
     """
     Generate channel name for an event.
@@ -120,6 +124,10 @@ def generate_channel_name(
         template: Optional event template with channel_name field
         template_engine: Optional template engine for variable resolution
         timezone: User's timezone for date/time formatting
+        exception_keyword: Optional matched exception keyword for sub-consolidation
+        group_info: Event EPG group configuration
+        detected_league: Per-stream detected league (for multi-sport groups)
+        detected_sport: Per-stream detected sport (for multi-sport groups)
 
     Returns:
         Channel name string
@@ -127,17 +135,30 @@ def generate_channel_name(
     # If template has channel_name and we have an engine, use it
     if template and template.get('channel_name') and template_engine:
         from epg.event_template_engine import build_event_context
-        ctx = build_event_context(event, {}, {}, timezone)
+
+        # Build effective group_info with per-stream overrides for multi-sport
+        effective_group_info = dict(group_info) if group_info else {}
+        if detected_league:
+            effective_group_info['assigned_league'] = detected_league
+        if detected_sport:
+            effective_group_info['assigned_sport'] = detected_sport
+
+        ctx = build_event_context(event, {}, effective_group_info, timezone, exception_keyword=exception_keyword)
         return template_engine.resolve(template['channel_name'], ctx)
 
-    # Default format: "Away @ Home"
+    # Default format: "Away @ Home" (with keyword suffix if present)
     home = event.get('home_team', {})
     away = event.get('away_team', {})
 
     home_name = home.get('shortDisplayName') or home.get('name', 'Home')
     away_name = away.get('shortDisplayName') or away.get('name', 'Away')
 
-    return f"{away_name} @ {home_name}"
+    base_name = f"{away_name} @ {home_name}"
+
+    # Append keyword to default name if present
+    if exception_keyword:
+        return f"{base_name} ({exception_keyword.title()})"
+    return base_name
 
 
 def should_create_channel(
@@ -730,11 +751,23 @@ class ChannelLifecycleManager:
 
             # Check channel name - resolve from template and compare
             if event and template and template_engine:
+                # Get exception_keyword from existing channel for proper name resolution
+                channel_exception_keyword = existing.get('exception_keyword')
+
+                # For multi-sport groups, use the stored league/sport from when channel was created
+                # This ensures template variables resolve correctly even during sync
+                stored_league = existing.get('league')
+                stored_sport = existing.get('sport')
+
                 new_channel_name = generate_channel_name(
                     event,
                     template=template,
                     template_engine=template_engine,
-                    timezone=self.timezone
+                    timezone=self.timezone,
+                    exception_keyword=channel_exception_keyword,
+                    group_info=group,
+                    detected_league=stored_league,
+                    detected_sport=stored_sport
                 )
                 current_dispatcharr_name = current_channel.get('name', '')
 
@@ -937,14 +970,20 @@ class ChannelLifecycleManager:
             get_next_channel_number,
             create_managed_channel,
             add_stream_to_channel,
+            remove_stream_from_channel,
             find_existing_channel,
             stream_exists_on_channel,
             log_channel_history
         )
         from epg.event_template_engine import EventTemplateEngine
+        from database import get_consolidation_exception_keywords
+        from utils.keyword_matcher import check_exception_keyword
 
         # Create template engine for channel name resolution
         template_engine = EventTemplateEngine()
+
+        # Load global exception keywords
+        exception_keywords = get_consolidation_exception_keywords()
 
         results = {
             'created': [],
@@ -1000,17 +1039,70 @@ class ChannelLifecycleManager:
                 })
                 continue
 
+            # Check for exception keyword match (only relevant when base mode is 'consolidate')
+            matched_keyword = None
+            effective_mode = duplicate_mode  # Default to group's duplicate mode
+
+            if exception_keywords and duplicate_mode == 'consolidate':
+                keyword, exception_behavior = check_exception_keyword(stream.get('name', ''), exception_keywords)
+                if keyword:
+                    matched_keyword = keyword
+                    effective_mode = exception_behavior
+                    logger.debug(
+                        f"Stream '{stream['name']}' matched exception keyword '{keyword}' "
+                        f"→ behavior: {exception_behavior}"
+                    )
+
+                    # Remove stream from any non-keyword channel for this event
+                    # (handles case where stream was added before keyword was configured)
+                    non_keyword_channel = find_existing_channel(
+                        group_id=group['id'],
+                        event_id=espn_event_id,
+                        exception_keyword=None,
+                        mode='consolidate'
+                    )
+                    if non_keyword_channel and stream_exists_on_channel(non_keyword_channel['id'], stream['id']):
+                        try:
+                            remove_stream_from_channel(non_keyword_channel['id'], stream['id'])
+                            # Also remove from Dispatcharr
+                            with self._dispatcharr_lock:
+                                current_channel = self.channel_api.get_channel(non_keyword_channel['dispatcharr_channel_id'])
+                                if current_channel:
+                                    current_streams = current_channel.get('streams', [])
+                                    if stream['id'] in current_streams:
+                                        current_streams.remove(stream['id'])
+                                        self.channel_api.update_channel(
+                                            non_keyword_channel['dispatcharr_channel_id'],
+                                            {'streams': current_streams}
+                                        )
+                            logger.info(
+                                f"Removed stream '{stream['name']}' from non-keyword channel "
+                                f"'{non_keyword_channel['channel_name']}' (now using keyword '{keyword}')"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to remove stream from non-keyword channel: {e}")
+
             # V2: Check for existing channel based on duplicate handling mode
-            existing = find_existing_channel(
-                group_id=group['id'],
-                event_id=espn_event_id,
-                stream_id=stream.get('id') if duplicate_mode == 'separate' else None,
-                mode=duplicate_mode
-            )
+            # For keyword-based consolidation, we need a different lookup strategy
+            if matched_keyword and effective_mode == 'consolidate':
+                # Find existing channel for this event+keyword combination
+                existing = find_existing_channel(
+                    group_id=group['id'],
+                    event_id=espn_event_id,
+                    exception_keyword=matched_keyword,
+                    mode='consolidate'
+                )
+            else:
+                existing = find_existing_channel(
+                    group_id=group['id'],
+                    event_id=espn_event_id,
+                    stream_id=stream.get('id') if effective_mode == 'separate' else None,
+                    mode=effective_mode
+                )
 
             if existing:
-                # Handle based on duplicate mode
-                if duplicate_mode == 'ignore':
+                # Handle based on effective mode (may differ from group default due to keyword)
+                if effective_mode == 'ignore':
                     # Skip - don't add stream
                     results['existing'].append({
                         'stream': stream['name'],
@@ -1019,7 +1111,7 @@ class ChannelLifecycleManager:
                         'action': 'ignored'
                     })
 
-                elif duplicate_mode == 'consolidate':
+                elif effective_mode == 'consolidate':
                     # V2: Add stream to existing channel if not already present
                     if not stream_exists_on_channel(existing['id'], stream['id']):
                         try:
@@ -1043,14 +1135,16 @@ class ChannelLifecycleManager:
                                                 stream_name=stream.get('name'),
                                                 source_group_type='parent',
                                                 m3u_account_id=stream.get('m3u_account_id'),
-                                                m3u_account_name=stream.get('m3u_account_name')
+                                                m3u_account_name=stream.get('m3u_account_name'),
+                                                exception_keyword=matched_keyword
                                             )
                                             # Log history
+                                            keyword_note = f" [keyword: {matched_keyword}]" if matched_keyword else ""
                                             log_channel_history(
                                                 managed_channel_id=existing['id'],
                                                 change_type='stream_added',
                                                 change_source='epg_generation',
-                                                notes=f"Added stream '{stream.get('name')}' (consolidate mode)"
+                                                notes=f"Added stream '{stream.get('name')}' (consolidate mode){keyword_note}"
                                             )
                                             results['streams_added'].append({
                                                 'stream': stream['name'],
@@ -1122,16 +1216,31 @@ class ChannelLifecycleManager:
                 })
                 continue
 
+            # Get detected league/sport for multi-sport groups
+            # detected_league is stored both in teams dict and at top level of matched
+            stream_detected_league = matched.get('detected_league') or teams.get('detected_league')
+            stream_detected_sport = None
+            if stream_detected_league:
+                from epg.league_detector import LEAGUE_TO_SPORT
+                stream_detected_sport = LEAGUE_TO_SPORT.get(stream_detected_league)
+
             # Generate channel name using template
             channel_name = generate_channel_name(
                 event,
                 template=template,
                 template_engine=template_engine,
-                timezone=self.timezone
+                timezone=self.timezone,
+                exception_keyword=matched_keyword,
+                group_info=group,
+                detected_league=stream_detected_league,
+                detected_sport=stream_detected_sport
             )
 
             # Calculate scheduled delete time (uses template duration if custom)
-            delete_at = calculate_delete_time(event, delete_timing, self.timezone, sport, self.settings, template)
+            # Use detected sport for multi-sport groups, otherwise group's assigned sport
+            effective_sport = stream_detected_sport or sport
+            effective_league = stream_detected_league or league
+            delete_at = calculate_delete_time(event, delete_timing, self.timezone, effective_sport, self.settings, template)
 
             # Generate tvg_id for channel-EPG association
             # This must match the channel id in the generated XMLTV
@@ -1143,7 +1252,15 @@ class ChannelLifecycleManager:
                 logo_id = None
                 if template and template.get('channel_logo_url'):
                     from epg.event_template_engine import build_event_context
-                    logo_ctx = build_event_context(event, stream, group, self.timezone)
+
+                    # Build effective group_info with per-stream overrides for multi-sport
+                    effective_group_info = dict(group) if group else {}
+                    if stream_detected_league:
+                        effective_group_info['assigned_league'] = stream_detected_league
+                    if stream_detected_sport:
+                        effective_group_info['assigned_sport'] = stream_detected_sport
+
+                    logo_ctx = build_event_context(event, stream, effective_group_info, self.timezone)
                     logo_url = template_engine.resolve(template['channel_logo_url'], logo_ctx)
 
                     if logo_url:
@@ -1225,7 +1342,15 @@ class ChannelLifecycleManager:
                 logo_url_source = None
                 if template and template.get('channel_logo_url'):
                     from epg.event_template_engine import build_event_context
-                    logo_ctx = build_event_context(event, stream, group, self.timezone)
+
+                    # Build effective group_info with per-stream overrides for multi-sport
+                    logo_effective_group = dict(group) if group else {}
+                    if stream_detected_league:
+                        logo_effective_group['assigned_league'] = stream_detected_league
+                    if stream_detected_sport:
+                        logo_effective_group['assigned_sport'] = stream_detected_sport
+
+                    logo_ctx = build_event_context(event, stream, logo_effective_group, self.timezone)
                     logo_url_source = template_engine.resolve(template['channel_logo_url'], logo_ctx)
 
                 managed_id = create_managed_channel(
@@ -1244,7 +1369,7 @@ class ChannelLifecycleManager:
                     channel_profile_ids=added_to_profiles if added_to_profiles else None,
                     dispatcharr_uuid=dispatcharr_uuid,
                     # V2 fields
-                    primary_stream_id=stream['id'] if duplicate_mode == 'separate' else None,
+                    primary_stream_id=stream['id'] if effective_mode == 'separate' else None,
                     channel_group_id=channel_group_id,
                     stream_profile_id=stream_profile_id,
                     logo_url=logo_url_source,
@@ -1253,11 +1378,12 @@ class ChannelLifecycleManager:
                     away_team_abbrev=away_team_abbrev,
                     away_team_logo=away_team_logo,
                     event_name=event_name,
-                    league=league,
-                    sport=sport,
+                    league=effective_league,  # Use detected league for multi-sport
+                    sport=effective_sport,    # Use detected sport for multi-sport
                     venue=venue,
                     broadcast=broadcast,
-                    sync_status='created'
+                    sync_status='created',
+                    exception_keyword=matched_keyword  # Store keyword for keyword-based consolidation
                 )
 
                 # V2: Also track stream in managed_channel_streams
@@ -1269,15 +1395,19 @@ class ChannelLifecycleManager:
                     source_group_type='parent',
                     priority=0,  # Primary stream
                     m3u_account_id=stream.get('m3u_account_id'),
-                    m3u_account_name=stream.get('m3u_account_name')
+                    m3u_account_name=stream.get('m3u_account_name'),
+                    exception_keyword=matched_keyword
                 )
 
                 # V2: Log channel creation in history
+                creation_notes = f"Channel created for event {event_name}"
+                if matched_keyword:
+                    creation_notes += f" (keyword: {matched_keyword}, mode: {effective_mode})"
                 log_channel_history(
                     managed_channel_id=managed_id,
                     change_type='created',
                     change_source='epg_generation',
-                    notes=f"Channel created for event {event_name}"
+                    notes=creation_notes
                 )
 
                 results['created'].append({
@@ -1287,13 +1417,15 @@ class ChannelLifecycleManager:
                     'channel_name': channel_name,
                     'managed_id': managed_id,
                     'logo_id': logo_id,
-                    'scheduled_delete_at': delete_at.isoformat() if delete_at else None
+                    'scheduled_delete_at': delete_at.isoformat() if delete_at else None,
+                    'exception_keyword': matched_keyword,
+                    'duplicate_mode': effective_mode
                 })
 
-                logger.info(
-                    f"Created channel {channel_number} '{channel_name}' "
-                    f"for stream '{stream['name']}'"
-                )
+                log_msg = f"Created channel {channel_number} '{channel_name}' for stream '{stream['name']}'"
+                if matched_keyword:
+                    log_msg += f" [keyword: {matched_keyword}]"
+                logger.info(log_msg)
 
             except Exception as e:
                 # Channel was created but tracking failed - try to delete it
@@ -1307,6 +1439,418 @@ class ChannelLifecycleManager:
 
         return results
 
+    def process_child_group_streams(
+        self,
+        child_group: Dict,
+        matched_streams: List[Dict]
+    ) -> Dict[str, Any]:
+        """
+        Process streams from a child group - add them to parent's channels.
+
+        Child groups don't create new channels. Instead, they add their matched
+        streams to the parent group's existing channels for the same events.
+
+        This method handles exception keyword matching so that child streams
+        go to the correct sub-consolidated channel (if applicable).
+
+        Args:
+            child_group: The child event EPG group configuration
+            matched_streams: List of matched streams with events
+
+        Returns:
+            Dict with streams_added, skipped, and errors
+        """
+        from database import (
+            find_parent_channel_for_event,
+            add_stream_to_channel,
+            stream_exists_on_channel,
+            log_channel_history,
+            get_consolidation_exception_keywords
+        )
+        from utils.keyword_matcher import check_exception_keyword
+
+        results = {
+            'streams_added': [],
+            'skipped': [],
+            'errors': []
+        }
+
+        parent_group_id = child_group.get('parent_group_id')
+        if not parent_group_id:
+            logger.error(f"Child group {child_group['id']} has no parent_group_id")
+            return results
+
+        # Load global exception keywords (same as parent uses)
+        exception_keywords = get_consolidation_exception_keywords()
+
+        for matched in matched_streams:
+            stream = matched['stream']
+            event = matched['event']
+            event_id = event.get('id')
+
+            if not event_id:
+                results['errors'].append({
+                    'stream': stream['name'],
+                    'error': 'No ESPN event ID'
+                })
+                continue
+
+            # Check for exception keyword match (child should route to same channel as parent would)
+            matched_keyword = None
+            if exception_keywords:
+                keyword, exception_behavior = check_exception_keyword(stream.get('name', ''), exception_keywords)
+                if keyword:
+                    # For 'ignore' behavior, skip this stream
+                    if exception_behavior == 'ignore':
+                        results['skipped'].append({
+                            'stream': stream['name'],
+                            'reason': f"exception keyword '{keyword}' set to ignore"
+                        })
+                        continue
+                    matched_keyword = keyword
+                    logger.debug(
+                        f"Child stream '{stream['name']}' matched exception keyword '{keyword}'"
+                    )
+
+            # Find parent's channel for this event (with matching keyword if applicable)
+            parent_channel = find_parent_channel_for_event(parent_group_id, event_id, matched_keyword)
+
+            if not parent_channel:
+                # If keyword matched but no keyword channel exists, try main channel
+                if matched_keyword:
+                    parent_channel = find_parent_channel_for_event(parent_group_id, event_id, None)
+
+                if not parent_channel:
+                    logger.debug(
+                        f"No parent channel for event {event_id} "
+                        f"(keyword: {matched_keyword}) - skipping stream '{stream['name']}'"
+                    )
+                    results['skipped'].append({
+                        'stream': stream['name'],
+                        'reason': 'no parent channel for event'
+                    })
+                    continue
+
+            # Check if stream already attached
+            if stream_exists_on_channel(parent_channel['id'], stream['id']):
+                continue
+
+            # Add stream to parent channel in Dispatcharr
+            try:
+                current_channel = self.channel_api.get_channel(parent_channel['dispatcharr_channel_id'])
+                if current_channel:
+                    current_streams = current_channel.get('streams', [])
+                    if stream['id'] not in current_streams:
+                        new_streams = current_streams + [stream['id']]
+                        with self._dispatcharr_lock:
+                            update_result = self.channel_api.update_channel(
+                                parent_channel['dispatcharr_channel_id'],
+                                {'streams': new_streams}
+                            )
+                        if update_result.get('success'):
+                            # Track in database
+                            add_stream_to_channel(
+                                managed_channel_id=parent_channel['id'],
+                                dispatcharr_stream_id=stream['id'],
+                                source_group_id=child_group['id'],
+                                stream_name=stream.get('name'),
+                                source_group_type='child',
+                                m3u_account_id=stream.get('m3u_account_id'),
+                                m3u_account_name=stream.get('m3u_account_name')
+                            )
+                            log_channel_history(
+                                managed_channel_id=parent_channel['id'],
+                                change_type='stream_added',
+                                change_source='epg_generation',
+                                notes=f"Added stream '{stream.get('name')}' from child group {child_group.get('group_name')}"
+                            )
+                            results['streams_added'].append({
+                                'stream': stream['name'],
+                                'channel': parent_channel['channel_name'],
+                                'keyword': matched_keyword
+                            })
+                            logger.debug(
+                                f"Added child stream '{stream['name']}' to parent channel "
+                                f"'{parent_channel['channel_name']}' (keyword: {matched_keyword})"
+                            )
+                        else:
+                            results['errors'].append({
+                                'stream': stream['name'],
+                                'error': update_result.get('error', 'Failed to update channel')
+                            })
+            except Exception as e:
+                logger.warning(f"Failed to add child stream to parent channel: {e}")
+                results['errors'].append({
+                    'stream': stream['name'],
+                    'error': str(e)
+                })
+
+        if results['streams_added']:
+            logger.info(
+                f"Child group '{child_group.get('group_name')}': "
+                f"added {len(results['streams_added'])} streams to parent channels"
+            )
+
+        return results
+
+    def enforce_stream_keyword_placement(self) -> Dict[str, Any]:
+        """
+        Enforce correct stream placement based on exception keywords.
+
+        Runs once per EPG generation to fix streams that are on the wrong channel:
+        - Streams with keyword match should be on keyword channel, not main channel
+        - Streams without keyword match should be on main channel, not keyword channel
+
+        This handles cases where:
+        - Keywords were added after streams were already placed
+        - Keywords were removed and streams need to move back to main
+        - Stream names changed and now match/don't match keywords
+
+        Returns:
+            Dict with 'moved' count and 'errors' list
+        """
+        from database import (
+            get_consolidation_exception_keywords,
+            get_all_managed_channel_streams,
+            find_existing_channel,
+            remove_stream_from_channel,
+            add_stream_to_channel,
+            stream_exists_on_channel,
+            log_channel_history
+        )
+        from utils.keyword_matcher import check_exception_keyword
+
+        results = {
+            'moved': 0,
+            'errors': []
+        }
+
+        exception_keywords = get_consolidation_exception_keywords()
+        if not exception_keywords:
+            return results  # No keywords configured, nothing to enforce
+
+        # Get all streams across all channels
+        all_streams = get_all_managed_channel_streams()
+
+        for stream_record in all_streams:
+            stream_name = stream_record.get('stream_name', '')
+            if not stream_name:
+                continue
+
+            channel_id = stream_record['managed_channel_id']
+            channel_event_id = stream_record.get('espn_event_id')
+            channel_group_id = stream_record.get('event_epg_group_id')
+            channel_keyword = stream_record.get('channel_exception_keyword')  # Current channel's keyword
+            stream_id = stream_record['dispatcharr_stream_id']
+
+            if not channel_event_id or not channel_group_id:
+                continue
+
+            # Check what keyword this stream SHOULD have
+            matched_keyword, behavior = check_exception_keyword(stream_name, exception_keywords)
+
+            # Skip if behavior is 'ignore' - stream shouldn't be anywhere
+            if matched_keyword and behavior == 'ignore':
+                continue
+
+            # Normalize for comparison (both None or both have value)
+            current_keyword = channel_keyword if channel_keyword else None
+            target_keyword = matched_keyword if matched_keyword else None
+
+            # If stream is on correct channel, skip
+            if current_keyword == target_keyword:
+                continue
+
+            # Stream is on wrong channel - need to move it
+            # Find the correct target channel
+            target_channel = find_existing_channel(
+                group_id=channel_group_id,
+                event_id=channel_event_id,
+                exception_keyword=target_keyword,
+                mode='consolidate'
+            )
+
+            if not target_channel:
+                # Target channel doesn't exist - can't move
+                # This is OK - the stream will stay where it is
+                logger.debug(
+                    f"No target channel for stream '{stream_name}' "
+                    f"(keyword: {target_keyword}) - leaving in place"
+                )
+                continue
+
+            if target_channel['id'] == channel_id:
+                # Already on correct channel (shouldn't happen, but safety check)
+                continue
+
+            # Check if already on target channel
+            if stream_exists_on_channel(target_channel['id'], stream_id):
+                # Already on target - just remove from wrong channel
+                pass
+            else:
+                # Add to target channel in Dispatcharr
+                try:
+                    with self._dispatcharr_lock:
+                        target_dispatcharr = self.channel_api.get_channel(target_channel['dispatcharr_channel_id'])
+                        if target_dispatcharr:
+                            target_streams = target_dispatcharr.get('streams', [])
+                            if stream_id not in target_streams:
+                                target_streams.append(stream_id)
+                                self.channel_api.update_channel(
+                                    target_channel['dispatcharr_channel_id'],
+                                    {'streams': target_streams}
+                                )
+
+                    # Add to target in DB
+                    add_stream_to_channel(
+                        managed_channel_id=target_channel['id'],
+                        dispatcharr_stream_id=stream_id,
+                        source_group_id=stream_record.get('source_group_id', channel_group_id),
+                        stream_name=stream_name,
+                        source_group_type=stream_record.get('source_group_type', 'parent'),
+                        m3u_account_id=stream_record.get('m3u_account_id'),
+                        m3u_account_name=stream_record.get('m3u_account_name')
+                    )
+                    log_channel_history(
+                        managed_channel_id=target_channel['id'],
+                        change_type='stream_added',
+                        change_source='keyword_enforcement',
+                        notes=f"Moved stream '{stream_name}' from keyword '{current_keyword or 'main'}'"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to add stream to target channel: {e}")
+                    results['errors'].append({
+                        'stream': stream_name,
+                        'error': f'Failed to add to target: {e}'
+                    })
+                    continue
+
+            # Remove from wrong channel in Dispatcharr
+            try:
+                with self._dispatcharr_lock:
+                    current_dispatcharr = self.channel_api.get_channel(stream_record['dispatcharr_channel_id'])
+                    if current_dispatcharr:
+                        current_streams = current_dispatcharr.get('streams', [])
+                        if stream_id in current_streams:
+                            current_streams.remove(stream_id)
+                            self.channel_api.update_channel(
+                                stream_record['dispatcharr_channel_id'],
+                                {'streams': current_streams}
+                            )
+
+                # Remove from wrong channel in DB
+                remove_stream_from_channel(channel_id, stream_id)
+
+                log_channel_history(
+                    managed_channel_id=channel_id,
+                    change_type='stream_removed',
+                    change_source='keyword_enforcement',
+                    notes=f"Moved stream '{stream_name}' to keyword channel '{target_keyword or 'main'}'"
+                )
+
+                results['moved'] += 1
+                logger.info(
+                    f"Moved stream '{stream_name}' from "
+                    f"'{stream_record.get('channel_name')}' to '{target_channel['channel_name']}' "
+                    f"(keyword: {current_keyword} → {target_keyword})"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to remove stream from wrong channel: {e}")
+                results['errors'].append({
+                    'stream': stream_name,
+                    'error': f'Failed to remove from source: {e}'
+                })
+
+        if results['moved'] > 0:
+            logger.info(f"🔄 Keyword enforcement: moved {results['moved']} stream(s) to correct channels")
+
+        return results
+
+    def enforce_keyword_channel_ordering(self) -> Dict[str, Any]:
+        """
+        Ensure keyword (sub-consolidated) channels come AFTER the main channel for the same event.
+
+        For each event with multiple channels (main + keyword channels), ensures:
+        - Main channel (no exception_keyword) has the lowest channel number
+        - Keyword channels have higher channel numbers
+
+        Returns:
+            Dict with 'reordered' count
+        """
+        from database import get_channels_needing_reorder, update_managed_channel
+
+        results = {
+            'reordered': 0,
+            'errors': []
+        }
+
+        # Get channels grouped by event where keyword channel has lower number than main
+        channels_to_fix = get_channels_needing_reorder()
+
+        for fix in channels_to_fix:
+            main_channel = fix['main_channel']
+            keyword_channel = fix['keyword_channel']
+
+            # Swap channel numbers
+            main_number = main_channel['channel_number']
+            keyword_number = keyword_channel['channel_number']
+
+            try:
+                # Update Dispatcharr
+                with self._dispatcharr_lock:
+                    # Set main channel to keyword's (lower) number
+                    self.channel_api.update_channel(
+                        main_channel['dispatcharr_channel_id'],
+                        {'channel_number': keyword_number}
+                    )
+                    # Set keyword channel to main's (higher) number
+                    self.channel_api.update_channel(
+                        keyword_channel['dispatcharr_channel_id'],
+                        {'channel_number': main_number}
+                    )
+
+                # Update DB
+                update_managed_channel(main_channel['id'], {'channel_number': keyword_number})
+                update_managed_channel(keyword_channel['id'], {'channel_number': main_number})
+
+                # Log history for both channels
+                from database import log_channel_history
+                log_channel_history(
+                    managed_channel_id=main_channel['id'],
+                    change_type='number_swapped',
+                    change_source='keyword_ordering',
+                    field_name='channel_number',
+                    old_value=str(main_number),
+                    new_value=str(keyword_number),
+                    notes=f"Swapped with keyword channel to maintain main-first ordering"
+                )
+                log_channel_history(
+                    managed_channel_id=keyword_channel['id'],
+                    change_type='number_swapped',
+                    change_source='keyword_ordering',
+                    field_name='channel_number',
+                    old_value=str(keyword_number),
+                    new_value=str(main_number),
+                    notes=f"Swapped with main channel to maintain main-first ordering"
+                )
+
+                results['reordered'] += 1
+                logger.info(
+                    f"Reordered channels for event {main_channel['espn_event_id']}: "
+                    f"main #{keyword_number} ↔ keyword #{main_number}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to reorder channels: {e}")
+                results['errors'].append({
+                    'event_id': main_channel['espn_event_id'],
+                    'error': str(e)
+                })
+
+        if results['reordered'] > 0:
+            logger.info(f"🔢 Channel ordering: reordered {results['reordered']} keyword channel(s)")
+
+        return results
+
     def cleanup_deleted_streams(
         self,
         group: Dict,
@@ -1315,7 +1859,11 @@ class ChannelLifecycleManager:
         """
         Clean up channels for streams that no longer exist.
 
-        Only applies if group's delete_timing is 'stream_removed'.
+        ALWAYS runs regardless of delete_timing - if a stream no longer exists,
+        the channel should be deleted immediately. This ensures channels are
+        cleaned up at the EARLIEST of:
+        - Stream removed from M3U provider
+        - Scheduled delete time (end of day for 'same_day', etc.)
 
         Args:
             group: Event EPG group configuration
@@ -1324,40 +1872,95 @@ class ChannelLifecycleManager:
         Returns:
             Dict with deleted and error counts
         """
-        from database import get_managed_channels_for_group
+        from database import get_managed_channels_for_group, get_channel_streams
 
         results = {
             'deleted': [],
             'errors': []
         }
 
-        # Get delete timing - always use global settings (no per-group overrides)
-        global_settings = get_global_lifecycle_settings()
-        delete_timing = global_settings['channel_delete_timing']
-        if delete_timing != 'stream_removed':
-            return results
-
         # Get all active managed channels for this group
         managed_channels = get_managed_channels_for_group(group['id'])
         current_ids_set = set(current_stream_ids)
 
         for channel in managed_channels:
-            if channel['dispatcharr_stream_id'] not in current_ids_set:
-                # Stream no longer exists - use unified delete method
-                delete_result = self.delete_managed_channel(channel, reason='stream removed')
+            # V2: Check all streams on the channel, not just primary
+            channel_streams = get_channel_streams(channel['id'])
+            if channel_streams:
+                # Check if ALL streams are gone (channel should be deleted)
+                # vs just SOME streams gone (remove those streams but keep channel)
+                valid_streams = [s for s in channel_streams if s['dispatcharr_stream_id'] in current_ids_set]
+                missing_streams = [s for s in channel_streams if s['dispatcharr_stream_id'] not in current_ids_set]
 
-                if delete_result.get('success'):
-                    results['deleted'].append({
-                        'channel_id': channel['dispatcharr_channel_id'],
-                        'channel_number': channel['channel_number'],
-                        'channel_name': channel['channel_name'],
-                        'logo_deleted': delete_result.get('logo_deleted')
-                    })
-                else:
-                    results['errors'].append({
-                        'channel_id': channel['dispatcharr_channel_id'],
-                        'error': delete_result.get('error')
-                    })
+                if not valid_streams:
+                    # All streams are gone - delete channel
+                    delete_result = self.delete_managed_channel(channel, reason='all streams removed')
+
+                    if delete_result.get('success'):
+                        results['deleted'].append({
+                            'channel_id': channel['dispatcharr_channel_id'],
+                            'channel_number': channel['channel_number'],
+                            'channel_name': channel['channel_name'],
+                            'logo_deleted': delete_result.get('logo_deleted')
+                        })
+                    else:
+                        results['errors'].append({
+                            'channel_id': channel['dispatcharr_channel_id'],
+                            'error': delete_result.get('error')
+                        })
+                elif missing_streams:
+                    # Some streams are gone - remove them from channel but keep channel
+                    from database import remove_stream_from_channel, log_channel_history
+                    for stream in missing_streams:
+                        try:
+                            # Remove from Teamarr DB
+                            remove_stream_from_channel(channel['id'], stream['dispatcharr_stream_id'])
+
+                            # Also update Dispatcharr - remove the missing stream from the channel
+                            # (the stream may already be gone from Dispatcharr, but we still need to
+                            # update the channel's stream list to remove the stale reference)
+                            with self._dispatcharr_lock:
+                                current_channel = self.channel_api.get_channel(channel['dispatcharr_channel_id'])
+                                if current_channel:
+                                    current_streams = current_channel.get('streams', [])
+                                    if stream['dispatcharr_stream_id'] in current_streams:
+                                        new_streams = [s for s in current_streams if s != stream['dispatcharr_stream_id']]
+                                        self.channel_api.update_channel(
+                                            channel['dispatcharr_channel_id'],
+                                            {'streams': new_streams}
+                                        )
+
+                            log_channel_history(
+                                managed_channel_id=channel['id'],
+                                change_type='stream_removed',
+                                change_source='epg_generation',
+                                notes=f"Stream '{stream.get('stream_name', stream['dispatcharr_stream_id'])}' no longer exists"
+                            )
+                            logger.debug(
+                                f"Removed missing stream {stream['dispatcharr_stream_id']} from channel "
+                                f"'{channel['channel_name']}'"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to remove missing stream from channel: {e}")
+            else:
+                # Legacy: Check primary stream ID (V1 channels without stream records)
+                primary_stream_id = channel.get('dispatcharr_stream_id')
+                if primary_stream_id and primary_stream_id not in current_ids_set:
+                    # Stream no longer exists - delete channel
+                    delete_result = self.delete_managed_channel(channel, reason='stream removed')
+
+                    if delete_result.get('success'):
+                        results['deleted'].append({
+                            'channel_id': channel['dispatcharr_channel_id'],
+                            'channel_number': channel['channel_number'],
+                            'channel_name': channel['channel_name'],
+                            'logo_deleted': delete_result.get('logo_deleted')
+                        })
+                    else:
+                        results['errors'].append({
+                            'channel_id': channel['dispatcharr_channel_id'],
+                            'error': delete_result.get('error')
+                        })
 
         return results
 

@@ -153,9 +153,13 @@ def db_insert(query: str, params: tuple = ()) -> int:
 #   6: Managed channels enhancements (logo tracking)
 #   7: Data fixes (NCAA logos, per-group timing cleanup)
 #   8: Channel Lifecycle V2 (multi-stream, history, reconciliation, parent groups)
+#   9-11: Various enhancements (see schema.sql comments)
+#   12: Soccer multi-league cache tables (with league_tags JSON array)
+#   15: Team-league cache tables for non-soccer sports
+#   16: Multi-sport event groups (is_multi_sport, enabled_leagues, etc.)
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 17
 
 
 def get_schema_version(conn) -> int:
@@ -308,7 +312,8 @@ def run_migrations(conn):
         # Event-based filtering stats (aggregated across all groups)
         ("event_total_streams", "INTEGER DEFAULT 0"),  # Sum of raw provider streams
         ("event_filtered_no_indicator", "INTEGER DEFAULT 0"),  # Sum filtered by built-in
-        ("event_filtered_exclude_regex", "INTEGER DEFAULT 0"),  # Sum filtered by user regex
+        ("event_filtered_include_regex", "INTEGER DEFAULT 0"),  # Sum not matching inclusion regex
+        ("event_filtered_exclude_regex", "INTEGER DEFAULT 0"),  # Sum filtered by exclusion regex
         ("event_filtered_outside_lookahead", "INTEGER DEFAULT 0"),  # Sum outside date range
         ("event_filtered_final", "INTEGER DEFAULT 0"),  # Sum of final events excluded
         ("event_eligible_streams", "INTEGER DEFAULT 0"),  # Sum of streams that passed filters
@@ -386,12 +391,15 @@ def run_migrations(conn):
             ("custom_regex_date_enabled", "INTEGER DEFAULT 0"),  # Enable custom date regex
             ("custom_regex_time", "TEXT"),
             ("custom_regex_time_enabled", "INTEGER DEFAULT 0"),  # Enable custom time regex
+            ("stream_include_regex", "TEXT"),  # User regex to include only matching streams
+            ("stream_include_regex_enabled", "INTEGER DEFAULT 0"),  # Enable inclusion regex
             ("stream_exclude_regex", "TEXT"),  # User regex to exclude streams from matching
             ("stream_exclude_regex_enabled", "INTEGER DEFAULT 0"),  # Enable exclusion regex
             ("skip_builtin_filter", "INTEGER DEFAULT 0"),  # Skip built-in game indicator filter
             # Filtering stats (per-group breakdown)
             ("total_stream_count", "INTEGER DEFAULT 0"),  # Raw count from provider
             ("filtered_no_indicator", "INTEGER DEFAULT 0"),  # No vs/@/at (built-in filter)
+            ("filtered_include_regex", "INTEGER DEFAULT 0"),  # Didn't match user's inclusion regex
             ("filtered_exclude_regex", "INTEGER DEFAULT 0"),  # Matched user's exclusion regex
             ("filtered_outside_lookahead", "INTEGER DEFAULT 0"),  # Date outside lookahead window
             ("filtered_final", "INTEGER DEFAULT 0"),  # Final events (when exclude setting on)
@@ -734,6 +742,289 @@ def run_migrations(conn):
         conn.commit()
     except Exception as e:
         print(f"  ⚠️ Could not migrate channel profiles: {e}")
+
+    # =========================================================================
+    # 12. SOCCER MULTI-LEAGUE CACHE TABLES
+    # =========================================================================
+    if current_version < 12:
+        print("  🔄 Running migration 12: Soccer multi-league cache tables...")
+
+        # 12a. soccer_team_leagues table
+        if not table_exists("soccer_team_leagues"):
+            try:
+                cursor.execute("""
+                    CREATE TABLE soccer_team_leagues (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        espn_team_id TEXT NOT NULL,
+                        league_slug TEXT NOT NULL,
+                        team_name TEXT,
+                        team_type TEXT,
+                        default_league TEXT,
+                        last_seen TEXT,
+                        UNIQUE(espn_team_id, league_slug)
+                    )
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_stl_team ON soccer_team_leagues(espn_team_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_stl_league ON soccer_team_leagues(league_slug)")
+                migrations_run += 1
+                print("    ✅ Created table: soccer_team_leagues")
+            except Exception as e:
+                print(f"    ⚠️ Could not create soccer_team_leagues table: {e}")
+            conn.commit()
+
+        # 12b. soccer_leagues_cache table
+        if not table_exists("soccer_leagues_cache"):
+            try:
+                cursor.execute("""
+                    CREATE TABLE soccer_leagues_cache (
+                        league_slug TEXT PRIMARY KEY,
+                        league_name TEXT,
+                        league_abbrev TEXT,
+                        league_tags TEXT,
+                        league_logo_url TEXT,
+                        team_count INTEGER,
+                        last_seen TEXT
+                    )
+                """)
+                migrations_run += 1
+                print("    ✅ Created table: soccer_leagues_cache")
+            except Exception as e:
+                print(f"    ⚠️ Could not create soccer_leagues_cache table: {e}")
+            conn.commit()
+
+    # 12b-fix. Rename league_category to league_tags if old column exists (dev migration)
+    # This handles dev databases that ran migration 12 before the tags refactor
+    # Runs ALWAYS (outside version check) to fix dev databases
+    if table_exists("soccer_leagues_cache"):
+        try:
+            cursor.execute("PRAGMA table_info(soccer_leagues_cache)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if 'league_category' in columns and 'league_tags' not in columns:
+                # SQLite doesn't support RENAME COLUMN in older versions, recreate table
+                cursor.execute("""
+                    CREATE TABLE soccer_leagues_cache_new (
+                        league_slug TEXT PRIMARY KEY,
+                        league_name TEXT,
+                        league_abbrev TEXT,
+                        league_tags TEXT,
+                        league_logo_url TEXT,
+                        team_count INTEGER,
+                        last_seen TEXT
+                    )
+                """)
+                cursor.execute("""
+                    INSERT INTO soccer_leagues_cache_new
+                    SELECT league_slug, league_name, league_abbrev, league_category, league_logo_url, team_count, last_seen
+                    FROM soccer_leagues_cache
+                """)
+                cursor.execute("DROP TABLE soccer_leagues_cache")
+                cursor.execute("ALTER TABLE soccer_leagues_cache_new RENAME TO soccer_leagues_cache")
+                conn.commit()
+                print("  ✅ Renamed league_category to league_tags (dev migration)")
+        except Exception as e:
+            print(f"  ⚠️ Could not rename league_category column: {e}")
+
+    # =========================================================================
+    # 12. SOCCER MULTI-LEAGUE CACHE TABLES (continued)
+    # =========================================================================
+    if current_version < 12:
+        # 12c. soccer_cache_meta table
+        if not table_exists("soccer_cache_meta"):
+            try:
+                cursor.execute("""
+                    CREATE TABLE soccer_cache_meta (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        last_full_refresh TEXT,
+                        leagues_processed INTEGER,
+                        teams_indexed INTEGER,
+                        refresh_duration_seconds REAL,
+                        next_scheduled_refresh TEXT
+                    )
+                """)
+                cursor.execute("INSERT OR IGNORE INTO soccer_cache_meta (id) VALUES (1)")
+                migrations_run += 1
+                print("    ✅ Created table: soccer_cache_meta")
+            except Exception as e:
+                print(f"    ⚠️ Could not create soccer_cache_meta table: {e}")
+            conn.commit()
+
+        # 12d. Settings column for cache frequency
+        add_columns_if_missing("settings", [
+            ("soccer_cache_refresh_frequency", "TEXT DEFAULT 'weekly'"),
+        ])
+
+    # =========================================================================
+    # 13. CONSOLIDATION EXCEPTION KEYWORDS (per-group version - deprecated)
+    # =========================================================================
+    if current_version < 13:
+        print("  🔄 Running migration 13: Consolidation exception keywords...")
+
+        # 13a. Create consolidation_exception_keywords table
+        if not table_exists("consolidation_exception_keywords"):
+            try:
+                cursor.execute("""
+                    CREATE TABLE consolidation_exception_keywords (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        group_id INTEGER NOT NULL,
+                        keywords TEXT NOT NULL,
+                        behavior TEXT NOT NULL DEFAULT 'consolidate',
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (group_id) REFERENCES event_epg_groups(id) ON DELETE CASCADE
+                    )
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cek_group ON consolidation_exception_keywords(group_id)")
+                migrations_run += 1
+                print("    ✅ Created table: consolidation_exception_keywords")
+            except Exception as e:
+                print(f"    ⚠️ Could not create consolidation_exception_keywords table: {e}")
+            conn.commit()
+
+        # 13b. Add exception_keyword column to managed_channels
+        add_columns_if_missing("managed_channels", [
+            ("exception_keyword", "TEXT"),
+        ])
+
+        # 13c. Add exception_keyword column to managed_channel_streams
+        add_columns_if_missing("managed_channel_streams", [
+            ("exception_keyword", "TEXT"),
+        ])
+
+        conn.commit()
+
+    # =========================================================================
+    # 14. MAKE EXCEPTION KEYWORDS GLOBAL (remove group_id)
+    # =========================================================================
+    if current_version < 14:
+        print("  🔄 Running migration 14: Make exception keywords global...")
+
+        # Drop group_id column by recreating the table (SQLite doesn't support DROP COLUMN directly)
+        if table_exists("consolidation_exception_keywords"):
+            try:
+                # Create new table without group_id
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS consolidation_exception_keywords_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        keywords TEXT NOT NULL,
+                        behavior TEXT NOT NULL DEFAULT 'consolidate',
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Copy data (ignoring duplicates since keywords are now global)
+                cursor.execute("""
+                    INSERT INTO consolidation_exception_keywords_new (keywords, behavior, created_at)
+                    SELECT DISTINCT keywords, behavior, created_at
+                    FROM consolidation_exception_keywords
+                """)
+
+                # Drop old table and rename
+                cursor.execute("DROP TABLE consolidation_exception_keywords")
+                cursor.execute("ALTER TABLE consolidation_exception_keywords_new RENAME TO consolidation_exception_keywords")
+
+                # Drop old index (no longer needed)
+                cursor.execute("DROP INDEX IF EXISTS idx_cek_group")
+
+                migrations_run += 1
+                print("    ✅ Migrated consolidation_exception_keywords to global (removed group_id)")
+            except Exception as e:
+                print(f"    ⚠️ Could not migrate exception keywords table: {e}")
+            conn.commit()
+
+    # =========================================================================
+    # 15. TEAM LEAGUE CACHE TABLES (Multi-Sport Support)
+    # =========================================================================
+    if current_version < 15:
+        print("  🔄 Running migration 15: Create team league cache tables...")
+
+        # Create team_league_cache table
+        if not table_exists("team_league_cache"):
+            try:
+                cursor.execute("""
+                    CREATE TABLE team_league_cache (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        league_code TEXT NOT NULL,
+                        espn_team_id TEXT NOT NULL,
+                        team_name TEXT NOT NULL,
+                        team_abbrev TEXT,
+                        team_short_name TEXT,
+                        sport TEXT NOT NULL,
+                        UNIQUE(league_code, espn_team_id)
+                    )
+                """)
+                migrations_run += 1
+                print("    ✅ Created team_league_cache table")
+            except Exception as e:
+                print(f"    ⚠️ Could not create team_league_cache table: {e}")
+
+        # Create indexes for team_league_cache
+        create_index_if_not_exists("idx_tlc_name", "team_league_cache", "team_name COLLATE NOCASE")
+        create_index_if_not_exists("idx_tlc_abbrev", "team_league_cache", "team_abbrev COLLATE NOCASE")
+        create_index_if_not_exists("idx_tlc_short", "team_league_cache", "team_short_name COLLATE NOCASE")
+        create_index_if_not_exists("idx_tlc_league", "team_league_cache", "league_code")
+
+        # Create team_league_cache_meta table
+        if not table_exists("team_league_cache_meta"):
+            try:
+                cursor.execute("""
+                    CREATE TABLE team_league_cache_meta (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        last_refresh TEXT,
+                        leagues_processed INTEGER DEFAULT 0,
+                        teams_indexed INTEGER DEFAULT 0
+                    )
+                """)
+                cursor.execute("INSERT OR IGNORE INTO team_league_cache_meta (id) VALUES (1)")
+                migrations_run += 1
+                print("    ✅ Created team_league_cache_meta table")
+            except Exception as e:
+                print(f"    ⚠️ Could not create team_league_cache_meta table: {e}")
+
+        conn.commit()
+
+    # =========================================================================
+    # 16. MULTI-SPORT EVENT GROUPS
+    # =========================================================================
+    if current_version < 16:
+        print("  📦 Running migration 16: Multi-sport event groups...")
+        cursor = conn.cursor()
+
+        # Add multi-sport columns to event_epg_groups
+        add_columns_if_missing('event_epg_groups', [
+            ('is_multi_sport', 'INTEGER DEFAULT 0'),
+            ('enabled_leagues', 'TEXT'),  # JSON array, NULL = all leagues
+            ('channel_sort_order', "TEXT DEFAULT 'time'"),  # time, sport_time, league_time
+            ('overlap_handling', "TEXT DEFAULT 'add_stream'"),  # add_stream, skip, create_all
+        ])
+        migrations_run += 1
+        print("    ✅ Added multi-sport columns to event_epg_groups")
+
+        # Note: consolidation_exception_keywords table is global (not per-group)
+        # It was already created in an earlier migration, no changes needed
+
+        # Add team_cache_refresh_frequency to settings
+        add_columns_if_missing('settings', [
+            ('team_cache_refresh_frequency', "TEXT DEFAULT 'weekly'"),
+        ])
+        print("    ✅ Added team_cache_refresh_frequency to settings")
+
+        conn.commit()
+
+    # =========================================================================
+    # 17. NCAA SOCCER LEAGUES
+    # =========================================================================
+    if current_version < 17:
+        # Add NCAA Men's and Women's Soccer to league_config
+        cursor.execute("""
+            INSERT OR IGNORE INTO league_config
+            (league_code, league_name, sport, api_path, default_category, record_format, logo_url)
+            VALUES
+            ('ncaas', 'NCAA Men''s Soccer', 'soccer', 'soccer/usa.ncaa.m.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png'),
+            ('ncaaws', 'NCAA Women''s Soccer', 'soccer', 'soccer/usa.ncaa.w.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png')
+        """)
+        migrations_run += 1
+        print("    ✅ Added NCAA Men's and Women's Soccer to league_config")
+        conn.commit()
 
     # =========================================================================
     # UPDATE SCHEMA VERSION
@@ -1449,10 +1740,16 @@ def create_event_epg_group(
     custom_regex_date_enabled: bool = False,
     custom_regex_time: str = None,
     custom_regex_time_enabled: bool = False,
+    stream_include_regex: str = None,
+    stream_include_regex_enabled: bool = False,
     stream_exclude_regex: str = None,
     stream_exclude_regex_enabled: bool = False,
     skip_builtin_filter: bool = False,
-    parent_group_id: int = None
+    parent_group_id: int = None,
+    is_multi_sport: bool = False,
+    enabled_leagues: str = None,
+    channel_sort_order: str = 'time',
+    overlap_handling: str = 'add_stream'
 ) -> int:
     """
     Create a new event EPG group.
@@ -1471,6 +1768,8 @@ def create_event_epg_group(
         custom_regex_date_enabled: Enable custom date regex
         custom_regex_time: Optional regex pattern to extract game time
         custom_regex_time_enabled: Enable custom time regex
+        stream_include_regex: Optional regex to include only matching streams
+        stream_include_regex_enabled: Enable inclusion regex
         stream_exclude_regex: Optional regex to exclude streams from matching
         stream_exclude_regex_enabled: Enable exclusion regex
         skip_builtin_filter: Skip built-in game indicator filter
@@ -1503,9 +1802,11 @@ def create_event_epg_group(
              custom_regex_teams, custom_regex_teams_enabled,
              custom_regex_date, custom_regex_date_enabled,
              custom_regex_time, custom_regex_time_enabled,
+             stream_include_regex, stream_include_regex_enabled,
              stream_exclude_regex, stream_exclude_regex_enabled,
-             skip_builtin_filter, parent_group_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             skip_builtin_filter, parent_group_id,
+             is_multi_sport, enabled_leagues, channel_sort_order, overlap_handling)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 dispatcharr_group_id, dispatcharr_account_id, group_name,
@@ -1516,8 +1817,10 @@ def create_event_epg_group(
                 custom_regex_teams, 1 if custom_regex_teams_enabled else 0,
                 custom_regex_date, 1 if custom_regex_date_enabled else 0,
                 custom_regex_time, 1 if custom_regex_time_enabled else 0,
+                stream_include_regex, 1 if stream_include_regex_enabled else 0,
                 stream_exclude_regex, 1 if stream_exclude_regex_enabled else 0,
-                1 if skip_builtin_filter else 0, parent_group_id
+                1 if skip_builtin_filter else 0, parent_group_id,
+                1 if is_multi_sport else 0, enabled_leagues, channel_sort_order, overlap_handling
             )
         )
         conn.commit()
@@ -1566,8 +1869,31 @@ def update_event_epg_group(group_id: int, data: Dict[str, Any]) -> bool:
 
 
 def delete_event_epg_group(group_id: int) -> bool:
-    """Delete an event EPG group."""
-    return db_execute("DELETE FROM event_epg_groups WHERE id = ?", (group_id,)) > 0
+    """Delete an event EPG group and any child groups that reference it."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+
+        # First delete any child groups that have this as parent
+        cursor.execute("DELETE FROM event_epg_groups WHERE parent_group_id = ?", (group_id,))
+        children_deleted = cursor.rowcount
+
+        # Then delete the group itself
+        cursor.execute("DELETE FROM event_epg_groups WHERE id = ?", (group_id,))
+        group_deleted = cursor.rowcount > 0
+
+        conn.commit()
+
+        if children_deleted > 0:
+            import logging
+            logging.getLogger(__name__).info(f"Deleted {children_deleted} child group(s) when deleting parent group {group_id}")
+
+        return group_deleted
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def update_event_epg_group_stats(
@@ -1576,6 +1902,7 @@ def update_event_epg_group_stats(
     matched_count: int,
     total_stream_count: int = None,
     filtered_no_indicator: int = None,
+    filtered_include_regex: int = None,
     filtered_exclude_regex: int = None,
     filtered_outside_lookahead: int = None,
     filtered_final: int = None
@@ -1589,6 +1916,7 @@ def update_event_epg_group_stats(
         matched_count: Streams matched to ESPN events
         total_stream_count: Raw count from provider (optional)
         filtered_no_indicator: Streams without vs/@/at (optional)
+        filtered_include_regex: Streams not matching inclusion regex (optional)
         filtered_exclude_regex: Streams matching exclusion regex (optional)
         filtered_outside_lookahead: Streams outside date range (optional)
         filtered_final: Final events excluded by setting (optional)
@@ -1606,6 +1934,9 @@ def update_event_epg_group_stats(
     if filtered_no_indicator is not None:
         fields.append("filtered_no_indicator = ?")
         values.append(filtered_no_indicator)
+    if filtered_include_regex is not None:
+        fields.append("filtered_include_regex = ?")
+        values.append(filtered_include_regex)
     if filtered_exclude_regex is not None:
         fields.append("filtered_exclude_regex = ?")
         values.append(filtered_exclude_regex)
@@ -1750,7 +2081,8 @@ def create_managed_channel(
     sport: str = None,
     venue: str = None,
     broadcast: str = None,
-    sync_status: str = 'created'
+    sync_status: str = 'created',
+    exception_keyword: str = None  # For keyword-based consolidation exceptions
 ) -> int:
     """
     Create a new managed channel record.
@@ -1833,6 +2165,7 @@ def create_managed_channel(
             ('venue', venue),
             ('broadcast', broadcast),
             ('sync_status', sync_status),
+            ('exception_keyword', exception_keyword),
         ]
 
         for col_name, col_value in optional_columns:
@@ -2069,6 +2402,54 @@ def cleanup_old_deleted_channels(days_old: int = 30) -> int:
     )
 
 
+# Module-level cache for soccer slug mapping (built once per session)
+_soccer_slug_mapping_cache = None
+
+
+def get_soccer_slug_mapping() -> Dict[str, str]:
+    """
+    Get mapping from ESPN soccer league slugs (esp.1) to league_config codes (laliga).
+
+    This is used by multi-sport mode to translate soccer_team_leagues cache results
+    to codes that TeamMatcher can use.
+
+    Returns:
+        Dict mapping ESPN slug to league_config code, e.g.:
+        {'esp.1': 'laliga', 'eng.1': 'epl', 'ger.1': 'bundesliga', ...}
+    """
+    global _soccer_slug_mapping_cache
+
+    if _soccer_slug_mapping_cache is not None:
+        return _soccer_slug_mapping_cache
+
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT league_code, api_path
+            FROM league_config
+            WHERE sport = 'soccer' AND api_path IS NOT NULL
+        """).fetchall()
+
+        mapping = {}
+        for row in rows:
+            # api_path is like "soccer/esp.1", extract "esp.1"
+            api_path = row['api_path']
+            if '/' in api_path:
+                slug = api_path.split('/')[-1]
+                mapping[slug] = row['league_code']
+
+        _soccer_slug_mapping_cache = mapping
+        return mapping
+    finally:
+        conn.close()
+
+
+def clear_soccer_slug_mapping_cache():
+    """Clear the soccer slug mapping cache. Call when soccer cache is refreshed."""
+    global _soccer_slug_mapping_cache
+    _soccer_slug_mapping_cache = None
+
+
 # =============================================================================
 # EPG Generation Stats Functions (Single Source of Truth)
 # =============================================================================
@@ -2114,6 +2495,7 @@ def save_epg_generation_stats(stats: Dict[str, Any]) -> int:
             # Event-based filtering stats (aggregated across all groups)
             event_total_streams: int - raw streams from provider
             event_filtered_no_indicator: int - streams without vs/@/at
+            event_filtered_include_regex: int - streams not matching inclusion regex
             event_filtered_exclude_regex: int - streams matching exclusion regex
             event_filtered_outside_lookahead: int - past games
             event_filtered_final: int - final events (when excluded)
@@ -2145,10 +2527,11 @@ def save_epg_generation_stats(stats: Dict[str, Any]) -> int:
                 event_based_channels, event_based_events,
                 event_based_pregame, event_based_postgame,
                 event_total_streams, event_filtered_no_indicator,
-                event_filtered_exclude_regex, event_filtered_outside_lookahead,
+                event_filtered_include_regex, event_filtered_exclude_regex,
+                event_filtered_outside_lookahead,
                 event_filtered_final, event_eligible_streams, event_matched_streams,
                 unresolved_vars_count, coverage_gaps_count, warnings_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             stats.get('file_path', ''),
             stats.get('file_size', 0),
@@ -2178,6 +2561,7 @@ def save_epg_generation_stats(stats: Dict[str, Any]) -> int:
             # Event-based filtering stats
             stats.get('event_total_streams', 0),
             stats.get('event_filtered_no_indicator', 0),
+            stats.get('event_filtered_include_regex', 0),
             stats.get('event_filtered_exclude_regex', 0),
             stats.get('event_filtered_outside_lookahead', 0),
             stats.get('event_filtered_final', 0),
@@ -2352,6 +2736,26 @@ def get_epg_stats_summary() -> Dict[str, Any]:
 # Channel Lifecycle V2 - Stream Management Functions
 # =============================================================================
 
+def get_all_managed_channel_streams() -> List[Dict[str, Any]]:
+    """Get all streams across all active channels with channel info for keyword enforcement.
+
+    Returns stream records joined with channel info needed for keyword placement checks.
+    """
+    return db_fetch_all("""
+        SELECT
+            mcs.*,
+            mc.espn_event_id,
+            mc.event_epg_group_id,
+            mc.exception_keyword as channel_exception_keyword,
+            mc.channel_name,
+            mc.dispatcharr_channel_id
+        FROM managed_channel_streams mcs
+        JOIN managed_channels mc ON mcs.managed_channel_id = mc.id
+        WHERE mcs.removed_at IS NULL
+          AND mc.deleted_at IS NULL
+    """)
+
+
 def get_channel_streams(managed_channel_id: int, include_removed: bool = False) -> List[Dict[str, Any]]:
     """Get all streams attached to a managed channel, ordered by priority."""
     query = """
@@ -2374,7 +2778,8 @@ def add_stream_to_channel(
     source_group_type: str = 'parent',
     priority: int = None,
     m3u_account_id: int = None,
-    m3u_account_name: str = None
+    m3u_account_name: str = None,
+    exception_keyword: str = None
 ) -> int:
     """
     Add a stream to a managed channel.
@@ -2388,6 +2793,7 @@ def add_stream_to_channel(
         priority: Stream priority (0=primary, higher=failover). Auto-assigned if None.
         m3u_account_id: M3U account ID
         m3u_account_name: M3U account name
+        exception_keyword: Keyword that matched this stream (for keyword-based consolidation)
 
     Returns:
         ID of the created stream record
@@ -2404,15 +2810,30 @@ def add_stream_to_channel(
             """, (managed_channel_id,)).fetchone()
             priority = (result['max_p'] or -1) + 1 if result and result['max_p'] is not None else 0
 
-        cursor.execute("""
-            INSERT INTO managed_channel_streams
-            (managed_channel_id, dispatcharr_stream_id, stream_name,
-             source_group_id, source_group_type, priority,
-             m3u_account_id, m3u_account_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (managed_channel_id, dispatcharr_stream_id, stream_name,
-              source_group_id, source_group_type, priority,
-              m3u_account_id, m3u_account_name))
+        # Check if exception_keyword column exists (backward compatibility)
+        cursor.execute("PRAGMA table_info(managed_channel_streams)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        if 'exception_keyword' in existing_columns:
+            cursor.execute("""
+                INSERT INTO managed_channel_streams
+                (managed_channel_id, dispatcharr_stream_id, stream_name,
+                 source_group_id, source_group_type, priority,
+                 m3u_account_id, m3u_account_name, exception_keyword)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (managed_channel_id, dispatcharr_stream_id, stream_name,
+                  source_group_id, source_group_type, priority,
+                  m3u_account_id, m3u_account_name, exception_keyword))
+        else:
+            cursor.execute("""
+                INSERT INTO managed_channel_streams
+                (managed_channel_id, dispatcharr_stream_id, stream_name,
+                 source_group_id, source_group_type, priority,
+                 m3u_account_id, m3u_account_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (managed_channel_id, dispatcharr_stream_id, stream_name,
+                  source_group_id, source_group_type, priority,
+                  m3u_account_id, m3u_account_name))
 
         conn.commit()
         return cursor.lastrowid
@@ -2544,6 +2965,52 @@ def get_recent_channel_changes(hours: int = 24, change_types: List[str] = None) 
     return db_fetch_all(query, tuple(params))
 
 
+def get_channels_needing_reorder() -> List[Dict[str, Any]]:
+    """Find events where keyword channel has a lower number than main channel.
+
+    Returns list of dicts with 'main_channel' and 'keyword_channel' that need swapping.
+    """
+    # Find all events with both main and keyword channels
+    rows = db_fetch_all("""
+        SELECT
+            m.id as main_id,
+            m.channel_number as main_number,
+            m.dispatcharr_channel_id as main_dispatcharr_id,
+            m.espn_event_id,
+            k.id as keyword_id,
+            k.channel_number as keyword_number,
+            k.dispatcharr_channel_id as keyword_dispatcharr_id,
+            k.exception_keyword
+        FROM managed_channels m
+        JOIN managed_channels k ON m.espn_event_id = k.espn_event_id
+                               AND m.event_epg_group_id = k.event_epg_group_id
+        WHERE m.deleted_at IS NULL
+          AND k.deleted_at IS NULL
+          AND (m.exception_keyword IS NULL OR m.exception_keyword = '')
+          AND k.exception_keyword IS NOT NULL
+          AND k.exception_keyword != ''
+          AND k.channel_number < m.channel_number
+    """)
+
+    results = []
+    for row in rows:
+        results.append({
+            'main_channel': {
+                'id': row['main_id'],
+                'channel_number': row['main_number'],
+                'dispatcharr_channel_id': row['main_dispatcharr_id'],
+                'espn_event_id': row['espn_event_id']
+            },
+            'keyword_channel': {
+                'id': row['keyword_id'],
+                'channel_number': row['keyword_number'],
+                'dispatcharr_channel_id': row['keyword_dispatcharr_id'],
+                'exception_keyword': row['exception_keyword']
+            }
+        })
+    return results
+
+
 def cleanup_old_channel_history(days: int = 90) -> int:
     """Delete channel history older than N days. Returns count deleted."""
     return db_execute("""
@@ -2560,7 +3027,8 @@ def find_existing_channel(
     group_id: int,
     event_id: str,
     stream_id: int = None,
-    mode: str = 'consolidate'
+    mode: str = 'consolidate',
+    exception_keyword: str = None
 ) -> Optional[Dict[str, Any]]:
     """
     Find existing channel based on duplicate handling mode.
@@ -2570,6 +3038,7 @@ def find_existing_channel(
         event_id: ESPN event ID
         stream_id: Stream ID (only used for 'separate' mode)
         mode: Duplicate handling mode ('ignore', 'consolidate', 'separate')
+        exception_keyword: Canonical keyword for keyword-based consolidation
 
     Returns:
         Managed channel dict if found, None otherwise
@@ -2583,24 +3052,114 @@ def find_existing_channel(
               AND primary_stream_id = ?
               AND deleted_at IS NULL
         """, (group_id, event_id, stream_id))
-    else:
-        # Any channel for this event in this group
+    elif exception_keyword:
+        # Keyword-based consolidation: find channel for this event+keyword
         return db_fetch_one("""
             SELECT * FROM managed_channels
             WHERE event_epg_group_id = ?
               AND espn_event_id = ?
+              AND exception_keyword = ?
+              AND deleted_at IS NULL
+        """, (group_id, event_id, exception_keyword))
+    else:
+        # Any channel for this event in this group (without exception_keyword)
+        # When in consolidate mode without keywords, find a channel without a keyword
+        # This ensures keyword streams and non-keyword streams don't mix
+        return db_fetch_one("""
+            SELECT * FROM managed_channels
+            WHERE event_epg_group_id = ?
+              AND espn_event_id = ?
+              AND (exception_keyword IS NULL OR exception_keyword = '')
               AND deleted_at IS NULL
         """, (group_id, event_id))
 
 
-def find_parent_channel_for_event(parent_group_id: int, event_id: str) -> Optional[Dict[str, Any]]:
-    """Find a parent group's channel for a given event (used by child groups)."""
-    return db_fetch_one("""
-        SELECT * FROM managed_channels
-        WHERE event_epg_group_id = ?
-          AND espn_event_id = ?
-          AND deleted_at IS NULL
-    """, (parent_group_id, event_id))
+def find_parent_channel_for_event(parent_group_id: int, event_id: str, exception_keyword: str = None) -> Optional[Dict[str, Any]]:
+    """Find a parent group's channel for a given event (used by child groups).
+
+    Args:
+        parent_group_id: The parent group ID
+        event_id: The ESPN event ID
+        exception_keyword: Optional exception keyword to match (for sub-consolidated channels)
+
+    Returns:
+        The matching managed channel record, or None if not found
+    """
+    if exception_keyword:
+        # Look for channel with matching keyword
+        return db_fetch_one("""
+            SELECT * FROM managed_channels
+            WHERE event_epg_group_id = ?
+              AND espn_event_id = ?
+              AND exception_keyword = ?
+              AND deleted_at IS NULL
+        """, (parent_group_id, event_id, exception_keyword))
+    else:
+        # Look for main channel (no keyword)
+        return db_fetch_one("""
+            SELECT * FROM managed_channels
+            WHERE event_epg_group_id = ?
+              AND espn_event_id = ?
+              AND (exception_keyword IS NULL OR exception_keyword = '')
+              AND deleted_at IS NULL
+        """, (parent_group_id, event_id))
+
+
+def find_any_channel_for_event(event_id: str, exception_keyword: str = None, exclude_group_id: int = None) -> Optional[Dict[str, Any]]:
+    """Find any group's channel for a given event (used by multi-sport groups for overlap handling).
+
+    Unlike find_parent_channel_for_event which only searches within a parent group,
+    this searches across ALL groups to find if an event already has a channel.
+
+    Args:
+        event_id: The ESPN event ID
+        exception_keyword: Optional exception keyword to match
+        exclude_group_id: Optional group ID to exclude from search (usually the current group)
+
+    Returns:
+        The matching managed channel record, or None if not found
+    """
+    if exception_keyword:
+        if exclude_group_id:
+            return db_fetch_one("""
+                SELECT mc.*, eg.group_name
+                FROM managed_channels mc
+                LEFT JOIN event_epg_groups eg ON mc.event_epg_group_id = eg.id
+                WHERE mc.espn_event_id = ?
+                  AND mc.exception_keyword = ?
+                  AND mc.event_epg_group_id != ?
+                  AND mc.deleted_at IS NULL
+            """, (event_id, exception_keyword, exclude_group_id))
+        else:
+            return db_fetch_one("""
+                SELECT mc.*, eg.group_name
+                FROM managed_channels mc
+                LEFT JOIN event_epg_groups eg ON mc.event_epg_group_id = eg.id
+                WHERE mc.espn_event_id = ?
+                  AND mc.exception_keyword = ?
+                  AND mc.deleted_at IS NULL
+            """, (event_id, exception_keyword))
+    else:
+        # Look for main channel (no keyword)
+        if exclude_group_id:
+            return db_fetch_one("""
+                SELECT mc.*, eg.group_name
+                FROM managed_channels mc
+                LEFT JOIN event_epg_groups eg ON mc.event_epg_group_id = eg.id
+                WHERE mc.espn_event_id = ?
+                  AND (mc.exception_keyword IS NULL OR mc.exception_keyword = '')
+                  AND mc.event_epg_group_id != ?
+                  AND mc.deleted_at IS NULL
+            """, (event_id, exclude_group_id))
+        else:
+            return db_fetch_one("""
+                SELECT mc.*, eg.group_name
+                FROM managed_channels mc
+                LEFT JOIN event_epg_groups eg ON mc.event_epg_group_id = eg.id
+                WHERE mc.espn_event_id = ?
+                  AND (mc.exception_keyword IS NULL OR mc.exception_keyword = '')
+                  AND mc.deleted_at IS NULL
+            """, (event_id,))
 
 
 def get_channels_by_sync_status(status: str) -> List[Dict[str, Any]]:
@@ -2737,3 +3296,96 @@ def get_potential_parents_for_sport(sport: str, exclude_group_id: int = None) ->
 
     query += " ORDER BY group_name"
     return db_fetch_all(query, tuple(params))
+
+
+# =============================================================================
+# CONSOLIDATION EXCEPTION KEYWORDS (Global)
+# =============================================================================
+
+def get_consolidation_exception_keywords() -> List[Dict[str, Any]]:
+    """
+    Get all global exception keywords.
+
+    Returns:
+        List of dicts: [{'id': 1, 'keywords': 'Prime Vision, Primevision', 'behavior': 'separate'}, ...]
+    """
+    return db_fetch_all(
+        "SELECT id, keywords, behavior FROM consolidation_exception_keywords ORDER BY id"
+    )
+
+
+def add_consolidation_exception_keyword(keywords: str, behavior: str = 'consolidate') -> int:
+    """
+    Add a new global exception keyword entry.
+
+    Args:
+        keywords: Comma-separated keyword variants
+        behavior: 'consolidate', 'separate', or 'ignore'
+
+    Returns:
+        New entry ID
+    """
+    if behavior not in ('consolidate', 'separate', 'ignore'):
+        raise ValueError(f"Invalid behavior: {behavior}")
+
+    return db_insert(
+        "INSERT INTO consolidation_exception_keywords (keywords, behavior) VALUES (?, ?)",
+        (keywords.strip(), behavior)
+    )
+
+
+def update_consolidation_exception_keyword(keyword_id: int, keywords: str = None, behavior: str = None) -> bool:
+    """
+    Update an existing exception keyword entry.
+
+    Args:
+        keyword_id: ID of the keyword entry
+        keywords: New keywords (optional)
+        behavior: New behavior (optional)
+
+    Returns:
+        True if updated, False if not found
+    """
+    if behavior and behavior not in ('consolidate', 'separate', 'ignore'):
+        raise ValueError(f"Invalid behavior: {behavior}")
+
+    updates = []
+    params = []
+    if keywords is not None:
+        updates.append("keywords = ?")
+        params.append(keywords.strip())
+    if behavior is not None:
+        updates.append("behavior = ?")
+        params.append(behavior)
+
+    if not updates:
+        return False
+
+    params.append(keyword_id)
+
+    with db_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE consolidation_exception_keywords SET {', '.join(updates)} WHERE id = ?",
+            params
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def delete_consolidation_exception_keyword(keyword_id: int) -> bool:
+    """
+    Delete an exception keyword entry.
+
+    Args:
+        keyword_id: ID of the keyword entry
+
+    Returns:
+        True if deleted, False if not found
+    """
+    with db_connection() as conn:
+        cursor = conn.execute(
+            "DELETE FROM consolidation_exception_keywords WHERE id = ?",
+            (keyword_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0

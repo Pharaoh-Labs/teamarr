@@ -31,6 +31,9 @@ class EventTemplateEngine:
     def __init__(self):
         pass
 
+    # Variables that should be gracefully removed with surrounding chars when empty
+    OPTIONAL_VARS = {'exception_keyword', 'exception_keyword_title'}
+
     def resolve(self, template: str, context: Dict[str, Any]) -> str:
         """
         Resolve all template variables in a string.
@@ -48,7 +51,27 @@ class EventTemplateEngine:
         # Build all variables from context
         variables = self._build_variable_dict(context)
 
-        # Use regex to find and replace all {variable} patterns
+        # First pass: Remove optional variables with their surrounding brackets/parens when empty
+        # Pattern matches: (optional_var), [optional_var], or just the var with surrounding spaces
+        for var_name in self.OPTIONAL_VARS:
+            var_value = variables.get(var_name, '')
+            if not var_value:
+                # Remove patterns like "({var})" or "( {var} )" or "[ {var} ]" etc.
+                template = re.sub(
+                    r'\s*[\(\[]\s*\{' + var_name + r'\}\s*[\)\]]\s*',
+                    '',
+                    template,
+                    flags=re.IGNORECASE
+                )
+                # Also remove standalone " - {var}" or " {var}" patterns
+                template = re.sub(
+                    r'\s*[-–—]\s*\{' + var_name + r'\}',
+                    '',
+                    template,
+                    flags=re.IGNORECASE
+                )
+
+        # Second pass: Replace all remaining {variable} patterns
         pattern = r'\{([a-z_][a-z0-9_]*)\}'
 
         def replace_variable(match):
@@ -57,6 +80,10 @@ class EventTemplateEngine:
             return str(var_value)
 
         result = re.sub(pattern, replace_variable, template, flags=re.IGNORECASE)
+
+        # Clean up any double spaces left behind
+        result = re.sub(r'  +', ' ', result).strip()
+
         return result
 
     def _build_variable_dict(self, context: Dict[str, Any]) -> Dict[str, str]:
@@ -351,6 +378,15 @@ class EventTemplateEngine:
         else:
             variables['channel_id'] = stream.get('tvg_id') or f"event-{stream.get('id', 'unknown')}"
 
+        # =====================================================================
+        # EXCEPTION KEYWORD (for sub-consolidation)
+        # =====================================================================
+
+        exception_keyword = context.get('exception_keyword', '')
+        variables['exception_keyword'] = exception_keyword or ''
+        # Title case version for display (e.g., "Prime Vision")
+        variables['exception_keyword_title'] = exception_keyword.title() if exception_keyword else ''
+
         return variables
 
     def select_description(self, description_options: Any, context: Dict[str, Any]) -> str:
@@ -401,7 +437,8 @@ def build_event_context(
     stream: Dict,
     group_info: Dict,
     epg_timezone: str = 'America/Detroit',
-    time_format_settings: Dict = None
+    time_format_settings: Dict = None,
+    exception_keyword: str = None
 ) -> Dict[str, Any]:
     """
     Build context dictionary for event template resolution.
@@ -412,6 +449,7 @@ def build_event_context(
         group_info: Event EPG group configuration
         epg_timezone: Timezone for display
         time_format_settings: User's time format preferences (time_format, show_timezone)
+        exception_keyword: Optional matched exception keyword for sub-consolidation
 
     Returns:
         Context dictionary ready for EventTemplateEngine.resolve()
@@ -421,5 +459,6 @@ def build_event_context(
         'stream': stream,
         'group_info': group_info,
         'epg_timezone': epg_timezone,
-        'time_format_settings': time_format_settings or {}
+        'time_format_settings': time_format_settings or {},
+        'exception_keyword': exception_keyword
     }

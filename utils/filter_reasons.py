@@ -35,6 +35,9 @@ class FilterReason:
     # Built-in game indicator filter
     NO_GAME_INDICATOR = 'no_game_indicator'
 
+    # User inclusion regex not matched
+    INCLUDE_REGEX_NOT_MATCHED = 'include_regex_not_matched'
+
     # User exclusion regex matched
     EXCLUDE_REGEX_MATCHED = 'exclude_regex_matched'
 
@@ -65,6 +68,7 @@ class FilterReason:
 # Display text for user-facing UI (preview modal, etc.)
 DISPLAY_TEXT = {
     FilterReason.NO_GAME_INDICATOR: 'Excluded by filter',
+    FilterReason.INCLUDE_REGEX_NOT_MATCHED: 'Did not match inclusion pattern',
     FilterReason.EXCLUDE_REGEX_MATCHED: 'Matched exclusion pattern',
     FilterReason.GAME_PAST: 'Event already passed',
     FilterReason.GAME_FINAL_EXCLUDED: 'Event is final (excluded)',
@@ -153,6 +157,7 @@ def is_excluded_from_count(reason: str) -> bool:
 # Database column mapping for statistics
 DB_COLUMN_MAPPING = {
     FilterReason.NO_GAME_INDICATOR: 'filtered_no_indicator',
+    FilterReason.INCLUDE_REGEX_NOT_MATCHED: 'filtered_include_regex',
     FilterReason.EXCLUDE_REGEX_MATCHED: 'filtered_exclude_regex',
     FilterReason.GAME_PAST: 'filtered_outside_lookahead',
     FilterReason.GAME_FINAL_EXCLUDED: 'filtered_final',

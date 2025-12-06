@@ -235,24 +235,30 @@
                                     {% if group.account_name %}
                                         <span class="badge badge-secondary">{{ group.account_name }}</span>
                                     {% endif %}
-                                    {% if group.custom_regex_teams_enabled or group.custom_regex_date_enabled or group.custom_regex_time_enabled or group.stream_exclude_regex_enabled %}
+                                    {% if group.custom_regex_teams_enabled or group.custom_regex_date_enabled or group.custom_regex_time_enabled or group.stream_include_regex_enabled or group.stream_exclude_regex_enabled %}
                                         <span class="badge badge-info" title="Custom regex patterns configured">Regex</span>
                                     {% endif %}
                                 </div>
                             </td>
                             <td style="text-align: center;">
+                                {% if group.is_multi_sport %}
+                                <span class="multi-sport-badge" title="Multi-Sport / Multi-League">MUL</span>
+                                {% else %}
                                 <img src="{{ league_logos.get(group.assigned_league, '') }}"
                                      alt="{{ group.assigned_league.upper() }}"
                                      class="league-logo"
                                      title="{{ group.assigned_league.upper() }}">
+                                {% endif %}
                             </td>
-                            <td style="font-size: 1.5rem; text-align: center; vertical-align: middle;" title="{{ group.assigned_sport|title }}">
-                                {% if group.assigned_sport == 'basketball' %}🏀
-                                {% elif group.assigned_sport == 'football' %}🏈
-                                {% elif group.assigned_sport == 'baseball' %}⚾
-                                {% elif group.assigned_sport == 'hockey' %}🏒
-                                {% elif group.assigned_sport == 'soccer' %}⚽
-                                {% else %}🏆
+                            <td style="text-align: center; vertical-align: middle;" title="{{ group.assigned_sport|title if not group.is_multi_sport else 'Multi-Sport' }}">
+                                {% if group.is_multi_sport %}
+                                <span class="multi-sport-badge">MUL</span>
+                                {% elif group.assigned_sport == 'basketball' %}<span style="font-size: 1.5rem;">🏀</span>
+                                {% elif group.assigned_sport == 'football' %}<span style="font-size: 1.5rem;">🏈</span>
+                                {% elif group.assigned_sport == 'baseball' %}<span style="font-size: 1.5rem;">⚾</span>
+                                {% elif group.assigned_sport == 'hockey' %}<span style="font-size: 1.5rem;">🏒</span>
+                                {% elif group.assigned_sport == 'soccer' %}<span style="font-size: 1.5rem;">⚽</span>
+                                {% else %}<span style="font-size: 1.5rem;">🏆</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -336,7 +342,7 @@
                                         {% if child.account_name %}
                                             <span class="badge badge-secondary" style="font-size: 0.65rem;">{{ child.account_name }}</span>
                                         {% endif %}
-                                        {% if child.custom_regex_teams_enabled or child.custom_regex_date_enabled or child.custom_regex_time_enabled or child.stream_exclude_regex_enabled %}
+                                        {% if child.custom_regex_teams_enabled or child.custom_regex_date_enabled or child.custom_regex_time_enabled or child.stream_include_regex_enabled or child.stream_exclude_regex_enabled %}
                                             <span class="badge badge-info" style="font-size: 0.65rem;" title="Custom regex patterns configured">Regex</span>
                                         {% endif %}
                                     </div>
@@ -1487,6 +1493,21 @@ code {
     vertical-align: middle;
     object-fit: contain;
     display: inline-block;
+}
+
+.multi-sport-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    min-width: 30px;
+    padding: 0 6px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    font-weight: 700;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
 }
 
 /* Toggle switch */

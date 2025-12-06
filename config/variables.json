@@ -486,6 +486,117 @@
       ]
     },
     {
+      "name": "soccer_match_league",
+      "description": "Competition name for this specific match (changes per game)",
+      "source": "Event source league",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "⚽",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "soccer"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "Soccer": "UEFA Champions League"
+      },
+      "context": [
+        "team"
+      ]
+    },
+    {
+      "name": "soccer_match_league_id",
+      "description": "Competition slug for this specific match (changes per game)",
+      "source": "Event source league",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "⚽",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "soccer"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "Soccer": "uefa.champions"
+      },
+      "context": [
+        "team"
+      ]
+    },
+    {
+      "name": "soccer_match_league_logo",
+      "description": "Competition logo URL for this specific match (changes per game)",
+      "source": "Event source league",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "⚽",
+      "type": "url",
+      "availability": "always",
+      "sports": [
+        "soccer"
+      ],
+      "available_suffixes": [
+        "base",
+        "next",
+        "last"
+      ],
+      "examples_by_sport": {
+        "Soccer": "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png"
+      },
+      "context": [
+        "team"
+      ]
+    },
+    {
+      "name": "soccer_primary_league",
+      "description": "Team's primary/home league name (alias for league_name)",
+      "source": "Team config",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "⚽",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "soccer"
+      ],
+      "available_suffixes": [
+        "base"
+      ],
+      "examples_by_sport": {
+        "Soccer": "English Premier League"
+      },
+      "context": [
+        "team"
+      ]
+    },
+    {
+      "name": "soccer_primary_league_id",
+      "description": "Team's primary/home league slug (alias for league_id)",
+      "source": "Team config",
+      "category": "\ud83c\udff7\ufe0f Team Identity",
+      "icon": "⚽",
+      "type": "string",
+      "availability": "always",
+      "sports": [
+        "soccer"
+      ],
+      "available_suffixes": [
+        "base"
+      ],
+      "examples_by_sport": {
+        "Soccer": "eng.1"
+      },
+      "context": [
+        "team"
+      ]
+    },
+    {
       "name": "sport",
       "description": "Sport name",
       "source": "Team config",
@@ -4900,10 +5011,60 @@
         "NFL": "NE",
         "NBA": "BOS"
       }
+    },
+    {
+      "name": "exception_keyword",
+      "description": "Matched exception keyword for sub-consolidation (lowercase)",
+      "source": "Exception keyword matching",
+      "category": "🔧 Channel Settings",
+      "icon": "🏷️",
+      "type": "string",
+      "availability": "when_matched",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball",
+        "soccer"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "prime vision",
+        "NBA": "league pass",
+        "NHL": "center ice"
+      }
+    },
+    {
+      "name": "exception_keyword_title",
+      "description": "Matched exception keyword for sub-consolidation (title case)",
+      "source": "Exception keyword matching",
+      "category": "🔧 Channel Settings",
+      "icon": "🏷️",
+      "type": "string",
+      "availability": "when_matched",
+      "context": [
+        "event"
+      ],
+      "sports": [
+        "basketball",
+        "football",
+        "hockey",
+        "baseball",
+        "soccer"
+      ],
+      "available_suffixes": [],
+      "examples_by_sport": {
+        "NFL": "Prime Vision",
+        "NBA": "League Pass",
+        "NHL": "Center Ice"
+      }
     }
   ],
   "base_variables_count": 113,
-  "total_variables_count": 248,
+  "total_variables_count": 250,
   "examples_by_sport_info": {
     "description": "Each variable has sport-specific example values representing realistic scenarios",
     "sports": [
@@ -4934,6 +5095,6 @@
     "generated": "2025-11-24"
   },
   "team_variables": 138,
-  "event_variables": 71,
+  "event_variables": 73,
   "shared_variables": 60
 }

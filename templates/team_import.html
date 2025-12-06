@@ -415,7 +415,7 @@ async function selectLeague(league) {
 
     try {
         // Check if this is a college league that should be organized by conference
-        const isCollegeSport = ['ncaaf', 'ncaam', 'ncaaw'].includes(league.code);
+        const isCollegeSport = ['ncaaf', 'ncaam', 'ncaaw', 'ncaah', 'ncaavb-w', 'ncaavb-m', 'ncaas', 'ncaaws'].includes(league.code);
 
         if (isCollegeSport) {
             await loadConferences(league);

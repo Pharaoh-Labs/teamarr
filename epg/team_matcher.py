@@ -13,13 +13,21 @@ Key Features:
 """
 
 import re
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 
 from epg.league_config import get_league_config, parse_api_path, is_college_league
 from utils.logger import get_logger
+from utils.regex_helper import REGEX_MODULE
 
 logger = get_logger(__name__)
+
+
+# Module-level shared cache for team data across all TeamMatcher instances
+# This prevents redundant ESPN API calls when processing streams in parallel
+_shared_team_cache: Dict[str, Dict] = {}
+_shared_team_cache_lock = threading.Lock()
 
 
 def extract_date_from_text(text: str) -> Optional[datetime]:
@@ -212,14 +220,14 @@ class TeamMatcher:
             espn_client: ESPNClient instance for fetching team data
             db_connection_func: Function that returns a database connection
                                (for alias lookups). If None, aliases won't be used.
+
+        Note: Team data is cached at the module level (shared across all instances)
+        to prevent redundant ESPN API calls when processing streams in parallel.
         """
         self.espn = espn_client
         self.db_connection_func = db_connection_func
 
-        # Cache: {league_code: {'teams': [...], 'fetched_at': datetime}}
-        self._team_cache: Dict[str, Dict] = {}
-
-        # League config cache (from database)
+        # League config cache (from database) - per instance since config is fast to fetch
         self._league_config: Dict[str, Dict] = {}
 
     def _get_league_config(self, league_code: str) -> Optional[Dict]:
@@ -236,8 +244,10 @@ class TeamMatcher:
 
     def _get_teams_for_league(self, league_code: str) -> List[Dict]:
         """
-        Get all teams for a league, using cache when available.
+        Get all teams for a league, using shared cache when available.
 
+        Uses module-level shared cache to prevent redundant API calls when
+        multiple TeamMatcher instances are used in parallel threads.
         Fetches from ESPN API and caches for CACHE_DURATION.
         College leagues use conference-based fetching to get all teams.
 
@@ -247,13 +257,15 @@ class TeamMatcher:
         Returns:
             List of team dicts with id, name, abbreviation, shortName, slug
         """
+        global _shared_team_cache
         league_lower = league_code.lower()
 
-        # Check cache
-        if league_lower in self._team_cache:
-            cached = self._team_cache[league_lower]
-            if datetime.now() - cached['fetched_at'] < self.CACHE_DURATION:
-                return cached['teams']
+        # Check shared cache first (with lock for thread safety)
+        with _shared_team_cache_lock:
+            if league_lower in _shared_team_cache:
+                cached = _shared_team_cache[league_lower]
+                if datetime.now() - cached['fetched_at'] < self.CACHE_DURATION:
+                    return cached['teams']
 
         # Get league config
         config = self._get_league_config(league_lower)
@@ -265,6 +277,14 @@ class TeamMatcher:
         sport, league = parse_api_path(config['api_path'])
         if not sport or not league:
             return []
+
+        # Double-check lock pattern: re-check cache after acquiring lock
+        # Another thread may have populated the cache while we were getting config
+        with _shared_team_cache_lock:
+            if league_lower in _shared_team_cache:
+                cached = _shared_team_cache[league_lower]
+                if datetime.now() - cached['fetched_at'] < self.CACHE_DURATION:
+                    return cached['teams']
 
         # College leagues need conference-based fetching
         if is_college_league(league_lower) or is_college_league(league):
@@ -282,11 +302,12 @@ class TeamMatcher:
         for team in teams:
             team['_search_names'] = self._build_search_names(team)
 
-        # Cache results
-        self._team_cache[league_lower] = {
-            'teams': teams,
-            'fetched_at': datetime.now()
-        }
+        # Cache results in shared cache (with lock)
+        with _shared_team_cache_lock:
+            _shared_team_cache[league_lower] = {
+                'teams': teams,
+                'fetched_at': datetime.now()
+            }
 
         logger.info(f"Cached {len(teams)} teams for {league_code}")
         return teams
@@ -411,6 +432,12 @@ class TeamMatcher:
             return ''
 
         text = text.lower()
+
+        # Normalize special characters (handles ESPN stream name quirks)
+        # Backtick → apostrophe (e.g., "Hawai`i" → "Hawai'i")
+        text = text.replace('`', "'")
+        # Underscore → space (e.g., "Gardner_Webb" → "Gardner Webb")
+        text = text.replace('_', ' ')
 
         # Remove parenthetical content
         text = re.sub(r'\([^)]*\)', '', text)
@@ -655,6 +682,116 @@ class TeamMatcher:
 
         return None
 
+    def _find_all_matching_teams(self, text: str, teams: List[Dict], max_results: int = 5) -> List[Dict]:
+        """
+        Find ALL teams that match the given text, sorted by match quality.
+
+        This is used for team disambiguation when the primary match doesn't find a game.
+        For example, "Maryland" could match:
+        - Maryland Terrapins (best match - exact location)
+        - Maryland Eastern Shore Hawks (contains "Maryland")
+        - Loyola Maryland Greyhounds (contains "Maryland")
+
+        Match quality tiers (higher = better):
+        - Tier 4: Exact match
+        - Tier 3: Input is prefix of team name
+        - Tier 2: Team name appears as whole word in input
+        - Tier 1: Team name is prefix of input
+
+        Args:
+            text: Normalized text to search (e.g., "maryland")
+            teams: List of team dicts with _search_names, _primary_names, _secondary_names
+            max_results: Maximum number of teams to return (default 5)
+
+        Returns:
+            List of team dicts sorted by match quality (best first)
+        """
+        text = text.strip().lower()
+        if not text:
+            return []
+
+        # Collect all matches with their quality scores
+        # Format: (team, tier, match_length, is_primary)
+        matches = []
+        seen_team_ids = set()
+
+        for team in teams:
+            team_id = team.get('id')
+            if team_id in seen_team_ids:
+                continue
+
+            best_tier = 0
+            best_length = 0
+            best_is_primary = False
+
+            # Check primary names first (higher priority)
+            for search_name in team.get('_primary_names', []):
+                if not search_name:
+                    continue
+                search_lower = search_name.lower()
+
+                # Tier 4: Exact match
+                if text == search_lower:
+                    best_tier = 4
+                    best_length = len(search_lower)
+                    best_is_primary = True
+                    break
+
+                # Tier 3: Input is prefix of search name
+                if search_lower.startswith(text) and len(text) >= 3:
+                    if 3 > best_tier or (3 == best_tier and len(text) > best_length):
+                        best_tier = 3
+                        best_length = len(text)
+                        best_is_primary = True
+
+                # Tier 2: Whole word match
+                if len(search_lower) >= 3:
+                    pattern = r'\b' + re.escape(search_lower) + r'\b'
+                    if re.search(pattern, text):
+                        if 2 > best_tier or (2 == best_tier and len(search_lower) > best_length):
+                            best_tier = 2
+                            best_length = len(search_lower)
+                            best_is_primary = True
+
+                # Tier 1: Search name is prefix of input
+                if text.startswith(search_lower) and len(search_lower) >= 3:
+                    if 1 > best_tier or (1 == best_tier and len(search_lower) > best_length):
+                        best_tier = 1
+                        best_length = len(search_lower)
+                        best_is_primary = True
+
+            # Check secondary names (location-only, lower priority)
+            for search_name in team.get('_secondary_names', []):
+                if not search_name:
+                    continue
+                search_lower = search_name.lower()
+
+                # Tier 4: Exact match
+                if text == search_lower:
+                    if 4 > best_tier:
+                        best_tier = 4
+                        best_length = len(search_lower)
+                        best_is_primary = False
+
+                # Tier 2: Whole word match (only for secondary)
+                if len(search_lower) >= 3:
+                    pattern = r'\b' + re.escape(search_lower) + r'\b'
+                    if re.search(pattern, text):
+                        if 2 > best_tier or (2 == best_tier and len(search_lower) > best_length and not best_is_primary):
+                            best_tier = 2
+                            best_length = len(search_lower)
+                            best_is_primary = False
+
+            if best_tier > 0:
+                matches.append((team, best_tier, best_length, best_is_primary))
+                seen_team_ids.add(team_id)
+
+        # Sort by: tier (desc), is_primary (desc), length (desc)
+        matches.sort(key=lambda x: (x[1], x[3], x[2]), reverse=True)
+
+        # Return just the team dicts, limited to max_results
+        return [m[0] for m in matches[:max_results]]
+
     def _find_all_teams_in_text(self, text: str, teams: List[Dict]) -> List[Tuple[Dict, int, int]]:
         """
         Find all team matches in the given text with their positions.
@@ -876,6 +1013,9 @@ class TeamMatcher:
             - raw_away, raw_home: Raw extracted strings (for debugging)
             - game_date: datetime or None - extracted date from stream name
         """
+        # TRACE: Log the input
+        logger.debug(f"[TRACE] extract_teams START | stream='{stream_name}' | league={league}")
+
         # Initialize result
         game_date, game_time = self._extract_metadata(stream_name)
         result = {
@@ -886,33 +1026,46 @@ class TeamMatcher:
             'game_time': game_time
         }
 
+        # TRACE: Log extracted date/time
+        if game_date or game_time:
+            logger.debug(f"[TRACE] Metadata | date={game_date.date() if game_date else None} | time={game_time.strftime('%H:%M') if game_time else None}")
+
         # Get teams for this league
         teams = self._get_teams_for_league(league)
         if not teams:
             result['reason'] = f'No team data available for league: {league}'
+            logger.debug(f"[TRACE] extract_teams FAIL | reason=no team data for {league}")
             return result
 
         # Normalize and split the stream name
         normalized = self._normalize_for_stream(stream_name)
         if not normalized:
             result['reason'] = 'Stream name empty after normalization'
+            logger.debug(f"[TRACE] extract_teams FAIL | reason=empty after normalization")
             return result
+
+        # TRACE: Log normalized result
+        logger.debug(f"[TRACE] Normalized | '{stream_name}' -> '{normalized}'")
 
         away_part, home_part, split_error = self._split_matchup(normalized)
 
         if split_error:
             # No separator found - try separator-less matching as fallback
-            logger.debug(f"No separator found, trying separator-less matching for: {normalized}")
+            logger.debug(f"[TRACE] No separator found, trying separator-less matching for: {normalized}")
             away_team, home_team, fallback_error = self._extract_teams_without_separator(
                 normalized, league, teams
             )
 
             if fallback_error:
                 result['reason'] = fallback_error
+                logger.debug(f"[TRACE] extract_teams FAIL | reason={fallback_error}")
                 return result
         else:
             result['raw_away'] = away_part
             result['raw_home'] = home_part
+
+            # TRACE: Log the split parts
+            logger.debug(f"[TRACE] Split | away_part='{away_part}' | home_part='{home_part}'")
 
             # Find both teams using separator-based parts
             away_team = self._find_team(away_part, league, teams)
@@ -921,11 +1074,13 @@ class TeamMatcher:
             if not away_team:
                 result['reason'] = f'Away team not found: {away_part}'
                 result['unmatched_team'] = away_part
+                logger.debug(f"[TRACE] extract_teams FAIL | away_part='{away_part}' not found in {league}")
                 return result
 
             if not home_team:
                 result['reason'] = f'Home team not found: {home_part}'
                 result['unmatched_team'] = home_part
+                logger.debug(f"[TRACE] extract_teams FAIL | home_part='{home_part}' not found in {league}")
                 return result
 
         # Both teams found - populate result
@@ -936,6 +1091,9 @@ class TeamMatcher:
         result['home_team_id'] = home_team.get('id')
         result['home_team_name'] = home_team.get('name')
         result['home_team_abbrev'] = home_team.get('abbreviation', '')
+
+        # TRACE: Log successful match
+        logger.debug(f"[TRACE] extract_teams OK | '{away_team.get('name')}' (id={away_team.get('id')}) vs '{home_team.get('name')}' (id={home_team.get('id')})")
 
         return result
 
@@ -971,13 +1129,13 @@ class TeamMatcher:
             'game_time': None
         }
 
-        # Apply teams pattern
+        # Apply teams pattern (uses regex module for advanced pattern support like variable-width lookbehind)
         try:
-            teams_match = re.search(teams_pattern, stream_name, re.IGNORECASE)
+            teams_match = REGEX_MODULE.search(teams_pattern, stream_name, REGEX_MODULE.IGNORECASE)
             if not teams_match:
                 result['reason'] = 'Teams pattern did not match stream name'
                 return result
-        except re.error as e:
+        except Exception as e:
             result['reason'] = f'Invalid teams pattern: {e}'
             return result
 
@@ -1005,10 +1163,10 @@ class TeamMatcher:
         result['raw_away'] = team1_text
         result['raw_home'] = team2_text
 
-        # Extract optional date
+        # Extract optional date (uses regex module for advanced pattern support)
         if date_pattern:
             try:
-                date_match = re.search(date_pattern, stream_name, re.IGNORECASE)
+                date_match = REGEX_MODULE.search(date_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if date_match:
                     # Try named group first, then first capture group, then full match
                     try:
@@ -1017,14 +1175,14 @@ class TeamMatcher:
                         date_text = date_match.group(1) if date_match.groups() else date_match.group(0)
                     if date_text:
                         result['game_date'] = extract_date_from_text(date_text.strip())
-            except re.error as e:
+            except Exception as e:
                 result['reason'] = f'Invalid date pattern: {e}'
                 return result
 
-        # Extract optional time
+        # Extract optional time (uses regex module for advanced pattern support)
         if time_pattern:
             try:
-                time_match = re.search(time_pattern, stream_name, re.IGNORECASE)
+                time_match = REGEX_MODULE.search(time_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if time_match:
                     # Try named group first, then first capture group, then full match
                     try:
@@ -1033,7 +1191,7 @@ class TeamMatcher:
                         time_text = time_match.group(1) if time_match.groups() else time_match.group(0)
                     if time_text:
                         result['game_time'] = extract_time_from_text(time_text.strip())
-            except re.error as e:
+            except Exception as e:
                 result['reason'] = f'Invalid time pattern: {e}'
                 return result
 
@@ -1110,13 +1268,14 @@ class TeamMatcher:
                 return result
 
         # Now handle date/time - override with custom if enabled, otherwise keep defaults
+        # Uses REGEX_MODULE for advanced pattern support like variable-width lookbehind
         if date_enabled and date_pattern:
             try:
-                date_match = re.search(date_pattern, stream_name, re.IGNORECASE)
+                date_match = REGEX_MODULE.search(date_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if date_match:
                     try:
                         date_text = date_match.group('date')
-                    except (IndexError, re.error):
+                    except (IndexError, Exception):
                         date_text = date_match.group(1) if date_match.groups() else date_match.group(0)
                     if date_text:
                         result['game_date'] = extract_date_from_text(date_text.strip())
@@ -1124,18 +1283,18 @@ class TeamMatcher:
                         result['game_date'] = None
                 else:
                     result['game_date'] = None
-            except re.error as e:
+            except Exception as e:
                 logger.warning(f"Invalid custom date pattern: {e}")
                 # Fall back to default
                 result['game_date'] = extract_date_from_text(stream_name)
 
         if time_enabled and time_pattern:
             try:
-                time_match = re.search(time_pattern, stream_name, re.IGNORECASE)
+                time_match = REGEX_MODULE.search(time_pattern, stream_name, REGEX_MODULE.IGNORECASE)
                 if time_match:
                     try:
                         time_text = time_match.group('time')
-                    except (IndexError, re.error):
+                    except (IndexError, Exception):
                         time_text = time_match.group(1) if time_match.groups() else time_match.group(0)
                     if time_text:
                         result['game_time'] = extract_time_from_text(time_text.strip())
@@ -1143,7 +1302,7 @@ class TeamMatcher:
                         result['game_time'] = None
                 else:
                     result['game_time'] = None
-            except re.error as e:
+            except Exception as e:
                 logger.warning(f"Invalid custom time pattern: {e}")
                 # Fall back to default
                 result['game_time'] = extract_time_from_text(stream_name)
@@ -1169,12 +1328,13 @@ class TeamMatcher:
             'game_time': extract_time_from_text(stream_name)
         }
 
+        # Uses REGEX_MODULE for advanced pattern support like variable-width lookbehind
         try:
-            teams_match = re.search(teams_pattern, stream_name, re.IGNORECASE)
+            teams_match = REGEX_MODULE.search(teams_pattern, stream_name, REGEX_MODULE.IGNORECASE)
             if not teams_match:
                 result['reason'] = 'Teams pattern did not match stream name'
                 return result
-        except re.error as e:
+        except Exception as e:
             result['reason'] = f'Invalid teams pattern: {e}'
             return result
 
@@ -1233,17 +1393,150 @@ class TeamMatcher:
 
         return result
 
+    def extract_raw_matchup(
+        self,
+        stream_name: str,
+        custom_regex_teams: str = None,
+        custom_regex_teams_enabled: bool = False,
+        custom_regex_date: str = None,
+        custom_regex_date_enabled: bool = False,
+        custom_regex_time: str = None,
+        custom_regex_time_enabled: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Extract raw matchup data from a stream name WITHOUT resolving to ESPN teams.
+
+        This is useful for multi-sport mode where we don't know the league yet.
+        Extracts: team1, team2, date, time, and detected league indicator.
+
+        Supports custom regex patterns for teams/date/time extraction, shared with
+        regular event groups.
+
+        Args:
+            stream_name: Raw stream/channel name
+            custom_regex_teams: Custom regex pattern with (?P<team1>...) and (?P<team2>...)
+            custom_regex_teams_enabled: Whether to use custom teams pattern
+            custom_regex_date: Custom regex pattern for date
+            custom_regex_date_enabled: Whether to use custom date pattern
+            custom_regex_time: Custom regex pattern for time
+            custom_regex_time_enabled: Whether to use custom time pattern
+
+        Returns:
+            Dict with:
+            - success: bool - whether team names were extracted
+            - team1, team2: Raw team name strings (if found)
+            - game_date: datetime or None
+            - game_time: datetime or None
+            - detected_league: str or None - league code if indicator found
+            - detected_sport: str or None - sport if indicator found
+            - reason: str - error reason if not successful
+        """
+        result = {
+            'success': False,
+            'stream_name': stream_name,
+            'team1': None,
+            'team2': None,
+            'game_date': None,
+            'game_time': None,
+            'detected_league': None,
+            'detected_sport': None,
+            'reason': None
+        }
+
+        # Extract date using custom or default pattern
+        if custom_regex_date_enabled and custom_regex_date:
+            try:
+                date_match = REGEX_MODULE.search(custom_regex_date, stream_name, REGEX_MODULE.IGNORECASE)
+                if date_match:
+                    date_str = date_match.group('date') if 'date' in date_match.groupdict() else date_match.group(1)
+                    if date_str:
+                        result['game_date'] = extract_date_from_text(date_str)
+            except Exception as e:
+                logger.warning(f"Custom date regex failed: {e}")
+                result['game_date'] = extract_date_from_text(stream_name)
+        else:
+            result['game_date'] = extract_date_from_text(stream_name)
+
+        # Extract time using custom or default pattern
+        if custom_regex_time_enabled and custom_regex_time:
+            try:
+                time_match = REGEX_MODULE.search(custom_regex_time, stream_name, REGEX_MODULE.IGNORECASE)
+                if time_match:
+                    time_str = time_match.group('time') if 'time' in time_match.groupdict() else time_match.group(1)
+                    if time_str:
+                        result['game_time'] = extract_time_from_text(time_str)
+            except Exception as e:
+                logger.warning(f"Custom time regex failed: {e}")
+                result['game_time'] = extract_time_from_text(stream_name)
+        else:
+            result['game_time'] = extract_time_from_text(stream_name)
+
+        # Try to detect league from indicators in stream name
+        from epg.league_detector import LEAGUE_INDICATORS, SPORT_INDICATORS, LEAGUE_TO_SPORT
+        import re
+
+        for pattern, league in LEAGUE_INDICATORS.items():
+            if re.search(pattern, stream_name, re.IGNORECASE):
+                result['detected_league'] = league
+                result['detected_sport'] = LEAGUE_TO_SPORT.get(league)
+                break
+
+        if not result['detected_league']:
+            for pattern, leagues in SPORT_INDICATORS.items():
+                if re.search(pattern, stream_name, re.IGNORECASE):
+                    result['detected_sport'] = pattern.strip(r'\b').lower()
+                    break
+
+        # Extract teams using custom or default pattern
+        if custom_regex_teams_enabled and custom_regex_teams:
+            try:
+                teams_match = REGEX_MODULE.search(custom_regex_teams, stream_name, REGEX_MODULE.IGNORECASE)
+                if teams_match:
+                    result['team1'] = teams_match.group('team1').strip() if 'team1' in teams_match.groupdict() else None
+                    result['team2'] = teams_match.group('team2').strip() if 'team2' in teams_match.groupdict() else None
+                    if result['team1'] and result['team2']:
+                        result['success'] = True
+                        return result
+                    else:
+                        result['reason'] = 'Custom teams regex matched but missing team1 or team2 groups'
+                else:
+                    result['reason'] = 'Custom teams regex did not match stream name'
+                return result
+            except Exception as e:
+                logger.warning(f"Custom teams regex failed: {e}")
+                result['reason'] = f'Custom teams regex error: {e}'
+                return result
+        else:
+            # Use default extraction
+            normalized = self._normalize_for_stream(stream_name)
+            if not normalized:
+                result['reason'] = 'Stream name empty after normalization'
+                return result
+
+            away_part, home_part, split_error = self._split_matchup(normalized)
+            if split_error:
+                result['reason'] = split_error
+                return result
+
+            result['team1'] = away_part
+            result['team2'] = home_part
+            result['success'] = True
+
+        return result
+
     def clear_cache(self, league: str = None) -> None:
         """
-        Clear the team cache.
+        Clear the shared team cache.
 
         Args:
             league: Specific league to clear, or None to clear all
         """
-        if league:
-            self._team_cache.pop(league.lower(), None)
-        else:
-            self._team_cache.clear()
+        global _shared_team_cache
+        with _shared_team_cache_lock:
+            if league:
+                _shared_team_cache.pop(league.lower(), None)
+            else:
+                _shared_team_cache.clear()
         logger.info(f"Team cache cleared: {league or 'all'}")
 
     def get_teams_for_league(self, league: str) -> List[Dict]:
@@ -1261,6 +1554,42 @@ class TeamMatcher:
         return [
             {k: v for k, v in team.items() if not k.startswith('_')}
             for team in teams
+        ]
+
+    def get_all_matching_teams(self, team_text: str, league: str, max_results: int = 5) -> List[Dict]:
+        """
+        Get all teams that match the given text in a league, sorted by match quality.
+
+        This is used for team disambiguation when the primary match doesn't find a game.
+        For example, "Maryland" could match:
+        - Maryland Terrapins (best match - exact location)
+        - Maryland Eastern Shore Hawks (contains "Maryland")
+        - Loyola Maryland Greyhounds (contains "Maryland")
+
+        Args:
+            team_text: Team name text to search for (e.g., "Maryland")
+            league: League code (e.g., "ncaam")
+            max_results: Maximum number of teams to return (default 5)
+
+        Returns:
+            List of team dicts with 'id' and 'name' keys, sorted by match quality (best first)
+        """
+        teams = self._get_teams_for_league(league)
+        if not teams:
+            return []
+
+        # Normalize the input text
+        normalized = team_text.strip().lower()
+        if not normalized:
+            return []
+
+        # Use internal method to find all matches
+        matching_teams = self._find_all_matching_teams(normalized, teams, max_results)
+
+        # Return clean version without internal search names
+        return [
+            {'id': team.get('id'), 'name': team.get('name'), 'abbrev': team.get('abbrev', '')}
+            for team in matching_teams
         ]
 
 

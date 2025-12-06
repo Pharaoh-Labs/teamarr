@@ -161,7 +161,7 @@
             <div class="form-row" style="margin-top: 0.75rem;">
                 <div class="form-group">
                     <label for="default_duplicate_event_handling">Duplicate Stream Handling</label>
-                    <select id="default_duplicate_event_handling" name="default_duplicate_event_handling" class="form-control">
+                    <select id="default_duplicate_event_handling" name="default_duplicate_event_handling" class="form-control" onchange="handleDuplicateHandlingChange()">
                         <option value="consolidate" {% if settings.default_duplicate_event_handling == 'consolidate' or not settings.default_duplicate_event_handling %}selected{% endif %}>Consolidate</option>
                         <option value="ignore" {% if settings.default_duplicate_event_handling == 'ignore' %}selected{% endif %}>Ignore</option>
                         <option value="separate" {% if settings.default_duplicate_event_handling == 'separate' %}selected{% endif %}>Separate</option>
@@ -170,6 +170,52 @@
                         <strong>Consolidate</strong> = add all streams to one channel<br>
                         <strong>Ignore</strong> = keep first stream only<br>
                         <strong>Separate</strong> = create separate channel per stream</small>
+                </div>
+            </div>
+
+            <!-- Exception Keywords Section (only visible when consolidate selected) -->
+            <div id="exception-keywords-section" class="form-row" style="margin-top: 0.75rem; display: none;">
+                <div class="form-group" style="width: 100%;">
+                    <label>
+                        <strong>Exception Keywords</strong>
+                        <small class="text-muted" style="margin-left: 0.5rem;">Streams matching these keywords get special handling</small>
+                    </label>
+
+                    <!-- Keywords table -->
+                    <div class="exception-keywords-table-wrapper">
+                        <table class="exception-keywords-table" id="exception-keywords-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50%">Keywords (comma-separated variants)</th>
+                                    <th style="width: 35%">Behavior</th>
+                                    <th style="width: 15%"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="exception-keywords-body">
+                                <!-- Rows populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add new keyword row -->
+                    <div class="exception-keyword-add-row" id="exception-keyword-add-row">
+                        <input type="text" id="new-keyword-input" class="form-control"
+                               placeholder="e.g., Prime Vision, Primevision">
+                        <select id="new-keyword-behavior" class="form-control" style="max-width: 150px;">
+                            <option value="consolidate">Sub-Consolidate</option>
+                            <option value="separate">Separate</option>
+                            <option value="ignore">Ignore</option>
+                        </select>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addExceptionKeyword()">
+                            + Add
+                        </button>
+                    </div>
+
+                    <small class="form-help" style="margin-top: 0.5rem;">
+                        <strong>Sub-Consolidate:</strong> Group streams with same keyword on one channel (separate from main consolidation)<br>
+                        <strong>Separate:</strong> Create new channel for each matching stream<br>
+                        <strong>Ignore:</strong> Skip streams with this keyword entirely
+                    </small>
                 </div>
             </div>
         </div>
@@ -340,6 +386,95 @@
                     Last sync: {{ settings.dispatcharr_last_sync }}
                 </div>
                 {% endif %}
+            </div>
+        </div>
+
+        <!-- Local Caching Section -->
+        <div class="form-section">
+            <h2>Local Caching</h2>
+            <p class="section-description">
+                Team-to-league lookup caches enable multi-sport event groups to detect which league a stream belongs to.
+                These caches map team names to their leagues for fast lookups during stream matching.
+            </p>
+
+            <!-- Soccer Multi-League Cache -->
+            <div class="cache-section">
+                <h3>Soccer Multi-League Cache</h3>
+                <p class="cache-description">
+                    Maps soccer teams to all their competitions (domestic league, cups, European competitions).
+                    Required for soccer team matching and multi-league EPG coverage.
+                </p>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="soccer_cache_refresh_frequency">Refresh Frequency</label>
+                        <select id="soccer_cache_refresh_frequency" name="soccer_cache_refresh_frequency" class="form-control">
+                            <option value="daily" {% if settings.soccer_cache_refresh_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                            <option value="every_3_days" {% if settings.soccer_cache_refresh_frequency == 'every_3_days' %}selected{% endif %}>Every 3 Days</option>
+                            <option value="weekly" {% if settings.soccer_cache_refresh_frequency == 'weekly' or not settings.soccer_cache_refresh_frequency %}selected{% endif %}>Weekly (Recommended)</option>
+                            <option value="manual" {% if settings.soccer_cache_refresh_frequency == 'manual' %}selected{% endif %}>Manual Only</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Status</label>
+                        <div id="soccer-cache-status" class="cache-status-box">
+                            <span class="loading-spinner"></span> Loading...
+                        </div>
+                    </div>
+
+                    <div class="form-group cache-action">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="refreshSoccerCache()" id="soccer-refresh-btn">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Team-League Cache (Non-Soccer) -->
+            <div class="cache-section">
+                <h3>Team-League Cache (Non-Soccer)</h3>
+                <p class="cache-description">
+                    Maps teams to their leagues for NHL, NBA, NFL, MLB, and college sports.
+                    Required for multi-sport event groups to detect leagues from team names.
+                </p>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="team_cache_refresh_frequency">Refresh Frequency</label>
+                        <select id="team_cache_refresh_frequency" name="team_cache_refresh_frequency" class="form-control">
+                            <option value="daily" {% if settings.team_cache_refresh_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                            <option value="every_3_days" {% if settings.team_cache_refresh_frequency == 'every_3_days' %}selected{% endif %}>Every 3 Days</option>
+                            <option value="weekly" {% if settings.team_cache_refresh_frequency == 'weekly' or not settings.team_cache_refresh_frequency %}selected{% endif %}>Weekly (Recommended)</option>
+                            <option value="manual" {% if settings.team_cache_refresh_frequency == 'manual' %}selected{% endif %}>Manual Only</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Status</label>
+                        <div id="team-cache-status" class="cache-status-box">
+                            <span class="loading-spinner"></span> Loading...
+                        </div>
+                    </div>
+
+                    <div class="form-group cache-action">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="refreshTeamCache()" id="team-refresh-btn">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Refresh All Button -->
+            <div class="form-row" style="grid-template-columns: 1fr; margin-top: 1rem;">
+                <div class="form-group">
+                    <button type="button" class="btn btn-secondary" onclick="refreshAllCaches()" id="refresh-all-btn">
+                        🔄 Refresh All Caches
+                    </button>
+                    <small class="form-help" style="display: block; margin-top: 0.5rem;">
+                        Refresh both caches (~10-15 seconds total)
+                    </small>
+                </div>
             </div>
         </div>
 
@@ -540,6 +675,155 @@ select.form-control {
     font-weight: normal;
     margin-left: 0.25rem;
 }
+
+/* Cache Section Styles */
+.cache-section {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+/* Form controls inside cache section need darker background for contrast */
+.cache-section .form-control {
+    background: var(--bg-secondary);
+}
+
+.cache-section h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.cache-section .cache-description {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.cache-section .form-row {
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.cache-section .form-group {
+    margin-bottom: 0;
+}
+
+.cache-section .cache-action {
+    padding-top: 1.5rem;
+    white-space: nowrap;
+}
+
+.cache-section .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+/* Cache Status Box */
+.cache-status-box {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+.cache-status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.125rem 0;
+}
+
+.cache-status-item.success {
+    color: var(--success);
+}
+
+.cache-status-item.warning {
+    color: var(--warning);
+}
+
+.cache-status-item.error {
+    color: var(--danger);
+}
+
+.cache-status-item .status-label {
+    color: var(--text-muted);
+    min-width: 90px;
+}
+
+.cache-status-item .status-icon {
+    font-size: 1rem;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Exception Keywords Section */
+.exception-keywords-table-wrapper {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.exception-keywords-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.exception-keywords-table thead {
+    background: var(--bg-tertiary);
+}
+
+.exception-keywords-table th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+}
+
+.exception-keywords-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.exception-keywords-table tr:last-child td {
+    border-bottom: none;
+}
+
+.exception-keywords-table .form-control-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.exception-keyword-add-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.exception-keyword-add-row .form-control {
+    flex: 1;
+}
 </style>
 
 <script>
@@ -725,5 +1009,355 @@ async function refreshProviderNames() {
         btn.textContent = 'Refresh Providers';
     }
 }
+
+// =============================================================================
+// Soccer Multi-League Cache Functions
+// =============================================================================
+
+async function loadSoccerCacheStatus() {
+    const statusDiv = document.getElementById('soccer-cache-status');
+
+    try {
+        const response = await fetch('/api/soccer/cache/status');
+        const data = await response.json();
+
+        if (data.success) {
+            let statusHtml = '';
+
+            if (data.is_empty) {
+                statusHtml = `
+                    <div class="cache-status-item warning">
+                        <span class="status-icon">⚠️</span>
+                        <span>Cache is empty - click "Refresh Cache Now" to build</span>
+                    </div>
+                `;
+            } else {
+                const lastRefresh = data.last_refresh
+                    ? new Date(data.last_refresh).toLocaleString()
+                    : 'Never';
+
+                const stalenessClass = data.is_stale ? 'warning' : 'success';
+                const stalenessText = data.is_stale
+                    ? `${data.staleness_days} days old (stale)`
+                    : `${data.staleness_days} days old`;
+
+                statusHtml = `
+                    <div class="cache-status-item ${stalenessClass}">
+                        <span class="status-label">Last Refresh:</span>
+                        <span>${lastRefresh}</span>
+                    </div>
+                    <div class="cache-status-item">
+                        <span class="status-label">Leagues:</span>
+                        <span>${data.leagues_processed.toLocaleString()}</span>
+                    </div>
+                    <div class="cache-status-item">
+                        <span class="status-label">Teams:</span>
+                        <span>${data.teams_indexed.toLocaleString()}</span>
+                    </div>
+                    <div class="cache-status-item">
+                        <span class="status-label">Duration:</span>
+                        <span>${data.refresh_duration_seconds.toFixed(1)}s</span>
+                    </div>
+                `;
+            }
+
+            statusDiv.innerHTML = statusHtml;
+        } else {
+            statusDiv.innerHTML = `<div class="cache-status-item error">Error: ${data.error}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="cache-status-item error">Error loading status: ${error.message}</div>`;
+    }
+}
+
+async function refreshSoccerCache() {
+    const btn = document.getElementById('soccer-refresh-btn');
+    const statusDiv = document.getElementById('soccer-cache-status');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ ...';
+    statusDiv.innerHTML = '<span class="loading-spinner"></span> Building cache (~244 leagues)...';
+
+    try {
+        const response = await fetch('/api/soccer/cache/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.innerHTML = `
+                <div class="cache-status-item success">
+                    <span class="status-icon">✅</span>
+                    <span>Refreshed: ${result.teams_indexed.toLocaleString()} teams (${result.duration_seconds.toFixed(1)}s)</span>
+                </div>
+            `;
+            // Reload full status after a moment
+            setTimeout(loadSoccerCacheStatus, 1500);
+        } else {
+            statusDiv.innerHTML = `<div class="cache-status-item error">❌ ${result.error || 'Refresh failed'}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="cache-status-item error">❌ Error: ${error.message}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Refresh';
+    }
+}
+
+// Team-League Cache Functions
+async function loadTeamCacheStatus() {
+    const statusDiv = document.getElementById('team-cache-status');
+
+    try {
+        const response = await fetch('/api/cache/team-league/status');
+        const data = await response.json();
+
+        if (data.success) {
+            if (!data.last_refresh) {
+                statusDiv.innerHTML = `
+                    <div class="cache-status-item warning">
+                        <span class="status-icon">⚠️</span>
+                        <span>Cache is empty - click "Refresh" to build</span>
+                    </div>
+                `;
+            } else {
+                const lastRefresh = new Date(data.last_refresh);
+                const formattedDate = lastRefresh.toLocaleDateString() + ' ' + lastRefresh.toLocaleTimeString();
+                const stalenessClass = data.is_stale ? 'warning' : 'success';
+                const stalenessIcon = data.is_stale ? '⚠️' : '✅';
+                const stalenessText = data.is_stale ? ` (${data.staleness_days}d ago - stale)` : '';
+
+                statusDiv.innerHTML = `
+                    <div class="cache-status-item ${stalenessClass}">
+                        <span class="status-icon">${stalenessIcon}</span>
+                        <span>Last refresh: ${formattedDate}${stalenessText}</span>
+                    </div>
+                    <div class="cache-status-item">
+                        <span class="status-icon">📊</span>
+                        <span>${data.teams_indexed.toLocaleString()} teams across ${data.leagues_processed} leagues</span>
+                    </div>
+                `;
+            }
+        } else {
+            statusDiv.innerHTML = `<div class="cache-status-item error">Error: ${data.error}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="cache-status-item error">Error loading status: ${error.message}</div>`;
+    }
+}
+
+async function refreshTeamCache() {
+    const btn = document.getElementById('team-refresh-btn');
+    const statusDiv = document.getElementById('team-cache-status');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ ...';
+    statusDiv.innerHTML = '<span class="loading-spinner"></span> Building cache (fetching team rosters)...';
+
+    try {
+        const response = await fetch('/api/cache/team-league/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.innerHTML = `
+                <div class="cache-status-item success">
+                    <span class="status-icon">✅</span>
+                    <span>Refreshed: ${result.teams_indexed.toLocaleString()} teams (${result.duration_seconds.toFixed(1)}s)</span>
+                </div>
+            `;
+            // Reload full status after a moment
+            setTimeout(loadTeamCacheStatus, 1500);
+        } else {
+            statusDiv.innerHTML = `<div class="cache-status-item error">❌ ${result.error || 'Refresh failed'}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<div class="cache-status-item error">❌ Error: ${error.message}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Refresh';
+    }
+}
+
+async function refreshAllCaches() {
+    const btn = document.getElementById('refresh-all-btn');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Refreshing All...';
+
+    try {
+        const response = await fetch('/api/cache/refresh-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        // Reload both cache statuses
+        await Promise.all([loadSoccerCacheStatus(), loadTeamCacheStatus()]);
+
+        if (!result.success) {
+            console.warn('Cache refresh partial failure:', result);
+        }
+    } catch (error) {
+        console.error('Error refreshing caches:', error);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Refresh All Caches';
+    }
+}
+
+// Load both cache statuses on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadSoccerCacheStatus();
+    loadTeamCacheStatus();
+});
+
+// ============================================================================
+// Exception Keywords (Consolidation Exceptions) - Global Settings
+// ============================================================================
+
+let exceptionKeywordsData = [];
+
+function handleDuplicateHandlingChange() {
+    const handling = document.getElementById('default_duplicate_event_handling');
+    const section = document.getElementById('exception-keywords-section');
+
+    if (handling && handling.value === 'consolidate') {
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+async function loadExceptionKeywords() {
+    try {
+        const response = await fetch('/api/settings/exception-keywords');
+        const data = await response.json();
+        exceptionKeywordsData = data.keywords || [];
+        renderExceptionKeywords();
+    } catch (error) {
+        console.error('Failed to load exception keywords:', error);
+    }
+}
+
+function renderExceptionKeywords() {
+    const tbody = document.getElementById('exception-keywords-body');
+    tbody.innerHTML = '';
+
+    if (exceptionKeywordsData.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="3" class="text-muted text-center" style="padding: 1rem;">
+            No exception keywords defined
+        </td>`;
+        tbody.appendChild(row);
+        return;
+    }
+
+    exceptionKeywordsData.forEach(kw => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="text" class="form-control form-control-sm"
+                       value="${escapeHtml(kw.keywords)}"
+                       onchange="updateExceptionKeyword(${kw.id}, this.value, null)">
+            </td>
+            <td>
+                <select class="form-control form-control-sm"
+                        onchange="updateExceptionKeyword(${kw.id}, null, this.value)">
+                    <option value="consolidate" ${kw.behavior === 'consolidate' ? 'selected' : ''}>Sub-Consolidate</option>
+                    <option value="separate" ${kw.behavior === 'separate' ? 'selected' : ''}>Separate</option>
+                    <option value="ignore" ${kw.behavior === 'ignore' ? 'selected' : ''}>Ignore</option>
+                </select>
+            </td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        onclick="deleteExceptionKeyword(${kw.id})" title="Delete">
+                    &times;
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function addExceptionKeyword() {
+    const keywords = document.getElementById('new-keyword-input').value.trim();
+    const behavior = document.getElementById('new-keyword-behavior').value;
+
+    if (!keywords) {
+        alert('Please enter at least one keyword');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/settings/exception-keywords', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keywords, behavior})
+        });
+
+        if (response.ok) {
+            document.getElementById('new-keyword-input').value = '';
+            await loadExceptionKeywords();
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Failed to add keyword');
+        }
+    } catch (error) {
+        console.error('Failed to add keyword:', error);
+        alert('Failed to add keyword');
+    }
+}
+
+async function updateExceptionKeyword(keywordId, keywords, behavior) {
+    const body = {};
+    if (keywords !== null) body.keywords = keywords;
+    if (behavior !== null) body.behavior = behavior;
+
+    try {
+        await fetch(`/api/settings/exception-keywords/${keywordId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+    } catch (error) {
+        console.error('Failed to update keyword:', error);
+    }
+}
+
+async function deleteExceptionKeyword(keywordId) {
+    if (!confirm('Delete this keyword?')) return;
+
+    try {
+        const response = await fetch(`/api/settings/exception-keywords/${keywordId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            await loadExceptionKeywords();
+        }
+    } catch (error) {
+        console.error('Failed to delete keyword:', error);
+    }
+}
+
+// Initialize exception keywords on page load
+document.addEventListener('DOMContentLoaded', function() {
+    handleDuplicateHandlingChange();
+    loadExceptionKeywords();
+});
 </script>
 {% endblock %}

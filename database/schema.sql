@@ -258,8 +258,12 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Default Settings for New Groups
     default_duplicate_event_handling TEXT DEFAULT 'consolidate',  -- ignore, consolidate, separate
 
+    -- Local Caching Settings
+    soccer_cache_refresh_frequency TEXT DEFAULT 'weekly',  -- daily, every_3_days, weekly, manual
+    team_cache_refresh_frequency TEXT DEFAULT 'weekly',    -- daily, every_3_days, weekly, manual
+
     -- Schema versioning for migrations
-    schema_version INTEGER DEFAULT 11,  -- Current schema version (increment with each migration)
+    schema_version INTEGER DEFAULT 16,  -- Current schema version (increment with each migration)
 
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -485,7 +489,13 @@ INSERT OR IGNORE INTO league_config (league_code, league_name, sport, api_path, 
     ('ligue1', 'Ligue 1', 'soccer', 'soccer/fra.1', 'Soccer', 'wins-losses-ties', 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png'),
     ('ncaaf', 'NCAA Football', 'football', 'football/college-football', 'College Football', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.png'),
     ('ncaam', 'NCAA Men''s Basketball', 'basketball', 'basketball/mens-college-basketball', 'College Basketball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png'),
-    ('ncaaw', 'NCAA Women''s Basketball', 'basketball', 'basketball/womens-college-basketball', 'College Basketball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png');
+    ('ncaaw', 'NCAA Women''s Basketball', 'basketball', 'basketball/womens-college-basketball', 'College Basketball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png'),
+    ('nba-g', 'NBA G League', 'basketball', 'basketball/nba-development', 'Basketball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/nba-g-league.png'),
+    ('ncaavb-w', 'NCAA Women''s Volleyball', 'volleyball', 'volleyball/womens-college-volleyball', 'Volleyball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png'),
+    ('ncaavb-m', 'NCAA Men''s Volleyball', 'volleyball', 'volleyball/mens-college-volleyball', 'Volleyball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png'),
+    ('ncaah', 'NCAA Men''s Hockey', 'hockey', 'hockey/mens-college-hockey', 'Hockey', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/hockey.png'),
+    ('ncaas', 'NCAA Men''s Soccer', 'soccer', 'soccer/usa.ncaa.m.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png'),
+    ('ncaaws', 'NCAA Women''s Soccer', 'soccer', 'soccer/usa.ncaa.w.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png');
 
 CREATE INDEX IF NOT EXISTS idx_league_code ON league_config(league_code);
 
@@ -658,6 +668,12 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     parent_group_id INTEGER REFERENCES event_epg_groups(id),  -- NULL = parent, set = child
     duplicate_event_handling TEXT DEFAULT 'consolidate',       -- ignore, consolidate, separate
 
+    -- Multi-Sport Mode (v16)
+    is_multi_sport INTEGER DEFAULT 0,              -- 1 = detect league per-stream
+    enabled_leagues TEXT,                          -- JSON array of league codes (NULL = all)
+    channel_sort_order TEXT DEFAULT 'time',        -- time, sport_time, league_time
+    overlap_handling TEXT DEFAULT 'add_stream',    -- add_stream, skip, create_all
+
     -- Stats (updated after each generation)
     last_refresh TIMESTAMP,                        -- Last time EPG was generated
     stream_count INTEGER DEFAULT 0,                -- Number of streams in group
@@ -675,6 +691,18 @@ FOR EACH ROW
 BEGIN
     UPDATE event_epg_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
 END;
+
+-- =============================================================================
+-- CONSOLIDATION EXCEPTION KEYWORDS TABLE
+-- Global keywords that override default duplicate_event_handling when matched
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS consolidation_exception_keywords (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    keywords TEXT NOT NULL,                        -- Comma-separated keyword variants (case-insensitive)
+    behavior TEXT NOT NULL DEFAULT 'consolidate',  -- consolidate, separate, ignore
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 
 -- =============================================================================
 -- TEAM ALIASES TABLE (Event Channel EPG Feature)
@@ -753,7 +781,10 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     -- ========== SYNC STATE ==========
     last_verified_at TEXT,
     sync_status TEXT DEFAULT 'created',      -- created, in_sync, drifted, orphaned
-    sync_notes TEXT
+    sync_notes TEXT,
+
+    -- ========== EXCEPTION KEYWORDS ==========
+    exception_keyword TEXT                   -- Keyword that created this channel (for keyword-based grouping)
 );
 
 CREATE INDEX IF NOT EXISTS idx_managed_channels_group ON managed_channels(event_epg_group_id);
@@ -802,6 +833,9 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     last_verified_at TEXT,
     in_dispatcharr INTEGER DEFAULT 1,        -- 1=confirmed, 0=missing
 
+    -- ========== EXCEPTION KEYWORDS ==========
+    exception_keyword TEXT,                  -- Keyword that matched this stream
+
     FOREIGN KEY (managed_channel_id) REFERENCES managed_channels(id) ON DELETE CASCADE,
     FOREIGN KEY (source_group_id) REFERENCES event_epg_groups(id)
 );
@@ -839,6 +873,101 @@ CREATE TABLE IF NOT EXISTS managed_channel_history (
 CREATE INDEX IF NOT EXISTS idx_mch_channel ON managed_channel_history(managed_channel_id, changed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mch_time ON managed_channel_history(changed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mch_type ON managed_channel_history(change_type);
+
+-- =============================================================================
+-- SOCCER TEAM LEAGUES CACHE
+-- Weekly cache mapping team_id → leagues they play in
+-- Enables multi-competition EPG for soccer teams
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS soccer_team_leagues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Team-League Mapping
+    espn_team_id TEXT NOT NULL,              -- "364" for Liverpool
+    league_slug TEXT NOT NULL,               -- "eng.1", "uefa.champions"
+
+    -- Team Metadata (stable, rarely changes)
+    team_name TEXT,                          -- "Liverpool"
+    team_type TEXT,                          -- "club" or "national"
+    -- Note: default_league is NOT stored - fetched on-demand via get_team_default_league()
+
+    -- Cache Metadata
+    last_seen TEXT,                          -- ISO datetime when last seen in this league
+
+    UNIQUE(espn_team_id, league_slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stl_team ON soccer_team_leagues(espn_team_id);
+CREATE INDEX IF NOT EXISTS idx_stl_league ON soccer_team_leagues(league_slug);
+
+-- =============================================================================
+-- SOCCER LEAGUES CACHE
+-- Metadata about each league (slug → name, category, logo)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS soccer_leagues_cache (
+    league_slug TEXT PRIMARY KEY,            -- "eng.1", "uefa.champions"
+    league_name TEXT,                        -- "English Premier League"
+    league_abbrev TEXT,                      -- "EPL"
+    league_tags TEXT,                        -- JSON array: ["domestic", "club", "league", "mens"]
+    league_logo_url TEXT,                    -- URL to league logo
+    team_count INTEGER,                      -- Number of teams in league
+    last_seen TEXT                           -- ISO datetime
+);
+
+-- =============================================================================
+-- SOCCER CACHE METADATA
+-- Tracks cache refresh status (single row)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS soccer_cache_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_full_refresh TEXT,                  -- ISO datetime of last refresh
+    leagues_processed INTEGER,               -- 244
+    teams_indexed INTEGER,                   -- 3413
+    refresh_duration_seconds REAL,           -- 4.9
+    next_scheduled_refresh TEXT              -- ISO datetime of next scheduled
+);
+
+INSERT OR IGNORE INTO soccer_cache_meta (id) VALUES (1);
+
+-- =============================================================================
+-- TEAM LEAGUE CACHE (Non-Soccer Sports)
+-- Maps team names to leagues for multi-sport event groups
+-- Parallel structure to soccer_team_leagues but for NHL, NBA, NFL, etc.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS team_league_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    league_code TEXT NOT NULL,               -- 'nhl', 'nba', 'ncaam', etc.
+    espn_team_id TEXT NOT NULL,              -- ESPN team ID
+    team_name TEXT NOT NULL,                 -- "Nashville Predators"
+    team_abbrev TEXT,                        -- "NSH"
+    team_short_name TEXT,                    -- "Predators"
+    sport TEXT NOT NULL,                     -- "hockey", "basketball", etc.
+    UNIQUE(league_code, espn_team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tlc_name ON team_league_cache(team_name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_tlc_abbrev ON team_league_cache(team_abbrev COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_tlc_short ON team_league_cache(team_short_name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_tlc_league ON team_league_cache(league_code);
+
+-- =============================================================================
+-- TEAM LEAGUE CACHE METADATA
+-- Tracks cache refresh status (single row)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS team_league_cache_meta (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_refresh TEXT,                       -- ISO datetime of last refresh
+    leagues_processed INTEGER DEFAULT 0,     -- 12
+    teams_indexed INTEGER DEFAULT 0          -- ~1847
+);
+
+INSERT OR IGNORE INTO team_league_cache_meta (id) VALUES (1);
 
 -- =============================================================================
 -- END OF SCHEMA

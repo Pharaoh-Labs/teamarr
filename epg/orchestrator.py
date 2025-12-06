@@ -19,7 +19,8 @@ from utils.logger import get_logger
 from database import get_connection
 from api.espn_client import ESPNClient
 from epg.template_engine import TemplateEngine
-from epg.league_config import SoccerCompat
+from epg.league_config import SoccerCompat, is_soccer_league
+from epg.soccer_multi_league import SoccerMultiLeague
 
 logger = get_logger(__name__)
 
@@ -33,10 +34,47 @@ class EPGOrchestrator:
         self.api_calls = 0
         self._api_calls_lock = threading.Lock()  # Thread-safe counter
 
+        # Scoreboard cache by (sport, league, date) - cleared each generation
+        # Prevents duplicate fetches for same date across different methods
+        self._scoreboard_cache = {}
+        self._scoreboard_cache_lock = threading.Lock()
+
     def _increment_api_calls(self, count: int = 1):
         """Thread-safe increment of API call counter"""
         with self._api_calls_lock:
             self.api_calls += count
+
+    def _get_scoreboard_cached(self, api_sport: str, api_league: str, date_str: str) -> Optional[Dict]:
+        """
+        Get scoreboard with caching to avoid duplicate fetches.
+
+        Caches by (sport, league, date). Cache is cleared at start of each EPG generation.
+        """
+        cache_key = f"{api_sport}:{api_league}:{date_str}"
+
+        # Fast path: check cache without lock
+        if cache_key in self._scoreboard_cache:
+            return self._scoreboard_cache[cache_key]
+
+        # Slow path: acquire lock
+        with self._scoreboard_cache_lock:
+            # Double-check after lock
+            if cache_key in self._scoreboard_cache:
+                return self._scoreboard_cache[cache_key]
+
+            # Fetch from ESPN
+            scoreboard_data = self.espn.get_scoreboard(api_sport, api_league, date_str)
+            self._increment_api_calls()
+
+            # Cache result (even None to avoid re-fetching failures)
+            self._scoreboard_cache[cache_key] = scoreboard_data
+
+            return scoreboard_data
+
+    def _clear_scoreboard_cache(self):
+        """Clear scoreboard cache. Call at start of each EPG generation."""
+        with self._scoreboard_cache_lock:
+            self._scoreboard_cache.clear()
 
     def _round_to_last_hour(self, dt: datetime) -> datetime:
         """Round datetime down to the last top of hour"""
@@ -128,6 +166,9 @@ class EPGOrchestrator:
         logger.info(f"Starting EPG generation: days_ahead={days_ahead}, timezone={epg_timezone}")
         start_time = datetime.now()
         self.api_calls = 0
+
+        # Clear caches at start of generation
+        self._clear_scoreboard_cache()
 
         # Get active teams with templates
         teams_list = self._get_teams_with_templates()
@@ -450,8 +491,8 @@ class EPGOrchestrator:
             Enriched event dict, or None if scoreboard data not found
         """
         try:
-            # Fetch scoreboard for date
-            scoreboard_data = self.espn.get_scoreboard(api_sport, api_league, date_str)
+            # Fetch scoreboard for date (cached to avoid duplicate fetches)
+            scoreboard_data = self._get_scoreboard_cached(api_sport, api_league, date_str)
 
             if not scoreboard_data or 'events' not in scoreboard_data:
                 return None
@@ -563,9 +604,9 @@ class EPGOrchestrator:
         # Use api_path from league_config if available, otherwise fall back to team's sport/league
         api_sport, api_league = self._get_api_path(team)
 
-        # Fetch team stats (record, standings, etc.)
+        # Fetch team info (logos, colors) and stats (record, standings, streaks, PPG, etc.)
         team_data = self.espn.get_team_info(api_sport, api_league, team['espn_team_id'])
-        team_stats_basic = self.espn.get_team_stats(api_sport, api_league, team['espn_team_id'])
+        team_stats = self.espn.get_team_stats(api_sport, api_league, team['espn_team_id'])
         self._increment_api_calls()
 
         # Extract team logo from ESPN data if not already set
@@ -574,38 +615,51 @@ class EPGOrchestrator:
             if logos and len(logos) > 0:
                 team['team_logo_url'] = logos[0].get('href', '')
 
-        # Fetch enhanced team stats (streaks, PPG, standings, home/away records)
-        enhanced_stats = self.espn.get_team_stats(api_sport, api_league, team['espn_team_id'])
-        self._increment_api_calls()
+        # Check if this is a soccer team - if so, use multi-league schedule fetching
+        team_league = team.get('league', '')
+        is_soccer = is_soccer_league(team_league)
 
-        # Merge basic and enhanced stats
-        team_stats = {**team_stats_basic, **enhanced_stats}
+        if is_soccer:
+            # Soccer multi-league: fetch from all competitions the team plays in
+            schedule_data, extended_schedule_data, schedule_events, extended_events = \
+                self._fetch_soccer_multi_league_schedules(
+                    team, days_ahead, epg_start_datetime, epg_timezone
+                )
+        else:
+            # Standard single-league fetch
+            schedule_data = self.espn.get_team_schedule(
+                api_sport,
+                api_league,
+                team['espn_team_id'],
+                days_ahead
+            )
+            self._increment_api_calls()
 
-        # Fetch schedule from ESPN
-        schedule_data = self.espn.get_team_schedule(
-            api_sport,
-            api_league,
-            team['espn_team_id'],
-            days_ahead
-        )
-        self._increment_api_calls()
+            # Fetch extended schedule for context (next/last game info beyond EPG window)
+            extended_schedule_data = self.espn.get_team_schedule(
+                api_sport,
+                api_league,
+                team['espn_team_id'],
+                30  # Look 30 days ahead for context
+            )
+            self._increment_api_calls()
 
-        # Fetch extended schedule for context (next/last game info beyond EPG window)
-        extended_schedule_data = self.espn.get_team_schedule(
-            api_sport,
-            api_league,
-            team['espn_team_id'],
-            30  # Look 30 days ahead for context
-        )
-        self._increment_api_calls()
+            if not schedule_data:
+                logger.warning(f"No schedule data for team {team.get('team_name')}")
+                return []
 
-        if not schedule_data:
-            logger.warning(f"No schedule data for team {team.get('team_name')}")
-            return []
+            # Parse events using epg_start_datetime as the cutoff (single source of truth)
+            logger.debug(f"Parsing events with cutoff_past_datetime={epg_start_datetime.strftime('%Y-%m-%d %H:%M %Z')}")
+            schedule_events = self.espn.parse_schedule_events(schedule_data, days_ahead, cutoff_past_datetime=epg_start_datetime)
 
-        # Parse events using epg_start_datetime as the cutoff (single source of truth)
-        logger.debug(f"Parsing events with cutoff_past_datetime={epg_start_datetime.strftime('%Y-%m-%d %H:%M %Z')}")
-        schedule_events = self.espn.parse_schedule_events(schedule_data, days_ahead, cutoff_past_datetime=epg_start_datetime)
+            # Parse extended events (for context only - look 30 days back AND 30 days forward)
+            epg_tz = ZoneInfo(epg_timezone)
+            context_cutoff = datetime.now(epg_tz) - timedelta(days=30)
+            extended_events = self.espn.parse_schedule_events(
+                extended_schedule_data,
+                days_ahead=60,  # 30 days back + 30 days forward from context_cutoff
+                cutoff_past_datetime=context_cutoff
+            ) if extended_schedule_data else []
 
         # Unified scoreboard integration: discover missing events AND enrich existing ones
         # This handles soccer leagues (where schedule API returns no future games) and
@@ -617,16 +671,6 @@ class EPGOrchestrator:
             epg_timezone,
             epg_start_datetime
         )
-
-        # Parse extended events (for context only - look 30 days back AND 30 days forward)
-        # This provides last_game info (past) and next_game info (future) for filler templates
-        epg_tz = ZoneInfo(epg_timezone)
-        context_cutoff = datetime.now(epg_tz) - timedelta(days=30)
-        extended_events = self.espn.parse_schedule_events(
-            extended_schedule_data,
-            days_ahead=60,  # 30 days back + 30 days forward from context_cutoff
-            cutoff_past_datetime=context_cutoff
-        ) if extended_schedule_data else []
 
         # Enrich past events with scoreboard data to get actual scores
         if extended_events:
@@ -692,6 +736,126 @@ class EPGOrchestrator:
 
         return combined_events
 
+    def _fetch_soccer_multi_league_schedules(
+        self,
+        team: Dict[str, Any],
+        days_ahead: int,
+        epg_start_datetime: datetime,
+        epg_timezone: str
+    ) -> tuple:
+        """
+        Fetch schedules from ALL leagues a soccer team plays in.
+
+        Uses the soccer multi-league cache to find all competitions (domestic league,
+        cup competitions, European competitions, etc.) and fetches schedule from each.
+        Events are merged and deduplicated by ESPN event ID.
+
+        Args:
+            team: Team configuration dict
+            days_ahead: Days to look forward
+            epg_start_datetime: Start datetime for EPG window
+            epg_timezone: EPG timezone
+
+        Returns:
+            Tuple of (schedule_data, extended_schedule_data, schedule_events, extended_events)
+            schedule_data and extended_schedule_data are from the primary league (for compatibility)
+            Events have '_source_league' field set to track which competition they're from
+        """
+        team_id = str(team.get('espn_team_id', ''))
+        team_name = team.get('team_name', 'Unknown')
+        primary_league = team.get('league', '')
+
+        # Get all leagues from cache
+        all_leagues = SoccerMultiLeague.get_team_leagues(team_id)
+
+        if not all_leagues:
+            # Fallback to single league if not in cache
+            logger.warning(f"Soccer team {team_name} ({team_id}) not in multi-league cache, using primary league only")
+            all_leagues = [primary_league]
+
+        logger.info(f"⚽ {team_name}: fetching schedule from {len(all_leagues)} leagues: {', '.join(all_leagues[:5])}{'...' if len(all_leagues) > 5 else ''}")
+
+        # Track events by ID to dedupe across leagues
+        events_by_id = {}
+        extended_events_by_id = {}
+
+        # Keep the primary league's schedule_data for compatibility
+        primary_schedule_data = None
+        primary_extended_data = None
+
+        epg_tz = ZoneInfo(epg_timezone)
+        context_cutoff = datetime.now(epg_tz) - timedelta(days=30)
+
+        for league_slug in all_leagues:
+            try:
+                # Fetch schedule for this league
+                schedule_data = self.espn.get_team_schedule(
+                    'soccer',
+                    league_slug,
+                    team_id,
+                    days_ahead
+                )
+                self._increment_api_calls()
+
+                # Fetch extended schedule
+                extended_data = self.espn.get_team_schedule(
+                    'soccer',
+                    league_slug,
+                    team_id,
+                    30  # Look 30 days ahead for context
+                )
+                self._increment_api_calls()
+
+                # Keep primary league data for compatibility
+                if league_slug == primary_league or primary_schedule_data is None:
+                    if schedule_data:
+                        primary_schedule_data = schedule_data
+                    if extended_data:
+                        primary_extended_data = extended_data
+
+                # Parse events from this league
+                if schedule_data:
+                    events = self.espn.parse_schedule_events(
+                        schedule_data, days_ahead, cutoff_past_datetime=epg_start_datetime
+                    )
+                    for event in events:
+                        event_id = event.get('id')
+                        if event_id and event_id not in events_by_id:
+                            # Track source league for competition-specific branding
+                            event['_source_league'] = league_slug
+                            event['_source_league_name'] = SoccerMultiLeague.get_league_name(league_slug)
+                            event['_source_league_logo'] = SoccerMultiLeague.get_league_logo(league_slug)
+                            events_by_id[event_id] = event
+
+                # Parse extended events
+                if extended_data:
+                    ext_events = self.espn.parse_schedule_events(
+                        extended_data,
+                        days_ahead=60,
+                        cutoff_past_datetime=context_cutoff
+                    )
+                    for event in ext_events:
+                        event_id = event.get('id')
+                        if event_id and event_id not in extended_events_by_id:
+                            event['_source_league'] = league_slug
+                            event['_source_league_name'] = SoccerMultiLeague.get_league_name(league_slug)
+                            event['_source_league_logo'] = SoccerMultiLeague.get_league_logo(league_slug)
+                            extended_events_by_id[event_id] = event
+
+            except Exception as e:
+                logger.warning(f"Error fetching {league_slug} schedule for {team_name}: {e}")
+
+        # Convert to lists and sort by date
+        schedule_events = list(events_by_id.values())
+        schedule_events.sort(key=lambda e: e.get('date', ''))
+
+        extended_events = list(extended_events_by_id.values())
+        extended_events.sort(key=lambda e: e.get('date', ''))
+
+        logger.info(f"⚽ {team_name}: found {len(schedule_events)} events across {len(all_leagues)} leagues")
+
+        return primary_schedule_data, primary_extended_data, schedule_events, extended_events
+
     def _discover_and_enrich_from_scoreboard(
         self,
         schedule_events: List[dict],
@@ -744,8 +908,7 @@ class EPGOrchestrator:
             check_date = start_local + timedelta(days=day_offset)
             date_str = check_date.strftime('%Y%m%d')
 
-            scoreboard_data = self.espn.get_scoreboard(api_sport, api_league, date_str)
-            self._increment_api_calls()
+            scoreboard_data = self._get_scoreboard_cached(api_sport, api_league, date_str)
 
             if not scoreboard_data or 'events' not in scoreboard_data:
                 continue
@@ -864,8 +1027,7 @@ class EPGOrchestrator:
 
         # Fetch scoreboards for last 7 days (to control API calls)
         for date_str in sorted(past_by_date.keys(), reverse=True)[:7]:
-            scoreboard_data = self.espn.get_scoreboard(api_sport, api_league, date_str)
-            self._increment_api_calls()
+            scoreboard_data = self._get_scoreboard_cached(api_sport, api_league, date_str)
 
             if scoreboard_data and 'events' in scoreboard_data:
                 # Parse scoreboard events

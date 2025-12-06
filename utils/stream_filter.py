@@ -12,10 +12,25 @@ This ensures match rate calculations reflect reality:
 import re
 from typing import Dict, List, Tuple
 
+from utils.regex_helper import compile_pattern
+
 # Pattern to detect game indicators in stream names
-# Matches: vs, vs., at (as word), v (as word), x (as word), @
+# Matches: vs, vs., at (as word), v (as word), x (as word)
+# Note: @ is handled separately - only counts as game indicator when followed by team name
 GAME_INDICATOR_PATTERN = re.compile(
-    r'\b(vs\.?|at|v|x)\b|@',
+    r'\b(vs\.?|at|v|x)\b',
+    re.IGNORECASE
+)
+
+# Month pattern for detecting date separators
+# Handles both short (Jan, Feb) and full (January, February) month names
+_MONTHS_PATTERN = r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+
+# Pattern to detect @ used as team separator (not date/time separator)
+# Matches: "Team @ Team" (@ followed by word that's not a month or digit)
+# Does NOT match: "@ Dec 05", "@ 12:00", "@ 2025" (date/time markers)
+AT_AS_SEPARATOR_PATTERN = re.compile(
+    rf'@\s+(?!{_MONTHS_PATTERN}\b|\d)([A-Za-z]{{2,}})',
     re.IGNORECASE
 )
 
@@ -26,10 +41,14 @@ def has_game_indicator(stream_name: str) -> bool:
 
     Game indicators are patterns that suggest this is an actual game stream:
     - "vs" or "vs." (e.g., "Lakers vs Celtics")
-    - "@" (e.g., "Chiefs @ Ravens")
+    - "@" when used as team separator (e.g., "Chiefs @ Ravens")
     - "at" as a word (e.g., "Patriots at Bills")
     - "v" as a word (e.g., "Arsenal v Chelsea" - soccer style)
     - "x" as a word (e.g., "76ers x Wizards" - some providers use this)
+
+    Note: "@" followed by a date/time is NOT a game indicator:
+    - "UFC 302 @ Dec 05 08:00 PM ET" - NOT a game (@ is date separator)
+    - "ESPN+ 122 : Show Name @ Dec 05" - NOT a game (@ is date separator)
 
     Args:
         stream_name: The stream name to check
@@ -48,23 +67,41 @@ def has_game_indicator(stream_name: str) -> bool:
         False
         >>> has_game_indicator("NFL Network")
         False
+        >>> has_game_indicator("UFC 302 @ Dec 05 08:00 PM ET")
+        False
     """
-    return bool(GAME_INDICATOR_PATTERN.search(stream_name))
+    # Check for standard game indicators (vs, vs., at, v, x)
+    if GAME_INDICATOR_PATTERN.search(stream_name):
+        return True
+
+    # Check for @ used as team separator (not date separator)
+    if AT_AS_SEPARATOR_PATTERN.search(stream_name):
+        return True
+
+    return False
 
 
 def filter_game_streams(
     streams: List[Dict],
+    include_regex: str = None,
     exclude_regex: str = None
 ) -> Dict:
     """
     Filter streams to only those that appear to be game streams.
 
-    Two-layer filtering:
-    1. Built-in: Must have game indicator (vs/@/at/v)
-    2. Optional: User exclusion regex for additional filtering
+    Three-layer filtering:
+    1. Built-in: Must have game indicator (vs/@/at/v/x)
+    2. Optional: User inclusion regex (stream must match to be processed)
+    3. Optional: User exclusion regex (stream must NOT match to be processed)
+
+    Filter order matters:
+    - Include filter runs first (whitelist)
+    - Exclude filter runs second (blacklist)
+    - This allows: "include Washington teams, but exclude George Washington"
 
     Args:
         streams: List of stream dicts with 'name' key
+        include_regex: Optional regex pattern - only matching streams are processed
         exclude_regex: Optional regex pattern to exclude additional streams
 
     Returns:
@@ -72,6 +109,7 @@ def filter_game_streams(
         - 'game_streams': Streams that passed filtering
         - 'filtered_streams': All streams that were filtered out
         - 'filtered_no_indicator': Count of streams without vs/@/at
+        - 'filtered_include_regex': Count of streams not matching inclusion regex
         - 'filtered_exclude_regex': Count of streams matching exclusion regex
 
     Example:
@@ -89,16 +127,12 @@ def filter_game_streams(
     game_streams = []
     filtered_streams = []
     filtered_no_indicator = 0
+    filtered_include_regex = 0
     filtered_exclude_regex = 0
 
-    # Compile user exclusion pattern if provided
-    exclude_pattern = None
-    if exclude_regex:
-        try:
-            exclude_pattern = re.compile(exclude_regex, re.IGNORECASE)
-        except re.error:
-            # Invalid regex - log and continue without it
-            pass
+    # Compile user patterns using regex helper (supports variable-width lookbehind)
+    include_pattern = compile_pattern(include_regex) if include_regex else None
+    exclude_pattern = compile_pattern(exclude_regex) if exclude_regex else None
 
     for stream in streams:
         name = stream.get('name', '')
@@ -109,7 +143,13 @@ def filter_game_streams(
             filtered_no_indicator += 1
             continue
 
-        # Layer 2: Check user exclusion pattern
+        # Layer 2: Check user inclusion pattern (must match to pass)
+        if include_pattern and not include_pattern.search(name):
+            filtered_streams.append(stream)
+            filtered_include_regex += 1
+            continue
+
+        # Layer 3: Check user exclusion pattern (must NOT match to pass)
         if exclude_pattern and exclude_pattern.search(name):
             filtered_streams.append(stream)
             filtered_exclude_regex += 1
@@ -121,6 +161,7 @@ def filter_game_streams(
         'game_streams': game_streams,
         'filtered_streams': filtered_streams,
         'filtered_no_indicator': filtered_no_indicator,
+        'filtered_include_regex': filtered_include_regex,
         'filtered_exclude_regex': filtered_exclude_regex,
     }
 

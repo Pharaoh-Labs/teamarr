@@ -217,10 +217,24 @@
                                 </div>
                             </td>
                             <td>
-                                <img src="{{ league_logos.get(team.league, '') }}"
-                                     alt="{{ team.league.upper() }}"
-                                     class="league-logo"
-                                     title="{{ team.league.upper() }}">
+                                <div class="league-cell{% if team.sport == 'soccer' %} soccer-multi-league{% endif %}"
+                                     {% if team.sport == 'soccer' %}data-team-id="{{ team.espn_team_id }}"{% endif %}>
+                                    <div class="league-logo-wrapper">
+                                        <img src="{{ league_logos.get(team.league, '') }}"
+                                             alt="{{ team.league.upper() }}"
+                                             class="league-logo"
+                                             title="{{ team.league.upper() }}">
+                                        {% if team.sport == 'soccer' %}
+                                        <span class="multi-league-indicator" style="display: none;">+</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if team.sport == 'soccer' %}
+                                    <div class="multi-league-tooltip" style="display: none;">
+                                        <div class="tooltip-title">Competitions</div>
+                                        <div class="multi-league-list">Loading...</div>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td style="font-size: 1.5rem; padding-left: 1rem; line-height: 1; vertical-align: middle;" title="{{ team.sport|title }}">
                                 <span style="display: inline-block; height: 1.5rem; line-height: 1.5rem;">
@@ -1014,6 +1028,112 @@ code {
     display: inline-block;
 }
 
+/* Multi-league indicator for soccer teams */
+.league-cell {
+    position: relative;
+    display: inline-block;
+}
+
+.league-logo-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.multi-league-indicator {
+    position: absolute;
+    bottom: -2px;
+    right: -4px;
+    background: var(--accent);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 700;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    border: 1px solid var(--bg-secondary);
+}
+
+.soccer-multi-league {
+    cursor: help;
+}
+
+.multi-league-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    min-width: 200px;
+    max-width: 280px;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.soccer-multi-league:hover .multi-league-tooltip {
+    display: block !important;
+}
+
+.multi-league-tooltip .tooltip-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.375rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.multi-league-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.multi-league-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.multi-league-item img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.multi-league-item > span:first-of-type {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.multi-league-item.primary {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.multi-league-item .league-category {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    text-transform: capitalize;
+    text-align: right;
+    min-width: 70px;
+}
+
 /* Team logos in table */
 .team-logo-small {
     height: 32px;
@@ -1305,5 +1425,93 @@ async function applyBulkChannelId() {
         alert(`Error: ${error.message}`);
     }
 }
+
+// =============================================================================
+// Soccer Multi-League Indicator
+// =============================================================================
+
+// Cache for multi-league data to avoid repeated API calls
+const multiLeagueCache = {};
+
+async function loadMultiLeagueData(teamId) {
+    if (multiLeagueCache[teamId]) {
+        return multiLeagueCache[teamId];
+    }
+
+    try {
+        const response = await fetch(`/api/soccer/team/${teamId}/leagues`);
+        const data = await response.json();
+
+        if (data.success) {
+            multiLeagueCache[teamId] = data;
+            return data;
+        }
+    } catch (error) {
+        console.warn(`Failed to load multi-league data for team ${teamId}:`, error);
+    }
+    return null;
+}
+
+function renderMultiLeagueTooltip(data, primaryLeague) {
+    if (!data || !data.leagues || data.leagues.length <= 1) {
+        return '';
+    }
+
+    // Sort leagues: primary first, then by category
+    const sorted = [...data.leagues].sort((a, b) => {
+        if (a.slug === primaryLeague) return -1;
+        if (b.slug === primaryLeague) return 1;
+        // Prioritize domestic leagues
+        const categoryOrder = ['domestic', 'domestic_cup', 'continental_club', 'continental_national', 'world_club', 'qualifier', 'friendly', 'other'];
+        return categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category);
+    });
+
+    return sorted.map(league => {
+        const isPrimary = league.slug === primaryLeague;
+        return `
+            <div class="multi-league-item ${isPrimary ? 'primary' : ''}">
+                <img src="${league.logo_url || ''}" alt="${league.name}" onerror="this.style.display='none'">
+                <span>${league.name}</span>
+                <span class="league-category">${league.category.replace('_', ' ')}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function initMultiLeagueIndicators() {
+    const soccerCells = document.querySelectorAll('.soccer-multi-league');
+
+    for (const cell of soccerCells) {
+        const teamId = cell.dataset.teamId;
+        if (!teamId) continue;
+
+        const data = await loadMultiLeagueData(teamId);
+
+        if (data && data.leagues && data.leagues.length > 1) {
+            // Show the indicator badge
+            const indicator = cell.querySelector('.multi-league-indicator');
+            if (indicator) {
+                indicator.style.display = 'flex';
+                indicator.textContent = `+${data.leagues.length - 1}`;
+                indicator.title = `${data.leagues.length} competitions`;
+            }
+
+            // Populate the tooltip
+            const tooltip = cell.querySelector('.multi-league-tooltip');
+            const list = cell.querySelector('.multi-league-list');
+            if (tooltip && list) {
+                const primaryLeague = cell.querySelector('.league-logo')?.alt?.toLowerCase() || '';
+                list.innerHTML = renderMultiLeagueTooltip(data, data.default_league || primaryLeague);
+                tooltip.style.display = 'none'; // CSS hover will show it
+            }
+        }
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Small delay to not block initial render
+    setTimeout(initMultiLeagueIndicators, 500);
+});
 </script>
 {% endblock %}
