@@ -461,7 +461,6 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         from database import get_soccer_slug_mapping
                         slug_to_code = get_soccer_slug_mapping()
                         sport_leagues = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
-                        sport_leagues = [c for c in sport_leagues if c]  # Remove None values
                     else:
                         sport_leagues = [l for l in enabled_leagues if LEAGUE_TO_SPORT.get(l) == indicator_sport]
 
@@ -497,7 +496,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         from database import get_soccer_slug_mapping
                         slug_to_code = get_soccer_slug_mapping()
                         soccer_codes = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
-                        candidate_leagues.extend([c for c in soccer_codes if c])  # Add mapped codes
+                        candidate_leagues.extend(soccer_codes)
 
                     # Try each candidate league - collect all matches first
                     # Then disambiguate by checking which has an actual game in the window
@@ -4512,7 +4511,6 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                                     soccer_slugs = thread_league_detector._find_soccer_leagues_for_teams(raw_team1, raw_team2)
                                     slug_to_code = get_soccer_slug_mapping()
                                     sport_leagues = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
-                                    sport_leagues = [c for c in sport_leagues if c]  # Remove None values
                                 else:
                                     sport_leagues = [l for l in enabled_leagues if LEAGUE_TO_SPORT.get(l) == indicator_sport]
 
@@ -4547,7 +4545,7 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
                                     # Map ESPN slugs (esp.1) to league_config codes (laliga)
                                     slug_to_code = get_soccer_slug_mapping()
                                     soccer_codes = [slug_to_code.get(slug) for slug in soccer_slugs[:10] if slug in slug_to_code]
-                                    candidate_leagues.extend([c for c in soccer_codes if c])  # Add mapped codes
+                                    candidate_leagues.extend(soccer_codes)
 
                                 # Try each candidate league - collect all matches first
                                 # Then disambiguate by checking which has an actual game in the window

@@ -159,7 +159,7 @@ def db_insert(query: str, params: tuple = ()) -> int:
 #   16: Multi-sport event groups (is_multi_sport, enabled_leagues, etc.)
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 16
+CURRENT_SCHEMA_VERSION = 17
 
 
 def get_schema_version(conn) -> int:
@@ -1008,6 +1008,22 @@ def run_migrations(conn):
         ])
         print("    ✅ Added team_cache_refresh_frequency to settings")
 
+        conn.commit()
+
+    # =========================================================================
+    # 17. NCAA SOCCER LEAGUES
+    # =========================================================================
+    if current_version < 17:
+        # Add NCAA Men's and Women's Soccer to league_config
+        cursor.execute("""
+            INSERT OR IGNORE INTO league_config
+            (league_code, league_name, sport, api_path, default_category, record_format, logo_url)
+            VALUES
+            ('ncaas', 'NCAA Men''s Soccer', 'soccer', 'soccer/usa.ncaa.m.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png'),
+            ('ncaaws', 'NCAA Women''s Soccer', 'soccer', 'soccer/usa.ncaa.w.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png')
+        """)
+        migrations_run += 1
+        print("    ✅ Added NCAA Men's and Women's Soccer to league_config")
         conn.commit()
 
     # =========================================================================

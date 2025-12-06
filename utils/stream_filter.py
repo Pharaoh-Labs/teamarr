@@ -15,9 +15,22 @@ from typing import Dict, List, Tuple
 from utils.regex_helper import compile_pattern
 
 # Pattern to detect game indicators in stream names
-# Matches: vs, vs., at (as word), v (as word), x (as word), @
+# Matches: vs, vs., at (as word), v (as word), x (as word)
+# Note: @ is handled separately - only counts as game indicator when followed by team name
 GAME_INDICATOR_PATTERN = re.compile(
-    r'\b(vs\.?|at|v|x)\b|@',
+    r'\b(vs\.?|at|v|x)\b',
+    re.IGNORECASE
+)
+
+# Month pattern for detecting date separators
+# Handles both short (Jan, Feb) and full (January, February) month names
+_MONTHS_PATTERN = r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)'
+
+# Pattern to detect @ used as team separator (not date/time separator)
+# Matches: "Team @ Team" (@ followed by word that's not a month or digit)
+# Does NOT match: "@ Dec 05", "@ 12:00", "@ 2025" (date/time markers)
+AT_AS_SEPARATOR_PATTERN = re.compile(
+    rf'@\s+(?!{_MONTHS_PATTERN}\b|\d)([A-Za-z]{{2,}})',
     re.IGNORECASE
 )
 
@@ -28,10 +41,14 @@ def has_game_indicator(stream_name: str) -> bool:
 
     Game indicators are patterns that suggest this is an actual game stream:
     - "vs" or "vs." (e.g., "Lakers vs Celtics")
-    - "@" (e.g., "Chiefs @ Ravens")
+    - "@" when used as team separator (e.g., "Chiefs @ Ravens")
     - "at" as a word (e.g., "Patriots at Bills")
     - "v" as a word (e.g., "Arsenal v Chelsea" - soccer style)
     - "x" as a word (e.g., "76ers x Wizards" - some providers use this)
+
+    Note: "@" followed by a date/time is NOT a game indicator:
+    - "UFC 302 @ Dec 05 08:00 PM ET" - NOT a game (@ is date separator)
+    - "ESPN+ 122 : Show Name @ Dec 05" - NOT a game (@ is date separator)
 
     Args:
         stream_name: The stream name to check
@@ -50,8 +67,18 @@ def has_game_indicator(stream_name: str) -> bool:
         False
         >>> has_game_indicator("NFL Network")
         False
+        >>> has_game_indicator("UFC 302 @ Dec 05 08:00 PM ET")
+        False
     """
-    return bool(GAME_INDICATOR_PATTERN.search(stream_name))
+    # Check for standard game indicators (vs, vs., at, v, x)
+    if GAME_INDICATOR_PATTERN.search(stream_name):
+        return True
+
+    # Check for @ used as team separator (not date separator)
+    if AT_AS_SEPARATOR_PATTERN.search(stream_name):
+        return True
+
+    return False
 
 
 def filter_game_streams(

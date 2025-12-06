@@ -14,9 +14,10 @@ logger = get_logger(__name__)
 
 # College leagues that need conference-based team fetching
 COLLEGE_LEAGUES = {
-    'ncaam', 'ncaaw', 'ncaaf', 'ncaah', 'ncaavb-w', 'ncaavb-m',
+    'ncaam', 'ncaaw', 'ncaaf', 'ncaah', 'ncaavb-w', 'ncaavb-m', 'ncaas', 'ncaaws',
     'mens-college-basketball', 'womens-college-basketball', 'college-football',
-    'mens-college-hockey', 'womens-college-volleyball', 'mens-college-volleyball'
+    'mens-college-hockey', 'womens-college-volleyball', 'mens-college-volleyball',
+    'usa.ncaa.m.1', 'usa.ncaa.w.1'  # ESPN soccer slugs for NCAA soccer
 }
 
 

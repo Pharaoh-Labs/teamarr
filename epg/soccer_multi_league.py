@@ -39,8 +39,12 @@ ESPN_LEAGUES_URL = "https://sports.core.api.espn.com/v2/sports/soccer/leagues?li
 ESPN_TEAMS_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/teams"
 ESPN_LEAGUE_DETAIL_URL = "https://sports.core.api.espn.com/v2/sports/soccer/leagues/{slug}"
 
-# League slugs to skip (junk leagues)
-SKIP_LEAGUE_SLUGS = {'nonfifa'}
+# League slugs to skip (junk leagues or handled elsewhere)
+SKIP_LEAGUE_SLUGS = {
+    'nonfifa',
+    'usa.ncaa.m.1',   # NCAA Men's Soccer - handled via TeamLeagueCache as 'ncaas'
+    'usa.ncaa.w.1',   # NCAA Women's Soccer - handled via TeamLeagueCache as 'ncaaws'
+}
 SKIP_LEAGUE_PATTERNS = ['not_used']
 
 # League tag detection patterns

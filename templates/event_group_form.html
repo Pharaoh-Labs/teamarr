@@ -1249,10 +1249,15 @@ const multiSportLeagues = {
     'volleyball': [
         { value: 'ncaavb-m', label: 'NCAA Men\'s Volleyball' },
         { value: 'ncaavb-w', label: 'NCAA Women\'s Volleyball' },
+    ],
+    'soccer': [
+        { value: 'ncaas', label: 'NCAA Men\'s Soccer' },
+        { value: 'ncaaws', label: 'NCAA Women\'s Soccer' },
+        { value: 'soccer_all', label: 'Professional Soccer (All)' },
     ]
 };
 
-// Soccer is all-or-nothing (uses SoccerMultiLeague cache with 240+ leagues)
+// Soccer professional leagues uses SoccerMultiLeague cache with 240+ leagues
 const SOCCER_ENABLED_VALUE = 'soccer_all';
 
 function loadLeaguesPicker() {
@@ -1267,13 +1272,9 @@ function loadLeaguesPicker() {
         selected = [];
     }
 
-    // Count total leagues (non-soccer)
+    // Count total leagues
     let totalLeagues = 0;
     Object.values(multiSportLeagues).forEach(leagues => totalLeagues += leagues.length);
-    totalLeagues += 1; // +1 for soccer (all-or-nothing)
-
-    // Check if soccer is enabled
-    const soccerEnabled = selected.includes(SOCCER_ENABLED_VALUE);
 
     // Build the picker HTML with Select All / Clear buttons
     let html = `
@@ -1285,7 +1286,7 @@ function loadLeaguesPicker() {
 
     html += '<div class="leagues-picker-grid">';
 
-    // Add non-soccer sports
+    // Add all sports including soccer
     Object.entries(multiSportLeagues).forEach(([sport, leagues]) => {
         html += `<div class="leagues-sport-group">`;
         html += `<div class="leagues-sport-header">${sport.charAt(0).toUpperCase() + sport.slice(1)}</div>`;
@@ -1293,36 +1294,26 @@ function loadLeaguesPicker() {
 
         leagues.forEach(league => {
             const checked = selected.includes(league.value) ? 'checked' : '';
+            // Add helper text for Professional Soccer
+            const helperText = league.value === SOCCER_ENABLED_VALUE
+                ? '<small style="color: var(--text-muted); font-size: 0.65rem; display: block; margin-left: 1.25rem;">240+ leagues via cache</small>'
+                : '';
             html += `
                 <label class="league-checkbox">
                     <input type="checkbox" value="${league.value}" ${checked} onchange="updateEnabledLeagues()">
                     <span>${league.label}</span>
                 </label>
+                ${helperText}
             `;
         });
 
         html += `</div></div>`;
     });
 
-    // Add soccer as single checkbox
-    html += `<div class="leagues-sport-group">`;
-    html += `<div class="leagues-sport-header">Soccer</div>`;
-    html += `<div class="leagues-list">`;
-    html += `
-        <label class="league-checkbox">
-            <input type="checkbox" value="${SOCCER_ENABLED_VALUE}" ${soccerEnabled ? 'checked' : ''} onchange="updateEnabledLeagues()">
-            <span>All Soccer Leagues</span>
-        </label>
-        <small style="color: var(--text-muted); font-size: 0.7rem; margin-top: 0.25rem; display: block;">
-            Includes 240+ leagues via cache
-        </small>
-    `;
-    html += `</div></div>`;
-
     html += '</div>';
 
     // Count selected
-    const selectedCount = selected.filter(s => s !== SOCCER_ENABLED_VALUE).length + (soccerEnabled ? 1 : 0);
+    const selectedCount = selected.length;
     html += `<div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
         Selected: <span id="selected-leagues-count">${selectedCount}</span> / ${totalLeagues} sports/leagues
         ${selectedCount === 0 ? '(all will be searched)' : ''}

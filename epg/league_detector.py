@@ -104,7 +104,7 @@ SPORT_INDICATORS = {
     r'\bFootball\b': ['nfl', 'ncaaf'],
     r'\bBaseball\b': ['mlb'],
     r'\bVolleyball\b': ['ncaavb-m', 'ncaavb-w'],
-    r'\bSoccer\b': [],  # Soccer uses SoccerMultiLeague, not handled here
+    r'\bSoccer\b': ['ncaas', 'ncaaws'],  # NCAA soccer handled like other college sports
 }
 
 # Map league codes to their sport for grouping
@@ -121,7 +121,7 @@ LEAGUE_TO_SPORT = {
     'mlb': 'baseball',
     'ncaavb-m': 'volleyball',
     'ncaavb-w': 'volleyball',
-    # Soccer
+    # Soccer (professional)
     'epl': 'soccer',
     'laliga': 'soccer',
     'bundesliga': 'soccer',
@@ -131,6 +131,9 @@ LEAGUE_TO_SPORT = {
     'nwsl': 'soccer',
     'efl': 'soccer',
     'efl1': 'soccer',
+    # Soccer (NCAA - treated like other college sports)
+    'ncaas': 'soccer',
+    'ncaaws': 'soccer',
 }
 
 # Time tolerance for schedule matching (±30 minutes)

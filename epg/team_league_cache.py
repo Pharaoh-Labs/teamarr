@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 # CONSTANTS
 # =============================================================================
 
-# Non-soccer leagues to index
+# Non-soccer leagues to index (includes NCAA soccer as standalone leagues)
 NON_SOCCER_LEAGUES = [
     'nhl', 'nba', 'nba-g', 'wnba',
     'nfl', 'ncaaf',
@@ -45,6 +45,7 @@ NON_SOCCER_LEAGUES = [
     'mlb',
     'ncaah',
     'ncaavb-w', 'ncaavb-m',
+    'ncaas', 'ncaaws',  # NCAA soccer treated like other college sports
 ]
 
 # Thread pool size for parallel fetching

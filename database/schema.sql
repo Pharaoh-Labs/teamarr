@@ -493,7 +493,9 @@ INSERT OR IGNORE INTO league_config (league_code, league_name, sport, api_path, 
     ('nba-g', 'NBA G League', 'basketball', 'basketball/nba-development', 'Basketball', 'wins-losses', 'https://a.espncdn.com/i/teamlogos/leagues/500/nba-g-league.png'),
     ('ncaavb-w', 'NCAA Women''s Volleyball', 'volleyball', 'volleyball/womens-college-volleyball', 'Volleyball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png'),
     ('ncaavb-m', 'NCAA Men''s Volleyball', 'volleyball', 'volleyball/mens-college-volleyball', 'Volleyball', 'wins-losses', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png'),
-    ('ncaah', 'NCAA Men''s Hockey', 'hockey', 'hockey/mens-college-hockey', 'Hockey', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/hockey.png');
+    ('ncaah', 'NCAA Men''s Hockey', 'hockey', 'hockey/mens-college-hockey', 'Hockey', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/hockey.png'),
+    ('ncaas', 'NCAA Men''s Soccer', 'soccer', 'soccer/usa.ncaa.m.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png'),
+    ('ncaaws', 'NCAA Women''s Soccer', 'soccer', 'soccer/usa.ncaa.w.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png');
 
 CREATE INDEX IF NOT EXISTS idx_league_code ON league_config(league_code);
 
