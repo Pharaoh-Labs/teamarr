@@ -22,7 +22,7 @@ STATIC FIELDS (cached, never change for an event):
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, Optional, Any, Tuple, TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -30,6 +30,16 @@ if TYPE_CHECKING:
     from api.espn_client import ESPNClient
 
 logger = logging.getLogger(__name__)
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """JSON encoder that handles datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        return super().default(obj)
 
 # =============================================================================
 # DYNAMIC EVENT FIELDS - Update this when adding new template variables!
@@ -202,7 +212,7 @@ class StreamMatchCache:
                     updated_at = CURRENT_TIMESTAMP
             """, (
                 fingerprint, group_id, stream_id, stream_name,
-                event_id, league, json.dumps(cached_data), generation
+                event_id, league, json.dumps(cached_data, cls=DateTimeEncoder), generation
             ))
             conn.commit()
             self._stats['sets'] += 1
