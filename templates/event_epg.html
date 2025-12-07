@@ -304,12 +304,16 @@
                             <td class="text-center">{{ group.stream_count or 0 }}</td>
                             <td>
                                 {% if group.stream_count and group.stream_count > 0 %}
+                                {% set past_events = group.filtered_outside_lookahead or 0 %}
+                                {% set final_events = group.filtered_final or 0 %}
                                 {% set league_disabled = group.filtered_league_not_enabled or 0 %}
                                 {% set unsupported_sport = group.filtered_unsupported_sport or 0 %}
-                                {% set total_excluded = league_disabled + unsupported_sport %}
+                                {% set total_excluded = past_events + final_events + league_disabled + unsupported_sport %}
                                 {% set exclusion_parts = [] %}
+                                {% if past_events > 0 %}{% set _ = exclusion_parts.append(past_events ~ ' past') %}{% endif %}
+                                {% if final_events > 0 %}{% set _ = exclusion_parts.append(final_events ~ ' final') %}{% endif %}
                                 {% if league_disabled > 0 %}{% set _ = exclusion_parts.append(league_disabled ~ ' league disabled') %}{% endif %}
-                                {% if unsupported_sport > 0 %}{% set _ = exclusion_parts.append(unsupported_sport ~ ' unsupported sport') %}{% endif %}
+                                {% if unsupported_sport > 0 %}{% set _ = exclusion_parts.append(unsupported_sport ~ ' unsupported') %}{% endif %}
                                 <div class="match-rate-container" {% if total_excluded > 0 %}title="{{ total_excluded }} stream(s) excluded: {{ exclusion_parts | join(', ') }}"{% endif %}>
                                     <div class="match-rate-bar">
                                         <div class="match-rate-fill {% if match_rate >= 80 %}rate-good{% elif match_rate >= 50 %}rate-warn{% else %}rate-bad{% endif %}"
@@ -406,12 +410,16 @@
                                 <td class="text-center">{{ child.stream_count or 0 }}</td>
                                 <td>
                                     {% if child.stream_count and child.stream_count > 0 %}
+                                    {% set child_past_events = child.filtered_outside_lookahead or 0 %}
+                                    {% set child_final_events = child.filtered_final or 0 %}
                                     {% set child_league_disabled = child.filtered_league_not_enabled or 0 %}
                                     {% set child_unsupported_sport = child.filtered_unsupported_sport or 0 %}
-                                    {% set child_total_excluded = child_league_disabled + child_unsupported_sport %}
+                                    {% set child_total_excluded = child_past_events + child_final_events + child_league_disabled + child_unsupported_sport %}
                                     {% set child_exclusion_parts = [] %}
+                                    {% if child_past_events > 0 %}{% set _ = child_exclusion_parts.append(child_past_events ~ ' past') %}{% endif %}
+                                    {% if child_final_events > 0 %}{% set _ = child_exclusion_parts.append(child_final_events ~ ' final') %}{% endif %}
                                     {% if child_league_disabled > 0 %}{% set _ = child_exclusion_parts.append(child_league_disabled ~ ' league disabled') %}{% endif %}
-                                    {% if child_unsupported_sport > 0 %}{% set _ = child_exclusion_parts.append(child_unsupported_sport ~ ' unsupported sport') %}{% endif %}
+                                    {% if child_unsupported_sport > 0 %}{% set _ = child_exclusion_parts.append(child_unsupported_sport ~ ' unsupported') %}{% endif %}
                                     <div class="match-rate-container" {% if child_total_excluded > 0 %}title="{{ child_total_excluded }} stream(s) excluded: {{ child_exclusion_parts | join(', ') }}"{% endif %}>
                                         <div class="match-rate-bar">
                                             <div class="match-rate-fill {% if child_match_rate >= 80 %}rate-good{% elif child_match_rate >= 50 %}rate-warn{% else %}rate-bad{% endif %}"

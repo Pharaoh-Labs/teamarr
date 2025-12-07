@@ -515,13 +515,21 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                     # Unsupported sport - return as filtered so it's excluded from match rate
                     return {'type': 'filtered', 'reason': result.reason, 'stream': stream}
                 elif result.parsed_teams:
-                    return {
-                        'type': 'no_teams',
-                        'stream': stream,
-                        'reason': result.reason,
-                        'detail': result.detail,
-                        'parsed_teams': result.parsed_teams
-                    }
+                    # Teams were parsed but no event found - check if reason is excludable
+                    normalized = INTERNAL_REASONS.get(result.reason, result.reason)
+                    if normalized in (FilterReason.GAME_PAST, FilterReason.GAME_FINAL_EXCLUDED,
+                                     FilterReason.NO_GAME_FOUND, FilterReason.LEAGUE_NOT_ENABLED):
+                        # Return as filtered so it's excluded from match rate denominator
+                        return {'type': 'filtered', 'reason': normalized, 'stream': stream}
+                    else:
+                        # True no_teams case - teams parsed but couldn't match to ESPN
+                        return {
+                            'type': 'no_teams',
+                            'stream': stream,
+                            'reason': result.reason,
+                            'detail': result.detail,
+                            'parsed_teams': result.parsed_teams
+                        }
                 else:
                     # Event not found - normalize reason
                     normalized = INTERNAL_REASONS.get(result.reason, result.reason)
@@ -584,7 +592,6 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                     filtered_league_not_enabled += 1
                 elif reason in (FilterReason.UNSUPPORTED_BEACH_SOCCER, FilterReason.UNSUPPORTED_BOXING_MMA, FilterReason.UNSUPPORTED_FUTSAL):
                     filtered_unsupported_sport += 1
-
         matched_count = len(matched_streams)
 
         # Step 3.5: Include existing managed channels that weren't matched
