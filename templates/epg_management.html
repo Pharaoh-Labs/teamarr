@@ -91,26 +91,26 @@
                     <span class="stat-label">Events</span>
                 </span>
                 <span class="stat-divider">|</span>
-                <span class="stat-item stat-clickable stat-success"
-                      onclick="openMatchedStreamsModal()"
-                      title="Click to view matched streams">
-                    <span class="stat-icon">✓</span>
-                    <span class="stat-value">{{ latest_epg.event_matched_streams or 0 }}</span>
-                    <span class="stat-label">Matched</span>
-                </span>
-                <span class="stat-divider">|</span>
-                <span class="stat-item stat-clickable {% if failed_count > 0 %}stat-warning{% endif %}"
-                      onclick="openFailedMatchesModal()"
-                      title="Click to view failed matches">
-                    <span class="stat-icon">✗</span>
-                    <span class="stat-value" id="failed-count">{{ failed_count }}</span>
-                    <span class="stat-label">Failed</span>
-                </span>
-                <span class="stat-divider">|</span>
                 <span class="stat-item stat-filler" title="Pregame: {{ latest_epg.num_pregame or 0 }} | Postgame: {{ latest_epg.num_postgame or 0 }} | Idle: {{ latest_epg.num_idle or 0 }}">
                     <span class="stat-icon">📝</span>
                     <span class="stat-value">{{ total_filler }}</span>
                     <span class="stat-label">Filler</span>
+                </span>
+                <span class="stat-divider">|</span>
+                <span class="stat-item stat-clickable stat-success"
+                      onclick="openMatchedStreamsModal()"
+                      title="Click to view matched streams">
+                    <span class="stat-icon">✅</span>
+                    <span class="stat-value">{{ latest_epg.event_matched_streams or 0 }}</span>
+                    <span class="stat-label">Matched</span>
+                </span>
+                <span class="stat-divider">|</span>
+                <span class="stat-item stat-clickable stat-error"
+                      onclick="openFailedMatchesModal()"
+                      title="Click to view failed matches">
+                    <span class="stat-icon">❌</span>
+                    <span class="stat-value" id="failed-count">{{ failed_count }}</span>
+                    <span class="stat-label">Failed</span>
                 </span>
             </div>
         </div>
@@ -960,6 +960,14 @@ mark.current-match {
 
 .stat-warning .stat-icon {
     color: #f59e0b;
+}
+
+.stat-error .stat-value {
+    color: #ef4444;
+}
+
+.stat-error .stat-icon {
+    color: #ef4444;
 }
 
 .stat-clickable {
