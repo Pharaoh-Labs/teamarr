@@ -440,6 +440,36 @@ class MultiSportMatcher:
                         # Preserve original reason if disambiguation returned no specific reason
                         event_result['reason'] = original_reason
 
+            # Step 7b: Tier 4b+ fallback - if event still not found, try raw name schedule search
+            # This handles cases where team IDs were found but WRONG (e.g., "Miami" matched
+            # to Miami Hurricanes instead of Miami (OH) RedHawks). The raw opponent name
+            # search can find the correct game even when team resolution was incorrect.
+            if not event_result.get('found') and team_result:
+                original_reason = event_result.get('reason')
+                from utils.filter_reasons import FilterReason
+                skip_schedule_search = original_reason in (
+                    FilterReason.GAME_PAST,
+                    FilterReason.GAME_FINAL_EXCLUDED
+                )
+
+                if not skip_schedule_search:
+                    logger.debug(
+                        f"Event not found after disambiguation for '{stream_name[:40]}...', "
+                        f"trying Tier 4b+ schedule search as fallback"
+                    )
+                    schedule_result = self._search_schedules_for_raw_opponent(
+                        team_result, raw_team1, raw_team2,
+                        detected_league, detected_api_path_override
+                    )
+                    if schedule_result:
+                        fallback_event_result, fallback_team_result = schedule_result
+                        if fallback_event_result.get('found'):
+                            event_result = fallback_event_result
+                            team_result = fallback_team_result
+                            # Update detected_league from the successful search
+                            detected_league = team_result.get('detected_league', detected_league)
+                            logger.info(f"[TIER 4b+ FALLBACK] Found event via schedule search for '{stream_name[:40]}...'")
+
             if event_result.get('found'):
                 # Match successful! Now check if league is enabled for this group
                 team_result['detected_league'] = detected_league
