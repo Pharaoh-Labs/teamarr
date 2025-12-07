@@ -1,5 +1,6 @@
 """ESPN API Client for fetching sports schedules and team data"""
 import requests
+from requests.adapters import HTTPAdapter
 import json
 import threading
 from datetime import datetime, timedelta
@@ -10,6 +11,32 @@ from epg.league_config import SoccerCompat
 
 logger = get_logger(__name__)
 
+
+# Module-level HTTP session for connection pooling across all ESPNClient instances
+_espn_session: Optional[requests.Session] = None
+_espn_session_lock = threading.Lock()
+
+
+def _get_espn_session() -> requests.Session:
+    """Get or create the shared ESPN HTTP session with connection pooling."""
+    global _espn_session
+    if _espn_session is None:
+        with _espn_session_lock:
+            if _espn_session is None:
+                session = requests.Session()
+                # Configure connection pooling for ESPN's multiple domains
+                adapter = HTTPAdapter(
+                    pool_connections=10,  # Number of connection pools
+                    pool_maxsize=20,      # Max connections per pool
+                    max_retries=0         # We handle retries ourselves
+                )
+                session.mount('http://', adapter)
+                session.mount('https://', adapter)
+                _espn_session = session
+                logger.debug("ESPN HTTP session created with connection pooling")
+    return _espn_session
+
+
 class ESPNClient:
     """Client for ESPN's public API"""
 
@@ -19,6 +46,9 @@ class ESPNClient:
         self.timeout = 10
         self.retry_count = 3
         self.retry_delay = 1  # seconds
+
+        # Use shared session for connection pooling
+        self._session = _get_espn_session()
 
         # Cache for team stats (refreshes every 6 hours)
         self._stats_cache = {}
@@ -51,10 +81,10 @@ class ESPNClient:
         self._scoreboard_cache_lock = threading.Lock()
 
     def _make_request(self, url: str) -> Optional[Dict]:
-        """Make HTTP request with retry logic"""
+        """Make HTTP request with retry logic and connection pooling"""
         for attempt in range(self.retry_count):
             try:
-                response = requests.get(url, timeout=self.timeout)
+                response = self._session.get(url, timeout=self.timeout)
                 response.raise_for_status()
                 return response.json()
             except requests.exceptions.RequestException as e:

@@ -475,6 +475,16 @@ class ChannelLifecycleManager:
         # Prevents race conditions when multiple groups are processed in parallel
         self._dispatcharr_lock = threading.Lock()
 
+    def clear_cache(self):
+        """
+        Clear Dispatcharr API caches. Call at the start of each EPG generation cycle.
+
+        This ensures fresh channel/logo data is fetched from Dispatcharr,
+        while still benefiting from caching within the generation cycle.
+        """
+        self.channel_api.clear_cache()
+        logger.debug("ChannelLifecycleManager: Dispatcharr caches cleared")
+
     def delete_managed_channel(
         self,
         channel: Dict,

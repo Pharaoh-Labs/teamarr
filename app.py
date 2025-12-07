@@ -976,6 +976,12 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
         epg_orchestrator.espn.clear_scoreboard_cache()
         epg_orchestrator.api_calls = 0
 
+        # Clear Dispatcharr caches for fresh channel/logo lookups
+        # (caches are still used within this generation cycle for performance)
+        lifecycle_mgr = get_lifecycle_manager()
+        if lifecycle_mgr:
+            lifecycle_mgr.clear_cache()
+
         # ============================================
         # PHASE 1: Team-based EPG
         # ============================================
