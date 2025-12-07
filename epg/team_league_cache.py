@@ -255,6 +255,123 @@ class TeamLeagueCache:
             conn.close()
 
     @classmethod
+    def get_team_id_for_league(cls, team_name: str, league_code: str) -> Optional[str]:
+        """
+        Get the ESPN team ID for a specific team in a specific league.
+
+        This is critical because the same team name (e.g., "Iowa State Cyclones")
+        can have different ESPN IDs in different leagues:
+        - ID 66 in college-football, mens-college-basketball, womens-college-volleyball
+        - ID 20535 in usa.ncaa.w.1 (women's soccer)
+
+        Uses tiered matching (parallel structure to get_soccer_team_ids_for_league):
+        1. Direct match with abbreviation variants (st/st., mt/mt.)
+        2. Accent-normalized match (Atletico -> Atlético)
+        3. Number-stripped match (SV Elversberg -> SV 07 Elversberg)
+        4. Article-stripped match (Atlético de Madrid -> Atlético Madrid)
+
+        Args:
+            team_name: Team name to search
+            league_code: League to find the team in
+
+        Returns:
+            ESPN team ID if found, None otherwise
+        """
+        if not team_name or not league_code:
+            return None
+
+        # Import here to avoid circular imports
+        from epg.league_detector import (
+            get_abbreviation_variants, strip_accents, normalize_team_name
+        )
+        import re
+
+        team_lower = team_name.lower().strip()
+        team_accent_stripped = strip_accents(team_lower)
+        team_stripped = normalize_team_name(team_lower, strip_articles=False)
+        team_normalized = normalize_team_name(team_lower, strip_articles=True)
+
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+
+            # Tier 1: Direct match with abbreviation variants (st/st., mt/mt.)
+            for variant in get_abbreviation_variants(team_name):
+                cursor.execute("""
+                    SELECT espn_team_id, team_name
+                    FROM team_league_cache
+                    WHERE league_code = ?
+                      AND (LOWER(team_name) LIKE ?
+                           OR LOWER(team_abbrev) = ?
+                           OR LOWER(team_short_name) LIKE ?
+                           OR INSTR(?, LOWER(team_name)) > 0)
+                    ORDER BY LENGTH(team_name) ASC
+                    LIMIT 1
+                """, (league_code, f'%{variant}%', variant, f'%{variant}%', variant))
+                row = cursor.fetchone()
+                if row:
+                    logger.debug(f"Team '{team_name}' matched via direct lookup in {league_code}: {row[1]} (ID {row[0]})")
+                    return str(row[0])
+
+            # Tier 2: Accent-normalized match
+            # Handles "Atletico" (stream) matching "Atlético" (DB)
+            cursor.execute("""
+                SELECT espn_team_id, team_name FROM team_league_cache
+                WHERE league_code = ?
+            """, (league_code,))
+            for row in cursor.fetchall():
+                db_normalized = strip_accents(row[1].lower())
+                if team_accent_stripped in db_normalized or db_normalized in team_accent_stripped:
+                    logger.debug(f"Team '{team_name}' matched via accent-stripping in {league_code}: {row[1]} (ID {row[0]})")
+                    return str(row[0])
+
+            # Tier 3: Number-stripped match
+            # Handles "SV Elversberg" (stream) matching "SV 07 Elversberg" (DB)
+            if team_stripped != team_lower:
+                # SQL expression to strip numbers from team_name
+                sql_strip_numbers = """
+                    TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                            LOWER(team_name), '0', ''), '1', ''), '2', ''), '3', ''), '4', ''),
+                        '5', ''), '6', ''), '7', ''), '8', ''), '9', ''), '  ', ' '))
+                """
+                cursor.execute(f"""
+                    SELECT espn_team_id, team_name FROM team_league_cache
+                    WHERE league_code = ? AND (
+                        {sql_strip_numbers} LIKE ?
+                        OR {sql_strip_numbers} LIKE ?
+                        OR INSTR(?, {sql_strip_numbers}) > 0
+                    )
+                    ORDER BY LENGTH(team_name) ASC
+                    LIMIT 1
+                """, (league_code, f'%{team_stripped}%', f'{team_stripped}%', team_stripped))
+                row = cursor.fetchone()
+                if row:
+                    logger.debug(f"Team '{team_name}' matched via number-stripping in {league_code}: {row[1]} (ID {row[0]})")
+                    return str(row[0])
+
+            # Tier 4: Article-stripped match (de, del, da, do, di, du)
+            if team_normalized != team_stripped:
+                cursor.execute("""
+                    SELECT espn_team_id, team_name FROM team_league_cache
+                    WHERE league_code = ?
+                """, (league_code,))
+                for row in cursor.fetchall():
+                    db_normalized = strip_accents(row[1].lower())
+                    # Strip articles from DB value too
+                    db_articles_stripped = re.sub(r'\b(de|del|da|do|di|du)\b', '', db_normalized, flags=re.I)
+                    db_articles_stripped = re.sub(r'\s+', ' ', db_articles_stripped).strip()
+                    if team_normalized in db_articles_stripped:
+                        logger.debug(f"Team '{team_name}' matched via article-stripping in {league_code}: {row[1]} (ID {row[0]})")
+                        return str(row[0])
+
+            # No match found
+            logger.debug(f"Team '{team_name}' not found in {league_code}")
+            return None
+        finally:
+            conn.close()
+
+    @classmethod
     def get_cache_stats(cls) -> CacheStats:
         """
         Get cache status and statistics.

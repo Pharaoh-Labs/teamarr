@@ -485,7 +485,7 @@ class EventMatcher:
                 logger.debug(f"[TRACE] find_event FAIL | reason=invalid api_path")
                 return result
 
-        # Try team1's schedule first
+        # Try team1's schedule first (future games)
         logger.debug(f"[TRACE] Searching team1 ({team1_id}) schedule for opponent {team2_id}")
         matching_events, skip_reason, error = self._search_team_schedule(
             team1_id, team2_id, sport, api_league, include_final_events
@@ -493,21 +493,22 @@ class EventMatcher:
 
         # If no match found on team1's schedule, try team2's schedule as fallback
         if not matching_events and not skip_reason:
-            logger.debug(f"[TRACE] No match on team1 schedule, trying team2 ({team2_id}) schedule for opponent {team1_id}")
+            logger.debug(f"[TRACE] No match on team1 schedule, trying team2 ({team2_id}) schedule")
             matching_events, skip_reason, error = self._search_team_schedule(
                 team2_id, team1_id, sport, api_league, include_final_events
             )
             if matching_events:
                 logger.info(f"[TRACE] Found game via team2 ({team2_id}) schedule fallback")
 
-        # Soccer fallback: schedule API only returns past results, use scoreboard for future games
-        if not matching_events and not skip_reason and is_soccer_league(league):
-            logger.debug(f"[TRACE] No match in schedule, trying scoreboard fallback for soccer league {league}")
+        # Scoreboard fallback: schedule API doesn't include today's games for many sports
+        # Check scoreboard for ALL sports (not just soccer)
+        if not matching_events and not skip_reason:
+            logger.debug(f"[TRACE] No match in schedule, trying scoreboard for {league}")
             matching_events, skip_reason, error = self._search_scoreboard(
                 team1_id, team2_id, sport, api_league, include_final_events
             )
             if matching_events:
-                logger.info(f"[TRACE] Found game via scoreboard fallback for soccer league {league}")
+                logger.info(f"[TRACE] Found game via scoreboard for {league}")
 
         if error and not matching_events:
             result['reason'] = error

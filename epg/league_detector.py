@@ -1246,39 +1246,10 @@ class LeagueDetector:
                 candidates_checked=[detected_league]
             )
 
-        # Resolve team IDs
-        from epg.team_league_cache import TeamLeagueCache
-        team1_id = team2_id = None
-
-        team1_info = TeamLeagueCache.get_team_info(team1)
-        if team1_info:
-            for ti in team1_info:
-                if ti.league == detected_league:
-                    team1_id = ti.espn_team_id
-                    break
-            if not team1_id and team1_info:
-                team1_id = team1_info[0].espn_team_id
-
-        team2_info = TeamLeagueCache.get_team_info(team2)
-        if team2_info:
-            for ti in team2_info:
-                if ti.league == detected_league:
-                    team2_id = ti.espn_team_id
-                    break
-            if not team2_id and team2_info:
-                team2_id = team2_info[0].espn_team_id
-
-        if not team1_id or not team2_id:
-            logger.debug(f"Tier 1: League indicator {detected_league} found but cannot resolve team IDs")
-            return DetectionResult(
-                detected=False,
-                method=f"League indicator {detected_league} found but cannot resolve team IDs",
-                candidates_checked=[detected_league]
-            )
-
-        # Search for actual game
+        # Search for actual game - pass team NAMES, not IDs
+        # Team IDs are resolved per-league inside _search_schedules
         schedule_result = self._search_schedules(
-            str(team1_id), str(team2_id),
+            team1, team2,
             [detected_league], game_time, TIME_TOLERANCE_MINUTES if game_time else None
         )
 
@@ -1355,39 +1326,10 @@ class LeagueDetector:
                         candidates_checked=sport_leagues
                     )
 
-                # Resolve team IDs
-                from epg.team_league_cache import TeamLeagueCache
-                team1_id = team2_id = None
-
-                team1_info = TeamLeagueCache.get_team_info(team1)
-                if team1_info:
-                    for ti in team1_info:
-                        if ti.league == league:
-                            team1_id = ti.espn_team_id
-                            break
-                    if not team1_id and team1_info:
-                        team1_id = team1_info[0].espn_team_id
-
-                team2_info = TeamLeagueCache.get_team_info(team2)
-                if team2_info:
-                    for ti in team2_info:
-                        if ti.league == league:
-                            team2_id = ti.espn_team_id
-                            break
-                    if not team2_id and team2_info:
-                        team2_id = team2_info[0].espn_team_id
-
-                if not team1_id or not team2_id:
-                    logger.debug(f"Tier 2: Sport {detected_sport} + league {league} but cannot resolve team IDs")
-                    return DetectionResult(
-                        detected=False,
-                        method=f"Sport indicator '{detected_sport}' + {league} but cannot resolve team IDs",
-                        candidates_checked=sport_leagues
-                    )
-
-                # Search for actual game
+                # Search for actual game - pass team NAMES, not IDs
+                # Team IDs are resolved per-league inside _search_schedules
                 schedule_result = self._search_schedules(
-                    str(team1_id), str(team2_id),
+                    team1, team2,
                     [league], game_time, TIME_TOLERANCE_MINUTES if game_time else None
                 )
 
@@ -1475,88 +1417,45 @@ class LeagueDetector:
 
             # Try to verify a game exists (if we have ESPN client)
             if self.espn:
-                # Get team IDs for this league
-                from epg.team_league_cache import TeamLeagueCache
-                local_team1_id = team1_id
-                local_team2_id = team2_id
-
-                if not local_team1_id:
-                    team1_info = TeamLeagueCache.get_team_info(team1)
-                    if team1_info:
-                        # Filter to this specific league
-                        for ti in team1_info:
-                            if ti.league == league:
-                                local_team1_id = ti.espn_team_id
-                                break
-                        if not local_team1_id and team1_info:
-                            local_team1_id = team1_info[0].espn_team_id
-
-                if not local_team2_id:
-                    team2_info = TeamLeagueCache.get_team_info(team2)
-                    if team2_info:
-                        for ti in team2_info:
-                            if ti.league == league:
-                                local_team2_id = ti.espn_team_id
-                                break
-                        if not local_team2_id and team2_info:
-                            local_team2_id = team2_info[0].espn_team_id
-
-                # If we have team IDs, check if a game exists
-                if local_team1_id and local_team2_id:
-                    from epg.league_config import get_league_config, parse_api_path
-                    from database import get_connection
-                    config = get_league_config(league, get_connection)
-                    if config:
-                        sport, api_league = parse_api_path(config['api_path'])
-                        if sport:
-                            schedule_result = self._search_schedules(
-                                str(local_team1_id), str(local_team2_id),
-                                [league], game_time, TIME_TOLERANCE_MINUTES if game_time else None
-                            )
-                            if schedule_result:
-                                # Game found - Tier 3 success
-                                closest = schedule_result[0]
-                                tier_detail = '3a' if game_date and game_time else '3b' if game_time else '3c'
-                                return DetectionResult(
-                                    detected=True,
-                                    league=league,
-                                    sport=sport,
-                                    tier=3,
-                                    tier_detail=tier_detail,
-                                    method=f"Game found in {league.upper()}",
-                                    candidates_checked=candidates,
-                                    event_id=closest.event_id,
-                                    event_date=closest.event_date
-                                )
-                            else:
-                                # No game between matched teams - try Tier 4a
-                                logger.debug(
-                                    f"Single candidate {league} but no game between matched teams, "
-                                    f"trying Tier 4a schedule search"
-                                )
-                                fallback_result = self._schedule_search_fallback(
-                                    team1, team2, game_date, game_time
-                                )
-                                if fallback_result and fallback_result.detected:
-                                    return fallback_result
-                    else:
-                        # League has no config (e.g., usa.ncaa.w.1 from soccer cache)
-                        # This league is in the cache but not in league_config
-                        # Try Tier 4 schedule search instead
-                        logger.debug(
-                            f"Single candidate {league} has no league_config, "
-                            f"trying Tier 4 schedule search"
-                        )
-                        fallback_result = self._schedule_search_fallback(
-                            team1, team2, game_date, game_time
-                        )
-                        if fallback_result and fallback_result.detected:
-                            return fallback_result
+                # Search for actual game - pass team NAMES, not IDs
+                # Team IDs are resolved per-league inside _search_schedules
+                # This is critical because the same team name can have different IDs
+                # in different leagues (e.g., Iowa State = 66 in volleyball, 20535 in soccer)
+                schedule_result = self._search_schedules(
+                    team1, team2,
+                    [league], game_time, TIME_TOLERANCE_MINUTES if game_time else None
+                )
+                if schedule_result:
+                    # Game found - Tier 3 success
+                    closest = schedule_result[0]
+                    tier_detail = '3a' if game_date and game_time else '3b' if game_time else '3c'
+                    return DetectionResult(
+                        detected=True,
+                        league=league,
+                        sport=get_sport_for_league(league),
+                        tier=3,
+                        tier_detail=tier_detail,
+                        method=f"Game found in {league.upper()}",
+                        candidates_checked=candidates,
+                        event_id=closest.event_id,
+                        event_date=closest.event_date
+                    )
+                else:
+                    # No game between matched teams - try Tier 4a
+                    logger.debug(
+                        f"Single candidate {league} but no game between matched teams, "
+                        f"trying Tier 4a schedule search"
+                    )
+                    fallback_result = self._schedule_search_fallback(
+                        team1, team2, game_date, game_time
+                    )
+                    if fallback_result and fallback_result.detected:
+                        return fallback_result
 
             # Cannot verify game exists - NO SUCCESS without event_id
-            # (happens when no ESPN client or couldn't get team IDs or config missing)
+            # (happens when no ESPN client)
             logger.debug(
-                f"Single candidate {league} but cannot verify game exists (no ESPN/team IDs/config)"
+                f"Single candidate {league} but cannot verify game exists (no ESPN client)"
             )
             return DetectionResult(
                 detected=False,
@@ -1573,37 +1472,17 @@ class LeagueDetector:
                 candidates_checked=candidates
             )
 
-        # Resolve team IDs from cache if not provided
-        # This is critical - schedule API requires team IDs, not names
-        if not team1_id or not team2_id:
-            from epg.team_league_cache import TeamLeagueCache
-            if not team1_id:
-                team1_info = TeamLeagueCache.get_team_info(team1)
-                if team1_info:
-                    team1_id = team1_info[0].espn_team_id
-                    logger.debug(f"Resolved team1 '{team1}' to ID {team1_id}")
-            if not team2_id:
-                team2_info = TeamLeagueCache.get_team_info(team2)
-                if team2_info:
-                    team2_id = team2_info[0].espn_team_id
-                    logger.debug(f"Resolved team2 '{team2}' to ID {team2_id}")
-
-        # If we still don't have IDs, we can't do schedule disambiguation
-        # NO SUCCESS without event_id - team ID resolution failed
-        if not team1_id or not team2_id:
-            logger.warning(f"Could not resolve team IDs for schedule check: {team1}={team1_id}, {team2}={team2_id}")
-            return DetectionResult(
-                detected=False,
-                method=f"Cannot resolve team IDs for schedule verification",
-                candidates_checked=candidates
-            )
+        # Team IDs are now resolved PER-LEAGUE in _search_schedules
+        # This is critical because the same team name can have different IDs
+        # in different leagues (e.g., Iowa State = 66 in volleyball, 20535 in soccer)
+        # Pass team NAMES to tier detection, not pre-resolved IDs
 
         # Determine tier based on available date/time
         if game_date and game_time:
             # Tier 3a: Exact date + time
             return self._detect_tier3a(
-                team1_id,
-                team2_id,
+                team1,  # Pass name, not ID
+                team2,  # Pass name, not ID
                 candidates,
                 game_date,
                 game_time
@@ -1611,16 +1490,16 @@ class LeagueDetector:
         elif game_time:
             # Tier 3b: Time only, infer today
             return self._detect_tier3b(
-                team1_id,
-                team2_id,
+                team1,  # Pass name, not ID
+                team2,  # Pass name, not ID
                 candidates,
                 game_time
             )
         else:
             # Tier 3c: Teams only, find closest game
             return self._detect_tier3c(
-                team1_id,
-                team2_id,
+                team1,  # Pass name, not ID
+                team2,  # Pass name, not ID
                 candidates
             )
 
@@ -2239,8 +2118,8 @@ class LeagueDetector:
 
     def _search_schedules(
         self,
-        team1: str,
-        team2: str,
+        team1_name: str,
+        team2_name: str,
         candidates: List[str],
         target_datetime: datetime = None,
         tolerance_minutes: int = None
@@ -2249,8 +2128,8 @@ class LeagueDetector:
         Search schedules across multiple leagues for a team matchup.
 
         Args:
-            team1: Team name or ID
-            team2: Team name or ID
+            team1_name: Team name (will be resolved to ID per-league)
+            team2_name: Team name (will be resolved to ID per-league)
             candidates: List of league codes to search
             target_datetime: Specific datetime to match (None = search all)
             tolerance_minutes: Time tolerance for matching (None = any time)
@@ -2259,6 +2138,7 @@ class LeagueDetector:
             List of ScheduleMatch objects
         """
         from epg.league_config import get_league_config, parse_api_path
+        from epg.team_league_cache import TeamLeagueCache
 
         matches = []
         now = datetime.now(ZoneInfo('UTC'))
@@ -2293,12 +2173,41 @@ class LeagueDetector:
                     else:
                         continue
 
-                # Search team1's schedule
-                schedule = self.espn.get_team_schedule(sport, api_league, str(team1))
-                if not schedule or 'events' not in schedule:
+                # Resolve team IDs for THIS specific league
+                # Critical: same team name can have different IDs in different leagues
+                # e.g., Iowa State Cyclones = ID 66 in volleyball, ID 20535 in women's soccer
+                team1_id = TeamLeagueCache.get_team_id_for_league(team1_name, league)
+                team2_id = TeamLeagueCache.get_team_id_for_league(team2_name, league)
+
+                if not team1_id:
+                    logger.debug(f"Could not resolve team1 '{team1_name}' in {league}")
+                    continue
+                if not team2_id:
+                    logger.debug(f"Could not resolve team2 '{team2_name}' in {league}")
                     continue
 
-                for event in schedule.get('events', []):
+                # Collect events from both schedule AND scoreboard
+                # Schedule API has future games, scoreboard has today's games
+                all_events = []
+
+                # 1. Check scoreboard first (today's games)
+                scoreboard = self.espn.get_scoreboard(sport, api_league)
+                if scoreboard and 'events' in scoreboard:
+                    all_events.extend(scoreboard.get('events', []))
+
+                # 2. Also check team schedule (future games)
+                schedule = self.espn.get_team_schedule(sport, api_league, team1_id)
+                if schedule and 'events' in schedule:
+                    # Avoid duplicates by event ID
+                    existing_ids = {e.get('id') for e in all_events}
+                    for event in schedule.get('events', []):
+                        if event.get('id') not in existing_ids:
+                            all_events.append(event)
+
+                if not all_events:
+                    continue
+
+                for event in all_events:
                     try:
                         event_date_str = event.get('date', '')
                         if not event_date_str:
@@ -2323,7 +2232,7 @@ class LeagueDetector:
                             for c in competitors
                         ]
 
-                        if str(team2) not in team_ids:
+                        if str(team2_id) not in team_ids:
                             continue
 
                         # Calculate time difference
