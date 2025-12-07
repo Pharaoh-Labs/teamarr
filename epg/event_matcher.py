@@ -146,10 +146,22 @@ class EventMatcher:
             - matching_events: List of {event, event_date, event_id} dicts
             - skip_reason: None, 'past_game', or 'today_final' indicating why game was skipped
         """
+        from utils.time_format import get_today_in_user_tz, get_user_timezone
+
         now = datetime.now(ZoneInfo('UTC'))
         cutoff_past = now - timedelta(days=self.SEARCH_DAYS_BACK)
         cutoff_future = now + timedelta(days=self.lookahead_days)
-        today = now.date()
+
+        # Use user's timezone for "today" to avoid games becoming "yesterday"
+        # when UTC crosses midnight but user's local time hasn't
+        today = get_today_in_user_tz(self.db_connection_func)
+
+        # Get user timezone for event date conversion
+        user_tz_str = get_user_timezone(self.db_connection_func)
+        try:
+            user_tz = ZoneInfo(user_tz_str)
+        except Exception:
+            user_tz = ZoneInfo('America/Detroit')
 
         matching_events = []
         skip_reason = None  # 'past_game' or 'today_final'
@@ -204,7 +216,11 @@ class EventMatcher:
 
                 # Filter completed games based on settings
                 if is_completed:
-                    event_day = event_date.date()
+                    # Convert event_date to user timezone for day comparison
+                    # This ensures a 7pm EST game on Dec 6 (which is 12am UTC Dec 7)
+                    # is still considered "Dec 6" for a user in EST
+                    event_in_user_tz = event_date.astimezone(user_tz)
+                    event_day = event_in_user_tz.date()
                     if event_day < today:
                         skip_reason = 'past_game'  # Game from a previous day
                         logger.debug(f"[TRACE]   Event {event_id} ({event_name}) - skipped: past completed game ({event_day})")
@@ -499,13 +515,14 @@ class EventMatcher:
             return result
 
         if not matching_events:
-            # Provide specific reason based on why game was skipped
+            # Use FilterReason constants for consistent messaging and match rate exclusion
+            from utils.filter_reasons import FilterReason
             if skip_reason == 'past_game':
-                result['reason'] = 'Game already completed (past)'
+                result['reason'] = FilterReason.GAME_PAST
             elif skip_reason == 'today_final':
-                result['reason'] = 'Game completed (excluded)'
+                result['reason'] = FilterReason.GAME_FINAL_EXCLUDED
             else:
-                result['reason'] = 'No game found between teams'
+                result['reason'] = FilterReason.NO_GAME_FOUND
             logger.debug(f"[TRACE] find_event FAIL | team1={team1_id} vs team2={team2_id} | reason={result['reason']} | skip_reason={skip_reason}")
             return result
 

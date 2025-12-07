@@ -794,52 +794,13 @@ class LeagueDetector:
                         logger.debug(f"Found leagues via article-stripped search: '{team_name}' -> '{normalized}'")
                         return leagues
 
-                # Tier 5: Word-overlap matching for city name variants
-                # Handles German/English city differences:
-                #   - München vs Munich (Bayern Munich in DB, FC Bayern München in stream)
-                #   - Köln vs Cologne
-                #   - Napoli vs Naples
-                search_words = set(search_normalized.split())
-                # Filter out common prefixes AND generic words that cause false positives
-                non_significant_words = {
-                    # Soccer club prefixes
-                    'fc', 'sc', 'sv', 'vfb', 'vfl', 'tsv', 'fsv', 'bsc', '1.', 'ac', 'as', 'ss', 'us',
-                    'cd', 'cf', 'rc', 'rcd', 'ud', 'sd', 'real', 'sporting', 'athletic', 'atletico',
-                    # Generic institutional words (cause false positives)
-                    'college', 'university', 'state', 'city', 'united', 'town', 'county',
-                    # Common suffixes
-                    'afc', 'utd',
-                }
-                # Directional words that alone are not enough for a match
-                directional_words = {'east', 'west', 'north', 'south', 'central', 'southern', 'northern', 'eastern', 'western'}
-
-                search_words_significant = search_words - non_significant_words
-
-                if search_words_significant:
-                    cursor.execute("""
-                        SELECT league_slug, team_name FROM soccer_team_leagues
-                    """)
-                    for row in cursor.fetchall():
-                        db_normalized = strip_accents(row[1].lower())
-                        db_words = set(db_normalized.split())
-                        db_words_significant = db_words - non_significant_words
-
-                        # Match requires either:
-                        # 1. More than 50% of search words match, OR
-                        # 2. Non-directional words overlap (not just east/west/north/south)
-                        # This catches "Bayern" in both "FC Bayern München" and "Bayern Munich"
-                        overlap = search_words_significant & db_words_significant
-                        if overlap:
-                            non_directional_overlap = overlap - directional_words
-                            overlap_ratio = len(overlap) / len(search_words_significant)
-
-                            # Require >50% overlap OR non-directional match
-                            if non_directional_overlap or overlap_ratio > 0.5:
-                                leagues.add(row[0])
-
-                    if leagues:
-                        logger.debug(f"Found leagues via word-overlap search: '{team_name}' -> significant words: {search_words_significant}")
-                        return leagues
+                # Word-overlap matching DISABLED (v1.4.1)
+                # Originally intended for city name transliterations (München/Munich, Köln/Cologne)
+                # but ESPN already uses English names, and accent-stripping (Tier 2) handles accented variants.
+                # The word-overlap logic caused many false positives:
+                #   - "Tampa Bay Lightning" (NHL) matching "Monterey Bay F.C." (soccer) via 'bay'
+                #   - "Chicago Bulls" (NBA) matching "Chicago Fire FC" (soccer) via 'chicago'
+                # Net negative value - disabled entirely.
 
                 return leagues
 
@@ -982,49 +943,8 @@ class LeagueDetector:
                             logger.debug(f"Team '{team_name}' matched via article-stripping: {row[1]}")
                             return row
 
-                # Tier 5: Word-overlap matching for city name variants
-                # Handles German/English city differences:
-                #   - München vs Munich (Bayern Munich in DB, FC Bayern München in stream)
-                #   - Köln vs Cologne
-                # Match if significant words overlap (ignoring common prefixes like FC, VfB)
-                search_words = set(team_accent_stripped.split())
-                # Filter out common prefixes AND generic words that cause false positives
-                non_significant_words = {
-                    # Soccer club prefixes
-                    'fc', 'sc', 'sv', 'vfb', 'vfl', 'tsv', 'fsv', 'bsc', '1.', 'ac', 'as', 'ss', 'us',
-                    'cd', 'cf', 'rc', 'rcd', 'ud', 'sd', 'real', 'sporting', 'athletic', 'atletico',
-                    # Generic institutional words (cause false positives)
-                    'college', 'university', 'state', 'city', 'united', 'town', 'county',
-                    # Common suffixes
-                    'afc', 'utd',
-                }
-                # Directional words that alone are not enough for a match
-                directional_words = {'east', 'west', 'north', 'south', 'central', 'southern', 'northern', 'eastern', 'western'}
-
-                search_words_significant = search_words - non_significant_words
-
-                if search_words_significant:
-                    cursor.execute("""
-                        SELECT espn_team_id, team_name FROM soccer_team_leagues
-                        WHERE league_slug = ?
-                    """, (league,))
-                    for row in cursor.fetchall():
-                        db_normalized = strip_accents(row[1].lower())
-                        db_words = set(db_normalized.split())
-                        db_words_significant = db_words - non_significant_words
-
-                        # Match requires either:
-                        # 1. More than 50% of search words match, OR
-                        # 2. Non-directional words overlap (not just east/west/north/south)
-                        overlap = search_words_significant & db_words_significant
-                        if overlap:
-                            non_directional_overlap = overlap - directional_words
-                            overlap_ratio = len(overlap) / len(search_words_significant)
-
-                            # Require >50% overlap OR non-directional match
-                            if non_directional_overlap or overlap_ratio > 0.5:
-                                logger.debug(f"Team '{team_name}' matched via word-overlap: {row[1]} (shared: {overlap})")
-                                return row
+                # Word-overlap matching DISABLED (v1.4.1)
+                # See comment in _find_soccer_leagues_for_teams() for rationale.
 
                 return None
 
