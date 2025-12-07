@@ -333,9 +333,10 @@ def get_league_alias(slug: str) -> str:
 #   12: Soccer multi-league cache tables (with league_tags JSON array)
 #   15: Team-league cache tables for non-soccer sports
 #   16: Multi-sport event groups (is_multi_sport, enabled_leagues, etc.)
+#   23: Stream fingerprint cache for EPG generation optimization
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 22
+CURRENT_SCHEMA_VERSION = 23
 
 
 def get_schema_version(conn) -> int:
@@ -1524,6 +1525,64 @@ def run_migrations(conn):
         except Exception as e:
             print(f"    ⚠️ Migration 22 warning: {e}")
             migrations_run += 1
+
+    # =========================================================================
+    # 23. Stream Fingerprint Cache
+    # =========================================================================
+    # Caches stream-to-event matches to avoid expensive tier matching on every
+    # EPG generation. Only caches successful matches (with event_id).
+    # Fingerprint = group_id + stream_id + stream_name
+    if current_version < 23:
+        print("  🔄 Migration 23: Creating stream fingerprint cache...")
+        try:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS stream_match_cache (
+                    -- Hash fingerprint for fast lookup (SHA256 truncated to 16 chars)
+                    fingerprint TEXT PRIMARY KEY,
+
+                    -- Original fields kept for debugging
+                    group_id INTEGER NOT NULL,
+                    stream_id INTEGER NOT NULL,
+                    stream_name TEXT NOT NULL,
+
+                    -- Match result
+                    event_id TEXT NOT NULL,
+                    league TEXT NOT NULL,
+
+                    -- Cached static event data (JSON blob)
+                    -- Contains full normalized event + team_result for template vars
+                    cached_event_data TEXT NOT NULL,
+
+                    -- Housekeeping
+                    last_seen_generation INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Index for purge queries
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_smc_generation
+                ON stream_match_cache(last_seen_generation)
+            """)
+
+            # Index for event_id lookups (useful for debugging)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_smc_event_id
+                ON stream_match_cache(event_id)
+            """)
+
+            # Add epg_generation_counter to settings if not exists
+            add_columns_if_missing('settings', [
+                ('epg_generation_counter', 'INTEGER DEFAULT 0'),
+            ])
+
+            conn.commit()
+            migrations_run += 1
+            print("    ✅ Migration 23 complete: Stream fingerprint cache created")
+        except Exception as e:
+            print(f"    ⚠️ Migration 23 error: {e}")
+            conn.rollback()
 
     # =========================================================================
     # UPDATE SCHEMA VERSION

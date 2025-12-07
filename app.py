@@ -220,7 +220,7 @@ def inject_globals():
 # CORE EPG GENERATION FUNCTIONS
 # =============================================================================
 
-def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_start_datetime=None, progress_callback=None):
+def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_start_datetime=None, progress_callback=None, generation=None):
     """
     Core function to refresh a single event EPG group.
 
@@ -233,6 +233,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
         skip_m3u_refresh: If True, skip M3U refresh (use when already refreshed in batch)
         epg_start_datetime: Optional datetime for EPG start (for multi-day filler)
         progress_callback: Optional callable(processed, total, group_name) for stream progress
+        generation: EPG generation counter for fingerprint cache (None = no caching)
 
     Returns:
         dict with keys: success, stream_count, matched_count, matched_streams,
@@ -244,8 +245,13 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
     from epg.epg_consolidator import get_data_dir, after_event_epg_generation
     from database import get_template, update_event_epg_group_stats
     from utils.stream_filter import filter_game_streams
+    from epg.stream_match_cache import StreamMatchCache, refresh_cached_event
 
     group_id = group['id']
+
+    # Initialize fingerprint cache if generation provided
+    stream_cache = StreamMatchCache(get_connection) if generation is not None else None
+    cache_stats = {'hits': 0, 'misses': 0, 'stored': 0}
 
     # Fetch settings early for use throughout the function
     conn = get_connection()
@@ -563,7 +569,74 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             }
 
         # Select the matching function based on mode
-        match_single_stream = match_single_stream_multi_sport if is_multi_sport else match_single_stream_single_league
+        match_single_stream_base = match_single_stream_multi_sport if is_multi_sport else match_single_stream_single_league
+
+        # Create ESPN client for cache refreshes (shared across threads via get_event_summary)
+        from api.espn_client import ESPNClient
+        espn_for_cache = ESPNClient()
+
+        def match_with_cache(stream):
+            """
+            Wrapper that checks fingerprint cache before full matching.
+
+            On cache hit: refresh dynamic fields from ESPN and return cached match
+            On cache miss: run full matching, cache successful results
+            """
+            nonlocal cache_stats
+            stream_id = stream.get('id')
+            stream_name = stream.get('name', '')
+
+            # Check cache first (if caching enabled)
+            if stream_cache and generation is not None:
+                cached = stream_cache.get(group_id, stream_id, stream_name)
+                if cached:
+                    event_id, league, cached_data = cached
+                    cache_stats['hits'] += 1
+
+                    # Refresh dynamic fields (scores, status, odds)
+                    refreshed = refresh_cached_event(
+                        espn_for_cache,
+                        cached_data,
+                        league,
+                        get_connection
+                    )
+
+                    if refreshed:
+                        # Touch cache entry to keep it fresh
+                        stream_cache.touch(group_id, stream_id, stream_name, generation)
+
+                        return {
+                            'type': 'matched',
+                            'stream': stream,
+                            'teams': refreshed.get('team_result', {}),
+                            'event': refreshed.get('event', {}),
+                            'from_cache': True
+                        }
+
+                cache_stats['misses'] += 1
+
+            # Cache miss - run full matching
+            result = match_single_stream_base(stream)
+
+            # Cache successful matches
+            if stream_cache and generation is not None and result.get('type') == 'matched':
+                event = result.get('event', {})
+                event_id = event.get('id')
+                detected_league = result.get('detected_league') or group.get('assigned_league', '')
+
+                if event_id and detected_league:
+                    # Build cached data structure
+                    cached_data = {
+                        'event': event,
+                        'team_result': result.get('teams', {})
+                    }
+                    stream_cache.set(
+                        group_id, stream_id, stream_name,
+                        event_id, detected_league, cached_data, generation
+                    )
+                    cache_stats['stored'] += 1
+
+            return result
 
         # Process streams in parallel with progress reporting
         from concurrent.futures import as_completed
@@ -579,7 +652,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             processed_count = 0
 
             with ThreadPoolExecutor(max_workers=min(total_streams, 100)) as executor:
-                futures = {executor.submit(match_single_stream, s): s for s in streams}
+                futures = {executor.submit(match_with_cache, s): s for s in streams}
                 for future in as_completed(futures):
                     results.append(future.result())
                     processed_count += 1
@@ -690,6 +763,11 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             if filtered_unsupported_sport > 0:
                 exclude_parts.append(f"{filtered_unsupported_sport} unsupported sport")
             log_parts.append(f"{total_event_excluded} event excluded ({', '.join(exclude_parts)})")
+
+        # Add cache stats if caching was enabled
+        if stream_cache and (cache_stats['hits'] > 0 or cache_stats['stored'] > 0):
+            log_parts.append(f"cache: {cache_stats['hits']} hits, {cache_stats['stored']} stored")
+
         app.logger.debug(" | ".join(log_parts))
 
         # Check if template is assigned (child groups inherit from parent, so they don't need one)
@@ -916,9 +994,14 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
     from epg.epg_consolidator import after_team_epg_generation, get_data_dir, finalize_epg_generation
     from database import save_epg_generation_stats
     from epg.channel_lifecycle import get_lifecycle_manager
+    from epg.stream_match_cache import StreamMatchCache, increment_generation_counter
     import hashlib
 
     start_time = datetime.now()
+
+    # Increment generation counter for fingerprint cache
+    current_generation = increment_generation_counter(get_connection)
+    app.logger.debug(f"EPG generation #{current_generation}")
 
     def report_progress(status, message, percent=None, **extra):
         """Helper to report progress if callback provided"""
@@ -1163,7 +1246,8 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
                             group, m3u_manager,
                             skip_m3u_refresh=True,
                             epg_start_datetime=epg_start_datetime,
-                            progress_callback=stream_callback
+                            progress_callback=stream_callback,
+                            generation=current_generation
                         )
                         error = None
                     except Exception as e:
@@ -1432,6 +1516,15 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
 
         # Finalize: archive intermediate files (runs once at end of full cycle)
         finalize_epg_generation(output_path)
+
+        # Purge stale fingerprint cache entries
+        try:
+            stream_cache = StreamMatchCache(get_connection)
+            purged = stream_cache.purge_stale(current_generation)
+            if purged > 0:
+                app.logger.info(f"🗑️ Purged {purged} stale fingerprint cache entries")
+        except Exception as e:
+            app.logger.warning(f"Fingerprint cache purge error: {e}")
 
         return {
             'success': True,
