@@ -220,7 +220,7 @@ def inject_globals():
 # CORE EPG GENERATION FUNCTIONS
 # =============================================================================
 
-def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_start_datetime=None):
+def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_start_datetime=None, progress_callback=None):
     """
     Core function to refresh a single event EPG group.
 
@@ -232,6 +232,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
         m3u_manager: M3UAccountManager instance
         skip_m3u_refresh: If True, skip M3U refresh (use when already refreshed in batch)
         epg_start_datetime: Optional datetime for EPG start (for multi-day filler)
+        progress_callback: Optional callable(processed, total, group_name) for stream progress
 
     Returns:
         dict with keys: success, stream_count, matched_count, matched_streams,
@@ -564,7 +565,8 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
         # Select the matching function based on mode
         match_single_stream = match_single_stream_multi_sport if is_multi_sport else match_single_stream_single_league
 
-        # Process streams in parallel (max 10 workers to avoid overwhelming ESPN API)
+        # Process streams in parallel with progress reporting
+        from concurrent.futures import as_completed
         matched_streams = []
         filtered_outside_lookahead = 0
         filtered_final = 0
@@ -573,8 +575,18 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
         results = []
 
         if streams:  # Only use ThreadPoolExecutor if there are streams to process
-            with ThreadPoolExecutor(max_workers=min(len(streams), 100)) as executor:
-                results = list(executor.map(match_single_stream, streams))
+            total_streams = len(streams)
+            processed_count = 0
+
+            with ThreadPoolExecutor(max_workers=min(total_streams, 100)) as executor:
+                futures = {executor.submit(match_single_stream, s): s for s in streams}
+                for future in as_completed(futures):
+                    results.append(future.result())
+                    processed_count += 1
+
+                    # Report progress periodically (every 10 streams or at the end)
+                    if progress_callback and (processed_count % 10 == 0 or processed_count == total_streams):
+                        progress_callback(processed_count, total_streams, group['group_name'])
 
         # Process results
         for result in results:
@@ -1101,105 +1113,100 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
                             if not result.get('success') and not result.get('skipped'):
                                 app.logger.warning(f"  Account {account_id}: {result.get('message')}")
 
-                # Step 2b: Process groups (parents first, then children)
-                # Parent groups process in parallel, then child groups process in parallel
-                # This ensures parent channels exist before children try to add streams
+                # Step 2b: Process groups sequentially (parents first, then children)
+                # Sequential processing allows stream-level progress reporting during large groups
+                # Streams within each group are still processed in parallel for speed
                 report_progress('progress', f'Processing {total_groups} event group(s)...', 55)
 
-                def process_single_group(group):
-                    """Process a single event group - called in parallel. Exact same logic."""
+                group_results = []
+                completed_count = 0
+                all_groups = parent_groups + child_groups
+
+                def make_stream_progress_callback(group_idx, total_groups):
+                    """Create a callback for stream-level progress within a group."""
+                    def callback(processed_streams, total_streams, group_name):
+                        # Calculate overall progress: 55-85% range divided among groups
+                        # Each group gets a slice of the progress bar proportional to its position
+                        group_base_percent = 55 + int(30 * group_idx / total_groups)
+                        group_end_percent = 55 + int(30 * (group_idx + 1) / total_groups)
+                        group_range = group_end_percent - group_base_percent
+
+                        # Within this group's slice, show stream progress
+                        stream_progress = processed_streams / total_streams if total_streams > 0 else 1
+                        progress_percent = group_base_percent + int(group_range * stream_progress)
+
+                        report_progress(
+                            'progress',
+                            f"Processing {group_name}: {processed_streams}/{total_streams} streams",
+                            progress_percent,
+                            group_name=group_name,
+                            streams_processed=processed_streams,
+                            streams_total=total_streams
+                        )
+                    return callback
+
+                for group_idx, group in enumerate(all_groups):
                     try:
-                        # Skip M3U refresh since we did batch refresh above
-                        # Pass epg_start_datetime for multi-day filler support
+                        # Create stream progress callback for this group
+                        stream_callback = make_stream_progress_callback(group_idx, total_groups)
+
+                        # Initial progress message for this group
+                        group_base_percent = 55 + int(30 * group_idx / total_groups)
+                        report_progress(
+                            'progress',
+                            f"Starting group: {group['group_name']}",
+                            group_base_percent,
+                            group_name=group['group_name']
+                        )
+
+                        # Process the group with stream-level progress callback
                         refresh_result = refresh_event_group_core(
                             group, m3u_manager,
                             skip_m3u_refresh=True,
-                            epg_start_datetime=epg_start_datetime
+                            epg_start_datetime=epg_start_datetime,
+                            progress_callback=stream_callback
                         )
-                        return (group, refresh_result, None)
+                        error = None
                     except Exception as e:
                         app.logger.warning(f"Error refreshing event group '{group['group_name']}': {e}")
-                        return (group, None, str(e))
+                        refresh_result = None
+                        error = str(e)
 
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-                group_results = []
-                completed_count = 0
+                    group_results.append((group, refresh_result, error))
+                    completed_count += 1
 
-                # Process parent groups first (can run in parallel)
-                if parent_groups:
-                    with ThreadPoolExecutor(max_workers=min(len(parent_groups), 100)) as executor:
-                        futures = {executor.submit(process_single_group, g): g for g in parent_groups}
-                        for future in as_completed(futures):
-                            group, refresh_result, error = future.result()
-                            group_results.append((group, refresh_result, error))
-                            completed_count += 1
+                    # Aggregate stats
+                    if refresh_result and refresh_result.get('success'):
+                        event_stats['groups_refreshed'] += 1
+                        event_stats['streams_matched'] += refresh_result.get('matched_count', 0)
+                        event_stats['programmes'] += refresh_result.get('programmes_generated', 0)
+                        event_stats['events'] += refresh_result.get('events_count', 0)
+                        event_stats['pregame'] += refresh_result.get('pregame_count', 0)
+                        event_stats['postgame'] += refresh_result.get('postgame_count', 0)
+                        event_stats['total_streams'] += refresh_result.get('total_stream_count', 0)
+                        event_stats['filtered_no_indicator'] += refresh_result.get('filtered_no_indicator', 0)
+                        event_stats['filtered_include_regex'] += refresh_result.get('filtered_include_regex', 0)
+                        event_stats['filtered_exclude_regex'] += refresh_result.get('filtered_exclude_regex', 0)
+                        event_stats['filtered_outside_lookahead'] += refresh_result.get('filtered_outside_lookahead', 0)
+                        event_stats['filtered_final'] += refresh_result.get('filtered_final', 0)
+                        event_stats['filtered_league_not_enabled'] += refresh_result.get('filtered_league_not_enabled', 0)
+                        event_stats['filtered_unsupported_sport'] += refresh_result.get('filtered_unsupported_sport', 0)
 
-                            # Aggregate stats immediately
-                            if refresh_result and refresh_result.get('success'):
-                                event_stats['groups_refreshed'] += 1
-                                event_stats['streams_matched'] += refresh_result.get('matched_count', 0)
-                                event_stats['programmes'] += refresh_result.get('programmes_generated', 0)
-                                event_stats['events'] += refresh_result.get('events_count', 0)
-                                event_stats['pregame'] += refresh_result.get('pregame_count', 0)
-                                event_stats['postgame'] += refresh_result.get('postgame_count', 0)
-                                event_stats['total_streams'] += refresh_result.get('total_stream_count', 0)
-                                event_stats['filtered_no_indicator'] += refresh_result.get('filtered_no_indicator', 0)
-                                event_stats['filtered_include_regex'] += refresh_result.get('filtered_include_regex', 0)
-                                event_stats['filtered_exclude_regex'] += refresh_result.get('filtered_exclude_regex', 0)
-                                event_stats['filtered_outside_lookahead'] += refresh_result.get('filtered_outside_lookahead', 0)
-                                event_stats['filtered_final'] += refresh_result.get('filtered_final', 0)
-                                event_stats['filtered_league_not_enabled'] += refresh_result.get('filtered_league_not_enabled', 0)
-                                event_stats['filtered_unsupported_sport'] += refresh_result.get('filtered_unsupported_sport', 0)
+                        # Child groups also track eligible_streams
+                        if group.get('parent_group_id'):
+                            event_stats['eligible_streams'] += refresh_result.get('stream_count', 0)
+                            update_event_epg_group_last_refresh(group['id'])
 
-                            progress_percent = 55 + int(30 * completed_count / total_groups)
-                            report_progress(
-                                'progress',
-                                f"Processed {completed_count}/{total_groups} groups ({group['group_name']})",
-                                progress_percent,
-                                group_name=group['group_name'],
-                                current=completed_count,
-                                total=total_groups
-                            )
-
-                # Process child groups after parents (can run in parallel)
-                if child_groups:
-                    app.logger.debug(f"Processing {len(child_groups)} child group(s)...")
-                    with ThreadPoolExecutor(max_workers=min(len(child_groups), 100)) as executor:
-                        futures = {executor.submit(process_single_group, g): g for g in child_groups}
-                        for future in as_completed(futures):
-                            group, refresh_result, error = future.result()
-                            group_results.append((group, refresh_result, error))
-                            completed_count += 1
-
-                            # Aggregate stats immediately
-                            if refresh_result and refresh_result.get('success'):
-                                event_stats['groups_refreshed'] += 1
-                                event_stats['streams_matched'] += refresh_result.get('matched_count', 0)
-                                event_stats['programmes'] += refresh_result.get('programmes_generated', 0)
-                                event_stats['events'] += refresh_result.get('events_count', 0)
-                                event_stats['pregame'] += refresh_result.get('pregame_count', 0)
-                                event_stats['postgame'] += refresh_result.get('postgame_count', 0)
-                                event_stats['total_streams'] += refresh_result.get('total_stream_count', 0)
-                                event_stats['filtered_no_indicator'] += refresh_result.get('filtered_no_indicator', 0)
-                                event_stats['filtered_include_regex'] += refresh_result.get('filtered_include_regex', 0)
-                                event_stats['filtered_exclude_regex'] += refresh_result.get('filtered_exclude_regex', 0)
-                                event_stats['filtered_outside_lookahead'] += refresh_result.get('filtered_outside_lookahead', 0)
-                                event_stats['filtered_final'] += refresh_result.get('filtered_final', 0)
-                                event_stats['filtered_league_not_enabled'] += refresh_result.get('filtered_league_not_enabled', 0)
-                                event_stats['filtered_unsupported_sport'] += refresh_result.get('filtered_unsupported_sport', 0)
-                                event_stats['eligible_streams'] += refresh_result.get('stream_count', 0)
-                                update_event_epg_group_last_refresh(group['id'])
-
-                            # Progress: 55% to 85% range
-                            progress_percent = 55 + int(30 * completed_count / total_groups)
-                            report_progress(
-                                'progress',
-                                f"Processed {completed_count}/{total_groups} groups ({group['group_name']})",
-                                progress_percent,
-                                group_name=group['group_name'],
-                                current=completed_count,
-                                total=total_groups
-                            )
+                    # Report group completion
+                    progress_percent = 55 + int(30 * completed_count / total_groups)
+                    report_progress(
+                        'progress',
+                        f"Completed {completed_count}/{total_groups} groups ({group['group_name']})",
+                        progress_percent,
+                        group_name=group['group_name'],
+                        current=completed_count,
+                        total=total_groups
+                    )
             else:
                 report_progress('progress', 'M3U manager not available, skipping event groups...', 85)
                 app.logger.warning("M3U manager not available - skipping event groups")
