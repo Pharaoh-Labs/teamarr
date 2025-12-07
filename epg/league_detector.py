@@ -1954,6 +1954,9 @@ class LeagueDetector:
         """
         Helper: Search a single team's schedule for events matching opponent name.
 
+        OPTIMIZATION: Checks cached scoreboard first before making schedule API call.
+        Scoreboard is already cached from earlier tiers, so this is essentially free.
+
         Appends matching events to candidates list.
         """
         from epg.league_config import get_league_config, parse_api_path
@@ -1968,6 +1971,22 @@ class LeagueDetector:
             if not sport:
                 return
 
+            # SCOREBOARD FIRST: Check cached scoreboard before hitting schedule API
+            # The scoreboard is already cached from Tier 3 checks, so this is free
+            scoreboard_events = self._search_scoreboard_for_team_and_opponent(
+                sport, api_league, str(team_id), team_name,
+                opponent_lower, opponent_primary, now, cutoff_future
+            )
+            if scoreboard_events:
+                for event_id, event_dt, event_name in scoreboard_events:
+                    logger.debug(
+                        f"Tier 4 found via SCOREBOARD: '{event_name}' for {team_name} "
+                        f"(matched '{opponent_lower}' or '{opponent_primary}')"
+                    )
+                    candidates.append((event_id, event_dt, league_code, sport, event_name))
+                return  # Found on scoreboard, no need for schedule API call
+
+            # SCHEDULE FALLBACK: Only call API if not found on scoreboard
             schedule = self.espn.get_team_schedule(sport, api_league, str(team_id))
             if not schedule or 'events' not in schedule:
                 return
@@ -2002,6 +2021,88 @@ class LeagueDetector:
 
         except Exception as e:
             logger.debug(f"Tier 4 error searching {team_name}'s {league_code} schedule: {e}")
+
+    def _search_scoreboard_for_team_and_opponent(
+        self,
+        sport: str,
+        api_league: str,
+        team_id: str,
+        team_name: str,
+        opponent_lower: str,
+        opponent_primary: str,
+        now: datetime,
+        cutoff_future: datetime
+    ) -> List[Tuple[str, datetime, str]]:
+        """
+        Search cached scoreboard for games involving a known team where opponent matches.
+
+        This is an optimization for Tier 4 - instead of fetching a team's schedule,
+        we first check if the game is on an already-cached scoreboard.
+
+        Args:
+            sport: Sport (e.g., 'basketball')
+            api_league: League for API (e.g., 'mens-college-basketball')
+            team_id: ESPN team ID of the known team
+            team_name: Display name of known team (for logging)
+            opponent_lower: Lowercase opponent name to match
+            opponent_primary: Primary word of opponent name
+            now: Current datetime
+            cutoff_future: Future cutoff datetime
+
+        Returns:
+            List of (event_id, event_datetime, event_name) tuples
+        """
+        results = []
+
+        # Check scoreboard for multiple days (same logic as other scoreboard checks)
+        for day_offset in range(-1, min(self.lookahead_days, 7)):
+            check_date = now + timedelta(days=day_offset)
+            date_str = check_date.strftime('%Y%m%d')
+
+            # Use cached scoreboard fetch (from ESPNClient class-level cache)
+            scoreboard = self.espn.get_scoreboard(sport, api_league, date_str)
+            if not scoreboard or 'events' not in scoreboard:
+                continue
+
+            for event in scoreboard.get('events', []):
+                competitions = event.get('competitions', [])
+                if not competitions:
+                    continue
+
+                competitors = competitions[0].get('competitors', [])
+                if len(competitors) != 2:
+                    continue
+
+                # Check if our known team is in this game
+                team_ids_in_game = [str(c.get('team', {}).get('id', '')) for c in competitors]
+                if team_id not in team_ids_in_game:
+                    continue
+
+                # Known team is in this game - check if opponent name matches
+                event_name = event.get('name', '')
+                event_name_lower = event_name.lower()
+
+                if opponent_lower not in event_name_lower and opponent_primary not in event_name_lower:
+                    continue
+
+                # Found a match!
+                event_date_str = event.get('date', '')
+                if not event_date_str:
+                    continue
+
+                try:
+                    event_dt = datetime.fromisoformat(event_date_str.replace('Z', '+00:00'))
+                except Exception:
+                    continue
+
+                # Check if within window
+                if event_dt < now - timedelta(days=1) or event_dt > cutoff_future:
+                    continue
+
+                event_id = event.get('id')
+                results.append((event_id, event_dt, event_name))
+
+        return results
 
     def _search_single_team_schedule(
         self,
