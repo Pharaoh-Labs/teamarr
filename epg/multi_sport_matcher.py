@@ -343,13 +343,13 @@ class MultiSportMatcher:
                         event_result = {'found': True, 'event': event, 'event_id': event.get('id')}
 
                     # Populate team names from event for UI display (Tier 4 doesn't have team IDs)
-                    if event_result.get('found'):
-                        home_team = event.get('home_team', {})
-                        away_team = event.get('away_team', {})
-                        team_result['home_team_name'] = home_team.get('name', team_result.get('raw_home', '?'))
-                        team_result['away_team_name'] = away_team.get('name', team_result.get('raw_away', '?'))
-                        team_result['home_team_id'] = home_team.get('id')
-                        team_result['away_team_id'] = away_team.get('id')
+                    # Always populate, even for filtered events, so UI can show team names
+                    home_team = event.get('home_team', {})
+                    away_team = event.get('away_team', {})
+                    team_result['home_team_name'] = home_team.get('name', team_result.get('raw_home', '?'))
+                    team_result['away_team_name'] = away_team.get('name', team_result.get('raw_away', '?'))
+                    team_result['home_team_id'] = home_team.get('id')
+                    team_result['away_team_id'] = away_team.get('id')
                 else:
                     event_result = {'found': False, 'reason': f'Tier 4 event {event_id} not found'}
             else:
@@ -376,9 +376,11 @@ class MultiSportMatcher:
                             detected_league = team_result.get('detected_league', detected_league)
                             # event_result is already set, will be handled by success path below
                         else:
-                            logger.warning(f"Missing team IDs: away={away_team_id}, home={home_team_id} for stream '{stream_name}'")
-                            result.reason = 'MISSING_TEAM_IDS'
-                            return result
+                            # Tier 4b+ found an event but it was filtered (GAME_PAST or GAME_FINAL_EXCLUDED)
+                            # Propagate the result with team names populated for UI display
+                            reason = event_result.get('reason', 'No game found')
+                            logger.debug(f"Tier 4b+ found filtered event for '{stream_name[:40]}...': {reason}")
+                            # event_result and team_result are already set, fall through to end
                     else:
                         logger.warning(f"Missing team IDs: away={away_team_id}, home={home_team_id} for stream '{stream_name}'")
                         result.reason = 'MISSING_TEAM_IDS'
@@ -469,6 +471,12 @@ class MultiSportMatcher:
                             # Update detected_league from the successful search
                             detected_league = team_result.get('detected_league', detected_league)
                             logger.info(f"[TIER 4b+ FALLBACK] Found event via schedule search for '{stream_name[:40]}...'")
+                        else:
+                            # Tier 4b+ found an event but it was filtered - propagate team names for UI
+                            event_result = fallback_event_result
+                            team_result = fallback_team_result
+                            detected_league = team_result.get('detected_league', detected_league)
+                            logger.debug(f"[TIER 4b+ FALLBACK] Found filtered event for '{stream_name[:40]}...': {fallback_event_result.get('reason')}")
 
             if event_result.get('found'):
                 # Match successful! Now check if league is enabled for this group
@@ -1058,12 +1066,34 @@ class MultiSportMatcher:
 
                         if event_day < today:
                             # Past day completed event - always excluded
+                            # Still populate team names for UI display
                             logger.debug(f"Tier 4b+ event {best_event_id} filtered: past completed game ({event_day})")
-                            return None  # Return None to indicate no match, will continue searching
+                            home_team = event.get('home_team', {})
+                            away_team = event.get('away_team', {})
+                            team_result['tier4b_plus'] = True
+                            team_result['tier4b_plus_via'] = via_team
+                            team_result['detected_league'] = best_league
+                            team_result['home_team_name'] = home_team.get('name', raw_home or '?')
+                            team_result['away_team_name'] = away_team.get('name', raw_away or '?')
+                            team_result['home_team_id'] = home_team.get('id')
+                            team_result['away_team_id'] = away_team.get('id')
+                            event_result = {'found': False, 'reason': FilterReason.GAME_PAST}
+                            return event_result, team_result
                         elif event_day == today and not self.config.include_final_events:
                             # Today's final - excluded by setting
+                            # Still populate team names for UI display
                             logger.debug(f"Tier 4b+ event {best_event_id} filtered: today's final (excluded)")
-                            return None
+                            home_team = event.get('home_team', {})
+                            away_team = event.get('away_team', {})
+                            team_result['tier4b_plus'] = True
+                            team_result['tier4b_plus_via'] = via_team
+                            team_result['detected_league'] = best_league
+                            team_result['home_team_name'] = home_team.get('name', raw_home or '?')
+                            team_result['away_team_name'] = away_team.get('name', raw_away or '?')
+                            team_result['home_team_id'] = home_team.get('id')
+                            team_result['away_team_id'] = away_team.get('id')
+                            event_result = {'found': False, 'reason': FilterReason.GAME_FINAL_EXCLUDED}
+                            return event_result, team_result
                     except Exception as e:
                         logger.debug(f"Error checking Tier 4b+ event date: {e}")
                         # On error, allow the event through
