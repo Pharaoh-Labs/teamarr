@@ -654,12 +654,21 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             with ThreadPoolExecutor(max_workers=min(total_streams, 100)) as executor:
                 futures = {executor.submit(match_with_cache, s): s for s in streams}
                 for future in as_completed(futures):
-                    results.append(future.result())
+                    result = future.result()
+                    results.append(result)
                     processed_count += 1
 
-                    # Report progress periodically (every 10 streams or at the end)
-                    if progress_callback and (processed_count % 10 == 0 or processed_count == total_streams):
-                        progress_callback(processed_count, total_streams, group['group_name'])
+                    # Report progress for every stream with name and status
+                    if progress_callback:
+                        stream_name = result.get('stream', {}).get('name', '')[:50]
+                        matched = result.get('type') == 'matched'
+                        status_icon = '✓' if matched else '✗'
+                        progress_callback(
+                            processed_count, total_streams, group['group_name'],
+                            stream_name=stream_name,
+                            stream_matched=matched,
+                            stream_status=status_icon
+                        )
 
         # Process results
         for result in results:
@@ -1206,7 +1215,7 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
 
                 def make_stream_progress_callback(group_idx, total_groups):
                     """Create a callback for stream-level progress within a group."""
-                    def callback(processed_streams, total_streams, group_name):
+                    def callback(processed_streams, total_streams, group_name, **kwargs):
                         # Calculate overall progress: 55-85% range divided among groups
                         # Each group gets a slice of the progress bar proportional to its position
                         group_base_percent = 55 + int(30 * group_idx / total_groups)
@@ -1217,13 +1226,24 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
                         stream_progress = processed_streams / total_streams if total_streams > 0 else 1
                         progress_percent = group_base_percent + int(group_range * stream_progress)
 
+                        # Build message with stream name and status if available
+                        stream_name = kwargs.get('stream_name', '')
+                        stream_status = kwargs.get('stream_status', '')
+                        if stream_name:
+                            message = f"{group_name}: {stream_name} {stream_status}"
+                        else:
+                            message = f"Processing {group_name}: {processed_streams}/{total_streams} streams"
+
                         report_progress(
                             'progress',
-                            f"Processing {group_name}: {processed_streams}/{total_streams} streams",
+                            message,
                             progress_percent,
                             group_name=group_name,
                             streams_processed=processed_streams,
-                            streams_total=total_streams
+                            streams_total=total_streams,
+                            stream_name=stream_name,
+                            stream_matched=kwargs.get('stream_matched'),
+                            stream_status=stream_status
                         )
                     return callback
 
