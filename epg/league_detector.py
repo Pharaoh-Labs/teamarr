@@ -1094,7 +1094,8 @@ class LeagueDetector:
                 - detail: Human-readable explanation
         """
         from database import get_connection
-        from utils.filter_reasons import FilterReason
+        from utils.match_result import FilteredReason, FailedReason
+        from utils.filter_reasons import FilterReason  # For backwards compat
 
         if not team1 or not team2:
             return {
@@ -1103,7 +1104,7 @@ class LeagueDetector:
                 'team1_leagues': [],
                 'team2_leagues': [],
                 'common_leagues': [],
-                'reason': FilterReason.TEAMS_NOT_PARSED,
+                'reason': FailedReason.TEAMS_NOT_PARSED,
                 'detail': 'Team names not provided'
             }
 
@@ -1159,56 +1160,57 @@ class LeagueDetector:
             # Find common leagues
             common_leagues = list(set(team1_leagues) & set(team2_leagues))
 
-            # Determine reason and detail
-            from utils.filter_reasons import is_beach_soccer, is_boxing_mma, is_futsal
+            # Determine reason and detail using new match_result types
+            from utils.match_result import is_beach_soccer, is_boxing_mma, is_futsal
 
             if not team1_found and not team2_found:
                 # Neither team found - check if it's an unsupported sport as FINAL fallback
                 # This gives better user feedback than just "teams not found"
                 if stream_name and is_boxing_mma(stream_name):
-                    reason = FilterReason.UNSUPPORTED_BOXING_MMA
+                    reason = FilteredReason.UNSUPPORTED_BOXING_MMA
                     detail = "Boxing/MMA not supported by ESPN API"
-                    logger.debug(f"Boxing/MMA detected: {stream_name}")
+                    logger.debug(f"[FILTERED:unsupported_boxing_mma] {stream_name[:60]}")
                 elif is_beach_soccer(team1, team2):
-                    reason = FilterReason.UNSUPPORTED_BEACH_SOCCER
+                    reason = FilteredReason.UNSUPPORTED_BEACH_SOCCER
                     detail = "Beach soccer not supported by ESPN API"
-                    logger.debug(f"Beach soccer detected: '{team1}' vs '{team2}'")
+                    logger.debug(f"[FILTERED:unsupported_beach_soccer] '{team1}' vs '{team2}'")
                 elif is_futsal(team1, team2):
-                    reason = FilterReason.UNSUPPORTED_FUTSAL
+                    reason = FilteredReason.UNSUPPORTED_FUTSAL
                     detail = "Futsal not supported by ESPN API"
-                    logger.debug(f"Futsal detected: '{team1}' vs '{team2}'")
+                    logger.debug(f"[FILTERED:unsupported_futsal] '{team1}' vs '{team2}'")
                 else:
-                    reason = FilterReason.TEAMS_NOT_IN_ESPN
+                    reason = FailedReason.BOTH_TEAMS_NOT_FOUND
                     detail = f"Neither '{team1}' nor '{team2}' found in ESPN database"
             elif not team1_found:
                 # Only team1 not found - check if it looks like unsupported sport
                 if is_beach_soccer(team1, None):
-                    reason = FilterReason.UNSUPPORTED_BEACH_SOCCER
+                    reason = FilteredReason.UNSUPPORTED_BEACH_SOCCER
                     detail = "Beach soccer not supported by ESPN API"
                 elif is_futsal(team1, None):
-                    reason = FilterReason.UNSUPPORTED_FUTSAL
+                    reason = FilteredReason.UNSUPPORTED_FUTSAL
                     detail = "Futsal not supported by ESPN API"
                 else:
-                    reason = FilterReason.TEAMS_NOT_IN_ESPN
+                    reason = FailedReason.TEAM1_NOT_FOUND
                     detail = f"'{team1}' not found in ESPN database"
             elif not team2_found:
                 # Only team2 not found - check if it looks like unsupported sport
                 if is_beach_soccer(None, team2):
-                    reason = FilterReason.UNSUPPORTED_BEACH_SOCCER
+                    reason = FilteredReason.UNSUPPORTED_BEACH_SOCCER
                     detail = "Beach soccer not supported by ESPN API"
                 elif is_futsal(None, team2):
-                    reason = FilterReason.UNSUPPORTED_FUTSAL
+                    reason = FilteredReason.UNSUPPORTED_FUTSAL
                     detail = "Futsal not supported by ESPN API"
                 else:
-                    reason = FilterReason.TEAMS_NOT_IN_ESPN
+                    reason = FailedReason.TEAM2_NOT_FOUND
                     detail = f"'{team2}' not found in ESPN database"
             elif not common_leagues:
-                reason = FilterReason.NO_COMMON_LEAGUE
+                reason = FailedReason.NO_COMMON_LEAGUE
                 detail = (f"'{team1}' in [{', '.join(team1_leagues[:3])}{'...' if len(team1_leagues) > 3 else ''}], "
                          f"'{team2}' in [{', '.join(team2_leagues[:3])}{'...' if len(team2_leagues) > 3 else ''}] - no common league")
             else:
-                # Shouldn't happen if this is called for failure diagnosis
-                reason = None
+                # Common leagues found but teams didn't match - likely event not found
+                # This happens when teams exist in DB but couldn't match to event
+                reason = FailedReason.NO_EVENT_FOUND
                 detail = f"Common leagues found: {common_leagues}"
 
             return {

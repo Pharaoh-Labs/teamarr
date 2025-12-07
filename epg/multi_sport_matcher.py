@@ -16,10 +16,64 @@ Tiered Detection Flow:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union
 from utils.logger import get_logger
+from utils.match_result import (
+    ResultCategory, FilteredReason, FailedReason, MatchedTier,
+    is_filtered, is_failed
+)
 
 logger = get_logger(__name__)
+
+
+def _get_reason_value(reason: Union[FilteredReason, FailedReason, str, None]) -> str:
+    """Get string value from reason (enum or string)."""
+    if reason is None:
+        return 'unknown'
+    if isinstance(reason, (FilteredReason, FailedReason)):
+        return reason.value
+    return str(reason)
+
+
+def _log_result(
+    stream_name: str,
+    category: str,
+    reason: Union[FilteredReason, FailedReason, str, None] = None,
+    tier: str = None,
+    league: str = None,
+    detail: str = None,
+    max_len: int = 60
+):
+    """
+    Log a match result with consistent formatting.
+
+    Formats:
+        [FILTERED:reason] stream_name | detail
+        [FAILED:reason] stream_name | detail
+        [TIER X] stream_name → LEAGUE | detail
+    """
+    display_name = stream_name[:max_len]
+    if len(stream_name) > max_len:
+        display_name += '...'
+
+    if category == 'matched' and tier:
+        league_str = (league or '').upper()
+        if detail:
+            logger.info(f"[TIER {tier}] {display_name} → {league_str} | {detail}")
+        else:
+            logger.info(f"[TIER {tier}] {display_name} → {league_str}")
+    elif category == 'filtered':
+        reason_str = _get_reason_value(reason)
+        if detail:
+            logger.info(f"[FILTERED:{reason_str}] {display_name} | {detail}")
+        else:
+            logger.debug(f"[FILTERED:{reason_str}] {display_name}")
+    elif category == 'failed':
+        reason_str = _get_reason_value(reason)
+        if detail:
+            logger.info(f"[FAILED:{reason_str}] {display_name} | {detail}")
+        else:
+            logger.info(f"[FAILED:{reason_str}] {display_name}")
 
 
 @dataclass
@@ -250,10 +304,14 @@ class MultiSportMatcher:
                     result.reason = diagnosis.get('reason')
                     result.detail = diagnosis.get('detail')
                     result.parsed_teams = {'team1': raw_team1, 'team2': raw_team2}
-                    logger.info(f"[UNMATCHED] {stream_name[:60]}... | reason={result.reason} | {result.detail}")
+                    # Determine category based on reason type
+                    if is_filtered(result.reason):
+                        _log_result(stream_name, 'filtered', result.reason, detail=result.detail)
+                    else:
+                        _log_result(stream_name, 'failed', result.reason, detail=result.detail)
                 else:
-                    result.reason = 'NO_TEAMS'
-                    logger.info(f"[UNMATCHED] {stream_name[:60]}... | reason=NO_TEAMS")
+                    result.reason = FailedReason.TEAMS_NOT_PARSED
+                    _log_result(stream_name, 'failed', result.reason)
                 return result
 
             # Step 6: If still no league but teams matched, try full detection
@@ -269,8 +327,8 @@ class MultiSportMatcher:
                             team_result = new_result
 
             if not detected_league:
-                result.reason = 'NO_LEAGUE_DETECTED'
-                logger.info(f"[UNMATCHED] {stream_name[:60]}... | reason=NO_LEAGUE_DETECTED")
+                result.reason = FailedReason.NO_LEAGUE_DETECTED
+                _log_result(stream_name, 'failed', result.reason)
                 return result
 
             # Step 7: Find event in the detected league (with enrichment)
@@ -292,7 +350,6 @@ class MultiSportMatcher:
                     from zoneinfo import ZoneInfo
                     from utils.time_format import get_today_in_user_tz, get_user_timezone
                     from database import get_connection
-                    from utils.filter_reasons import FilterReason
 
                     # Get event status - check both direct status and competitions[0].status
                     status = event.get('status', {})
@@ -322,11 +379,11 @@ class MultiSportMatcher:
 
                                 if event_day < today:
                                     # Past day completed event - always excluded
-                                    event_result = {'found': False, 'reason': FilterReason.GAME_PAST}
+                                    event_result = {'found': False, 'reason': FilteredReason.EVENT_PAST}
                                     logger.debug(f"Tier 4 event {event_id} filtered: past completed game ({event_day})")
                                 elif event_day == today and not self.config.include_final_events:
                                     # Today's final - excluded by setting
-                                    event_result = {'found': False, 'reason': FilterReason.GAME_FINAL_EXCLUDED}
+                                    event_result = {'found': False, 'reason': FilteredReason.EVENT_FINAL}
                                     logger.debug(f"Tier 4 event {event_id} filtered: today's final (excluded)")
                                 else:
                                     # Today's final but include_final_events=True, or future completed (rare)
@@ -425,10 +482,10 @@ class MultiSportMatcher:
                 original_reason = event_result.get('reason')
 
                 # Don't disambiguate if the stream's target game was found but filtered
-                from utils.filter_reasons import FilterReason
                 skip_disambiguation = original_reason in (
-                    FilterReason.GAME_PAST,
-                    FilterReason.GAME_FINAL_EXCLUDED
+                    FilteredReason.EVENT_PAST,
+                    FilteredReason.EVENT_FINAL,
+                    'event_past', 'event_final'  # String values from FilterReason constants
                 )
 
                 if not skip_disambiguation:
@@ -448,10 +505,10 @@ class MultiSportMatcher:
             # search can find the correct game even when team resolution was incorrect.
             if not event_result.get('found') and team_result:
                 original_reason = event_result.get('reason')
-                from utils.filter_reasons import FilterReason
                 skip_schedule_search = original_reason in (
-                    FilterReason.GAME_PAST,
-                    FilterReason.GAME_FINAL_EXCLUDED
+                    FilteredReason.EVENT_PAST,
+                    FilteredReason.EVENT_FINAL,
+                    'event_past', 'event_final'  # String values from FilterReason constants
                 )
 
                 if not skip_schedule_search:
@@ -482,9 +539,6 @@ class MultiSportMatcher:
                 # Match successful! Now check if league is enabled for this group
                 team_result['detected_league'] = detected_league
 
-                if detection_tier:
-                    logger.info(f"[TIER {detection_tier}] {stream_name[:50]}... → {detected_league.upper()}")
-
                 # Check if detected league is enabled
                 # For professional soccer leagues, also check soccer_enabled flag (enables all pro soccer)
                 # Note: NCAA soccer (usa.ncaa.m.1, usa.ncaa.w.1) is in league_config, not covered by soccer_enabled
@@ -498,16 +552,16 @@ class MultiSportMatcher:
                         league_enabled = True
 
                 if not league_enabled:
-                    # League not enabled - return helpful message
-                    from utils.filter_reasons import FilterReason
+                    # League not enabled - this is a FILTERED result (not a failure)
                     league_name = self.league_detector.get_league_name(detected_league)
-                    result.reason = FilterReason.LEAGUE_NOT_ENABLED
+                    result.reason = FilteredReason.LEAGUE_NOT_ENABLED
                     result.detected_league = detected_league
                     result.league_not_enabled = True
                     result.league_name = league_name
                     result.parsed_teams = {'team1': raw_team1, 'team2': raw_team2}
                     result.detail = f"Found in {league_name} (not enabled for this group)"
-                    logger.info(f"Match found in non-enabled league: {stream_name[:50]}... → {league_name}")
+                    _log_result(stream_name, 'filtered', result.reason,
+                               tier=detection_tier, league=detected_league, detail=league_name)
                     return result
 
                 # League is enabled - full success!
@@ -517,23 +571,31 @@ class MultiSportMatcher:
                 result.detected_league = detected_league
                 result.detection_tier = detection_tier
                 result.api_path_override = detected_api_path_override
+
+                # Log the successful match
+                event_name = ''
+                if result.event:
+                    event_name = result.event.get('name', result.event.get('shortName', ''))
+                _log_result(stream_name, 'matched', tier=detection_tier,
+                           league=detected_league, detail=event_name)
                 return result
             else:
                 # Event not found - include team info so UI knows teams WERE parsed
-                result.reason = event_result.get('reason', 'No game found')
+                result.reason = event_result.get('reason', FailedReason.NO_EVENT_FOUND)
                 result.team_result = team_result  # Include team info for UI
                 result.parsed_teams = {'team1': raw_team1, 'team2': raw_team2}
                 result.detected_league = detected_league
 
-                # Log differently based on reason - GAME_PAST/GAME_FINAL means we DID match, just excluded
-                from utils.filter_reasons import FilterReason
-                if result.reason in (FilterReason.GAME_PAST, FilterReason.GAME_FINAL_EXCLUDED):
-                    # We matched the event but excluded it due to timing
-                    tier_str = f"TIER {detection_tier}" if detection_tier else "MATCHED"
-                    logger.info(f"[{tier_str}] {stream_name[:50]}... → {detected_league.upper()} | [EXCLUDED] {result.reason}")
+                # Log based on reason category
+                # EVENT_PAST/EVENT_FINAL means we DID match, just excluded (FILTERED)
+                if result.reason in (FilteredReason.EVENT_PAST, FilteredReason.EVENT_FINAL,
+                                    'event_past', 'event_final'):  # String values from FilterReason constants
+                    _log_result(stream_name, 'filtered', result.reason,
+                               tier=detection_tier, league=detected_league, detail='Event excluded')
                 else:
-                    # True unmatched - couldn't find the event
-                    logger.info(f"[UNMATCHED] {stream_name[:60]}... | reason={result.reason} | league={detected_league}")
+                    # True failure - couldn't find the event
+                    _log_result(stream_name, 'failed', result.reason,
+                               league=detected_league, detail=f"league={detected_league}")
                 return result
 
         except Exception as e:
@@ -1046,7 +1108,6 @@ class MultiSportMatcher:
             # Check if event is completed/past - apply same filtering as find_event()
             from utils.time_format import get_today_in_user_tz, get_user_timezone
             from database import get_connection
-            from utils.filter_reasons import FilterReason
 
             # Get event status
             status = event.get('status', {})
@@ -1077,7 +1138,7 @@ class MultiSportMatcher:
                             team_result['away_team_name'] = away_team.get('name', raw_away or '?')
                             team_result['home_team_id'] = home_team.get('id')
                             team_result['away_team_id'] = away_team.get('id')
-                            event_result = {'found': False, 'reason': FilterReason.GAME_PAST}
+                            event_result = {'found': False, 'reason': FilteredReason.EVENT_PAST}
                             return event_result, team_result
                         elif event_day == today and not self.config.include_final_events:
                             # Today's final - excluded by setting
@@ -1092,7 +1153,7 @@ class MultiSportMatcher:
                             team_result['away_team_name'] = away_team.get('name', raw_away or '?')
                             team_result['home_team_id'] = home_team.get('id')
                             team_result['away_team_id'] = away_team.get('id')
-                            event_result = {'found': False, 'reason': FilterReason.GAME_FINAL_EXCLUDED}
+                            event_result = {'found': False, 'reason': FilteredReason.EVENT_FINAL}
                             return event_result, team_result
                     except Exception as e:
                         logger.debug(f"Error checking Tier 4b+ event date: {e}")

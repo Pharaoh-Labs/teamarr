@@ -417,7 +417,10 @@ CREATE TABLE IF NOT EXISTS epg_history (
 
     -- Status
     status TEXT DEFAULT 'success',          -- 'success', 'error', 'partial'
-    error_message TEXT
+    error_message TEXT,
+
+    -- Trigger Source (added in migration 24)
+    triggered_by TEXT DEFAULT 'manual'      -- 'manual', 'scheduler', 'api'
 );
 
 CREATE INDEX IF NOT EXISTS idx_epg_history_generated ON epg_history(generated_at);

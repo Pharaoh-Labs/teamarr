@@ -1670,6 +1670,25 @@ def run_migrations(conn):
             conn.rollback()
 
     # =========================================================================
+    # REPAIR: Ensure critical columns exist (catches failed migrations)
+    # =========================================================================
+    # Some columns may have failed to be added during their migration due to
+    # timing issues. This section ensures they exist regardless of schema version.
+    repair_columns = [
+        ('epg_history', 'triggered_by', "TEXT DEFAULT 'manual'"),
+    ]
+    for table, col_name, col_def in repair_columns:
+        cursor.execute(f"PRAGMA table_info({table})")
+        existing = {row[1] for row in cursor.fetchall()}
+        if col_name not in existing:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}")
+                conn.commit()
+                print(f"    🔧 Repaired missing column: {table}.{col_name}")
+            except Exception as e:
+                print(f"    ⚠️ Could not repair column {table}.{col_name}: {e}")
+
+    # =========================================================================
     # UPDATE SCHEMA VERSION
     # =========================================================================
     # All migrations complete - update version to current

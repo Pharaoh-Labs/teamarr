@@ -35,6 +35,10 @@ from utils.logger import setup_logging, get_logger
 from utils import to_pascal_case
 from utils.time_format import format_time as fmt_time, get_time_settings
 from utils.filter_reasons import FilterReason, get_display_text, INTERNAL_REASONS
+from utils.match_result import (
+    FilteredReason, FailedReason, MatchedTier,
+    should_record_failure, normalize_reason
+)
 from config import VERSION
 
 app = Flask(__name__)
@@ -528,12 +532,12 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                     return {'type': 'filtered', 'reason': result.reason, 'stream': stream}
                 elif result.parsed_teams:
                     # Teams were parsed but no event found - check if reason is excludable
-                    normalized = INTERNAL_REASONS.get(result.reason, result.reason)
-                    if normalized in (FilterReason.GAME_PAST, FilterReason.GAME_FINAL_EXCLUDED,
-                                     FilterReason.LEAGUE_NOT_ENABLED):
+                    # Use normalize_reason() to handle both enum and string values
+                    reason_str = normalize_reason(result.reason)
+                    if reason_str in ('event_past', 'event_final', 'league_not_enabled'):
                         # Return as filtered so it's excluded from match rate denominator
                         # Note: NO_GAME_FOUND is NOT excluded - it counts against match rate
-                        return {'type': 'filtered', 'reason': normalized, 'stream': stream}
+                        return {'type': 'filtered', 'reason': result.reason, 'stream': stream}
                     else:
                         # True no_teams case - teams parsed but couldn't match to ESPN
                         # This includes NO_GAME_FOUND which counts against match rate
@@ -713,36 +717,23 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                     })
             elif result['type'] == 'filtered':
                 reason = result.get('reason')
-                if reason == FilterReason.GAME_FINAL_EXCLUDED:
+                # Normalize reason to string for comparison (handles enums and strings)
+                reason_str = normalize_reason(reason)
+
+                # Count filtered reasons by category
+                # Note: reason can be enum or string, reason_str is always the string value
+                if reason in (FilteredReason.EVENT_FINAL,) or reason_str == 'event_final':
                     filtered_final += 1
-                elif reason == FilterReason.GAME_PAST:
-                    # Only GAME_PAST is excluded from denominator (not NO_GAME_FOUND)
+                elif reason in (FilteredReason.EVENT_PAST, FilteredReason.EVENT_OUTSIDE_WINDOW) or reason_str in ('event_past', 'event_outside_window'):
                     filtered_outside_lookahead += 1
-                elif reason == FilterReason.LEAGUE_NOT_ENABLED:
+                elif reason in (FilteredReason.LEAGUE_NOT_ENABLED,) or reason_str == 'league_not_enabled':
                     filtered_league_not_enabled += 1
-                elif reason in (FilterReason.UNSUPPORTED_BEACH_SOCCER, FilterReason.UNSUPPORTED_BOXING_MMA, FilterReason.UNSUPPORTED_FUTSAL):
+                elif reason in (FilteredReason.UNSUPPORTED_BEACH_SOCCER, FilteredReason.UNSUPPORTED_BOXING_MMA, FilteredReason.UNSUPPORTED_FUTSAL):
                     filtered_unsupported_sport += 1
-                # Collect failed matches for reasons that indicate real match failures
-                # (not pre-filters like NO_GAME_INDICATOR which are expected)
-                elif reason in ('NO_LEAGUE_DETECTED', 'NO_GAME_FOUND', 'EVENT_OWNED_BY_OTHER_GROUP'):
-                    if generation is not None:
-                        stream = result.get('stream', {})
-                        failed_matches.append({
-                            'generation_id': generation,
-                            'group_id': group_id,
-                            'group_name': group_name,
-                            'stream_id': stream.get('id'),
-                            'stream_name': stream.get('name', ''),
-                            'reason': reason,
-                            'parsed_team1': None,
-                            'parsed_team2': None,
-                            'detection_tier': result.get('detection_tier'),
-                            'leagues_checked': result.get('leagues_checked'),
-                            'detail': result.get('detail')
-                        })
-            elif result['type'] == 'no_teams':
-                # Teams could not be parsed/matched - this is a real failure
-                if generation is not None:
+
+                # Check if this is a FAILURE that should be recorded
+                # Uses new should_record_failure() which checks against FailedReason enums
+                if should_record_failure(reason) and generation is not None:
                     stream = result.get('stream', {})
                     parsed_teams = result.get('parsed_teams', {})
                     failed_matches.append({
@@ -751,7 +742,27 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         'group_name': group_name,
                         'stream_id': stream.get('id'),
                         'stream_name': stream.get('name', ''),
-                        'reason': result.get('reason', 'NO_TEAMS'),
+                        'reason': reason_str,  # Store normalized string value
+                        'parsed_team1': parsed_teams.get('team1') if parsed_teams else None,
+                        'parsed_team2': parsed_teams.get('team2') if parsed_teams else None,
+                        'detection_tier': result.get('detection_tier'),
+                        'leagues_checked': result.get('leagues_checked'),
+                        'detail': result.get('detail')
+                    })
+
+            elif result['type'] == 'no_teams':
+                # Teams could not be parsed/matched - this is a FAILURE
+                if generation is not None:
+                    stream = result.get('stream', {})
+                    parsed_teams = result.get('parsed_teams', {})
+                    reason = result.get('reason', FailedReason.TEAMS_NOT_PARSED)
+                    failed_matches.append({
+                        'generation_id': generation,
+                        'group_id': group_id,
+                        'group_name': group_name,
+                        'stream_id': stream.get('id'),
+                        'stream_name': stream.get('name', ''),
+                        'reason': normalize_reason(reason),  # Store normalized string value
                         'parsed_team1': parsed_teams.get('team1') if parsed_teams else None,
                         'parsed_team2': parsed_teams.get('team2') if parsed_teams else None,
                         'detection_tier': result.get('detection_tier'),
@@ -1389,10 +1400,10 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
                         event_stats['filtered_final'] += refresh_result.get('filtered_final', 0)
                         event_stats['filtered_league_not_enabled'] += refresh_result.get('filtered_league_not_enabled', 0)
                         event_stats['filtered_unsupported_sport'] += refresh_result.get('filtered_unsupported_sport', 0)
+                        event_stats['eligible_streams'] += refresh_result.get('stream_count', 0)
 
-                        # Child groups also track eligible_streams
+                        # Child groups update their own last_refresh
                         if group.get('parent_group_id'):
-                            event_stats['eligible_streams'] += refresh_result.get('stream_count', 0)
                             update_event_epg_group_last_refresh(group['id'])
 
                     # Report group completion
@@ -4524,20 +4535,20 @@ def api_event_epg_dispatcharr_streams(group_id):
                             # Add reason for not found, with better messages
                             if not event_result['found']:
                                 reason = event_result.get('reason', 'No event found')
-                                # Normalize internal reason to constant
-                                normalized = INTERNAL_REASONS.get(reason, reason)
+                                # Use normalize_reason() to handle both enum and string values
+                                reason_str = normalize_reason(reason)
 
                                 # Set flags and display text based on reason
-                                if normalized == FilterReason.GAME_FINAL_EXCLUDED:
+                                if reason_str == 'event_final':
                                     event_match_data['is_final'] = True
-                                    event_match_data['reason'] = get_display_text(FilterReason.GAME_FINAL_EXCLUDED)
-                                elif normalized == FilterReason.GAME_PAST:
+                                    event_match_data['reason'] = get_display_text(FilteredReason.EVENT_FINAL)
+                                elif reason_str == 'event_past':
                                     event_match_data['is_past'] = True
-                                    event_match_data['reason'] = get_display_text(FilterReason.GAME_PAST)
-                                elif normalized == FilterReason.NO_GAME_FOUND:
-                                    event_match_data['reason'] = get_display_text(FilterReason.NO_GAME_FOUND, lookahead_days)
+                                    event_match_data['reason'] = get_display_text(FilteredReason.EVENT_PAST)
+                                elif reason_str == 'no_event_found':
+                                    event_match_data['reason'] = get_display_text(FailedReason.NO_EVENT_FOUND, lookahead_days)
                                 else:
-                                    event_match_data['reason'] = reason
+                                    event_match_data['reason'] = get_display_text(reason)
 
                             stream['event_match'] = event_match_data
                         else:
@@ -5042,17 +5053,18 @@ def api_event_epg_dispatcharr_streams_sse(group_id):
 
                                 if not event_result['found']:
                                     reason = event_result.get('reason', 'No event found')
-                                    normalized = INTERNAL_REASONS.get(reason, reason)
-                                    if normalized == FilterReason.GAME_FINAL_EXCLUDED:
+                                    # Use normalize_reason() to handle both enum and string values
+                                    reason_str = normalize_reason(reason)
+                                    if reason_str == 'event_final':
                                         event_match_data['is_final'] = True
-                                        event_match_data['reason'] = get_display_text(FilterReason.GAME_FINAL_EXCLUDED)
-                                    elif normalized == FilterReason.GAME_PAST:
+                                        event_match_data['reason'] = get_display_text(FilteredReason.EVENT_FINAL)
+                                    elif reason_str == 'event_past':
                                         event_match_data['is_past'] = True
-                                        event_match_data['reason'] = get_display_text(FilterReason.GAME_PAST)
-                                    elif normalized == FilterReason.NO_GAME_FOUND:
-                                        event_match_data['reason'] = get_display_text(FilterReason.NO_GAME_FOUND, lookahead_days)
+                                        event_match_data['reason'] = get_display_text(FilteredReason.EVENT_PAST)
+                                    elif reason_str == 'no_event_found':
+                                        event_match_data['reason'] = get_display_text(FailedReason.NO_EVENT_FOUND, lookahead_days)
                                     else:
-                                        event_match_data['reason'] = reason
+                                        event_match_data['reason'] = get_display_text(reason)
 
                                 stream['event_match'] = event_match_data
                             else:
