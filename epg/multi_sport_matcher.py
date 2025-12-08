@@ -196,15 +196,9 @@ class MultiSportMatcher:
         result = MatchResult(stream=stream)
         stream_name = stream.get('name', '')
 
-        # Strip exception keywords (language indicators, etc.) early
-        # The matched keyword is stored for later use in consolidation
-        from utils.keyword_matcher import strip_exception_keywords
-        cleaned_name, exception_keyword = strip_exception_keywords(stream_name)
-        result.exception_keyword = exception_keyword
-
-        # Use cleaned name for matching if keywords were stripped
-        if exception_keyword:
-            stream_name = cleaned_name
+        # Exception keyword was pre-extracted in app.py Step 2.6 and attached to stream dict
+        # Team matcher's _prepare_text_for_parsing() handles stripping for matching
+        result.exception_keyword = stream.get('exception_keyword')
 
         try:
             # Step 1: Extract raw matchup data (teams, date, time, league indicator)

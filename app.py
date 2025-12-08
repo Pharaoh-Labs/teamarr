@@ -320,6 +320,13 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             if filtered_count > 0:
                 app.logger.debug(f"Filtered {filtered_count} non-game streams ({filtered_no_indicator} no indicator, {filtered_include_regex} include regex, {filtered_exclude_regex} exclude regex), {len(streams)} game streams remain")
 
+        # Step 2.6: Pre-extract exception keywords for all streams (once, before matching)
+        # This avoids re-extracting in each matching code path (single-league, multi-sport, cache hit)
+        from utils.keyword_matcher import strip_exception_keywords
+        for stream in streams:
+            _, keyword = strip_exception_keywords(stream.get('name', ''))
+            stream['exception_keyword'] = keyword
+
         # Step 3: Match streams to ESPN events (PARALLEL for speed)
         from concurrent.futures import ThreadPoolExecutor
 
@@ -365,20 +372,14 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
             thread_team_matcher = create_matcher()
             thread_event_matcher = create_event_matcher(lookahead_days=lookahead_days)
 
-            # Strip exception keywords (language indicators, etc.) early
-            # The matched keyword is stored for later use in template variables
-            from utils.keyword_matcher import strip_exception_keywords
-            stream_name = stream['name']
-            cleaned_name, exception_keyword = strip_exception_keywords(stream_name)
-            # Use cleaned name for matching if keywords were stripped
-            if exception_keyword:
-                stream_name = cleaned_name
+            # Exception keyword was pre-extracted in Step 2.6 and attached to stream dict
+            # Team matcher's _prepare_text_for_parsing() handles stripping for matching
 
             try:
                 # Use selective regex if any individual field is enabled
                 if any_custom_enabled:
                     team_result = thread_team_matcher.extract_teams_with_selective_regex(
-                        stream_name,  # Use cleaned name (without exception keywords)
+                        stream['name'],
                         group['assigned_league'],
                         teams_pattern=group.get('custom_regex_teams'),
                         teams_enabled=teams_enabled,
@@ -388,7 +389,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         time_enabled=time_enabled
                     )
                 else:
-                    team_result = thread_team_matcher.extract_teams(stream_name, group['assigned_league'])
+                    team_result = thread_team_matcher.extract_teams(stream['name'], group['assigned_league'])
 
                 if team_result.get('matched'):
                     event_result = thread_event_matcher.find_and_enrich(
@@ -408,7 +409,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                             'event': event_result['event'],
                             'detected_league': group['assigned_league'],
                             'detection_tier': 'direct',
-                            'exception_keyword': exception_keyword
+                            'exception_keyword': stream.get('exception_keyword')
                         }
                     else:
                         # No game found with primary team matches - try alternate team combinations
@@ -464,7 +465,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                                             'event': alt_result['event'],
                                             'detected_league': league,
                                             'detection_tier': 'direct',
-                                            'exception_keyword': exception_keyword
+                                            'exception_keyword': stream.get('exception_keyword')
                                         }
 
                         # No match found with any combination
@@ -654,11 +655,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                         # Touch cache entry to keep it fresh
                         stream_cache.touch(group_id, stream_id, stream_name, generation)
 
-                        # Re-extract exception keyword from stream name
-                        # (keyword is derived from stream name, not stored in cache)
-                        from utils.keyword_matcher import strip_exception_keywords
-                        _, cache_exception_keyword = strip_exception_keywords(stream_name)
-
+                        # Exception keyword was pre-extracted in Step 2.6 and attached to stream dict
                         return {
                             'type': 'matched',
                             'stream': stream,
@@ -667,7 +664,7 @@ def refresh_event_group_core(group, m3u_manager, skip_m3u_refresh=False, epg_sta
                             'detected_league': league,
                             'detection_tier': 'cache',
                             'from_cache': True,
-                            'exception_keyword': cache_exception_keyword
+                            'exception_keyword': stream.get('exception_keyword')
                         }
 
                 cache_stats['misses'] += 1
