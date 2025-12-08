@@ -70,17 +70,26 @@ def fix_mojibake(text: str) -> str:
     return result
 
 
-# Common name variants for European teams
-# Maps stream name variants to ESPN canonical names
+# Name variant mappings - all variants map to ESPN's canonical form
+# This is ONE-WAY: stream variant → ESPN name (no back-and-forth replacement)
+# ESPN uses a MIX of English and German names - verified against soccer_team_leagues cache
 CITY_NAME_VARIANTS = {
-    # German cities
+    # ESPN uses ENGLISH for these cities
     'münchen': 'munich',
     'munchen': 'munich',
     'köln': 'cologne',
     'koln': 'cologne',
-    'nürnberg': 'nuremberg',
-    'nurnberg': 'nuremberg',
-    # Note: ESPN uses English names (Munich, Cologne) not German (München, Köln)
+    # ESPN uses GERMAN (with umlauts) for these
+    'nuremberg': 'nürnberg',
+    'nurnberg': 'nürnberg',
+    'dusseldorf': 'düsseldorf',
+    'furth': 'fürth',
+    'monchengladbach': 'mönchengladbach',
+    'munster': 'münster',
+    # German team name variants → ESPN canonical
+    'hertha bsc': 'hertha berlin',
+    'hamburger sv': 'hamburg sv',
+    'sv werder bremen': 'werder bremen',
 }
 
 
@@ -839,8 +848,8 @@ class TeamMatcher:
         # Apply standard normalization first
         text = self._normalize_text(text)
 
-        # Apply city name variants (ESPN uses English names)
-        # München→Munich, Köln→Cologne, etc.
+        # Apply city/team name variants to match ESPN format
+        # nuremberg→nürnberg, hertha bsc→hertha berlin, etc.
         for variant, canonical in CITY_NAME_VARIANTS.items():
             # Use word boundary matching to avoid partial replacements
             text = re.sub(r'\b' + re.escape(variant) + r'\b', canonical, text, flags=re.I)

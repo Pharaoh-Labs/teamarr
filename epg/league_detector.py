@@ -2320,15 +2320,26 @@ class LeagueDetector:
                 # Resolve team IDs for THIS specific league
                 # Critical: same team name can have different IDs in different leagues
                 # e.g., Iowa State Cyclones = ID 66 in volleyball, ID 20535 in women's soccer
-                team1_id = TeamLeagueCache.get_team_id_for_league(team1_name, league)
-                team2_id = TeamLeagueCache.get_team_id_for_league(team2_name, league)
+                if sport == 'soccer':
+                    # Use soccer cache for soccer leagues
+                    soccer_ids = self.get_soccer_team_ids_for_league(team1_name, team2_name, league)
+                    if soccer_ids:
+                        team1_id = soccer_ids['team1_id']
+                        team2_id = soccer_ids['team2_id']
+                    else:
+                        logger.debug(f"Could not resolve teams '{team1_name}' vs '{team2_name}' in soccer league {league}")
+                        continue
+                else:
+                    # Use non-soccer cache for other sports
+                    team1_id = TeamLeagueCache.get_team_id_for_league(team1_name, league)
+                    team2_id = TeamLeagueCache.get_team_id_for_league(team2_name, league)
 
-                if not team1_id:
-                    logger.debug(f"Could not resolve team1 '{team1_name}' in {league}")
-                    continue
-                if not team2_id:
-                    logger.debug(f"Could not resolve team2 '{team2_name}' in {league}")
-                    continue
+                    if not team1_id:
+                        logger.debug(f"Could not resolve team1 '{team1_name}' in {league}")
+                        continue
+                    if not team2_id:
+                        logger.debug(f"Could not resolve team2 '{team2_name}' in {league}")
+                        continue
 
                 # Collect events from both schedule AND scoreboard
                 # Schedule API has future games, but some events (NCAA tournaments)
