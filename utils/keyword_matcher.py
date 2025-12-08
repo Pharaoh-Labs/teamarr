@@ -5,52 +5,23 @@ Provides keyword matching for consolidation exception handling.
 Matches stream names against user-defined keywords to determine
 how duplicate streams should be handled.
 
-System keywords (language variants) are defined here and merged with
-user keywords at runtime. Only user keywords are shown in the UI.
+Keywords are stored in the database and are fully user-editable.
+Default language keywords are seeded on first install but can be
+modified or deleted by the user.
 """
 
 from typing import Optional, Tuple, List, Dict
 
 
-# =============================================================================
-# SYSTEM-MANAGED KEYWORDS
-# =============================================================================
-# These keywords are managed by Teamarr, not visible in UI, and handle
-# common cases like language-specific streams that should be separate.
-# Each entry: {'keywords': 'variant1, variant2, ...', 'behavior': 'consolidate'|'separate'}
-
-SYSTEM_KEYWORDS = [
-    # Language keywords - streams in different languages get separate channels
-    # but streams with the same language keyword consolidate together
-    {'keywords': 'En Español, (ESP), Spanish, Español', 'behavior': 'consolidate'},
-    {'keywords': 'En Français, (FRA), French, Français', 'behavior': 'consolidate'},
-    {'keywords': '(GER), German, Deutsch', 'behavior': 'consolidate'},
-    {'keywords': '(POR), Portuguese, Português', 'behavior': 'consolidate'},
-    {'keywords': '(ITA), Italian, Italiano', 'behavior': 'consolidate'},
-    {'keywords': '(ARA), Arabic, العربية', 'behavior': 'consolidate'},
-]
-
-
 def get_all_exception_keywords() -> List[Dict]:
     """
-    Get all exception keywords: system + user.
-
-    Returns combined list of system-managed keywords and user-defined
-    keywords from the database. System keywords take precedence.
+    Get all exception keywords from the database.
 
     Returns:
         List of keyword dicts with 'keywords' and 'behavior' keys
     """
     from database import get_consolidation_exception_keywords
-
-    # Start with system keywords (checked first)
-    all_keywords = list(SYSTEM_KEYWORDS)
-
-    # Add user keywords from DB
-    user_keywords = get_consolidation_exception_keywords()
-    all_keywords.extend(user_keywords)
-
-    return all_keywords
+    return get_consolidation_exception_keywords()
 
 
 def check_exception_keyword(stream_name: str, keywords_list: List[Dict]) -> Tuple[Optional[str], Optional[str]]:

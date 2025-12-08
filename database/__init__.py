@@ -336,7 +336,7 @@ def get_league_alias(slug: str) -> str:
 #   23: Stream fingerprint cache for EPG generation optimization
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 24
+CURRENT_SCHEMA_VERSION = 25
 
 
 def get_schema_version(conn) -> int:
@@ -1667,6 +1667,82 @@ def run_migrations(conn):
             print("    ✅ Migration 24 complete: EPG match tracking tables + triggered_by column")
         except Exception as e:
             print(f"    ⚠️ Migration 24 error: {e}")
+            conn.rollback()
+
+    # =========================================================================
+    # 25. Fix duplicate language keywords in consolidation_exception_keywords
+    # =========================================================================
+    # Language keywords were being inserted on every startup due to missing
+    # UNIQUE constraint. This migration:
+    # 1. Deduplicates existing rows (keeps lowest ID for each keyword)
+    # 2. Recreates table with UNIQUE constraint
+    # 3. Re-inserts default language keywords (INSERT OR IGNORE now works)
+    if current_version < 25:
+        print("  🔄 Migration 25: Fixing duplicate exception keywords...")
+        try:
+            # Step 1: Get unique keywords (keep first occurrence of each)
+            cursor.execute("""
+                SELECT MIN(id) as id, keywords, behavior, MIN(created_at) as created_at
+                FROM consolidation_exception_keywords
+                GROUP BY keywords
+            """)
+            unique_keywords = cursor.fetchall()
+
+            # Step 2: Recreate table with UNIQUE constraint
+            cursor.execute("DROP TABLE IF EXISTS consolidation_exception_keywords")
+            cursor.execute("""
+                CREATE TABLE consolidation_exception_keywords (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    keywords TEXT NOT NULL UNIQUE,
+                    behavior TEXT NOT NULL DEFAULT 'consolidate',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Step 3: Re-insert unique user keywords (excluding language defaults)
+            language_patterns = [
+                'En Español', 'En Français', '(GER)', '(POR)', '(ITA)', '(ARA)',
+                'Spanish', 'French', 'German', 'Portuguese', 'Italian', 'Arabic'
+            ]
+            user_keywords = []
+            for row in unique_keywords:
+                keywords_str = row[1]
+                is_language = any(pattern in keywords_str for pattern in language_patterns)
+                if not is_language:
+                    user_keywords.append((row[1], row[2], row[3]))
+
+            if user_keywords:
+                cursor.executemany(
+                    "INSERT INTO consolidation_exception_keywords (keywords, behavior, created_at) VALUES (?, ?, ?)",
+                    user_keywords
+                )
+                print(f"    📝 Preserved {len(user_keywords)} user-defined keyword(s)")
+
+            # Step 4: Insert default language keywords (fresh, no duplicates)
+            # First keyword is canonical (shown in EPG variables) - use English names
+            default_keywords = [
+                ('Spanish, En Español, (ESP), Español', 'consolidate'),
+                ('French, En Français, (FRA), Français', 'consolidate'),
+                ('German, (GER), Deutsch', 'consolidate'),
+                ('Portuguese, (POR), Português', 'consolidate'),
+                ('Italian, (ITA), Italiano', 'consolidate'),
+                ('Arabic, (ARA), العربية', 'consolidate'),
+            ]
+            cursor.executemany(
+                "INSERT OR IGNORE INTO consolidation_exception_keywords (keywords, behavior) VALUES (?, ?)",
+                default_keywords
+            )
+
+            conn.commit()
+            migrations_run += 1
+
+            # Count what we ended up with
+            cursor.execute("SELECT COUNT(*) FROM consolidation_exception_keywords")
+            final_count = cursor.fetchone()[0]
+            print(f"    ✅ Migration 25 complete: {final_count} exception keywords (duplicates removed, UNIQUE constraint added)")
+
+        except Exception as e:
+            print(f"    ⚠️ Migration 25 error: {e}")
             conn.rollback()
 
     # =========================================================================

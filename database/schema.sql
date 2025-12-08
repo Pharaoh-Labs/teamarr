@@ -765,20 +765,21 @@ END;
 
 CREATE TABLE IF NOT EXISTS consolidation_exception_keywords (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    keywords TEXT NOT NULL,                        -- Comma-separated keyword variants (case-insensitive)
+    keywords TEXT NOT NULL UNIQUE,                 -- Comma-separated keyword variants (case-insensitive)
     behavior TEXT NOT NULL DEFAULT 'consolidate',  -- consolidate, separate, ignore
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- Pre-populate default language exception keywords for sub-consolidation
--- These ensure non-English language streams get their own channel, separate from English
+-- Default language keywords - user can modify or delete these
+-- First keyword in each list is the "canonical" name shown in EPG variables
+-- UNIQUE constraint on keywords prevents duplicates on repeated schema runs
 INSERT OR IGNORE INTO consolidation_exception_keywords (keywords, behavior) VALUES
-    ('En Español, (ESP), Spanish, Español', 'consolidate'),
-    ('En Français, (FRA), French, Français', 'consolidate'),
-    ('(GER), German, Deutsch', 'consolidate'),
-    ('(POR), Portuguese, Português', 'consolidate'),
-    ('(ITA), Italian, Italiano', 'consolidate'),
-    ('(ARA), Arabic, العربية', 'consolidate');
+    ('Spanish, En Español, (ESP), Español', 'consolidate'),
+    ('French, En Français, (FRA), Français', 'consolidate'),
+    ('German, (GER), Deutsch', 'consolidate'),
+    ('Portuguese, (POR), Português', 'consolidate'),
+    ('Italian, (ITA), Italiano', 'consolidate'),
+    ('Arabic, (ARA), العربية', 'consolidate');
 
 -- =============================================================================
 -- TEAM ALIASES TABLE (Event Channel EPG Feature)
