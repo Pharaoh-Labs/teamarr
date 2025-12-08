@@ -103,6 +103,9 @@ class MatchResult:
     league_not_enabled: bool = False
     league_name: Optional[str] = None  # Friendly name for display
 
+    # Exception keyword (stripped during matching, used for consolidation)
+    exception_keyword: Optional[str] = None
+
     # Error info (when error=True)
     error_message: Optional[str] = None
 
@@ -192,6 +195,16 @@ class MultiSportMatcher:
         """
         result = MatchResult(stream=stream)
         stream_name = stream.get('name', '')
+
+        # Strip exception keywords (language indicators, etc.) early
+        # The matched keyword is stored for later use in consolidation
+        from utils.keyword_matcher import strip_exception_keywords
+        cleaned_name, exception_keyword = strip_exception_keywords(stream_name)
+        result.exception_keyword = exception_keyword
+
+        # Use cleaned name for matching if keywords were stripped
+        if exception_keyword:
+            stream_name = cleaned_name
 
         try:
             # Step 1: Extract raw matchup data (teams, date, time, league indicator)

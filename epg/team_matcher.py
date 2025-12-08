@@ -933,11 +933,10 @@ class TeamMatcher:
         # "CB01:12pm 10 ISU @ 1 PUR" -> masked "CB01:____ 10 ISU @ 1 PUR" -> strips at colon
         text = self._strip_prefix_at_colon(text, masked_text)
 
-        # Remove language broadcast prefixes like "En Español-", "En Espanol-", "Spanish-"
-        text = re.sub(r'^(?:En\s+Espa[ñn]ol|Spanish|Espa[ñn]ol|French|Portuguese|German)\s*[-:]\s*', '', text, flags=re.I)
-
-        # Remove parenthesized language codes like "(ESP)", "(SPA)", "(FRA)", "(GER)", "(POR)", "(ITA)", "(ARA)"
-        text = re.sub(r'^\((?:ESP|SPA|FRA|GER|POR|ITA|ARA)\)\s*[-:]?\s*', '', text, flags=re.I)
+        # Strip exception keywords (language prefixes, etc.) using database-driven patterns
+        # This replaces the hardcoded language patterns and uses user-configurable keywords
+        from utils.keyword_matcher import strip_exception_keywords
+        text, _ = strip_exception_keywords(text)
 
         # Apply standard normalization first
         text = self._normalize_text(text)
