@@ -3,14 +3,65 @@ Dispatcharr API Client with JIT Authentication
 
 Provides just-in-time authentication with automatic token refresh
 and session management for Dispatcharr API integration.
+
+Retry Strategy:
+- Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s (capped)
+- Jitter: ±50% randomization to prevent thundering herd
+- Max retries: 5 (configurable)
+- Retryable: ConnectionError, Timeout, 502, 503, 504
 """
 
 import logging
+import random
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Retry Configuration
+# =============================================================================
+
+# Retryable exceptions (connection-level failures)
+RETRYABLE_EXCEPTIONS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
+
+# Retryable HTTP status codes (server-side transient errors)
+RETRYABLE_STATUS_CODES = {502, 503, 504}
+
+
+def _calculate_backoff(attempt: int, base_delay: float = 1.0, max_delay: float = 32.0) -> float:
+    """
+    Calculate delay with exponential backoff and jitter.
+
+    Formula: min(max_delay, base_delay * 2^attempt) * random(0.5, 1.5)
+
+    Args:
+        attempt: Current attempt number (0-indexed)
+        base_delay: Initial delay in seconds (default: 1.0)
+        max_delay: Maximum delay cap in seconds (default: 32.0)
+
+    Returns:
+        Delay in seconds with jitter applied
+
+    Example delays:
+        Attempt 0: 0.5-1.5s   (base * 1)
+        Attempt 1: 1-3s       (base * 2)
+        Attempt 2: 2-6s       (base * 4)
+        Attempt 3: 4-12s      (base * 8)
+        Attempt 4: 8-24s      (base * 16)
+        Attempt 5: 16-32s     (base * 32, capped)
+    """
+    delay = min(max_delay, base_delay * (2 ** attempt))
+    # Add jitter: ±50%
+    jitter = random.uniform(0.5, 1.5)
+    return delay * jitter
 
 
 class DispatcharrAuth:
@@ -215,19 +266,25 @@ class DispatcharrAuth:
         method: str,
         endpoint: str,
         data: Optional[Dict] = None,
-        retry_on_401: bool = True
+        retry_on_401: bool = True,
+        max_retries: int = 5
     ) -> Optional[requests.Response]:
         """
-        Make an authenticated request to Dispatcharr API.
+        Make an authenticated request to Dispatcharr API with retry support.
+
+        Uses exponential backoff with jitter for transient errors:
+        - Connection errors, timeouts, chunked encoding errors
+        - HTTP 502, 503, 504 responses
 
         Args:
             method: HTTP method (GET, POST, PATCH, DELETE)
             endpoint: API endpoint (e.g., "/api/epg/sources/")
             data: JSON data for POST/PATCH requests
             retry_on_401: Whether to retry with fresh token on 401
+            max_retries: Maximum retry attempts for transient errors (default: 5)
 
         Returns:
-            Response object or None if request fails
+            Response object or None if request fails after all retries
         """
         token = self.get_token()
         if not token:
@@ -240,31 +297,65 @@ class DispatcharrAuth:
         }
 
         full_url = f"{self.url}{endpoint}"
+        last_exception = None
 
-        try:
-            if method.upper() == "GET":
-                response = self._http_session.get(full_url, headers=headers, timeout=self.timeout)
-            elif method.upper() == "POST":
-                response = self._http_session.post(full_url, headers=headers, json=data, timeout=self.timeout)
-            elif method.upper() == "PATCH":
-                response = self._http_session.patch(full_url, headers=headers, json=data, timeout=self.timeout)
-            elif method.upper() == "DELETE":
-                response = self._http_session.delete(full_url, headers=headers, timeout=self.timeout)
-            else:
-                logger.error(f"Unsupported HTTP method: {method}")
+        for attempt in range(max_retries + 1):
+            try:
+                if method.upper() == "GET":
+                    response = self._http_session.get(full_url, headers=headers, timeout=self.timeout)
+                elif method.upper() == "POST":
+                    response = self._http_session.post(full_url, headers=headers, json=data, timeout=self.timeout)
+                elif method.upper() == "PATCH":
+                    response = self._http_session.patch(full_url, headers=headers, json=data, timeout=self.timeout)
+                elif method.upper() == "DELETE":
+                    response = self._http_session.delete(full_url, headers=headers, timeout=self.timeout)
+                else:
+                    logger.error(f"Unsupported HTTP method: {method}")
+                    return None
+
+                # Handle 401 with re-authentication (not counted as retry)
+                if response.status_code == 401 and retry_on_401:
+                    logger.info("Received 401, clearing session and retrying...")
+                    self.clear_session()
+                    return self.request(method, endpoint, data, retry_on_401=False, max_retries=max_retries)
+
+                # Check for retryable HTTP status codes
+                if response.status_code in RETRYABLE_STATUS_CODES:
+                    if attempt < max_retries:
+                        delay = _calculate_backoff(attempt)
+                        logger.warning(
+                            f"Retryable HTTP {response.status_code} for {method} {endpoint}, "
+                            f"retry {attempt + 1}/{max_retries} after {delay:.1f}s"
+                        )
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.error(f"Max retries exceeded for {method} {endpoint} (HTTP {response.status_code})")
+
+                return response
+
+            except RETRYABLE_EXCEPTIONS as e:
+                last_exception = e
+
+                if attempt < max_retries:
+                    delay = _calculate_backoff(attempt)
+                    logger.warning(
+                        f"Retryable error for {method} {endpoint}: {type(e).__name__}, "
+                        f"retry {attempt + 1}/{max_retries} after {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Max retries exceeded for {method} {endpoint}: {e}")
+
+            except requests.RequestException as e:
+                # Non-retryable request exception
+                logger.error(f"Request failed (non-retryable): {e}")
                 return None
 
-            # Handle 401 with retry
-            if response.status_code == 401 and retry_on_401:
-                logger.info("Received 401, clearing session and retrying...")
-                self.clear_session()
-                return self.request(method, endpoint, data, retry_on_401=False)
-
-            return response
-
-        except requests.RequestException as e:
-            logger.error(f"Request failed: {e}")
-            return None
+        # All retries exhausted
+        if last_exception:
+            logger.error(f"Request failed after {max_retries} retries: {last_exception}")
+        return None
 
     # Convenience methods
     def get(self, endpoint: str) -> Optional[requests.Response]:
