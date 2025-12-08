@@ -456,6 +456,7 @@ def merge_dynamic_fields(cached_event: Dict, fresh_event: Dict) -> Dict:
     - home_team.score, away_team.score
     - odds (spread, moneyline, over_under)
     - home_team.streak, away_team.streak
+    - broadcasts (can change close to game time)
 
     Args:
         cached_event: Cached normalized event dict
@@ -499,6 +500,10 @@ def merge_dynamic_fields(cached_event: Dict, fresh_event: Dict) -> Dict:
     # Update competitions array for downstream processing
     if 'competitions' in fresh_event:
         merged['competitions'] = fresh_event['competitions']
+
+    # Update broadcasts (can change close to game time)
+    if 'broadcasts' in fresh_event:
+        merged['broadcasts'] = fresh_event['broadcasts']
 
     # Mark as refreshed
     if '_enrichment' not in merged:
