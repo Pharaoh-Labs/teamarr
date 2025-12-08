@@ -244,8 +244,8 @@
             {% endif %}
         </div>
 
-        <!-- Independent Group Settings (hidden for child groups, hidden in add mode until type accepted) -->
-        <div id="independent-settings"{% if mode == 'add' %} class="hidden"{% endif %}>
+        <!-- Independent Group Settings (hidden for child groups, locked in add mode until type accepted) -->
+        <div id="independent-settings"{% if mode == 'add' %} class="locked-section"{% endif %}>
             <div class="form-section">
                 <h2>Template & Channel Settings</h2>
 
@@ -325,7 +325,7 @@
         </div><!-- end independent-settings -->
 
         <!-- Custom Regex Section (Collapsible) - Available for both parent and child groups -->
-        <div class="form-section collapsible-section">
+        <div class="form-section collapsible-section{% if mode == 'add' %} locked-section{% endif %}" id="custom-regex-section">
             <h2 class="collapsible-header" onclick="toggleSection('custom-regex')">
                 <span class="collapse-arrow" id="custom-regex-arrow">▶</span>
                 Custom Regex
@@ -551,8 +551,9 @@ function acceptGroupType() {
         populateParentGroups();
     }
 
-    // Show independent settings (template, channel config, etc.)
-    document.getElementById('independent-settings').classList.remove('hidden');
+    // Unlock all form sections (template, channel config, regex, etc.)
+    document.getElementById('independent-settings').classList.remove('locked-section');
+    document.getElementById('custom-regex-section').classList.remove('locked-section');
 
     groupTypeAccepted = true;
 }
@@ -1490,7 +1491,37 @@ function updateEnabledLeagues() {
     color: #7c3aed;
 }
 
-/* Independent settings hidden state */
+/* Locked section state - visible but disabled until group type selected */
+.locked-section {
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+    position: relative;
+}
+
+.locked-section::before {
+    content: 'Select group type above to continue';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    z-index: 10;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.locked-section:hover::before {
+    opacity: 1;
+}
+
+/* Independent settings hidden state (for child groups) */
 #independent-settings.hidden {
     display: none;
 }
