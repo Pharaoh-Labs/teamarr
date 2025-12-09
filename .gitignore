@@ -30,6 +30,8 @@ claude.md
 CLAUDE.md
 BOOTSTRAP_PROMPT.md
 REFACTOR_PLAN.md
+CHANGELOG.md
+test_tier4b_fallback.py
 
 # Documentation/Integration notes
 docs/
