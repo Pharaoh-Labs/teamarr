@@ -567,9 +567,17 @@ class EventEnricher:
                     team['record'] = stats_record
 
                 # Add additional stats
-                team['streak'] = {
-                    'count': team_stats.get('streak_count', 0),
-                }
+                # Streak: ESPN provides signed value (positive=wins, negative=losses)
+                streak_raw = team_stats.get('streak_count', 0)
+                team['streak_raw'] = streak_raw  # Signed value for conditionals
+                team['streak_count'] = abs(streak_raw)  # Absolute value for "X-game streak"
+                # Formatted as "W5" or "L2" for {home_team_streak}/{away_team_streak}
+                if streak_raw > 0:
+                    team['streak'] = f"W{streak_raw}"
+                elif streak_raw < 0:
+                    team['streak'] = f"L{abs(streak_raw)}"
+                else:
+                    team['streak'] = ''
                 team['home_record'] = team_stats.get('home_record', '')
                 team['away_record'] = team_stats.get('away_record', '')
                 team['division_record'] = team_stats.get('division_record', '')
