@@ -1,6 +1,10 @@
-# Teamarr
+<p align="center">
+  <img src="static/logo.svg" alt="Teamarr" width="120">
+</p>
 
-**Dynamic EPG Generator for Sports Channels**
+<h1 align="center">Teamarr</h1>
+
+<p align="center"><strong>Dynamic EPG Generator for Sports Channels</strong></p>
 
 Teamarr creates rich, dynamic Electronic Program Guide (EPG) data for your sports channels. It fetches real-time schedules from ESPN and generates XMLTV-format EPG files with intelligent descriptions that adapt based on game context—streaks, odds, matchups, and more.
 
