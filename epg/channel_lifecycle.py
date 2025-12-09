@@ -2227,6 +2227,85 @@ class ChannelLifecycleManager:
 
         return results
 
+    def cleanup_orphan_dispatcharr_channels(self) -> Dict[str, Any]:
+        """
+        Clean up orphan channels in Dispatcharr that have teamarr-event-* tvg_id
+        but aren't tracked (or are tracked as deleted) in our DB.
+
+        These orphans can occur when:
+        - Dispatcharr delete API call failed but DB was marked deleted
+        - Same event got a new channel, old one wasn't cleaned up
+        - Manual intervention or bugs
+
+        This runs every generation to keep Dispatcharr clean.
+
+        Returns:
+            Dict with 'deleted' count and 'errors' list
+        """
+        from database import get_all_managed_channels
+
+        results = {
+            'deleted': 0,
+            'errors': []
+        }
+
+        try:
+            # Get all teamarr channels from Dispatcharr
+            all_dispatcharr = self.channel_api.get_channels()
+            teamarr_channels = [
+                c for c in all_dispatcharr
+                if (c.get('tvg_id') or '').startswith('teamarr-event-')
+            ]
+
+            if not teamarr_channels:
+                return results
+
+            # Get active DB channels (by dispatcharr_channel_id and UUID)
+            db_channels = get_all_managed_channels(include_deleted=False)
+            active_ids = {c['dispatcharr_channel_id'] for c in db_channels}
+            active_uuids = {c.get('dispatcharr_uuid') for c in db_channels if c.get('dispatcharr_uuid')}
+
+            # Find orphans
+            orphans = [
+                c for c in teamarr_channels
+                if c['id'] not in active_ids and c.get('uuid') not in active_uuids
+            ]
+
+            if not orphans:
+                return results
+
+            logger.info(f"🧹 Found {len(orphans)} orphan Dispatcharr channel(s) to clean up")
+
+            for orphan in orphans:
+                try:
+                    with self._dispatcharr_lock:
+                        delete_result = self.channel_api.delete_channel(orphan['id'])
+
+                    if delete_result.get('success') or 'not found' in str(delete_result.get('error', '')).lower():
+                        results['deleted'] += 1
+                        logger.debug(f"Deleted orphan channel #{int(orphan['channel_number'])} - {orphan['name']}")
+                    else:
+                        results['errors'].append({
+                            'channel_id': orphan['id'],
+                            'channel_name': orphan['name'],
+                            'error': delete_result.get('error')
+                        })
+                except Exception as e:
+                    results['errors'].append({
+                        'channel_id': orphan['id'],
+                        'channel_name': orphan.get('name', 'unknown'),
+                        'error': str(e)
+                    })
+
+            if results['deleted'] > 0:
+                logger.info(f"🧹 Cleaned up {results['deleted']} orphan Dispatcharr channel(s)")
+
+        except Exception as e:
+            logger.warning(f"Error during orphan cleanup: {e}")
+            results['errors'].append({'error': str(e)})
+
+        return results
+
     def cleanup_disabled_groups(self) -> Dict[str, Any]:
         """
         Clean up channels from disabled event groups.

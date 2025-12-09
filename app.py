@@ -1582,7 +1582,11 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
                 cross_group_results = lifecycle_mgr.enforce_cross_group_consolidation()
                 cross_group_consolidated = cross_group_results.get('consolidated', 0)
 
-                lifecycle_stats['channels_deleted'] = disabled_deleted + scheduled_deleted + cross_group_results.get('channels_deleted', 0)
+                # 3g: Clean up orphan Dispatcharr channels (teamarr-event-* not in DB)
+                orphan_cleanup = lifecycle_mgr.cleanup_orphan_dispatcharr_channels()
+                orphans_deleted = orphan_cleanup.get('deleted', 0)
+
+                lifecycle_stats['channels_deleted'] = disabled_deleted + scheduled_deleted + cross_group_results.get('channels_deleted', 0) + orphans_deleted
                 lifecycle_stats['streams_moved'] = streams_moved
                 lifecycle_stats['channels_reordered'] = channels_reordered
                 lifecycle_stats['reconciliation'] = reconciliation_stats
