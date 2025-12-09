@@ -2074,8 +2074,8 @@ class ChannelLifecycleManager:
                         delete_result = self.channel_api.delete_channel(ms_channel['dispatcharr_channel_id'])
                         if delete_result.get('success'):
                             # Mark as deleted in DB
-                            from database import mark_channel_deleted
-                            mark_channel_deleted(ms_channel['id'])
+                            from database import mark_managed_channel_deleted
+                            mark_managed_channel_deleted(ms_channel['id'])
 
                             log_channel_history(
                                 managed_channel_id=ms_channel['id'],
