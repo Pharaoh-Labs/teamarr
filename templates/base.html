@@ -16,11 +16,15 @@
     <nav class="navbar">
         <div class="container nav-container">
             <div class="nav-brand">
-                <a href="{{ url_for('index') }}" class="brand-link">
+                <a href="{{ url_for('index') }}" class="brand-logo-link">
                     <img src="{{ url_for('static', filename='logo.svg') }}" alt="Teamarr" class="brand-logo">
-                    <h1>Teamarr</h1>
                 </a>
-                <span class="tagline">Dynamic EPG Generator for Sports Channels</span>
+                <div class="brand-text">
+                    <a href="{{ url_for('index') }}" class="brand-link">
+                        <h1>Teamarr</h1>
+                    </a>
+                    <span class="tagline">Dynamic EPG Generator for Sports Channels</span>
+                </div>
             </div>
             <ul class="nav-menu">
                 <li><a href="{{ url_for('index') }}" class="nav-link">Dashboard</a></li>
