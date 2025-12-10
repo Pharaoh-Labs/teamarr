@@ -813,12 +813,19 @@ class ChannelLifecycleManager:
 
                 # Get the calculated block start for this AUTO group
                 block_start = get_auto_group_block_start(group['id'])
+                logger.debug(
+                    f"AUTO mode sync: group_id={group['id']}, block_start={block_start}, "
+                    f"current_channel_number={current_channel_number}"
+                )
                 if block_start:
                     # Calculate the expected range for this AUTO group
                     stream_count = group.get('total_stream_count') or 0
                     blocks_needed = (stream_count + 9) // 10 if stream_count > 0 else 1
                     range_size = blocks_needed * 10
                     block_end = block_start + range_size - 1
+                    logger.debug(
+                        f"AUTO mode range: {block_start}-{block_end} (stream_count={stream_count}, blocks={blocks_needed})"
+                    )
 
                     # Check if current number is outside the expected range
                     if current_channel_number and (current_channel_number < block_start or current_channel_number > block_end):
