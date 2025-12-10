@@ -93,6 +93,10 @@ CITY_NAME_VARIANTS = {
     # Italian team name variants → ESPN canonical
     'inter milan': 'internazionale',
     'inter': 'internazionale',
+    # College team aliases (stream name → ESPN name)
+    'albany': 'ualbany',
+    'st leo': 'saint leo',
+    'st. leo': 'saint leo',
 }
 
 

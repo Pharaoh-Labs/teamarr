@@ -619,6 +619,53 @@ def normalize_reason(reason: Union[str, FilteredReason, FailedReason]) -> str:
     return reason
 
 
+def categorize_team_matcher_reason(reason) -> str:
+    """
+    Convert verbose team_matcher reasons to standardized failure reason codes.
+
+    team_matcher.extract_teams() returns reasons like:
+    - "Away team not found: albany"
+    - "Home team not found: yale"
+    - "No team data available for league: xyz"
+    - "Stream name empty after normalization"
+
+    This converts them to standard FailedReason enum values.
+    Also handles FailedReason enums that are already categorized.
+    """
+    if not reason:
+        return FailedReason.TEAMS_NOT_PARSED.value
+
+    # Handle FailedReason enum - already categorized
+    if isinstance(reason, FailedReason):
+        return reason.value
+
+    # Handle FilteredReason enum - convert to string value
+    if isinstance(reason, FilteredReason):
+        return reason.value
+
+    # Convert to string and lowercase for pattern matching
+    reason_lower = str(reason).lower()
+
+    # Team lookup failures
+    if 'away team not found' in reason_lower:
+        return FailedReason.TEAM1_NOT_FOUND.value
+    if 'home team not found' in reason_lower:
+        return FailedReason.TEAM2_NOT_FOUND.value
+    if 'no team data' in reason_lower:
+        return FailedReason.TEAMS_NOT_PARSED.value
+
+    # Parsing failures
+    if 'empty after normalization' in reason_lower:
+        return FailedReason.TEAMS_NOT_PARSED.value
+    if 'no separator' in reason_lower:
+        return FailedReason.TEAMS_NOT_PARSED.value
+    if 'pattern did not match' in reason_lower:
+        return FailedReason.TEAMS_NOT_PARSED.value
+
+    # Return as-is if not recognized (will be stored as verbose string)
+    return reason
+
+
 # =============================================================================
 # DETECTION HELPERS (moved from filter_reasons.py)
 # =============================================================================

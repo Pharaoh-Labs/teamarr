@@ -234,7 +234,9 @@ class EventMatcher:
                     if c.get('team', {}).get('id') or c.get('id')
                 ]
 
-                if str(team2_id) not in team_ids_in_game:
+                # Only filter by team2_id if one is provided
+                # (name-based matching passes None because we already matched by name)
+                if team2_id is not None and str(team2_id) not in team_ids_in_game:
                     # TRACE: Log what teams ARE in this game (to help debug wrong team matches)
                     team_names_in_game = [
                         c.get('team', {}).get('displayName', c.get('team', {}).get('name', 'Unknown'))
@@ -918,6 +920,195 @@ class EventMatcher:
                 league,
                 include_scoreboard=True,
                 include_team_stats=True
+            )
+
+        return result
+
+    def find_event_by_team_names(
+        self,
+        team1_name: str,
+        team2_name: str,
+        league: str,
+        game_date: datetime = None,
+        game_time: datetime = None,
+        include_final_events: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Find an ESPN event by searching team NAMES on the scoreboard.
+
+        This is a fallback for when teams are not in ESPN's /teams database
+        but their games ARE on the scoreboard (common for small college teams,
+        NAIA schools, D2/D3 teams, etc.).
+
+        Instead of looking up team IDs first, this searches the scoreboard
+        directly for events where the event name contains both team names.
+
+        Args:
+            team1_name: First team name from stream (e.g., "Albany", "Fisher College")
+            team2_name: Second team name from stream (e.g., "Yale", "UMass Lowell")
+            league: League code (e.g., 'mens-college-basketball')
+            game_date: Optional target date extracted from stream name
+            game_time: Optional target time for disambiguation
+            include_final_events: Whether to include completed events
+
+        Returns:
+            Dict with found, event, event_id, reason (if not found)
+        """
+        import unicodedata
+
+        result = {
+            'found': False,
+            'team1_name': team1_name,
+            'team2_name': team2_name,
+            'league': league
+        }
+
+        logger.debug(
+            f"[TRACE] find_event_by_team_names START | "
+            f"team1='{team1_name}' vs team2='{team2_name}' | league={league}"
+        )
+
+        # Get league config
+        config = self._get_league_config(league)
+        if not config:
+            result['reason'] = f'Unknown league: {league}'
+            return result
+
+        sport, api_league = parse_api_path(config['api_path'])
+        if not sport or not api_league:
+            result['reason'] = f'Invalid api_path for league: {league}'
+            return result
+
+        # Normalize team names for matching (lowercase, strip accents)
+        def normalize_name(name: str) -> str:
+            # Lowercase and strip whitespace
+            name = name.lower().strip()
+            # Remove accents (é → e, ñ → n, etc.)
+            name = unicodedata.normalize('NFD', name)
+            name = ''.join(c for c in name if unicodedata.category(c) != 'Mn')
+            # Common abbreviations
+            name = name.replace('st.', 'saint').replace('st ', 'saint ')
+            return name
+
+        # Apply team aliases (stream name → ESPN canonical name)
+        # These map common stream abbreviations to ESPN's official team names
+        TEAM_ALIASES = {
+            'albany': 'ualbany',
+            'st leo': 'saint leo',
+            'st. leo': 'saint leo',
+        }
+
+        team1_norm = normalize_name(team1_name)
+        team2_norm = normalize_name(team2_name)
+
+        # Apply aliases if present
+        team1_norm = TEAM_ALIASES.get(team1_norm, team1_norm)
+        team2_norm = TEAM_ALIASES.get(team2_norm, team2_norm)
+
+        # Search scoreboards for the target date range
+        from zoneinfo import ZoneInfo
+        from utils.time_format import get_user_timezone
+
+        tz = ZoneInfo(get_user_timezone(self.db_connection_func))
+
+        now = datetime.now(tz)
+
+        # If game_date provided, search that day; otherwise search today and tomorrow
+        if game_date:
+            dates_to_check = [game_date]
+        else:
+            dates_to_check = [now, now + timedelta(days=1)]
+
+        candidate_events = []
+
+        for check_date in dates_to_check:
+            date_str = check_date.strftime('%Y%m%d')
+
+            # Get scoreboard (uses cache)
+            scoreboard = self._get_scoreboard_cached(sport, api_league, date_str)
+            if not scoreboard:
+                continue
+
+            events = scoreboard.get('events', [])
+
+            for event in events:
+                event_name = event.get('name', '') or event.get('shortName', '')
+                event_name_norm = normalize_name(event_name)
+
+                # Check if BOTH team names appear in the event name
+                if team1_norm in event_name_norm and team2_norm in event_name_norm:
+                    logger.debug(
+                        f"[TRACE] find_event_by_team_names MATCH | "
+                        f"'{team1_name}' + '{team2_name}' found in '{event_name}'"
+                    )
+                    candidate_events.append(event)
+
+        if not candidate_events:
+            result['reason'] = 'no_game_found'
+            logger.debug(
+                f"[TRACE] find_event_by_team_names FAIL | "
+                f"no event with both '{team1_name}' and '{team2_name}'"
+            )
+            return result
+
+        # Filter by state if needed
+        matching_events, skip_reason = self._filter_matching_events(
+            candidate_events,
+            None,  # No opponent ID filter needed
+            include_final_events
+        )
+
+        if not matching_events:
+            result['reason'] = skip_reason or 'no_game_found'
+            return result
+
+        # Select best match (closest to game_time if provided)
+        best_event = self._select_best_match(
+            matching_events, game_date, game_time
+        )
+
+        if best_event:
+            # best_event is a wrapper dict {'event': {...}, 'event_date': ..., 'event_id': ...}
+            # Extract the actual event from the wrapper
+            actual_event = best_event['event']
+            result['found'] = True
+            result['event'] = actual_event
+            result['event_id'] = actual_event.get('id')
+            logger.info(
+                f"[NAME-MATCH] Found event by team names: "
+                f"'{team1_name}' vs '{team2_name}' → {actual_event.get('name')}"
+            )
+
+        return result
+
+    def find_and_enrich_by_names(
+        self,
+        team1_name: str,
+        team2_name: str,
+        league: str,
+        game_date: datetime = None,
+        game_time: datetime = None,
+        include_final_events: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Find event by team names and enrich with scoreboard data.
+
+        This is the name-based equivalent of find_and_enrich().
+        Use when teams are not in ESPN's /teams database.
+        """
+        result = self.find_event_by_team_names(
+            team1_name, team2_name, league,
+            game_date=game_date,
+            game_time=game_time,
+            include_final_events=include_final_events
+        )
+
+        if result['found'] and self.enricher:
+            result['event'] = self.enricher.enrich_event(
+                result['event'],
+                league,
+                include_scoreboard=True,
+                include_team_stats=False  # Can't do team stats without IDs
             )
 
         return result

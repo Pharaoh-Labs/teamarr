@@ -1973,19 +1973,29 @@ def run_migrations(conn):
                 ("sort_order", "INTEGER DEFAULT 0"),
             ])
 
-            # Migrate existing groups: all groups with channel_start become 'manual'
+            # Migrate existing PARENT groups: all groups with channel_start become 'manual'
             # This preserves backwards compatibility - existing setups keep working
+            # Child groups inherit from parent, so they should have NULL
             cursor.execute("""
                 UPDATE event_epg_groups
                 SET channel_assignment_mode = 'manual'
                 WHERE channel_start IS NOT NULL
+                AND parent_group_id IS NULL
             """)
 
-            # Groups without channel_start get 'auto' mode
+            # Parent groups without channel_start get 'auto' mode
             cursor.execute("""
                 UPDATE event_epg_groups
                 SET channel_assignment_mode = 'auto'
                 WHERE channel_start IS NULL
+                AND parent_group_id IS NULL
+            """)
+
+            # Child groups: clear channel_assignment_mode and channel_start (they inherit)
+            cursor.execute("""
+                UPDATE event_epg_groups
+                SET channel_assignment_mode = NULL, channel_start = NULL
+                WHERE parent_group_id IS NOT NULL
             """)
 
             # Set initial sort_order based on current ID order
@@ -3077,7 +3087,7 @@ def get_all_managed_channels(include_deleted: bool = False) -> List[Dict[str, An
     """
     if not include_deleted:
         query += " WHERE mc.deleted_at IS NULL"
-    query += " ORDER BY mc.event_epg_group_id, mc.channel_number"
+    query += " ORDER BY mc.channel_number ASC"
     channels = db_fetch_all(query)
     return [_parse_managed_channel_json_fields(c) for c in channels]
 
@@ -3463,11 +3473,18 @@ def get_next_channel_number(group_id: int, auto_assign: bool = True) -> Optional
         assignment_mode = group['channel_assignment_mode'] or 'manual'
 
         # For AUTO mode, calculate effective channel_start dynamically
+        # Also calculate block_end to enforce range limit
+        block_end = None
         if assignment_mode == 'auto':
             channel_start = _calculate_auto_channel_start(cursor, group_id, group['sort_order'])
             if not channel_start:
                 logger.warning(f"Could not calculate auto channel_start for group {group_id}")
                 return None
+            # Calculate block_end based on stream count
+            stream_count = group['total_stream_count'] or 0
+            blocks_needed = (stream_count + 9) // 10 if stream_count > 0 else 1
+            range_size = blocks_needed * 10
+            block_end = channel_start + range_size - 1
 
         # For MANUAL mode with no channel_start, auto-assign if enabled
         elif not channel_start and auto_assign:
@@ -3502,11 +3519,25 @@ def get_next_channel_number(group_id: int, auto_assign: bool = True) -> Optional
         next_num = channel_start
         while next_num in used_set:
             next_num += 1
+            # Enforce AUTO mode block limit
+            if block_end and next_num > block_end:
+                logger.warning(
+                    f"Cannot allocate channel for AUTO group {group_id}: "
+                    f"would exceed block_end {block_end} (range {channel_start}-{block_end})"
+                )
+                return None
             # Enforce Dispatcharr's max channel limit
             if next_num > MAX_CHANNEL:
                 logger.warning(f"Cannot allocate channel for group {group_id}: would exceed {MAX_CHANNEL}")
                 return None
 
+        # Final check for AUTO mode block limit
+        if block_end and next_num > block_end:
+            logger.warning(
+                f"Cannot allocate channel for AUTO group {group_id}: "
+                f"{next_num} exceeds block_end {block_end}"
+            )
+            return None
         # Final check (in case channel_start itself exceeds limit)
         if next_num > MAX_CHANNEL:
             logger.warning(f"Cannot allocate channel for group {group_id}: {next_num} exceeds {MAX_CHANNEL}")

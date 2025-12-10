@@ -808,24 +808,19 @@ class ChannelLifecycleManager:
             current_dispatcharr_number = current_channel.get('channel_number')
 
             # For AUTO mode, get the dynamically calculated block start
+            # Note: reassign_group_channels() runs first and handles bulk reassignment,
+            # but this is kept as a safety net for channels created mid-run
             if assignment_mode == 'auto':
                 from database import get_auto_group_block_start
 
                 # Get the calculated block start for this AUTO group
                 block_start = get_auto_group_block_start(group['id'])
-                logger.debug(
-                    f"AUTO mode sync: group_id={group['id']}, block_start={block_start}, "
-                    f"current_channel_number={current_channel_number}"
-                )
                 if block_start:
                     # Calculate the expected range for this AUTO group
                     stream_count = group.get('total_stream_count') or 0
                     blocks_needed = (stream_count + 9) // 10 if stream_count > 0 else 1
                     range_size = blocks_needed * 10
                     block_end = block_start + range_size - 1
-                    logger.debug(
-                        f"AUTO mode range: {block_start}-{block_end} (stream_count={stream_count}, blocks={blocks_needed})"
-                    )
 
                     # Check if current number is outside the expected range
                     if current_channel_number and (current_channel_number < block_start or current_channel_number > block_end):
@@ -2720,6 +2715,176 @@ class ChannelLifecycleManager:
 
         if results['updated']:
             logger.info(f"Synced delete times for {len(results['updated'])} channels with group settings")
+
+        return results
+
+    def reassign_group_channels(self, group: Dict) -> Dict[str, Any]:
+        """
+        Reassign ALL channels in a group to their correct range.
+
+        This is called during EPG generation to ensure channels are in the correct
+        range when:
+        - AUTO mode: sort order changes or upstream groups' stream counts change
+        - MANUAL mode: user changes channel_start to a new value
+
+        Unlike _sync_channel_settings (which only syncs matched streams), this
+        reassigns ALL channels in the group regardless of whether they matched
+        a stream this generation.
+
+        Args:
+            group: Event EPG group configuration
+
+        Returns:
+            Dict with 'reassigned', 'already_correct', 'errors' lists
+        """
+        from database import (
+            get_managed_channels_for_group,
+            get_auto_group_block_start,
+            update_managed_channel
+        )
+
+        results = {
+            'reassigned': [],
+            'already_correct': [],
+            'errors': []
+        }
+
+        group_id = group['id']
+        assignment_mode = group.get('channel_assignment_mode', 'manual')
+
+        # Determine the expected range based on mode
+        if assignment_mode == 'auto':
+            # Get the calculated block start for this AUTO group
+            block_start = get_auto_group_block_start(group_id)
+            if not block_start:
+                logger.warning(f"Could not calculate block_start for AUTO group {group_id}")
+                return results
+
+            # Calculate the expected range for this AUTO group
+            stream_count = group.get('total_stream_count') or 0
+            blocks_needed = (stream_count + 9) // 10 if stream_count > 0 else 1
+            range_size = blocks_needed * 10
+            block_end = block_start + range_size - 1
+        else:
+            # MANUAL mode: use channel_start, no upper bound (open-ended)
+            block_start = group.get('channel_start')
+            if not block_start:
+                # No channel_start set, nothing to reassign
+                return results
+            block_end = 9999  # Dispatcharr max
+
+        logger.debug(
+            f"{assignment_mode.upper()} reassign for group {group_id}: range {block_start}-{block_end}"
+        )
+
+        # Get all active (non-deleted) channels for this group
+        channels = get_managed_channels_for_group(group_id)
+        if not channels:
+            logger.debug(f"No active channels for group {group_id}")
+            return results
+
+        logger.debug(f"Found {len(channels)} active channels for group {group_id}")
+
+        # Sort channels by current channel_number to maintain relative order when reassigning
+        channels_sorted = sorted(channels, key=lambda c: c.get('channel_number') or 0)
+
+        # Track assigned numbers to compact channels at start of range
+        next_number = block_start
+
+        # Track if we've hit the range limit
+        range_overflow = False
+
+        for channel in channels_sorted:
+            current_number = channel.get('channel_number')
+            if not current_number:
+                logger.debug(f"Channel {channel.get('id')} has no channel_number, skipping")
+                continue
+
+            # Check if we've exceeded the range
+            if next_number > block_end:
+                if not range_overflow:
+                    logger.warning(
+                        f"Channel range overflow in {assignment_mode.upper()} group {group_id}: "
+                        f"need channel {next_number} but range ends at {block_end}"
+                    )
+                    range_overflow = True
+                results['errors'].append({
+                    'channel_id': channel.get('dispatcharr_channel_id'),
+                    'channel_name': channel.get('channel_name', ''),
+                    'error': f'Range overflow: would need channel {next_number}, max is {block_end}'
+                })
+                continue
+
+            # Also enforce Dispatcharr max (9999)
+            if next_number > 9999:
+                logger.warning(
+                    f"Channel {next_number} exceeds Dispatcharr max 9999 in group {group_id}"
+                )
+                results['errors'].append({
+                    'channel_id': channel.get('dispatcharr_channel_id'),
+                    'channel_name': channel.get('channel_name', ''),
+                    'error': f'Exceeds Dispatcharr max: would need channel {next_number}, max is 9999'
+                })
+                continue
+
+            # Always reassign to compact channels at start of range
+            # Check if channel is already at the correct position
+            if current_number == next_number:
+                logger.debug(f"Channel {current_number} already at correct position")
+                results['already_correct'].append({
+                    'channel_id': channel['dispatcharr_channel_id'],
+                    'channel_number': current_number
+                })
+                next_number += 1
+                continue
+
+            # Channel needs to be moved to next_number
+            new_number = next_number
+            try:
+                # Update in Dispatcharr
+                with self._dispatcharr_lock:
+                    update_result = self.channel_api.update_channel(
+                        channel['dispatcharr_channel_id'],
+                        {'channel_number': new_number}
+                    )
+
+                if not update_result or not update_result.get('success', True):
+                    error_msg = update_result.get('error', 'Unknown error') if update_result else 'No response'
+                    results['errors'].append({
+                        'channel_id': channel['dispatcharr_channel_id'],
+                        'error': f'Dispatcharr update failed: {error_msg}'
+                    })
+                    continue
+
+                # Update in database
+                update_managed_channel(channel['id'], {'channel_number': new_number})
+
+                results['reassigned'].append({
+                    'channel_id': channel['dispatcharr_channel_id'],
+                    'channel_name': channel.get('channel_name', ''),
+                    'old_number': current_number,
+                    'new_number': new_number
+                })
+
+                logger.info(
+                    f"{assignment_mode.upper()} reassigned channel '{channel.get('channel_name', '')}': "
+                    f"{current_number} -> {new_number} (group range {block_start}-{block_end})"
+                )
+
+                next_number += 1
+
+            except Exception as e:
+                results['errors'].append({
+                    'channel_id': channel['dispatcharr_channel_id'],
+                    'error': str(e)
+                })
+                logger.warning(f"Error reassigning channel {channel['dispatcharr_channel_id']}: {e}")
+
+        if results['reassigned']:
+            logger.info(
+                f"Reassigned {len(results['reassigned'])} channels in {assignment_mode.upper()} group {group_id} "
+                f"to range {block_start}-{block_end}"
+            )
 
         return results
 
