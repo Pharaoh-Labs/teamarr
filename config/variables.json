@@ -2359,6 +2359,10 @@
       "available_suffixes": [
         "last"
       ],
+      "available_suffixes_by_context": {
+        "team": ["last"],
+        "event": ["base"]
+      },
       "examples_by_sport": {
         "NBA": "in overtime",
         "NFL": "in overtime",

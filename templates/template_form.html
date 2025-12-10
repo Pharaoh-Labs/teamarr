@@ -1489,8 +1489,9 @@ function updatePreviews() {
 function replaceVariables(template) {
     let result = template;
     for (const [key, value] of Object.entries(sampleData)) {
-        // Get available suffixes for this variable
-        const suffixes = window.variableSuffixMap?.[key] || ['base', 'next', 'last'];
+        // Get available suffixes - check context-specific first, then fall back to default
+        const contextSuffixes = window.variableSuffixByContextMap?.[key]?.[currentTemplateType];
+        const suffixes = contextSuffixes || window.variableSuffixMap?.[key] || ['base', 'next', 'last'];
 
         // Replace base variable {var} if base suffix is available
         if (suffixes.includes('base')) {
@@ -1524,6 +1525,7 @@ async function loadVariablesFromAPI() {
         const categoryMap = {};
         const sampleMap = {};  // Now stores { varName: { NBA: 'val', NFL: 'val', ... } }
         const suffixMap = {}; // Store suffix availability for each variable
+        const suffixByContextMap = {}; // Store context-specific suffix overrides
         const contextMap = {}; // Store context (team/event) for each variable
 
         data.variables.forEach(variable => {
@@ -1553,6 +1555,11 @@ async function loadVariablesFromAPI() {
 
             suffixMap[variable.name] = variable.available_suffixes || ['base', 'next', 'last'];
 
+            // Store context-specific suffixes if available
+            if (variable.available_suffixes_by_context) {
+                suffixByContextMap[variable.name] = variable.available_suffixes_by_context;
+            }
+
             // Store context for filtering (default to both if not specified)
             contextMap[variable.name] = variable.context || ['team', 'event'];
         });
@@ -1565,6 +1572,7 @@ async function loadVariablesFromAPI() {
         TEMPLATE_VARIABLES = categoryMap;
         sampleDataFromAPI = sampleMap;
         window.variableSuffixMap = suffixMap; // Make globally available
+        window.variableSuffixByContextMap = suffixByContextMap; // Context-specific suffixes
         variableContextMap = contextMap; // Store for filtering
 
         // Initialize sampleData for current sport
