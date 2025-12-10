@@ -2846,6 +2846,11 @@ def update_event_epg_group(group_id: int, data: Dict[str, Any]) -> bool:
         if 'assigned_sport' in data:
             data['assigned_sport'] = data['assigned_sport'].lower()
 
+        # When switching to AUTO mode, clear any existing channel_start
+        # (AUTO mode calculates channel_start dynamically)
+        if data.get('channel_assignment_mode') == 'auto':
+            data['channel_start'] = None
+
         # Convert channel_profile_ids list to JSON string
         if 'channel_profile_ids' in data:
             if isinstance(data['channel_profile_ids'], list):
@@ -2984,6 +2989,24 @@ def update_event_epg_group_last_refresh(group_id: int) -> bool:
         "UPDATE event_epg_groups SET last_refresh = CURRENT_TIMESTAMP WHERE id = ?",
         (group_id,)
     ) > 0
+
+
+def clear_auto_group_channel_starts() -> int:
+    """
+    Clear channel_start for all AUTO groups.
+
+    AUTO groups calculate channel_start dynamically at EPG generation time,
+    so any stored value should be cleared to ensure correct behavior.
+
+    Returns:
+        Number of groups updated
+    """
+    return db_execute(
+        """UPDATE event_epg_groups
+           SET channel_start = NULL
+           WHERE channel_assignment_mode = 'auto'
+             AND channel_start IS NOT NULL"""
+    )
 
 
 # =============================================================================
@@ -3498,9 +3521,15 @@ def _calculate_auto_channel_start(cursor, group_id: int, sort_order: int) -> Opt
     """
     Calculate effective channel_start for an AUTO group based on sort_order.
 
-    AUTO groups are allocated channels sequentially within the global range,
-    with each group's starting position determined by the cumulative
-    total_stream_count of preceding AUTO groups.
+    AUTO groups are allocated channel blocks in 10-channel increments (xxx1-xxx0).
+    Each group starts at a clean xx01 boundary based on how many blocks preceding
+    groups need (rounded up from their total_stream_count to next 10).
+
+    Example with range_start=9001:
+    - Group 1 (16 streams): 9001 (needs 2 blocks of 10)
+    - Group 2 (20 streams): 9021 (needs 2 blocks of 10)
+    - Group 3 (250 streams): 9041 (needs 25 blocks of 10)
+    - Group 4 (31 streams): 9291 (needs 4 blocks of 10)
 
     Args:
         cursor: Database cursor
@@ -3533,17 +3562,21 @@ def _calculate_auto_channel_start(cursor, group_id: int, sort_order: int) -> Opt
         """
     ).fetchall()
 
-    # Calculate cumulative offset for this group
-    cumulative_offset = 0
+    # Calculate cumulative blocks for this group
+    # Each group reserves ceil(stream_count / 10) blocks of 10 channels
+    cumulative_blocks = 0
     for g in auto_groups:
         if g['id'] == group_id:
             break
-        # Reserve space for this preceding group's streams
+        # Reserve blocks for this preceding group (minimum 1 block if any streams)
         stream_count = g['total_stream_count'] or 0
         if stream_count > 0:
-            cumulative_offset += stream_count
+            # Round up to next 10: ceil(stream_count / 10)
+            blocks_needed = (stream_count + 9) // 10
+            cumulative_blocks += blocks_needed
 
-    effective_start = range_start + cumulative_offset
+    # Each block is 10 channels
+    effective_start = range_start + (cumulative_blocks * 10)
 
     # Check if we exceed the range
     if range_end and effective_start > range_end:

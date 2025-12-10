@@ -1336,6 +1336,13 @@ def generate_all_epg(progress_callback=None, settings=None, save_history=True, t
         # ============================================
         report_progress('progress', 'Processing event groups...', 50)
 
+        # Clear any stale channel_start values from AUTO groups
+        # (AUTO mode calculates channel_start dynamically)
+        from database import clear_auto_group_channel_starts
+        cleared_count = clear_auto_group_channel_starts()
+        if cleared_count > 0:
+            app.logger.debug(f"Cleared channel_start for {cleared_count} AUTO group(s)")
+
         event_groups = get_all_event_epg_groups(enabled_only=True)
         # Parent groups need templates, child groups inherit from parent (template can be NULL)
         event_groups_with_templates = [
