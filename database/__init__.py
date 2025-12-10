@@ -378,7 +378,7 @@ def get_gracenote_category(league_code: str, league_name: str = '', sport: str =
 #   23: Stream fingerprint cache for EPG generation optimization
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 27
+CURRENT_SCHEMA_VERSION = 28
 
 
 def get_schema_version(conn) -> int:
@@ -1926,6 +1926,24 @@ def run_migrations(conn):
                 print(f"    🔧 Repaired missing column: {table}.{col_name}")
             except Exception as e:
                 print(f"    ⚠️ Could not repair column {table}.{col_name}: {e}")
+
+    # =========================================================================
+    # 28. Add team_abbrev column to soccer_team_leagues for abbreviation matching
+    # =========================================================================
+    if current_version < 28:
+        print("    🔄 Running migration 28: Add team_abbrev to soccer_team_leagues")
+        try:
+            add_columns_if_missing("soccer_team_leagues", [
+                ("team_abbrev", "TEXT"),
+            ])
+
+            # Note: Existing rows will have NULL abbreviation until next cache refresh.
+            # The soccer cache refresh will populate this column.
+            print("    ℹ️  Run a soccer cache refresh to populate team abbreviations")
+
+            migrations_run += 1
+        except Exception as e:
+            print(f"    ⚠️ Migration 28 failed: {e}")
 
     # =========================================================================
     # UPDATE SCHEMA VERSION

@@ -663,6 +663,7 @@ class SoccerMultiLeague:
                             if team_id not in team_to_leagues:
                                 team_to_leagues[team_id] = {
                                     'name': team['name'],
+                                    'abbrev': team.get('abbrev', ''),
                                     'type': team['type'],
                                     'leagues': []
                                 }
@@ -717,6 +718,7 @@ class SoccerMultiLeague:
                 teams.append({
                     'id': team_data['id'],
                     'name': name,
+                    'abbrev': team_data.get('abbreviation', ''),
                     'type': team_type,
                 })
 
@@ -818,12 +820,13 @@ class SoccerMultiLeague:
                 for league_slug in unique_leagues:
                     cursor.execute("""
                         INSERT INTO soccer_team_leagues
-                        (espn_team_id, league_slug, team_name, team_type, last_seen)
-                        VALUES (?, ?, ?, ?, ?)
+                        (espn_team_id, league_slug, team_name, team_abbrev, team_type, last_seen)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     """, (
                         team_id,
                         league_slug,
                         info['name'],
+                        info.get('abbrev', ''),
                         info['type'],
                         now
                     ))

@@ -260,19 +260,30 @@ LEAGUE_INDICATORS = {
     r'\bWomen\'?s College Volleyball\b': 'ncaavb-w',
 
     # Soccer - Major Leagues
-    r'\bEPL\b': 'epl',
-    r'\bPremier League\b': 'epl',
-    r'\bEnglish Premier League\b': 'epl',
-    r'\bLa Liga\b': 'laliga',
-    r'\bLaLiga\b': 'laliga',
-    r'\bBundesliga\b': 'bundesliga',
-    r'\bSerie A\b': 'seriea',
-    r'\bLigue 1\b': 'ligue1',
-    r'\bMLS\b': 'mls',
-    r'\bMajor League Soccer\b': 'mls',
-    r'\bNWSL\b': 'nwsl',
-    r'\bEFL\b': 'efl',
-    r'\bEFL Championship\b': 'efl',
+    r'\bEPL\b': 'eng.1',
+    r'\bPremier League\b': 'eng.1',
+    r'\bEnglish Premier League\b': 'eng.1',
+    r'\bLa Liga\b': 'esp.1',
+    r'\bLaLiga\b': 'esp.1',
+    r'\bBundesliga\b': 'ger.1',
+    r'\bSerie A\b': 'ita.1',
+    r'\bLigue 1\b': 'fra.1',
+    r'\bMLS\b': 'usa.1',
+    r'\bMajor League Soccer\b': 'usa.1',
+    r'\bNWSL\b': 'usa.nwsl',
+    r'\bEFL\b': 'eng.2',
+    r'\bEFL Championship\b': 'eng.2',
+
+    # Soccer - UEFA Competitions
+    r'\bUEFA Champions League\b': 'uefa.champions',
+    r'\bChampions League\b': 'uefa.champions',
+    r'\bUCL\b': 'uefa.champions',
+    r'\bUEFA Europa League\b': 'uefa.europa',
+    r'\bEuropa League\b': 'uefa.europa',
+    r'\bUEL\b': 'uefa.europa',
+    r'\bUEFA Conference League\b': 'uefa.europa.conf',
+    r'\bConference League\b': 'uefa.europa.conf',
+    r'\bUECL\b': 'uefa.europa.conf',
 }
 
 # Sport indicator patterns - maps to list of leagues for that sport
@@ -746,13 +757,28 @@ class LeagueDetector:
                 Find leagues for a team with tiered fallback search.
 
                 Tiers:
+                0. Exact abbreviation match (PSG, ATH, BAR)
                 1. Direct match with abbreviation variants (st/st., mt/mt.)
                 2. Accent-normalized match (Atletico -> Atlético)
                 3. Number-stripped match (SV Elversberg -> SV 07 Elversberg)
                 4. Article-stripped match (Atlético de Madrid -> Atlético Madrid)
                 """
-                # Tier 1: Direct match with abbreviation variants (st/st., mt/mt.)
                 leagues = set()
+                team_lower = team_name.lower().strip()
+
+                # Tier 0a: Exact abbreviation match (e.g., PSG, ATH, BAR)
+                cursor.execute("""
+                    SELECT DISTINCT league_slug FROM soccer_team_leagues
+                    WHERE LOWER(team_abbrev) = ?
+                """, (team_lower,))
+                for row in cursor.fetchall():
+                    leagues.add(row[0])
+
+                if leagues:
+                    logger.debug(f"Found leagues via abbreviation match: '{team_name}'")
+                    return leagues
+
+                # Tier 1: Direct match with abbreviation variants (st/st., mt/mt.)
                 for variant in get_abbreviation_variants(team_name):
                     # Note: INSTR(search, db_name) checks if db_name is a substring of search.
                     # Only allow this for db names >= 6 chars to avoid "Sport", "Port" false positives
@@ -927,6 +953,7 @@ class LeagueDetector:
                 Find a team in a league with tiered fallback matching.
 
                 Tiers:
+                0. Exact abbreviation match (PSG -> Paris Saint-Germain)
                 1. Direct match with abbreviation variants (st/st., mt/mt.)
                 2. Accent-normalized match (Atletico -> Atlético)
                 3. Number-stripped match (SV Elversberg -> SV 07 Elversberg)
@@ -937,6 +964,18 @@ class LeagueDetector:
                 team_accent_stripped = strip_accents(team_lower)
                 team_stripped = normalize_team_name(team_lower, strip_articles=False)
                 team_normalized = normalize_team_name(team_lower, strip_articles=True)
+
+                # Tier 0: Exact abbreviation match (e.g., PSG, ATH, BAR)
+                # This handles common stream abbreviations that don't substring-match team names
+                cursor.execute("""
+                    SELECT espn_team_id, team_name FROM soccer_team_leagues
+                    WHERE league_slug = ? AND LOWER(team_abbrev) = ?
+                    LIMIT 1
+                """, (league, team_lower))
+                row = cursor.fetchone()
+                if row:
+                    logger.debug(f"Team '{team_name}' matched via abbreviation: {row[1]}")
+                    return row
 
                 # Tier 1: Direct match with abbreviation variants (st/st., mt/mt.)
                 # IMPORTANT: INSTR checks require LENGTH >= 6 to avoid "Sport", "Port" false positives
@@ -1293,19 +1332,10 @@ class LeagueDetector:
         if not detected_league:
             return DetectionResult(detected=False)
 
-        # Validate teams exist in this league
-        if team1 and team2:
-            candidates = self.find_candidate_leagues(team1, team2)
-            if detected_league not in candidates:
-                logger.debug(
-                    f"Tier 1: League indicator {detected_league} found but teams "
-                    f"'{team1}' vs '{team2}' not found in that league"
-                )
-                return DetectionResult(
-                    detected=False,
-                    method=f"League indicator {detected_league} found but teams not in league",
-                    candidates_checked=[detected_league]
-                )
+        # NOTE: We no longer validate teams exist in league cache before searching schedules.
+        # The league indicator is trusted - if teams don't match, the schedule search will fail.
+        # This avoids false negatives from abbreviations (PSG, ATH) not being in the soccer cache.
+        # The schedule search uses team_matcher which handles abbreviations properly.
 
         sport = get_sport_for_league(detected_league)
 
