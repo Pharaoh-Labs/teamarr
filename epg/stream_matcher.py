@@ -117,7 +117,7 @@ def match_stream_single_league(
             if cached:
                 event_id, cached_league, cached_data = cached
                 # Import here to avoid circular imports
-                from epg.fingerprint_cache import refresh_cached_event
+                from epg.stream_match_cache import refresh_cached_event
                 from database import get_connection
 
                 refreshed = refresh_cached_event(
