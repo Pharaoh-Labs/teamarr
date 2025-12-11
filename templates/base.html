@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Teamarr - Dynamic EPG Generator for Sports Channels{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ version }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}?v={{ version }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}?v={{ version }}">
@@ -17,7 +17,7 @@
         <div class="container nav-container">
             <div class="nav-brand">
                 <a href="{{ url_for('index') }}" class="brand-logo-link">
-                    <img src="{{ url_for('static', filename='logo.svg') }}" alt="Teamarr" class="brand-logo">
+                    <img src="{{ url_for('static', filename='logo.svg') }}?v={{ version }}" alt="Teamarr" class="brand-logo">
                 </a>
                 <div class="brand-text">
                     <a href="{{ url_for('index') }}" class="brand-link">
@@ -64,7 +64,7 @@
 
     <footer>
         <div class="container footer-content">
-            <img src="{{ url_for('static', filename='logo.svg') }}" alt="Teamarr" class="footer-logo">
+            <img src="{{ url_for('static', filename='logo.svg') }}?v={{ version }}" alt="Teamarr" class="footer-logo">
             <p>Teamarr - Dynamic EPG Generator for Sports Channels | v{{ version }} | Port 9195</p>
         </div>
     </footer>
