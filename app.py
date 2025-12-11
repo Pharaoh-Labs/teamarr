@@ -1876,6 +1876,7 @@ def scheduler_loop():
     """Background thread that runs the scheduler using cron expressions"""
     global scheduler_running, last_run_time
     from datetime import timezone
+    from zoneinfo import ZoneInfo
     from croniter import croniter
 
     app.logger.info("🚀 EPG Auto-Generation Scheduler started")
@@ -1893,17 +1894,25 @@ def scheduler_loop():
             # Get cron expression (default: every hour at minute 0)
             cron_expression = settings.get('cron_expression', '0 * * * *')
 
-            # Use UTC for all comparisons to avoid timezone issues
-            now = datetime.now(timezone.utc)
+            # Use user's configured timezone for cron evaluation
+            user_tz_name = settings.get('default_timezone', 'UTC')
+            try:
+                user_tz = ZoneInfo(user_tz_name)
+            except Exception:
+                user_tz = ZoneInfo('UTC')
+
+            now = datetime.now(user_tz)
 
             # Get last run time from database (persists across restarts)
             db_last_run = get_last_epg_generation_time()
 
             # Use database time if available, otherwise use in-memory time
             effective_last_run = db_last_run or last_run_time
-            # Ensure in-memory time is also UTC-aware
-            if effective_last_run and effective_last_run.tzinfo is None:
-                effective_last_run = effective_last_run.replace(tzinfo=timezone.utc)
+            # Convert to user timezone for comparison
+            if effective_last_run:
+                if effective_last_run.tzinfo is None:
+                    effective_last_run = effective_last_run.replace(tzinfo=timezone.utc)
+                effective_last_run = effective_last_run.astimezone(user_tz)
 
             # Check if it's time to run based on cron expression
             should_run = False
@@ -1916,12 +1925,12 @@ def scheduler_loop():
                 cron = croniter(cron_expression, base_time)
                 next_run = cron.get_next(datetime)
 
-                # Make next_run timezone-aware if it isn't
+                # Make next_run timezone-aware in user timezone if it isn't
                 if next_run.tzinfo is None:
-                    next_run = next_run.replace(tzinfo=timezone.utc)
+                    next_run = next_run.replace(tzinfo=user_tz)
 
                 if now >= next_run:
-                    app.logger.info(f"⏰ Cron trigger: '{cron_expression}' - scheduled time {next_run.strftime('%H:%M')} reached")
+                    app.logger.info(f"⏰ Cron trigger: '{cron_expression}' - scheduled time {next_run.strftime('%H:%M %Z')} reached")
                     should_run = True
 
             except Exception as e:
@@ -1934,7 +1943,7 @@ def scheduler_loop():
                 run_scheduled_generation()
                 last_run_time = now
 
-            # Check cache refresh once per day at midnight UTC
+            # Check cache refresh once per day at midnight in user timezone
             # This is separate from EPG generation frequency
             if now.hour == 0 and now.minute < 1:  # First minute of the day
                 try:
