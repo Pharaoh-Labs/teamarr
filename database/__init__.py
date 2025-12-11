@@ -378,7 +378,7 @@ def get_gracenote_category(league_code: str, league_name: str = '', sport: str =
 #   23: Stream fingerprint cache for EPG generation optimization
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 30
+CURRENT_SCHEMA_VERSION = 31
 
 
 def get_schema_version(conn) -> int:
@@ -2011,6 +2011,24 @@ def run_migrations(conn):
             migrations_run += 1
         except Exception as e:
             print(f"    ⚠️ Migration 30 failed: {e}")
+
+    # =========================================================================
+    # 31. IDLE OFFSEASON SUPPORT
+    # =========================================================================
+    if current_version < 31:
+        print("    🔄 Running migration 31: Add idle offseason support for templates")
+        try:
+            # Add offseason-specific idle fields to templates
+            # When no games exist in the 30-day lookahead, use these instead of regular idle
+            add_columns_if_missing("templates", [
+                ("idle_offseason_enabled", "BOOLEAN DEFAULT 0"),
+                ("idle_description_offseason", "TEXT DEFAULT 'No upcoming {team_name} games scheduled.'"),
+            ])
+
+            conn.commit()
+            migrations_run += 1
+        except Exception as e:
+            print(f"    ⚠️ Migration 31 failed: {e}")
 
     # =========================================================================
     # UPDATE SCHEMA VERSION

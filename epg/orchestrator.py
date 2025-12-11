@@ -645,12 +645,12 @@ class EPGOrchestrator:
             self._increment_api_calls()
 
             if not schedule_data:
-                logger.warning(f"No schedule data for team {team.get('team_name')}")
-                return []
-
-            # Parse events using epg_start_datetime as the cutoff (single source of truth)
-            logger.debug(f"Parsing events with cutoff_past_datetime={epg_start_datetime.strftime('%Y-%m-%d %H:%M %Z')}")
-            schedule_events = self.espn.parse_schedule_events(schedule_data, days_ahead, cutoff_past_datetime=epg_start_datetime)
+                logger.warning(f"No schedule data for team {team.get('team_name')} - will generate idle filler only")
+                schedule_events = []
+            else:
+                # Parse events using epg_start_datetime as the cutoff (single source of truth)
+                logger.debug(f"Parsing events with cutoff_past_datetime={epg_start_datetime.strftime('%Y-%m-%d %H:%M %Z')}")
+                schedule_events = self.espn.parse_schedule_events(schedule_data, days_ahead, cutoff_past_datetime=epg_start_datetime)
 
             # Parse extended events (for context only - look 30 days back AND 30 days forward)
             epg_tz = ZoneInfo(epg_timezone)
@@ -1712,15 +1712,28 @@ class EPGOrchestrator:
 
         # Description template - check for conditional mode (postgame/idle only)
         desc_template = team.get(f'{filler_type}_description', '')
-        if filler_type in ['postgame', 'idle'] and team.get(f'{filler_type}_conditional_enabled'):
-            # Check if last game is final (consistent with template_engine logic)
+
+        if filler_type == 'idle':
+            # Priority 1: Offseason check (no next game in 30-day lookahead)
+            # game_event is the "next game" for idle filler - if None, no upcoming games
+            if team.get('idle_offseason_enabled') and game_event is None:
+                desc_template = team.get('idle_description_offseason', desc_template)
+            # Priority 2: Last game final/not-final check
+            elif team.get('idle_conditional_enabled'):
+                last_game_status = (last_game_event or {}).get('status', {})
+                is_last_game_final = last_game_status.get('name', '') in ['STATUS_FINAL', 'Final']
+                if is_last_game_final:
+                    desc_template = team.get('idle_description_final', desc_template)
+                else:
+                    desc_template = team.get('idle_description_not_final', desc_template)
+        elif filler_type == 'postgame' and team.get('postgame_conditional_enabled'):
+            # Postgame: only check last game final/not-final
             last_game_status = (last_game_event or {}).get('status', {})
             is_last_game_final = last_game_status.get('name', '') in ['STATUS_FINAL', 'Final']
-
             if is_last_game_final:
-                desc_template = team.get(f'{filler_type}_description_final', desc_template)
+                desc_template = team.get('postgame_description_final', desc_template)
             else:
-                desc_template = team.get(f'{filler_type}_description_not_final', desc_template)
+                desc_template = team.get('postgame_description_not_final', desc_template)
 
         # Get program datetime for relative next/last game finding
         program_datetime = start_dt

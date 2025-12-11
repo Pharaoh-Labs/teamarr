@@ -1065,6 +1065,27 @@
                         </div>
                         <div class="form-group" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);">
                             <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                <input type="checkbox" name="idle_offseason_enabled" id="idle_offseason_enabled"
+                                       {% if template and template.idle_offseason_enabled %}checked{% endif %}
+                                       onchange="toggleIdleOffseason()">
+                                <span>Use conditional description when no games in 30-day lookahead</span>
+                            </label>
+                            <div id="idle-offseason-fields" style="{% if not template or not template.idle_offseason_enabled %}display: none;{% endif %}">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="idle_description_offseason" style="font-size: 0.85rem; color: var(--muted);">📅 No upcoming games:</label>
+                                    <input type="text" name="idle_description_offseason" id="idle_description_offseason"
+                                           value="{{ template.idle_description_offseason if template and template.idle_description_offseason else 'No upcoming {team_name} games scheduled.' }}"
+                                           class="template-field" placeholder="No upcoming {team_name} games scheduled."
+                                           style="border: 1px solid var(--border); background: var(--bg-secondary);">
+                                    <div class="inline-preview">
+                                        <small>Preview:</small>
+                                        <span id="preview-idle-description-offseason"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                                 <input type="checkbox" name="idle_conditional_enabled" id="idle_conditional_enabled"
                                        {% if not template or template.idle_conditional_enabled %}checked{% endif %}
                                        onchange="toggleIdleConditional()">
@@ -1288,6 +1309,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Initialize conditional toggle states on page load
     togglePostgameConditional();
+    toggleIdleOffseason();
     toggleIdleConditional();
 
     // Apply template type visibility (hide conditions tab and idle section for event templates)
@@ -1357,16 +1379,36 @@ function togglePostgameConditional() {
     updatePreviews();
 }
 
-function toggleIdleConditional() {
-    const checkbox = document.getElementById('idle_conditional_enabled');
-    const fields = document.getElementById('idle-conditional-fields');
-    const mainDescGroup = document.getElementById('idle-description-group');
-    const mainDescInput = document.getElementById('idle_description');
+function toggleIdleOffseason() {
+    const checkbox = document.getElementById('idle_offseason_enabled');
+    const fields = document.getElementById('idle-offseason-fields');
 
     fields.style.display = checkbox.checked ? 'block' : 'none';
 
-    // Grey out and disable main description when conditional is enabled
-    if (checkbox.checked) {
+    // Update main description state based on both toggles
+    updateIdleDescriptionState();
+    updatePreviews();
+}
+
+function toggleIdleConditional() {
+    const checkbox = document.getElementById('idle_conditional_enabled');
+    const fields = document.getElementById('idle-conditional-fields');
+
+    fields.style.display = checkbox.checked ? 'block' : 'none';
+
+    // Update main description state based on both toggles
+    updateIdleDescriptionState();
+    updatePreviews();
+}
+
+function updateIdleDescriptionState() {
+    const offseasonEnabled = document.getElementById('idle_offseason_enabled')?.checked;
+    const conditionalEnabled = document.getElementById('idle_conditional_enabled')?.checked;
+    const mainDescGroup = document.getElementById('idle-description-group');
+    const mainDescInput = document.getElementById('idle_description');
+
+    // Grey out and disable main description when either conditional is enabled
+    if (offseasonEnabled || conditionalEnabled) {
         mainDescGroup.style.opacity = '0.5';
         mainDescInput.disabled = true;
         mainDescInput.style.backgroundColor = 'var(--bg-tertiary)';
@@ -1375,8 +1417,6 @@ function toggleIdleConditional() {
         mainDescInput.disabled = false;
         mainDescInput.style.backgroundColor = '';
     }
-
-    updatePreviews();
 }
 
 // ============================================================================
@@ -1448,6 +1488,11 @@ function updatePreviews() {
     if (previewPostgameDescFinal) previewPostgameDescFinal.textContent = replaceVariables(postgameDescFinal);
     const previewPostgameDescNotFinal = document.getElementById('preview-postgame-description-not-final');
     if (previewPostgameDescNotFinal) previewPostgameDescNotFinal.textContent = replaceVariables(postgameDescNotFinal);
+
+    // Update inline previews for idle offseason description
+    const idleDescOffseason = document.getElementById('idle_description_offseason')?.value || '';
+    const previewIdleDescOffseason = document.getElementById('preview-idle-description-offseason');
+    if (previewIdleDescOffseason) previewIdleDescOffseason.textContent = replaceVariables(idleDescOffseason);
 
     // Update inline previews for idle conditional descriptions
     const idleDescFinal = document.getElementById('idle_description_final')?.value || '';
@@ -1641,6 +1686,7 @@ const TEAM_TEMPLATE_DEFAULTS = {
     'idle_title': 'No {team_name} Game Today',
     'idle_subtitle': 'Next game: {game_date.next} at {game_time.next} {vs_at.next} the {opponent.next}',
     'idle_description': 'Next game: {game_date.next} at {game_time.next} vs {opponent.next}',
+    'idle_description_offseason': 'No upcoming {team_name} games scheduled.',
     'idle_description_final': 'The {team_name} {result_text.last} the {opponent.last} on {game_date.last} {final_score.last} {overtime_text.last}',
     'idle_description_not_final': 'The {team_name} last played against the {opponent.last} on {game_date.last}.'
 };
