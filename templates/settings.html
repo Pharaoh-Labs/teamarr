@@ -883,24 +883,10 @@ select.form-control {
 }
 </style>
 
+<!-- Cron expression to human-readable descriptions -->
+<script src="https://cdn.jsdelivr.net/npm/cronstrue@2.50.0/dist/cronstrue.min.js"></script>
+
 <script>
-// Cron expression descriptions
-const CRON_DESCRIPTIONS = {
-    '0 * * * *': 'Every hour at minute 0',
-    '0 */2 * * *': 'Every 2 hours at minute 0',
-    '0 */4 * * *': 'Every 4 hours at minute 0',
-    '0 */6 * * *': 'Every 6 hours at minute 0',
-    '0 */12 * * *': 'Every 12 hours at minute 0',
-    '0 0 * * *': 'Daily at midnight (12 AM)',
-    '0 3 * * *': 'Daily at 3 AM',
-    '0 6 * * *': 'Daily at 6 AM',
-    '0 6,18 * * *': 'Twice daily at 6 AM and 6 PM',
-    '0 9 * * *': 'Daily at 9 AM',
-    '0 12 * * *': 'Daily at noon (12 PM)',
-    '0 15 * * *': 'Daily at 3 PM',
-    '0 18 * * *': 'Daily at 6 PM',
-    '0 21 * * *': 'Daily at 9 PM',
-};
 
 function setCronPreset(cron) {
     document.getElementById('cron_expression').value = cron;
@@ -913,14 +899,6 @@ function validateAndDescribeCron() {
     const description = document.getElementById('cron_description');
     const value = input.value.trim();
 
-    // Check for known descriptions first
-    if (CRON_DESCRIPTIONS[value]) {
-        description.textContent = CRON_DESCRIPTIONS[value];
-        description.style.color = 'var(--text-secondary)';
-        input.style.borderColor = '';
-        return true;
-    }
-
     // Validate cron format (5 fields)
     const parts = value.split(/\s+/);
     if (parts.length !== 5) {
@@ -930,90 +908,18 @@ function validateAndDescribeCron() {
         return false;
     }
 
-    // Basic validation of each field
-    const isValid = validateCronField(parts[0], 0, 59) &&  // minute
-                    validateCronField(parts[1], 0, 23) &&  // hour
-                    validateCronField(parts[2], 1, 31) &&  // day
-                    validateCronField(parts[3], 1, 12) &&  // month
-                    validateCronField(parts[4], 0, 6);     // weekday
-
-    if (isValid) {
-        description.textContent = describeCron(parts);
+    // Use cronstrue library for description (also validates)
+    try {
+        description.textContent = cronstrue.toString(value, { use24HourTimeFormat: false });
         description.style.color = 'var(--text-secondary)';
         input.style.borderColor = '';
-    } else {
+        return true;
+    } catch (e) {
         description.textContent = 'Invalid cron expression';
         description.style.color = 'var(--danger)';
         input.style.borderColor = 'var(--danger)';
+        return false;
     }
-    return isValid;
-}
-
-function validateCronField(field, min, max) {
-    if (field === '*') return true;
-    if (field.startsWith('*/')) {
-        const step = parseInt(field.slice(2), 10);
-        return !isNaN(step) && step > 0 && step <= max;
-    }
-    // Handle comma-separated values
-    const values = field.split(',');
-    for (const v of values) {
-        // Handle ranges like 1-5
-        if (v.includes('-')) {
-            const [start, end] = v.split('-').map(Number);
-            if (isNaN(start) || isNaN(end) || start < min || end > max || start > end) {
-                return false;
-            }
-        } else {
-            const num = parseInt(v, 10);
-            if (isNaN(num) || num < min || num > max) return false;
-        }
-    }
-    return true;
-}
-
-function describeCron(parts) {
-    const [minute, hour, day, month, weekday] = parts;
-    let desc = '';
-
-    // Describe hour
-    if (hour === '*') {
-        desc = 'Every hour';
-    } else if (hour.startsWith('*/')) {
-        desc = `Every ${hour.slice(2)} hours`;
-    } else if (hour.includes(',')) {
-        const hours = hour.split(',').map(h => formatHour(parseInt(h, 10))).join(' and ');
-        desc = `Daily at ${hours}`;
-    } else {
-        desc = `Daily at ${formatHour(parseInt(hour, 10))}`;
-    }
-
-    // Add minute
-    if (minute !== '0' && minute !== '*') {
-        if (minute.startsWith('*/')) {
-            desc += `, every ${minute.slice(2)} minutes`;
-        } else {
-            desc += ` at minute ${minute}`;
-        }
-    } else if (minute === '0' && hour !== '*') {
-        // Already implied in "Daily at X"
-    } else if (minute === '0') {
-        desc += ' at minute 0';
-    }
-
-    // Day/month/weekday constraints
-    if (day !== '*' || month !== '*' || weekday !== '*') {
-        desc += ' (custom schedule)';
-    }
-
-    return desc;
-}
-
-function formatHour(h) {
-    if (h === 0) return '12 AM';
-    if (h === 12) return '12 PM';
-    if (h < 12) return `${h} AM`;
-    return `${h - 12} PM`;
 }
 
 function updateCronFromHelper() {
