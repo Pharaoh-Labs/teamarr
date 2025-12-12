@@ -378,7 +378,7 @@ def get_gracenote_category(league_code: str, league_name: str = '', sport: str =
 #   23: Stream fingerprint cache for EPG generation optimization
 # =============================================================================
 
-CURRENT_SCHEMA_VERSION = 33
+CURRENT_SCHEMA_VERSION = 34
 
 
 def get_schema_version(conn) -> int:
@@ -2061,6 +2061,21 @@ def run_migrations(conn):
             migrations_run += 1
         except Exception as e:
             print(f"    ⚠️ Migration 33 failed: {e}")
+
+    # =========================================================================
+    # 34. SWEDISH ALLSVENSKAN LEAGUE
+    # =========================================================================
+    if current_version < 34:
+        print("    🔄 Running migration 34: Add Swedish Allsvenskan (swe.1) league")
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO league_config (league_code, league_name, sport, api_path, default_category, record_format, logo_url)
+                VALUES ('swe.1', 'Swedish Allsvenskan', 'soccer', 'soccer/swe.1', 'Soccer', 'wins-draws-losses', 'https://a.espncdn.com/i/leaguelogos/soccer/500/16.png')
+            """)
+            conn.commit()
+            migrations_run += 1
+        except Exception as e:
+            print(f"    ⚠️ Migration 34 failed: {e}")
 
     # =========================================================================
     # UPDATE SCHEMA VERSION

@@ -526,6 +526,7 @@ INSERT OR IGNORE INTO league_config (league_code, league_name, sport, api_path, 
     ('ger.1', 'Bundesliga', 'soccer', 'soccer/ger.1', 'Soccer', 'wins-draws-losses', 'https://a.espncdn.com/i/leaguelogos/soccer/500/10.png'),
     ('ita.1', 'Serie A', 'soccer', 'soccer/ita.1', 'Soccer', 'wins-draws-losses', 'https://a.espncdn.com/i/leaguelogos/soccer/500/12.png'),
     ('fra.1', 'Ligue 1', 'soccer', 'soccer/fra.1', 'Soccer', 'wins-draws-losses', 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png'),
+    ('swe.1', 'Swedish Allsvenskan', 'soccer', 'soccer/swe.1', 'Soccer', 'wins-draws-losses', 'https://a.espncdn.com/i/leaguelogos/soccer/500/16.png'),
     ('uefa.champions', 'UEFA Champions League', 'soccer', 'soccer/uefa.champions', 'Soccer', 'wins-draws-losses', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2.png'),
     -- NCAA Soccer (league_code uses ESPN slug)
     ('usa.ncaa.m.1', 'NCAA Men''s Soccer', 'soccer', 'soccer/usa.ncaa.m.1', 'Soccer', 'wins-losses-ties', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/soccer.png'),
