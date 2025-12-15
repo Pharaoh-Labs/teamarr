@@ -151,9 +151,7 @@ class FillerGenerator:
 
         # Day boundaries
         day_start = datetime.combine(date, datetime.min.time()).replace(tzinfo=tz)
-        day_end = datetime.combine(
-            date + timedelta(days=1), datetime.min.time()
-        ).replace(tzinfo=tz)
+        day_end = datetime.combine(date + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz)
 
         # On first day, start from epg_start instead of midnight
         if date == epg_start.date():
@@ -167,9 +165,7 @@ class FillerGenerator:
         day_events = [e for e in events if event_date(e) == date]
 
         # Get previous day's last event (for midnight crossover)
-        prev_day_events = [
-            e for e in events if event_date(e) == date - timedelta(days=1)
-        ]
+        prev_day_events = [e for e in events if event_date(e) == date - timedelta(days=1)]
         prev_day_last_event = prev_day_events[-1] if prev_day_events else None
 
         # Get next event after this day (for .next context)

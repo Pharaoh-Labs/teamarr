@@ -29,9 +29,7 @@ def extract_team_rank(ctx: TemplateContext, game_ctx: GameContext | None) -> str
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's ranking with # prefix (e.g., '#5')",
 )
-def extract_team_rank_display(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_team_rank_display(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats and ctx.team_stats.rank:
         return f"#{ctx.team_stats.rank}"
     return ""
@@ -55,9 +53,7 @@ def extract_opponent_rank(ctx: TemplateContext, game_ctx: GameContext | None) ->
     suffix_rules=SuffixRules.ALL,
     description="Opponent's ranking with # prefix",
 )
-def extract_opponent_rank_display(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_rank_display(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.rank:
         return f"#{game_ctx.opponent_stats.rank}"
     return ""
@@ -81,9 +77,7 @@ def extract_is_ranked(ctx: TemplateContext, game_ctx: GameContext | None) -> str
     suffix_rules=SuffixRules.ALL,
     description="'true' if opponent is ranked, empty otherwise",
 )
-def extract_opponent_is_ranked(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_is_ranked(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.rank:
         return "true"
     return ""
@@ -95,15 +89,9 @@ def extract_opponent_is_ranked(
     suffix_rules=SuffixRules.ALL,
     description="'true' if both teams are ranked",
 )
-def extract_is_ranked_matchup(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_is_ranked_matchup(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     team_ranked = ctx.team_stats and ctx.team_stats.rank
-    opponent_ranked = (
-        game_ctx
-        and game_ctx.opponent_stats
-        and game_ctx.opponent_stats.rank
-    )
+    opponent_ranked = game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.rank
     if team_ranked and opponent_ranked:
         return "true"
     return ""

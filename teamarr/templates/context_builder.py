@@ -169,9 +169,7 @@ class ContextBuilder:
         cache_key = (team_id, league)
         if cache_key not in self._stats_cache:
             try:
-                self._stats_cache[cache_key] = self._service.get_team_stats(
-                    team_id, league
-                )
+                self._stats_cache[cache_key] = self._service.get_team_stats(team_id, league)
             except Exception as e:
                 logger.warning(f"Failed to fetch stats for team {team_id}: {e}")
                 self._stats_cache[cache_key] = None

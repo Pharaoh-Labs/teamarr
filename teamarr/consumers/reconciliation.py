@@ -192,8 +192,10 @@ class ChannelReconciler:
                 result.issues_found.extend(drift_issues)
 
                 # Step 5: Apply fixes if auto_fix is enabled
-                should_fix = auto_fix if auto_fix is not None else self._settings.get(
-                    "auto_fix_enabled", False
+                should_fix = (
+                    auto_fix
+                    if auto_fix is not None
+                    else self._settings.get("auto_fix_enabled", False)
                 )
                 if should_fix:
                     self._apply_fixes(conn, result)
@@ -335,9 +337,7 @@ class ChannelReconciler:
                             "streams": list(channel.streams),  # Already int IDs
                         },
                         suggested_action="delete_or_adopt",
-                        auto_fixable=self._settings.get(
-                            "auto_fix_orphan_dispatcharr", False
-                        ),
+                        auto_fixable=self._settings.get("auto_fix_orphan_dispatcharr", False),
                     )
                 )
 
@@ -400,9 +400,7 @@ class ChannelReconciler:
                         "group_id": dup.get("event_epg_group_id"),
                         "channel_count": dup["channel_count"],
                         "channel_ids": (
-                            dup.get("channel_ids", "").split(",")
-                            if dup.get("channel_ids")
-                            else []
+                            dup.get("channel_ids", "").split(",") if dup.get("channel_ids") else []
                         ),
                         "channel_names": (
                             dup.get("channel_names", "").split(",")
@@ -469,39 +467,47 @@ class ChannelReconciler:
                 expected = int(channel.channel_number)
                 actual = dispatcharr_channel.channel_number
                 if expected != actual:
-                    drift_fields.append({
-                        "field": "channel_number",
-                        "expected": expected,
-                        "actual": actual,
-                    })
+                    drift_fields.append(
+                        {
+                            "field": "channel_number",
+                            "expected": expected,
+                            "actual": actual,
+                        }
+                    )
 
             # Check tvg_id
             if channel.tvg_id and channel.tvg_id != dispatcharr_channel.tvg_id:
-                drift_fields.append({
-                    "field": "tvg_id",
-                    "expected": channel.tvg_id,
-                    "actual": dispatcharr_channel.tvg_id,
-                })
+                drift_fields.append(
+                    {
+                        "field": "tvg_id",
+                        "expected": channel.tvg_id,
+                        "actual": dispatcharr_channel.tvg_id,
+                    }
+                )
 
             # Check channel_group_id
             expected_group = channel.channel_group_id
             actual_group = dispatcharr_channel.channel_group_id
             if expected_group and expected_group != actual_group:
-                drift_fields.append({
-                    "field": "channel_group_id",
-                    "expected": expected_group,
-                    "actual": actual_group,
-                })
+                drift_fields.append(
+                    {
+                        "field": "channel_group_id",
+                        "expected": expected_group,
+                        "actual": actual_group,
+                    }
+                )
 
             # Check stream_profile_id
             expected_profile = channel.stream_profile_id
             actual_profile = dispatcharr_channel.stream_profile_id
             if expected_profile and expected_profile != actual_profile:
-                drift_fields.append({
-                    "field": "stream_profile_id",
-                    "expected": channel.stream_profile_id,
-                    "actual": dispatcharr_channel.stream_profile_id,
-                })
+                drift_fields.append(
+                    {
+                        "field": "stream_profile_id",
+                        "expected": channel.stream_profile_id,
+                        "actual": dispatcharr_channel.stream_profile_id,
+                    }
+                )
 
             if drift_fields:
                 issues.append(
@@ -539,11 +545,13 @@ class ChannelReconciler:
 
         for issue in result.issues_found:
             if not issue.auto_fixable:
-                result.issues_skipped.append({
-                    "issue_type": issue.issue_type,
-                    "channel_name": issue.channel_name,
-                    "reason": "Auto-fix disabled for this issue type",
-                })
+                result.issues_skipped.append(
+                    {
+                        "issue_type": issue.issue_type,
+                        "channel_name": issue.channel_name,
+                        "reason": "Auto-fix disabled for this issue type",
+                    }
+                )
                 continue
 
             try:
@@ -562,14 +570,14 @@ class ChannelReconciler:
                             change_source="reconciliation",
                             notes="Orphan detected - channel missing from Dispatcharr",
                         )
-                        result.issues_fixed.append({
-                            "issue_type": issue.issue_type,
-                            "channel_name": issue.channel_name,
-                            "action": "marked_deleted",
-                        })
-                        logger.info(
-                            f"Marked orphan channel as deleted: {issue.channel_name}"
+                        result.issues_fixed.append(
+                            {
+                                "issue_type": issue.issue_type,
+                                "channel_name": issue.channel_name,
+                                "action": "marked_deleted",
+                            }
                         )
+                        logger.info(f"Marked orphan channel as deleted: {issue.channel_name}")
 
                 elif issue.issue_type == "orphan_dispatcharr":
                     # Delete from Dispatcharr
@@ -579,14 +587,14 @@ class ChannelReconciler:
                                 issue.dispatcharr_channel_id
                             )
                         if delete_result.success:
-                            result.issues_fixed.append({
-                                "issue_type": issue.issue_type,
-                                "channel_name": issue.channel_name,
-                                "action": "deleted_from_dispatcharr",
-                            })
-                            logger.info(
-                                f"Deleted orphan Dispatcharr channel: {issue.channel_name}"
+                            result.issues_fixed.append(
+                                {
+                                    "issue_type": issue.issue_type,
+                                    "channel_name": issue.channel_name,
+                                    "action": "deleted_from_dispatcharr",
+                                }
                             )
+                            logger.info(f"Deleted orphan Dispatcharr channel: {issue.channel_name}")
                         else:
                             result.errors.append(
                                 f"Failed to delete orphan channel: {delete_result.error}"
@@ -608,23 +616,25 @@ class ChannelReconciler:
                                     issue.dispatcharr_channel_id,
                                     update_data,
                                 )
-                            result.issues_fixed.append({
-                                "issue_type": issue.issue_type,
-                                "channel_name": issue.channel_name,
-                                "action": "synced",
-                                "fields": list(update_data.keys()),
-                            })
-                            logger.info(
-                                f"Synced drift for channel: {issue.channel_name}"
+                            result.issues_fixed.append(
+                                {
+                                    "issue_type": issue.issue_type,
+                                    "channel_name": issue.channel_name,
+                                    "action": "synced",
+                                    "fields": list(update_data.keys()),
+                                }
                             )
+                            logger.info(f"Synced drift for channel: {issue.channel_name}")
 
                 elif issue.issue_type == "duplicate":
                     # Duplicate fix is more complex - skip for now
-                    result.issues_skipped.append({
-                        "issue_type": issue.issue_type,
-                        "event_id": issue.event_id,
-                        "reason": "Duplicate merge requires manual review",
-                    })
+                    result.issues_skipped.append(
+                        {
+                            "issue_type": issue.issue_type,
+                            "event_id": issue.event_id,
+                            "reason": "Duplicate merge requires manual review",
+                        }
+                    )
 
             except Exception as e:
                 result.errors.append(

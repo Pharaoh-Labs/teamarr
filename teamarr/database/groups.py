@@ -93,13 +93,9 @@ def get_all_groups(conn: Connection, include_inactive: bool = False) -> list[Eve
         List of EventEPGGroup objects
     """
     if include_inactive:
-        cursor = conn.execute(
-            "SELECT * FROM event_epg_groups ORDER BY name"
-        )
+        cursor = conn.execute("SELECT * FROM event_epg_groups ORDER BY name")
     else:
-        cursor = conn.execute(
-            "SELECT * FROM event_epg_groups WHERE active = 1 ORDER BY name"
-        )
+        cursor = conn.execute("SELECT * FROM event_epg_groups WHERE active = 1 ORDER BY name")
 
     return [_row_to_group(row) for row in cursor.fetchall()]
 
@@ -114,10 +110,7 @@ def get_group(conn: Connection, group_id: int) -> EventEPGGroup | None:
     Returns:
         EventEPGGroup or None if not found
     """
-    cursor = conn.execute(
-        "SELECT * FROM event_epg_groups WHERE id = ?",
-        (group_id,)
-    )
+    cursor = conn.execute("SELECT * FROM event_epg_groups WHERE id = ?", (group_id,))
     row = cursor.fetchone()
     return _row_to_group(row) if row else None
 
@@ -132,10 +125,7 @@ def get_group_by_name(conn: Connection, name: str) -> EventEPGGroup | None:
     Returns:
         EventEPGGroup or None if not found
     """
-    cursor = conn.execute(
-        "SELECT * FROM event_epg_groups WHERE name = ?",
-        (name,)
-    )
+    cursor = conn.execute("SELECT * FROM event_epg_groups WHERE name = ?", (name,))
     row = cursor.fetchone()
     return _row_to_group(row) if row else None
 
@@ -150,9 +140,7 @@ def get_groups_for_league(conn: Connection, league: str) -> list[EventEPGGroup]:
     Returns:
         List of EventEPGGroup objects that include the league
     """
-    cursor = conn.execute(
-        "SELECT * FROM event_epg_groups WHERE active = 1 ORDER BY name"
-    )
+    cursor = conn.execute("SELECT * FROM event_epg_groups WHERE active = 1 ORDER BY name")
 
     groups = []
     for row in cursor.fetchall():
@@ -229,7 +217,7 @@ def create_group(
             m3u_group_id,
             m3u_group_name,
             int(active),
-        )
+        ),
     )
     return cursor.lastrowid
 
@@ -372,8 +360,7 @@ def set_group_active(conn: Connection, group_id: int, active: bool) -> bool:
         True if updated
     """
     cursor = conn.execute(
-        "UPDATE event_epg_groups SET active = ? WHERE id = ?",
-        (int(active), group_id)
+        "UPDATE event_epg_groups SET active = ? WHERE id = ?", (int(active), group_id)
     )
     return cursor.rowcount > 0
 
@@ -395,10 +382,7 @@ def delete_group(conn: Connection, group_id: int) -> bool:
     Returns:
         True if deleted
     """
-    cursor = conn.execute(
-        "DELETE FROM event_epg_groups WHERE id = ?",
-        (group_id,)
-    )
+    cursor = conn.execute("DELETE FROM event_epg_groups WHERE id = ?", (group_id,))
     return cursor.rowcount > 0
 
 
@@ -420,7 +404,7 @@ def get_group_channel_count(conn: Connection, group_id: int) -> int:
     cursor = conn.execute(
         """SELECT COUNT(*) as count FROM managed_channels
            WHERE event_epg_group_id = ? AND deleted_at IS NULL""",
-        (group_id,)
+        (group_id,),
     )
     row = cursor.fetchone()
     return row["count"] if row else 0
@@ -441,23 +425,22 @@ def get_group_stats(conn: Connection, group_id: int) -> dict:
             COUNT(*) as total,
             SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) as active,
             SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END) as deleted,
-            SUM(CASE WHEN sync_status = 'pending' AND deleted_at IS NULL THEN 1 ELSE 0 END) as pending,
-            SUM(CASE WHEN sync_status = 'created' AND deleted_at IS NULL THEN 1 ELSE 0 END) as created,
-            SUM(CASE WHEN sync_status = 'in_sync' AND deleted_at IS NULL THEN 1 ELSE 0 END) as in_sync,
-            SUM(CASE WHEN sync_status = 'error' AND deleted_at IS NULL THEN 1 ELSE 0 END) as errors
+            SUM(CASE WHEN sync_status = 'pending' AND deleted_at IS NULL
+                THEN 1 ELSE 0 END) as pending,
+            SUM(CASE WHEN sync_status = 'created' AND deleted_at IS NULL
+                THEN 1 ELSE 0 END) as created,
+            SUM(CASE WHEN sync_status = 'in_sync' AND deleted_at IS NULL
+                THEN 1 ELSE 0 END) as in_sync,
+            SUM(CASE WHEN sync_status = 'error' AND deleted_at IS NULL
+                THEN 1 ELSE 0 END) as errors
         FROM managed_channels
         WHERE event_epg_group_id = ?""",
-        (group_id,)
+        (group_id,),
     )
     row = cursor.fetchone()
 
     if not row:
-        return {
-            "total": 0,
-            "active": 0,
-            "deleted": 0,
-            "by_status": {}
-        }
+        return {"total": 0, "active": 0, "deleted": 0, "by_status": {}}
 
     return {
         "total": row["total"] or 0,
@@ -468,7 +451,7 @@ def get_group_stats(conn: Connection, group_id: int) -> dict:
             "created": row["created"] or 0,
             "in_sync": row["in_sync"] or 0,
             "errors": row["errors"] or 0,
-        }
+        },
     }
 
 

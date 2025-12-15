@@ -141,9 +141,7 @@ class ConditionEvaluator:
 
         return False
 
-    def _check_streak(
-        self, ctx: TemplateContext, threshold: int | None, positive: bool
-    ) -> bool:
+    def _check_streak(self, ctx: TemplateContext, threshold: int | None, positive: bool) -> bool:
         """Check overall streak against threshold."""
         if not ctx.team_stats or threshold is None:
             return False
@@ -170,9 +168,7 @@ class ConditionEvaluator:
         streak_str = game_ctx.streaks.away_streak
         return self._parse_streak_string(streak_str, threshold, positive)
 
-    def _parse_streak_string(
-        self, streak_str: str, threshold: int, positive: bool
-    ) -> bool:
+    def _parse_streak_string(self, streak_str: str, threshold: int, positive: bool) -> bool:
         """Parse streak string like 'W3' or 'L2' and check threshold."""
         if not streak_str:
             return False
@@ -191,9 +187,7 @@ class ConditionEvaluator:
             return False
         return game_ctx.opponent_stats.rank is not None
 
-    def _is_top_ten_matchup(
-        self, ctx: TemplateContext, game_ctx: GameContext | None
-    ) -> bool:
+    def _is_top_ten_matchup(self, ctx: TemplateContext, game_ctx: GameContext | None) -> bool:
         """Check if both teams are in top 10."""
         team_top_10 = (
             ctx.team_stats is not None
@@ -228,9 +222,7 @@ class ConditionEvaluator:
         season_type = game_ctx.event.season_type
         return season_type is not None and "pre" in season_type.lower()
 
-    def _is_conference_game(
-        self, ctx: TemplateContext, game_ctx: GameContext | None
-    ) -> bool:
+    def _is_conference_game(self, ctx: TemplateContext, game_ctx: GameContext | None) -> bool:
         """Check if both teams in same conference (college sports)."""
         if not ctx.team_stats or not game_ctx or not game_ctx.opponent_stats:
             return False

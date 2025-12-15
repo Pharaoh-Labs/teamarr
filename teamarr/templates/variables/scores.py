@@ -116,9 +116,7 @@ def extract_score_diff(ctx: TemplateContext, game_ctx: GameContext | None) -> st
     suffix_rules=SuffixRules.LAST_ONLY,
     description="Score differential as absolute value (e.g., '7')",
 )
-def extract_score_differential(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_score_differential(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     is_home = _is_team_home(ctx, game_ctx)
     if is_home is None or not game_ctx or not game_ctx.event:
         return "0"

@@ -339,9 +339,7 @@ def get_factory(db_factory: Any = None) -> DispatcharrFactory:
     with _factory_lock:
         if _factory is None:
             if db_factory is None:
-                raise RuntimeError(
-                    "db_factory required on first call to get_factory()"
-                )
+                raise RuntimeError("db_factory required on first call to get_factory()")
             _factory = DispatcharrFactory(db_factory)
         return _factory
 

@@ -81,9 +81,7 @@ class ESPNProvider(SportsProvider):
 
         return events
 
-    def _get_tournament_events(
-        self, league: str, target_date: date, sport: str
-    ) -> list[Event]:
+    def _get_tournament_events(self, league: str, target_date: date, sport: str) -> list[Event]:
         """Get events for tournament sports (tennis, golf, racing).
 
         These sports have tournaments/races as events with many competitors,
@@ -102,9 +100,7 @@ class ESPNProvider(SportsProvider):
 
         return events
 
-    def _parse_tournament_event(
-        self, data: dict, league: str, sport: str
-    ) -> Event | None:
+    def _parse_tournament_event(self, data: dict, league: str, sport: str) -> Event | None:
         """Parse a tournament-style event (tennis, golf, racing).
 
         Creates placeholder 'teams' representing the tournament/event itself.
@@ -595,9 +591,7 @@ class ESPNProvider(SportsProvider):
         except ValueError:
             return 0, 0, 0
 
-    def _build_record_from_stats(
-        self, stats: dict, prefix: str, overall_record: str
-    ) -> str | None:
+    def _build_record_from_stats(self, stats: dict, prefix: str, overall_record: str) -> str | None:
         """Build home/away record from individual stat fields."""
         wins = int(stats.get(f"{prefix}Wins", 0))
         losses = int(stats.get(f"{prefix}Losses", 0))

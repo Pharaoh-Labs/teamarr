@@ -17,9 +17,7 @@ from teamarr.templates.variables.registry import (
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's home league name (e.g., 'Premier League')",
 )
-def extract_soccer_primary_league(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_soccer_primary_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     # First check team config (set at channel creation)
     if ctx.team_config.soccer_primary_league:
         return ctx.team_config.soccer_primary_league
@@ -35,9 +33,7 @@ def extract_soccer_primary_league(
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's home league ID (e.g., 'eng.1')",
 )
-def extract_soccer_primary_league_id(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_soccer_primary_league_id(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_config.soccer_primary_league_id:
         return ctx.team_config.soccer_primary_league_id
     return ctx.team_config.league
@@ -49,9 +45,7 @@ def extract_soccer_primary_league_id(
     suffix_rules=SuffixRules.ALL,
     description="League for THIS game (may differ from primary)",
 )
-def extract_soccer_match_league(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_soccer_match_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     # Check for source league metadata on event
@@ -71,9 +65,7 @@ def extract_soccer_match_league(
     suffix_rules=SuffixRules.ALL,
     description="League ID for THIS game (e.g., 'uefa.champions')",
 )
-def extract_soccer_match_league_id(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_soccer_match_league_id(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     return game_ctx.event.league
@@ -85,9 +77,7 @@ def extract_soccer_match_league_id(
     suffix_rules=SuffixRules.ALL,
     description="Logo URL for THIS game's league",
 )
-def extract_soccer_match_league_logo(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_soccer_match_league_logo(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     # This would need to be added to Event or fetched separately
     # For now, return empty - can be populated by context builder
     return ""

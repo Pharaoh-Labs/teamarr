@@ -32,19 +32,6 @@ from teamarr.consumers.event_group_processor import (
     process_event_group,
 )
 from teamarr.consumers.event_matcher import EventMatcher
-from teamarr.consumers.reconciliation import (
-    ChannelReconciler,
-    ReconciliationIssue,
-    ReconciliationResult,
-    create_reconciler,
-)
-from teamarr.consumers.scheduler import (
-    LifecycleScheduler,
-    get_scheduler_status,
-    is_scheduler_running,
-    start_lifecycle_scheduler,
-    stop_lifecycle_scheduler,
-)
 from teamarr.consumers.filler import (
     ConditionalFillerTemplate,
     FillerConfig,
@@ -63,6 +50,19 @@ from teamarr.consumers.orchestrator import (
     GenerationResult,
     Orchestrator,
     TeamChannelConfig,
+)
+from teamarr.consumers.reconciliation import (
+    ChannelReconciler,
+    ReconciliationIssue,
+    ReconciliationResult,
+    create_reconciler,
+)
+from teamarr.consumers.scheduler import (
+    LifecycleScheduler,
+    get_scheduler_status,
+    is_scheduler_running,
+    start_lifecycle_scheduler,
+    stop_lifecycle_scheduler,
 )
 from teamarr.consumers.single_league_matcher import MatchResult, SingleLeagueMatcher
 from teamarr.consumers.stream_match_cache import (

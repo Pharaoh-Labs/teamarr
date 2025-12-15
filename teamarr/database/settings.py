@@ -206,9 +206,7 @@ def get_all_settings(conn: Connection) -> AllSettings:
         api=APISettings(
             timeout=row["api_timeout"] or 10,
             retry_count=row["api_retry_count"] or 3,
-            soccer_cache_refresh_frequency=(
-                row["soccer_cache_refresh_frequency"] or "weekly"
-            ),
+            soccer_cache_refresh_frequency=(row["soccer_cache_refresh_frequency"] or "weekly"),
             team_cache_refresh_frequency=row["team_cache_refresh_frequency"] or "weekly",
         ),
         epg_generation_counter=row["epg_generation_counter"] or 0,

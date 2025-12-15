@@ -19,16 +19,14 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.consumers.channel_lifecycle import (
-    ChannelLifecycleService,
     StreamProcessResult,
     create_lifecycle_service,
 )
-from teamarr.consumers.event_epg import EventEPGGenerator, EventEPGOptions
+from teamarr.consumers.event_epg import EventEPGGenerator
 from teamarr.consumers.multi_league_matcher import BatchMatchResult, MultiLeagueMatcher
-from teamarr.core import Event, Programme
+from teamarr.core import Event
 from teamarr.database.groups import EventEPGGroup, get_all_groups, get_group
 from teamarr.services import SportsDataService, create_default_service
-from teamarr.utilities.xmltv import programmes_to_xmltv
 
 logger = logging.getLogger(__name__)
 
@@ -182,9 +180,7 @@ class EventGroupProcessor:
         with self._db_factory() as conn:
             group = get_group(conn, group_id)
             if not group:
-                result = ProcessingResult(
-                    group_id=group_id, group_name="Unknown"
-                )
+                result = ProcessingResult(group_id=group_id, group_name="Unknown")
                 result.errors.append(f"Group {group_id} not found")
                 result.completed_at = datetime.now()
                 return result
@@ -208,9 +204,6 @@ class EventGroupProcessor:
 
         with self._db_factory() as conn:
             groups = get_all_groups(conn, include_inactive=False)
-
-            all_programmes: list[Programme] = []
-            all_channels: list[dict] = []
 
             for group in groups:
                 result = self._process_group_internal(conn, group, target_date)
@@ -249,18 +242,14 @@ class EventGroupProcessor:
                 return result
 
             # Step 3: Match streams to events
-            match_result = self._match_streams(
-                streams, group.leagues, target_date
-            )
+            match_result = self._match_streams(streams, group.leagues, target_date)
             result.streams_matched = match_result.matched_count
             result.streams_unmatched = match_result.unmatched_count
 
             # Step 4: Create/update channels
             matched_streams = self._build_matched_stream_list(streams, match_result)
             if matched_streams:
-                lifecycle_result = self._process_channels(
-                    matched_streams, group, conn
-                )
+                lifecycle_result = self._process_channels(matched_streams, group, conn)
                 result.channels_created = len(lifecycle_result.created)
                 result.channels_existing = len(lifecycle_result.existing)
                 result.channels_skipped = len(lifecycle_result.skipped)
@@ -364,10 +353,12 @@ class EventGroupProcessor:
             if result.matched and result.included and result.event:
                 stream = stream_lookup.get(result.stream_name)
                 if stream:
-                    matched.append({
-                        "stream": stream,
-                        "event": result.event,
-                    })
+                    matched.append(
+                        {
+                            "stream": stream,
+                            "event": result.event,
+                        }
+                    )
 
         return matched
 
@@ -396,9 +387,7 @@ class EventGroupProcessor:
         # TODO: Load template if group has one
         template = None
 
-        return lifecycle_service.process_matched_streams(
-            matched_streams, group_config, template
-        )
+        return lifecycle_service.process_matched_streams(matched_streams, group_config, template)
 
 
 # =============================================================================

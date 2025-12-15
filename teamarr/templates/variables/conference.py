@@ -19,9 +19,7 @@ from teamarr.templates.variables.registry import (
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's college conference name",
 )
-def extract_college_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_college_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats and ctx.team_stats.conference:
         return ctx.team_stats.conference
     return ""
@@ -33,9 +31,7 @@ def extract_college_conference(
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's college conference abbreviation",
 )
-def extract_college_conference_abbrev(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_college_conference_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats and ctx.team_stats.conference_abbrev:
         return ctx.team_stats.conference_abbrev
     return ""
@@ -50,9 +46,7 @@ def extract_college_conference_abbrev(
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's pro conference (e.g., 'NFC', 'Eastern')",
 )
-def extract_pro_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_pro_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats and ctx.team_stats.conference:
         return ctx.team_stats.conference
     return ""
@@ -64,9 +58,7 @@ def extract_pro_conference(
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's pro conference abbreviation",
 )
-def extract_pro_conference_abbrev(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_pro_conference_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats and ctx.team_stats.conference_abbrev:
         return ctx.team_stats.conference_abbrev
     return ""
@@ -78,9 +70,7 @@ def extract_pro_conference_abbrev(
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Team's pro division (e.g., 'NFC North')",
 )
-def extract_pro_division(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_pro_division(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats and ctx.team_stats.division:
         return ctx.team_stats.division
     return ""
@@ -95,9 +85,7 @@ def extract_pro_division(
     suffix_rules=SuffixRules.ALL,
     description="Opponent's college conference",
 )
-def extract_opponent_college_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_college_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.conference:
         return game_ctx.opponent_stats.conference
     return ""
@@ -123,9 +111,7 @@ def extract_opponent_college_conference_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Opponent's pro conference",
 )
-def extract_opponent_pro_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_pro_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.conference:
         return game_ctx.opponent_stats.conference
     return ""
@@ -151,9 +137,7 @@ def extract_opponent_pro_conference_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Opponent's pro division",
 )
-def extract_opponent_pro_division(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_pro_division(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.division:
         return game_ctx.opponent_stats.division
     return ""
@@ -168,9 +152,7 @@ def extract_opponent_pro_division(
     suffix_rules=SuffixRules.ALL,
     description="Home team's college conference",
 )
-def extract_home_team_college_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_home_team_college_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     is_home = game_ctx.event.home_team.id == ctx.team_config.team_id
@@ -206,9 +188,7 @@ def extract_home_team_college_conference_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Home team's pro conference",
 )
-def extract_home_team_pro_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_home_team_pro_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     is_home = game_ctx.event.home_team.id == ctx.team_config.team_id
@@ -244,9 +224,7 @@ def extract_home_team_pro_conference_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Home team's pro division",
 )
-def extract_home_team_pro_division(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_home_team_pro_division(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     is_home = game_ctx.event.home_team.id == ctx.team_config.team_id
@@ -266,9 +244,7 @@ def extract_home_team_pro_division(
     suffix_rules=SuffixRules.ALL,
     description="Away team's college conference",
 )
-def extract_away_team_college_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_away_team_college_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     is_home = game_ctx.event.home_team.id == ctx.team_config.team_id
@@ -304,9 +280,7 @@ def extract_away_team_college_conference_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Away team's pro conference",
 )
-def extract_away_team_pro_conference(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_away_team_pro_conference(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     is_home = game_ctx.event.home_team.id == ctx.team_config.team_id
@@ -342,9 +316,7 @@ def extract_away_team_pro_conference_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Away team's pro division",
 )
-def extract_away_team_pro_division(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_away_team_pro_division(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     is_home = game_ctx.event.home_team.id == ctx.team_config.team_id

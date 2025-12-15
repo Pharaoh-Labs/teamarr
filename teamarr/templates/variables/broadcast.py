@@ -82,9 +82,7 @@ def extract_broadcast_network(ctx: TemplateContext, game_ctx: GameContext | None
     suffix_rules=SuffixRules.ALL,
     description="National broadcast networks only",
 )
-def extract_broadcast_national_network(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_broadcast_national_network(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     broadcasts = _get_broadcasts(game_ctx)
     national = [b for b in broadcasts if b in NATIONAL_NETWORKS]
     return ", ".join(national)
@@ -96,9 +94,7 @@ def extract_broadcast_national_network(
     suffix_rules=SuffixRules.ALL,
     description="'true' if game is on national TV",
 )
-def extract_is_national_broadcast(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_is_national_broadcast(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     broadcasts = _get_broadcasts(game_ctx)
     has_national = any(b in NATIONAL_NETWORKS for b in broadcasts)
     return "true" if has_national else "false"

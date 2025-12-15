@@ -80,7 +80,8 @@ class EventMatcher:
             List of matching events
         """
         return [
-            event for event in events
+            event
+            for event in events
             if event.home_team.id == team_id or event.away_team.id == team_id
         ]
 

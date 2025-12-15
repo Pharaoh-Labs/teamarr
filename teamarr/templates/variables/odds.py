@@ -93,9 +93,7 @@ def extract_odds_moneyline(ctx: TemplateContext, game_ctx: GameContext | None) -
     suffix_rules=SuffixRules.BASE_NEXT_ONLY,
     description="Opponent's moneyline",
 )
-def extract_odds_opponent_moneyline(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_odds_opponent_moneyline(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if _has_odds(game_ctx) and game_ctx.odds.opponent_moneyline:
         ml = game_ctx.odds.opponent_moneyline
         if ml > 0:
@@ -110,9 +108,7 @@ def extract_odds_opponent_moneyline(
     suffix_rules=SuffixRules.BASE_NEXT_ONLY,
     description="Opponent's spread odds",
 )
-def extract_odds_opponent_spread(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_odds_opponent_spread(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if _has_odds(game_ctx) and game_ctx.odds.opponent_spread_odds:
         return str(game_ctx.odds.opponent_spread_odds)
     return ""

@@ -111,7 +111,7 @@ def _get_settings() -> dict:
             settings = {
                 "team_schedule_days_ahead": 30,  # For .next vars, conditionals
                 "event_match_days_ahead": 7,
-                "epg_output_days_ahead": 14,     # Days in XMLTV output
+                "epg_output_days_ahead": 14,  # Days in XMLTV output
                 "epg_lookback_hours": 6,
                 "duration_default": 3.0,
                 "duration_basketball": 3.0,
@@ -165,8 +165,7 @@ def generate_epg(
     settings = _get_settings()
     schedule_days = settings["team_schedule_days_ahead"]
     output_days = (
-        request.days_ahead if request.days_ahead is not None
-        else settings["epg_output_days_ahead"]
+        request.days_ahead if request.days_ahead is not None else settings["epg_output_days_ahead"]
     )
 
     options = TeamEPGOptions(
@@ -205,10 +204,7 @@ def get_xmltv(
     # Use settings defaults
     settings = _get_settings()
     schedule_days = settings["team_schedule_days_ahead"]
-    output_days = (
-        days_ahead if days_ahead is not None
-        else settings["epg_output_days_ahead"]
-    )
+    output_days = days_ahead if days_ahead is not None else settings["epg_output_days_ahead"]
 
     options = TeamEPGOptions(
         schedule_days_ahead=schedule_days,

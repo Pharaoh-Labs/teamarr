@@ -93,9 +93,7 @@ class LifecycleScheduler:
             daemon=True,
         )
         self._thread.start()
-        logger.info(
-            f"Lifecycle scheduler started (interval: {self._interval_minutes} minutes)"
-        )
+        logger.info(f"Lifecycle scheduler started (interval: {self._interval_minutes} minutes)")
         return True
 
     def stop(self, timeout: float = 30.0) -> bool:
@@ -233,8 +231,7 @@ class LifecycleScheduler:
 
         if result.issues_found:
             logger.info(
-                f"Reconciliation found {len(result.issues_found)} issue(s): "
-                f"{result.summary}"
+                f"Reconciliation found {len(result.issues_found)} issue(s): {result.summary}"
             )
 
         return result.summary

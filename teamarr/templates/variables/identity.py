@@ -216,7 +216,5 @@ def extract_head_coach(ctx: TemplateContext, game_ctx: GameContext | None) -> st
     suffix_rules=SuffixRules.BASE_ONLY,
     description="Gracenote category for EPG (e.g., 'Sports event')",
 )
-def extract_gracenote_category(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_gracenote_category(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     return "Sports event"

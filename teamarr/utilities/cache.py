@@ -51,9 +51,7 @@ class TTLCache:
                 return None
             return entry.value
 
-    def set(
-        self, key: str, value: Any, ttl_seconds: int | None = None
-    ) -> None:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         """Set value with optional custom TTL."""
         ttl = timedelta(seconds=ttl_seconds) if ttl_seconds else self._default_ttl
         expires_at = datetime.now() + ttl
@@ -75,9 +73,7 @@ class TTLCache:
         now = datetime.now()
         removed = 0
         with self._lock:
-            expired_keys = [
-                k for k, v in self._cache.items() if now > v.expires_at
-            ]
+            expired_keys = [k for k, v in self._cache.items() if now > v.expires_at]
             for key in expired_keys:
                 del self._cache[key]
                 removed += 1

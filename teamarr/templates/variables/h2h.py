@@ -30,9 +30,7 @@ def extract_season_series(ctx: TemplateContext, game_ctx: GameContext | None) ->
     suffix_rules=SuffixRules.ALL,
     description="Team's wins in season series",
 )
-def extract_season_series_team_wins(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_season_series_team_wins(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.h2h:
         return "0"
     return str(game_ctx.h2h.team_wins)
@@ -44,9 +42,7 @@ def extract_season_series_team_wins(
     suffix_rules=SuffixRules.ALL,
     description="Opponent's wins in season series",
 )
-def extract_season_series_opponent_wins(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_season_series_opponent_wins(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.h2h:
         return "0"
     return str(game_ctx.h2h.opponent_wins)
@@ -58,9 +54,7 @@ def extract_season_series_opponent_wins(
     suffix_rules=SuffixRules.ALL,
     description="'Leads', 'Trails', or 'Tied' in season series",
 )
-def extract_season_series_leader(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_season_series_leader(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.h2h:
         return ""
     h2h = game_ctx.h2h
@@ -117,9 +111,7 @@ def extract_rematch_score(ctx: TemplateContext, game_ctx: GameContext | None) ->
     suffix_rules=SuffixRules.ALL,
     description="Days since last meeting",
 )
-def extract_rematch_days_since(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_rematch_days_since(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.h2h:
         return ""
     days = game_ctx.h2h.days_since
@@ -193,9 +185,7 @@ def extract_rematch_date(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     suffix_rules=SuffixRules.ALL,
     description="Score of last meeting with team abbrevs (e.g., 'DET 24-17 CHI')",
 )
-def extract_rematch_score_abbrev(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_rematch_score_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.h2h or not game_ctx.h2h.previous_score:
         return ""
     # Would need team abbrevs stored in h2h - for now return the score
@@ -208,9 +198,7 @@ def extract_rematch_score_abbrev(
     suffix_rules=SuffixRules.ALL,
     description="Season series context (e.g., 'leads series 2-1')",
 )
-def extract_rematch_season_series(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_rematch_season_series(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.h2h:
         return ""
     h2h = game_ctx.h2h

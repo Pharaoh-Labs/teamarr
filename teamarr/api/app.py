@@ -66,9 +66,8 @@ async def lifespan(app: FastAPI):
                 dispatcharr_client=client,
             )
             if started:
-                logger.info(
-                    f"Background scheduler started (interval: {scheduler_settings.interval_minutes} min)"
-                )
+                interval = scheduler_settings.interval_minutes
+                logger.info(f"Background scheduler started (interval: {interval} min)")
         except Exception as e:
             logger.warning(f"Failed to start scheduler: {e}")
     else:

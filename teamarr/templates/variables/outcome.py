@@ -104,9 +104,7 @@ def extract_result_verb(ctx: TemplateContext, game_ctx: GameContext | None) -> s
     suffix_rules=SuffixRules.LAST_ONLY,
     description="Result as past verb ('defeated', 'fell to', 'tied')",
 )
-def extract_result_verb_past(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_result_verb_past(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     result = _get_result(ctx, game_ctx)
     if result == "win":
         return "defeated"

@@ -558,10 +558,7 @@ def list_dispatcharr_channel_groups():
         ) from e
 
     return {
-        "groups": [
-            {"id": g.id, "name": g.name}
-            for g in groups
-        ],
+        "groups": [{"id": g.id, "name": g.name} for g in groups],
         "total": len(groups),
     }
 

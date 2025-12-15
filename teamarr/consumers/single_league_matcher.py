@@ -76,9 +76,7 @@ class SingleLeagueMatcher:
             matched=event is not None,
         )
 
-    def match_batch(
-        self, stream_names: list[str], target_date: date
-    ) -> list[MatchResult]:
+    def match_batch(self, stream_names: list[str], target_date: date) -> list[MatchResult]:
         """Match multiple streams efficiently."""
         self._build_patterns(target_date)
         return [self.match(name, target_date) for name in stream_names]

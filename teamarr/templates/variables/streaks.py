@@ -90,9 +90,7 @@ def extract_last_10_record(ctx: TemplateContext, game_ctx: GameContext | None) -
     suffix_rules=SuffixRules.ALL,
     description="Home team's current streak for this game",
 )
-def extract_home_team_streak(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_home_team_streak(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     event = game_ctx.event
@@ -110,9 +108,7 @@ def extract_home_team_streak(
     suffix_rules=SuffixRules.ALL,
     description="Away team's current streak for this game",
 )
-def extract_away_team_streak(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_away_team_streak(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     event = game_ctx.event

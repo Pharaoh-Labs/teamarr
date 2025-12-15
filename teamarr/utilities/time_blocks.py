@@ -62,9 +62,7 @@ def get_previous_time_block(dt: datetime) -> datetime:
     return prev_day.replace(hour=18, minute=0, second=0, microsecond=0)
 
 
-def create_filler_chunks(
-    start_dt: datetime, end_dt: datetime
-) -> list[tuple[datetime, datetime]]:
+def create_filler_chunks(start_dt: datetime, end_dt: datetime) -> list[tuple[datetime, datetime]]:
     """Create filler time chunks aligned to 6-hour boundaries.
 
     Splits a time range into chunks that align with block boundaries.

@@ -824,9 +824,7 @@ def get_exception_keywords(conn: Connection, enabled_only: bool = True) -> list[
         List of ExceptionKeyword objects
     """
     if enabled_only:
-        cursor = conn.execute(
-            "SELECT * FROM consolidation_exception_keywords WHERE enabled = 1"
-        )
+        cursor = conn.execute("SELECT * FROM consolidation_exception_keywords WHERE enabled = 1")
     else:
         cursor = conn.execute("SELECT * FROM consolidation_exception_keywords")
     return [ExceptionKeyword.from_row(dict(row)) for row in cursor.fetchall()]

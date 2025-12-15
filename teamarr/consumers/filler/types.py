@@ -80,12 +80,8 @@ class FillerConfig:
             description="Next game: {game_date.next} vs {opponent.next}",
         )
     )
-    idle_conditional: ConditionalFillerTemplate = field(
-        default_factory=ConditionalFillerTemplate
-    )
-    idle_offseason: OffseasonFillerTemplate = field(
-        default_factory=OffseasonFillerTemplate
-    )
+    idle_conditional: ConditionalFillerTemplate = field(default_factory=ConditionalFillerTemplate)
+    idle_offseason: OffseasonFillerTemplate = field(default_factory=OffseasonFillerTemplate)
 
     # Category for filler content
     category: str = "Sports"

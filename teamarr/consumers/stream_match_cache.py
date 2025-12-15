@@ -113,9 +113,7 @@ class StreamMatchCache:
 
             if row:
                 self._stats["hits"] += 1
-                logger.debug(
-                    f"[CACHE HIT] stream_id={stream_id} -> event_id={row['event_id']}"
-                )
+                logger.debug(f"[CACHE HIT] stream_id={stream_id} -> event_id={row['event_id']}")
                 return CacheEntry(
                     event_id=row["event_id"],
                     league=row["league"],
@@ -254,8 +252,7 @@ class StreamMatchCache:
                 if purged > 0:
                     self._stats["purged"] += purged
                     logger.info(
-                        f"[CACHE PURGE] Removed {purged} stale entries "
-                        f"(generation < {threshold})"
+                        f"[CACHE PURGE] Removed {purged} stale entries (generation < {threshold})"
                     )
                 return purged
         except Exception as e:
@@ -319,9 +316,7 @@ def get_generation_counter(get_connection: Callable) -> int:
     """Get current EPG generation counter from settings."""
     try:
         with get_connection() as conn:
-            cursor = conn.execute(
-                "SELECT epg_generation_counter FROM settings WHERE id = 1"
-            )
+            cursor = conn.execute("SELECT epg_generation_counter FROM settings WHERE id = 1")
             row = cursor.fetchone()
             return row["epg_generation_counter"] if row else 0
     except Exception:
@@ -340,9 +335,7 @@ def increment_generation_counter(get_connection: Callable) -> int:
         )
         conn.commit()
 
-        cursor = conn.execute(
-            "SELECT epg_generation_counter FROM settings WHERE id = 1"
-        )
+        cursor = conn.execute("SELECT epg_generation_counter FROM settings WHERE id = 1")
         row = cursor.fetchone()
         new_value = row["epg_generation_counter"] if row else 1
         logger.debug(f"EPG generation counter: {new_value}")

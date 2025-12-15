@@ -33,22 +33,24 @@ LEAGUE_SPORT_MAP = {
 }
 
 # Country codes that indicate soccer leagues (e.g., "eng.1", "ger.1")
-SOCCER_COUNTRY_CODES = frozenset({
-    "ger",  # Germany
-    "eng",  # England
-    "esp",  # Spain
-    "ita",  # Italy
-    "fra",  # France
-    "usa",  # USA (non-MLS leagues)
-    "aus",  # Australia
-    "ned",  # Netherlands
-    "por",  # Portugal
-    "sco",  # Scotland
-    "bel",  # Belgium
-    "mex",  # Mexico
-    "bra",  # Brazil
-    "arg",  # Argentina
-})
+SOCCER_COUNTRY_CODES = frozenset(
+    {
+        "ger",  # Germany
+        "eng",  # England
+        "esp",  # Spain
+        "ita",  # Italy
+        "fra",  # France
+        "usa",  # USA (non-MLS leagues)
+        "aus",  # Australia
+        "ned",  # Netherlands
+        "por",  # Portugal
+        "sco",  # Scotland
+        "bel",  # Belgium
+        "mex",  # Mexico
+        "bra",  # Brazil
+        "arg",  # Argentina
+    }
+)
 
 
 def get_sport_from_league(league: str) -> str:

@@ -117,10 +117,7 @@ class Orchestrator:
             leagues, target_date, channel_prefix, options
         )
 
-        channel_dicts = [
-            {"id": ch.channel_id, "name": ch.name, "icon": ch.icon}
-            for ch in channels
-        ]
+        channel_dicts = [{"id": ch.channel_id, "name": ch.name, "icon": ch.icon} for ch in channels]
 
         xmltv = programmes_to_xmltv(programmes, channel_dicts)
 

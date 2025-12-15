@@ -324,9 +324,7 @@ class TSDBClient:
             mapping = get_league_mapping(conn, league, "tsdb")
             return mapping.sport if mapping else "Sports"
 
-    def get_events_by_date(
-        self, league: str, date_str: str
-    ) -> dict | None:
+    def get_events_by_date(self, league: str, date_str: str) -> dict | None:
         """Fetch events for a league on a specific date.
 
         Uses eventsday.php which takes league NAME (strLeague), not ID.

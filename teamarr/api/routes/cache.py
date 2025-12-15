@@ -197,10 +197,7 @@ def find_candidate_leagues(
     return {
         "team1": team1,
         "team2": team2,
-        "candidates": [
-            {"league": league, "provider": provider}
-            for league, provider in candidates
-        ],
+        "candidates": [{"league": league, "provider": provider} for league, provider in candidates],
         "count": len(candidates),
     }
 

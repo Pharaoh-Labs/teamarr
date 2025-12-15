@@ -496,10 +496,12 @@ class ChannelLifecycleService:
                     event = matched.get("event")
 
                     if not event:
-                        result.errors.append({
-                            "stream": stream.get("name", "Unknown"),
-                            "error": "No event data",
-                        })
+                        result.errors.append(
+                            {
+                                "stream": stream.get("name", "Unknown"),
+                                "error": "No event data",
+                            }
+                        )
                         continue
 
                     event_id = event.id
@@ -548,11 +550,13 @@ class ChannelLifecycleService:
                     )
 
                     if not decision.should_act:
-                        result.skipped.append({
-                            "stream": stream_name,
-                            "event_id": event_id,
-                            "reason": decision.reason,
-                        })
+                        result.skipped.append(
+                            {
+                                "stream": stream_name,
+                                "event_id": event_id,
+                                "reason": decision.reason,
+                            }
+                        )
                         continue
 
                     # Create new channel
@@ -569,14 +573,16 @@ class ChannelLifecycleService:
                     )
 
                     if channel_result.success:
-                        result.created.append({
-                            "stream": stream_name,
-                            "event_id": event_id,
-                            "channel_id": channel_result.channel_id,
-                            "dispatcharr_channel_id": channel_result.dispatcharr_channel_id,
-                            "channel_number": channel_result.channel_number,
-                            "tvg_id": channel_result.tvg_id,
-                        })
+                        result.created.append(
+                            {
+                                "stream": stream_name,
+                                "event_id": event_id,
+                                "channel_id": channel_result.channel_id,
+                                "dispatcharr_channel_id": channel_result.dispatcharr_channel_id,
+                                "channel_number": channel_result.channel_number,
+                                "tvg_id": channel_result.tvg_id,
+                            }
+                        )
 
                         # Log history
                         log_channel_history(
@@ -587,11 +593,13 @@ class ChannelLifecycleService:
                             notes=f"Created from stream '{stream_name}'",
                         )
                     else:
-                        result.errors.append({
-                            "stream": stream_name,
-                            "event_id": event_id,
-                            "error": channel_result.error,
-                        })
+                        result.errors.append(
+                            {
+                                "stream": stream_name,
+                                "event_id": event_id,
+                                "error": channel_result.error,
+                            }
+                        )
 
         except Exception as e:
             logger.exception("Error processing matched streams")
@@ -624,12 +632,14 @@ class ChannelLifecycleService:
 
         if effective_mode == "ignore":
             # Skip - don't add stream
-            result.existing.append({
-                "stream": stream_name,
-                "channel_id": existing.dispatcharr_channel_id,
-                "channel_number": existing.channel_number,
-                "action": "ignored",
-            })
+            result.existing.append(
+                {
+                    "stream": stream_name,
+                    "channel_id": existing.dispatcharr_channel_id,
+                    "channel_number": existing.channel_number,
+                    "action": "ignored",
+                }
+            )
             return result
 
         if effective_mode == "consolidate":
@@ -669,26 +679,32 @@ class ChannelLifecycleService:
                     notes=f"Added stream '{stream_name}' (consolidate mode)",
                 )
 
-                result.streams_added.append({
+                result.streams_added.append(
+                    {
+                        "stream": stream_name,
+                        "channel_id": existing.dispatcharr_channel_id,
+                        "channel_name": existing.channel_name,
+                    }
+                )
+
+            result.existing.append(
+                {
                     "stream": stream_name,
                     "channel_id": existing.dispatcharr_channel_id,
-                    "channel_name": existing.channel_name,
-                })
-
-            result.existing.append({
-                "stream": stream_name,
-                "channel_id": existing.dispatcharr_channel_id,
-                "channel_number": existing.channel_number,
-                "action": "consolidated",
-            })
+                    "channel_number": existing.channel_number,
+                    "action": "consolidated",
+                }
+            )
 
         else:  # separate mode - channel found for this stream
-            result.existing.append({
-                "stream": stream_name,
-                "channel_id": existing.dispatcharr_channel_id,
-                "channel_number": existing.channel_number,
-                "action": "separate_exists",
-            })
+            result.existing.append(
+                {
+                    "stream": stream_name,
+                    "channel_id": existing.dispatcharr_channel_id,
+                    "channel_number": existing.channel_number,
+                    "action": "separate_exists",
+                }
+            )
 
         # Sync channel settings
         settings_result = self._sync_channel_settings(
@@ -920,11 +936,13 @@ class ChannelLifecycleService:
                         update_data,
                     )
 
-                result.settings_updated.append({
-                    "channel_id": existing.dispatcharr_channel_id,
-                    "channel_name": existing.channel_name,
-                    "changes": update_data,
-                })
+                result.settings_updated.append(
+                    {
+                        "channel_id": existing.dispatcharr_channel_id,
+                        "channel_name": existing.channel_name,
+                        "changes": update_data,
+                    }
+                )
 
         except Exception as e:
             logger.debug(f"Error syncing settings for channel {existing.channel_name}: {e}")
@@ -960,9 +978,7 @@ class ChannelLifecycleService:
         # Delete from Dispatcharr
         if self._channel_manager and channel.dispatcharr_channel_id:
             with self._dispatcharr_lock:
-                result = self._channel_manager.delete_channel(
-                    channel.dispatcharr_channel_id
-                )
+                result = self._channel_manager.delete_channel(channel.dispatcharr_channel_id)
                 if not result.success:
                     logger.warning(
                         f"Failed to delete channel {channel.dispatcharr_channel_id} "
@@ -1006,17 +1022,21 @@ class ChannelLifecycleService:
                     )
 
                     if success:
-                        result.deleted.append({
-                            "channel_id": channel.id,
-                            "channel_name": channel.channel_name,
-                            "tvg_id": channel.tvg_id,
-                        })
+                        result.deleted.append(
+                            {
+                                "channel_id": channel.id,
+                                "channel_name": channel.channel_name,
+                                "tvg_id": channel.tvg_id,
+                            }
+                        )
                     else:
-                        result.errors.append({
-                            "channel_id": channel.id,
-                            "channel_name": channel.channel_name,
-                            "error": "Failed to delete",
-                        })
+                        result.errors.append(
+                            {
+                                "channel_id": channel.id,
+                                "channel_name": channel.channel_name,
+                                "error": "Failed to delete",
+                            }
+                        )
 
         except Exception as e:
             logger.exception("Error processing scheduled deletions")
@@ -1075,9 +1095,7 @@ class ChannelLifecycleService:
                         )
                     result["associated"] += 1
                 except Exception as e:
-                    logger.debug(
-                        f"Failed to associate EPG for channel {channel.channel_name}: {e}"
-                    )
+                    logger.debug(f"Failed to associate EPG for channel {channel.channel_name}: {e}")
                     result["errors"] += 1
 
         if result["associated"]:

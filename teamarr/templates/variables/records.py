@@ -77,9 +77,7 @@ def extract_team_ties(ctx: TemplateContext, game_ctx: GameContext | None) -> str
 )
 def extract_team_win_pct(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if ctx.team_stats:
-        return _get_win_pct(
-            ctx.team_stats.wins, ctx.team_stats.losses, ctx.team_stats.ties
-        )
+        return _get_win_pct(ctx.team_stats.wins, ctx.team_stats.losses, ctx.team_stats.ties)
     return ""
 
 
@@ -137,9 +135,7 @@ def extract_opponent_ties(ctx: TemplateContext, game_ctx: GameContext | None) ->
     suffix_rules=SuffixRules.ALL,
     description="Opponent's winning percentage",
 )
-def extract_opponent_win_pct(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_win_pct(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats:
         stats = game_ctx.opponent_stats
         return _get_win_pct(stats.wins, stats.losses, stats.ties)
@@ -176,9 +172,7 @@ def extract_away_record(ctx: TemplateContext, game_ctx: GameContext | None) -> s
     suffix_rules=SuffixRules.ALL,
     description="Home team's overall record for this game",
 )
-def extract_home_team_record(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_home_team_record(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     event = game_ctx.event
@@ -196,9 +190,7 @@ def extract_home_team_record(
     suffix_rules=SuffixRules.ALL,
     description="Away team's overall record for this game",
 )
-def extract_away_team_record(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_away_team_record(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     event = game_ctx.event

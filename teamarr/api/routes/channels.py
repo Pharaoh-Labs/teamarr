@@ -7,7 +7,6 @@ Provides REST API for:
 - Lifecycle sync (create/delete based on timing)
 """
 
-
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
@@ -61,9 +60,7 @@ class ReconciliationRequest(BaseModel):
     """Request for reconciliation."""
 
     auto_fix: bool = Field(default=False, description="Automatically fix issues")
-    group_ids: list[int] | None = Field(
-        default=None, description="Limit to specific groups"
-    )
+    group_ids: list[int] | None = Field(default=None, description="Limit to specific groups")
 
 
 class ReconciliationIssueModel(BaseModel):
@@ -215,9 +212,7 @@ def get_managed_channel(channel_id: int):
         league=channel.league,
         sport=channel.sport,
         scheduled_delete_at=(
-            channel.scheduled_delete_at.isoformat()
-            if channel.scheduled_delete_at
-            else None
+            channel.scheduled_delete_at.isoformat() if channel.scheduled_delete_at else None
         ),
         sync_status=channel.sync_status,
         created_at=channel.created_at.isoformat() if channel.created_at else None,

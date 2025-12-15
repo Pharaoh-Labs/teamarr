@@ -25,7 +25,6 @@ SINGLE_EVENT_LEAGUES = {
 }
 
 
-
 @dataclass
 class StreamMatchResult:
     """Result of matching a single stream."""
@@ -125,9 +124,7 @@ class MultiLeagueMatcher:
         self._event_patterns: list[EventPatterns] = []
         self._patterns_date: date | None = None
 
-    def match_all(
-        self, stream_names: list[str], target_date: date
-    ) -> BatchMatchResult:
+    def match_all(self, stream_names: list[str], target_date: date) -> BatchMatchResult:
         """Match all streams against events from configured leagues."""
         # Build event patterns for target date
         self._build_event_patterns(target_date)
@@ -167,10 +164,12 @@ class MultiLeagueMatcher:
         away_patterns = self._fuzzy.generate_team_patterns(event.away_team)
 
         # Event name patterns
-        event_patterns = self._unique_patterns([
-            event.name,
-            event.short_name,
-        ])
+        event_patterns = self._unique_patterns(
+            [
+                event.name,
+                event.short_name,
+            ]
+        )
 
         return EventPatterns(
             event=event,
@@ -228,9 +227,7 @@ class MultiLeagueMatcher:
             exclusion_reason=None if included else "league_not_in_whitelist",
         )
 
-    def _find_matching_event(
-        self, stream_lower: str
-    ) -> tuple[Event | None, str | None]:
+    def _find_matching_event(self, stream_lower: str) -> tuple[Event | None, str | None]:
         """Find event that matches the stream name using fuzzy matching."""
         # Expand abbreviations for matching (e.g., "UFC FN" → "UFC Fight Night")
         stream_expanded = self._fuzzy._expand_abbreviations(stream_lower)

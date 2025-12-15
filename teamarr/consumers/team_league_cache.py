@@ -237,9 +237,7 @@ class TeamLeagueCache:
 
             if row and row[1]:  # last_full_refresh
                 try:
-                    last_refresh = datetime.fromisoformat(
-                        str(row[1]).replace("Z", "+00:00")
-                    )
+                    last_refresh = datetime.fromisoformat(str(row[1]).replace("Z", "+00:00"))
                     days_old = (datetime.now(last_refresh.tzinfo) - last_refresh).days
                     is_stale = days_old > 7
                 except (ValueError, TypeError):
@@ -367,12 +365,11 @@ class CacheRefresher:
                 report(f"Fetching from {provider.name}...", base_progress)
 
                 # Create progress callback with captured values
-                def make_progress_callback(
-                    bp: int, ppp: int
-                ) -> Callable[[str, int], None]:
+                def make_progress_callback(bp: int, ppp: int) -> Callable[[str, int], None]:
                     def callback(msg: str, pct: int) -> None:
                         actual_pct = bp + int(pct * ppp / 100)
                         report(msg, actual_pct)
+
                     return callback
 
                 leagues, teams = self._discover_from_provider(
@@ -493,16 +490,18 @@ class CacheRefresher:
 
                 team_entries = []
                 for team in league_teams or []:
-                    team_entries.append({
-                        "team_name": team.name,
-                        "team_abbrev": team.abbreviation,
-                        "team_short_name": team.short_name,
-                        "provider": provider_name,
-                        "provider_team_id": team.id,
-                        "league": league_slug,
-                        "sport": team.sport or sport,
-                        "logo_url": team.logo_url,
-                    })
+                    team_entries.append(
+                        {
+                            "team_name": team.name,
+                            "team_abbrev": team.abbreviation,
+                            "team_short_name": team.short_name,
+                            "provider": provider_name,
+                            "provider_team_id": team.id,
+                            "league": league_slug,
+                            "sport": team.sport or sport,
+                            "logo_url": team.logo_url,
+                        }
+                    )
 
                 return league_info, team_entries
             except Exception as e:
@@ -705,9 +704,7 @@ class CacheRefresher:
                     ),
                 )
 
-            logger.info(
-                f"Saved {len(leagues)} leagues and {len(unique_teams)} teams to cache"
-            )
+            logger.info(f"Saved {len(leagues)} leagues and {len(unique_teams)} teams to cache")
 
     def _update_meta(
         self,

@@ -147,9 +147,7 @@ class CachedMatcher:
                 cache_hits += 1
                 # Cache hit - use cached event, refresh dynamic fields
                 event = self._refresh_event(cached.event_id, cached.league)
-                self._cache.touch(
-                    self._group_id, stream_id, stream_name, self._generation
-                )
+                self._cache.touch(self._group_id, stream_id, stream_name, self._generation)
 
                 result = CachedMatchResult(
                     stream_name=stream_name,
@@ -205,16 +203,18 @@ class CachedMatcher:
             cache_misses=cache_misses,
         )
 
-    def _match_single(
-        self, stream_name: str, target_date: date
-    ) -> StreamMatchResult:
+    def _match_single(self, stream_name: str, target_date: date) -> StreamMatchResult:
         """Match a single stream using the underlying matcher."""
         # Use the batch matcher for a single stream
         batch_result = self._matcher.match_all([stream_name], target_date)
-        return batch_result.results[0] if batch_result.results else StreamMatchResult(
-            stream_name=stream_name,
-            matched=False,
-            exclusion_reason="matcher_error",
+        return (
+            batch_result.results[0]
+            if batch_result.results
+            else StreamMatchResult(
+                stream_name=stream_name,
+                matched=False,
+                exclusion_reason="matcher_error",
+            )
         )
 
     def _refresh_event(self, event_id: str, league: str) -> Event | None:

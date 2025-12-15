@@ -107,9 +107,7 @@ class EventEPGGenerator:
             )
 
             # Generate channel name from template
-            channel_name = self._resolver.resolve(
-                options.template.channel_name_format, context
-            )
+            channel_name = self._resolver.resolve(options.template.channel_name_format, context)
 
             channel_info = EventChannelInfo(
                 channel_id=channel_id,
@@ -229,9 +227,7 @@ class EventEPGGenerator:
             # Full event: prelims start → full duration
             return event.start_time, event.start_time + timedelta(hours=mma_duration)
 
-    def _enrich_if_recent(
-        self, events: list[Event], target_date: date
-    ) -> list[Event]:
+    def _enrich_if_recent(self, events: list[Event], target_date: date) -> list[Event]:
         """Fetch fresh data for events if target is today/yesterday.
 
         Scoreboard endpoint is cached for 8hr (discovery only).

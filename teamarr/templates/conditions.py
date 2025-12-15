@@ -88,15 +88,11 @@ class ConditionEvaluator:
     # Home/Away conditions
     # =========================================================================
 
-    def _eval_is_home(
-        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
-    ) -> bool:
+    def _eval_is_home(self, value: str | None, ctx: TemplateContext, game_ctx: GameContext) -> bool:
         """Check if team is playing at home."""
         return game_ctx.is_home
 
-    def _eval_is_away(
-        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
-    ) -> bool:
+    def _eval_is_away(self, value: str | None, ctx: TemplateContext, game_ctx: GameContext) -> bool:
         """Check if team is playing away."""
         return not game_ctx.is_home
 

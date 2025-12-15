@@ -47,9 +47,7 @@ def extract_games_back(ctx: TemplateContext, game_ctx: GameContext | None) -> st
     suffix_rules=SuffixRules.ALL,
     description="Opponent's playoff seed",
 )
-def extract_opponent_playoff_seed(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_playoff_seed(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats and game_ctx.opponent_stats.playoff_seed:
         return str(game_ctx.opponent_stats.playoff_seed)
     return ""
@@ -61,9 +59,7 @@ def extract_opponent_playoff_seed(
     suffix_rules=SuffixRules.ALL,
     description="Opponent's games behind leader",
 )
-def extract_opponent_games_back(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_opponent_games_back(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if game_ctx and game_ctx.opponent_stats:
         gb = game_ctx.opponent_stats.games_back
         if gb is not None:
