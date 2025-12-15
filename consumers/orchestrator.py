@@ -183,17 +183,17 @@ class Orchestrator:
                     t.team_abbrev,
                     t.channel_id,
                     t.team_logo_url,
-                    tp.title_template,
-                    tp.description_template,
+                    t.sport,
+                    tp.title_format,
                     tp.subtitle_template,
-                    tp.default_category,
                     tp.pregame_title,
                     tp.pregame_description,
                     tp.postgame_title,
                     tp.postgame_description,
                     tp.idle_title,
                     tp.idle_description,
-                    lc.sport as league_sport
+                    lc.sport as league_sport,
+                    lc.default_category
                 FROM teams t
                 INNER JOIN templates tp ON t.template_id = tp.id
                 LEFT JOIN league_config lc ON t.league = lc.league_code
@@ -204,6 +204,9 @@ class Orchestrator:
 
             configs = []
             for row in rows:
+                # Use team's sport, fallback to league_config's sport
+                sport = row["sport"] or row["league_sport"]
+
                 config = TeamChannelConfig(
                     team_id=str(row["espn_team_id"]),
                     league=row["league"],
@@ -211,10 +214,9 @@ class Orchestrator:
                     team_name=row["team_name"],
                     team_abbrev=row["team_abbrev"],
                     logo_url=row["team_logo_url"],
-                    sport=row["league_sport"],
+                    sport=sport,
                     # Template overrides
-                    title_format=row["title_template"],
-                    description_format=row["description_template"],
+                    title_format=row["title_format"],
                     subtitle_format=row["subtitle_template"],
                     category=row["default_category"],
                     pregame_title=row["pregame_title"],
@@ -269,18 +271,33 @@ class Orchestrator:
             conn.close()
 
     def _get_additional_leagues(self, config: TeamChannelConfig) -> list[str]:
-        """Get additional leagues for multi-league support (soccer).
+        """Get additional leagues for multi-league support (soccer only).
 
-        Uses the team/league cache to find all leagues a team plays in.
+        Soccer teams play in multiple competitions (domestic league, cups,
+        Champions League, etc.). This method returns those additional leagues.
+
+        For non-soccer sports, team IDs are not unique across leagues
+        (e.g., team ID 8 = Pistons in NBA, Lions in NFL), so we don't
+        use multi-league support.
         """
-        # Try to use the unified cache
+        # Only use multi-league for soccer
+        from utilities.sports import is_soccer_league
+
+        if not is_soccer_league(config.league):
+            return []
+
+        # Try to use the unified cache for soccer teams
         try:
             from services import get_cache
 
             cache = get_cache()
             leagues = cache.get_team_leagues(config.team_id, "espn")
-            # Remove primary league
-            return [lg for lg in leagues if lg != config.league]
+            # Filter to only soccer leagues and remove primary
+            soccer_leagues = [
+                lg for lg in leagues
+                if lg != config.league and is_soccer_league(lg)
+            ]
+            return soccer_leagues
         except Exception:
             # Cache not available or error - return empty
             return []
