@@ -165,11 +165,11 @@ def create_keyword(request: ExceptionKeywordCreate):
                 enabled=request.enabled,
             )
             keyword = db_get_keyword(conn, keyword_id)
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Keywords '{request.keywords}' already exist",
-        )
+        ) from e
 
     return ExceptionKeywordResponse(
         id=keyword.id,
