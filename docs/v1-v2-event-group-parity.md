@@ -391,9 +391,17 @@ For existing V2 users:
   - [x] API layer (`/api/v1/aliases` endpoints)
   - [x] Frontend UI (`TeamAliases.tsx` at `/teams/aliases`)
 
-### Phase 3: Multi-Sport
-- [ ] 3.1 Channel Sort Order
-- [ ] 3.2 Overlap Handling
+### Phase 3: Multi-Sport - COMPLETE (Dec 20, 2025)
+- [x] 3.1 Channel Sort Order
+  - [x] Schema migration (`channel_sort_order` column with CHECK constraint)
+  - [x] Database layer (`EventEPGGroup` dataclass, `create_group`, `update_group`)
+  - [x] API layer (Pydantic models, validation, all CRUD endpoints)
+  - [x] Frontend UI (Multi-Sport Settings card in EventGroupForm for multi-league groups)
+- [x] 3.2 Overlap Handling
+  - [x] Schema migration (`overlap_handling` column with CHECK constraint)
+  - [x] Database layer (`EventEPGGroup` dataclass, `create_group`, `update_group`)
+  - [x] API layer (Pydantic models, validation, all CRUD endpoints)
+  - [x] Frontend UI (Multi-Sport Settings card in EventGroupForm for multi-league groups)
 
 ### Bug Fixes
 - [x] Blank screen after import (null name in league sorting)

@@ -48,6 +48,9 @@ class EventEPGGroup:
     filtered_include_regex: int = 0
     filtered_exclude_regex: int = 0
     filtered_no_match: int = 0
+    # Multi-sport enhancements (Phase 3)
+    channel_sort_order: str = "time"
+    overlap_handling: str = "add_stream"
     enabled: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -119,6 +122,9 @@ def _row_to_group(row) -> EventEPGGroup:
         filtered_include_regex=row["filtered_include_regex"] or 0,
         filtered_exclude_regex=row["filtered_exclude_regex"] or 0,
         filtered_no_match=row["filtered_no_match"] or 0,
+        # Multi-sport enhancements
+        channel_sort_order=row["channel_sort_order"] or "time",
+        overlap_handling=row["overlap_handling"] or "add_stream",
         enabled=bool(row["enabled"]),
         created_at=created_at,
         updated_at=updated_at,
@@ -236,6 +242,9 @@ def create_group(
     custom_regex_teams: str | None = None,
     custom_regex_teams_enabled: bool = False,
     skip_builtin_filter: bool = False,
+    # Multi-sport enhancements (Phase 3)
+    channel_sort_order: str = "time",
+    overlap_handling: str = "add_stream",
     enabled: bool = True,
 ) -> int:
     """Create a new event EPG group.
@@ -276,8 +285,8 @@ def create_group(
             stream_include_regex, stream_include_regex_enabled,
             stream_exclude_regex, stream_exclude_regex_enabled,
             custom_regex_teams, custom_regex_teams_enabled,
-            skip_builtin_filter, enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            skip_builtin_filter, channel_sort_order, overlap_handling, enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name,
             json.dumps(leagues),
@@ -304,6 +313,8 @@ def create_group(
             custom_regex_teams,
             int(custom_regex_teams_enabled),
             int(skip_builtin_filter),
+            channel_sort_order,
+            overlap_handling,
             int(enabled),
         ),
     )
@@ -344,6 +355,9 @@ def update_group(
     custom_regex_teams: str | None = None,
     custom_regex_teams_enabled: bool | None = None,
     skip_builtin_filter: bool | None = None,
+    # Multi-sport enhancements (Phase 3)
+    channel_sort_order: str | None = None,
+    overlap_handling: str | None = None,
     enabled: bool | None = None,
     # Clear flags
     clear_template: bool = False,
@@ -503,6 +517,15 @@ def update_group(
     if skip_builtin_filter is not None:
         updates.append("skip_builtin_filter = ?")
         values.append(int(skip_builtin_filter))
+
+    # Multi-sport enhancements (Phase 3)
+    if channel_sort_order is not None:
+        updates.append("channel_sort_order = ?")
+        values.append(channel_sort_order)
+
+    if overlap_handling is not None:
+        updates.append("overlap_handling = ?")
+        values.append(overlap_handling)
 
     if enabled is not None:
         updates.append("enabled = ?")

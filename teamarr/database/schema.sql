@@ -318,6 +318,12 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     filtered_exclude_regex INTEGER DEFAULT 0,   -- Streams filtered by exclude regex
     filtered_no_match INTEGER DEFAULT 0,        -- Streams with no event match
 
+    -- Multi-Sport Enhancements (Phase 3)
+    channel_sort_order TEXT DEFAULT 'time'
+        CHECK(channel_sort_order IN ('time', 'sport_time', 'league_time')),
+    overlap_handling TEXT DEFAULT 'add_stream'
+        CHECK(overlap_handling IN ('add_stream', 'add_only', 'create_all', 'skip')),
+
     -- Status
     enabled BOOLEAN DEFAULT 1,
 

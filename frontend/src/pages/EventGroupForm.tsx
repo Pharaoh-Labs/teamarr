@@ -124,6 +124,9 @@ export function EventGroupForm() {
     m3u_group_name: m3uGroupName || null,
     m3u_account_id: m3uAccountId ? Number(m3uAccountId) : null,
     m3u_account_name: m3uAccountName || null,
+    // Multi-sport enhancements (Phase 3)
+    channel_sort_order: "time",
+    overlap_handling: "add_stream",
     enabled: true,
   })
 
@@ -187,6 +190,9 @@ export function EventGroupForm() {
         custom_regex_teams: group.custom_regex_teams,
         custom_regex_teams_enabled: group.custom_regex_teams_enabled,
         skip_builtin_filter: group.skip_builtin_filter,
+        // Multi-sport enhancements (Phase 3)
+        channel_sort_order: group.channel_sort_order || "time",
+        overlap_handling: group.overlap_handling || "add_stream",
         enabled: group.enabled,
       })
 
@@ -942,6 +948,57 @@ export function EventGroupForm() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Multi-Sport Settings (Phase 3) - only show for multi-sport groups */}
+          {formData.leagues.length > 1 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Multi-Sport Settings</CardTitle>
+                <CardDescription>
+                  Configure how events from multiple leagues are handled
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="channel_sort_order">Channel Sort Order</Label>
+                    <Select
+                      id="channel_sort_order"
+                      value={formData.channel_sort_order || "time"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, channel_sort_order: e.target.value })
+                      }
+                    >
+                      <option value="time">By Time (default)</option>
+                      <option value="sport_time">By Sport, then Time</option>
+                      <option value="league_time">By League, then Time</option>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      How to order channels when multiple events are scheduled
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="overlap_handling">Overlap Handling</Label>
+                    <Select
+                      id="overlap_handling"
+                      value={formData.overlap_handling || "add_stream"}
+                      onChange={(e) =>
+                        setFormData({ ...formData, overlap_handling: e.target.value })
+                      }
+                    >
+                      <option value="add_stream">Add Stream (default)</option>
+                      <option value="add_only">Add Only</option>
+                      <option value="create_all">Create All</option>
+                      <option value="skip">Skip</option>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      How to handle events that overlap in time
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* M3U Source */}
           {formData.m3u_group_name && (

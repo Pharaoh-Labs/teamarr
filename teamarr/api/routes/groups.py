@@ -48,6 +48,9 @@ class GroupCreate(BaseModel):
     custom_regex_teams: str | None = None
     custom_regex_teams_enabled: bool = False
     skip_builtin_filter: bool = False
+    # Multi-sport enhancements (Phase 3)
+    channel_sort_order: str = "time"
+    overlap_handling: str = "add_stream"
     enabled: bool = True
 
 
@@ -79,6 +82,9 @@ class GroupUpdate(BaseModel):
     custom_regex_teams: str | None = None
     custom_regex_teams_enabled: bool | None = None
     skip_builtin_filter: bool | None = None
+    # Multi-sport enhancements (Phase 3)
+    channel_sort_order: str | None = None
+    overlap_handling: str | None = None
     enabled: bool | None = None
 
     # Clear flags for nullable fields
@@ -133,6 +139,9 @@ class GroupResponse(BaseModel):
     filtered_include_regex: int = 0
     filtered_exclude_regex: int = 0
     filtered_no_match: int = 0
+    # Multi-sport enhancements (Phase 3)
+    channel_sort_order: str = "time"
+    overlap_handling: str = "add_stream"
     enabled: bool = True
     created_at: str | None = None
     updated_at: str | None = None
@@ -197,6 +206,8 @@ VALID_DELETE_TIMING = {
 
 VALID_DUPLICATE_HANDLING = {"consolidate", "separate", "ignore"}
 VALID_ASSIGNMENT_MODE = {"auto", "manual"}
+VALID_CHANNEL_SORT_ORDER = {"time", "sport_time", "league_time"}
+VALID_OVERLAP_HANDLING = {"add_stream", "add_only", "create_all", "skip"}
 
 
 def validate_group_fields(
@@ -204,6 +215,8 @@ def validate_group_fields(
     delete_timing: str | None = None,
     duplicate_event_handling: str | None = None,
     channel_assignment_mode: str | None = None,
+    channel_sort_order: str | None = None,
+    overlap_handling: str | None = None,
 ):
     """Validate group field values."""
     if create_timing and create_timing not in VALID_CREATE_TIMING:
@@ -225,6 +238,16 @@ def validate_group_fields(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid channel_assignment_mode. Valid: {VALID_ASSIGNMENT_MODE}",
+        )
+    if channel_sort_order and channel_sort_order not in VALID_CHANNEL_SORT_ORDER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid channel_sort_order. Valid: {VALID_CHANNEL_SORT_ORDER}",
+        )
+    if overlap_handling and overlap_handling not in VALID_OVERLAP_HANDLING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid overlap_handling. Valid: {VALID_OVERLAP_HANDLING}",
         )
 
 
@@ -282,6 +305,8 @@ def list_groups(
                 filtered_include_regex=g.filtered_include_regex,
                 filtered_exclude_regex=g.filtered_exclude_regex,
                 filtered_no_match=g.filtered_no_match,
+                channel_sort_order=g.channel_sort_order,
+                overlap_handling=g.overlap_handling,
                 enabled=g.enabled,
                 created_at=g.created_at.isoformat() if g.created_at else None,
                 updated_at=g.updated_at.isoformat() if g.updated_at else None,
@@ -303,6 +328,8 @@ def create_group(request: GroupCreate):
         delete_timing=request.delete_timing,
         duplicate_event_handling=request.duplicate_event_handling,
         channel_assignment_mode=request.channel_assignment_mode,
+        channel_sort_order=request.channel_sort_order,
+        overlap_handling=request.overlap_handling,
     )
 
     with get_db() as conn:
@@ -340,6 +367,8 @@ def create_group(request: GroupCreate):
             custom_regex_teams=request.custom_regex_teams,
             custom_regex_teams_enabled=request.custom_regex_teams_enabled,
             skip_builtin_filter=request.skip_builtin_filter,
+            channel_sort_order=request.channel_sort_order,
+            overlap_handling=request.overlap_handling,
             enabled=request.enabled,
         )
 
@@ -377,6 +406,8 @@ def create_group(request: GroupCreate):
         filtered_include_regex=group.filtered_include_regex,
         filtered_exclude_regex=group.filtered_exclude_regex,
         filtered_no_match=group.filtered_no_match,
+        channel_sort_order=group.channel_sort_order,
+        overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         created_at=group.created_at.isoformat() if group.created_at else None,
         updated_at=group.updated_at.isoformat() if group.updated_at else None,
@@ -430,6 +461,8 @@ def get_group_by_id(group_id: int):
         filtered_include_regex=group.filtered_include_regex,
         filtered_exclude_regex=group.filtered_exclude_regex,
         filtered_no_match=group.filtered_no_match,
+        channel_sort_order=group.channel_sort_order,
+        overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         created_at=group.created_at.isoformat() if group.created_at else None,
         updated_at=group.updated_at.isoformat() if group.updated_at else None,
@@ -452,6 +485,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         delete_timing=request.delete_timing,
         duplicate_event_handling=request.duplicate_event_handling,
         channel_assignment_mode=request.channel_assignment_mode,
+        channel_sort_order=request.channel_sort_order,
+        overlap_handling=request.overlap_handling,
     )
 
     with get_db() as conn:
@@ -498,6 +533,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             custom_regex_teams=request.custom_regex_teams,
             custom_regex_teams_enabled=request.custom_regex_teams_enabled,
             skip_builtin_filter=request.skip_builtin_filter,
+            channel_sort_order=request.channel_sort_order,
+            overlap_handling=request.overlap_handling,
             enabled=request.enabled,
             clear_template=request.clear_template,
             clear_channel_start_number=request.clear_channel_start_number,
@@ -548,6 +585,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         filtered_include_regex=group.filtered_include_regex,
         filtered_exclude_regex=group.filtered_exclude_regex,
         filtered_no_match=group.filtered_no_match,
+        channel_sort_order=group.channel_sort_order,
+        overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         created_at=group.created_at.isoformat() if group.created_at else None,
         updated_at=group.updated_at.isoformat() if group.updated_at else None,

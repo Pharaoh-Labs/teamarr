@@ -35,6 +35,9 @@ export interface EventGroup {
   filtered_include_regex: number
   filtered_exclude_regex: number
   filtered_no_match: number
+  // Multi-sport enhancements (Phase 3)
+  channel_sort_order: string
+  overlap_handling: string
   enabled: boolean
   created_at: string | null
   updated_at: string | null
@@ -67,6 +70,9 @@ export interface EventGroupCreate {
   custom_regex_teams?: string | null
   custom_regex_teams_enabled?: boolean
   skip_builtin_filter?: boolean
+  // Multi-sport enhancements (Phase 3)
+  channel_sort_order?: string
+  overlap_handling?: string
   enabled?: boolean
 }
 
