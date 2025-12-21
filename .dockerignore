@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# Frontend build artifacts (rebuilt in Docker)
+frontend/node_modules/
+frontend/dist/
+
+# Development
+.git/
+.github/
+.ruff_cache/
+.pytest_cache/
+*.md
+tests/
+
+# Runtime data (created at runtime)
+*.db
+*.xml
+*.xml.bak
+data/logs/
+data/*.xml
+data/*.xml.bak
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

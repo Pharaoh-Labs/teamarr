@@ -1,10 +1,18 @@
+# Build frontend
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Build Python application
 FROM python:3.11-slim
 
 # Build arguments for version info
 ARG GIT_BRANCH=unknown
 ARG GIT_SHA=unknown
 
-# Set working directory
 WORKDIR /app
 
 # Install system dependencies
@@ -13,42 +21,40 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+COPY pyproject.toml ./
 RUN pip install --no-cache-dir \
-    flask \
-    requests \
-    regex \
-    croniter
+    httpx>=0.27.0 \
+    "fastapi>=0.115.0" \
+    "uvicorn[standard]>=0.32.0" \
+    pydantic>=2.0.0 \
+    rapidfuzz>=3.0.0
 
 # Copy application code
-COPY api/ ./api/
-COPY config/ ./config/
-COPY database/ ./database/
-COPY epg/ ./epg/
-COPY static/ ./static/
-COPY templates/ ./templates/
-COPY utils/ ./utils/
-COPY app.py .
-COPY config.py .
+COPY teamarr/ ./teamarr/
+COPY app.py ./
+COPY data/tsdb_seed.json ./data/
+
+# Copy built frontend
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Write version file with build-time git info
 RUN echo "${GIT_BRANCH}" > /app/.git-branch && \
     echo "${GIT_SHA}" > /app/.git-sha
 
 # Create directory for data persistence
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data/logs
 
 # Expose the application port
-EXPOSE 9195
+EXPOSE 9198
 
 # Set environment variables
-ENV FLASK_APP=app.py
 ENV PYTHONUNBUFFERED=1
 ENV GIT_BRANCH=${GIT_BRANCH}
 ENV GIT_SHA=${GIT_SHA}
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9195/').read()" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9198/health').read()" || exit 1
 
 # Run the application
 CMD ["python", "app.py"]
