@@ -44,8 +44,8 @@ RUN echo "${GIT_BRANCH}" > /app/.git-branch && \
 # Create directory for data persistence
 RUN mkdir -p /app/data/logs
 
-# Expose the application port
-EXPOSE 9198
+# Expose the application port (same as V1)
+EXPOSE 9195
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -54,7 +54,7 @@ ENV GIT_SHA=${GIT_SHA}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9198/health').read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9195/health').read()" || exit 1
 
 # Run the application
 CMD ["python", "app.py"]

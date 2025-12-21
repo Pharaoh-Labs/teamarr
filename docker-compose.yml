@@ -1,6 +1,6 @@
 services:
   teamarr:
-    image: ghcr.io/egyptiangio/teamarr:dev
+    image: ghcr.io/egyptiangio/teamarr:v2-alpha
     container_name: teamarr
     restart: unless-stopped
     ports:
