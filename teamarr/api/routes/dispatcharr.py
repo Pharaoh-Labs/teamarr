@@ -123,8 +123,12 @@ def list_group_streams(account_id: int, group_id: int) -> list[dict]:
 
 
 @router.get("/channel-groups")
-def list_channel_groups() -> list[dict]:
-    """List all Dispatcharr channel groups (for channel assignment).
+def list_channel_groups(exclude_m3u: bool = True) -> list[dict]:
+    """List Dispatcharr channel groups (for channel assignment).
+
+    Args:
+        exclude_m3u: If True, exclude groups originating from M3U accounts.
+                     Defaults to True since M3U groups shouldn't be used for channel assignment.
 
     Returns:
         List of channel groups
@@ -133,7 +137,7 @@ def list_channel_groups() -> list[dict]:
     if not conn:
         raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
 
-    groups = conn.m3u.list_groups()
+    groups = conn.m3u.list_groups(exclude_m3u=exclude_m3u)
     return [
         {
             "id": g.id,
@@ -141,6 +145,69 @@ def list_channel_groups() -> list[dict]:
         }
         for g in groups
     ]
+
+
+@router.post("/channel-groups")
+def create_channel_group(name: str) -> dict:
+    """Create a new channel group in Dispatcharr.
+
+    Args:
+        name: Group name
+
+    Returns:
+        Created group data
+    """
+    conn = get_dispatcharr_connection(db_factory=get_db)
+    if not conn:
+        raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
+
+    result = conn.m3u.create_channel_group(name)
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+
+    return result.data
+
+
+@router.get("/channel-profiles")
+def list_channel_profiles() -> list[dict]:
+    """List all channel profiles from Dispatcharr.
+
+    Returns:
+        List of channel profiles
+    """
+    conn = get_dispatcharr_connection(db_factory=get_db)
+    if not conn:
+        raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
+
+    profiles = conn.channels.list_profiles()
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+        }
+        for p in profiles
+    ]
+
+
+@router.post("/channel-profiles")
+def create_channel_profile(name: str) -> dict:
+    """Create a new channel profile in Dispatcharr.
+
+    Args:
+        name: Profile name
+
+    Returns:
+        Created profile data
+    """
+    conn = get_dispatcharr_connection(db_factory=get_db)
+    if not conn:
+        raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
+
+    result = conn.channels.create_profile(name)
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+
+    return result.data
 
 
 @router.get("/epg-sources")

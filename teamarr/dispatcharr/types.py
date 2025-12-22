@@ -185,6 +185,27 @@ class DispatcharrChannelGroup:
         )
 
 
+@dataclass(frozen=True)
+class DispatcharrChannelProfile:
+    """A channel profile in Dispatcharr."""
+
+    id: int
+    name: str
+    channel_ids: tuple[int, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_api(cls, data: dict) -> "DispatcharrChannelProfile":
+        """Create from API response dict."""
+        channels = data.get("channels", [])
+        if isinstance(channels, list):
+            channels = tuple(channels)
+        return cls(
+            id=data["id"],
+            name=data.get("name", ""),
+            channel_ids=channels,
+        )
+
+
 @dataclass
 class OperationResult:
     """Result of a Dispatcharr API operation.

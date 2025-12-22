@@ -14,6 +14,7 @@ from teamarr.dispatcharr.types import (
     DispatcharrChannelGroup,
     DispatcharrM3UAccount,
     DispatcharrStream,
+    OperationResult,
     RefreshResult,
 )
 
@@ -100,11 +101,16 @@ class M3UManager:
             return DispatcharrM3UAccount.from_api(response.json())
         return None
 
-    def list_groups(self, search: str | None = None) -> list[DispatcharrChannelGroup]:
+    def list_groups(
+        self,
+        search: str | None = None,
+        exclude_m3u: bool = False,
+    ) -> list[DispatcharrChannelGroup]:
         """List channel groups, optionally filtered by name.
 
         Args:
             search: Filter by group name (case-insensitive substring match)
+            exclude_m3u: If True, exclude groups that originate from M3U accounts
 
         Returns:
             List of DispatcharrChannelGroup objects
@@ -118,11 +124,50 @@ class M3UManager:
         groups = [DispatcharrChannelGroup.from_api(g) for g in response.json()]
         self._groups_cache = groups  # Cache for name lookups
 
+        # Filter out M3U-originated groups if requested
+        if exclude_m3u:
+            groups = [g for g in groups if not g.m3u_accounts]
+
         if search:
             search_lower = search.lower()
             groups = [g for g in groups if search_lower in g.name.lower()]
 
         return groups
+
+    def create_channel_group(self, name: str) -> OperationResult:
+        """Create a new channel group in Dispatcharr.
+
+        Args:
+            name: Group name
+
+        Returns:
+            OperationResult with success status and created group data
+        """
+        if not name or not name.strip():
+            return OperationResult(success=False, error="Group name is required")
+
+        payload = {"name": name.strip()}
+        response = self._client.post("/api/channels/groups/", payload)
+
+        if response is None:
+            return OperationResult(success=False, error="Request failed - no response")
+
+        if response.status_code == 201:
+            data = response.json()
+            # Invalidate cache so new group appears
+            self._groups_cache = None
+            return OperationResult(success=True, data=data)
+
+        if response.status_code == 400:
+            return OperationResult(
+                success=False,
+                error=response.json().get("detail", "Bad request"),
+            )
+
+        return OperationResult(
+            success=False,
+            error=f"Failed to create group: {response.status_code}",
+        )
 
     def get_group_name(self, group_id: int) -> str | None:
         """Get exact group name by ID (needed for stream filtering).

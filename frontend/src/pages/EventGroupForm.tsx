@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, Save, ChevronRight, X } from "lucide-react"
+import { ArrowLeft, Loader2, Save, ChevronRight, X, Plus, Check } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -41,6 +41,46 @@ async function fetchLeagues(): Promise<CachedLeague[]> {
   if (!response.ok) return []
   const data = await response.json()
   return data.leagues || []
+}
+
+// Dispatcharr channel group
+interface ChannelGroup {
+  id: number
+  name: string
+}
+
+// Dispatcharr channel profile
+interface ChannelProfile {
+  id: number
+  name: string
+}
+
+async function fetchChannelGroups(): Promise<ChannelGroup[]> {
+  const response = await fetch("/api/v1/dispatcharr/channel-groups")
+  if (!response.ok) return []
+  return response.json()
+}
+
+async function fetchChannelProfiles(): Promise<ChannelProfile[]> {
+  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
+  if (!response.ok) return []
+  return response.json()
+}
+
+async function createChannelGroup(name: string): Promise<ChannelGroup | null> {
+  const response = await fetch(`/api/v1/dispatcharr/channel-groups?name=${encodeURIComponent(name)}`, {
+    method: "POST",
+  })
+  if (!response.ok) return null
+  return response.json()
+}
+
+async function createChannelProfile(name: string): Promise<ChannelProfile | null> {
+  const response = await fetch(`/api/v1/dispatcharr/channel-profiles?name=${encodeURIComponent(name)}`, {
+    method: "POST",
+  })
+  if (!response.ok) return null
+  return response.json()
 }
 
 // Sport display names
@@ -123,6 +163,24 @@ export function EventGroupForm() {
     queryKey: ["leagues"],
     queryFn: fetchLeagues,
   })
+
+  // Fetch channel groups and profiles from Dispatcharr
+  const { data: channelGroups, refetch: refetchChannelGroups } = useQuery({
+    queryKey: ["dispatcharr-channel-groups"],
+    queryFn: fetchChannelGroups,
+  })
+  const { data: channelProfiles, refetch: refetchChannelProfiles } = useQuery({
+    queryKey: ["dispatcharr-channel-profiles"],
+    queryFn: fetchChannelProfiles,
+  })
+
+  // Inline create state
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState("")
+  const [creatingGroup, setCreatingGroup] = useState(false)
+  const [showCreateProfile, setShowCreateProfile] = useState(false)
+  const [newProfileName, setNewProfileName] = useState("")
+  const [creatingProfile, setCreatingProfile] = useState(false)
 
   // Mutations
   const createMutation = useCreateGroup()
@@ -784,6 +842,217 @@ export function EventGroupForm() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   How to handle multiple streams matching the same event
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Dispatcharr Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Dispatcharr Settings</CardTitle>
+              <CardDescription>
+                Channel group and profile assignments in Dispatcharr
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Channel Group */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="channel_group">Channel Group</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setShowCreateGroup(!showCreateGroup)}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    New
+                  </Button>
+                </div>
+                {showCreateGroup && (
+                  <div className="flex gap-2 p-2 bg-muted/50 rounded-md">
+                    <Input
+                      placeholder="New group name..."
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={creatingGroup || !newGroupName.trim()}
+                      onClick={async () => {
+                        setCreatingGroup(true)
+                        const created = await createChannelGroup(newGroupName.trim())
+                        setCreatingGroup(false)
+                        if (created) {
+                          toast.success(`Created group "${created.name}"`)
+                          setFormData({ ...formData, channel_group_id: created.id })
+                          setNewGroupName("")
+                          setShowCreateGroup(false)
+                          refetchChannelGroups()
+                        } else {
+                          toast.error("Failed to create group")
+                        }
+                      }}
+                    >
+                      {creatingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowCreateGroup(false)
+                        setNewGroupName("")
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <Select
+                  id="channel_group"
+                  value={formData.channel_group_id?.toString() || ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      channel_group_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                >
+                  <option value="">None (use default)</option>
+                  {channelGroups?.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Dispatcharr group to assign created channels to
+                </p>
+              </div>
+
+              {/* Channel Profiles */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Channel Profiles</Label>
+                  <div className="flex gap-1">
+                    {(formData.channel_profile_ids?.length || 0) > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-muted-foreground"
+                        onClick={() => setFormData({ ...formData, channel_profile_ids: [] })}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      onClick={() => setShowCreateProfile(!showCreateProfile)}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      New
+                    </Button>
+                  </div>
+                </div>
+                {showCreateProfile && (
+                  <div className="flex gap-2 p-2 bg-muted/50 rounded-md">
+                    <Input
+                      placeholder="New profile name..."
+                      value={newProfileName}
+                      onChange={(e) => setNewProfileName(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={creatingProfile || !newProfileName.trim()}
+                      onClick={async () => {
+                        setCreatingProfile(true)
+                        const created = await createChannelProfile(newProfileName.trim())
+                        setCreatingProfile(false)
+                        if (created) {
+                          toast.success(`Created profile "${created.name}"`)
+                          setFormData({
+                            ...formData,
+                            channel_profile_ids: [...(formData.channel_profile_ids || []), created.id],
+                          })
+                          setNewProfileName("")
+                          setShowCreateProfile(false)
+                          refetchChannelProfiles()
+                        } else {
+                          toast.error("Failed to create profile")
+                        }
+                      }}
+                    >
+                      {creatingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowCreateProfile(false)
+                        setNewProfileName("")
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <div className="border rounded-md max-h-40 overflow-y-auto">
+                  {channelProfiles?.length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground text-center">
+                      No profiles found
+                    </div>
+                  ) : (
+                    channelProfiles?.map((p) => {
+                      const isSelected = formData.channel_profile_ids?.includes(p.id) || false
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={cn(
+                            "w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent border-b last:border-b-0",
+                            isSelected && "bg-primary/10"
+                          )}
+                          onClick={() => {
+                            const current = formData.channel_profile_ids || []
+                            if (isSelected) {
+                              setFormData({
+                                ...formData,
+                                channel_profile_ids: current.filter((id) => id !== p.id),
+                              })
+                            } else {
+                              setFormData({
+                                ...formData,
+                                channel_profile_ids: [...current, p.id],
+                              })
+                            }
+                          }}
+                        >
+                          <div className={cn(
+                            "w-4 h-4 border rounded flex items-center justify-center",
+                            isSelected && "bg-primary border-primary"
+                          )}>
+                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                          </div>
+                          <span className="flex-1">{p.name}</span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Select profiles to add created channels to (click to toggle)
                 </p>
               </div>
             </CardContent>

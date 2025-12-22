@@ -8,7 +8,11 @@ import logging
 import threading
 
 from teamarr.dispatcharr.client import DispatcharrClient
-from teamarr.dispatcharr.types import DispatcharrChannel, OperationResult
+from teamarr.dispatcharr.types import (
+    DispatcharrChannel,
+    DispatcharrChannelProfile,
+    OperationResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -425,6 +429,57 @@ class ChannelManager:
         return OperationResult(
             success=False,
             error=self._client.parse_api_error(response),
+        )
+
+    # ========================================================================
+    # Channel Profiles
+    # ========================================================================
+
+    def list_profiles(self) -> list[DispatcharrChannelProfile]:
+        """List all channel profiles from Dispatcharr.
+
+        Returns:
+            List of DispatcharrChannelProfile objects
+        """
+        response = self._client.get("/api/channels/profiles/")
+
+        if response is None or response.status_code != 200:
+            status = response.status_code if response else "No response"
+            logger.error(f"Failed to list channel profiles: {status}")
+            return []
+
+        return [DispatcharrChannelProfile.from_api(p) for p in response.json()]
+
+    def create_profile(self, name: str) -> OperationResult:
+        """Create a new channel profile in Dispatcharr.
+
+        Args:
+            name: Profile name
+
+        Returns:
+            OperationResult with success status and created profile data
+        """
+        if not name or not name.strip():
+            return OperationResult(success=False, error="Profile name is required")
+
+        payload = {"name": name.strip()}
+        response = self._client.post("/api/channels/profiles/", payload)
+
+        if response is None:
+            return OperationResult(success=False, error="Request failed - no response")
+
+        if response.status_code == 201:
+            return OperationResult(success=True, data=response.json())
+
+        if response.status_code == 400:
+            return OperationResult(
+                success=False,
+                error=response.json().get("detail", "Bad request"),
+            )
+
+        return OperationResult(
+            success=False,
+            error=f"Failed to create profile: {response.status_code}",
         )
 
     def add_to_profile(
