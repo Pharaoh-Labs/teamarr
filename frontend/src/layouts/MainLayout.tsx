@@ -131,17 +131,15 @@ export function MainLayout() {
         </div>
       </footer>
 
-      {/* Toast notifications */}
+      {/* Toast notifications - themed styling for all toasts */}
       <Toaster
         position="top-right"
-        expand={true}
-        richColors
         toastOptions={{
-          className: "bg-card border border-border text-foreground text-sm",
+          className: "!bg-background !text-foreground !border !border-border !rounded-lg !shadow-lg",
           style: {
-            padding: "16px 20px",
+            padding: "12px 16px",
             fontSize: "14px",
-            minWidth: "320px",
+            width: "356px",
           },
         }}
       />

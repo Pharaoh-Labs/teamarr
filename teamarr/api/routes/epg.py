@@ -1,11 +1,25 @@
 """EPG generation endpoints."""
 
+import json
+import logging
+import queue
+import threading
 from datetime import date, datetime
 
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from teamarr.api.dependencies import get_sports_service
+from teamarr.api.generation_status import (
+    complete_generation,
+    fail_generation,
+    get_status,
+    is_in_progress,
+    start_generation,
+    update_status,
+)
 from teamarr.api.models import (
     EPGGenerateRequest,
     EPGGenerateResponse,
@@ -17,7 +31,6 @@ from teamarr.api.models import (
 )
 from teamarr.consumers import CachedMatcher  # Complex component with DB integration
 from teamarr.database import get_db
-from teamarr.database.stats import create_run, save_run
 from teamarr.services import (
     EventEPGOptions,
     SportsDataService,
@@ -154,156 +167,199 @@ def generate_epg(
     request: EPGGenerateRequest,
     service: SportsDataService = Depends(get_sports_service),
 ):
-    """Generate full EPG: teams, event groups, and channel lifecycle.
+    """Generate full EPG using the unified generation workflow.
 
-    This is the unified generation endpoint that handles:
-    1. Team-based EPG generation (per-team schedules)
-    2. Event group processing (stream matching + channel lifecycle)
-    3. XMLTV file output
-    4. Dispatcharr integration (EPG refresh, channel association)
+    This endpoint calls run_full_generation() which handles:
+    - M3U refresh
+    - Team and event group processing
+    - XMLTV generation and file output
+    - Dispatcharr integration
+    - Channel lifecycle (deletions, reconciliation, cleanup)
+
+    For real-time progress, use GET /epg/generate/stream instead.
     """
-    import time
-    from pathlib import Path
+    from teamarr.consumers.generation import run_full_generation
+    from teamarr.database.settings import get_dispatcharr_settings
+    from teamarr.dispatcharr import get_dispatcharr_client
 
-    from teamarr.consumers import process_all_event_groups, process_all_teams
-    from teamarr.consumers.team_processor import get_all_team_xmltv
-    from teamarr.database.groups import get_all_group_xmltv
-    from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
-    from teamarr.dispatcharr import EPGManager, M3UManager, get_dispatcharr_client
-    from teamarr.utilities.xmltv import merge_xmltv_content
-
-    start_time = time.time()
-
-    # Create stats run for tracking
+    # Get Dispatcharr client if configured
     with get_db() as conn:
-        stats_run = create_run(conn, run_type="full_epg")
+        dispatcharr_settings = get_dispatcharr_settings(conn)
 
-    try:
-        # Get settings
-        with get_db() as conn:
-            settings_row = get_epg_settings(conn)
-            dispatcharr_settings = get_dispatcharr_settings(conn)
+    dispatcharr_client = None
+    if dispatcharr_settings.enabled and dispatcharr_settings.url:
+        dispatcharr_client = get_dispatcharr_client(get_db)
 
-        # Create Dispatcharr client if configured
-        dispatcharr_client = None
-        if dispatcharr_settings.enabled and dispatcharr_settings.url:
-            dispatcharr_client = get_dispatcharr_client(get_db)
-
-        # Step 1: Refresh M3U accounts (with skip cache)
-        if dispatcharr_client:
-            from teamarr.database.groups import get_all_groups
-
-            with get_db() as conn:
-                groups = get_all_groups(conn, include_disabled=False)
-
-            account_ids = set()
-            for group in groups:
-                if group.m3u_account_id:
-                    account_ids.add(group.m3u_account_id)
-
-            if account_ids:
-                m3u_manager = M3UManager(dispatcharr_client)
-                m3u_manager.refresh_multiple(
-                    list(account_ids),
-                    timeout=120,
-                    skip_if_recent_minutes=60,
-                )
-
-        # Step 2: Process all active teams
-        team_result = process_all_teams(db_factory=get_db)
-
-        # Step 3: Process all event groups (matching + channel lifecycle)
-        group_result = process_all_event_groups(
-            db_factory=get_db,
-            dispatcharr_client=dispatcharr_client,
-        )
-
-        # Step 4: Get all stored XMLTV content and merge
-        xmltv_contents: list[str] = []
-        with get_db() as conn:
-            team_xmltv = get_all_team_xmltv(conn)
-            xmltv_contents.extend(team_xmltv)
-            group_xmltv = get_all_group_xmltv(conn)
-            xmltv_contents.extend(group_xmltv)
-
-        # Step 5: Write to output file if configured
-        output_path = settings_row.epg_output_path
-        file_written = False
-        file_size = 0
-
-        if xmltv_contents and output_path:
-            merged_xmltv = merge_xmltv_content(xmltv_contents)
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_text(merged_xmltv, encoding="utf-8")
-            file_written = True
-            file_size = len(merged_xmltv)
-
-        # Step 6: Trigger Dispatcharr EPG refresh
-        if dispatcharr_client and dispatcharr_settings.epg_id:
-            epg_manager = EPGManager(dispatcharr_client)
-            epg_manager.wait_for_refresh(dispatcharr_settings.epg_id, timeout=60)
-
-        # Update stats run
-        total_programmes = team_result.total_programmes + group_result.total_programmes
-        total_channels = team_result.teams_processed + group_result.total_channels_created
-        stats_run.programmes_total = total_programmes
-        stats_run.programmes_events = team_result.total_events + group_result.total_programmes
-        stats_run.programmes_pregame = team_result.total_pregame
-        stats_run.programmes_postgame = team_result.total_postgame
-        stats_run.programmes_idle = team_result.total_idle
-        stats_run.channels_created = total_channels
-        stats_run.xmltv_size_bytes = file_size
-        stats_run.extra_metrics["teams_processed"] = team_result.teams_processed
-        stats_run.extra_metrics["groups_processed"] = group_result.groups_processed
-        stats_run.extra_metrics["file_written"] = file_written
-        stats_run.extra_metrics["file_size"] = file_size
-        stats_run.complete(status="completed")
-
-    except Exception as e:
-        stats_run.complete(status="failed", error=str(e))
-        with get_db() as conn:
-            save_run(conn, stats_run)
-        raise
-
-    with get_db() as conn:
-        save_run(conn, stats_run)
-
-    duration = time.time() - start_time
-
-    # Aggregate match stats from group results
-    total_fetched = 0
-    total_filtered = 0
-    total_matched = 0
-    total_unmatched = 0
-
-    for result in group_result.results:
-        total_fetched += result.streams_fetched
-        total_filtered += result.filtered_not_event + result.filtered_include_regex + result.filtered_exclude_regex
-        total_matched += result.streams_matched
-        total_unmatched += result.streams_unmatched
-
-    # Calculate eligible (streams that passed filters) and match rate
-    total_eligible = total_matched + total_unmatched
-    match_rate = (total_matched / total_eligible * 100) if total_eligible > 0 else 0.0
-
-    match_stats = MatchStats(
-        streams_fetched=total_fetched,
-        streams_filtered=total_filtered,
-        streams_eligible=total_eligible,
-        streams_matched=total_matched,
-        streams_unmatched=total_unmatched,
-        streams_cached=0,  # Could aggregate from results if tracked
-        match_rate=round(match_rate, 1),
+    # Run unified generation
+    result = run_full_generation(
+        db_factory=get_db,
+        dispatcharr_client=dispatcharr_client,
+        progress_callback=None,
     )
 
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.error or "Generation failed",
+        )
+
     return EPGGenerateResponse(
-        programmes_count=total_programmes,
-        teams_processed=team_result.teams_processed,
-        events_processed=group_result.total_programmes,
-        duration_seconds=duration,
-        run_id=stats_run.id,
-        match_stats=match_stats,
+        programmes_count=result.programmes_total,
+        teams_processed=result.teams_processed,
+        events_processed=result.groups_programmes,
+        duration_seconds=result.duration_seconds,
+        run_id=result.run_id,
+        match_stats=MatchStats(
+            streams_fetched=0,
+            streams_filtered=0,
+            streams_eligible=0,
+            streams_matched=0,
+            streams_unmatched=0,
+            streams_cached=0,
+            match_rate=0.0,
+        ),
+    )
+
+
+@router.get("/epg/generate/status")
+def get_generation_status():
+    """Get current EPG generation status for polling-based progress.
+
+    Returns JSON with:
+    - in_progress: bool - whether generation is running
+    - status: str - current status (starting, progress, complete, error, idle)
+    - message: str - human-readable message
+    - percent: int - progress percentage (0-100)
+    - phase: str - current phase (teams, groups, saving)
+    - current: int - current item number
+    - total: int - total items in current phase
+    - item_name: str - name of current item being processed
+    """
+    return get_status()
+
+
+@router.get("/epg/generate/stream")
+def generate_epg_stream():
+    """Stream EPG generation progress using Server-Sent Events.
+
+    This endpoint calls the unified run_full_generation() function which
+    handles the complete EPG workflow including:
+    - M3U refresh
+    - Team and event group processing
+    - XMLTV generation and file output
+    - Dispatcharr integration (EPG refresh, channel association)
+    - Channel lifecycle (scheduled deletions)
+    - Reconciliation (detect issues)
+    - History cleanup
+    """
+    from teamarr.consumers.generation import run_full_generation
+    from teamarr.database.settings import get_dispatcharr_settings
+    from teamarr.dispatcharr import get_dispatcharr_client
+
+    # Check if already in progress
+    if is_in_progress():
+        return StreamingResponse(
+            iter([f"data: {json.dumps({'status': 'error', 'message': 'Generation already in progress'})}\n\n"]),
+            media_type="text/event-stream",
+        )
+
+    # Mark as started
+    if not start_generation():
+        return StreamingResponse(
+            iter([f"data: {json.dumps({'status': 'error', 'message': 'Failed to start generation'})}\n\n"]),
+            media_type="text/event-stream",
+        )
+
+    # Queue for progress updates
+    progress_queue: queue.Queue = queue.Queue()
+
+    def generate():
+        """Generator function for SSE stream."""
+
+        def run_generation():
+            """Run EPG generation in background thread."""
+            try:
+                # Get Dispatcharr client if configured
+                with get_db() as conn:
+                    dispatcharr_settings = get_dispatcharr_settings(conn)
+
+                dispatcharr_client = None
+                if dispatcharr_settings.enabled and dispatcharr_settings.url:
+                    dispatcharr_client = get_dispatcharr_client(get_db)
+
+                # Progress callback that updates status and queues for SSE
+                def progress_callback(phase: str, percent: int, message: str, current: int, total: int, item_name: str):
+                    update_status(
+                        status="progress",
+                        phase=phase,
+                        percent=percent,
+                        message=message,
+                        current=current,
+                        total=total,
+                        item_name=item_name,
+                    )
+                    progress_queue.put(get_status())
+
+                # Run unified generation
+                result = run_full_generation(
+                    db_factory=get_db,
+                    dispatcharr_client=dispatcharr_client,
+                    progress_callback=progress_callback,
+                )
+
+                if result.success:
+                    complete_generation({
+                        "success": True,
+                        "programmes_count": result.programmes_total,
+                        "teams_processed": result.teams_processed,
+                        "groups_processed": result.groups_processed,
+                        "duration_seconds": result.duration_seconds,
+                        "run_id": result.run_id,
+                    })
+                else:
+                    fail_generation(result.error or "Unknown error")
+
+                progress_queue.put(get_status())
+
+            except Exception as e:
+                fail_generation(str(e))
+                progress_queue.put(get_status())
+
+            finally:
+                progress_queue.put({"_done": True})
+
+        # Start generation thread
+        generation_thread = threading.Thread(target=run_generation, daemon=True)
+        generation_thread.start()
+
+        # Stream progress updates
+        while True:
+            try:
+                data = progress_queue.get(timeout=0.5)
+
+                if data.get("_done"):
+                    break
+
+                yield f"data: {json.dumps(data)}\n\n"
+
+            except queue.Empty:
+                # Send heartbeat to keep connection alive
+                yield ": heartbeat\n\n"
+
+        # Wait for thread to complete
+        generation_thread.join(timeout=5)
+
+        # Send final status
+        yield f"data: {json.dumps(get_status())}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 
@@ -581,23 +637,29 @@ def _analyze_xmltv(xmltv_content: str) -> dict:
             if max_stop is None or stop_date > max_stop:
                 max_stop = stop_date
 
-        # Check for programme type from title patterns
+        # Get text content for variable checking
         title = prog.findtext("title", "") or ""
-        title_lower = title.lower()
+        subtitle = prog.findtext("sub-title", "") or ""
+        desc = prog.findtext("desc", "") or ""
 
-        # Detect filler type from title
-        if "pregame" in title_lower:
+        # Check for programme type from filler comment (V1 compatibility)
+        # Comments look like: <!-- teamarr:filler-pregame -->
+        filler_type = None
+        for child in prog:
+            if callable(child.tag):  # This is a Comment
+                comment_text = child.text or ""
+                if comment_text.startswith("teamarr:filler-"):
+                    filler_type = comment_text.replace("teamarr:filler-", "")
+                    break
+
+        if filler_type == "pregame":
             result["programmes"]["pregame"] += 1
-        elif "postgame" in title_lower:
+        elif filler_type == "postgame":
             result["programmes"]["postgame"] += 1
-        elif "programming" in title_lower or "no " in title_lower and " game" in title_lower:
+        elif filler_type == "idle":
             result["programmes"]["idle"] += 1
         else:
             result["programmes"]["events"] += 1
-
-        # Check for unreplaced variables in text content
-        subtitle = prog.findtext("sub-title", "")
-        desc = prog.findtext("desc", "")
 
         for text in [title, subtitle, desc]:
             if text:
@@ -613,6 +675,8 @@ def _analyze_xmltv(xmltv_content: str) -> dict:
     result["date_range"]["end"] = max_stop
 
     # Detect coverage gaps (> 5 minute gap between programmes)
+    from datetime import datetime
+
     for channel_id, progs in channel_programmes.items():
         # Sort by start time
         progs.sort(key=lambda x: x[0])
@@ -626,12 +690,10 @@ def _analyze_xmltv(xmltv_content: str) -> dict:
                 stop1_time = stop1[:14]
                 start2_time = start2[:14]
 
-                # Calculate gap in minutes
-                from datetime import datetime
-
                 fmt = "%Y%m%d%H%M%S"
                 dt_stop = datetime.strptime(stop1_time, fmt)
                 dt_start = datetime.strptime(start2_time, fmt)
+
                 gap_seconds = (dt_start - dt_stop).total_seconds()
                 gap_minutes = int(gap_seconds / 60)
 
@@ -658,13 +720,35 @@ def get_epg_analysis():
 
     Returns:
     - Channel counts (team vs event based)
-    - Programme counts by type (events, pregame, postgame, idle)
+    - Programme counts by type (events, pregame, postgame, idle) from latest run
     - Date range coverage
     - Unreplaced template variables
     - Coverage gaps between programmes
     """
     xmltv = _get_combined_xmltv()
-    return _analyze_xmltv(xmltv)
+    result = _analyze_xmltv(xmltv)
+
+    # Override programme counts with stats from latest processing run
+    # (XML comments may not survive serialization, so use DB stats instead)
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT programmes_total, programmes_events, programmes_pregame,
+                   programmes_postgame, programmes_idle
+            FROM processing_runs
+            WHERE status = 'completed'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if row:
+            result["programmes"]["total"] = row["programmes_total"] or result["programmes"]["total"]
+            result["programmes"]["events"] = row["programmes_events"] or 0
+            result["programmes"]["pregame"] = row["programmes_pregame"] or 0
+            result["programmes"]["postgame"] = row["programmes_postgame"] or 0
+            result["programmes"]["idle"] = row["programmes_idle"] or 0
+
+    return result
 
 
 @router.get("/epg/content")

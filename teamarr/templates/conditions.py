@@ -16,7 +16,7 @@ Condition Types:
 
 Priority:
 - 1-99: Conditional descriptions (lower = higher priority)
-- 100: Fallback descriptions (always match)
+- 100: Default descriptions (always match, randomly selected if multiple)
 
 Example JSON format for description_options:
 [
@@ -24,7 +24,7 @@ Example JSON format for description_options:
      "template": "On fire! {win_streak}-game win streak!"},
     {"condition": "is_home", "priority": 50,
      "template": "{team_name} hosts {opponent}"},
-    {"priority": 100, "template": "{team_name} vs {opponent}"}
+    {"priority": 100, "label": "Generic", "template": "{team_name} vs {opponent}"}
 ]
 """
 
@@ -46,8 +46,8 @@ class ConditionOption:
     condition_value: str | None = None
 
     @property
-    def is_fallback(self) -> bool:
-        """Priority 100 = fallback (always matches)."""
+    def is_default(self) -> bool:
+        """Priority 100 = default description (always matches)."""
         return self.priority == 100
 
 
@@ -270,8 +270,8 @@ class ConditionalDescriptionSelector:
             if not opt.template:
                 continue
 
-            # Fallbacks always match
-            if opt.is_fallback:
+            # Default descriptions always match
+            if opt.is_default:
                 if opt.priority not in priority_groups:
                     priority_groups[opt.priority] = []
                 priority_groups[opt.priority].append(opt.template)

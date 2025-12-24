@@ -122,6 +122,8 @@ class Programme:
     category: str | None = None
     icon: str | None = None
     episode_num: str | None = None
+    # Filler type: 'pregame', 'postgame', 'idle', or None for actual events
+    filler_type: str | None = None
 
 
 @dataclass

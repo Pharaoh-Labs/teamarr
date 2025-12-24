@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from sqlite3 import Connection
-from typing import Any
+from typing import Any, Callable
 
 from teamarr.consumers.team_epg import TeamEPGGenerator, TeamEPGOptions
 from teamarr.core import Programme
@@ -187,11 +187,17 @@ class TeamProcessor:
 
             return self._process_team_internal(conn, team)
 
-    def process_all_teams(self) -> BatchTeamResult:
-        """Process all active teams in parallel.
+    def process_all_teams(
+        self,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> BatchTeamResult:
+        """Process all active teams.
 
-        Uses ThreadPoolExecutor with up to MAX_WORKERS (100) parallel workers
-        for concurrent ESPN API requests. Each worker gets its own DB connection.
+        ESPN teams are processed in parallel (up to MAX_WORKERS).
+        TSDB teams are processed sequentially (rate limit is ~10/min).
+
+        Args:
+            progress_callback: Optional callback(current, total, team_name)
 
         Returns:
             BatchTeamResult with all team results and combined XMLTV
@@ -205,27 +211,66 @@ class TeamProcessor:
             batch_result.completed_at = datetime.now()
             return batch_result
 
-        # Process teams in parallel
+        total_teams = len(teams)
+        processed_count = 0
+
+        # Separate teams by provider
+        espn_teams = [t for t in teams if t.provider == "espn"]
+        tsdb_teams = [t for t in teams if t.provider == "tsdb"]
+
         channels: list[dict] = []
-        num_workers = min(MAX_WORKERS, len(teams))
 
-        logger.info(f"Processing {len(teams)} teams with {num_workers} parallel workers")
+        # Process ESPN teams in parallel
+        if espn_teams:
+            num_workers = min(MAX_WORKERS, len(espn_teams))
+            logger.info(f"Processing {len(espn_teams)} ESPN teams with {num_workers} parallel workers")
 
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            # Submit all team processing tasks
-            future_to_team = {
-                executor.submit(self._process_team_parallel, team): team
-                for team in teams
-            }
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                future_to_team = {
+                    executor.submit(self._process_team_parallel, team): team
+                    for team in espn_teams
+                }
 
-            # Collect results as they complete
-            for future in as_completed(future_to_team):
-                team = future_to_team[future]
+                for future in as_completed(future_to_team):
+                    team = future_to_team[future]
+                    processed_count += 1
+                    try:
+                        result = future.result()
+                        batch_result.results.append(result)
+
+                        if result.programmes_generated > 0:
+                            channels.append(
+                                {
+                                    "id": team.channel_id,
+                                    "name": team.team_name,
+                                    "icon": team.channel_logo_url or team.team_logo_url,
+                                }
+                            )
+                    except Exception as e:
+                        logger.exception(f"Error processing team {team.team_name}")
+                        error_result = TeamProcessingResult(
+                            team_id=team.id,
+                            team_name=team.team_name,
+                            channel_id=team.channel_id,
+                        )
+                        error_result.errors.append(str(e))
+                        error_result.completed_at = datetime.now()
+                        batch_result.results.append(error_result)
+
+                    # Report progress
+                    if progress_callback:
+                        progress_callback(processed_count, total_teams, team.team_name)
+
+        # Process TSDB teams sequentially (rate limited API)
+        if tsdb_teams:
+            logger.info(f"Processing {len(tsdb_teams)} TSDB teams sequentially")
+
+            for team in tsdb_teams:
+                processed_count += 1
                 try:
-                    result = future.result()
+                    result = self._process_team_parallel(team)
                     batch_result.results.append(result)
 
-                    # Collect channel info for XMLTV
                     if result.programmes_generated > 0:
                         channels.append(
                             {
@@ -244,6 +289,10 @@ class TeamProcessor:
                     error_result.errors.append(str(e))
                     error_result.completed_at = datetime.now()
                     batch_result.results.append(error_result)
+
+                # Report progress
+                if progress_callback:
+                    progress_callback(processed_count, total_teams, team.team_name)
 
         # Generate combined XMLTV from all teams (sequential, uses stored XMLTV)
         if channels:
@@ -299,20 +348,17 @@ class TeamProcessor:
                 sport=team.sport,
             )
 
-            # Count programme types
+            # Count programme types by filler_type field (set during creation)
             result.programmes_generated = len(programmes)
             for prog in programmes:
-                # Categorize by title patterns (heuristic)
-                title_lower = prog.title.lower() if prog.title else ""
-                pregame_terms = ["preview", "pre-game", "pregame", "starting soon"]
-                postgame_terms = ["recap", "highlights", "replay", "postgame", "post-game"]
-                if any(x in title_lower for x in pregame_terms):
+                if prog.filler_type == "pregame":
                     result.programmes_pregame += 1
-                elif any(x in title_lower for x in postgame_terms):
+                elif prog.filler_type == "postgame":
                     result.programmes_postgame += 1
-                elif any(x in title_lower for x in ["programming", "off day", "no games"]):
+                elif prog.filler_type == "idle":
                     result.programmes_idle += 1
                 else:
+                    # filler_type is None = actual event programme
                     result.programmes_events += 1
 
             # Generate XMLTV for this team
@@ -531,6 +577,7 @@ def process_team(
 
 def process_all_teams(
     db_factory: Any,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> BatchTeamResult:
     """Process all active teams.
 
@@ -538,9 +585,10 @@ def process_all_teams(
 
     Args:
         db_factory: Factory function returning database connection
+        progress_callback: Optional callback(current, total, team_name)
 
     Returns:
         BatchTeamResult
     """
     processor = TeamProcessor(db_factory=db_factory)
-    return processor.process_all_teams()
+    return processor.process_all_teams(progress_callback=progress_callback)

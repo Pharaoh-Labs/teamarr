@@ -152,8 +152,9 @@ def get_scheduler_status():
 
     return SchedulerStatusResponse(
         running=status.running,
+        cron_expression=status.cron_expression,
         last_run=status.last_run.isoformat() if status.last_run else None,
-        interval_minutes=status.interval_minutes,
+        next_run=status.next_run.isoformat() if status.next_run else None,
     )
 
 

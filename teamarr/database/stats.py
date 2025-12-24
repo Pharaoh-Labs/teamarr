@@ -789,3 +789,27 @@ def clear_run_details(conn: Connection, run_id: int) -> None:
     conn.execute("DELETE FROM epg_matched_streams WHERE run_id = ?", (run_id,))
     conn.execute("DELETE FROM epg_failed_matches WHERE run_id = ?", (run_id,))
     conn.commit()
+
+
+def cleanup_stuck_runs(conn: Connection) -> int:
+    """Mark stuck 'running' runs as failed.
+
+    This handles runs that were interrupted by app restarts or crashes.
+    Called on app startup to clean up any orphaned runs.
+
+    Returns number of runs cleaned up.
+    """
+    cursor = conn.execute(
+        """
+        UPDATE processing_runs
+        SET status = 'failed',
+            completed_at = datetime('now'),
+            error_message = 'Run interrupted (app restart or crash)'
+        WHERE status = 'running'
+        """
+    )
+    conn.commit()
+    count = cursor.rowcount
+    if count > 0:
+        logger.info(f"Cleaned up {count} stuck processing run(s)")
+    return count

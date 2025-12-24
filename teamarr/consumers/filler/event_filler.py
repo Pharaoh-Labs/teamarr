@@ -139,6 +139,7 @@ class EventFillerGenerator:
                 channel_id=channel_id,
                 category=config.category,
                 logo_url=event.home_team.logo_url,
+                filler_type="pregame",
             )
             programmes.extend(pregame_programmes)
 
@@ -155,6 +156,7 @@ class EventFillerGenerator:
                 channel_id=channel_id,
                 category=config.category,
                 logo_url=event.home_team.logo_url,
+                filler_type="postgame",
             )
             programmes.extend(postgame_programmes)
 
@@ -169,6 +171,7 @@ class EventFillerGenerator:
         channel_id: str,
         category: str,
         logo_url: str | None,
+        filler_type: str,
     ) -> list[Programme]:
         """Generate filler programmes for a time range.
 
@@ -200,6 +203,7 @@ class EventFillerGenerator:
                 subtitle=subtitle,
                 category=category,
                 icon=template.art_url or logo_url,
+                filler_type=filler_type,
             )
             programmes.append(programme)
 

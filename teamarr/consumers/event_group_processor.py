@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from sqlite3 import Connection
-from typing import Any
+from typing import Any, Callable
 
 from teamarr.consumers.cached_matcher import CachedBatchResult, CachedMatcher
 from teamarr.consumers.channel_lifecycle import (
@@ -427,6 +427,7 @@ class EventGroupProcessor:
         self,
         target_date: date | None = None,
         run_enforcement: bool = True,
+        progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> BatchProcessingResult:
         """Process all active event groups.
 
@@ -440,6 +441,7 @@ class EventGroupProcessor:
         Args:
             target_date: Target date (defaults to today)
             run_enforcement: Whether to run post-processing enforcement
+            progress_callback: Optional callback(current, total, group_name)
 
         Returns:
             BatchProcessingResult with all group results and combined XMLTV
@@ -452,6 +454,8 @@ class EventGroupProcessor:
 
             # Sort groups: parents first, then children, then multi-league
             parent_groups, child_groups, multi_league_groups = self._sort_groups(groups)
+            total_groups = len(parent_groups) + len(child_groups) + len(multi_league_groups)
+            processed_count = 0
 
             processed_group_ids = []
             multi_league_ids = [g.id for g in multi_league_groups]
@@ -461,18 +465,27 @@ class EventGroupProcessor:
                 result = self._process_group_internal(conn, group, target_date)
                 batch_result.results.append(result)
                 processed_group_ids.append(group.id)
+                processed_count += 1
+                if progress_callback:
+                    progress_callback(processed_count, total_groups, group.name)
 
             # Phase 2: Process child groups (add streams to parent channels)
             for group in child_groups:
                 result = self._process_child_group_internal(conn, group, target_date)
                 batch_result.results.append(result)
                 # Child groups don't generate their own XMLTV
+                processed_count += 1
+                if progress_callback:
+                    progress_callback(processed_count, total_groups, group.name)
 
             # Phase 3: Process multi-league groups
             for group in multi_league_groups:
                 result = self._process_group_internal(conn, group, target_date)
                 batch_result.results.append(result)
                 processed_group_ids.append(group.id)
+                processed_count += 1
+                if progress_callback:
+                    progress_callback(processed_count, total_groups, group.name)
 
             # Phase 4: Run enforcement (keyword placement + cross-group consolidation)
             if run_enforcement:
@@ -1385,6 +1398,7 @@ def process_all_event_groups(
     db_factory: Any,
     dispatcharr_client: Any = None,
     target_date: date | None = None,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> BatchProcessingResult:
     """Process all active event groups.
 
@@ -1394,6 +1408,7 @@ def process_all_event_groups(
         db_factory: Factory function returning database connection
         dispatcharr_client: Optional DispatcharrClient
         target_date: Target date (defaults to today)
+        progress_callback: Optional callback(current, total, group_name)
 
     Returns:
         BatchProcessingResult
@@ -1402,7 +1417,7 @@ def process_all_event_groups(
         db_factory=db_factory,
         dispatcharr_client=dispatcharr_client,
     )
-    return processor.process_all_groups(target_date)
+    return processor.process_all_groups(target_date, progress_callback=progress_callback)
 
 
 def preview_event_group(

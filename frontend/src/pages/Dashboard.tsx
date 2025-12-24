@@ -3,15 +3,28 @@ import { useNavigate } from "react-router-dom"
 import { api } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Quadrant, StatTile } from "@/components/ui/rich-tooltip"
+import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useDateFormat } from "@/hooks/useDateFormat"
 import {
   RefreshCw,
   Rocket,
   FileText,
   Plus,
   Download,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Clock,
 } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
 // Types for dashboard stats
 interface LeagueBreakdown {
@@ -59,7 +72,7 @@ interface DashboardStats {
     with_logos: number
     groups: number
     deleted_24h: number
-    group_breakdown: { name: string; count: number }[]
+    group_breakdown: { id: number; name: string; count: number }[]
   }
 }
 
@@ -89,6 +102,28 @@ interface EPGHistoryEntry {
     postgame: number
     idle: number
   }
+  xmltv_size_bytes?: number
+  extra_metrics?: {
+    teams_processed?: number
+    groups_processed?: number
+  }
+}
+
+// Helper functions for formatting
+function formatDuration(ms: number | null): string {
+  if (!ms) return "-"
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+}
+
+function formatBytes(bytes: number | undefined | null): string {
+  if (bytes == null || isNaN(bytes) || bytes === 0) return "-"
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // Fetch dashboard stats
@@ -118,6 +153,7 @@ async function fetchCounts() {
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const { formatDateTime } = useDateFormat()
 
   // Fetch dashboard stats
   const statsQuery = useQuery({
@@ -139,18 +175,15 @@ export function Dashboard() {
     retry: false,
   })
 
-  const handleGenerateEPG = async () => {
-    toast.loading("Generating EPG...", { id: "epg-generate" })
-    try {
-      const result = await api.post<{ programmes_count: number }>("/epg/generate")
-      toast.success(`Generated ${result.programmes_count} programmes`, {
-        id: "epg-generate",
-      })
+  // Generation progress (non-blocking toast)
+  const { startGeneration, isGenerating } = useGenerationProgress()
+
+  const handleGenerateEPG = () => {
+    startGeneration(() => {
+      // Callback when generation completes
       statsQuery.refetch()
       historyQuery.refetch()
-    } catch {
-      toast.error("EPG generation failed", { id: "epg-generate" })
-    }
+    })
   }
 
   const handleRefreshCache = async () => {
@@ -210,9 +243,9 @@ export function Dashboard() {
               <Plus className="h-4 w-4 mr-1" />
               Import Event Group
             </Button>
-            <Button size="sm" onClick={handleGenerateEPG}>
+            <Button size="sm" onClick={handleGenerateEPG} disabled={isGenerating}>
               <Rocket className="h-4 w-4 mr-1" />
-              Generate EPG
+              {isGenerating ? "Generating..." : "Generate EPG"}
             </Button>
           </div>
         </div>
@@ -366,54 +399,48 @@ export function Dashboard() {
         <div>
           <h2 className="text-lg font-semibold mb-3">EPG Generation History</h2>
           <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="text-left p-3 font-medium">Generated At</th>
-                  <th className="text-center p-3 font-medium">Matched</th>
-                  <th className="text-center p-3 font-medium">Events</th>
-                  <th className="text-center p-3 font-medium">Programmes</th>
-                  <th className="text-center p-3 font-medium">Duration</th>
-                  <th className="text-center p-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Generated At</TableHead>
+                  <TableHead>Teams</TableHead>
+                  <TableHead>Events</TableHead>
+                  <TableHead>Filler</TableHead>
+                  <TableHead>Managed Channels</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Size</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {history.map((entry) => (
-                  <tr key={entry.id} className="border-t hover:bg-muted/30">
-                    <td className="p-3">
-                      {new Date(entry.started_at).toLocaleString()}
-                    </td>
-                    <td className="text-center p-3">{entry.streams?.matched ?? 0}</td>
-                    <td className="text-center p-3">{entry.programmes?.events ?? 0}</td>
-                    <td className="text-center p-3 font-medium">{entry.programmes?.total ?? 0}</td>
-                    <td className="text-center p-3">
-                      {entry.duration_ms
-                        ? entry.duration_ms >= 60000
-                          ? `${Math.floor(entry.duration_ms / 60000)}m ${Math.round((entry.duration_ms % 60000) / 1000)}s`
-                          : `${Math.round(entry.duration_ms / 1000)}s`
-                        : "—"}
-                    </td>
-                    <td className="text-center p-3">
-                      <span
-                        className={cn(
-                          "inline-block px-2 py-0.5 rounded text-xs font-medium",
-                          entry.status === "completed" &&
-                            "bg-green-500/20 text-green-600",
-                          entry.status === "error" &&
-                            "bg-red-500/20 text-red-600",
-                          entry.status === "running" &&
-                            "bg-yellow-500/20 text-yellow-600"
-                        )}
-                      >
-                        {entry.status === "completed" && "✓"}
-                        {entry.status === "error" && "✗"}
-                        {entry.status === "running" && "⏳"}
-                      </span>
-                    </td>
-                  </tr>
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      {entry.status === "completed" ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : entry.status === "failed" ? (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      ) : entry.status === "running" ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      ) : (
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDateTime(entry.started_at)}
+                    </TableCell>
+                    <TableCell>{entry.extra_metrics?.teams_processed ?? 0}</TableCell>
+                    <TableCell>{entry.programmes?.events ?? 0}</TableCell>
+                    <TableCell>{(entry.programmes?.pregame ?? 0) + (entry.programmes?.postgame ?? 0) + (entry.programmes?.idle ?? 0)}</TableCell>
+                    <TableCell>{(entry.channels?.created ?? 0) + (entry.channels?.updated ?? 0)}</TableCell>
+                    <TableCell>{formatDuration(entry.duration_ms)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatBytes(entry.xmltv_size_bytes)}
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -509,6 +536,7 @@ export function Dashboard() {
           Refresh Cache
         </Button>
       </div>
+
     </div>
   )
 }

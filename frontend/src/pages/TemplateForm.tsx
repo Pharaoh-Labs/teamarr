@@ -150,6 +150,17 @@ export function TemplateForm() {
   const resolveTemplate = createResolver(sampleData)
   const availableSports = samplesData?.available_sports ?? variablesData?.available_sports ?? ["NBA", "NFL", "MLB", "NHL"]
 
+  // Helper to merge filler content with defaults, ensuring no null values
+  const mergeFillerContent = (content: FillerContent | null, defaults: FillerContent): FillerContent => {
+    if (!content) return defaults
+    return {
+      title: content.title ?? defaults.title,
+      subtitle: content.subtitle ?? defaults.subtitle,
+      description: content.description ?? defaults.description,
+      art_url: content.art_url ?? defaults.art_url,
+    }
+  }
+
   // Populate form when template loads
   useEffect(() => {
     if (template) {
@@ -168,12 +179,12 @@ export function TemplateForm() {
         xmltv_categories: template.xmltv_categories || ["Sports"],
         categories_apply_to: template.categories_apply_to || "events",
         pregame_enabled: template.pregame_enabled ?? true,
-        pregame_fallback: template.pregame_fallback || DEFAULT_PREGAME,
+        pregame_fallback: mergeFillerContent(template.pregame_fallback, DEFAULT_PREGAME),
         postgame_enabled: template.postgame_enabled ?? true,
-        postgame_fallback: template.postgame_fallback || DEFAULT_POSTGAME,
+        postgame_fallback: mergeFillerContent(template.postgame_fallback, DEFAULT_POSTGAME),
         postgame_conditional: template.postgame_conditional || { enabled: true, description_final: null, description_not_final: null },
         idle_enabled: template.idle_enabled ?? true,
-        idle_content: template.idle_content || DEFAULT_IDLE,
+        idle_content: mergeFillerContent(template.idle_content, DEFAULT_IDLE),
         idle_conditional: template.idle_conditional || { enabled: true, description_final: null, description_not_final: null },
         idle_offseason: template.idle_offseason || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
         conditional_descriptions: template.conditional_descriptions || [],
@@ -995,6 +1006,102 @@ function BasicTab({ formData, setFormData, fieldRefs, setLastFocusedField, resol
 }
 
 function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate }: TabProps) {
+  // Extract fallback descriptions from conditional_descriptions (priority === 100)
+  const fallbacks = useMemo(() => {
+    const all = formData.conditional_descriptions || []
+    return all
+      .filter((c) => c.priority === 100)
+      .map((c) => ({ label: c.label || "Default", template: c.template }))
+  }, [formData.conditional_descriptions])
+
+  // If no fallbacks exist, use description_template as the single fallback
+  const effectiveFallbacks = fallbacks.length > 0 ? fallbacks :
+    formData.description_template ? [{ label: "Default", template: formData.description_template }] : []
+
+  const [expandedFallbacks, setExpandedFallbacks] = useState<Set<number>>(new Set([0]))
+
+  const addFallback = () => {
+    const newLabel = effectiveFallbacks.length === 0 ? "Default" : `Default ${effectiveFallbacks.length + 1}`
+    const newFallback: ConditionalDescription = {
+      condition: "",
+      template: "",
+      priority: 100,
+      label: newLabel,
+    }
+    // Get non-fallback conditions
+    const nonFallbacks = (formData.conditional_descriptions || []).filter((c) => c.priority !== 100)
+    setFormData((prev) => ({
+      ...prev,
+      conditional_descriptions: [...nonFallbacks, ...getFallbacksAsConditions(), newFallback],
+      description_template: null, // Clear single description when using fallbacks
+    }))
+    setExpandedFallbacks((prev) => new Set([...prev, effectiveFallbacks.length]))
+  }
+
+  const getFallbacksAsConditions = (): ConditionalDescription[] => {
+    return effectiveFallbacks.map((f) => ({
+      condition: "",
+      template: f.template,
+      priority: 100,
+      label: f.label,
+    }))
+  }
+
+  const updateFallback = (index: number, field: "label" | "template", value: string) => {
+    const updated = [...effectiveFallbacks]
+    updated[index] = { ...updated[index], [field]: value }
+    // Convert back to conditional_descriptions
+    const nonFallbacks = (formData.conditional_descriptions || []).filter((c) => c.priority !== 100)
+    const fallbackConditions = updated.map((f) => ({
+      condition: "",
+      template: f.template,
+      priority: 100,
+      label: f.label,
+    }))
+    setFormData((prev) => ({
+      ...prev,
+      conditional_descriptions: [...nonFallbacks, ...fallbackConditions],
+      description_template: null, // Clear single description when using fallbacks
+    }))
+  }
+
+  const removeFallback = (index: number) => {
+    if (effectiveFallbacks.length <= 1) {
+      toast.error("At least one default description is required")
+      return
+    }
+    const updated = effectiveFallbacks.filter((_, i) => i !== index)
+    const nonFallbacks = (formData.conditional_descriptions || []).filter((c) => c.priority !== 100)
+    const fallbackConditions = updated.map((f) => ({
+      condition: "",
+      template: f.template,
+      priority: 100,
+      label: f.label,
+    }))
+    setFormData((prev) => ({
+      ...prev,
+      conditional_descriptions: [...nonFallbacks, ...fallbackConditions],
+      description_template: null,
+    }))
+    setExpandedFallbacks((prev) => {
+      const next = new Set(prev)
+      next.delete(index)
+      return next
+    })
+  }
+
+  const toggleFallback = (index: number) => {
+    setExpandedFallbacks((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }
+
   return (
     <div className="space-y-6">
       {/* Channel Name & Logo (Event templates only) */}
@@ -1056,17 +1163,84 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
             setLastFocusedField={setLastFocusedField}
             resolveTemplate={resolveTemplate}
           />
-          <TemplateField
-            id="description_template"
-            label="Program Description Template"
-            value={formData.description_template || ""}
-            onChange={(v) => setFormData((prev) => ({ ...prev, description_template: v || null }))}
-            placeholder="{matchup} | {venue_full}"
-            fieldRefs={fieldRefs}
-            setLastFocusedField={setLastFocusedField}
-            resolveTemplate={resolveTemplate}
-            multiline
-          />
+        </CardContent>
+      </Card>
+
+      {/* Default Descriptions (Multiple with randomization) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Default Description Templates</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Used when no conditions match. If multiple defaults exist, one is randomly selected.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {effectiveFallbacks.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              No default descriptions yet. Click "Add Default Description" to get started.
+            </p>
+          ) : (
+            effectiveFallbacks.map((fallback, index) => (
+              <div key={index} className="border rounded-lg overflow-hidden">
+                {/* Header */}
+                <div
+                  className="flex items-center justify-between px-3 py-2 bg-muted/50 cursor-pointer hover:bg-muted/70"
+                  onClick={() => toggleFallback(index)}
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronRight
+                      className={`h-4 w-4 transition-transform ${expandedFallbacks.has(index) ? "rotate-90" : ""}`}
+                    />
+                    <span className="font-medium text-sm">{fallback.label || "Untitled"}</span>
+                    <span className="text-xs text-muted-foreground">(Priority: 100)</span>
+                  </div>
+                  {effectiveFallbacks.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeFallback(index)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                {/* Body */}
+                {expandedFallbacks.has(index) && (
+                  <div className="p-3 space-y-3 border-t">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Label *</Label>
+                      <Input
+                        value={fallback.label}
+                        onChange={(e) => updateFallback(index, "label", e.target.value)}
+                        placeholder="e.g., 'Generic', 'Exciting', 'Classic'"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Description Template *</Label>
+                      <Textarea
+                        value={fallback.template}
+                        onChange={(e) => updateFallback(index, "template", e.target.value)}
+                        placeholder="{matchup} | {venue_full}"
+                        rows={3}
+                      />
+                      {fallback.template && (
+                        <p className="text-xs text-muted-foreground">
+                          Preview: {resolveTemplate(fallback.template)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+          <Button variant="outline" size="sm" onClick={addFallback} className="mt-2">
+            + Add Default Description
+          </Button>
         </CardContent>
       </Card>
 
@@ -1094,7 +1268,10 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
 }
 
 function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate }: TabProps) {
-  const conditions = formData.conditional_descriptions || []
+  // Filter out fallback descriptions (priority=100) - they're managed on Defaults tab
+  const conditions = useMemo(() => {
+    return (formData.conditional_descriptions || []).filter((c) => c.priority !== 100)
+  }, [formData.conditional_descriptions])
   const [showPresetDialog, setShowPresetDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [presetName, setPresetName] = useState("")
@@ -1115,32 +1292,40 @@ function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate 
   const createPresetMutation = useCreatePreset()
   const deletePresetMutation = useDeletePreset()
 
+  // Get fallbacks to preserve when modifying conditions
+  const getFallbacks = () => (formData.conditional_descriptions || []).filter((c) => c.priority === 100)
+
   const addCondition = () => {
     const newCondition: ConditionalDescription = {
       condition: "always",
       template: "",
-      priority: 100,
+      priority: 50, // Default conditional priority (not 100 which is for fallbacks)
     }
+    const fallbacks = getFallbacks()
     setFormData((prev) => ({
       ...prev,
-      conditional_descriptions: [...(prev.conditional_descriptions || []), newCondition],
+      conditional_descriptions: [...conditions, newCondition, ...fallbacks],
     }))
     // Auto-expand the new condition
     setExpandedConditions((prev) => new Set([...prev, conditions.length]))
   }
 
   const updateCondition = (index: number, field: keyof ConditionalDescription, value: string | number) => {
-    setFormData((prev) => {
-      const updated = [...(prev.conditional_descriptions || [])]
-      updated[index] = { ...updated[index], [field]: value }
-      return { ...prev, conditional_descriptions: updated }
-    })
+    const updated = [...conditions]
+    updated[index] = { ...updated[index], [field]: value }
+    const fallbacks = getFallbacks()
+    setFormData((prev) => ({
+      ...prev,
+      conditional_descriptions: [...updated, ...fallbacks],
+    }))
   }
 
   const removeCondition = (index: number) => {
+    const updated = conditions.filter((_, i) => i !== index)
+    const fallbacks = getFallbacks()
     setFormData((prev) => ({
       ...prev,
-      conditional_descriptions: (prev.conditional_descriptions || []).filter((_, i) => i !== index),
+      conditional_descriptions: [...updated, ...fallbacks],
     }))
     setExpandedConditions((prev) => {
       const newSet = new Set(prev)
@@ -1165,14 +1350,16 @@ function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate 
   }
 
   const applyPreset = (preset: ConditionPreset) => {
+    const fallbacks = getFallbacks()
+    const presetConditions = preset.conditions.map((c) => ({
+      condition: c.condition,
+      template: c.template,
+      priority: c.priority,
+      condition_value: c.condition_value,
+    }))
     setFormData((prev) => ({
       ...prev,
-      conditional_descriptions: preset.conditions.map((c) => ({
-        condition: c.condition,
-        template: c.template,
-        priority: c.priority,
-        condition_value: c.condition_value,
-      })),
+      conditional_descriptions: [...presetConditions, ...fallbacks], // Preserve fallbacks
     }))
     setShowPresetDialog(false)
     toast.success(`Applied preset "${preset.name}"`)

@@ -56,10 +56,16 @@ def _add_channel(root: Element, channel: dict) -> None:
 
 def _add_programme(root: Element, programme: Programme) -> None:
     """Add a programme element to the TV root."""
+    from xml.etree.ElementTree import Comment
+
     prog_elem = SubElement(root, "programme")
     prog_elem.set("start", format_datetime_xmltv(programme.start))
     prog_elem.set("stop", format_datetime_xmltv(programme.stop))
     prog_elem.set("channel", programme.channel_id)
+
+    # Add filler type comment for analysis (V1 compatibility)
+    if programme.filler_type:
+        prog_elem.append(Comment(f"teamarr:filler-{programme.filler_type}"))
 
     title_elem = SubElement(prog_elem, "title")
     title_elem.set("lang", "en")

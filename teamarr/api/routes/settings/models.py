@@ -98,8 +98,9 @@ class SchedulerStatusResponse(BaseModel):
     """Scheduler status response."""
 
     running: bool
+    cron_expression: str | None = None
     last_run: str | None = None
-    interval_minutes: int | None = None
+    next_run: str | None = None
 
 
 # =============================================================================

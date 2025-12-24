@@ -110,9 +110,12 @@ export interface ConnectionTestResponse {
 
 export interface SchedulerStatus {
   running: boolean
+  cron_expression: string | null
   last_run: string | null
-  interval_minutes: number | null
+  next_run: string | null
 }
+
+// Note: cron_description is handled on frontend via cronstrue library
 
 export interface DispatcharrStatus {
   configured: boolean
@@ -185,10 +188,6 @@ export async function updateSchedulerSettings(
 
 export async function getSchedulerStatus(): Promise<SchedulerStatus> {
   return api.get("/scheduler/status")
-}
-
-export async function triggerSchedulerRun(): Promise<{ success: boolean; results: unknown }> {
-  return api.post("/scheduler/run")
 }
 
 export async function getEPGSettings(): Promise<EPGSettings> {

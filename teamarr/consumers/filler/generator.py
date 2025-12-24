@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from teamarr.core import Event, Programme, TeamStats
 from teamarr.services import SportsDataService
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
+from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.sports import get_sport_duration, get_sport_from_league
 from teamarr.utilities.time_blocks import create_filler_chunks, crosses_midnight
@@ -55,6 +56,7 @@ class FillerGenerator:
     def __init__(self, service: SportsDataService):
         self._service = service
         self._resolver = TemplateResolver()
+        self._context_builder = ContextBuilder(service)
         self._options: FillerOptions | None = None  # Set during generate()
 
     def generate(
@@ -95,8 +97,11 @@ class FillerGenerator:
         sorted_events = sorted(events, key=lambda e: e.start_time)
 
         # Calculate EPG window
-        epg_start = now_user()
-        epg_end = epg_start + timedelta(days=options.output_days_ahead)
+        # Key insight from V1: EPG start should be synchronized with earliest event
+        # to avoid gaps between event end and filler start
+        now = now_user()
+        epg_start = self._calculate_epg_start(sorted_events, now, options)
+        epg_end = now + timedelta(days=options.output_days_ahead)
 
         # Get sport from events (provider is authoritative), fallback to utility
         sport = sorted_events[0].sport if sorted_events else self._get_sport(league)
@@ -441,6 +446,7 @@ class FillerGenerator:
                 subtitle=subtitle,
                 category=config.category,
                 icon=logo_url,
+                filler_type=filler_type.value,  # 'pregame', 'postgame', or 'idle'
             )
             programmes.append(programme)
 
@@ -521,11 +527,11 @@ class FillerGenerator:
         """
         next_game = None
         if next_event:
-            next_game = self._build_game_context(next_event, team_config.team_id)
+            next_game = self._build_game_context(next_event, team_config.team_id, team_config.league)
 
         last_game = None
         if last_event:
-            last_game = self._build_game_context(last_event, team_config.team_id)
+            last_game = self._build_game_context(last_event, team_config.team_id, team_config.league)
 
         return TemplateContext(
             game_context=None,  # No current game for filler
@@ -535,19 +541,16 @@ class FillerGenerator:
             last_game=last_game,
         )
 
-    def _build_game_context(self, event: Event, team_id: str) -> GameContext:
-        """Build GameContext for a single event."""
-        # Determine home/away from event
-        is_home = event.home_team.id == team_id
-        team = event.home_team if is_home else event.away_team
-        opponent = event.away_team if is_home else event.home_team
+    def _build_game_context(self, event: Event, team_id: str, league: str) -> GameContext:
+        """Build GameContext for a single event.
 
-        return GameContext(
+        Uses ContextBuilder to fetch opponent stats for proper template resolution.
+        """
+        # Use ContextBuilder which fetches opponent stats with caching
+        return self._context_builder._build_game_context(
             event=event,
-            is_home=is_home,
-            team=team,
-            opponent=opponent,
-            opponent_stats=None,  # Could be populated if needed
+            team_id=team_id,
+            league=league,
         )
 
     def _estimate_event_end(self, event: Event) -> datetime:
@@ -556,6 +559,40 @@ class FillerGenerator:
         default = self._options.default_duration if self._options else 3.0
         duration_hours = get_sport_duration(event.sport, durations, default)
         return event.start_time + timedelta(hours=duration_hours)
+
+    def _calculate_epg_start(
+        self,
+        events: list[Event],
+        now: datetime,
+        options: FillerOptions,
+    ) -> datetime:
+        """Calculate EPG start time, synchronized with earliest event.
+
+        V1 approach: Check for "in-progress" games (started within lookback window).
+        If found, EPG starts from that game's start time to ensure continuous coverage.
+
+        Args:
+            events: Sorted list of events
+            now: Current time
+            options: Filler options
+
+        Returns:
+            EPG start datetime - either earliest recent event or current time
+        """
+        # Default lookback: 6 hours (matches V1)
+        lookback_hours = 6
+        lookback_cutoff = now - timedelta(hours=lookback_hours)
+
+        # Find earliest event that started within lookback window
+        # (these are "in-progress" or recently completed games)
+        for event in events:
+            event_start = event.start_time
+            if event_start >= lookback_cutoff and event_start <= now:
+                # Found an in-progress/recent event - start EPG from its start time
+                return event_start
+
+        # No recent events - start from current time (rounded to minute)
+        return now.replace(second=0, microsecond=0)
 
     def _get_sport(self, league: str) -> str:
         """Derive sport from league identifier (fallback).

@@ -30,10 +30,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useDateFormat } from "@/hooks/useDateFormat"
 import {
   useStats,
   useRecentRuns,
-  useGenerateTeamEpg,
   useEPGAnalysis,
   useEPGContent,
 } from "@/hooks/useEPG"
@@ -41,8 +42,11 @@ import { getTeamXmltvUrl } from "@/api/epg"
 
 function formatDuration(ms: number | null): string {
   if (!ms) return "-"
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
 }
 
 function formatBytes(bytes: number | undefined | null): string {
@@ -50,21 +54,6 @@ function formatBytes(bytes: number | undefined | null): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "Never"
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffMins < 1) return "Just now"
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  return `${diffDays}d ago`
 }
 
 function formatDateRange(start: string | null, end: string | null): string {
@@ -78,8 +67,7 @@ export function EPG() {
   const { data: runsData, isLoading: runsLoading, refetch: refetchRuns } = useRecentRuns(10)
   const { data: analysis, isLoading: analysisLoading, refetch: refetchAnalysis } = useEPGAnalysis()
   const { data: epgContent, isLoading: contentLoading } = useEPGContent(2000)
-
-  const generateMutation = useGenerateTeamEpg()
+  const { formatDateTime, formatRelativeTime } = useDateFormat()
 
   const [isDownloading, setIsDownloading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -116,16 +104,16 @@ export function EPG() {
     }
   }
 
-  const handleGenerate = async () => {
-    try {
-      const result = await generateMutation.mutateAsync({})
-      toast.success(
-        `Generated ${result.programmes_count} programmes for ${result.teams_processed} teams in ${result.duration_seconds.toFixed(1)}s`
-      )
+  // Generation progress (non-blocking toast)
+  const { startGeneration, isGenerating } = useGenerationProgress()
+
+  const handleGenerate = () => {
+    startGeneration(() => {
+      // Callback when generation completes
       refetchAnalysis()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to generate EPG")
-    }
+      refetchRuns()
+      refetchStats()
+    })
   }
 
   const handleDownload = async () => {
@@ -233,13 +221,13 @@ export function EPG() {
           <CardContent className="space-y-2">
             <Button
               onClick={handleGenerate}
-              disabled={generateMutation.isPending}
+              disabled={isGenerating}
               className="w-full"
             >
-              {generateMutation.isPending && (
+              {isGenerating && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              Generate Now
+              {isGenerating ? "Generating..." : "Generate Now"}
             </Button>
             {stats?.last_run && (
               <p className="text-xs text-muted-foreground text-center">
@@ -549,9 +537,10 @@ export function EPG() {
                 <TableRow>
                   <TableHead>Status</TableHead>
                   <TableHead>Generated At</TableHead>
-                  <TableHead>Channels</TableHead>
+                  <TableHead>Teams</TableHead>
                   <TableHead>Events</TableHead>
-                  <TableHead>Programmes</TableHead>
+                  <TableHead>Filler</TableHead>
+                  <TableHead>Managed Channels</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Size</TableHead>
                 </TableRow>
@@ -571,11 +560,12 @@ export function EPG() {
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatRelativeTime(run.started_at)}
+                      {formatDateTime(run.started_at)}
                     </TableCell>
-                    <TableCell>{(run.channels?.created ?? 0) + (run.channels?.updated ?? 0) + (run.channels?.skipped ?? 0)}</TableCell>
+                    <TableCell>{(run.extra_metrics?.teams_processed as number) ?? 0}</TableCell>
                     <TableCell>{run.programmes?.events ?? 0}</TableCell>
-                    <TableCell>{run.programmes?.total ?? 0}</TableCell>
+                    <TableCell>{(run.programmes?.pregame ?? 0) + (run.programmes?.postgame ?? 0) + (run.programmes?.idle ?? 0)}</TableCell>
+                    <TableCell>{(run.channels?.created ?? 0) + (run.channels?.updated ?? 0)}</TableCell>
                     <TableCell>{formatDuration(run.duration_ms)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatBytes(run.xmltv_size_bytes)}
@@ -636,6 +626,7 @@ export function EPG() {
           )}
         </CardContent>
       </Card>
+
     </div>
   )
 }

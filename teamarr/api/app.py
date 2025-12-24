@@ -50,15 +50,22 @@ async def lifespan(app: FastAPI):
     # Initialize database
     init_db()
 
+    # Cleanup any stuck processing runs from previous crashes
+    from teamarr.database.stats import cleanup_stuck_runs
+
+    with get_db() as conn:
+        cleanup_stuck_runs(conn)
+
     # Initialize services and providers with dependencies
     league_mapping_service = init_league_mapping_service(get_db)
     ProviderRegistry.initialize(league_mapping_service)
     logger.info("League mapping service and providers initialized")
 
-    # Auto-refresh team/league cache if empty or stale
+    # Always refresh team/league cache on startup
     cache_service = create_cache_service(get_db)
-    if cache_service.refresh_if_needed(max_age_days=7):
-        logger.info("Team/league cache refreshed on startup")
+    logger.info("Refreshing team/league cache on startup...")
+    cache_service.refresh()
+    logger.info("Team/league cache refreshed")
 
     # Load display settings from database into config cache
     from teamarr.config import set_display_settings, set_timezone
@@ -91,8 +98,11 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to initialize Dispatcharr factory: {e}")
 
     # Start background scheduler if enabled
+    from teamarr.database.settings import get_epg_settings
+
     with get_db() as conn:
         scheduler_settings = get_scheduler_settings(conn)
+        epg_settings = get_epg_settings(conn)
 
     scheduler_service = None
     if scheduler_settings.enabled:
@@ -106,12 +116,10 @@ async def lifespan(app: FastAPI):
                 pass
 
             scheduler_service = create_scheduler_service(get_db, client)
-            started = scheduler_service.start(
-                interval_minutes=scheduler_settings.interval_minutes,
-            )
+            cron_expr = epg_settings.cron_expression or "0 * * * *"
+            started = scheduler_service.start(cron_expression=cron_expr)
             if started:
-                interval = scheduler_settings.interval_minutes
-                logger.info(f"Background scheduler started (interval: {interval} min)")
+                logger.info(f"Background scheduler started (cron: {cron_expr})")
         except Exception as e:
             logger.warning(f"Failed to start scheduler: {e}")
     else:
@@ -170,9 +178,14 @@ def create_app() -> FastAPI:
         app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
 
         # Serve index.html for all non-API routes (SPA routing)
-        # Note: This catch-all route has lowest priority since it's added last
         @app.get("/{path:path}", include_in_schema=False)
         async def serve_spa(path: str):
+            # IMPORTANT: Never serve SPA for API routes - let them 404 naturally
+            # This prevents the catch-all from hijacking API requests
+            if path.startswith("api/"):
+                from fastapi import HTTPException
+                raise HTTPException(status_code=404, detail="Not found")
+
             # Serve static files if they exist (favicon, etc.)
             file_path = frontend_dist / path
             if file_path.exists() and file_path.is_file():

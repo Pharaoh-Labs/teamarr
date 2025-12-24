@@ -119,7 +119,7 @@ class RateLimiter:
     Tracks all wait events for UI feedback. Never fails - always waits and continues.
     """
 
-    def __init__(self, max_requests: int = 30, window_seconds: float = 60.0):
+    def __init__(self, max_requests: int = 8, window_seconds: float = 60.0):
         self._max_requests = max_requests
         self._window = window_seconds
         self._requests: deque[float] = deque()

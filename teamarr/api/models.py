@@ -75,8 +75,8 @@ class PregamePeriod(BaseModel):
 
     start_hours_before: float
     end_hours_before: float
-    title: str
-    description: str
+    title: str | None = ""
+    description: str | None = ""
 
 
 class PostgamePeriod(BaseModel):
@@ -84,16 +84,16 @@ class PostgamePeriod(BaseModel):
 
     start_hours_after: float
     end_hours_after: float
-    title: str
-    description: str
+    title: str | None = ""
+    description: str | None = ""
 
 
 class FillerFallback(BaseModel):
     """Fallback content for filler."""
 
-    title: str
+    title: str | None = ""
     subtitle: str | None = None
-    description: str
+    description: str | None = ""
     art_url: str | None = None
 
 
@@ -123,10 +123,11 @@ class IdleOffseasonContent(BaseModel):
 class ConditionalDescriptionEntry(BaseModel):
     """A conditional description entry."""
 
-    condition: str
+    condition: str | None = None  # None for default descriptions (priority=100)
     condition_value: str | None = None
     template: str
     priority: int = 50
+    label: str | None = None  # Optional label for default descriptions
 
 
 class TemplateCreate(BaseModel):

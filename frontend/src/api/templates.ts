@@ -32,6 +32,13 @@ export interface ConditionalDescription {
   condition_value?: string
   template: string
   priority: number
+  label?: string  // Optional label for fallback descriptions
+}
+
+// Fallback description entry (priority 100, no condition)
+export interface FallbackDescription {
+  label: string
+  template: string
 }
 
 // XMLTV flags

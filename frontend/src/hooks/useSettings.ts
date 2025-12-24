@@ -11,7 +11,6 @@ import {
   getSchedulerSettings,
   updateSchedulerSettings,
   getSchedulerStatus,
-  triggerSchedulerRun,
   getEPGSettings,
   updateEPGSettings,
   getDurationSettings,
@@ -127,18 +126,6 @@ export function useSchedulerStatus() {
     queryKey: ["scheduler", "status"],
     queryFn: getSchedulerStatus,
     refetchInterval: 10000, // Refresh every 10 seconds
-  })
-}
-
-export function useTriggerSchedulerRun() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: triggerSchedulerRun,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["scheduler"] })
-      queryClient.invalidateQueries({ queryKey: ["groups"] })
-    },
   })
 }
 

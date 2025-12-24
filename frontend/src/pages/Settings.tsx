@@ -15,6 +15,7 @@ import {
   Upload,
   ArrowRight,
 } from "lucide-react"
+import { useGenerationProgress } from "@/contexts/GenerationContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -31,7 +32,6 @@ import {
   useUpdateLifecycleSettings,
   useUpdateSchedulerSettings,
   useSchedulerStatus,
-  useTriggerSchedulerRun,
   useUpdateEPGSettings,
   useUpdateDurationSettings,
   useUpdateDisplaySettings,
@@ -98,12 +98,12 @@ export function Settings() {
   const schedulerStatus = useSchedulerStatus()
   const { data: cacheStatus, refetch: refetchCache } = useCacheStatus()
   const refreshCacheMutation = useRefreshCache()
+  const { startGeneration, isGenerating } = useGenerationProgress()
 
   const updateDispatcharr = useUpdateDispatcharrSettings()
   const testConnection = useTestDispatcharrConnection()
   const updateLifecycle = useUpdateLifecycleSettings()
   const updateScheduler = useUpdateSchedulerSettings()
-  const triggerRun = useTriggerSchedulerRun()
   const updateEPG = useUpdateEPGSettings()
   const updateDurations = useUpdateDurationSettings()
   const updateDisplay = useUpdateDisplaySettings()
@@ -187,43 +187,9 @@ export function Settings() {
     }
   }
 
-  const handleSaveLifecycle = async () => {
-    if (!lifecycle) return
-    try {
-      await updateLifecycle.mutateAsync(lifecycle)
-      toast.success("Lifecycle settings saved")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save")
-    }
-  }
-
-  const handleSaveScheduler = async () => {
-    if (!scheduler) return
-    try {
-      await updateScheduler.mutateAsync(scheduler)
-      toast.success("Scheduler settings saved")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save")
-    }
-  }
-
-  const handleTriggerRun = async () => {
-    try {
-      await triggerRun.mutateAsync()
-      toast.success("Scheduler run triggered")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to trigger run")
-    }
-  }
-
-  const handleSaveEPG = async () => {
-    if (!epg) return
-    try {
-      await updateEPG.mutateAsync(epg)
-      toast.success("EPG settings saved")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save")
-    }
+  const handleTriggerRun = () => {
+    // Use the same streaming endpoint as "Generate EPG" - full workflow with progress
+    startGeneration()
   }
 
   const handleSaveDurations = async () => {
@@ -256,11 +222,41 @@ export function Settings() {
     }
   }
 
-  const handleSaveReconciliation = async () => {
-    if (!reconciliation) return
+  // Combined save for sections that need both EPG and Display settings
+  const handleSaveEPGAndDisplay = async () => {
     try {
-      await updateReconciliation.mutateAsync(reconciliation)
-      toast.success("Event handling settings saved")
+      const promises: Promise<unknown>[] = []
+      if (display) promises.push(updateDisplay.mutateAsync(display))
+      if (epg) promises.push(updateEPG.mutateAsync(epg))
+      await Promise.all(promises)
+      toast.success("Settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  // Combined save for event group settings
+  const handleSaveEventGroupSettings = async () => {
+    try {
+      const promises: Promise<unknown>[] = []
+      if (epg) promises.push(updateEPG.mutateAsync(epg))
+      if (lifecycle) promises.push(updateLifecycle.mutateAsync(lifecycle))
+      if (reconciliation) promises.push(updateReconciliation.mutateAsync(reconciliation))
+      await Promise.all(promises)
+      toast.success("Settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  // Combined save for scheduler settings
+  const handleSaveSchedulerSettings = async () => {
+    try {
+      const promises: Promise<unknown>[] = []
+      if (epg) promises.push(updateEPG.mutateAsync(epg))
+      if (scheduler) promises.push(updateScheduler.mutateAsync(scheduler))
+      await Promise.all(promises)
+      toast.success("Settings saved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
     }
@@ -405,10 +401,7 @@ export function Settings() {
           </div>
 
           <Button
-            onClick={async () => {
-              await handleSaveDisplay()
-              await handleSaveEPG()
-            }}
+            onClick={handleSaveEPGAndDisplay}
             disabled={updateDisplay.isPending || updateEPG.isPending}
           >
             {(updateDisplay.isPending || updateEPG.isPending) ? (
@@ -476,10 +469,7 @@ export function Settings() {
           </div>
 
           <Button
-            onClick={async () => {
-              await handleSaveEPG()
-              await handleSaveDisplay()
-            }}
+            onClick={handleSaveEPGAndDisplay}
             disabled={updateEPG.isPending || updateDisplay.isPending}
           >
             {(updateEPG.isPending || updateDisplay.isPending) ? (
@@ -682,11 +672,7 @@ export function Settings() {
           )}
 
           <Button
-            onClick={async () => {
-              await handleSaveEPG()
-              await handleSaveLifecycle()
-              await handleSaveReconciliation()
-            }}
+            onClick={handleSaveEventGroupSettings}
             disabled={updateEPG.isPending || updateLifecycle.isPending || updateReconciliation.isPending}
           >
             {(updateEPG.isPending || updateLifecycle.isPending || updateReconciliation.isPending) ? (
@@ -841,8 +827,8 @@ export function Settings() {
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={handleTriggerRun} variant="outline" disabled={triggerRun.isPending}>
-              {triggerRun.isPending ? (
+            <Button onClick={handleTriggerRun} variant="outline" disabled={isGenerating}>
+              {isGenerating ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <Play className="h-4 w-4 mr-1" />
@@ -850,10 +836,7 @@ export function Settings() {
               Run Now
             </Button>
             <Button
-              onClick={async () => {
-                await handleSaveEPG()
-                await handleSaveScheduler()
-              }}
+              onClick={handleSaveSchedulerSettings}
               disabled={updateEPG.isPending || updateScheduler.isPending}
             >
               {(updateEPG.isPending || updateScheduler.isPending) ? (

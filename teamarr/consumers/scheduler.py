@@ -1,10 +1,11 @@
-"""Background scheduler for channel lifecycle tasks.
+"""Background scheduler for EPG generation.
 
-Runs periodic tasks:
-- EPG generation and file delivery
-- Process scheduled channel deletions
-- Light reconciliation (detect and log issues)
-- Cleanup old history records
+Uses cron expressions for scheduling (like V1).
+Runs periodic EPG generation using the unified run_full_generation() function
+which handles everything:
+- EPG generation (teams, groups, XMLTV)
+- Dispatcharr integration
+- Channel lifecycle (deletions, reconciliation, cleanup)
 
 Integrates with FastAPI lifespan for clean startup/shutdown.
 """
@@ -13,24 +14,22 @@ import logging
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
+
+from croniter import croniter
 
 logger = logging.getLogger(__name__)
 
 
-class LifecycleScheduler:
-    """Background scheduler for channel lifecycle tasks.
+class CronScheduler:
+    """Background scheduler using cron expressions.
 
-    Runs periodic tasks in a daemon thread:
-    - Channel deletion based on scheduled times
-    - Light reconciliation (detect-only)
-    - History cleanup
+    Runs tasks at times specified by a cron expression.
 
     Usage:
-        scheduler = LifecycleScheduler(
+        scheduler = CronScheduler(
             db_factory=get_db,
-            interval_minutes=15,
+            cron_expression="0 * * * *",  # Every hour
         )
         scheduler.start()
         # ... application runs ...
@@ -39,7 +38,7 @@ class LifecycleScheduler:
     FastAPI integration:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            scheduler = LifecycleScheduler(get_db)
+            scheduler = CronScheduler(get_db, "0 * * * *")
             scheduler.start()
             yield
             scheduler.stop()
@@ -48,24 +47,28 @@ class LifecycleScheduler:
     def __init__(
         self,
         db_factory: Any,
-        interval_minutes: int = 15,
+        cron_expression: str = "0 * * * *",
         dispatcharr_client: Any = None,
+        run_on_start: bool = True,
     ):
         """Initialize the scheduler.
 
         Args:
             db_factory: Factory function returning database connection
-            interval_minutes: Minutes between task runs
+            cron_expression: Cron expression (e.g., "0 * * * *" for hourly)
             dispatcharr_client: Optional DispatcharrClient for Dispatcharr operations
+            run_on_start: Whether to run tasks immediately on start
         """
         self._db_factory = db_factory
-        self._interval_minutes = interval_minutes
+        self._cron_expression = cron_expression
         self._dispatcharr_client = dispatcharr_client
+        self._run_on_start = run_on_start
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._running = False
         self._last_run: datetime | None = None
+        self._next_run: datetime | None = None
 
     @property
     def is_running(self) -> bool:
@@ -77,6 +80,16 @@ class LifecycleScheduler:
         """Get time of last task run."""
         return self._last_run
 
+    @property
+    def next_run(self) -> datetime | None:
+        """Get time of next scheduled run."""
+        return self._next_run
+
+    @property
+    def cron_expression(self) -> str:
+        """Get the cron expression."""
+        return self._cron_expression
+
     def start(self) -> bool:
         """Start the scheduler.
 
@@ -87,15 +100,22 @@ class LifecycleScheduler:
             logger.warning("Scheduler already running")
             return False
 
+        # Validate cron expression
+        try:
+            croniter(self._cron_expression)
+        except (KeyError, ValueError) as e:
+            logger.error(f"Invalid cron expression '{self._cron_expression}': {e}")
+            return False
+
         self._stop_event.clear()
         self._running = True
         self._thread = threading.Thread(
             target=self._run_loop,
-            name="lifecycle-scheduler",
+            name="cron-scheduler",
             daemon=True,
         )
         self._thread.start()
-        logger.info(f"Lifecycle scheduler started (interval: {self._interval_minutes} minutes)")
+        logger.info(f"Cron scheduler started (expression: {self._cron_expression})")
         return True
 
     def stop(self, timeout: float = 30.0) -> bool:
@@ -110,7 +130,7 @@ class LifecycleScheduler:
         if not self.is_running:
             return True
 
-        logger.info("Stopping lifecycle scheduler...")
+        logger.info("Stopping cron scheduler...")
         self._stop_event.set()
         self._running = False
 
@@ -120,7 +140,7 @@ class LifecycleScheduler:
                 logger.warning("Scheduler thread did not stop in time")
                 return False
 
-        logger.info("Lifecycle scheduler stopped")
+        logger.info("Cron scheduler stopped")
         return True
 
     def run_once(self) -> dict:
@@ -133,20 +153,30 @@ class LifecycleScheduler:
 
     def _run_loop(self) -> None:
         """Main scheduler loop - runs in background thread."""
-        interval_seconds = self._interval_minutes * 60
-
-        # Run immediately on startup
-        try:
-            self._run_tasks()
-        except Exception as e:
-            logger.exception(f"Error in initial scheduler run: {e}")
+        # Run immediately on startup if configured
+        if self._run_on_start:
+            try:
+                logger.info("Running initial scheduled tasks...")
+                self._run_tasks()
+            except Exception as e:
+                logger.exception(f"Error in initial scheduler run: {e}")
 
         while not self._stop_event.is_set():
-            # Wait for interval (checking stop event periodically)
-            for _ in range(int(interval_seconds)):
-                if self._stop_event.is_set():
-                    return
-                time.sleep(1)
+            # Calculate next run time
+            cron = croniter(self._cron_expression, datetime.now())
+            self._next_run = cron.get_next(datetime)
+
+            wait_seconds = (self._next_run - datetime.now()).total_seconds()
+            logger.info(f"Next scheduled run at {self._next_run.strftime('%Y-%m-%d %H:%M:%S')} ({wait_seconds:.0f}s)")
+
+            # Wait until next run time (checking stop event every second)
+            while wait_seconds > 0 and not self._stop_event.is_set():
+                sleep_time = min(1.0, wait_seconds)
+                time.sleep(sleep_time)
+                wait_seconds = (self._next_run - datetime.now()).total_seconds()
+
+            if self._stop_event.is_set():
+                return
 
             # Run tasks
             try:
@@ -157,393 +187,126 @@ class LifecycleScheduler:
     def _run_tasks(self) -> dict:
         """Run all scheduled tasks.
 
+        Tasks:
+        - Weekly cache refresh (team/league data from ESPN/TSDB)
+        - EPG generation (teams, groups, XMLTV)
+        - Dispatcharr integration
+        - Channel lifecycle (deletions, reconciliation, cleanup)
+
         Returns:
             Dict with task results
         """
         self._last_run = datetime.now()
         results = {
             "started_at": self._last_run.isoformat(),
+            "cache_refresh": {},
             "epg_generation": {},
-            "deletions": {},
-            "reconciliation": {},
-            "cleanup": {},
         }
 
+        # Weekly cache refresh (only refreshes if > 7 days old)
         try:
-            # Task 1: EPG generation and file delivery
+            results["cache_refresh"] = self._task_refresh_cache()
+        except Exception as e:
+            logger.warning(f"Cache refresh task failed: {e}")
+            results["cache_refresh"] = {"error": str(e)}
+
+        try:
+            # Single unified generation call - does everything
             results["epg_generation"] = self._task_generate_epg()
         except Exception as e:
             logger.warning(f"EPG generation task failed: {e}")
             results["epg_generation"] = {"error": str(e)}
 
-        try:
-            # Task 2: Process scheduled deletions
-            results["deletions"] = self._task_process_deletions()
-        except Exception as e:
-            logger.warning(f"Deletion task failed: {e}")
-            results["deletions"] = {"error": str(e)}
-
-        try:
-            # Task 3: Light reconciliation (detect only)
-            results["reconciliation"] = self._task_light_reconciliation()
-        except Exception as e:
-            logger.warning(f"Reconciliation task failed: {e}")
-            results["reconciliation"] = {"error": str(e)}
-
-        try:
-            # Task 4: Cleanup old history
-            results["cleanup"] = self._task_cleanup_history()
-        except Exception as e:
-            logger.warning(f"Cleanup task failed: {e}")
-            results["cleanup"] = {"error": str(e)}
-
         results["completed_at"] = datetime.now().isoformat()
         return results
 
-    def _task_generate_epg(self) -> dict:
-        """Generate EPG for all teams and groups, write to output file.
+    def _task_refresh_cache(self) -> dict:
+        """Refresh team/league cache if stale (weekly).
 
-        Flow:
-        1. Refresh M3U accounts (with 60-min skip cache)
-        2. Process all active teams (generates XMLTV per team)
-        3. Process all active event groups (generates XMLTV per group)
-        4. Get all stored XMLTV from database (teams + groups)
-        5. Merge into single XMLTV document
-        6. Write to output file path
-        7. Trigger Dispatcharr EPG refresh
-        8. Associate EPG data with managed channels
+        Returns:
+            Dict with refresh status
+        """
+        from teamarr.services import create_cache_service
+
+        cache_service = create_cache_service(self._db_factory)
+        refreshed = cache_service.refresh_if_needed(max_age_days=7)
+
+        if refreshed:
+            logger.info("Weekly cache refresh completed")
+            stats = cache_service.get_stats()
+            return {
+                "refreshed": True,
+                "leagues_count": stats.leagues_count,
+                "teams_count": stats.teams_count,
+            }
+        else:
+            return {"refreshed": False, "reason": "Cache not stale yet"}
+
+    def _task_generate_epg(self) -> dict:
+        """Generate EPG using the unified generation workflow.
+
+        Uses run_full_generation() which handles:
+        - M3U refresh
+        - Team and event group processing
+        - XMLTV merging and file output
+        - Dispatcharr integration
+        - Channel lifecycle (deletions, reconciliation, cleanup)
 
         Returns:
             Dict with generation stats
         """
-        from teamarr.consumers import process_all_event_groups, process_all_teams
-        from teamarr.consumers.team_processor import get_all_team_xmltv
-        from teamarr.database.groups import get_all_group_xmltv
-        from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
-        from teamarr.utilities.xmltv import merge_xmltv_content
+        from teamarr.consumers.generation import run_full_generation
 
-        result = {
-            "m3u_refresh": {},
-            "teams_processed": 0,
-            "teams_programmes": 0,
-            "groups_processed": 0,
-            "groups_programmes": 0,
-            "programmes_generated": 0,
-            "file_written": False,
-            "file_path": None,
-            "file_size": 0,
-            "epg_refresh": {},
-            "epg_association": {},
-        }
-
-        # Get settings
-        with self._db_factory() as conn:
-            settings = get_epg_settings(conn)
-            dispatcharr_settings = get_dispatcharr_settings(conn)
-
-        output_path = settings.epg_output_path
-        if not output_path:
-            logger.debug("EPG output path not configured, skipping file write")
-            return result
-
-        # Step 1: Refresh M3U accounts before processing event groups
-        if self._dispatcharr_client:
-            result["m3u_refresh"] = self._refresh_m3u_accounts()
-
-        # Step 2: Process all active teams
-        team_result = process_all_teams(db_factory=self._db_factory)
-        result["teams_processed"] = team_result.teams_processed
-        result["teams_programmes"] = team_result.total_programmes
-
-        if team_result.teams_processed > 0:
-            logger.info(
-                f"Processed {team_result.teams_processed} teams, "
-                f"{team_result.total_programmes} programmes"
-            )
-
-        # Step 3: Process all event groups
-        group_result = process_all_event_groups(
+        # Run the unified generation (includes all lifecycle tasks)
+        result = run_full_generation(
             db_factory=self._db_factory,
             dispatcharr_client=self._dispatcharr_client,
-        )
-        result["groups_processed"] = group_result.groups_processed
-        result["groups_programmes"] = group_result.total_programmes
-
-        if group_result.groups_processed > 0:
-            logger.info(
-                f"Processed {group_result.groups_processed} event groups, "
-                f"{group_result.total_programmes} programmes"
-            )
-
-        # Calculate total
-        result["programmes_generated"] = (
-            team_result.total_programmes + group_result.total_programmes
+            progress_callback=None,  # No streaming for background scheduler
         )
 
-        # Check if anything was processed
-        if team_result.teams_processed == 0 and group_result.groups_processed == 0:
-            logger.debug("No teams or event groups processed, skipping EPG file write")
-            return result
-
-        # Get all stored XMLTV content (teams + groups)
-        xmltv_contents: list[str] = []
-        with self._db_factory() as conn:
-            # Get team XMLTV
-            team_xmltv = get_all_team_xmltv(conn)
-            xmltv_contents.extend(team_xmltv)
-
-            # Get group XMLTV
-            group_xmltv = get_all_group_xmltv(conn)
-            xmltv_contents.extend(group_xmltv)
-
-        if not xmltv_contents:
-            logger.debug("No XMLTV content available, skipping file write")
-            return result
-
-        # Merge all XMLTV documents
-        merged_xmltv = merge_xmltv_content(xmltv_contents)
-
-        # Write to file
-        try:
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-
-            # Write with backup
-            if output_file.exists():
-                backup_path = output_file.with_suffix(".xml.bak")
-                try:
-                    if backup_path.exists():
-                        backup_path.unlink()
-                    output_file.rename(backup_path)
-                except Exception as e:
-                    logger.warning(f"Could not create backup: {e}")
-
-            output_file.write_text(merged_xmltv, encoding="utf-8")
-
-            result["file_written"] = True
-            result["file_path"] = str(output_file.absolute())
-            result["file_size"] = len(merged_xmltv)
-
-            logger.info(
-                f"EPG written to {output_path} "
-                f"({len(merged_xmltv):,} bytes, {result['programmes_generated']} programmes)"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to write EPG file: {e}")
-            result["error"] = str(e)
-            return result
-
-        # Step 7: Trigger Dispatcharr EPG refresh
-        if self._dispatcharr_client and dispatcharr_settings.epg_id:
-            result["epg_refresh"] = self._trigger_epg_refresh(dispatcharr_settings.epg_id)
-
-        # Step 8: Associate EPG data with managed channels
-        if self._dispatcharr_client and dispatcharr_settings.epg_id:
-            result["epg_association"] = self._associate_epg_with_channels(
-                dispatcharr_settings.epg_id
-            )
-
-        return result
-
-    def _refresh_m3u_accounts(self) -> dict:
-        """Refresh M3U accounts for all event groups.
-
-        Collects unique M3U account IDs from all active event groups
-        and refreshes them in parallel with 60-minute skip cache.
-
-        Returns:
-            Dict with refresh stats
-        """
-        from teamarr.database.groups import get_all_groups
-        from teamarr.dispatcharr import M3UManager
-
-        result = {"refreshed": 0, "skipped": 0, "failed": 0, "account_ids": []}
-
-        if not self._dispatcharr_client:
-            return result
-
-        # Collect unique M3U account IDs from active groups
-        with self._db_factory() as conn:
-            groups = get_all_groups(conn, include_disabled=False)
-
-        account_ids = set()
-        for group in groups:
-            if group.m3u_account_id:
-                account_ids.add(group.m3u_account_id)
-
-        if not account_ids:
-            logger.debug("No M3U accounts to refresh")
-            return result
-
-        result["account_ids"] = list(account_ids)
-
-        # Refresh all accounts in parallel
-        m3u_manager = M3UManager(self._dispatcharr_client)
-        batch_result = m3u_manager.refresh_multiple(
-            list(account_ids),
-            timeout=120,
-            skip_if_recent_minutes=60,
-        )
-
-        result["refreshed"] = batch_result.succeeded_count - batch_result.skipped_count
-        result["skipped"] = batch_result.skipped_count
-        result["failed"] = batch_result.failed_count
-        result["duration"] = batch_result.duration
-
-        if batch_result.succeeded_count > 0:
-            logger.info(
-                f"M3U refresh: {result['refreshed']} refreshed, "
-                f"{result['skipped']} skipped (recently updated)"
-            )
-
-        return result
-
-    def _trigger_epg_refresh(self, epg_id: int) -> dict:
-        """Trigger Dispatcharr EPG refresh and wait for completion.
-
-        Args:
-            epg_id: Dispatcharr EPG source ID
-
-        Returns:
-            Dict with refresh result
-        """
-        from teamarr.dispatcharr import EPGManager
-
-        if not self._dispatcharr_client:
-            return {"skipped": True, "reason": "No Dispatcharr client"}
-
-        epg_manager = EPGManager(self._dispatcharr_client)
-        refresh_result = epg_manager.wait_for_refresh(epg_id, timeout=60)
-
-        if refresh_result.success:
-            logger.info(
-                f"Dispatcharr EPG refresh completed in {refresh_result.duration:.1f}s"
-            )
-        else:
-            logger.warning(f"Dispatcharr EPG refresh failed: {refresh_result.message}")
-
+        # Convert to dict format for backward compatibility
         return {
-            "success": refresh_result.success,
-            "message": refresh_result.message,
-            "duration": refresh_result.duration,
+            "success": result.success,
+            "error": result.error,
+            "programmes_generated": result.programmes_total,
+            "teams_processed": result.teams_processed,
+            "teams_programmes": result.teams_programmes,
+            "groups_processed": result.groups_processed,
+            "groups_programmes": result.groups_programmes,
+            "file_written": result.file_written,
+            "file_path": result.file_path,
+            "file_size": result.file_size,
+            "duration_seconds": result.duration_seconds,
+            "m3u_refresh": result.m3u_refresh,
+            "epg_refresh": result.epg_refresh,
+            "epg_association": result.epg_association,
+            "deletions": result.deletions,
+            "reconciliation": result.reconciliation,
+            "cleanup": result.cleanup,
+            "run_id": result.run_id,
         }
-
-    def _associate_epg_with_channels(self, epg_source_id: int) -> dict:
-        """Associate EPG data with managed channels after EPG refresh.
-
-        Args:
-            epg_source_id: Dispatcharr EPG source ID
-
-        Returns:
-            Dict with association stats
-        """
-        from teamarr.consumers import create_lifecycle_service
-        from teamarr.services import create_default_service
-
-        if not self._dispatcharr_client:
-            return {"skipped": True, "reason": "No Dispatcharr client"}
-
-        sports_service = create_default_service()
-        service = create_lifecycle_service(
-            self._db_factory,
-            sports_service,
-            dispatcharr_client=self._dispatcharr_client,
-        )
-
-        result = service.associate_epg_with_channels(epg_source_id)
-
-        if result.get("associated", 0) > 0:
-            logger.info(f"Associated EPG data with {result['associated']} channels")
-
-        return result
-
-    def _task_process_deletions(self) -> dict:
-        """Process channels past their scheduled delete time."""
-        from teamarr.consumers import create_lifecycle_service
-        from teamarr.services import create_default_service
-
-        sports_service = create_default_service()
-        service = create_lifecycle_service(
-            self._db_factory,
-            sports_service,
-            self._dispatcharr_client,
-        )
-
-        result = service.process_scheduled_deletions()
-
-        if result.deleted:
-            logger.info(f"Scheduler deleted {len(result.deleted)} expired channel(s)")
-
-        return {
-            "deleted_count": len(result.deleted),
-            "error_count": len(result.errors),
-        }
-
-    def _task_light_reconciliation(self) -> dict:
-        """Run detect-only reconciliation and log issues."""
-        from teamarr.consumers import create_reconciler
-        from teamarr.database.channels import get_reconciliation_settings
-
-        # Check if reconciliation is enabled
-        with self._db_factory() as conn:
-            settings = get_reconciliation_settings(conn)
-
-        if not settings.get("reconcile_on_epg_generation", True):
-            return {"skipped": True, "reason": "disabled"}
-
-        reconciler = create_reconciler(
-            self._db_factory,
-            self._dispatcharr_client,
-        )
-
-        # Detect only - don't auto-fix in background
-        result = reconciler.reconcile(auto_fix=False)
-
-        if result.issues_found:
-            logger.info(
-                f"Reconciliation found {len(result.issues_found)} issue(s): {result.summary}"
-            )
-
-        return result.summary
-
-    def _task_cleanup_history(self) -> dict:
-        """Cleanup old channel history records."""
-        from teamarr.database.channels import (
-            cleanup_old_history,
-            get_reconciliation_settings,
-        )
-
-        # Get retention days from settings
-        with self._db_factory() as conn:
-            settings = get_reconciliation_settings(conn)
-            retention_days = settings.get("channel_history_retention_days", 90)
-            deleted_count = cleanup_old_history(conn, retention_days)
-
-        if deleted_count > 0:
-            logger.info(f"Cleaned up {deleted_count} old history record(s)")
-
-        return {"deleted_count": deleted_count}
 
 
 # =============================================================================
 # MODULE-LEVEL FUNCTIONS
 # =============================================================================
 
+# Keep old name for backward compatibility
+LifecycleScheduler = CronScheduler
 
-_scheduler: LifecycleScheduler | None = None
+_scheduler: CronScheduler | None = None
 
 
 def start_lifecycle_scheduler(
     db_factory: Any,
-    interval_minutes: int | None = None,
+    cron_expression: str | None = None,
     dispatcharr_client: Any = None,
 ) -> bool:
-    """Start the global lifecycle scheduler.
+    """Start the global cron scheduler.
 
     Args:
         db_factory: Factory function returning database connection
-        interval_minutes: Minutes between runs (None = use settings)
+        cron_expression: Cron expression (None = use settings)
         dispatcharr_client: Optional DispatcharrClient instance
 
     Returns:
@@ -551,32 +314,35 @@ def start_lifecycle_scheduler(
     """
     global _scheduler
 
-    from teamarr.database.channels import get_scheduler_settings
+    from teamarr.database.settings import get_epg_settings, get_scheduler_settings
 
     # Get settings
     with db_factory() as conn:
-        settings = get_scheduler_settings(conn)
+        scheduler_settings = get_scheduler_settings(conn)
+        epg_settings = get_epg_settings(conn)
 
-    if not settings.get("enabled", True):
+    if not scheduler_settings.enabled:
         logger.info("Scheduler disabled in settings")
         return False
 
-    interval = interval_minutes or settings.get("interval_minutes", 15)
+    # Use provided cron expression or fall back to settings
+    cron = cron_expression or epg_settings.cron_expression or "0 * * * *"
 
     if _scheduler and _scheduler.is_running:
         logger.warning("Scheduler already running")
         return False
 
-    _scheduler = LifecycleScheduler(
+    _scheduler = CronScheduler(
         db_factory=db_factory,
-        interval_minutes=interval,
+        cron_expression=cron,
         dispatcharr_client=dispatcharr_client,
+        run_on_start=True,
     )
     return _scheduler.start()
 
 
 def stop_lifecycle_scheduler(timeout: float = 30.0) -> bool:
-    """Stop the global lifecycle scheduler.
+    """Stop the global cron scheduler.
 
     Args:
         timeout: Maximum seconds to wait
@@ -606,6 +372,7 @@ def get_scheduler_status() -> dict:
 
     return {
         "running": _scheduler.is_running,
+        "cron_expression": _scheduler.cron_expression,
         "last_run": _scheduler.last_run.isoformat() if _scheduler.last_run else None,
-        "interval_minutes": _scheduler._interval_minutes,
+        "next_run": _scheduler.next_run.isoformat() if _scheduler.next_run else None,
     }

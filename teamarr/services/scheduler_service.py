@@ -14,8 +14,9 @@ class SchedulerStatus:
     """Status of the scheduler."""
 
     running: bool = False
+    cron_expression: str = "0 * * * *"
     last_run: datetime | None = None
-    interval_minutes: int = 15
+    next_run: datetime | None = None
 
 
 @dataclass
@@ -33,7 +34,7 @@ class SchedulerRunResult:
 class SchedulerService:
     """Service for scheduler operations.
 
-    Wraps the consumer layer LifecycleScheduler.
+    Wraps the consumer layer CronScheduler.
     """
 
     def __init__(
@@ -45,11 +46,11 @@ class SchedulerService:
         self._db_factory = db_factory
         self._client = dispatcharr_client
 
-    def start(self, interval_minutes: int | None = None) -> bool:
-        """Start the lifecycle scheduler.
+    def start(self, cron_expression: str | None = None) -> bool:
+        """Start the cron scheduler.
 
         Args:
-            interval_minutes: Minutes between runs (None = use settings)
+            cron_expression: Cron expression (None = use settings)
 
         Returns:
             True if started, False if already running or disabled
@@ -58,12 +59,12 @@ class SchedulerService:
 
         return start_lifecycle_scheduler(
             self._db_factory,
-            interval_minutes=interval_minutes,
+            cron_expression=cron_expression,
             dispatcharr_client=self._client,
         )
 
     def stop(self, timeout: float = 30.0) -> bool:
-        """Stop the lifecycle scheduler.
+        """Stop the cron scheduler.
 
         Args:
             timeout: Maximum seconds to wait
@@ -79,19 +80,24 @@ class SchedulerService:
         """Get scheduler status.
 
         Returns:
-            SchedulerStatus with running state and last run time
+            SchedulerStatus with running state, cron expression, and run times
         """
         from teamarr.consumers.scheduler import get_scheduler_status
 
         status = get_scheduler_status()
         return SchedulerStatus(
             running=status.get("running", False),
+            cron_expression=status.get("cron_expression", "0 * * * *"),
             last_run=(
                 datetime.fromisoformat(status["last_run"])
                 if status.get("last_run")
                 else None
             ),
-            interval_minutes=status.get("interval_minutes", 15),
+            next_run=(
+                datetime.fromisoformat(status["next_run"])
+                if status.get("next_run")
+                else None
+            ),
         )
 
     def run_once(self) -> SchedulerRunResult:
@@ -100,11 +106,12 @@ class SchedulerService:
         Returns:
             SchedulerRunResult with task results
         """
-        from teamarr.consumers.scheduler import LifecycleScheduler
+        from teamarr.consumers.scheduler import CronScheduler
 
-        scheduler = LifecycleScheduler(
+        scheduler = CronScheduler(
             self._db_factory,
             dispatcharr_client=self._client,
+            run_on_start=False,
         )
         result = scheduler.run_once()
 

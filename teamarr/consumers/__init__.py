@@ -43,6 +43,10 @@ from teamarr.consumers.event_group_processor import (
     process_event_group,
 )
 from teamarr.consumers.event_matcher import EventMatcher
+from teamarr.consumers.generation import (
+    GenerationResult as FullGenerationResult,
+    run_full_generation,
+)
 from teamarr.consumers.filler import (
     ConditionalFillerTemplate,
     FillerConfig,
@@ -175,6 +179,9 @@ __all__ = [
     "TeamEPGGenerator",
     "TeamEPGOptions",
     "TemplateConfig",
+    # Unified generation
+    "FullGenerationResult",
+    "run_full_generation",
     # Team processing
     "BatchTeamResult",
     "TeamProcessor",
