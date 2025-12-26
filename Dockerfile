@@ -27,7 +27,8 @@ RUN pip install --no-cache-dir \
     "fastapi>=0.115.0" \
     "uvicorn[standard]>=0.32.0" \
     pydantic>=2.0.0 \
-    rapidfuzz>=3.0.0
+    rapidfuzz>=3.0.0 \
+    croniter>=2.0.0
 
 # Copy application code
 COPY teamarr/ ./teamarr/
