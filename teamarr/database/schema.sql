@@ -505,6 +505,9 @@ INSERT OR IGNORE INTO leagues (league_code, provider, provider_league_id, provid
     ('whl', 'tsdb', '5160', 'Canadian WHL', 'Western Hockey League', 'Hockey', 'https://r2.thesportsdb.com/images/media/league/badge/94w3kx1644535361.png', 1, NULL),
     ('qmjhl', 'tsdb', '5161', 'Canadian QMJHL', 'Quebec Major Junior Hockey League', 'Hockey', 'https://r2.thesportsdb.com/images/media/league/badge/3nofen1644535248.png', 1, NULL),
 
+    -- Hockey - AHL (TSDB)
+    ('ahl', 'tsdb', '4738', 'American AHL', 'American Hockey League', 'Hockey', 'https://r2.thesportsdb.com/images/media/league/badge/bm25ej1582197507.png', 1, NULL),
+
     -- Baseball (ESPN)
     ('mlb', 'espn', 'baseball/mlb', NULL, 'MLB', 'Baseball', 'https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png', 1, NULL),
     ('college-baseball', 'espn', 'baseball/college-baseball', NULL, 'NCAA Baseball', 'Baseball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/baseball.png', 1, 'ncaabb'),
