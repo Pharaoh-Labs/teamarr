@@ -130,10 +130,22 @@ def extract_matchup_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -
     name="league",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="League code (e.g., 'nfl', 'nba')",
+    description="League short code uppercase (e.g., 'NFL', 'NCAAM')",
 )
 def extract_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    return ctx.team_config.league or ""
+    """Return league alias (short code) uppercase, matching V1 behavior.
+
+    Examples:
+        mens-college-basketball → NCAAM
+        eng.1 → EPL
+        nfl → NFL
+    """
+    from teamarr.database import get_db
+    from teamarr.database.leagues import get_league_id
+
+    with get_db() as conn:
+        league_id = get_league_id(conn, ctx.team_config.league)
+    return league_id.upper()
 
 
 @register_variable(
