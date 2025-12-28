@@ -305,6 +305,38 @@ class TeamLeagueCache:
         except Exception:
             return True
 
+    def get_team_name_by_id(
+        self,
+        provider_team_id: str,
+        league: str,
+        provider: str = "tsdb",
+    ) -> str | None:
+        """Get team name from provider team ID.
+
+        Uses seeded/cached data instead of making API calls.
+        This is critical for TSDB performance - avoids 2 API calls per lookup.
+
+        Args:
+            provider_team_id: Team ID from the provider
+            league: League slug to search in
+            provider: Provider name (default 'tsdb')
+
+        Returns:
+            Team name or None if not found
+        """
+        with self._db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT team_name FROM team_cache
+                WHERE provider_team_id = ? AND league = ? AND provider = ?
+                LIMIT 1
+                """,
+                (provider_team_id, league, provider),
+            )
+            row = cursor.fetchone()
+            return row[0] if row else None
+
     def _get_leagues_for_team(
         self,
         team_name: str,

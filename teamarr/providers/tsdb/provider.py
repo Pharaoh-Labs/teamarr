@@ -134,7 +134,22 @@ class TSDBProvider(SportsProvider):
         return events
 
     def _get_team_name(self, team_id: str, league: str) -> str | None:
-        """Get team name from ID by searching league teams."""
+        """Get team name from ID.
+
+        Uses seeded database cache first to avoid API calls.
+        Falls back to API only if not found in cache.
+        """
+        # Try seeded database cache first (avoids 2 API calls per lookup!)
+        from teamarr.consumers.cache import get_cache
+
+        cache = get_cache()
+        team_name = cache.get_team_name_by_id(team_id, league, provider="tsdb")
+        if team_name:
+            logger.debug(f"TSDB team name from cache: {team_id} → {team_name}")
+            return team_name
+
+        # Fallback to API (for teams not in seed, e.g., new teams)
+        logger.debug(f"TSDB team {team_id} not in cache, fetching from API")
         data = self._client.get_teams_in_league(league)
         if not data:
             return None
