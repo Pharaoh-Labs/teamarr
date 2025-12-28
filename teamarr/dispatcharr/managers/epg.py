@@ -194,6 +194,17 @@ class EPGManager:
                     duration=duration,
                     source={"id": current.id, "status": current.status},
                 )
+            # Quick exit: no channels mapped - Dispatcharr returns success instantly
+            # but updated_at doesn't change, so we'd wait full timeout otherwise
+            elif current_status == "success" and "no channels" in (current_message or "").lower():
+                duration = time.time() - start_time
+                logger.info(f"EPG refresh: no channels mapped yet (completed in {duration:.1f}s)")
+                return RefreshResult(
+                    success=True,
+                    message=current_message or "EPG refresh completed (no channels mapped)",
+                    duration=duration,
+                    source={"id": current.id, "status": current.status},
+                )
             elif current_status == "error":
                 duration = time.time() - start_time
                 return RefreshResult(

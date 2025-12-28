@@ -336,7 +336,7 @@ def start_lifecycle_scheduler(
         db_factory=db_factory,
         cron_expression=cron,
         dispatcharr_client=dispatcharr_client,
-        run_on_start=True,
+        run_on_start=False,  # Don't run EPG generation on startup
     )
     return _scheduler.start()
 
