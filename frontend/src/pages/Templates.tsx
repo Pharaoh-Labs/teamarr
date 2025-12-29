@@ -271,7 +271,9 @@ export function Templates() {
                             {template.team_count} team{template.team_count !== 1 ? "s" : ""}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-xs">None</span>
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
+                            None
+                          </Badge>
                         )
                       ) : (
                         template.group_count && template.group_count > 0 ? (
@@ -279,7 +281,9 @@ export function Templates() {
                             {template.group_count} group{template.group_count !== 1 ? "s" : ""}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-xs">None</span>
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
+                            None
+                          </Badge>
                         )
                       )}
                     </TableCell>

@@ -4,11 +4,17 @@ Provides centralized access to all processing statistics:
 - Current aggregate stats
 - Historical run data
 - Daily/weekly trends
+- Live game stats (games today, live now)
 """
+
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 
 from teamarr.database import get_db
+from teamarr.database.settings import get_all_settings
 
 router = APIRouter()
 
@@ -283,6 +289,169 @@ def get_dashboard_stats():
                 "group_breakdown": channel_group_breakdown,
             },
         }
+
+
+@router.get("/live")
+def get_live_stats(
+    epg_type: str | None = Query(None, description="Filter by 'team' or 'event'"),
+):
+    """Get live game statistics from the EPG.
+
+    Parses stored XMLTV content to calculate:
+    - games_today: Events scheduled for today
+    - live_now: Events currently in progress
+
+    Returns:
+        team: stats for team-based EPG
+        event: stats for event-based EPG
+        today_events: list of games scheduled today with start times
+    """
+    with get_db() as conn:
+        settings = get_all_settings(conn)
+        user_tz = ZoneInfo(settings.epg.epg_timezone)
+        now = datetime.now(user_tz)
+        today = now.date()
+
+        stats = {
+            "team": {"games_today": 0, "live_now": 0, "by_league": {}},
+            "event": {"games_today": 0, "live_now": 0, "by_league": {}},
+        }
+
+        # Fetch team EPG XMLTV content
+        if epg_type is None or epg_type == "team":
+            cursor = conn.execute("SELECT xmltv_content FROM team_epg_xmltv")
+            for row in cursor.fetchall():
+                if row["xmltv_content"]:
+                    _parse_xmltv_for_live_stats(
+                        row["xmltv_content"], stats["team"], now, today, user_tz
+                    )
+
+        # Fetch event EPG XMLTV content
+        if epg_type is None or epg_type == "event":
+            cursor = conn.execute("SELECT xmltv_content FROM event_epg_xmltv")
+            for row in cursor.fetchall():
+                if row["xmltv_content"]:
+                    _parse_xmltv_for_live_stats(
+                        row["xmltv_content"], stats["event"], now, today, user_tz
+                    )
+
+        # Convert by_league dict to sorted list
+        for key in ["team", "event"]:
+            by_league = stats[key]["by_league"]
+            stats[key]["by_league"] = [
+                {"league": league.upper(), "count": count}
+                for league, count in sorted(by_league.items())
+            ]
+
+        return stats
+
+
+def _parse_xmltv_time(time_str: str) -> datetime | None:
+    """Parse XMLTV timestamp (YYYYMMDDHHmmss +ZZZZ)."""
+    try:
+        # Format: 20251229140000 -0500
+        if " " in time_str:
+            dt_part, tz_part = time_str.split(" ", 1)
+        else:
+            dt_part = time_str
+            tz_part = "+0000"
+
+        # Parse datetime
+        dt = datetime.strptime(dt_part, "%Y%m%d%H%M%S")
+
+        # Parse timezone offset
+        tz_sign = 1 if tz_part.startswith("+") else -1
+        tz_hours = int(tz_part[1:3])
+        tz_minutes = int(tz_part[3:5]) if len(tz_part) >= 5 else 0
+        from datetime import timedelta, timezone
+
+        tz_offset = timezone(timedelta(hours=tz_sign * tz_hours, minutes=tz_sign * tz_minutes))
+        return dt.replace(tzinfo=tz_offset)
+    except (ValueError, IndexError):
+        return None
+
+
+def _parse_xmltv_for_live_stats(
+    xmltv_content: str,
+    stats: dict,
+    now: datetime,
+    today,
+    user_tz: ZoneInfo,
+) -> None:
+    """Parse XMLTV content and update stats dict with games today/live now.
+
+    Only counts actual game programmes (not filler like pregame/postgame/idle).
+    V2 adds comments inside <programme> for filler: teamarr:filler-pregame, etc.
+    Programmes without a filler comment are games.
+    """
+    try:
+        # Parse with comments enabled to detect teamarr metadata
+        parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+        root = ET.fromstring(xmltv_content, parser)
+    except ET.ParseError:
+        return
+
+    # Track which programmes we've seen to avoid duplicates
+    seen = set()
+
+    for programme in root.findall(".//programme"):
+        # Check if this programme has a filler comment inside it
+        is_filler = False
+        for child in programme:
+            # Comments have callable tag (ET.Comment function)
+            if callable(child.tag):
+                comment_text = child.text or ""
+                if comment_text.startswith("teamarr:filler"):
+                    is_filler = True
+                    break
+
+        # Skip filler programmes
+        if is_filler:
+            continue
+
+        start_str = programme.get("start", "")
+        stop_str = programme.get("stop", "")
+        channel_id = programme.get("channel", "")
+
+        # Prefer sub-title (has matchup) over title (often generic "Sports event")
+        subtitle_elem = programme.find("sub-title")
+        title_elem = programme.find("title")
+        title = (
+            subtitle_elem.text if subtitle_elem is not None and subtitle_elem.text
+            else title_elem.text if title_elem is not None
+            else ""
+        )
+
+        # Skip if no timing info
+        if not start_str or not stop_str:
+            continue
+
+        # Dedupe by channel+start+stop (V1 style)
+        prog_key = (channel_id, start_str, stop_str)
+        if prog_key in seen:
+            continue
+        seen.add(prog_key)
+
+        start_time = _parse_xmltv_time(start_str)
+        stop_time = _parse_xmltv_time(stop_str)
+
+        if not start_time or not stop_time:
+            continue
+
+        # Convert to user timezone for date comparison
+        start_local = start_time.astimezone(user_tz)
+
+        # Games today: starts today
+        if start_local.date() == today:
+            stats["games_today"] += 1
+
+            # Extract league from channel_id (e.g., "MichiganWolverines.ncaam" -> "ncaam")
+            league = channel_id.split(".")[-1] if "." in channel_id else "unknown"
+            stats["by_league"][league] = stats["by_league"].get(league, 0) + 1
+
+            # Live now: currently in progress
+            if start_time <= now <= stop_time:
+                stats["live_now"] += 1
 
 
 @router.get("/history")

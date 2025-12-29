@@ -43,6 +43,7 @@ import {
 } from "@/hooks/useTeams"
 import { useTemplates } from "@/hooks/useTemplates"
 import type { Team } from "@/api/teams"
+import { statsApi, type LiveStats } from "@/api/stats"
 import { useQuery } from "@tanstack/react-query"
 
 // Sport emoji mapping
@@ -195,6 +196,11 @@ export function Teams() {
   const { data: teams, isLoading, error, refetch } = useTeams()
   const { data: templates } = useTemplates()
   const { data: cachedLeagues } = useQuery({ queryKey: ["leagues"], queryFn: fetchLeagues })
+  const { data: liveStats } = useQuery({
+    queryKey: ["stats", "live", "team"],
+    queryFn: () => statsApi.getLiveStats("team"),
+    refetchInterval: 60000, // Refresh every minute
+  })
 
   // Create league logo lookup map
   const leagueLogos = useMemo(() => {
@@ -504,15 +510,44 @@ export function Teams() {
             </div>
           </div>
 
-          {/* Games Today - placeholder */}
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-muted-foreground">--</div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wide">Games Today</div>
-          </Card>
+          {/* Games Today */}
+          <div className="group relative">
+            <Card className="p-3 cursor-help">
+              <div className={cn(
+                "text-2xl font-bold",
+                liveStats?.team.games_today ? "" : "text-muted-foreground"
+              )}>
+                {liveStats?.team.games_today ?? "--"}
+              </div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">Games Today</div>
+            </Card>
+            {liveStats?.team.by_league && liveStats.team.by_league.length > 0 && (
+              <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
+                <Card className="p-3 shadow-lg min-w-[120px]">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 pb-1 border-b">
+                    By League
+                  </div>
+                  <div className="space-y-1">
+                    {liveStats.team.by_league.map((item) => (
+                      <div key={item.league} className="flex justify-between text-sm gap-3">
+                        <span className="text-muted-foreground">{item.league}</span>
+                        <span className="font-medium">{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
 
-          {/* Live Now - placeholder */}
+          {/* Live Now */}
           <Card className="p-3">
-            <div className="text-2xl font-bold text-muted-foreground">--</div>
+            <div className={cn(
+              "text-2xl font-bold",
+              liveStats?.team.live_now ? "text-green-600" : "text-muted-foreground"
+            )}>
+              {liveStats?.team.live_now ?? "--"}
+            </div>
             <div className="text-xs text-muted-foreground uppercase tracking-wide">Live Now</div>
           </Card>
         </div>

@@ -235,6 +235,9 @@ class TemplateResponse(BaseModel):
     idle_enabled: bool | None
     created_at: datetime
     updated_at: datetime
+    # Usage counts from list query
+    team_count: int | None = None
+    group_count: int | None = None
 
 
 class TemplateFullResponse(TemplateResponse):
