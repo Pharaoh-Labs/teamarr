@@ -137,14 +137,14 @@ def extract_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
     Fallback chain:
         1. Our alias from leagues.league_id_alias (as stored - case preserved)
-        2. Raw league code (uppercased for fallback)
+        2. Full league name from display_name/league_name
 
     Examples:
-        nfl → NFL (stored as 'NFL')
-        mens-college-basketball → NCAAM (stored as 'NCAAM')
-        eng.1 → EPL (stored as 'EPL')
-        ger.1 → Bundesliga (stored as 'Bundesliga')
-        esp.1 → La Liga (stored as 'La Liga')
+        nfl → NFL (alias)
+        mens-college-basketball → NCAAM (alias)
+        eng.1 → EPL (alias)
+        ger.1 → Bundesliga (alias)
+        unknown.league → "Unknown League Name" (fallback to full name)
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
@@ -152,9 +152,9 @@ def extract_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
     service = get_league_mapping_service()
     alias = service.get_league_id(ctx.team_config.league)
-    # If no alias found, get_league_id returns raw code - uppercase it as fallback
+    # If no alias found, get_league_id returns raw code - fall back to full name
     if alias == ctx.team_config.league:
-        return alias.upper()
+        return service.get_league_display_name(ctx.team_config.league)
     return alias
 
 
