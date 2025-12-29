@@ -198,6 +198,12 @@ class EventEPGGenerator:
             icon=event.home_team.logo_url,
         )
 
+    # Keywords for detecting UFC prelim streams
+    UFC_PRELIM_KEYWORDS = ["prelim", "prelims", "early", "pre-show", "early prelim"]
+
+    # Keywords for detecting UFC main card streams
+    UFC_MAIN_KEYWORDS = ["main", "main card", "main event", "ppv"]
+
     def _get_ufc_programme_times(
         self,
         event: Event,
@@ -208,10 +214,11 @@ class EventEPGGenerator:
         """Get start/end times for UFC events based on stream type.
 
         Detects prelims vs main card from stream name and adjusts times accordingly.
+        Uses expanded keyword detection for better matching.
 
         Args:
             event: UFC Event with main_card_start set
-            stream_name: Stream name to check for "prelim" or "main"
+            stream_name: Stream name to check for prelim/main indicators
             sport_durations: Duration settings from database
             default_duration: Fallback duration
 
@@ -221,10 +228,13 @@ class EventEPGGenerator:
         stream_lower = stream_name.lower()
         mma_duration = sport_durations.get("mma", default_duration)
 
-        if "prelim" in stream_lower and event.main_card_start:
+        is_prelim = any(kw in stream_lower for kw in self.UFC_PRELIM_KEYWORDS)
+        is_main = any(kw in stream_lower for kw in self.UFC_MAIN_KEYWORDS)
+
+        if is_prelim and event.main_card_start:
             # Prelims only: event start → main card start
             return event.start_time, event.main_card_start
-        elif "main" in stream_lower and event.main_card_start:
+        elif is_main and event.main_card_start:
             # Main card only: main card start → estimated end
             # Main card is typically half the total duration
             main_duration = timedelta(hours=mma_duration / 2)
