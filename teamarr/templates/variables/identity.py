@@ -221,17 +221,24 @@ def extract_sport_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> s
     name="league_id",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="League identifier - uses alias if configured (e.g., 'nfl', 'epl', 'ncaam')",
+    description="League identifier lowercase for URLs (e.g., 'nfl', 'epl', 'bundesliga')",
 )
 def extract_league_id(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    """Return league_id_alias if configured, otherwise league_code.
+    """Return league_id_alias (lowercase) if configured, otherwise league_code.
+
+    Always lowercase - used for URL construction.
+
+    Examples:
+        nfl → nfl
+        eng.1 → epl
+        ger.1 → bundesliga
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
     from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
-    return service.get_league_id(ctx.team_config.league)
+    return service.get_league_id(ctx.team_config.league).lower()
 
 
 @register_variable(

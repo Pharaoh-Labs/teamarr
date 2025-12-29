@@ -128,10 +128,6 @@ class CacheRefresher:
             report(f"Saving {len(all_teams)} teams, {len(all_leagues)} leagues...", 95)
             self._save_cache(all_teams, all_leagues)
 
-            # Apply default league aliases for leagues that don't have one
-            # This ensures {league} template variable works correctly
-            self._apply_default_aliases()
-
             # Update metadata
             duration = time.time() - start_time
             self._update_meta(len(all_leagues), len(all_teams), duration, None)
@@ -525,101 +521,6 @@ class CacheRefresher:
                 "UPDATE cache_meta SET refresh_in_progress = ? WHERE id = 1",
                 (1 if in_progress else 0,),
             )
-
-    def _apply_default_aliases(self) -> int:
-        """Apply default league_id_alias values for configured leagues.
-
-        SINGLE SOURCE OF TRUTH for league aliases.
-
-        This function is the authoritative source for league display aliases.
-        It runs on every cache refresh and unconditionally overwrites whatever
-        is in the database. The schema.sql seeds leagues with NULL aliases,
-        and this function populates them.
-
-        Aliases are stored in display format:
-        - Abbreviations uppercase (NFL, EPL, UCL)
-        - Proper names in title case (Bundesliga, La Liga, Serie A)
-
-        To add/change an alias, edit the default_aliases dict below.
-
-        Returns:
-            Number of leagues updated
-        """
-        # Default aliases for common leagues
-        # Keys are league_code, values are display-ready aliases
-        default_aliases = {
-            # Major US sports
-            "nfl": "NFL",
-            "nba": "NBA",
-            "nhl": "NHL",
-            "mlb": "MLB",
-            "wnba": "WNBA",
-            "nba-development": "NBAG",
-            # College sports
-            "college-football": "NCAAF",
-            "mens-college-basketball": "NCAAM",
-            "womens-college-basketball": "NCAAW",
-            "mens-college-hockey": "NCAAH",
-            "womens-college-hockey": "NCAAWH",
-            "college-baseball": "NCAABB",
-            "college-softball": "NCAASBW",
-            "mens-college-volleyball": "NCAAVB",
-            "womens-college-volleyball": "NCAAWVB",
-            "mens-college-lacrosse": "NCAALAX",
-            "womens-college-lacrosse": "NCAAWLAX",
-            "usa.ncaa.m.1": "NCAAS",
-            "usa.ncaa.w.1": "NCAAWS",
-            # Soccer - abbreviations
-            "usa.1": "MLS",
-            "usa.nwsl": "NWSL",
-            "eng.1": "EPL",
-            "uefa.champions": "UCL",
-            "ksa.1": "SPL",
-            # Soccer - proper names (title case)
-            "eng.2": "Championship",
-            "eng.3": "League One",
-            "esp.1": "La Liga",
-            "ger.1": "Bundesliga",
-            "ita.1": "Serie A",
-            "fra.1": "Ligue 1",
-            # Hockey
-            "ohl": "OHL",
-            "whl": "WHL",
-            "qmjhl": "QMJHL",
-            "ahl": "AHL",
-            # Lacrosse
-            "nll": "NLL",
-            "pll": "PLL",
-            # Cricket
-            "ipl": "IPL",
-            "cpl": "CPL",
-            "bpl": "BPL",
-            # Rugby
-            "nrl": "NRL",
-            # MMA
-            "ufc": "UFC",
-            # Boxing
-            "boxing": "Boxing",
-        }
-
-        updated = 0
-        with self._db() as conn:
-            cursor = conn.cursor()
-            for league_code, alias in default_aliases.items():
-                # Unconditionally set the alias to ensure correct casing
-                cursor.execute(
-                    """
-                    UPDATE leagues
-                    SET league_id_alias = ?
-                    WHERE league_code = ?
-                    """,
-                    (alias, league_code),
-                )
-                updated += cursor.rowcount
-
-        if updated > 0:
-            logger.info(f"Applied default league aliases to {updated} leagues")
-        return updated
 
     def _merge_with_seed(
         self, api_teams: list[dict], api_leagues: list[dict]
