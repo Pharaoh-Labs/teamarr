@@ -92,6 +92,24 @@ def list_m3u_groups(account_id: int) -> list[dict]:
     return result
 
 
+def _natural_sort_key(name: str) -> list:
+    """Generate sort key for natural/human sorting.
+
+    Handles embedded numbers correctly:
+    - "ESPN+ 2" comes before "ESPN+ 10"
+    - "Sportsnet+ 01" comes before "Sportsnet+ 02"
+    """
+    import re
+
+    parts = []
+    for part in re.split(r"(\d+)", name.lower()):
+        if part.isdigit():
+            parts.append(int(part))  # Compare numbers as integers
+        else:
+            parts.append(part)  # Compare text as strings
+    return parts
+
+
 @router.get("/m3u-accounts/{account_id}/groups/{group_id}/streams")
 def list_group_streams(account_id: int, group_id: int) -> list[dict]:
     """List streams in a specific M3U group.
@@ -101,7 +119,7 @@ def list_group_streams(account_id: int, group_id: int) -> list[dict]:
         group_id: Channel group ID
 
     Returns:
-        List of streams with id and name
+        List of streams with id and name, sorted naturally
     """
     conn = get_dispatcharr_connection(db_factory=get_db)
     if not conn:
@@ -109,7 +127,7 @@ def list_group_streams(account_id: int, group_id: int) -> list[dict]:
 
     streams = conn.m3u.list_streams(group_id=group_id, account_id=account_id, limit=500)
 
-    # Sort alphabetically by name for consistent display
+    # Sort using natural ordering (ESPN+ 2 before ESPN+ 10)
     return sorted(
         [
             {
@@ -118,7 +136,7 @@ def list_group_streams(account_id: int, group_id: int) -> list[dict]:
             }
             for s in streams
         ],
-        key=lambda x: x["name"].lower(),
+        key=lambda x: _natural_sort_key(x["name"]),
     )
 
 

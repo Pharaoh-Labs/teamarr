@@ -276,8 +276,27 @@ class FuzzyMatcher:
 
         "Florida Atlantic Owls" -> "Florida Atlantic"
         "Chicago Blackhawks" -> "Chicago"
+        "Toronto Maple Leafs" -> "Toronto"
+        "Columbus Blue Jackets" -> "Columbus"
         """
-        words = name.lower().split()
+        name_lower = name.lower()
+
+        # First pass: strip multi-word mascots from the end
+        # Sort by length descending to match longest first
+        multi_word_mascots = sorted(
+            [m for m in MASCOT_WORDS if " " in m],
+            key=len,
+            reverse=True,
+        )
+        for mascot in multi_word_mascots:
+            if name_lower.endswith(" " + mascot):
+                # Strip the mascot from the end
+                name = name[: -(len(mascot) + 1)]
+                name_lower = name.lower()
+                break  # Only strip one multi-word mascot
+
+        # Second pass: strip single-word mascots
+        words = name_lower.split()
         result = []
 
         for word in words:
