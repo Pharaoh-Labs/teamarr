@@ -34,7 +34,7 @@ from teamarr.consumers.filler.event_filler import (
     EventFillerResult,
     template_to_event_filler_config,
 )
-from teamarr.core import Event, Programme
+from teamarr.core import Event
 from teamarr.database.groups import (
     EventEPGGroup,
     get_all_group_xmltv,
@@ -1483,7 +1483,7 @@ class EventGroupProcessor:
 
         try:
             from teamarr.database import get_db
-            from teamarr.dispatcharr import ChannelManager, EPGManager
+            from teamarr.dispatcharr import EPGManager
 
             # Get EPG source ID from settings
             with get_db() as conn:
@@ -1571,7 +1571,8 @@ class EventGroupProcessor:
                             associated += 1
                         else:
                             logger.debug(
-                                f"Failed to set EPG for channel {channel.channel_name}: {result.error}"
+                                f"Failed to set EPG for channel "
+                                f"{channel.channel_name}: {result.error}"
                             )
                     except Exception as e:
                         logger.debug(

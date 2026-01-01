@@ -100,7 +100,10 @@ def run_full_generation(
     result = GenerationResult()
     result.started_at = time.time()
 
-    def update_progress(phase: str, percent: int, message: str, current: int = 0, total: int = 0, item_name: str = ""):
+    def update_progress(
+        phase: str, percent: int, message: str,
+        current: int = 0, total: int = 0, item_name: str = "",
+    ):
         if progress_callback:
             progress_callback(phase, percent, message, current, total, item_name)
 
@@ -125,7 +128,8 @@ def run_full_generation(
 
         def team_progress(current: int, total: int, name: str):
             pct = 5 + int((current / total) * 40) if total > 0 else 5
-            update_progress("teams", pct, f"Processing {name} ({current}/{total})", current, total, name)
+            msg = f"Processing {name} ({current}/{total})"
+            update_progress("teams", pct, msg, current, total, name)
 
         team_result = process_all_teams(db_factory=db_factory, progress_callback=team_progress)
         result.teams_processed = team_result.teams_processed
@@ -136,7 +140,8 @@ def run_full_generation(
 
         def group_progress(current: int, total: int, name: str):
             pct = 45 + int((current / total) * 35) if total > 0 else 45
-            update_progress("groups", pct, f"Processing {name} ({current}/{total})", current, total, name)
+            msg = f"Processing {name} ({current}/{total})"
+            update_progress("groups", pct, msg, current, total, name)
 
         group_result = process_all_event_groups(
             db_factory=db_factory,
@@ -189,7 +194,9 @@ def run_full_generation(
             }
 
             update_progress("dispatcharr", 88, "Associating EPG with channels...")
-            result.epg_association = lifecycle_service.associate_epg_with_channels(dispatcharr_settings.epg_id)
+            result.epg_association = lifecycle_service.associate_epg_with_channels(
+                dispatcharr_settings.epg_id
+            )
 
         # Step 6: Process scheduled deletions (90-93%)
         update_progress("lifecycle", 90, "Processing scheduled deletions...")
