@@ -234,7 +234,7 @@ export function Templates() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Templates ({templates?.length ?? 0})</CardTitle>
+          <CardTitle>Templates</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (

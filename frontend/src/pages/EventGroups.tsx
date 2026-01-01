@@ -815,7 +815,7 @@ export function EventGroups() {
       {/* Groups Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Groups ({sortedGroups.length})</CardTitle>
+          <CardTitle>Groups</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (

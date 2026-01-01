@@ -897,8 +897,7 @@ export function Teams() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle>
-            Teams ({filteredTeams.length}
-            {filteredTeams.length !== teams?.length && ` of ${teams?.length}`})
+            Teams
           </CardTitle>
         </CardHeader>
         <CardContent>

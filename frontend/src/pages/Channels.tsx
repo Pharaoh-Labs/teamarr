@@ -295,7 +295,7 @@ export function Channels() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Tv className="h-5 w-5" />
-            Channels ({channelsData?.total ?? 0})
+            Channels
           </CardTitle>
         </CardHeader>
         <CardContent>
