@@ -237,9 +237,9 @@ def run_full_generation(
         # Update stats run
         stats_run.programmes_total = result.programmes_total
         stats_run.programmes_events = team_result.total_events + group_result.total_events
-        stats_run.programmes_pregame = team_result.total_pregame
-        stats_run.programmes_postgame = team_result.total_postgame
-        stats_run.programmes_idle = team_result.total_idle
+        stats_run.programmes_pregame = team_result.total_pregame + group_result.total_pregame
+        stats_run.programmes_postgame = team_result.total_postgame + group_result.total_postgame
+        stats_run.programmes_idle = team_result.total_idle  # Event groups don't have idle
         stats_run.channels_created = group_result.total_channels_created
         stats_run.xmltv_size_bytes = result.file_size
         stats_run.extra_metrics["teams_processed"] = result.teams_processed

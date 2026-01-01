@@ -13,6 +13,7 @@ from .event_filler import (
     EventFillerConfig,
     EventFillerGenerator,
     EventFillerOptions,
+    EventFillerResult,
     template_to_event_filler_config,
 )
 from .generator import FillerGenerator
@@ -34,6 +35,7 @@ __all__ = [
     "EventFillerGenerator",
     "EventFillerConfig",
     "EventFillerOptions",
+    "EventFillerResult",
     "template_to_event_filler_config",
     # Shared types
     "FillerTemplate",

@@ -31,6 +31,7 @@ from teamarr.consumers.filler.event_filler import (
     EventFillerConfig,
     EventFillerGenerator,
     EventFillerOptions,
+    EventFillerResult,
     template_to_event_filler_config,
 )
 from teamarr.core import Event, Programme
@@ -89,6 +90,8 @@ class ProcessingResult:
     # EPG generation
     programmes_generated: int = 0
     events_count: int = 0  # Actual event programmes (excluding filler)
+    pregame_count: int = 0  # Pregame filler programmes
+    postgame_count: int = 0  # Postgame filler programmes
     xmltv_size: int = 0
 
     # Errors
@@ -120,6 +123,8 @@ class ProcessingResult:
             "epg": {
                 "programmes": self.programmes_generated,
                 "events": self.events_count,
+                "pregame": self.pregame_count,
+                "postgame": self.postgame_count,
                 "xmltv_bytes": self.xmltv_size,
             },
             "errors": self.errors,
@@ -155,6 +160,16 @@ class BatchProcessingResult:
     def total_events(self) -> int:
         """Actual event programmes (excluding filler)."""
         return sum(r.events_count for r in self.results)
+
+    @property
+    def total_pregame(self) -> int:
+        """Total pregame filler programmes."""
+        return sum(r.pregame_count for r in self.results)
+
+    @property
+    def total_postgame(self) -> int:
+        """Total postgame filler programmes."""
+        return sum(r.postgame_count for r in self.results)
 
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
@@ -849,15 +864,19 @@ class EventGroupProcessor:
                     result.errors.append(f"Channel error: {error}")
 
                 # Step 5: Generate XMLTV from matched streams
-                xmltv_content, programmes_total, event_programmes = self._generate_xmltv(
-                    matched_streams, group, conn
+                xmltv_content, programmes_total, event_programmes, pregame, postgame = (
+                    self._generate_xmltv(matched_streams, group, conn)
                 )
                 result.programmes_generated = programmes_total
                 result.events_count = event_programmes
+                result.pregame_count = pregame
+                result.postgame_count = postgame
                 result.xmltv_size = len(xmltv_content.encode("utf-8")) if xmltv_content else 0
 
                 stats_run.programmes_total = programmes_total
                 stats_run.programmes_events = event_programmes
+                stats_run.programmes_pregame = pregame
+                stats_run.programmes_postgame = postgame
                 stats_run.xmltv_size_bytes = result.xmltv_size
 
                 # Step 6: Store XMLTV for this group (in database)
@@ -1273,7 +1292,7 @@ class EventGroupProcessor:
         matched_streams: list[dict],
         group: EventEPGGroup,
         conn: Connection,
-    ) -> tuple[str, int, int]:
+    ) -> tuple[str, int, int, int, int]:
         """Generate XMLTV content from matched streams.
 
         Args:
@@ -1282,10 +1301,10 @@ class EventGroupProcessor:
             conn: Database connection
 
         Returns:
-            Tuple of (xmltv_content, total_programmes, event_programmes)
+            Tuple of (xmltv_content, total_programmes, event_programmes, pregame, postgame)
         """
         if not matched_streams:
-            return "", 0, 0
+            return "", 0, 0, 0, 0
 
         # Load template options if configured
         options = EventEPGOptions()
@@ -1312,37 +1331,42 @@ class EventGroupProcessor:
         )
 
         if not programmes:
-            return "", 0, 0
+            return "", 0, 0, 0, 0
 
         # Track event programmes separately
         event_programmes_count = len(programmes)
-        filler_programmes_count = 0
+        pregame_count = 0
+        postgame_count = 0
 
         # Generate filler if enabled in template
         if filler_config:
-            filler_programmes = self._generate_filler_for_streams(
+            filler_result = self._generate_filler_for_streams(
                 matched_streams, filler_config, options.sport_durations
             )
-            if filler_programmes:
-                filler_programmes_count = len(filler_programmes)
-                programmes.extend(filler_programmes)
+            if filler_result.programmes:
+                pregame_count = filler_result.pregame_count
+                postgame_count = filler_result.postgame_count
+                programmes.extend(filler_result.programmes)
                 # Sort all programmes by channel_id then start time
                 programmes.sort(key=lambda p: (p.channel_id, p.start))
                 logger.debug(
-                    f"Added {filler_programmes_count} filler programmes for group '{group.name}'"
+                    f"Added {len(filler_result.programmes)} filler programmes "
+                    f"({pregame_count} pregame, {postgame_count} postgame) "
+                    f"for group '{group.name}'"
                 )
 
         # Convert to XMLTV
         channel_dicts = [{"id": ch.channel_id, "name": ch.name, "icon": ch.icon} for ch in channels]
         xmltv_content = programmes_to_xmltv(programmes, channel_dicts)
 
+        filler_total = pregame_count + postgame_count
         logger.info(
             f"Generated XMLTV for group '{group.name}': "
-            f"{event_programmes_count} events + {filler_programmes_count} filler = "
+            f"{event_programmes_count} events + {filler_total} filler = "
             f"{len(programmes)} programmes, {len(xmltv_content)} bytes"
         )
 
-        return xmltv_content, len(programmes), event_programmes_count
+        return xmltv_content, len(programmes), event_programmes_count, pregame_count, postgame_count
 
     def _load_sport_durations(self, conn: Connection) -> dict[str, float]:
         """Load sport duration settings from database."""
@@ -1366,7 +1390,7 @@ class EventGroupProcessor:
         matched_streams: list[dict],
         filler_config: EventFillerConfig,
         sport_durations: dict[str, float],
-    ) -> list[Programme]:
+    ) -> EventFillerResult:
         """Generate filler programmes for matched event streams.
 
         Args:
@@ -1375,12 +1399,12 @@ class EventGroupProcessor:
             sport_durations: Sport duration settings
 
         Returns:
-            List of filler Programme entries
+            EventFillerResult with programmes and pregame/postgame counts
         """
         from teamarr.config import get_user_timezone
 
         filler_generator = EventFillerGenerator()
-        all_filler: list[Programme] = []
+        result = EventFillerResult()
 
         # Get configured timezone
         tz = get_user_timezone()
@@ -1398,7 +1422,6 @@ class EventGroupProcessor:
 
         for stream_match in matched_streams:
             event = stream_match.get("event")
-            stream = stream_match.get("stream", {})
 
             if not event:
                 continue
@@ -1409,17 +1432,19 @@ class EventGroupProcessor:
             channel_id = generate_event_tvg_id(event.id, event.provider)
 
             try:
-                filler_programmes = filler_generator.generate(
+                filler_result = filler_generator.generate_with_counts(
                     event=event,
                     channel_id=channel_id,
                     config=filler_config,
                     options=options,
                 )
-                all_filler.extend(filler_programmes)
+                result.programmes.extend(filler_result.programmes)
+                result.pregame_count += filler_result.pregame_count
+                result.postgame_count += filler_result.postgame_count
             except Exception as e:
                 logger.warning(f"Failed to generate filler for event {event.id}: {e}")
 
-        return all_filler
+        return result
 
     def _store_group_xmltv(
         self,

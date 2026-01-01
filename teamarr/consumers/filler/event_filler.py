@@ -73,6 +73,15 @@ class EventFillerOptions:
     postgame_buffer_hours: float = 24.0
 
 
+@dataclass
+class EventFillerResult:
+    """Result of generating event filler with counts."""
+
+    programmes: list[Programme] = field(default_factory=list)
+    pregame_count: int = 0
+    postgame_count: int = 0
+
+
 class EventFillerGenerator:
     """Generates filler for event-based channels.
 
@@ -161,6 +170,70 @@ class EventFillerGenerator:
             programmes.extend(postgame_programmes)
 
         return programmes
+
+    def generate_with_counts(
+        self,
+        event: Event,
+        channel_id: str,
+        config: EventFillerConfig | None = None,
+        options: EventFillerOptions | None = None,
+    ) -> EventFillerResult:
+        """Generate filler with separate pregame/postgame counts.
+
+        Same as generate() but returns structured result with counts.
+        """
+        config = config or EventFillerConfig()
+        options = options or EventFillerOptions()
+
+        result = EventFillerResult()
+
+        # Calculate event times
+        event_start = event.start_time
+        event_duration = get_sport_duration(
+            event.sport, options.sport_durations, options.default_duration
+        )
+        event_end = event_start + timedelta(hours=event_duration)
+
+        # Calculate EPG window
+        epg_start = options.epg_start or datetime.now(event_start.tzinfo)
+        epg_end = options.epg_end or (event_end + timedelta(hours=options.postgame_buffer_hours))
+
+        # Build context once
+        context = self._build_event_context(event)
+
+        # Generate pregame filler
+        if config.pregame_enabled and epg_start < event_start:
+            pregame_programmes = self._generate_filler(
+                start_dt=epg_start,
+                end_dt=event_start,
+                template=config.pregame_template,
+                context=context,
+                channel_id=channel_id,
+                category=config.category,
+                logo_url=event.home_team.logo_url,
+                filler_type="pregame",
+            )
+            result.programmes.extend(pregame_programmes)
+            result.pregame_count = len(pregame_programmes)
+
+        # Generate postgame filler
+        if config.postgame_enabled and event_end < epg_end:
+            postgame_template = self._select_postgame_template(event, config)
+
+            postgame_programmes = self._generate_filler(
+                start_dt=event_end,
+                end_dt=epg_end,
+                template=postgame_template,
+                context=context,
+                channel_id=channel_id,
+                category=config.category,
+                logo_url=event.home_team.logo_url,
+                filler_type="postgame",
+            )
+            result.programmes.extend(postgame_programmes)
+            result.postgame_count = len(postgame_programmes)
+
+        return result
 
     def _generate_filler(
         self,
