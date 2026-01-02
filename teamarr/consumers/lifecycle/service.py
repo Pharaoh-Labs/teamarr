@@ -692,9 +692,9 @@ class ChannelLifecycleService:
         logo_url = None
         if template:
             # Handle both dict and dataclass template types
-            if hasattr(template, "logo_url"):
-                # EventTemplateConfig dataclass (if it has logo_url)
-                logo_url = template.logo_url
+            if hasattr(template, "event_channel_logo_url"):
+                # EventTemplateConfig dataclass
+                logo_url = template.event_channel_logo_url
             elif hasattr(template, "get"):
                 # Dict with event_channel_logo_url
                 logo_url = template.get("event_channel_logo_url")

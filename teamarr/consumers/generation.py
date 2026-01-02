@@ -225,14 +225,16 @@ def run_full_generation(
 
         # Step 6: Process scheduled deletions (90-93%)
         update_progress("lifecycle", 90, "Processing scheduled deletions...")
+        channels_deleted_count = 0
         try:
             deletion_result = lifecycle_service.process_scheduled_deletions()
+            channels_deleted_count = len(deletion_result.deleted)
             result.deletions = {
-                "deleted_count": len(deletion_result.deleted),
+                "deleted_count": channels_deleted_count,
                 "error_count": len(deletion_result.errors),
             }
             if deletion_result.deleted:
-                logger.info(f"Deleted {len(deletion_result.deleted)} expired channel(s)")
+                logger.info(f"Deleted {channels_deleted_count} expired channel(s)")
         except Exception as e:
             logger.warning(f"Scheduled deletions failed: {e}")
             result.deletions = {"error": str(e)}
@@ -273,7 +275,13 @@ def run_full_generation(
         stats_run.programmes_postgame = team_result.total_postgame + group_result.total_postgame
         stats_run.programmes_idle = team_result.total_idle  # Event groups don't have idle
         stats_run.channels_created = group_result.total_channels_created
+        # Combine scheduled deletions + group cleanup deletions
+        stats_run.channels_deleted = channels_deleted_count + group_result.total_channels_deleted
         stats_run.xmltv_size_bytes = result.file_size
+        # Aggregate stream stats from event groups into full_epg run
+        stats_run.streams_fetched = group_result.total_streams_fetched
+        stats_run.streams_matched = group_result.total_streams_matched
+        stats_run.streams_unmatched = group_result.total_streams_unmatched
         stats_run.extra_metrics["teams_processed"] = result.teams_processed
         stats_run.extra_metrics["groups_processed"] = result.groups_processed
         stats_run.extra_metrics["file_written"] = result.file_written

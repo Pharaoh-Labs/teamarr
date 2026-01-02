@@ -331,6 +331,9 @@ class TeamEPGGenerator:
         if not description:
             description = self._resolver.resolve(options.template.description_format, context)
 
+        # Icon priority: template program_art_url > channel logo > home team logo
+        icon = options.template.program_art_url or logo_url or event.home_team.logo_url
+
         return Programme(
             channel_id=channel_id,
             title=title,
@@ -339,7 +342,7 @@ class TeamEPGGenerator:
             description=description,
             subtitle=subtitle,
             category=options.template.category,
-            icon=logo_url or event.home_team.logo_url,
+            icon=icon,
         )
 
     def _enrich_events(self, events: list[Event]) -> list[Event]:

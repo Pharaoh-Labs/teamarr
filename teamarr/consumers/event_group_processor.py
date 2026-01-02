@@ -171,6 +171,26 @@ class BatchProcessingResult:
         """Total postgame filler programmes."""
         return sum(r.postgame_count for r in self.results)
 
+    @property
+    def total_streams_fetched(self) -> int:
+        """Total streams fetched across all groups."""
+        return sum(r.streams_fetched for r in self.results)
+
+    @property
+    def total_streams_matched(self) -> int:
+        """Total streams matched across all groups."""
+        return sum(r.streams_matched for r in self.results)
+
+    @property
+    def total_streams_unmatched(self) -> int:
+        """Total streams unmatched across all groups."""
+        return sum(r.streams_unmatched for r in self.results)
+
+    @property
+    def total_channels_deleted(self) -> int:
+        """Total channels deleted across all groups."""
+        return sum(r.channels_deleted for r in self.results)
+
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
         return {
@@ -894,11 +914,13 @@ class EventGroupProcessor:
                 result.channels_created = len(lifecycle_result.created)
                 result.channels_existing = len(lifecycle_result.existing)
                 result.channels_skipped = len(lifecycle_result.skipped)
+                result.channels_deleted = len(lifecycle_result.deleted)
                 result.channel_errors = len(lifecycle_result.errors)
 
                 stats_run.channels_created = len(lifecycle_result.created)
                 stats_run.channels_updated = len(lifecycle_result.existing)
                 stats_run.channels_skipped = len(lifecycle_result.skipped)
+                stats_run.channels_deleted = len(lifecycle_result.deleted)
                 stats_run.channels_errors = len(lifecycle_result.errors)
 
                 for error in lifecycle_result.errors:

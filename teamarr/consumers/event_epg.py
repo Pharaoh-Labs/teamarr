@@ -187,6 +187,9 @@ class EventEPGGenerator:
         if not description:
             description = self._resolver.resolve(options.template.description_format, context)
 
+        # Icon priority: template program_art_url > home team logo
+        icon = options.template.program_art_url or event.home_team.logo_url
+
         return Programme(
             channel_id=channel_id,
             title=title,
@@ -195,7 +198,7 @@ class EventEPGGenerator:
             description=description,
             subtitle=subtitle,
             category=options.template.category,
-            icon=event.home_team.logo_url,
+            icon=icon,
         )
 
     # Keywords for detecting UFC prelim streams
