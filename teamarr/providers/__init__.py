@@ -15,6 +15,7 @@ ProviderRegistry.initialize() must be called during app startup
 to inject the LeagueMappingSource into providers.
 """
 
+from teamarr.providers.cricbuzz import CricbuzzClient, CricbuzzProvider
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
@@ -69,6 +70,13 @@ def _create_hockeytech_provider() -> HockeyTechProvider:
     )
 
 
+def _create_cricbuzz_provider() -> CricbuzzProvider:
+    """Factory for Cricbuzz provider with injected dependencies."""
+    return CricbuzzProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 # =============================================================================
 # PROVIDER REGISTRATION
 # =============================================================================
@@ -92,10 +100,18 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="cricbuzz",
+    provider_class=CricbuzzProvider,
+    factory=_create_cricbuzz_provider,
+    priority=60,  # Cricket leagues (IPL, CPL, BPL, BBL)
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="tsdb",
     provider_class=TSDBProvider,
     factory=_create_tsdb_provider,
-    priority=100,  # Fallback provider for cricket, boxing, etc.
+    priority=100,  # Fallback provider for boxing, etc.
     enabled=True,
 )
 
@@ -114,6 +130,9 @@ __all__ = [
     # HockeyTech
     "HockeyTechClient",
     "HockeyTechProvider",
+    # Cricbuzz
+    "CricbuzzClient",
+    "CricbuzzProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

@@ -579,10 +579,13 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nll', 'espn', 'lacrosse/nll', NULL, 'National Lacrosse League', 'Lacrosse', 'https://a.espncdn.com/guid/5f77fe12-e54f-41a1-904e-77135452f348/logos/default.png', NULL, 1, 'NLL', 'nll', 'team_vs_team', NULL),
     ('pll', 'espn', 'lacrosse/pll', NULL, 'Premier Lacrosse League', 'Lacrosse', 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pll.png', NULL, 1, 'PLL', 'pll', 'team_vs_team', NULL),
 
-    -- Cricket (TSDB)
-    ('ipl', 'tsdb', '4460', 'Indian Premier League', 'Indian Premier League', 'Cricket', 'https://r2.thesportsdb.com/images/media/league/badge/gaiti11741709844.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL),
-    ('cpl', 'tsdb', '5176', 'Caribbean Premier League', 'Caribbean Premier League', 'Cricket', 'https://r2.thesportsdb.com/images/media/league/badge/5mjjnj1645179844.png', NULL, 1, 'CPL', 'cpl', 'team_vs_team', NULL),
-    ('bpl', 'tsdb', '5529', 'Bangladesh Premier League', 'Bangladesh Premier League', 'Cricket', 'https://r2.thesportsdb.com/images/media/league/badge/3smqzk1734192770.png', NULL, 1, 'BPL', 'bpl', 'team_vs_team', NULL),
+    -- Cricket (Cricbuzz)
+    -- NOTE: Cricbuzz series IDs change yearly. Update provider_league_id when new season starts.
+    -- Format: provider_league_id = 'series_id/url-slug' (e.g., '9241/indian-premier-league-2026')
+    ('ipl', 'cricbuzz', '9241/indian-premier-league-2026', 'Indian Premier League', 'Indian Premier League', 'Cricket', 'https://static.cricbuzz.com/a/img/v1/192x192/i1/c263802/i.jpg', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL),
+    ('bbl', 'cricbuzz', '10289/big-bash-league-2025-26', 'Big Bash League', 'Big Bash League', 'Cricket', 'https://static.cricbuzz.com/a/img/v1/192x192/i1/c172255/i.jpg', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL),
+    ('bpl', 'cricbuzz', '11328/bpl-2025-26', 'Bangladesh Premier League', 'Bangladesh Premier League', 'Cricket', 'https://static.cricbuzz.com/a/img/v1/192x192/i1/c200030/i.jpg', NULL, 1, 'BPL', 'bpl', 'team_vs_team', NULL),
+    ('sa20', 'cricbuzz', '10394/sa20-2025-26', 'SA20', 'SA20', 'Cricket', 'https://static.cricbuzz.com/a/img/v1/192x192/i1/c248432/i.jpg', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL),
 
     -- Rugby League (TSDB)
     ('nrl', 'tsdb', '4416', 'Australian National Rugby League', 'National Rugby League', 'Rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gsztcj1552071996.png', NULL, 1, 'NRL', 'nrl', 'team_vs_team', NULL),

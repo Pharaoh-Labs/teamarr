@@ -20,8 +20,9 @@ logger = logging.getLogger(__name__)
 # These are approximate and used for work-proportional progress allocation
 EXPECTED_LEAGUES = {
     "espn": 280,  # ~52 configured + ~228 discovered soccer leagues
-    "tsdb": 15,
+    "tsdb": 5,  # Reduced - only boxing and rugby left
     "hockeytech": 6,
+    "cricbuzz": 4,  # IPL, BBL, BPL, SA20
 }
 
 
