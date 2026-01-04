@@ -145,9 +145,11 @@ def _clean_team_name(name: str) -> str:
     if not name:
         return ""
 
-    # Remove datetime masks
+    # Remove datetime masks and trailing timezone remnants
     name = re.sub(r"\bDATE_MASK\b", "", name)
     name = re.sub(r"\bTIME_MASK\b", "", name)
+    # After mask removal, clean up "@ ET", "@ EST", "@ PT", etc.
+    name = re.sub(r"\s*@\s*[A-Z]{2,4}T?\s*$", "", name, flags=re.IGNORECASE)
 
     # Remove leading punctuation ONLY (not digits - team names like 49ers, 76ers start with numbers)
     # Strip whitespace, dashes, colons, periods, commas at the start
@@ -163,10 +165,10 @@ def _clean_team_name(name: str) -> str:
     # Remove HD, SD, etc.
     name = re.sub(r"\s+\b(HD|SD|FHD|4K|UHD)\b\s*$", "", name, flags=re.IGNORECASE)
 
-    # Strip numbered channel prefixes like "NFL Game Pass 03:", "ESPN+ 45:", "Fox Sports 1:"
-    # Pattern: Words followed by optional number, then colon
-    # This handles "Name Number:" patterns at the start
-    name = re.sub(r"^[A-Za-z][A-Za-z\s]*\d*:\s*", "", name)
+    # Strip numbered channel prefixes like "NFL Game Pass 03:", "ESPN+ 45:", "Sportsnet+ 04:"
+    # Pattern: Words (may include +) followed by optional number, then colon
+    # This handles "Name Number:" and "Name+ Number:" patterns at the start
+    name = re.sub(r"^[A-Za-z][A-Za-z\s+]*\d*:\s*", "", name)
 
     # Handle "|" separator - often used for show description before team names
     # "Manningcast | MNF with Peyton & Eli: Seahawks" → take part after last "|"

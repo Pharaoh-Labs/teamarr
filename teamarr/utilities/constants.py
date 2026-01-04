@@ -296,15 +296,27 @@ GAME_SEPARATORS: list[str] = [
 # =============================================================================
 
 LEAGUE_HINT_PATTERNS: list[tuple[str, str]] = [
-    # Explicit league prefixes
+    # ==========================================================================
+    # Major US/Canadian Pro Leagues
+    # ==========================================================================
     (r"^nfl[:\s-]", "nfl"),
     (r"^nba[:\s-]", "nba"),
     (r"^nhl[:\s-]", "nhl"),
     (r"^mlb[:\s-]", "mlb"),
     (r"^mls[:\s-]", "usa.1"),
+    (r"^wnba[:\s-]", "wnba"),
+    (r"^nwsl[:\s-]", "usa.nwsl"),
+    (r"^g[\s-]?league[:\s-]", "nba-development"),
+    # ==========================================================================
+    # US College Sports
+    # ==========================================================================
     (r"^ncaaf[:\s-]", "college-football"),
     (r"^ncaam[:\s-]", "mens-college-basketball"),
     (r"^ncaaw[:\s-]", "womens-college-basketball"),
+    (r"^ncaab[:\s-]", "mens-college-basketball"),  # Alternate abbreviation
+    # ==========================================================================
+    # Soccer / Football
+    # ==========================================================================
     (r"^epl[:\s-]", "eng.1"),
     (r"^premier\s+league[:\s-]", "eng.1"),
     (r"^la\s+liga[:\s-]", "esp.1"),
@@ -313,7 +325,19 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str]] = [
     (r"^ligue\s+1[:\s-]", "fra.1"),
     (r"^ucl[:\s-]", "uefa.champions"),
     (r"^champions\s+league[:\s-]", "uefa.champions"),
-    # Combat sports (event_card types)
+    (r"^spl[:\s-]", "ksa.1"),  # Saudi Pro League
+    # ==========================================================================
+    # Hockey (NHL, minor, junior, women's)
+    # ==========================================================================
+    (r"^pwhl[:\s-]", "pwhl"),
+    (r"^ahl[:\s-]", "ahl"),
+    (r"^ohl[:\s-]", "ohl"),
+    (r"^whl[:\s-]", "whl"),
+    (r"^qmjhl[:\s-]", "qmjhl"),
+    (r"^ushl[:\s-]", "ushl"),
+    # ==========================================================================
+    # Combat Sports (event_card types)
+    # ==========================================================================
     (r"\bufc\s*\d+", "ufc"),
     (r"\bufc\b", "ufc"),
     (r"\bfight\s+night\b", "ufc"),
@@ -321,12 +345,23 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str]] = [
     (r"\bpbc[:\s-]", "boxing"),  # Premier Boxing Champions
     (r"\btop\s+rank\b", "boxing"),
     (r"\bmatchroom\b", "boxing"),
+    # ==========================================================================
     # Cricket
+    # ==========================================================================
     (r"\bipl[:\s-]", "ipl"),
     (r"\bcpl[:\s-]", "cpl"),
+    (r"\bbbl[:\s-]", "bbl"),  # Big Bash League
+    (r"\bsa20[:\s-]", "sa20"),
+    # ==========================================================================
     # Lacrosse
+    # ==========================================================================
     (r"\bnll[:\s-]", "nll"),
     (r"\bpll[:\s-]", "pll"),
+    # ==========================================================================
+    # Rugby
+    # ==========================================================================
+    (r"^nrl[:\s-]", "nrl"),
+    (r"^super\s+rugby[:\s-]", "super-rugby"),
 ]
 
 

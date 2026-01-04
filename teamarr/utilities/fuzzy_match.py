@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 
 from rapidfuzz import fuzz
+from unidecode import unidecode
 
 from teamarr.core import Team
 
@@ -244,16 +245,19 @@ class FuzzyMatcher:
         """Generate all searchable patterns for a team.
 
         Returns patterns in priority order (most specific first).
+        Patterns are normalized (accents stripped) to match normalized stream text.
         """
         patterns = []
         seen = set()
 
         def add(value: str | None) -> None:
             if value:
-                lower = value.lower().strip()
-                if lower and lower not in seen and len(lower) >= 2:
-                    seen.add(lower)
-                    patterns.append(lower)
+                # Normalize: strip accents (é→e, ü→u) and lowercase
+                # This matches how stream text is normalized for comparison
+                normalized = unidecode(value).lower().strip()
+                if normalized and normalized not in seen and len(normalized) >= 2:
+                    seen.add(normalized)
+                    patterns.append(normalized)
 
         # Full name: "Florida Atlantic Owls"
         add(team.name)
