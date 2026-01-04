@@ -620,19 +620,9 @@ def preview_reset_channels():
     Returns all channels in Dispatcharr with teamarr-event-* tvg_id,
     regardless of whether they're tracked in managed_channels.
     """
-    from teamarr.database.settings import get_settings
-    from teamarr.dispatcharr import ChannelManager, create_dispatcharr_client
+    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
-    with get_db() as conn:
-        settings = get_settings(conn)
-
-    if not settings or not settings.dispatcharr_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Dispatcharr not configured",
-        )
-
-    client = create_dispatcharr_client(settings)
+    client = get_dispatcharr_client(get_db)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -672,19 +662,9 @@ def execute_reset_channels():
     This is a destructive operation that removes all channels with
     teamarr-event-* tvg_id. Also marks all managed_channels as deleted.
     """
-    from teamarr.database.settings import get_settings
-    from teamarr.dispatcharr import ChannelManager, create_dispatcharr_client
+    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
-    with get_db() as conn:
-        settings = get_settings(conn)
-
-    if not settings or not settings.dispatcharr_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Dispatcharr not configured",
-        )
-
-    client = create_dispatcharr_client(settings)
+    client = get_dispatcharr_client(get_db)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
