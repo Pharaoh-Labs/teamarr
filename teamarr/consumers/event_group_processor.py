@@ -1021,11 +1021,8 @@ class EventGroupProcessor:
             # Step 4: Create/update channels
             matched_streams = self._build_matched_stream_list(streams, match_result)
 
-            # Sort by event start time so channels are created in chronological order
-            def sort_key(m):
-                return m["event"].start_time if m.get("event") else datetime.max
-
-            matched_streams.sort(key=sort_key)
+            # Sort channels based on group's channel_sort_order setting
+            matched_streams = self._sort_matched_streams(matched_streams, group.channel_sort_order)
 
             # Extract all stream IDs for cleanup (V1 parity: cleanup missing streams)
             all_stream_ids = [s.get("id") for s in streams if s.get("id")]
@@ -1335,6 +1332,64 @@ class EventGroupProcessor:
                     )
 
         return matched
+
+    def _sort_matched_streams(
+        self,
+        matched_streams: list[dict],
+        sort_order: str,
+    ) -> list[dict]:
+        """Sort matched streams based on channel_sort_order setting.
+
+        Sort orders:
+        - 'time': Sort by event start time (default)
+        - 'sport_time': Sort by sport first, then start time
+        - 'league_time': Sort by league first, then start time
+
+        Args:
+            matched_streams: List of {'stream': ..., 'event': ...} dicts
+            sort_order: One of 'time', 'sport_time', 'league_time'
+
+        Returns:
+            Sorted list of matched streams
+        """
+        if not matched_streams:
+            return matched_streams
+
+        # Default fallback values for missing data
+        max_time = datetime.max.replace(tzinfo=None)
+
+        def get_start_time(m: dict) -> datetime:
+            """Get event start time, handling timezone-aware datetimes."""
+            event = m.get("event")
+            if not event:
+                return max_time
+            start = event.start_time
+            # Make timezone-naive for comparison
+            if start and start.tzinfo:
+                return start.replace(tzinfo=None)
+            return start or max_time
+
+        if sort_order == "sport_time":
+            # Sort by sport (alphabetically), then by start time
+            def sort_key(m: dict):
+                event = m.get("event")
+                sport = event.sport.lower() if event and event.sport else "zzz"
+                return (sport, get_start_time(m))
+
+            return sorted(matched_streams, key=sort_key)
+
+        elif sort_order == "league_time":
+            # Sort by league (alphabetically), then by start time
+            def sort_key(m: dict):
+                event = m.get("event")
+                league = event.league.lower() if event and event.league else "zzz"
+                return (league, get_start_time(m))
+
+            return sorted(matched_streams, key=sort_key)
+
+        else:
+            # Default: sort by time only
+            return sorted(matched_streams, key=get_start_time)
 
     def _save_match_details(
         self,
