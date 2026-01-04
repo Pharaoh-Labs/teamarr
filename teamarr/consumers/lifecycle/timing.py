@@ -18,6 +18,7 @@ Delete timing options:
 from datetime import datetime, timedelta
 
 from teamarr.core import Event
+from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import crosses_midnight
 from teamarr.utilities.tz import now_user, to_user_tz
 
@@ -32,6 +33,7 @@ class ChannelLifecycleManager:
             create_timing='same_day',
             delete_timing='day_after',
             default_duration_hours=3.0,
+            sport_durations={'basketball': 3.0, 'football': 3.5},
         )
 
         # Check if channel should be created
@@ -50,10 +52,12 @@ class ChannelLifecycleManager:
         create_timing: CreateTiming = "same_day",
         delete_timing: DeleteTiming = "day_after",
         default_duration_hours: float = 3.0,
+        sport_durations: dict[str, float] | None = None,
     ):
         self.create_timing = create_timing
         self.delete_timing = delete_timing
         self.default_duration_hours = default_duration_hours
+        self.sport_durations = sport_durations or {}
 
     def should_create_channel(
         self,
@@ -166,9 +170,13 @@ class ChannelLifecycleManager:
         """Calculate when channel should be deleted.
 
         Uses event END date for midnight-crossing games.
+        Uses sport-specific duration when available.
         """
         event_start = to_user_tz(event.start_time)
-        event_end = event_start + timedelta(hours=self.default_duration_hours)
+        duration_hours = get_sport_duration(
+            event.sport, self.sport_durations, self.default_duration_hours
+        )
+        event_end = event_start + timedelta(hours=duration_hours)
 
         # Use END date (important for midnight-crossing games)
         end_date = event_end.date()
@@ -194,8 +202,11 @@ class ChannelLifecycleManager:
         return self._calculate_delete_threshold(event)
 
     def get_event_end_time(self, event: Event) -> datetime:
-        """Calculate estimated event end time."""
-        return to_user_tz(event.start_time) + timedelta(hours=self.default_duration_hours)
+        """Calculate estimated event end time using sport-specific duration."""
+        duration_hours = get_sport_duration(
+            event.sport, self.sport_durations, self.default_duration_hours
+        )
+        return to_user_tz(event.start_time) + timedelta(hours=duration_hours)
 
     def event_crosses_midnight(self, event: Event) -> bool:
         """Check if event crosses midnight."""

@@ -515,6 +515,9 @@ def template_to_programme_config(template: Template) -> TemplateConfig:
         category=category,
         program_art_url=template.program_art_url,
         conditional_descriptions=template.conditional_descriptions or [],
+        # V1 Parity: Duration override support
+        game_duration_mode=template.game_duration_mode or "sport",
+        game_duration_override=template.game_duration_override,
     )
 
 

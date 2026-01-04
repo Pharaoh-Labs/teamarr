@@ -17,7 +17,7 @@ from teamarr.core import Event, Programme, TemplateConfig
 from teamarr.services import SportsDataService
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.sports import get_sport_duration
+from teamarr.utilities.sports import get_effective_duration, get_sport_duration
 from teamarr.utilities.tz import now_user, to_user_tz
 
 logger = logging.getLogger(__name__)
@@ -247,8 +247,14 @@ class TeamEPGGenerator:
             )
 
             # Calculate when this event's programme would end
-            duration = get_sport_duration(
-                event.sport, options.sport_durations, options.default_duration_hours
+            # V1 Parity: Use template custom duration if set
+            template_dict = {
+                "game_duration_mode": options.template.game_duration_mode,
+                "game_duration_override": options.template.game_duration_override,
+            } if options.template else None
+            duration = get_effective_duration(
+                event.sport, options.sport_durations, options.default_duration_hours,
+                template=template_dict,
             )
             event_end = event.start_time + timedelta(hours=duration)
 
@@ -317,8 +323,14 @@ class TeamEPGGenerator:
     ) -> Programme | None:
         """Convert an Event to a Programme with template resolution."""
         start = event.start_time - timedelta(minutes=options.pregame_minutes)
-        duration = get_sport_duration(
-            event.sport, options.sport_durations, options.default_duration_hours
+        # V1 Parity: Use template custom duration if set
+        template_dict = {
+            "game_duration_mode": options.template.game_duration_mode,
+            "game_duration_override": options.template.game_duration_override,
+        } if options.template else None
+        duration = get_effective_duration(
+            event.sport, options.sport_durations, options.default_duration_hours,
+            template=template_dict,
         )
         stop = event.start_time + timedelta(hours=duration)
 

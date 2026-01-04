@@ -67,6 +67,7 @@ class ChannelLifecycleService:
         create_timing: CreateTiming = "same_day",
         delete_timing: DeleteTiming = "day_after",
         default_duration_hours: float = 3.0,
+        sport_durations: dict[str, float] | None = None,
         timezone: str = "America/New_York",
     ):
         """Initialize the lifecycle service.
@@ -80,6 +81,7 @@ class ChannelLifecycleService:
             create_timing: When to create channels
             delete_timing: When to delete channels
             default_duration_hours: Default event duration
+            sport_durations: Per-sport duration mapping (basketball, football, etc.)
             timezone: User timezone for timing calculations
 
         Raises:
@@ -100,6 +102,7 @@ class ChannelLifecycleService:
             create_timing=create_timing,
             delete_timing=delete_timing,
             default_duration_hours=default_duration_hours,
+            sport_durations=sport_durations,
         )
 
         # Thread lock for Dispatcharr operations
@@ -562,6 +565,9 @@ class ChannelLifecycleService:
                 event_name=event.name,
                 league=event.league,
                 sport=event.sport,
+                # V1 Parity: Include venue and broadcast
+                venue=event.venue.name if event.venue else None,
+                broadcast=", ".join(event.broadcasts) if event.broadcasts else None,
                 scheduled_delete_at=delete_time.isoformat() if delete_time else None,
                 sync_status="in_sync" if dispatcharr_channel_id else "pending",
             )
@@ -966,6 +972,8 @@ class ChannelLifecycleService:
     ) -> bool:
         """Delete a managed channel from Dispatcharr and mark as deleted in DB.
 
+        V1 Parity: Also deletes the channel's logo from Dispatcharr.
+
         Args:
             conn: Database connection
             managed_channel_id: Managed channel ID
@@ -984,7 +992,16 @@ class ChannelLifecycleService:
         if not channel:
             return False
 
-        # Delete from Dispatcharr
+        # Delete logo from Dispatcharr (V1 parity)
+        logo_id = getattr(channel, "dispatcharr_logo_id", None)
+        if self._logo_manager and logo_id:
+            try:
+                with self._dispatcharr_lock:
+                    self._logo_manager.delete(logo_id)
+            except Exception as e:
+                logger.debug(f"Failed to delete logo {logo_id}: {e}")
+
+        # Delete channel from Dispatcharr
         if self._channel_manager and channel.dispatcharr_channel_id:
             with self._dispatcharr_lock:
                 result = self._channel_manager.delete_channel(channel.dispatcharr_channel_id)
@@ -1607,6 +1624,93 @@ class ChannelLifecycleService:
 
         if result["deleted"] > 0:
             logger.info(f"Cleaned up {result['deleted']} orphan Dispatcharr channels")
+
+        return result
+
+    def cleanup_disabled_groups(self) -> dict:
+        """Clean up channels from disabled event groups.
+
+        When a group is DISABLED, channels are cleaned up at the next EPG
+        generation rather than immediately. This allows users to re-enable
+        the group without losing channels.
+
+        V1 Parity: Matches cleanup_disabled_groups() from channel_lifecycle.py
+
+        Returns:
+            Dict with 'deleted' and 'errors' lists
+        """
+        from teamarr.database.channels import (
+            get_managed_channels_for_group,
+            mark_channel_deleted,
+        )
+        from teamarr.database.groups import get_all_groups
+
+        result: dict = {"deleted": [], "errors": []}
+
+        try:
+            with self._db_factory() as conn:
+                # Get ALL groups including disabled
+                all_groups = get_all_groups(conn, include_disabled=True)
+
+                # Filter to disabled groups only
+                disabled_groups = [g for g in all_groups if not g.enabled]
+
+                if not disabled_groups:
+                    return result
+
+                logger.info(
+                    f"Checking {len(disabled_groups)} disabled group(s) for channel cleanup..."
+                )
+
+                for group in disabled_groups:
+                    group_id = group.id
+                    group_name = group.name
+
+                    # Get channels for this disabled group
+                    channels = get_managed_channels_for_group(
+                        conn, group_id, include_deleted=False
+                    )
+
+                    for channel in channels:
+                        try:
+                            # Delete from Dispatcharr
+                            if self._channel_manager and channel.dispatcharr_channel_id:
+                                with self._dispatcharr_lock:
+                                    self._channel_manager.delete_channel(
+                                        channel.dispatcharr_channel_id
+                                    )
+
+                            # Mark as deleted in DB
+                            mark_channel_deleted(
+                                conn, channel.id, reason=f"Group '{group_name}' disabled"
+                            )
+
+                            result["deleted"].append(
+                                {
+                                    "group": group_name,
+                                    "channel_number": channel.channel_number,
+                                    "channel_name": channel.channel_name,
+                                }
+                            )
+                        except Exception as e:
+                            result["errors"].append(
+                                {
+                                    "group": group_name,
+                                    "channel_id": channel.dispatcharr_channel_id,
+                                    "error": str(e),
+                                }
+                            )
+
+                conn.commit()
+
+        except Exception as e:
+            logger.exception("Error cleaning up disabled groups")
+            result["errors"].append({"error": str(e)})
+
+        if result["deleted"]:
+            logger.info(
+                f"Cleaned up {len(result['deleted'])} channel(s) from disabled groups"
+            )
 
         return result
 

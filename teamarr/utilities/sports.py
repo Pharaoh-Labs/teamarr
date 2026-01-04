@@ -117,3 +117,42 @@ def get_sport_duration(
         Duration in hours
     """
     return sport_durations.get(sport.lower(), default)
+
+
+def get_effective_duration(
+    sport: str,
+    sport_durations: dict[str, float],
+    default: float = 3.0,
+    template: dict | None = None,
+) -> float:
+    """Get effective duration, checking template custom duration first.
+
+    V1 Parity: Supports template game_duration_mode and game_duration_override.
+
+    Priority order:
+    1. Template custom duration (if mode='custom' and override set)
+    2. Global default (if mode='default')
+    3. Sport-specific duration (if mode='sport' or no mode)
+    4. Fallback default
+
+    Args:
+        sport: Sport name (e.g., 'Basketball', 'Football')
+        sport_durations: Durations dict from database settings
+        default: Default duration if sport not found
+        template: Optional template dict with game_duration_mode/game_duration_override
+
+    Returns:
+        Duration in hours
+    """
+    if template:
+        duration_mode = template.get("game_duration_mode", "sport")
+        if duration_mode == "custom":
+            override = template.get("game_duration_override")
+            if override is not None:
+                return float(override)
+        elif duration_mode == "default":
+            # Use global default
+            return default
+
+    # Fall back to sport-specific duration
+    return get_sport_duration(sport, sport_durations, default)

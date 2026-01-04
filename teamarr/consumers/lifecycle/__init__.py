@@ -81,10 +81,29 @@ def create_lifecycle_service(
         ValueError: If sports_service is not provided
     """
     from teamarr.database.channels import get_dispatcharr_settings
+    from teamarr.database.settings import get_all_settings
 
     with db_factory() as conn:
         settings = get_dispatcharr_settings(conn)
         lifecycle = get_lifecycle_settings(conn)
+        all_settings = get_all_settings(conn)
+
+    # Build sport durations dict from settings
+    durations = all_settings.durations
+    sport_durations = {
+        "basketball": durations.basketball,
+        "football": durations.football,
+        "hockey": durations.hockey,
+        "baseball": durations.baseball,
+        "soccer": durations.soccer,
+        "mma": durations.mma,
+        "rugby": durations.rugby,
+        "boxing": durations.boxing,
+        "tennis": durations.tennis,
+        "golf": durations.golf,
+        "racing": durations.racing,
+        "cricket": durations.cricket,
+    }
 
     channel_manager = None
     logo_manager = None
@@ -105,6 +124,8 @@ def create_lifecycle_service(
         epg_manager=epg_manager,
         create_timing=lifecycle["create_timing"],
         delete_timing=lifecycle["delete_timing"],
+        default_duration_hours=durations.default,
+        sport_durations=sport_durations,
     )
 
 

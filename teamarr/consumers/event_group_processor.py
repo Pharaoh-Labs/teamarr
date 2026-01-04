@@ -846,11 +846,12 @@ class EventGroupProcessor:
         2. Cross-group consolidation: merge multi-league into single-league
         3. Keyword ordering: ensure main channel < keyword channels in numbering
         4. Orphan cleanup: delete Dispatcharr channels not tracked in DB
+        5. Disabled group cleanup: delete channels from disabled groups
 
         Args:
             conn: Database connection
             multi_league_ids: IDs of multi-league groups for cross-group check
-            lifecycle_service: Optional lifecycle service for orphan cleanup
+            lifecycle_service: Optional lifecycle service for orphan/disabled cleanup
         """
         channel_manager = None
         if self._dispatcharr_client:
@@ -900,6 +901,18 @@ class EventGroupProcessor:
                     )
             except Exception as e:
                 logger.warning(f"Orphan cleanup failed: {e}")
+
+        # 5. Disabled group cleanup: delete channels from disabled groups
+        if lifecycle_service:
+            try:
+                disabled_result = lifecycle_service.cleanup_disabled_groups()
+                if disabled_result.get("deleted"):
+                    logger.info(
+                        f"Disabled group cleanup: deleted "
+                        f"{len(disabled_result['deleted'])} channels"
+                    )
+            except Exception as e:
+                logger.warning(f"Disabled group cleanup failed: {e}")
 
     def _process_group_internal(
         self,
