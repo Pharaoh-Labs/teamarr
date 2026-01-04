@@ -24,7 +24,11 @@ from teamarr.consumers.channel_lifecycle import (
     create_lifecycle_service,
 )
 from teamarr.consumers.child_processor import ChildStreamProcessor
-from teamarr.consumers.enforcement import CrossGroupEnforcer, KeywordEnforcer
+from teamarr.consumers.enforcement import (
+    CrossGroupEnforcer,
+    KeywordEnforcer,
+    KeywordOrderingEnforcer,
+)
 from teamarr.consumers.event_epg import EventEPGGenerator, EventEPGOptions
 from teamarr.consumers.filler.event_filler import (
     EventFillerConfig,
@@ -580,9 +584,19 @@ class EventGroupProcessor:
                     stats = f"({result.streams_matched}/{result.streams_fetched} matched)"
                     progress_callback(processed_count, total_groups, f"{group.name} {stats}")
 
-            # Phase 4: Run enforcement (keyword placement + cross-group consolidation)
+            # Phase 4: Run enforcement (keyword, cross-group, ordering, orphans)
             if run_enforcement:
-                self._run_enforcement(conn, multi_league_ids)
+                # Create lifecycle_service for orphan cleanup
+                enforcement_lifecycle = None
+                if self._dispatcharr_client:
+                    enforcement_lifecycle = create_lifecycle_service(
+                        db_factory=self._db_factory,
+                        client=self._dispatcharr_client,
+                        sports_service=self._sports_service,
+                    )
+                self._run_enforcement(
+                    conn, multi_league_ids, lifecycle_service=enforcement_lifecycle
+                )
 
             # Aggregate XMLTV from all processed groups (parents + multi-league)
             if processed_group_ids:
@@ -819,15 +833,24 @@ class EventGroupProcessor:
             channel_manager=channel_manager,
         )
 
-    def _run_enforcement(self, conn: Connection, multi_league_ids: list[int]) -> None:
+    def _run_enforcement(
+        self,
+        conn: Connection,
+        multi_league_ids: list[int],
+        lifecycle_service=None,
+    ) -> None:
         """Run post-processing enforcement.
 
+        V1 Parity: Runs every EPG generation:
         1. Keyword enforcement: ensure streams are on correct keyword channels
         2. Cross-group consolidation: merge multi-league into single-league
+        3. Keyword ordering: ensure main channel < keyword channels in numbering
+        4. Orphan cleanup: delete Dispatcharr channels not tracked in DB
 
         Args:
             conn: Database connection
             multi_league_ids: IDs of multi-league groups for cross-group check
+            lifecycle_service: Optional lifecycle service for orphan cleanup
         """
         channel_manager = None
         if self._dispatcharr_client:
@@ -835,7 +858,7 @@ class EventGroupProcessor:
 
             channel_manager = ChannelManager(self._dispatcharr_client)
 
-        # Keyword enforcement
+        # 1. Keyword enforcement: move streams to correct keyword channels
         try:
             keyword_enforcer = KeywordEnforcer(self._db_factory, channel_manager)
             keyword_result = keyword_enforcer.enforce()
@@ -844,7 +867,7 @@ class EventGroupProcessor:
         except Exception as e:
             logger.warning(f"Keyword enforcement failed: {e}")
 
-        # Cross-group consolidation (only if multi-league groups exist)
+        # 2. Cross-group consolidation (only if multi-league groups exist)
         if multi_league_ids:
             try:
                 cross_group_enforcer = CrossGroupEnforcer(self._db_factory, channel_manager)
@@ -855,6 +878,28 @@ class EventGroupProcessor:
                     )
             except Exception as e:
                 logger.warning(f"Cross-group consolidation failed: {e}")
+
+        # 3. Keyword ordering: ensure main channel has lower number than keyword channels
+        try:
+            ordering_enforcer = KeywordOrderingEnforcer(self._db_factory, channel_manager)
+            ordering_result = ordering_enforcer.enforce()
+            if ordering_result.reordered_count > 0:
+                logger.info(
+                    f"Keyword ordering: reordered {ordering_result.reordered_count} channel pair(s)"
+                )
+        except Exception as e:
+            logger.warning(f"Keyword ordering failed: {e}")
+
+        # 4. Orphan cleanup: delete Dispatcharr channels not tracked in DB
+        if lifecycle_service:
+            try:
+                orphan_result = lifecycle_service.cleanup_orphan_dispatcharr_channels()
+                if orphan_result.get("deleted", 0) > 0:
+                    logger.info(
+                        f"Orphan cleanup: deleted {orphan_result['deleted']} Dispatcharr channels"
+                    )
+            except Exception as e:
+                logger.warning(f"Orphan cleanup failed: {e}")
 
     def _process_group_internal(
         self,

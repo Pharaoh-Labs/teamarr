@@ -7,6 +7,11 @@ Use case:
 - Multi-league group (ESPN+) matches an NHL game
 - Single-league group (NHL) also has that game
 - Move ESPN+ streams to NHL channel, delete ESPN+ channel
+
+Respects overlap_handling per group:
+- create_all: Keep separate channels, no consolidation
+- skip: Delete channel but don't move streams
+- add_stream/add_only: Move streams then delete (default)
 """
 
 import logging
@@ -111,24 +116,39 @@ class CrossGroupEnforcer:
                 # Identify single-league vs multi-league groups
                 # Multi-league = has multiple leagues in leagues array
                 single_league_ids = set()
-                multi_league_ids = set()
+                multi_league_groups: dict[int, Any] = {}  # id -> group object
 
                 for group in all_groups:
                     if len(group.leagues) > 1:
-                        multi_league_ids.add(group.id)
+                        multi_league_groups[group.id] = group
                     else:
                         single_league_ids.add(group.id)
 
                 # Filter to specified groups if provided
                 if multi_league_group_ids is not None:
-                    multi_league_ids = multi_league_ids.intersection(set(multi_league_group_ids))
+                    multi_league_groups = {
+                        gid: g
+                        for gid, g in multi_league_groups.items()
+                        if gid in set(multi_league_group_ids)
+                    }
 
-                if not multi_league_ids:
+                if not multi_league_groups:
                     logger.debug("No multi-league groups to check for consolidation")
                     return result
 
                 # For each multi-league group's channels
-                for group_id in multi_league_ids:
+                for group_id, group in multi_league_groups.items():
+                    # Check overlap_handling mode
+                    overlap_handling = getattr(group, "overlap_handling", "add_stream")
+
+                    # create_all mode: keep separate channels, no consolidation
+                    if overlap_handling == "create_all":
+                        logger.debug(
+                            f"Group '{group.group_name}' has overlap_handling=create_all, "
+                            "skipping consolidation"
+                        )
+                        continue
+
                     channels = get_managed_channels_for_group(conn, group_id, include_deleted=False)
 
                     for channel in channels:
@@ -159,49 +179,56 @@ class CrossGroupEnforcer:
                             )
                             continue
 
-                        # Move streams from multi-league to single-league
+                        # Handle based on overlap_handling mode
                         streams = get_channel_streams(conn, channel.id, include_removed=False)
                         moved_count = 0
 
-                        for stream in streams:
-                            if stream_exists_on_channel(
-                                conn, target_channel.id, stream.dispatcharr_stream_id
-                            ):
-                                continue  # Already on target
+                        # For add_stream/add_only: move streams before deleting
+                        # For skip: just delete (don't move streams)
+                        if overlap_handling in ("add_stream", "add_only"):
+                            for stream in streams:
+                                if stream_exists_on_channel(
+                                    conn, target_channel.id, stream.dispatcharr_stream_id
+                                ):
+                                    continue  # Already on target
 
-                            priority = get_next_stream_priority(conn, target_channel.id)
-                            add_stream_to_channel(
-                                conn=conn,
-                                managed_channel_id=target_channel.id,
-                                dispatcharr_stream_id=stream.dispatcharr_stream_id,
-                                stream_name=stream.stream_name,
-                                priority=priority,
-                                source_group_id=group_id,
-                                source_group_type="cross_group",
-                                exception_keyword=stream.exception_keyword,
-                            )
-                            moved_count += 1
+                                priority = get_next_stream_priority(conn, target_channel.id)
+                                add_stream_to_channel(
+                                    conn=conn,
+                                    managed_channel_id=target_channel.id,
+                                    dispatcharr_stream_id=stream.dispatcharr_stream_id,
+                                    stream_name=stream.stream_name,
+                                    priority=priority,
+                                    source_group_id=group_id,
+                                    source_group_type="cross_group",
+                                    exception_keyword=stream.exception_keyword,
+                                )
+                                moved_count += 1
 
-                            result.streams_moved.append(
-                                {
-                                    "stream": stream.stream_name,
-                                    "from_channel": channel.channel_name,
-                                    "to_channel": target_channel.channel_name,
-                                }
-                            )
+                                result.streams_moved.append(
+                                    {
+                                        "stream": stream.stream_name,
+                                        "from_channel": channel.channel_name,
+                                        "to_channel": target_channel.channel_name,
+                                    }
+                                )
 
-                        # Sync to Dispatcharr
-                        if self._channel_manager and moved_count > 0:
-                            self._sync_streams_to_dispatcharr(
-                                from_channel_id=channel.dispatcharr_channel_id,
-                                to_channel_id=target_channel.dispatcharr_channel_id,
-                                streams=streams,
-                            )
+                            # Sync to Dispatcharr
+                            if self._channel_manager and moved_count > 0:
+                                self._sync_streams_to_dispatcharr(
+                                    from_channel_id=channel.dispatcharr_channel_id,
+                                    to_channel_id=target_channel.dispatcharr_channel_id,
+                                    streams=streams,
+                                )
 
-                        # Delete the multi-league channel
+                        # Delete the multi-league channel (for add_stream, add_only, and skip)
                         if self._channel_manager and channel.dispatcharr_channel_id:
                             self._delete_channel_in_dispatcharr(channel.dispatcharr_channel_id)
 
+                        if overlap_handling == "skip":
+                            action = "Skipped (deleted)"
+                        else:
+                            action = "Consolidated into"
                         mark_channel_deleted(conn, channel.id, reason="Cross-group consolidation")
 
                         log_channel_history(
@@ -209,7 +236,7 @@ class CrossGroupEnforcer:
                             managed_channel_id=channel.id,
                             change_type="deleted",
                             change_source="cross_group_enforcement",
-                            notes=f"Consolidated into '{target_channel.channel_name}'",
+                            notes=f"{action} '{target_channel.channel_name}'",
                         )
 
                         if moved_count > 0:
@@ -227,7 +254,15 @@ class CrossGroupEnforcer:
                                 "event_id": event_id,
                                 "streams_moved": moved_count,
                                 "consolidated_into": target_channel.channel_name,
+                                "overlap_handling": overlap_handling,
                             }
+                        )
+
+                        action_log = "Deleted" if overlap_handling == "skip" else "Consolidated"
+                        logger.info(
+                            f"{action_log} multi-league channel #{channel.channel_number} "
+                            f"into single-league #{target_channel.channel_number} "
+                            f"(event: {event_id}, mode: {overlap_handling})"
                         )
 
                 conn.commit()

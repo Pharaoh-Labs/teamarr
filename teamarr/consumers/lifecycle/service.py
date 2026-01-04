@@ -323,7 +323,6 @@ class ChannelLifecycleService:
             get_next_stream_priority,
             log_channel_history,
             stream_exists_on_channel,
-            update_managed_channel,
         )
 
         from teamarr.database.channels import mark_channel_deleted
@@ -354,7 +353,7 @@ class ChannelLifecycleService:
                         managed_channel_id=existing.id,
                         change_type="deleted",
                         change_source="lifecycle_sync",
-                        notes=f"Channel missing from Dispatcharr, marked for cleanup",
+                        notes="Channel missing from Dispatcharr, marked for cleanup",
                     )
                     # Return empty result - stream will be processed as new channel
                     return result
@@ -1496,6 +1495,99 @@ class ChannelLifecycleService:
                 f"Global reassignment: {result['channels_reassigned']} channels "
                 f"across {result['groups_processed']} groups"
             )
+
+        return result
+
+    def cleanup_orphan_dispatcharr_channels(self) -> dict:
+        """Clean up orphan channels in Dispatcharr.
+
+        V1 Parity: Runs every EPG generation to find and delete orphan channels.
+
+        Orphan channels are Dispatcharr channels with teamarr-event-* tvg_id
+        that aren't tracked (or are tracked as deleted) in our DB.
+
+        These can occur when:
+        - Dispatcharr delete API call failed but DB was marked deleted
+        - Same event got a new channel, old one wasn't cleaned up
+        - Manual intervention or bugs
+
+        Returns:
+            Dict with 'deleted' count and 'errors' list
+        """
+        from teamarr.database.channels import get_all_managed_channels
+
+        result = {"deleted": 0, "errors": []}
+
+        if not self._channel_manager:
+            return result
+
+        try:
+            with self._db_factory() as conn:
+                # Get all teamarr channels from Dispatcharr
+                with self._dispatcharr_lock:
+                    all_dispatcharr = self._channel_manager.get_channels()
+
+                teamarr_channels = [
+                    c for c in all_dispatcharr if (c.tvg_id or "").startswith("teamarr-event-")
+                ]
+
+                if not teamarr_channels:
+                    return result
+
+                # Get active DB channels (by dispatcharr_channel_id and UUID)
+                db_channels = get_all_managed_channels(conn, include_deleted=False)
+                active_ids = {
+                    c.dispatcharr_channel_id for c in db_channels if c.dispatcharr_channel_id
+                }
+                active_uuids = {c.dispatcharr_uuid for c in db_channels if c.dispatcharr_uuid}
+
+                # Find orphans
+                orphans = [
+                    c
+                    for c in teamarr_channels
+                    if c.id not in active_ids and (not c.uuid or c.uuid not in active_uuids)
+                ]
+
+                if not orphans:
+                    return result
+
+                logger.info(f"Found {len(orphans)} orphan Dispatcharr channel(s) to clean up")
+
+                for orphan in orphans:
+                    try:
+                        with self._dispatcharr_lock:
+                            delete_result = self._channel_manager.delete_channel(orphan.id)
+
+                        is_success = delete_result.success
+                        is_not_found = "not found" in str(delete_result.error or "").lower()
+                        if is_success or is_not_found:
+                            result["deleted"] += 1
+                            logger.debug(
+                                f"Deleted orphan channel #{orphan.channel_number} - {orphan.name}"
+                            )
+                        else:
+                            result["errors"].append(
+                                {
+                                    "channel_id": orphan.id,
+                                    "channel_name": orphan.name,
+                                    "error": delete_result.error,
+                                }
+                            )
+                    except Exception as e:
+                        result["errors"].append(
+                            {
+                                "channel_id": orphan.id,
+                                "channel_name": orphan.name,
+                                "error": str(e),
+                            }
+                        )
+
+        except Exception as e:
+            logger.exception("Error cleaning up orphan Dispatcharr channels")
+            result["errors"].append({"error": str(e)})
+
+        if result["deleted"] > 0:
+            logger.info(f"Cleaned up {result['deleted']} orphan Dispatcharr channels")
 
         return result
 
