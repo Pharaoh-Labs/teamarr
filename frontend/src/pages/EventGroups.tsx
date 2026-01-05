@@ -368,11 +368,12 @@ export function EventGroups() {
     const filteredExcludeRegex = groups.reduce((sum, g) => sum + (g.filtered_exclude_regex || 0), 0)
     const filteredNotEvent = groups.reduce((sum, g) => sum + (g.filtered_not_event || 0), 0)
     const streamsExcluded = groups.reduce((sum, g) => sum + (g.streams_excluded || 0), 0)
-    // Note: failed_count tracks FAILED outcomes - streams that passed filters but couldn't match to an event
     const totalFiltered = filteredIncludeRegex + filteredExcludeRegex + filteredNotEvent
-    const eligible = groups.reduce((sum, g) => sum + (g.stream_count || 0), 0)
     const matched = groups.reduce((sum, g) => sum + (g.matched_count || 0), 0)
-    const matchRate = eligible > 0 ? Math.round((matched / eligible) * 100) : 0
+    const failedCount = groups.reduce((sum, g) => sum + (g.failed_count || 0), 0)
+    // Match rate = matched / (matched + failed) - percentage of match attempts that succeeded
+    const totalAttempted = matched + failedCount
+    const matchRate = totalAttempted > 0 ? Math.round((matched / totalAttempted) * 100) : 0
 
     // Per-group breakdowns for tooltips (all groups, not just parents)
     const streamsByGroup = groups
@@ -384,12 +385,11 @@ export function EventGroups() {
       .map(g => ({
         name: getDisplayName(g),
         count: g.matched_count || 0,
-        rate: g.stream_count ? Math.round(((g.matched_count || 0) / g.stream_count) * 100) : 0,
+        rate: (g.matched_count || 0) + (g.failed_count || 0) > 0
+          ? Math.round(((g.matched_count || 0) / ((g.matched_count || 0) + (g.failed_count || 0))) * 100)
+          : 0,
       }))
       .sort((a, b) => b.count - a.count)
-
-    // FAILED: Streams that passed filters but couldn't match to an event
-    const failedCount = groups.reduce((sum, g) => sum + (g.failed_count || 0), 0)
 
     return {
       totalStreams,
