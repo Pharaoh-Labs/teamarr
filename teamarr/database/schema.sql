@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS settings (
     stream_filter_exclude_patterns JSON DEFAULT '[]',
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 9
+    schema_version INTEGER DEFAULT 11
 );
 
 -- Insert default settings
@@ -374,7 +374,7 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     event_provider TEXT NOT NULL,
 
     -- Channel Info
-    tvg_id TEXT NOT NULL UNIQUE,
+    tvg_id TEXT NOT NULL,  -- Not UNIQUE: soft-deleted records can share tvg_id with active
     channel_name TEXT NOT NULL,
     channel_number TEXT,
     logo_url TEXT,

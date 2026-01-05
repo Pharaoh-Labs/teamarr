@@ -188,17 +188,6 @@ class ChannelLifecycleService:
                 group_id = group_config.get("id")
                 duplicate_mode = group_config.get("duplicate_event_handling", "consolidate")
 
-                # Debug: count active channels for this group
-                cursor = conn.execute(
-                    """SELECT COUNT(*) FROM managed_channels
-                       WHERE event_epg_group_id = ? AND deleted_at IS NULL""",
-                    (group_id,),
-                )
-                active_count = cursor.fetchone()[0]
-                if active_count > 0:
-                    logger.debug(
-                        f"Group {group_id}: {active_count} active channels before processing"
-                    )
                 channel_group_id = group_config.get("channel_group_id")
                 stream_profile_id = group_config.get("stream_profile_id")
                 channel_profile_ids = self._parse_profile_ids(
@@ -243,11 +232,6 @@ class ChannelLifecycleService:
                     )
 
                     if existing:
-                        logger.debug(
-                            f"Found existing channel id={existing.id} "
-                            f"dispatcharr_id={existing.dispatcharr_channel_id} "
-                            f"for event {event_id}"
-                        )
                         # Handle based on effective mode
                         channel_result = self._handle_existing_channel(
                             conn=conn,
@@ -569,14 +553,6 @@ class ChannelLifecycleService:
         result = StreamProcessResult()
         stream_name = stream.get("name", "")
         stream_id = stream.get("id")
-
-        # If channel has no Dispatcharr ID, it's a reactivated record needing fresh creation
-        if not existing.dispatcharr_channel_id:
-            logger.debug(
-                f"Channel {existing.id} has no Dispatcharr ID (reactivated), "
-                f"will create new: {existing.channel_name}"
-            )
-            return None
 
         # Verify channel exists in Dispatcharr
         # If missing, mark as deleted and return None to signal caller to create new

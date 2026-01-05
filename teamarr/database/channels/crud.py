@@ -4,9 +4,12 @@ Create, Read, Update, Delete operations for managed_channels table.
 """
 
 import json
+import logging
 from sqlite3 import Connection
 
 from .types import ManagedChannel
+
+logger = logging.getLogger(__name__)
 
 
 def create_managed_channel(
@@ -20,6 +23,9 @@ def create_managed_channel(
 ) -> int:
     """Create a managed channel record.
 
+    Simple INSERT - V1 parity. No reactivation logic needed since tvg_id
+    is no longer UNIQUE. Soft-deleted records naturally coexist with new ones.
+
     Args:
         conn: Database connection
         event_epg_group_id: Parent group ID
@@ -30,74 +36,8 @@ def create_managed_channel(
         **kwargs: Additional fields (channel_number, logo_url, etc.)
 
     Returns:
-        ID of created record, or existing record ID if duplicate
+        ID of created record
     """
-    exception_keyword = kwargs.get("exception_keyword")
-
-    # Check for existing channel by tvg_id first (UNIQUE constraint)
-    existing_by_tvg = conn.execute(
-        "SELECT id, deleted_at FROM managed_channels WHERE tvg_id = ?",
-        (tvg_id,),
-    ).fetchone()
-    if existing_by_tvg:
-        channel_id = existing_by_tvg[0]
-        was_deleted = existing_by_tvg[1] is not None
-        if was_deleted:
-            # Reactivate soft-deleted channel with new data
-            # Build UPDATE with all passed-in fields
-            update_fields = {
-                "deleted_at": None,
-                "event_epg_group_id": event_epg_group_id,
-                "event_id": event_id,
-                "event_provider": event_provider,
-                "channel_name": channel_name,
-            }
-            # Add all kwargs fields
-            allowed_fields = [
-                "channel_number", "logo_url", "dispatcharr_channel_id",
-                "dispatcharr_uuid", "dispatcharr_logo_id", "channel_group_id",
-                "stream_profile_id", "channel_profile_ids", "primary_stream_id",
-                "exception_keyword", "home_team", "home_team_abbrev", "home_team_logo",
-                "away_team", "away_team_abbrev", "away_team_logo", "event_date",
-                "event_name", "league", "sport", "venue", "broadcast",
-                "scheduled_delete_at", "sync_status",
-            ]
-            for field_name in allowed_fields:
-                if field_name in kwargs:
-                    value = kwargs[field_name]
-                    if isinstance(value, (list, dict)):
-                        value = json.dumps(value)
-                    update_fields[field_name] = value
-
-            set_clause = ", ".join(f"{k} = ?" for k in update_fields.keys())
-            values = list(update_fields.values()) + [channel_id]
-            conn.execute(
-                f"UPDATE managed_channels SET {set_clause}, "
-                f"updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                values,
-            )
-        return channel_id
-
-    # Also check by event composite key (handles race conditions)
-    if exception_keyword:
-        existing = conn.execute(
-            """SELECT id FROM managed_channels
-               WHERE event_epg_group_id = ? AND event_id = ? AND event_provider = ?
-                 AND exception_keyword = ? AND deleted_at IS NULL""",
-            (event_epg_group_id, event_id, event_provider, exception_keyword),
-        ).fetchone()
-    else:
-        existing = conn.execute(
-            """SELECT id FROM managed_channels
-               WHERE event_epg_group_id = ? AND event_id = ? AND event_provider = ?
-                 AND (exception_keyword IS NULL OR exception_keyword = '')
-                 AND deleted_at IS NULL""",
-            (event_epg_group_id, event_id, event_provider),
-        ).fetchone()
-
-    if existing:
-        return existing[0]
-
     # Build column list and values
     columns = [
         "event_epg_group_id",
@@ -148,79 +88,11 @@ def create_managed_channel(
     placeholders = ", ".join(["?"] * len(values))
     column_str = ", ".join(columns)
 
-    try:
-        cursor = conn.execute(
-            f"INSERT INTO managed_channels ({column_str}) VALUES ({placeholders})",
-            values,
-        )
-        return cursor.lastrowid
-    except Exception:
-        # Handle race condition - record may have been created between check and insert
-        # First check by tvg_id (the UNIQUE constraint that likely failed)
-        existing_by_tvg = conn.execute(
-            "SELECT id, deleted_at FROM managed_channels WHERE tvg_id = ?",
-            (tvg_id,),
-        ).fetchone()
-        if existing_by_tvg:
-            channel_id = existing_by_tvg[0]
-            was_deleted = existing_by_tvg[1] is not None
-            if was_deleted:
-                # Reactivate soft-deleted channel with new data
-                # Build UPDATE with all passed-in fields
-                update_fields = {
-                    "deleted_at": None,
-                    "event_epg_group_id": event_epg_group_id,
-                    "event_id": event_id,
-                    "event_provider": event_provider,
-                    "channel_name": channel_name,
-                }
-                # Add all kwargs fields
-                allowed_fields = [
-                    "channel_number", "logo_url", "dispatcharr_channel_id",
-                    "dispatcharr_uuid", "dispatcharr_logo_id", "channel_group_id",
-                    "stream_profile_id", "channel_profile_ids", "primary_stream_id",
-                    "exception_keyword", "home_team", "home_team_abbrev", "home_team_logo",
-                    "away_team", "away_team_abbrev", "away_team_logo", "event_date",
-                    "event_name", "league", "sport", "venue", "broadcast",
-                    "scheduled_delete_at", "sync_status",
-                ]
-                for field_name in allowed_fields:
-                    if field_name in kwargs:
-                        value = kwargs[field_name]
-                        if isinstance(value, (list, dict)):
-                            value = json.dumps(value)
-                        update_fields[field_name] = value
-
-                set_clause = ", ".join(f"{k} = ?" for k in update_fields.keys())
-                values_list = list(update_fields.values()) + [channel_id]
-                conn.execute(
-                    f"UPDATE managed_channels SET {set_clause}, "
-                    f"updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    values_list,
-                )
-            return channel_id
-
-        # Also check by event composite key
-        if exception_keyword:
-            existing = conn.execute(
-                """SELECT id FROM managed_channels
-                   WHERE event_epg_group_id = ? AND event_id = ? AND event_provider = ?
-                     AND exception_keyword = ? AND deleted_at IS NULL""",
-                (event_epg_group_id, event_id, event_provider, exception_keyword),
-            ).fetchone()
-        else:
-            existing = conn.execute(
-                """SELECT id FROM managed_channels
-                   WHERE event_epg_group_id = ? AND event_id = ? AND event_provider = ?
-                     AND (exception_keyword IS NULL OR exception_keyword = '')
-                     AND deleted_at IS NULL""",
-                (event_epg_group_id, event_id, event_provider),
-            ).fetchone()
-
-        if existing:
-            return existing[0]
-        # Re-raise if we still can't find it
-        raise
+    cursor = conn.execute(
+        f"INSERT INTO managed_channels ({column_str}) VALUES ({placeholders})",
+        values,
+    )
+    return cursor.lastrowid
 
 
 def get_managed_channel(conn: Connection, channel_id: int) -> ManagedChannel | None:
