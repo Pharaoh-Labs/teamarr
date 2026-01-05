@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query"
 import {
   Play,
   Download,
-  RefreshCw,
   Loader2,
   Clock,
   CheckCircle,
@@ -407,25 +406,9 @@ export function EPG() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">EPG Management</h1>
-          <p className="text-sm text-muted-foreground">Generate and manage XMLTV output</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              refetchStats()
-              refetchRuns()
-              refetchAnalysis()
-            }}
-          >
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Refresh
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold">EPG Management</h1>
+        <p className="text-sm text-muted-foreground">Generate and manage XMLTV output</p>
       </div>
 
       {/* Action Bar */}

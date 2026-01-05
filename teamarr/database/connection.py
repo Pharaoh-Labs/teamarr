@@ -549,6 +549,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         logger.info("Schema upgraded to version 11 (removed tvg_id UNIQUE constraint)")
         current_version = 11
 
+    # Version 12: Remove per-group timing settings
+    # All groups now use global settings from Settings table
+    if current_version < 12:
+        _remove_group_timing_columns(conn)
+        conn.execute("UPDATE settings SET schema_version = 12 WHERE id = 1")
+        logger.info("Schema upgraded to version 12 (removed per-group timing settings)")
+        current_version = 12
+
 
 def _remove_tvg_id_unique_constraint(conn: sqlite3.Connection) -> None:
     """Remove UNIQUE constraint from tvg_id column.
@@ -1022,6 +1030,91 @@ def _update_channel_timing_constraints(conn: sqlite3.Connection) -> None:
     """)
 
     logger.info("Updated settings table CHECK constraints for channel timing")
+
+
+def _remove_group_timing_columns(conn: sqlite3.Connection) -> None:
+    """Remove create_timing and delete_timing columns from event_epg_groups.
+
+    These columns are no longer used - all groups now use global settings
+    from the Settings table.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Check if columns exist
+    cursor = conn.execute("PRAGMA table_info(event_epg_groups)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    columns_to_drop = {"create_timing", "delete_timing"}
+    columns_present = columns_to_drop & columns
+
+    if not columns_present:
+        logger.debug("Per-group timing columns already removed, skipping migration")
+        return
+
+    logger.info(f"Removing per-group timing columns: {columns_present}")
+
+    # SQLite 3.35.0+ supports DROP COLUMN
+    # Use try/except in case of older SQLite versions
+    try:
+        for col in columns_present:
+            conn.execute(f"ALTER TABLE event_epg_groups DROP COLUMN {col}")
+        logger.info("Successfully dropped timing columns using ALTER TABLE DROP COLUMN")
+    except sqlite3.OperationalError as e:
+        logger.warning(f"DROP COLUMN not supported ({e}), using table recreation")
+        _remove_group_timing_columns_via_recreation(conn, columns_present)
+
+
+def _remove_group_timing_columns_via_recreation(
+    conn: sqlite3.Connection, columns_to_remove: set[str]
+) -> None:
+    """Fallback for SQLite < 3.35.0: recreate table without timing columns."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Get current columns
+    cursor = conn.execute("PRAGMA table_info(event_epg_groups)")
+    all_columns = [row[1] for row in cursor.fetchall()]
+    keep_columns = [c for c in all_columns if c not in columns_to_remove]
+
+    # Get current table schema
+    cursor = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='event_epg_groups'"
+    )
+    create_sql = cursor.fetchone()[0]
+
+    # Remove the timing column definitions from CREATE statement
+    import re
+
+    create_sql = re.sub(
+        r",?\s*create_timing TEXT DEFAULT '[^']*'\s*CHECK\([^)]+\)",
+        "",
+        create_sql,
+    )
+    create_sql = re.sub(
+        r",?\s*delete_timing TEXT DEFAULT '[^']*'\s*CHECK\([^)]+\)",
+        "",
+        create_sql,
+    )
+
+    # Perform atomic table swap
+    column_list = ", ".join(keep_columns)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("ALTER TABLE event_epg_groups RENAME TO event_epg_groups_old")
+        conn.execute(create_sql.replace("event_epg_groups", "event_epg_groups_new"))
+        conn.execute(
+            f"INSERT INTO event_epg_groups_new ({column_list}) "
+            f"SELECT {column_list} FROM event_epg_groups_old"
+        )
+        conn.execute("DROP TABLE event_epg_groups_old")
+        conn.execute("ALTER TABLE event_epg_groups_new RENAME TO event_epg_groups")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    logger.info("Recreated event_epg_groups table without timing columns")
 
 
 def reset_db(db_path: Path | str | None = None) -> None:

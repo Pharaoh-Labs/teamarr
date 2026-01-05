@@ -646,6 +646,16 @@ def get_epg_analysis():
             result["programmes"]["postgame"] = row["programmes_postgame"] or 0
             result["programmes"]["idle"] = row["programmes_idle"] or 0
 
+        # Get actual managed channel count from database (not XMLTV)
+        # This is more accurate as event channels may not be in XMLTV yet
+        event_channel_count = conn.execute(
+            "SELECT COUNT(*) FROM managed_channels WHERE deleted_at IS NULL"
+        ).fetchone()[0]
+        result["channels"]["event_based"] = event_channel_count
+        result["channels"]["total"] = (
+            result["channels"]["team_based"] + event_channel_count
+        )
+
     return result
 
 

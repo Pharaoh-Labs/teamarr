@@ -10,8 +10,6 @@ export interface EventGroup {
   channel_group_id: number | null
   stream_profile_id: number | null
   channel_profile_ids: number[]
-  create_timing: string
-  delete_timing: string
   duplicate_event_handling: string
   channel_assignment_mode: string
   sort_order: number
@@ -59,8 +57,6 @@ export interface EventGroupCreate {
   channel_group_id?: number | null
   stream_profile_id?: number | null
   channel_profile_ids?: number[]
-  create_timing?: string
-  delete_timing?: string
   duplicate_event_handling?: string
   channel_assignment_mode?: string
   sort_order?: number

@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS settings (
     stream_filter_exclude_patterns JSON DEFAULT '[]',
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 11
+    schema_version INTEGER DEFAULT 12
 );
 
 -- Insert default settings
@@ -284,13 +284,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     stream_profile_id INTEGER,               -- Dispatcharr stream profile
     channel_profile_ids TEXT,                -- JSON array of channel profile IDs
 
-    -- Lifecycle Settings (override global)
-    create_timing TEXT DEFAULT 'same_day'
-        CHECK(create_timing IN ('stream_available', 'same_day', 'day_before', '2_days_before', '3_days_before', '1_week_before', 'manual')),
-    delete_timing TEXT DEFAULT 'same_day'
-        CHECK(delete_timing IN ('stream_removed', 'same_day', 'day_after', '2_days_after', '3_days_after', '1_week_after', 'manual')),
-
-    -- Duplicate Event Handling (override global)
+    -- Duplicate Event Handling (uses global lifecycle settings)
     duplicate_event_handling TEXT DEFAULT 'consolidate'
         CHECK(duplicate_event_handling IN ('consolidate', 'separate', 'ignore')),
 

@@ -129,4 +129,4 @@ class AllSettings:
     api: APISettings = field(default_factory=APISettings)
     stream_filter: StreamFilterSettings = field(default_factory=StreamFilterSettings)
     epg_generation_counter: int = 0
-    schema_version: int = 11
+    schema_version: int = 12

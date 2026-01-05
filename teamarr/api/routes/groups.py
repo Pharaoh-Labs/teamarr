@@ -31,8 +31,6 @@ class GroupCreate(BaseModel):
     channel_group_id: int | None = None
     stream_profile_id: int | None = None
     channel_profile_ids: list[int] | None = None
-    create_timing: str = "same_day"
-    delete_timing: str = "same_day"
     duplicate_event_handling: str = "consolidate"
     channel_assignment_mode: str = "auto"
     sort_order: int = 0
@@ -70,8 +68,6 @@ class GroupUpdate(BaseModel):
     channel_group_id: int | None = None
     stream_profile_id: int | None = None
     channel_profile_ids: list[int] | None = None
-    create_timing: str | None = None
-    delete_timing: str | None = None
     duplicate_event_handling: str | None = None
     channel_assignment_mode: str | None = None
     sort_order: int | None = None
@@ -127,8 +123,6 @@ class GroupResponse(BaseModel):
     channel_group_id: int | None = None
     stream_profile_id: int | None = None
     channel_profile_ids: list[int] = []
-    create_timing: str = "same_day"
-    delete_timing: str = "same_day"
     duplicate_event_handling: str = "consolidate"
     channel_assignment_mode: str = "auto"
     sort_order: int = 0
@@ -203,26 +197,6 @@ class M3UGroupListResponse(BaseModel):
 # VALIDATION
 # =============================================================================
 
-VALID_CREATE_TIMING = {
-    "stream_available",
-    "same_day",
-    "day_before",
-    "2_days_before",
-    "3_days_before",
-    "1_week_before",
-    "manual",
-}
-
-VALID_DELETE_TIMING = {
-    "stream_removed",
-    "same_day",
-    "day_after",
-    "2_days_after",
-    "3_days_after",
-    "1_week_after",
-    "manual",
-}
-
 VALID_DUPLICATE_HANDLING = {"consolidate", "separate", "ignore"}
 VALID_ASSIGNMENT_MODE = {"auto", "manual"}
 VALID_CHANNEL_SORT_ORDER = {"time", "sport_time", "league_time"}
@@ -230,24 +204,12 @@ VALID_OVERLAP_HANDLING = {"add_stream", "add_only", "create_all", "skip"}
 
 
 def validate_group_fields(
-    create_timing: str | None = None,
-    delete_timing: str | None = None,
     duplicate_event_handling: str | None = None,
     channel_assignment_mode: str | None = None,
     channel_sort_order: str | None = None,
     overlap_handling: str | None = None,
 ):
     """Validate group field values."""
-    if create_timing and create_timing not in VALID_CREATE_TIMING:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid create_timing. Valid: {VALID_CREATE_TIMING}",
-        )
-    if delete_timing and delete_timing not in VALID_DELETE_TIMING:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid delete_timing. Valid: {VALID_DELETE_TIMING}",
-        )
     if duplicate_event_handling and duplicate_event_handling not in VALID_DUPLICATE_HANDLING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -302,8 +264,6 @@ def list_groups(
                 channel_group_id=g.channel_group_id,
                 stream_profile_id=g.stream_profile_id,
                 channel_profile_ids=g.channel_profile_ids,
-                create_timing=g.create_timing,
-                delete_timing=g.delete_timing,
                 duplicate_event_handling=g.duplicate_event_handling,
                 channel_assignment_mode=g.channel_assignment_mode,
                 sort_order=g.sort_order,
@@ -349,8 +309,6 @@ def create_group(request: GroupCreate):
     from teamarr.database.groups import create_group, get_group, get_group_by_name
 
     validate_group_fields(
-        create_timing=request.create_timing,
-        delete_timing=request.delete_timing,
         duplicate_event_handling=request.duplicate_event_handling,
         channel_assignment_mode=request.channel_assignment_mode,
         channel_sort_order=request.channel_sort_order,
@@ -376,8 +334,6 @@ def create_group(request: GroupCreate):
             channel_group_id=request.channel_group_id,
             stream_profile_id=request.stream_profile_id,
             channel_profile_ids=request.channel_profile_ids,
-            create_timing=request.create_timing,
-            delete_timing=request.delete_timing,
             duplicate_event_handling=request.duplicate_event_handling,
             channel_assignment_mode=request.channel_assignment_mode,
             sort_order=request.sort_order,
@@ -414,8 +370,6 @@ def create_group(request: GroupCreate):
         channel_group_id=group.channel_group_id,
         stream_profile_id=group.stream_profile_id,
         channel_profile_ids=group.channel_profile_ids,
-        create_timing=group.create_timing,
-        delete_timing=group.delete_timing,
         duplicate_event_handling=group.duplicate_event_handling,
         channel_assignment_mode=group.channel_assignment_mode,
         sort_order=group.sort_order,
@@ -475,8 +429,6 @@ def get_group_by_id(group_id: int):
         channel_group_id=group.channel_group_id,
         stream_profile_id=group.stream_profile_id,
         channel_profile_ids=group.channel_profile_ids,
-        create_timing=group.create_timing,
-        delete_timing=group.delete_timing,
         duplicate_event_handling=group.duplicate_event_handling,
         channel_assignment_mode=group.channel_assignment_mode,
         sort_order=group.sort_order,
@@ -523,8 +475,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
     )
 
     validate_group_fields(
-        create_timing=request.create_timing,
-        delete_timing=request.delete_timing,
         duplicate_event_handling=request.duplicate_event_handling,
         channel_assignment_mode=request.channel_assignment_mode,
         channel_sort_order=request.channel_sort_order,
@@ -559,8 +509,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             channel_group_id=request.channel_group_id,
             stream_profile_id=request.stream_profile_id,
             channel_profile_ids=request.channel_profile_ids,
-            create_timing=request.create_timing,
-            delete_timing=request.delete_timing,
             duplicate_event_handling=request.duplicate_event_handling,
             channel_assignment_mode=request.channel_assignment_mode,
             sort_order=request.sort_order,
@@ -613,8 +561,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         channel_group_id=group.channel_group_id,
         stream_profile_id=group.stream_profile_id,
         channel_profile_ids=group.channel_profile_ids,
-        create_timing=group.create_timing,
-        delete_timing=group.delete_timing,
         duplicate_event_handling=group.duplicate_event_handling,
         channel_assignment_mode=group.channel_assignment_mode,
         sort_order=group.sort_order,

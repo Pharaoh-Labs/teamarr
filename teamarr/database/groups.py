@@ -21,8 +21,6 @@ class EventEPGGroup:
     channel_group_id: int | None = None
     stream_profile_id: int | None = None
     channel_profile_ids: list[int] = field(default_factory=list)
-    create_timing: str = "same_day"
-    delete_timing: str = "same_day"
     duplicate_event_handling: str = "consolidate"
     channel_assignment_mode: str = "auto"
     sort_order: int = 0
@@ -101,8 +99,6 @@ def _row_to_group(row) -> EventEPGGroup:
         channel_group_id=row["channel_group_id"],
         stream_profile_id=row["stream_profile_id"],
         channel_profile_ids=channel_profile_ids,
-        create_timing=row["create_timing"] or "same_day",
-        delete_timing=row["delete_timing"] or "same_day",
         duplicate_event_handling=row["duplicate_event_handling"] or "consolidate",
         channel_assignment_mode=row["channel_assignment_mode"] or "auto",
         sort_order=row["sort_order"] or 0,
@@ -237,8 +233,6 @@ def create_group(
     channel_group_id: int | None = None,
     stream_profile_id: int | None = None,
     channel_profile_ids: list[int] | None = None,
-    create_timing: str = "same_day",
-    delete_timing: str = "same_day",
     duplicate_event_handling: str = "consolidate",
     channel_assignment_mode: str = "auto",
     sort_order: int = 0,
@@ -276,8 +270,6 @@ def create_group(
         channel_group_id: Dispatcharr channel group ID
         stream_profile_id: Dispatcharr stream profile ID
         channel_profile_ids: List of channel profile IDs
-        create_timing: When to create channels
-        delete_timing: When to delete channels
         duplicate_event_handling: How to handle duplicate events
         channel_assignment_mode: 'auto' or 'manual'
         sort_order: Ordering for AUTO channel allocation
@@ -306,9 +298,8 @@ def create_group(
         """INSERT INTO event_epg_groups (
             name, leagues, template_id, channel_start_number,
             channel_group_id, stream_profile_id, channel_profile_ids,
-            create_timing, delete_timing, duplicate_event_handling,
-            channel_assignment_mode, sort_order, total_stream_count,
-            parent_group_id, m3u_group_id, m3u_group_name,
+            duplicate_event_handling, channel_assignment_mode, sort_order,
+            total_stream_count, parent_group_id, m3u_group_id, m3u_group_name,
             m3u_account_id, m3u_account_name,
             stream_include_regex, stream_include_regex_enabled,
             stream_exclude_regex, stream_exclude_regex_enabled,
@@ -316,7 +307,7 @@ def create_group(
             custom_regex_date, custom_regex_date_enabled,
             custom_regex_time, custom_regex_time_enabled,
             skip_builtin_filter, channel_sort_order, overlap_handling, enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name,
             json.dumps(leagues),
@@ -325,8 +316,6 @@ def create_group(
             channel_group_id,
             stream_profile_id,
             json.dumps(channel_profile_ids) if channel_profile_ids else None,
-            create_timing,
-            delete_timing,
             duplicate_event_handling,
             channel_assignment_mode,
             sort_order,
@@ -370,8 +359,6 @@ def update_group(
     channel_group_id: int | None = None,
     stream_profile_id: int | None = None,
     channel_profile_ids: list[int] | None = None,
-    create_timing: str | None = None,
-    delete_timing: str | None = None,
     duplicate_event_handling: str | None = None,
     channel_assignment_mode: str | None = None,
     sort_order: int | None = None,
@@ -468,14 +455,6 @@ def update_group(
         values.append(json.dumps(channel_profile_ids))
     elif clear_channel_profile_ids:
         updates.append("channel_profile_ids = NULL")
-
-    if create_timing is not None:
-        updates.append("create_timing = ?")
-        values.append(create_timing)
-
-    if delete_timing is not None:
-        updates.append("delete_timing = ?")
-        values.append(delete_timing)
 
     if duplicate_event_handling is not None:
         updates.append("duplicate_event_handling = ?")

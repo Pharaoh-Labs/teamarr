@@ -8,7 +8,6 @@ import {
   Play,
   CheckCircle,
   XCircle,
-  RefreshCw,
   Database,
   Plus,
   Trash2,
@@ -392,15 +391,9 @@ export function Settings() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Settings</h1>
-          <p className="text-sm text-muted-foreground">Configure Teamarr application settings</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 mr-1" />
-          Refresh
-        </Button>
+      <div>
+        <h1 className="text-xl font-bold">Settings</h1>
+        <p className="text-sm text-muted-foreground">Configure Teamarr application settings</p>
       </div>
 
       {/* Tab Navigation */}
