@@ -677,28 +677,10 @@ export function EventGroups() {
               </div>
               {stats.streamsExcluded > 0 && (
                 <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
-                  <Card className="p-3 shadow-lg border min-w-[220px]">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">Exclusion Reasons</div>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Event final</span>
-                        <span className="text-muted-foreground">Game ended</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Event past</span>
-                        <span className="text-muted-foreground">Already over</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Before window</span>
-                        <span className="text-muted-foreground">Too early</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>League excluded</span>
-                        <span className="text-muted-foreground">Not in group</span>
-                      </div>
-                      <div className="pt-1 border-t text-xs text-muted-foreground">
-                        Total: {stats.streamsExcluded} matched but excluded
-                      </div>
+                  <Card className="p-3 shadow-lg border min-w-[200px]">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Matched but Excluded</div>
+                    <div className="text-sm text-muted-foreground">
+                      {stats.streamsExcluded} stream{stats.streamsExcluded !== 1 ? 's' : ''} matched an event but excluded due to timing (event final, past, or before create window).
                     </div>
                   </Card>
                 </div>
@@ -717,8 +699,7 @@ export function EventGroups() {
               </div>
               {(stats.matched > 0 || stats.failedCount > 0) && (
                 <div className="absolute right-0 top-full mt-1 z-50 hidden group-hover:block">
-                  <Card className="p-3 shadow-lg border min-w-[220px]">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">Match Results</div>
+                  <Card className="p-3 shadow-lg border min-w-[180px]">
                     <div className="space-y-1">
                       <div className="flex justify-between text-sm">
                         <span className="text-green-500">Matched</span>
@@ -728,24 +709,7 @@ export function EventGroups() {
                         <span className="text-red-500">Failed</span>
                         <span className="font-medium">{stats.failedCount}</span>
                       </div>
-                      <div className="flex justify-between text-sm font-medium pt-1 border-t">
-                        <span>Total attempted</span>
-                        <span>{stats.matched + stats.failedCount}</span>
-                      </div>
                     </div>
-                    {stats.matchedByGroup.length > 0 && (
-                      <>
-                        <div className="text-xs font-medium text-muted-foreground mt-3 mb-2">By Group</div>
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                          {stats.matchedByGroup.slice(0, 8).map((g, i) => (
-                            <div key={i} className="flex justify-between text-sm">
-                              <span className="truncate max-w-[120px]">{g.name}</span>
-                              <span className="font-medium ml-2">{g.count} ({g.rate}%)</span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
                   </Card>
                 </div>
               )}
