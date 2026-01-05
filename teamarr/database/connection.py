@@ -377,6 +377,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     - 12: Removed per-group timing settings
     - 13: Added display_name to event_epg_groups
     - 14: Added streams_excluded to event_epg_groups
+    - 15: Renamed filtered_no_match -> failed_count (clearer stat categories)
     """
     import logging
 
@@ -580,6 +581,55 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("UPDATE settings SET schema_version = 14 WHERE id = 1")
         logger.info("Schema upgraded to version 14 (event_epg_groups.streams_excluded)")
         current_version = 14
+
+    # Version 15: Rename filtered_no_match -> failed_count for clearer naming
+    # Reflects that this is FAILED category (match attempted but couldn't find event)
+    if current_version < 15:
+        _rename_filtered_no_match_to_failed_count(conn)
+        conn.execute("UPDATE settings SET schema_version = 15 WHERE id = 1")
+        logger.info("Schema upgraded to version 15 (filtered_no_match -> failed_count)")
+        current_version = 15
+
+
+def _rename_filtered_no_match_to_failed_count(conn: sqlite3.Connection) -> None:
+    """Rename filtered_no_match column to failed_count.
+
+    This clarifies the stat tracking categories:
+    - FILTERED: Pre-match filtering (regex, not_event)
+    - FAILED: Match attempted but couldn't find event (this column)
+    - EXCLUDED: Matched but excluded (timing/config)
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Check if the old column exists
+    cursor = conn.execute("PRAGMA table_info(event_epg_groups)")
+    columns = {row["name"] for row in cursor.fetchall()}
+
+    if "filtered_no_match" not in columns:
+        # Already renamed or fresh database
+        if "failed_count" not in columns:
+            # Add the column if missing entirely (shouldn't happen with schema.sql)
+            conn.execute(
+                "ALTER TABLE event_epg_groups ADD COLUMN failed_count INTEGER DEFAULT 0"
+            )
+            logger.info("Added event_epg_groups.failed_count column")
+        return
+
+    # SQLite doesn't support RENAME COLUMN in older versions, so we use the full approach
+    # First add new column, copy data, then we could drop old column but SQLite doesn't support DROP COLUMN
+    # So we recreate the table or just leave both (simpler approach: just add column and copy)
+    if "failed_count" not in columns:
+        conn.execute(
+            "ALTER TABLE event_epg_groups ADD COLUMN failed_count INTEGER DEFAULT 0"
+        )
+
+    # Copy data from old column to new
+    conn.execute(
+        "UPDATE event_epg_groups SET failed_count = filtered_no_match WHERE failed_count = 0"
+    )
+    logger.info("Migrated filtered_no_match -> failed_count")
 
 
 def _remove_tvg_id_unique_constraint(conn: sqlite3.Connection) -> None:

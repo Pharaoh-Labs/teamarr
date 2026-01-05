@@ -322,12 +322,13 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     custom_regex_time_enabled BOOLEAN DEFAULT 0,
     skip_builtin_filter BOOLEAN DEFAULT 0,   -- Skip built-in team name extraction
 
-    -- Filtering Stats (updated by EPG generation)
-    filtered_include_regex INTEGER DEFAULT 0,   -- Streams filtered by include regex
-    filtered_exclude_regex INTEGER DEFAULT 0,   -- Streams filtered by exclude regex
-    filtered_no_match INTEGER DEFAULT 0,        -- Streams with no event match
-    filtered_not_event INTEGER DEFAULT 0,       -- Streams that don't look like events (placeholders)
-    streams_excluded INTEGER DEFAULT 0,         -- Matched but excluded by timing (past/final/early)
+    -- Processing Stats (updated by EPG generation)
+    -- Three categories: FILTERED (pre-match), FAILED (match attempted), EXCLUDED (matched but excluded)
+    filtered_include_regex INTEGER DEFAULT 0,   -- FILTERED: Didn't match include regex
+    filtered_exclude_regex INTEGER DEFAULT 0,   -- FILTERED: Matched exclude regex
+    filtered_not_event INTEGER DEFAULT 0,       -- FILTERED: Stream doesn't look like event (placeholder)
+    failed_count INTEGER DEFAULT 0,             -- FAILED: Match attempted but couldn't find event
+    streams_excluded INTEGER DEFAULT 0,         -- EXCLUDED: Matched but excluded (timing/config)
 
     -- Multi-Sport Enhancements (Phase 3)
     channel_sort_order TEXT DEFAULT 'time'
