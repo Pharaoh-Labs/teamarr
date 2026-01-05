@@ -520,7 +520,7 @@ class EventGroupProcessor:
                     def make_stream_cb(grp_name: str, grp_idx: int):
                         def cb(current: int, total: int, stream_name: str, matched: bool):
                             icon = "✓" if matched else "✗"
-                            msg = f"{grp_name}: {stream_name} {icon} ({current}/{total})"
+                            msg = f"{icon} {current}/{total} — {grp_name}: {stream_name}"
                             progress_callback(grp_idx, total_groups, msg)
                         return cb
                     stream_cb = make_stream_cb(group.name, processed_count + 1)
@@ -544,7 +544,7 @@ class EventGroupProcessor:
                     def make_stream_cb(grp_name: str, grp_idx: int):
                         def cb(current: int, total: int, stream_name: str, matched: bool):
                             icon = "✓" if matched else "✗"
-                            msg = f"{grp_name}: {stream_name} {icon} ({current}/{total})"
+                            msg = f"{icon} {current}/{total} — {grp_name}: {stream_name}"
                             progress_callback(grp_idx, total_groups, msg)
                         return cb
                     stream_cb = make_stream_cb(group.name, processed_count + 1)
@@ -566,7 +566,7 @@ class EventGroupProcessor:
                     def make_stream_cb(grp_name: str, grp_idx: int):
                         def cb(current: int, total: int, stream_name: str, matched: bool):
                             icon = "✓" if matched else "✗"
-                            msg = f"{grp_name}: {stream_name} {icon} ({current}/{total})"
+                            msg = f"{icon} {current}/{total} — {grp_name}: {stream_name}"
                             progress_callback(grp_idx, total_groups, msg)
                         return cb
                     stream_cb = make_stream_cb(group.name, processed_count + 1)

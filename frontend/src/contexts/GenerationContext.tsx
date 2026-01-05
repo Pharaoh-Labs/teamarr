@@ -51,14 +51,12 @@ function ProgressDescription({ status }: { status: GenerationStatus | null }) {
           style={{ width: `${percent}%` }}
         />
       </div>
-      {/* Current item - stream-level progress already has counts in itemName */}
+      {/* Current item - wrap text naturally */}
       {itemName && (
-        <div className="text-xs text-muted-foreground truncate">
+        <div className="text-xs text-muted-foreground break-words">
           {isStreamProgress ? (
-            // Stream-level: itemName already has format "Group: Stream ✓ (x/y)"
             <>{itemName} — {percent}%</>
           ) : (
-            // Group/team level: add counts
             <>{itemName}{total > 0 && ` (${current}/${total})`} — {percent}%</>
           )}
         </div>
