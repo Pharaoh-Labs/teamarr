@@ -171,7 +171,7 @@ def run_full_generation(
             remaining = total - current
 
             # Messages from team_processor already include context
-            # (Processing X..., Finished X, still processing: Y, Z)
+            # (Processing X..., Finished X, now processing: Y, Z)
             # Just add timing and counts
             if remaining > 0:
                 msg = f"{name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"
