@@ -511,8 +511,13 @@ class CricbuzzClient:
 
         return matches
 
+    # Days to look back for .last variable resolution
+    DAYS_BACK = 7
+
     def get_team_schedule(self, league: str, team_id: str, days_ahead: int = 14) -> list[dict]:
-        """Get upcoming matches for a specific team.
+        """Get schedule for a specific team including past and future matches.
+
+        Includes past matches (DAYS_BACK) for .last template variable resolution.
 
         Args:
             league: League code
@@ -520,7 +525,7 @@ class CricbuzzClient:
             days_ahead: Number of days to look ahead
 
         Returns:
-            List of match dicts for this team
+            List of match dicts for this team (sorted by date)
         """
         from datetime import timedelta
 
@@ -532,6 +537,7 @@ class CricbuzzClient:
         schedule = self.get_series_schedule(series_id, series_slug)
 
         today = datetime.utcnow()
+        start_date = today - timedelta(days=self.DAYS_BACK)
         end_date = today + timedelta(days=days_ahead)
         team_id_int = int(team_id)
 
@@ -544,7 +550,7 @@ class CricbuzzClient:
             if team_id_int not in (team1_id, team2_id):
                 continue
 
-            # Check date is within range
+            # Check date is within range (includes past games)
             start_ts = match.get("startDate")
             if not start_ts:
                 continue
@@ -553,7 +559,7 @@ class CricbuzzClient:
                 start_ts = int(start_ts)
 
             match_dt = datetime.utcfromtimestamp(start_ts / 1000)
-            if today <= match_dt <= end_date:
+            if start_date <= match_dt <= end_date:
                 team_games.append(match)
 
         # Sort by date
