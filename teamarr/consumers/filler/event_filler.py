@@ -312,14 +312,9 @@ class EventFillerGenerator:
         Event filler uses positional variables (home_team, away_team)
         not perspective-based (team_name, opponent). No .next/.last support.
 
-        Fetches team stats and enriches ESPN events for odds if service available.
+        Fetches team stats if service available. Odds come from scoreboard
+        (event.odds_data) - no enrichment needed.
         """
-        # Enrich ESPN events to get odds (TSDB enrichment adds no value)
-        if self._service and event.provider == "espn":
-            enriched = self._service.get_event(event.id, event.league)
-            if enriched:
-                event = enriched
-
         # Build minimal team config for context (home team perspective)
         team_config = TeamChannelContext(
             team_id=event.home_team.id,

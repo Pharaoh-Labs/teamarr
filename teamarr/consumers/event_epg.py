@@ -275,7 +275,7 @@ class EventEPGGenerator:
         Unlike generate_for_leagues which fetches events, this takes
         pre-matched stream/event pairs from the matcher.
 
-        Enriches ESPN events to get odds data (TSDB enrichment adds no value).
+        Events come from scoreboard which already includes odds when available.
 
         Args:
             matched_streams: List of dicts with 'stream' and 'event' keys.
@@ -297,12 +297,6 @@ class EventEPGGenerator:
 
             if not event:
                 continue
-
-            # Enrich ESPN events to get odds (TSDB enrichment adds no value)
-            if event.provider == "espn":
-                enriched = self._service.get_event(event.id, event.league)
-                if enriched:
-                    event = enriched
 
             # Generate consistent tvg_id matching what ChannelLifecycleService uses
             # This ensures XMLTV channel IDs match managed_channels.tvg_id for EPG association
