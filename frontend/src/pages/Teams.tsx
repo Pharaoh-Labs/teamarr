@@ -949,7 +949,9 @@ export function Teams() {
                             `#${team.template_id}`}
                         </Badge>
                       ) : (
-                        <Badge variant="warning">Default</Badge>
+                        <Badge variant="outline" className="italic text-muted-foreground">
+                          Unassigned
+                        </Badge>
                       )}
                     </TableCell>
                     <TableCell>

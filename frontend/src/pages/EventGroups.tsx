@@ -1114,7 +1114,9 @@ export function EventGroups() {
                           {templates?.find((t) => t.id === group.template_id)?.name ?? `#${group.template_id}`}
                         </Badge>
                       ) : (
-                        <Badge variant="warning">Default</Badge>
+                        <Badge variant="outline" className="italic text-muted-foreground">
+                          Unassigned
+                        </Badge>
                       )}
                     </TableCell>
                     {/* Ch Start Column */}
