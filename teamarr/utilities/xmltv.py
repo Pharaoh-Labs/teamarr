@@ -31,10 +31,13 @@ def programmes_to_xmltv(
     root = Element("tv")
     root.set("generator-info-name", generator_name)
 
+    # Add all channels first
     for channel in channels:
         _add_channel(root, channel)
 
-    for programme in programmes:
+    # Sort programmes by channel ID, then by start time (XMLTV standard convention)
+    sorted_programmes = sorted(programmes, key=lambda p: (p.channel_id, p.start))
+    for programme in sorted_programmes:
         _add_programme(root, programme)
 
     xml_str = tostring(root, encoding="unicode")
@@ -108,7 +111,8 @@ def merge_xmltv_content(xmltv_contents: list[str]) -> str:
     """Merge multiple XMLTV content strings into one.
 
     Combines channels and programmes from multiple sources,
-    removing duplicates by channel ID.
+    removing duplicates by channel ID. Output follows XMLTV standard
+    convention: all channels first, then programmes sorted by channel.
 
     Args:
         xmltv_contents: List of XMLTV XML strings
@@ -123,6 +127,7 @@ def merge_xmltv_content(xmltv_contents: list[str]) -> str:
 
     seen_channels: set[str] = set()
     seen_programmes: set[tuple[str, str, str]] = set()  # (channel, start, stop)
+    all_programmes: list[Element] = []
 
     for content in xmltv_contents:
         if not content or not content.strip():
@@ -138,7 +143,7 @@ def merge_xmltv_content(xmltv_contents: list[str]) -> str:
                     seen_channels.add(channel_id)
                     root.append(channel)
 
-            # Collect programmes (skip duplicates)
+            # Collect programmes (skip duplicates, defer appending)
             for programme in source.findall("programme"):
                 channel_id = programme.get("channel")
                 start = programme.get("start")
@@ -147,10 +152,15 @@ def merge_xmltv_content(xmltv_contents: list[str]) -> str:
                 key = (channel_id, start, stop)
                 if key not in seen_programmes:
                     seen_programmes.add(key)
-                    root.append(programme)
+                    all_programmes.append(programme)
 
         except ET.ParseError:
             continue
+
+    # Sort programmes by channel ID, then by start time (XMLTV standard convention)
+    all_programmes.sort(key=lambda p: (p.get("channel", ""), p.get("start", "")))
+    for programme in all_programmes:
+        root.append(programme)
 
     xml_str = tostring(root, encoding="unicode")
     return _prettify(xml_str)
