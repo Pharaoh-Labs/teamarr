@@ -176,3 +176,20 @@ def get_leagues_for_provider(conn: sqlite3.Connection, provider: str) -> list[Le
         )
         for row in cursor.fetchall()
     ]
+
+
+def get_all_leagues(conn: sqlite3.Connection) -> list[dict]:
+    """Get all enabled leagues.
+
+    Returns:
+        List of dicts with league info including display_name
+    """
+    cursor = conn.execute(
+        """
+        SELECT league_code, provider, display_name, sport, league_alias
+        FROM leagues
+        WHERE enabled = 1
+        ORDER BY sport, display_name
+        """
+    )
+    return [dict(row) for row in cursor.fetchall()]

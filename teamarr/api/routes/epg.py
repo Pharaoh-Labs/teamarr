@@ -923,7 +923,7 @@ def search_events(
                     start_time=event.start_time.isoformat(),
                     home_team=event.home_team.name if event.home_team else None,
                     away_team=event.away_team.name if event.away_team else None,
-                    status=event.status.value if event.status else None,
+                    status=event.status.state if event.status else None,
                 )
             )
 
