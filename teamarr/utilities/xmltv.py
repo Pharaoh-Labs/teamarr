@@ -90,16 +90,11 @@ def _add_programme(root: Element, programme: Programme) -> None:
         date_elem = SubElement(prog_elem, "date")
         date_elem.text = programme.start.strftime("%Y%m%d")
 
-    # Add categories (prefer list, fall back to single category)
-    if programme.categories:
-        for cat in programme.categories:
-            cat_elem = SubElement(prog_elem, "category")
-            cat_elem.set("lang", "en")
-            cat_elem.text = cat
-    elif programme.category:
+    # Add categories
+    for cat in programme.categories:
         cat_elem = SubElement(prog_elem, "category")
         cat_elem.set("lang", "en")
-        cat_elem.text = programme.category
+        cat_elem.text = cat
 
     if programme.icon:
         icon_elem = SubElement(prog_elem, "icon")

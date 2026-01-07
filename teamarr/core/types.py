@@ -119,12 +119,11 @@ class Programme:
     stop: datetime
     description: str | None = None
     subtitle: str | None = None
-    category: str | None = None  # Primary category (legacy, use categories list)
     icon: str | None = None
     episode_num: str | None = None
     # Filler type: 'pregame', 'postgame', 'idle', or None for actual events
     filler_type: str | None = None
-    # Multiple categories for XMLTV output
+    # Categories for XMLTV output (e.g., ["Sports", "Football", "NFL"])
     categories: list[str] = field(default_factory=list)
     # XMLTV flags: new, live, date
     xmltv_flags: dict = field(default_factory=dict)
@@ -142,7 +141,6 @@ class TemplateConfig:
     title_format: str
     description_format: str
     subtitle_format: str
-    category: str  # Primary category (legacy)
     program_art_url: str | None = None
     conditional_descriptions: list[dict] = field(default_factory=list)
 

@@ -45,9 +45,6 @@ class EventFillerConfig:
         default_factory=ConditionalFillerTemplate
     )
 
-    # Category for filler content
-    category: str = ""
-
     # XMLTV categories (list for multiple categories)
     xmltv_categories: list[str] = field(default_factory=list)
     # Whether categories apply to filler ('all') or just events ('events')
@@ -278,7 +275,6 @@ class EventFillerGenerator:
             # Filler never gets xmltv_flags (new/live/date are for live events only)
             # Apply title case for proper XMLTV formatting (e.g., "Football" not "football")
             filler_categories = []
-            resolved_category = ""
             if config.categories_apply_to == "all":
                 # Resolve any {sport} variables in categories
                 for cat in config.xmltv_categories:
@@ -287,13 +283,6 @@ class EventFillerGenerator:
                     else:
                         filler_categories.append(cat.title())
 
-                # Resolve primary category (may contain {sport} variable)
-                resolved_category = config.category
-                if "{" in resolved_category:
-                    resolved_category = self._resolver.resolve(resolved_category, context).title()
-                else:
-                    resolved_category = resolved_category.title()
-
             programme = Programme(
                 channel_id=channel_id,
                 title=title,
@@ -301,7 +290,6 @@ class EventFillerGenerator:
                 stop=chunk_end,
                 description=description,
                 subtitle=subtitle,
-                category=resolved_category,
                 icon=icon,
                 filler_type=filler_type,
                 categories=filler_categories,
@@ -462,9 +450,8 @@ def template_to_event_filler_config(template) -> EventFillerConfig:
         description_not_final=pg_cond.get("description_not_final"),
     )
 
-    # Get category from xmltv_categories (no hardcoded defaults - schema provides them)
+    # Get categories from template
     categories = getattr(template, "xmltv_categories", None) or []
-    category = categories[0] if categories else ""
 
     return EventFillerConfig(
         pregame_enabled=getattr(template, "pregame_enabled", True),
@@ -472,7 +459,6 @@ def template_to_event_filler_config(template) -> EventFillerConfig:
         postgame_enabled=getattr(template, "postgame_enabled", True),
         postgame_template=postgame_template,
         postgame_conditional=postgame_conditional,
-        category=category,
         xmltv_categories=categories,
         categories_apply_to=getattr(template, "categories_apply_to", "events"),
     )

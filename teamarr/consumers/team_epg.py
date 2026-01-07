@@ -386,13 +386,6 @@ class TeamEPGGenerator:
             else:
                 resolved_categories.append(cat.title())
 
-        # Resolve primary category (may contain {sport} variable)
-        resolved_category = options.template.category
-        if "{" in resolved_category:
-            resolved_category = self._resolver.resolve(resolved_category, context).title()
-        else:
-            resolved_category = resolved_category.title()
-
         return Programme(
             channel_id=channel_id,
             title=title,
@@ -400,7 +393,6 @@ class TeamEPGGenerator:
             stop=stop,
             description=description,
             subtitle=subtitle,
-            category=resolved_category,
             icon=icon,
             categories=resolved_categories,
             xmltv_flags=options.template.xmltv_flags,

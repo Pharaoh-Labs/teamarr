@@ -77,9 +77,6 @@ class FillerConfig:
     idle_conditional: ConditionalFillerTemplate = field(default_factory=ConditionalFillerTemplate)
     idle_offseason: OffseasonFillerTemplate = field(default_factory=OffseasonFillerTemplate)
 
-    # Category for filler content
-    category: str = ""
-
     # XMLTV categories (list for multiple categories)
     xmltv_categories: list[str] = field(default_factory=list)
     # Whether categories apply to filler ('all') or just events ('events')

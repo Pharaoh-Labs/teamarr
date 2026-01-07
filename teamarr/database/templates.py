@@ -107,7 +107,6 @@ class EventTemplateConfig:
     channel_name_format: str = "{away_team_abbrev} @ {home_team_abbrev}"
     description_format: str = "{matchup} | {venue_full} | {broadcast_simple}"
     subtitle_format: str = "{venue_city}"
-    category: str = "Sports"
     program_art_url: str | None = None
     event_channel_logo_url: str | None = None
 
@@ -471,9 +470,8 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         description=idle_off.get("description"),
     )
 
-    # Get category from xmltv_categories (no hardcoded defaults - schema provides them)
+    # Get categories from template
     categories = template.xmltv_categories or []
-    category = categories[0] if categories else ""
 
     return FillerConfig(
         pregame_enabled=template.pregame_enabled,
@@ -485,7 +483,6 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         idle_template=idle_template,
         idle_conditional=idle_conditional,
         idle_offseason=idle_offseason,
-        category=category,
         xmltv_categories=categories,
         categories_apply_to=template.categories_apply_to or "events",
     )
@@ -504,16 +501,14 @@ def template_to_programme_config(template: Template) -> TemplateConfig:
     """
     from teamarr.core import TemplateConfig
 
-    # Get category from xmltv_categories (no hardcoded defaults - schema provides them)
+    # Get categories from template
     categories = template.xmltv_categories or []
-    category = categories[0] if categories else ""
 
     return TemplateConfig(
         # No hardcoded defaults - schema provides them
         title_format=template.title_format or "",
         description_format=template.description_template or "",
         subtitle_format=template.subtitle_template or "",
-        category=category,
         program_art_url=template.program_art_url,
         conditional_descriptions=template.conditional_descriptions or [],
         # V1 Parity: Duration override support
@@ -538,7 +533,7 @@ def template_to_event_config(template: Template) -> EventTemplateConfig:
     Returns:
         EventTemplateConfig ready for EventEPGGenerator
     """
-    # Get category from xmltv_categories (no hardcoded defaults - schema provides them)
+    # Get categories from template
     categories = template.xmltv_categories or []
 
     return EventTemplateConfig(
@@ -547,7 +542,6 @@ def template_to_event_config(template: Template) -> EventTemplateConfig:
         channel_name_format=template.event_channel_name or "",
         description_format=template.description_template or "",
         subtitle_format=template.subtitle_template or "",
-        category=categories[0] if categories else "",
         program_art_url=template.program_art_url,
         event_channel_logo_url=template.event_channel_logo_url,
         xmltv_flags=template.xmltv_flags or {},
