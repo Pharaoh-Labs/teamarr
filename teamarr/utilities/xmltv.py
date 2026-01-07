@@ -8,7 +8,7 @@ from xml.dom import minidom
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from teamarr.core import Programme
-from teamarr.utilities.tz import format_datetime_xmltv
+from teamarr.utilities.tz import format_datetime_xmltv, to_user_tz
 
 
 def programmes_to_xmltv(
@@ -84,11 +84,12 @@ def _add_programme(root: Element, programme: Programme) -> None:
         desc_elem.set("lang", "en")
         desc_elem.text = programme.description
 
-    # Add date tag if enabled (YYYYMMDD format)
+    # Add date tag if enabled (YYYYMMDD format in user's timezone)
     flags = programme.xmltv_flags or {}
     if flags.get("date"):
         date_elem = SubElement(prog_elem, "date")
-        date_elem.text = programme.start.strftime("%Y%m%d")
+        local_start = to_user_tz(programme.start)
+        date_elem.text = local_start.strftime("%Y%m%d")
 
     # Add categories
     for cat in programme.categories:
