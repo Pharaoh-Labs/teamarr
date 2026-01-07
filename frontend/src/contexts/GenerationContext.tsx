@@ -139,13 +139,21 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       clearInterval(pollIntervalRef.current)
     }
 
+    console.log("[EPG] Starting poll for generation status")
+
     const poll = () => {
+      console.log("[EPG] Fetching status...")
       fetch("/api/v1/epg/generate/status")
-        .then((res) => res.json())
+        .then((res) => {
+          console.log("[EPG] Response received:", res.status)
+          return res.json()
+        })
         .then((data: GenerationStatus) => {
+          console.log("[EPG] Poll result:", data.status, data.percent + "%", data.phase)
           updateToast(data)
 
           if (data.status === "complete" || data.status === "error") {
+            console.log("[EPG] Generation finished:", data.status)
             if (pollIntervalRef.current) {
               clearInterval(pollIntervalRef.current)
               pollIntervalRef.current = null
@@ -153,7 +161,9 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
             handleComplete(data)
           }
         })
-        .catch(console.error)
+        .catch((err) => {
+          console.error("[EPG] Poll error:", err)
+        })
     }
 
     // Poll immediately and then every 500ms
@@ -210,9 +220,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       if (backgroundPollRef.current) {
         clearInterval(backgroundPollRef.current)
       }
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-      }
+      // Don't clear pollIntervalRef here - it's managed by reconnectToGeneration/handleComplete
     }
   }, [isGenerating, reconnectToGeneration])
 

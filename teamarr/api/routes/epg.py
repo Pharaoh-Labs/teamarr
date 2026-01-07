@@ -160,79 +160,79 @@ def generate_epg_stream():
             media_type="text/event-stream",
         )
 
-    # Queue for progress updates
+    # Queue for progress updates (used by SSE stream if client reads it)
     progress_queue: queue.Queue = queue.Queue()
+
+    def run_generation():
+        """Run EPG generation in background thread."""
+        try:
+            # Get Dispatcharr connection if configured (not just client)
+            with get_db() as conn:
+                dispatcharr_settings = get_dispatcharr_settings(conn)
+
+            dispatcharr_client = None
+            if dispatcharr_settings.enabled and dispatcharr_settings.url:
+                dispatcharr_client = get_dispatcharr_connection(get_db)
+
+            # Progress callback that updates status and queues for SSE
+            def progress_callback(
+                phase: str,
+                percent: int,
+                message: str,
+                current: int,
+                total: int,
+                item_name: str,
+            ):
+                update_status(
+                    status="progress",
+                    phase=phase,
+                    percent=percent,
+                    message=message,
+                    current=current,
+                    total=total,
+                    item_name=item_name,
+                )
+                progress_queue.put(get_status())
+
+            # Run unified generation
+            result = run_full_generation(
+                db_factory=get_db,
+                dispatcharr_client=dispatcharr_client,
+                progress_callback=progress_callback,
+            )
+
+            if result.success:
+                complete_generation(
+                    {
+                        "success": True,
+                        "programmes_count": result.programmes_total,
+                        "teams_processed": result.teams_processed,
+                        "groups_processed": result.groups_processed,
+                        "duration_seconds": result.duration_seconds,
+                        "run_id": result.run_id,
+                    }
+                )
+            else:
+                fail_generation(result.error or "Unknown error")
+
+            progress_queue.put(get_status())
+
+        except Exception as e:
+            fail_generation(str(e))
+            progress_queue.put(get_status())
+
+        finally:
+            progress_queue.put({"_done": True})
+
+    # Start generation thread IMMEDIATELY (before returning response)
+    # This ensures generation runs even if client doesn't read SSE stream
+    generation_thread = threading.Thread(target=run_generation, daemon=True)
+    generation_thread.start()
 
     def generate():
         """Generator function for SSE stream."""
-        # Send initial status immediately so frontend knows connection is alive
-        # (SSE comments like `: heartbeat` don't trigger onmessage)
+        # Send initial status immediately
         yield f"data: {json.dumps(get_status())}\n\n"
-
-        def run_generation():
-            """Run EPG generation in background thread."""
-            try:
-                # Get Dispatcharr connection if configured (not just client)
-                with get_db() as conn:
-                    dispatcharr_settings = get_dispatcharr_settings(conn)
-
-                dispatcharr_client = None
-                if dispatcharr_settings.enabled and dispatcharr_settings.url:
-                    dispatcharr_client = get_dispatcharr_connection(get_db)
-
-                # Progress callback that updates status and queues for SSE
-                def progress_callback(
-                    phase: str,
-                    percent: int,
-                    message: str,
-                    current: int,
-                    total: int,
-                    item_name: str,
-                ):
-                    update_status(
-                        status="progress",
-                        phase=phase,
-                        percent=percent,
-                        message=message,
-                        current=current,
-                        total=total,
-                        item_name=item_name,
-                    )
-                    progress_queue.put(get_status())
-
-                # Run unified generation
-                result = run_full_generation(
-                    db_factory=get_db,
-                    dispatcharr_client=dispatcharr_client,
-                    progress_callback=progress_callback,
-                )
-
-                if result.success:
-                    complete_generation(
-                        {
-                            "success": True,
-                            "programmes_count": result.programmes_total,
-                            "teams_processed": result.teams_processed,
-                            "groups_processed": result.groups_processed,
-                            "duration_seconds": result.duration_seconds,
-                            "run_id": result.run_id,
-                        }
-                    )
-                else:
-                    fail_generation(result.error or "Unknown error")
-
-                progress_queue.put(get_status())
-
-            except Exception as e:
-                fail_generation(str(e))
-                progress_queue.put(get_status())
-
-            finally:
-                progress_queue.put({"_done": True})
-
-        # Start generation thread
-        generation_thread = threading.Thread(target=run_generation, daemon=True)
-        generation_thread.start()
 
         # Stream progress updates
         while True:
