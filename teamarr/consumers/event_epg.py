@@ -97,10 +97,13 @@ class EventEPGGenerator:
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             channel_name = self._resolver.resolve(options.template.channel_name_format, context)
 
+            # Use template-configured logo if set, otherwise fall back to home team logo
+            channel_icon = options.template.event_channel_logo_url or event.home_team.logo_url
+
             channel_info = EventChannelInfo(
                 channel_id=channel_id,
                 name=channel_name,
-                icon=event.home_team.logo_url,
+                icon=channel_icon,
             )
             channels.append(channel_info)
 
@@ -319,10 +322,14 @@ class EventEPGGenerator:
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             channel_name = self._resolver.resolve(options.template.channel_name_format, context)
 
+            # Use template-configured logo if set, otherwise fall back to home team logo
+            # This allows users to override ESPN logos with their own
+            channel_icon = options.template.event_channel_logo_url or event.home_team.logo_url
+
             channel_info = EventChannelInfo(
                 channel_id=tvg_id,
                 name=channel_name,
-                icon=event.home_team.logo_url,
+                icon=channel_icon,
             )
             channels.append(channel_info)
 
