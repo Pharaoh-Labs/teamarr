@@ -14,7 +14,18 @@ export default defineConfig({
   server: {
     host: true,  // Expose to network
     proxy: {
-      '/api': 'http://localhost:9198',
+      '/api': {
+        target: 'http://localhost:9198',
+        // Disable buffering for SSE streams
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            // Prevent buffering for SSE
+            if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
+              proxyRes.headers['X-Accel-Buffering'] = 'no'
+            }
+          })
+        },
+      },
       '/health': 'http://localhost:9198',
     },
   },
