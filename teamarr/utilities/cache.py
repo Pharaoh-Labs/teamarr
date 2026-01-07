@@ -2,7 +2,13 @@
 
 Two cache backends available:
 - TTLCache: In-memory, fast, resets on restart
-- PersistentTTLCache: SQLite-backed, survives restarts
+- PersistentTTLCache: Hybrid in-memory + SQLite persistence
+
+The PersistentTTLCache uses a "load on startup, operate in memory, flush
+periodically" pattern for optimal performance:
+- All reads/writes hit fast in-memory cache (no lock contention)
+- Background thread flushes dirty entries to SQLite every few minutes
+- Survives restarts by loading from SQLite on initialization
 
 TTL recommendations:
 - Team stats: 4 hours (changes infrequently)
@@ -10,6 +16,7 @@ TTL recommendations:
 - Events/scoreboard: 30 min today, 8 hours past/future
 """
 
+import atexit
 import json
 import logging
 import threading
@@ -162,164 +169,303 @@ class TTLCache:
                 "hit_rate": round(hit_rate, 3),
             }
 
+    def get_all_entries(self) -> dict[str, tuple[Any, datetime]]:
+        """Get all cache entries with their expiration times.
 
-# Module-level lock for PersistentTTLCache SQLite access
-# All instances share this lock to prevent "database is locked" errors
-# when multiple SportsDataService instances exist (each with their own cache)
-_persistent_cache_lock = threading.Lock()
+        Returns dict of key -> (value, expires_at) for serialization.
+        Only returns non-expired entries.
+        """
+        now = datetime.now()
+        with self._lock:
+            return {
+                k: (v.value, v.expires_at)
+                for k, v in self._cache.items()
+                if v.expires_at > now
+            }
+
+    def set_with_expiry(self, key: str, value: Any, expires_at: datetime) -> None:
+        """Set value with explicit expiration time.
+
+        Used when loading from persistent storage.
+        """
+        now = datetime.now()
+        if expires_at <= now:
+            return  # Already expired, don't load
+
+        with self._lock:
+            if self._max_size > 0 and key not in self._cache:
+                self._evict_if_needed()
+
+            self._cache[key] = CacheEntry(
+                value=value,
+                expires_at=expires_at,
+                last_accessed=now,
+            )
 
 
 class PersistentTTLCache:
-    """SQLite-backed cache with TTL support.
+    """Hybrid in-memory + SQLite cache with background persistence.
 
-    Same interface as TTLCache but persists to SQLite.
-    Survives application restarts while respecting TTL expiration.
-
-    Note: Uses a module-level lock (not instance lock) because multiple
-    cache instances may exist but all share the same SQLite database.
+    Optimized for high-concurrency workloads (100+ parallel workers):
+    - All reads/writes use fast in-memory TTLCache (no SQLite contention)
+    - Background thread flushes dirty entries to SQLite periodically
+    - On startup, loads existing cache from SQLite
+    - On shutdown, final flush ensures persistence
 
     Usage:
-        cache = PersistentTTLCache(default_ttl_seconds=3600)
+        cache = PersistentTTLCache(flush_interval_seconds=120)
         cache.set("key", value)
-        result = cache.get("key")  # Returns None if expired
+        result = cache.get("key")
+        # Cache auto-flushes in background
+        # Call cache.flush() for immediate persistence
     """
 
-    def __init__(self, default_ttl_seconds: int = 3600):
+    # Default flush interval (2 minutes)
+    DEFAULT_FLUSH_INTERVAL = 120
+
+    def __init__(
+        self,
+        default_ttl_seconds: int = 3600,
+        flush_interval_seconds: int = DEFAULT_FLUSH_INTERVAL,
+    ):
+        self._memory_cache = TTLCache(
+            default_ttl_seconds=default_ttl_seconds,
+            max_size=0,  # Unlimited - SQLite is the source of truth for size
+        )
         self._default_ttl = timedelta(seconds=default_ttl_seconds)
-        self._hits = 0
-        self._misses = 0
+        self._flush_interval = flush_interval_seconds
+
+        # Track dirty keys that need to be flushed
+        self._dirty_keys: set[str] = set()
+        self._deleted_keys: set[str] = set()
+        self._dirty_lock = threading.Lock()
+
+        # Background flush thread
+        self._flush_timer: threading.Timer | None = None
+        self._shutdown = False
+
+        # Load from SQLite on startup
+        self._load_from_sqlite()
+
+        # Start background flush thread
+        self._schedule_flush()
+
+        # Register shutdown handler
+        atexit.register(self._shutdown_flush)
+
+    def _load_from_sqlite(self) -> None:
+        """Load non-expired entries from SQLite into memory."""
+        from teamarr.database.connection import get_db
+
+        now = datetime.now()
+        loaded = 0
+        expired = 0
+
+        try:
+            with get_db() as conn:
+                rows = conn.execute(
+                    "SELECT cache_key, data_json, expires_at FROM service_cache"
+                ).fetchall()
+
+            for row in rows:
+                try:
+                    expires_at = datetime.fromisoformat(row["expires_at"])
+                    if expires_at > now:
+                        value = json.loads(row["data_json"])
+                        self._memory_cache.set_with_expiry(
+                            row["cache_key"], value, expires_at
+                        )
+                        loaded += 1
+                    else:
+                        expired += 1
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Failed to load cache entry: {e}")
+
+            if loaded > 0 or expired > 0:
+                logger.info(
+                    f"Loaded {loaded} cache entries from SQLite "
+                    f"(skipped {expired} expired)"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to load cache from SQLite: {e}")
+
+    def _schedule_flush(self) -> None:
+        """Schedule the next background flush."""
+        if self._shutdown:
+            return
+
+        self._flush_timer = threading.Timer(self._flush_interval, self._background_flush)
+        self._flush_timer.daemon = True
+        self._flush_timer.name = "CacheFlush"
+        self._flush_timer.start()
+
+    def _background_flush(self) -> None:
+        """Background flush handler."""
+        if self._shutdown:
+            return
+
+        try:
+            self.flush()
+        except Exception as e:
+            logger.error(f"Background cache flush failed: {e}")
+        finally:
+            self._schedule_flush()
+
+    def _shutdown_flush(self) -> None:
+        """Final flush on shutdown."""
+        self._shutdown = True
+        if self._flush_timer:
+            self._flush_timer.cancel()
+
+        try:
+            self.flush()
+        except Exception as e:
+            logger.error(f"Shutdown cache flush failed: {e}")
 
     def get(self, key: str) -> Any | None:
         """Get value if exists and not expired."""
-        from teamarr.database.connection import get_db
-
-        with _persistent_cache_lock:
-            now = datetime.now()
-            with get_db() as conn:
-                row = conn.execute(
-                    """
-                    SELECT data_json, expires_at FROM service_cache
-                    WHERE cache_key = ?
-                    """,
-                    (key,),
-                ).fetchone()
-
-            if row is None:
-                self._misses += 1
-                return None
-
-            expires_at = datetime.fromisoformat(row["expires_at"])
-            if now > expires_at:
-                # Expired - delete and return None
-                self._delete_key(key)
-                self._misses += 1
-                return None
-
-            self._hits += 1
-            try:
-                return json.loads(row["data_json"])
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to decode cached value for key: {key}")
-                self._delete_key(key)
-                return None
+        return self._memory_cache.get(key)
 
     def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         """Set value with optional custom TTL."""
-        from teamarr.database.connection import get_db
+        self._memory_cache.set(key, value, ttl_seconds)
 
-        ttl = timedelta(seconds=ttl_seconds) if ttl_seconds else self._default_ttl
-        now = datetime.now()
-        expires_at = now + ttl
-
-        try:
-            data_json = json.dumps(value, default=str)
-        except (TypeError, ValueError) as e:
-            logger.warning(f"Failed to serialize value for key {key}: {e}")
-            return
-
-        with _persistent_cache_lock:
-            with get_db() as conn:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO service_cache
-                    (cache_key, data_json, expires_at, created_at)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (key, data_json, expires_at.isoformat(), now.isoformat()),
-                )
-
-    def _delete_key(self, key: str) -> None:
-        """Delete a key (internal, no lock)."""
-        from teamarr.database.connection import get_db
-
-        with get_db() as conn:
-            conn.execute("DELETE FROM service_cache WHERE cache_key = ?", (key,))
+        # Mark as dirty for next flush
+        with self._dirty_lock:
+            self._dirty_keys.add(key)
+            self._deleted_keys.discard(key)
 
     def delete(self, key: str) -> None:
         """Delete a key from cache."""
-        with _persistent_cache_lock:
-            self._delete_key(key)
+        self._memory_cache.delete(key)
+
+        # Mark for deletion in SQLite
+        with self._dirty_lock:
+            self._deleted_keys.add(key)
+            self._dirty_keys.discard(key)
 
     def clear(self) -> None:
         """Clear all cached values."""
         from teamarr.database.connection import get_db
 
-        with _persistent_cache_lock:
+        self._memory_cache.clear()
+
+        with self._dirty_lock:
+            self._dirty_keys.clear()
+            self._deleted_keys.clear()
+
+        # Clear SQLite immediately
+        try:
             with get_db() as conn:
                 conn.execute("DELETE FROM service_cache")
-            self._hits = 0
-            self._misses = 0
+            logger.debug("Cleared service cache")
+        except Exception as e:
+            logger.error(f"Failed to clear SQLite cache: {e}")
 
     def cleanup_expired(self) -> int:
-        """Remove all expired entries. Returns count removed."""
+        """Remove expired entries from memory and SQLite."""
         from teamarr.database.connection import get_db
 
-        now = datetime.now().isoformat()
-        with _persistent_cache_lock:
+        # Clean memory
+        removed = self._memory_cache.cleanup_expired()
+
+        # Clean SQLite
+        try:
+            now = datetime.now().isoformat()
             with get_db() as conn:
                 cursor = conn.execute(
                     "DELETE FROM service_cache WHERE expires_at < ?", (now,)
                 )
-                return cursor.rowcount
+                removed += cursor.rowcount
+        except Exception as e:
+            logger.error(f"Failed to cleanup SQLite expired entries: {e}")
+
+        return removed
+
+    def flush(self) -> int:
+        """Flush dirty entries to SQLite.
+
+        Returns number of entries written.
+        Call this after EPG generation for immediate persistence.
+        """
+        from teamarr.database.connection import get_db
+
+        # Atomically grab dirty/deleted keys
+        with self._dirty_lock:
+            dirty_keys = self._dirty_keys.copy()
+            deleted_keys = self._deleted_keys.copy()
+            self._dirty_keys.clear()
+            self._deleted_keys.clear()
+
+        if not dirty_keys and not deleted_keys:
+            return 0
+
+        # Get current values for dirty keys
+        entries = self._memory_cache.get_all_entries()
+        to_write = {k: entries[k] for k in dirty_keys if k in entries}
+
+        written = 0
+        deleted = 0
+
+        try:
+            with get_db() as conn:
+                # Delete removed keys
+                for key in deleted_keys:
+                    conn.execute(
+                        "DELETE FROM service_cache WHERE cache_key = ?", (key,)
+                    )
+                    deleted += 1
+
+                # Upsert dirty keys
+                now = datetime.now().isoformat()
+                for key, (value, expires_at) in to_write.items():
+                    try:
+                        data_json = json.dumps(value, default=str)
+                        conn.execute(
+                            """
+                            INSERT OR REPLACE INTO service_cache
+                            (cache_key, data_json, expires_at, created_at)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (key, data_json, expires_at.isoformat(), now),
+                        )
+                        written += 1
+                    except (TypeError, ValueError) as e:
+                        logger.warning(f"Failed to serialize cache key {key}: {e}")
+
+            if written > 0 or deleted > 0:
+                logger.debug(f"Cache flush: {written} written, {deleted} deleted")
+
+        except Exception as e:
+            logger.error(f"Cache flush failed: {e}")
+            # Put keys back for retry on next flush
+            with self._dirty_lock:
+                self._dirty_keys.update(dirty_keys)
+                self._deleted_keys.update(deleted_keys)
+
+        return written
 
     @property
     def size(self) -> int:
-        """Current number of entries (including possibly expired)."""
-        from teamarr.database.connection import get_db
-
-        with get_db() as conn:
-            row = conn.execute("SELECT COUNT(*) as cnt FROM service_cache").fetchone()
-            return row["cnt"] if row else 0
+        """Current number of entries in memory."""
+        return self._memory_cache.size
 
     def stats(self) -> dict:
         """Get cache statistics."""
-        from teamarr.database.connection import get_db
+        base_stats = self._memory_cache.stats()
 
-        now = datetime.now().isoformat()
-        with _persistent_cache_lock:
-            with get_db() as conn:
-                total_row = conn.execute(
-                    "SELECT COUNT(*) as cnt FROM service_cache"
-                ).fetchone()
-                expired_row = conn.execute(
-                    "SELECT COUNT(*) as cnt FROM service_cache WHERE expires_at < ?",
-                    (now,),
-                ).fetchone()
+        with self._dirty_lock:
+            pending_writes = len(self._dirty_keys)
+            pending_deletes = len(self._deleted_keys)
 
-            total = total_row["cnt"] if total_row else 0
-            expired = expired_row["cnt"] if expired_row else 0
-            total_requests = self._hits + self._misses
-            hit_rate = self._hits / total_requests if total_requests > 0 else 0
+        base_stats.update({
+            "persistent": True,
+            "pending_writes": pending_writes,
+            "pending_deletes": pending_deletes,
+            "flush_interval_seconds": self._flush_interval,
+        })
 
-            return {
-                "total_entries": total,
-                "active_entries": total - expired,
-                "expired_entries": expired,
-                "hits": self._hits,
-                "misses": self._misses,
-                "hit_rate": round(hit_rate, 3),
-                "persistent": True,
-            }
+        return base_stats
 
 
 # Cache TTL constants (seconds)

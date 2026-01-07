@@ -3,11 +3,15 @@
 Routes requests to appropriate providers with caching.
 Consumers call this service - never providers directly.
 
-Uses PersistentTTLCache (SQLite-backed) for all caching.
-Cache survives restarts, respects TTL expiration.
+Uses PersistentTTLCache for all caching:
+- Fast in-memory operations (no SQLite during generation)
+- Background flush to SQLite every 2 minutes
+- Persists across restarts
+- Call flush_cache() after EPG generation for immediate persistence
 """
 
 import logging
+import threading
 from datetime import date
 
 from teamarr.core import Event, SportsProvider, Team, TeamStats
@@ -31,6 +35,33 @@ from teamarr.utilities.cache import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Singleton cache instance - shared across all SportsDataService instances
+# This ensures one in-memory cache with background persistence
+_shared_cache: PersistentTTLCache | None = None
+_cache_lock = threading.Lock()
+
+
+def _get_shared_cache() -> PersistentTTLCache:
+    """Get or create the shared cache singleton."""
+    global _shared_cache
+    if _shared_cache is None:
+        with _cache_lock:
+            if _shared_cache is None:
+                _shared_cache = PersistentTTLCache()
+                logger.info("Initialized shared service cache")
+    return _shared_cache
+
+
+def flush_shared_cache() -> int:
+    """Flush the shared cache to SQLite.
+
+    Call after EPG generation for immediate persistence.
+    Returns number of entries written.
+    """
+    if _shared_cache is not None:
+        return _shared_cache.flush()
+    return 0
 
 
 def _ensure_registry_initialized() -> None:
@@ -83,7 +114,7 @@ class SportsDataService:
 
     def __init__(self, providers: list[SportsProvider] | None = None):
         self._providers: list[SportsProvider] = providers or []
-        self._cache = PersistentTTLCache()
+        self._cache = _get_shared_cache()
 
     def add_provider(self, provider: SportsProvider) -> None:
         """Register a provider."""
@@ -248,6 +279,14 @@ class SportsDataService:
     def clear_cache(self) -> None:
         """Clear all cached data."""
         self._cache.clear()
+
+    def flush_cache(self) -> int:
+        """Flush dirty cache entries to SQLite.
+
+        Call after EPG generation for immediate persistence.
+        Returns number of entries written.
+        """
+        return self._cache.flush()
 
     def invalidate_team(self, team_id: str, league: str) -> None:
         """Invalidate all cached data for a team."""

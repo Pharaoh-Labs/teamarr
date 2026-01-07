@@ -360,6 +360,13 @@ def run_full_generation(
 
         update_progress("complete", 100, "Generation complete")
 
+        # Flush the service cache to SQLite for immediate persistence
+        from teamarr.services.sports_data import flush_shared_cache
+
+        flushed = flush_shared_cache()
+        if flushed > 0:
+            logger.debug(f"Flushed {flushed} cache entries to SQLite")
+
     except Exception as e:
         logger.exception(f"EPG generation failed: {e}")
         result.success = False
