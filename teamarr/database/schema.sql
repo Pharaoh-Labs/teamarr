@@ -249,7 +249,7 @@ CREATE TABLE IF NOT EXISTS settings (
     stream_filter_exclude_patterns JSON DEFAULT '[]',
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 19
+    schema_version INTEGER DEFAULT 20
 );
 
 -- Insert default settings
@@ -275,6 +275,8 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     -- Identity
     name TEXT NOT NULL UNIQUE,
     display_name TEXT,                       -- Optional display name override for UI
+    group_mode TEXT DEFAULT 'single'         -- 'single' or 'multi' - preserves original mode
+        CHECK(group_mode IN ('single', 'multi')),
 
     -- What to scan
     leagues JSON NOT NULL,                   -- ["nfl", "nba"] - leagues to scan for events

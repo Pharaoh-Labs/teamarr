@@ -26,6 +26,7 @@ class GroupCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     display_name: str | None = Field(None, max_length=100)  # Optional display name override
     leagues: list[str] = Field(..., min_length=1)
+    group_mode: str = "single"  # "single" or "multi" - persisted to preserve user intent
     parent_group_id: int | None = None
     template_id: int | None = None
     channel_start_number: int | None = Field(None, ge=1)
@@ -64,6 +65,7 @@ class GroupUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     display_name: str | None = Field(None, max_length=100)  # Optional display name override
     leagues: list[str] | None = None
+    group_mode: str | None = None  # "single" or "multi" - persisted to preserve user intent
     parent_group_id: int | None = None
     template_id: int | None = None
     channel_start_number: int | None = None
@@ -121,6 +123,7 @@ class GroupResponse(BaseModel):
     name: str
     display_name: str | None = None  # Optional display name override for UI
     leagues: list[str]
+    group_mode: str = "single"  # "single" or "multi" - persisted to preserve user intent
     parent_group_id: int | None = None
     template_id: int | None = None
     channel_start_number: int | None = None
@@ -269,6 +272,7 @@ def list_groups(
                 name=g.name,
                 display_name=g.display_name,
                 leagues=g.leagues,
+                group_mode=g.group_mode,
                 parent_group_id=g.parent_group_id,
                 template_id=g.template_id,
                 channel_start_number=g.channel_start_number,
@@ -345,6 +349,7 @@ def create_group(request: GroupCreate):
             name=request.name,
             leagues=request.leagues,
             display_name=request.display_name,
+            group_mode=request.group_mode,
             parent_group_id=request.parent_group_id,
             template_id=request.template_id,
             channel_start_number=request.channel_start_number,
@@ -382,6 +387,7 @@ def create_group(request: GroupCreate):
         name=group.name,
         display_name=group.display_name,
         leagues=group.leagues,
+        group_mode=group.group_mode,
         parent_group_id=group.parent_group_id,
         template_id=group.template_id,
         channel_start_number=group.channel_start_number,
@@ -447,6 +453,7 @@ def get_group_by_id(group_id: int):
         name=group.name,
         display_name=group.display_name,
         leagues=group.leagues,
+        group_mode=group.group_mode,
         parent_group_id=group.parent_group_id,
         template_id=group.template_id,
         channel_start_number=group.channel_start_number,
@@ -533,6 +540,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             name=request.name,
             display_name=request.display_name,
             leagues=request.leagues,
+            group_mode=request.group_mode,
             parent_group_id=request.parent_group_id,
             template_id=request.template_id,
             channel_start_number=request.channel_start_number,
@@ -587,6 +595,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         name=group.name,
         display_name=group.display_name,
         leagues=group.leagues,
+        group_mode=group.group_mode,
         parent_group_id=group.parent_group_id,
         template_id=group.template_id,
         channel_start_number=group.channel_start_number,

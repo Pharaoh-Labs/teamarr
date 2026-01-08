@@ -228,15 +228,20 @@ export function EventGroupForm() {
         enabled: group.enabled,
       })
 
-      // Determine mode from leagues
-      if (group.leagues.length === 1) {
-        setGroupMode("single")
-        setSelectedLeague(group.leagues[0])
-        // Try to find sport from cached leagues
-        const league = cachedLeagues?.find(l => l.slug === group.leagues[0])
-        if (league) setSelectedSport(league.sport)
-      } else if (group.leagues.length > 1) {
-        setGroupMode("multi")
+      // Use stored group_mode (not derived from league count) to preserve user intent
+      const mode = group.group_mode as GroupMode || (group.leagues.length > 1 ? "multi" : "single")
+      setGroupMode(mode)
+
+      if (mode === "single") {
+        // Single league mode - use first league
+        if (group.leagues.length > 0) {
+          setSelectedLeague(group.leagues[0])
+          // Try to find sport from cached leagues
+          const league = cachedLeagues?.find(l => l.slug === group.leagues[0])
+          if (league) setSelectedSport(league.sport)
+        }
+      } else {
+        // Multi league mode
         setSelectedLeagues(new Set(group.leagues))
       }
     }
@@ -312,7 +317,12 @@ export function EventGroupForm() {
     }
 
     try {
-      const submitData = { ...formData, leagues }
+      const submitData = {
+        ...formData,
+        leagues,
+        // Only include group_mode if it's set (not null)
+        ...(groupMode && { group_mode: groupMode })
+      }
 
       if (isEdit) {
         const updateData: EventGroupUpdate = { ...submitData }

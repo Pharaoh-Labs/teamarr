@@ -5,6 +5,7 @@ export interface EventGroup {
   name: string
   display_name: string | null  // Optional display name override for UI
   leagues: string[]
+  group_mode: string  // "single" or "multi" - persisted to preserve user intent
   parent_group_id: number | null
   template_id: number | null
   channel_start_number: number | null
@@ -60,6 +61,7 @@ export interface EventGroupCreate {
   name: string
   display_name?: string | null  // Optional display name override
   leagues: string[]
+  group_mode?: string  // "single" or "multi" - persisted to preserve user intent
   parent_group_id?: number | null
   template_id?: number | null
   channel_start_number?: number | null

@@ -642,6 +642,28 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         logger.info("Schema upgraded to version 19 (templates.xmltv_video)")
         current_version = 19
 
+    # Version 20: Add group_mode to event_epg_groups
+    # Preserves whether group was created as 'single' or 'multi' league
+    if current_version < 20:
+        _add_column_if_not_exists(
+            conn,
+            "event_epg_groups",
+            "group_mode",
+            "TEXT DEFAULT 'single' CHECK(group_mode IN ('single', 'multi'))",
+        )
+        # Migrate existing groups: set mode based on current league count
+        conn.execute("""
+            UPDATE event_epg_groups
+            SET group_mode = CASE
+                WHEN json_array_length(leagues) > 1 THEN 'multi'
+                ELSE 'single'
+            END
+            WHERE group_mode IS NULL OR group_mode = 'single'
+        """)
+        conn.execute("UPDATE settings SET schema_version = 20 WHERE id = 1")
+        logger.info("Schema upgraded to version 20 (event_epg_groups.group_mode)")
+        current_version = 20
+
 
 def _rename_filtered_no_match_to_failed_count(conn: sqlite3.Connection) -> None:
     """Rename filtered_no_match column to failed_count.

@@ -17,6 +17,7 @@ class EventEPGGroup:
     name: str
     display_name: str | None = None  # Optional display name override for UI
     leagues: list[str] = field(default_factory=list)
+    group_mode: str = "single"  # "single" or "multi" - persisted to preserve user intent
     template_id: int | None = None
     channel_start_number: int | None = None
     channel_group_id: int | None = None
@@ -102,6 +103,7 @@ def _row_to_group(row) -> EventEPGGroup:
         name=row["name"],
         display_name=row["display_name"] if "display_name" in row.keys() else None,
         leagues=leagues,
+        group_mode=row["group_mode"] if "group_mode" in row.keys() else "single",
         template_id=row["template_id"],
         channel_start_number=row["channel_start_number"],
         channel_group_id=row["channel_group_id"],
@@ -249,6 +251,7 @@ def create_group(
     name: str,
     leagues: list[str],
     display_name: str | None = None,
+    group_mode: str = "single",
     template_id: int | None = None,
     channel_start_number: int | None = None,
     channel_group_id: int | None = None,
@@ -317,7 +320,7 @@ def create_group(
 
     cursor = conn.execute(
         """INSERT INTO event_epg_groups (
-            name, display_name, leagues, template_id, channel_start_number,
+            name, display_name, leagues, group_mode, template_id, channel_start_number,
             channel_group_id, stream_profile_id, channel_profile_ids,
             duplicate_event_handling, channel_assignment_mode, sort_order,
             total_stream_count, parent_group_id, m3u_group_id, m3u_group_name,
@@ -328,11 +331,12 @@ def create_group(
             custom_regex_date, custom_regex_date_enabled,
             custom_regex_time, custom_regex_time_enabled,
             skip_builtin_filter, channel_sort_order, overlap_handling, enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name,
             display_name,
             json.dumps(leagues),
+            group_mode,
             template_id,
             channel_start_number,
             channel_group_id,
@@ -377,6 +381,7 @@ def update_group(
     name: str | None = None,
     display_name: str | None = None,
     leagues: list[str] | None = None,
+    group_mode: str | None = None,
     template_id: int | None = None,
     channel_start_number: int | None = None,
     channel_group_id: int | None = None,
@@ -455,6 +460,10 @@ def update_group(
     if leagues is not None:
         updates.append("leagues = ?")
         values.append(json.dumps(leagues))
+
+    if group_mode is not None:
+        updates.append("group_mode = ?")
+        values.append(group_mode)
 
     if template_id is not None:
         updates.append("template_id = ?")
