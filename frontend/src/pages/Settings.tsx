@@ -829,13 +829,33 @@ export function Settings() {
       {/* Default Team Filter Section */}
       <Card>
         <CardHeader>
-          <CardTitle>Default Team Filter</CardTitle>
-          <CardDescription>
-            Global team filter applied to all event groups that don't have their own filter.
-            Groups can override this with their own settings.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Default Team Filter</CardTitle>
+              <CardDescription>
+                Global team filter applied to all event groups that don't have their own filter.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="team-filter-enabled" className="text-sm">
+                {(teamFilter.include_teams?.length || teamFilter.exclude_teams?.length) ? "Enabled" : "Disabled"}
+              </Label>
+              <Switch
+                id="team-filter-enabled"
+                checked={!!(teamFilter.include_teams?.length || teamFilter.exclude_teams?.length)}
+                onCheckedChange={(checked) => {
+                  if (!checked) {
+                    // Disable - clear all teams
+                    setTeamFilter({ include_teams: null, exclude_teams: null, mode: "include" })
+                  }
+                  // If enabling, user will add teams below
+                }}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Show filter config when teams are selected OR always show to allow adding */}
           {/* Mode selector */}
           <div className="flex items-center gap-4">
             <Label>Filter Mode:</Label>
@@ -849,7 +869,7 @@ export function Settings() {
                   onChange={() => setTeamFilter({ ...teamFilter, mode: "include" })}
                   className="accent-primary"
                 />
-                <span className="text-sm">Include only these teams</span>
+                <span className="text-sm">Include only selected teams</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -860,7 +880,7 @@ export function Settings() {
                   onChange={() => setTeamFilter({ ...teamFilter, mode: "exclude" })}
                   className="accent-primary"
                 />
-                <span className="text-sm">Exclude these teams</span>
+                <span className="text-sm">Exclude selected teams</span>
               </label>
             </div>
           </div>
@@ -883,12 +903,14 @@ export function Settings() {
             placeholder="Search teams to add to default filter..."
           />
 
-          {/* Save button */}
+          {/* Status message and Save button */}
           <div className="flex justify-between items-center">
             <p className="text-xs text-muted-foreground">
-              {teamFilter.mode === "include"
-                ? "Only events involving these teams will be matched (unless group has its own filter)."
-                : "Events involving these teams will be excluded (unless group has its own filter)."}
+              {!(teamFilter.include_teams?.length || teamFilter.exclude_teams?.length)
+                ? "No filter active. All events will be matched."
+                : teamFilter.mode === "include"
+                  ? `Only events involving ${teamFilter.include_teams?.length} selected team(s) will be matched.`
+                  : `Events involving ${teamFilter.exclude_teams?.length} selected team(s) will be excluded.`}
             </p>
             <Button
               onClick={() => {
@@ -896,8 +918,8 @@ export function Settings() {
                   include_teams: teamFilter.include_teams,
                   exclude_teams: teamFilter.exclude_teams,
                   mode: teamFilter.mode,
-                  clear_include_teams: teamFilter.mode === "exclude" || !teamFilter.include_teams,
-                  clear_exclude_teams: teamFilter.mode === "include" || !teamFilter.exclude_teams,
+                  clear_include_teams: teamFilter.mode === "exclude" || !teamFilter.include_teams?.length,
+                  clear_exclude_teams: teamFilter.mode === "include" || !teamFilter.exclude_teams?.length,
                 }, {
                   onSuccess: () => toast.success("Default team filter saved"),
                   onError: () => toast.error("Failed to save team filter"),

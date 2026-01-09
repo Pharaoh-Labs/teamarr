@@ -621,16 +621,22 @@ def update_group(
         updates.append("skip_builtin_filter = ?")
         values.append(int(skip_builtin_filter))
 
-    # Team filtering
+    # Team filtering - treat empty list as clear (NULL)
     if include_teams is not None:
-        updates.append("include_teams = ?")
-        values.append(json.dumps(include_teams))
+        if include_teams:  # Non-empty list
+            updates.append("include_teams = ?")
+            values.append(json.dumps(include_teams))
+        else:  # Empty list - clear to NULL
+            updates.append("include_teams = NULL")
     elif clear_include_teams:
         updates.append("include_teams = NULL")
 
     if exclude_teams is not None:
-        updates.append("exclude_teams = ?")
-        values.append(json.dumps(exclude_teams))
+        if exclude_teams:  # Non-empty list
+            updates.append("exclude_teams = ?")
+            values.append(json.dumps(exclude_teams))
+        else:  # Empty list - clear to NULL
+            updates.append("exclude_teams = NULL")
     elif clear_exclude_teams:
         updates.append("exclude_teams = NULL")
 

@@ -336,17 +336,24 @@ def update_team_filter_settings(
     updates = []
     values = []
 
+    # Team filtering - treat empty list as clear (NULL)
     if clear_include_teams:
         updates.append("default_include_teams = NULL")
     elif include_teams is not None:
-        updates.append("default_include_teams = ?")
-        values.append(json.dumps(include_teams))
+        if include_teams:  # Non-empty list
+            updates.append("default_include_teams = ?")
+            values.append(json.dumps(include_teams))
+        else:  # Empty list - clear to NULL
+            updates.append("default_include_teams = NULL")
 
     if clear_exclude_teams:
         updates.append("default_exclude_teams = NULL")
     elif exclude_teams is not None:
-        updates.append("default_exclude_teams = ?")
-        values.append(json.dumps(exclude_teams))
+        if exclude_teams:  # Non-empty list
+            updates.append("default_exclude_teams = ?")
+            values.append(json.dumps(exclude_teams))
+        else:  # Empty list - clear to NULL
+            updates.append("default_exclude_teams = NULL")
 
     if mode is not None:
         updates.append("default_team_filter_mode = ?")

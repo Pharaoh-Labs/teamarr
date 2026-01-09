@@ -1695,9 +1695,33 @@ export function EventGroupForm() {
 
               {teamFilterExpanded && (
                 <CardContent className="space-y-4 pt-0">
-                  <p className="text-sm text-muted-foreground">
-                    Filter events by specific teams. Child groups inherit this filter.
-                  </p>
+                  {/* Enable/Disable toggle */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      Filter events by specific teams. Child groups inherit this filter.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="group-team-filter-enabled" className="text-sm">
+                        {(formData.include_teams?.length || formData.exclude_teams?.length) ? "Enabled" : "Disabled"}
+                      </Label>
+                      <Switch
+                        id="group-team-filter-enabled"
+                        checked={!!(formData.include_teams?.length || formData.exclude_teams?.length)}
+                        onCheckedChange={(checked) => {
+                          if (!checked) {
+                            // Disable - clear all teams
+                            setFormData({
+                              ...formData,
+                              include_teams: null,
+                              exclude_teams: null,
+                              team_filter_mode: "include",
+                            })
+                          }
+                          // If enabling, user will add teams below
+                        }}
+                      />
+                    </div>
+                  </div>
 
                   {/* Mode selector */}
                   <div className="flex gap-4">
@@ -1719,7 +1743,7 @@ export function EventGroupForm() {
                         }}
                         className="text-primary"
                       />
-                      <span className="text-sm">Include only these teams</span>
+                      <span className="text-sm">Include only selected teams</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1739,7 +1763,7 @@ export function EventGroupForm() {
                         }}
                         className="text-primary"
                       />
-                      <span className="text-sm">Exclude these teams</span>
+                      <span className="text-sm">Exclude selected teams</span>
                     </label>
                   </div>
 
@@ -1769,9 +1793,11 @@ export function EventGroupForm() {
                   />
 
                   <p className="text-xs text-muted-foreground">
-                    {formData.team_filter_mode === "include"
-                      ? "Only events involving these teams will be matched."
-                      : "Events involving these teams will be excluded."}
+                    {!(formData.include_teams?.length || formData.exclude_teams?.length)
+                      ? "No filter active. All events will be matched."
+                      : formData.team_filter_mode === "include"
+                        ? `Only events involving ${formData.include_teams?.length} selected team(s) will be matched.`
+                        : `Events involving ${formData.exclude_teams?.length} selected team(s) will be excluded.`}
                   </p>
                 </CardContent>
               )}
