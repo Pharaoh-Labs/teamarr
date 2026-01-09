@@ -216,14 +216,37 @@ class M3UManager:
         if account_id is not None:
             params.append(f"m3u_account={account_id}")
 
-        response = self._client.get(f"/api/channels/streams/?{'&'.join(params)}")
-        if response is None or response.status_code != 200:
-            status = response.status_code if response else "No response"
-            logger.error(f"Failed to list streams: {status}")
-            return []
+        # Fetch all pages
+        raw_streams: list[dict] = []
+        url: str | None = f"/api/channels/streams/?{'&'.join(params)}"
 
-        data = response.json()
-        raw_streams = data.get("results", []) if isinstance(data, dict) else data
+        while url:
+            response = self._client.get(url)
+            if response is None or response.status_code != 200:
+                status = response.status_code if response else "No response"
+                logger.error(f"Failed to list streams: {status}")
+                return []
+
+            data = response.json()
+            if isinstance(data, dict):
+                raw_streams.extend(data.get("results", []))
+                # Get next page URL (Dispatcharr returns full URL or None)
+                next_url = data.get("next")
+                if next_url:
+                    # Extract path from full URL if needed
+                    if next_url.startswith("http"):
+                        from urllib.parse import urlparse
+
+                        parsed = urlparse(next_url)
+                        url = f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
+                    else:
+                        url = next_url
+                else:
+                    url = None
+            else:
+                # Non-paginated response (legacy?)
+                raw_streams.extend(data)
+                url = None
 
         # Fix double-encoded UTF-8 in stream names
         streams = []
