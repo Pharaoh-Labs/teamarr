@@ -845,8 +845,8 @@ export function Settings() {
                 checked={!!(teamFilter.include_teams?.length || teamFilter.exclude_teams?.length)}
                 onCheckedChange={(checked) => {
                   if (!checked) {
-                    // Disable - clear all teams
-                    setTeamFilter({ include_teams: null, exclude_teams: null, mode: "include" })
+                    // Disable - clear all teams (send [] to clear, not null)
+                    setTeamFilter({ include_teams: [], exclude_teams: [], mode: "include" })
                   }
                   // If enabling, user will add teams below
                 }}
@@ -895,9 +895,9 @@ export function Settings() {
             }
             onSelectionChange={(teams) => {
               if (teamFilter.mode === "include") {
-                setTeamFilter({ ...teamFilter, include_teams: teams.length > 0 ? teams : null, exclude_teams: null })
+                setTeamFilter({ ...teamFilter, include_teams: teams, exclude_teams: [] })  // Send [] to clear
               } else {
-                setTeamFilter({ ...teamFilter, exclude_teams: teams.length > 0 ? teams : null, include_teams: null })
+                setTeamFilter({ ...teamFilter, exclude_teams: teams, include_teams: [] })  // Send [] to clear
               }
             }}
             placeholder="Search teams to add to default filter..."

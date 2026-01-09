@@ -1709,11 +1709,11 @@ export function EventGroupForm() {
                         checked={!!(formData.include_teams?.length || formData.exclude_teams?.length)}
                         onCheckedChange={(checked) => {
                           if (!checked) {
-                            // Disable - clear all teams
+                            // Disable - clear all teams (send [] to clear, not null)
                             setFormData({
                               ...formData,
-                              include_teams: null,
-                              exclude_teams: null,
+                              include_teams: [],
+                              exclude_teams: [],
                               team_filter_mode: "include",
                             })
                           }
@@ -1738,7 +1738,7 @@ export function EventGroupForm() {
                             ...formData,
                             team_filter_mode: "include",
                             include_teams: teams.length > 0 ? teams : formData.include_teams,
-                            exclude_teams: null,
+                            exclude_teams: [],  // Send [] to clear
                           })
                         }}
                         className="text-primary"
@@ -1758,7 +1758,7 @@ export function EventGroupForm() {
                             ...formData,
                             team_filter_mode: "exclude",
                             exclude_teams: teams.length > 0 ? teams : formData.exclude_teams,
-                            include_teams: null,
+                            include_teams: [],  // Send [] to clear
                           })
                         }}
                         className="text-primary"
@@ -1779,14 +1779,14 @@ export function EventGroupForm() {
                       if (formData.team_filter_mode === "include") {
                         setFormData({
                           ...formData,
-                          include_teams: teams.length > 0 ? teams : null,
-                          exclude_teams: null,
+                          include_teams: teams,  // Send [] to clear, not null
+                          exclude_teams: [],
                         })
                       } else {
                         setFormData({
                           ...formData,
-                          exclude_teams: teams.length > 0 ? teams : null,
-                          include_teams: null,
+                          exclude_teams: teams,  // Send [] to clear, not null
+                          include_teams: [],
                         })
                       }
                     }}
