@@ -32,7 +32,6 @@ import {
 } from "@/api/aliases"
 import { getLeagues } from "@/api/teams"
 import type { TeamAliasCreate, TeamFilterEntry } from "@/api/types"
-import type { CachedLeague } from "@/api/teams"
 import { TeamPicker } from "@/components/TeamPicker"
 
 export function TeamAliases() {
@@ -42,6 +41,7 @@ export function TeamAliases() {
 
   // Form state for create dialog
   const [aliasText, setAliasText] = useState("")
+  const [selectedSport, setSelectedSport] = useState("")
   const [selectedLeague, setSelectedLeague] = useState("")
   const [selectedTeams, setSelectedTeams] = useState<TeamFilterEntry[]>([])
 
@@ -67,15 +67,17 @@ export function TeamAliases() {
     })
   }, [leaguesData?.leagues])
 
-  // Group leagues by sport for display
-  const leaguesBySport = useMemo(() => {
-    const grouped: Record<string, CachedLeague[]> = {}
-    for (const league of sortedLeagues) {
-      if (!grouped[league.sport]) grouped[league.sport] = []
-      grouped[league.sport].push(league)
-    }
-    return grouped
+  // Get unique sports sorted alphabetically
+  const sports = useMemo(() => {
+    const sportSet = new Set(sortedLeagues.map((l) => l.sport))
+    return [...sportSet].sort()
   }, [sortedLeagues])
+
+  // Filter leagues by selected sport
+  const filteredLeagues = useMemo(() => {
+    if (!selectedSport) return []
+    return sortedLeagues.filter((l) => l.sport === selectedSport)
+  }, [sortedLeagues, selectedSport])
 
   // Get selected team from TeamPicker selection
   const selectedTeam = selectedTeams[0] || null
@@ -97,10 +99,17 @@ export function TeamAliases() {
   useEffect(() => {
     if (!isCreateOpen) {
       setAliasText("")
+      setSelectedSport("")
       setSelectedLeague("")
       setSelectedTeams([])
     }
   }, [isCreateOpen])
+
+  // Clear league and team when sport changes
+  useEffect(() => {
+    setSelectedLeague("")
+    setSelectedTeams([])
+  }, [selectedSport])
 
   // Clear team selection when league changes
   useEffect(() => {
@@ -114,7 +123,7 @@ export function TeamAliases() {
       alias: aliasText.toLowerCase().trim(),
       league: selectedLeague,
       team_id: selectedTeam.team_id,
-      team_name: selectedTeam.name,
+      team_name: selectedTeam.name || "",
       provider: selectedTeam.provider,
     }
 
@@ -208,14 +217,37 @@ export function TeamAliases() {
               </p>
             </div>
 
-            {/* League Dropdown */}
+            {/* Sport Dropdown */}
             <div className="space-y-2">
-              <Label htmlFor="league">League *</Label>
+              <Label htmlFor="sport">Sport *</Label>
               {leaguesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading leagues...
+                  Loading...
                 </div>
+              ) : (
+                <Select
+                  id="sport"
+                  value={selectedSport}
+                  onChange={(e) => setSelectedSport(e.target.value)}
+                >
+                  <option value="">Select a sport...</option>
+                  {sports.map((sport) => (
+                    <option key={sport} value={sport}>
+                      {sport}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+
+            {/* League Dropdown */}
+            <div className="space-y-2">
+              <Label htmlFor="league">League *</Label>
+              {!selectedSport ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  Select a sport first
+                </p>
               ) : (
                 <Select
                   id="league"
@@ -223,14 +255,10 @@ export function TeamAliases() {
                   onChange={(e) => setSelectedLeague(e.target.value)}
                 >
                   <option value="">Select a league...</option>
-                  {Object.entries(leaguesBySport).map(([sport, leagues]) => (
-                    <optgroup key={sport} label={sport}>
-                      {leagues.map((league) => (
-                        <option key={league.slug} value={league.slug}>
-                          {league.name} ({league.team_count} teams)
-                        </option>
-                      ))}
-                    </optgroup>
+                  {filteredLeagues.map((league) => (
+                    <option key={league.slug} value={league.slug}>
+                      {league.name} ({league.team_count} teams)
+                    </option>
                   ))}
                 </Select>
               )}
