@@ -136,28 +136,51 @@ def run_full_generation(
         if progress_callback:
             progress_callback(phase, percent, message, current, total, item_name)
 
-    # Create stats run for tracking
-    # Use database-level check to prevent race conditions across processes
+    # Create stats run for tracking with database-level lock
+    # Use BEGIN IMMEDIATE to acquire exclusive write lock BEFORE checking
+    # This prevents race conditions where two processes both pass the check
+    # before either has inserted their row
     with db_factory() as conn:
-        # Check if there's an in-progress full_epg run started in the last 5 minutes
-        recent_running = conn.execute("""
-            SELECT id FROM processing_runs
-            WHERE run_type = 'full_epg'
-              AND status = 'running'
-              AND started_at > datetime('now', '-5 minutes')
-            LIMIT 1
-        """).fetchone()
-        if recent_running:
+        try:
+            # BEGIN IMMEDIATE acquires write lock immediately, blocking other writers
+            conn.execute("BEGIN IMMEDIATE")
+
+            # Now check for in-progress runs - with lock held, this is reliable
+            recent_running = conn.execute("""
+                SELECT id FROM processing_runs
+                WHERE run_type = 'full_epg'
+                  AND status = 'running'
+                  AND started_at > datetime('now', '-5 minutes')
+                LIMIT 1
+            """).fetchone()
+
+            if recent_running:
+                conn.execute("ROLLBACK")
+                _generation_running = False
+                _generation_lock.release()
+                logger.warning(f"EPG generation already in progress (run {recent_running['id']}), skipping")
+                result = GenerationResult()
+                result.success = False
+                result.error = "Generation already in progress"
+                return result
+
+            # No running jobs - create our run (still holding lock)
+            stats_run = create_run(conn, run_type="full_epg")
+            result.run_id = stats_run.id
+            # create_run commits, which releases the lock
+
+        except Exception as e:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:
+                pass
             _generation_running = False
             _generation_lock.release()
-            logger.warning(f"EPG generation already in progress (run {recent_running['id']}), skipping")
+            logger.error(f"Failed to acquire generation lock: {e}")
             result = GenerationResult()
             result.success = False
-            result.error = "Generation already in progress"
+            result.error = f"Failed to acquire lock: {e}"
             return result
-
-        stats_run = create_run(conn, run_type="full_epg")
-        result.run_id = stats_run.id
 
     try:
         # Increment generation counter ONCE at start of full EPG run
