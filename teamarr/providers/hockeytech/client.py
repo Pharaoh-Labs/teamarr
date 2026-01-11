@@ -109,7 +109,7 @@ class HockeyTechClient:
                 if self._client is None:
                     self._client = httpx.Client(
                         timeout=self._timeout,
-                        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+                        limits=httpx.Limits(max_connections=100, max_keepalive_connections=50),
                     )
         return self._client
 
