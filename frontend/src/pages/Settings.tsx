@@ -13,8 +13,12 @@ import {
   Database,
   Plus,
   Trash2,
-  X,
 } from "lucide-react"
+import {
+  ChannelProfileSelector,
+  profileIdsToApi,
+  apiToProfileIds,
+} from "@/components/ChannelProfileSelector"
 import { useGenerationProgress } from "@/contexts/GenerationContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -114,14 +118,12 @@ export function Settings() {
   const dispatcharrStatus = useDispatcharrStatus()
   const epgSourcesQuery = useDispatcharrEPGSources(dispatcharrStatus.data?.connected ?? false)
 
-  // Fetch channel profiles from Dispatcharr
+  // Fetch channel profiles for conversion helpers
   const channelProfilesQuery = useQuery({
     queryKey: ["dispatcharr-channel-profiles"],
     queryFn: async () => {
       const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-      if (!response.ok) {
-        throw new Error(response.status === 503 ? "Dispatcharr not connected" : "Failed to fetch channel profiles")
-      }
+      if (!response.ok) return []
       return response.json() as Promise<{ id: number; name: string }[]>
     },
     enabled: dispatcharrStatus.data?.connected ?? false,
@@ -169,10 +171,8 @@ export function Settings() {
   })
   const [newKeyword, setNewKeyword] = useState({ keywords: "", behavior: "consolidate" })
 
-  // Channel profile creation state
-  const [showCreateProfile, setShowCreateProfile] = useState(false)
-  const [newProfileName, setNewProfileName] = useState("")
-  const [creatingProfile, setCreatingProfile] = useState(false)
+  // Selected profile IDs for display (converted from API format)
+  const [selectedProfileIds, setSelectedProfileIds] = useState<number[]>([])
 
   // Initialize local state from settings
   useEffect(() => {
@@ -183,7 +183,7 @@ export function Settings() {
         username: settings.dispatcharr.username,
         password: "", // Don't show masked password
         epg_id: settings.dispatcharr.epg_id,
-        default_channel_profile_ids: settings.dispatcharr.default_channel_profile_ids || [],
+        default_channel_profile_ids: settings.dispatcharr.default_channel_profile_ids,
       })
       setLifecycle(settings.lifecycle)
       setScheduler(settings.scheduler)
@@ -205,6 +205,18 @@ export function Settings() {
     }
   }, [teamFilterData])
 
+  // Convert API profile IDs to display IDs when profiles are loaded
+  useEffect(() => {
+    if (channelProfilesQuery.data && settings) {
+      const allProfileIds = channelProfilesQuery.data.map(p => p.id)
+      const displayIds = apiToProfileIds(
+        settings.dispatcharr.default_channel_profile_ids,
+        allProfileIds
+      )
+      setSelectedProfileIds(displayIds)
+    }
+  }, [channelProfilesQuery.data, settings])
+
   // Get league slugs for TeamPicker
   const availableLeagues = useMemo(() =>
     leaguesData?.leagues?.map(l => l.slug) ?? [],
@@ -213,13 +225,20 @@ export function Settings() {
 
   const handleSaveDispatcharr = async () => {
     try {
+      // Convert selected profile IDs to API format
+      // All selected → null (backend sends [0] sentinel to Dispatcharr)
+      // None selected → [] (no profiles)
+      // Some selected → those specific IDs
+      const allProfileIds = channelProfilesQuery.data?.map(p => p.id) ?? []
+      const profileIdsToSave = profileIdsToApi(selectedProfileIds, allProfileIds)
+
       // Only send password if it was changed
       const data: Partial<DispatcharrSettings> = {
         enabled: dispatcharr.enabled,
         url: dispatcharr.url,
         username: dispatcharr.username,
         epg_id: dispatcharr.epg_id,
-        default_channel_profile_ids: dispatcharr.default_channel_profile_ids,
+        default_channel_profile_ids: profileIdsToSave,
       }
       if (dispatcharr.password) {
         data.password = dispatcharr.password
@@ -1228,120 +1247,15 @@ export function Settings() {
 
           {/* 5. Default Channel Profiles */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Default Channel Profiles</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2"
-                onClick={() => setShowCreateProfile(!showCreateProfile)}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                New
-              </Button>
-            </div>
-            {showCreateProfile && (
-              <div className="flex gap-2 p-2 bg-muted/50 rounded-md">
-                <Input
-                  placeholder="New profile name..."
-                  value={newProfileName}
-                  onChange={(e) => setNewProfileName(e.target.value)}
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={creatingProfile || !newProfileName.trim()}
-                  onClick={async () => {
-                    setCreatingProfile(true)
-                    try {
-                      const response = await fetch(`/api/v1/dispatcharr/channel-profiles?name=${encodeURIComponent(newProfileName.trim())}`, {
-                        method: "POST",
-                      })
-                      if (response.ok) {
-                        const created = await response.json()
-                        toast.success(`Created profile "${created.name}"`)
-                        setDispatcharr({
-                          ...dispatcharr,
-                          default_channel_profile_ids: [...(dispatcharr.default_channel_profile_ids ?? []), created.id],
-                        })
-                        setNewProfileName("")
-                        setShowCreateProfile(false)
-                        channelProfilesQuery.refetch()
-                      } else {
-                        toast.error("Failed to create profile")
-                      }
-                    } catch {
-                      toast.error("Failed to create profile")
-                    }
-                    setCreatingProfile(false)
-                  }}
-                >
-                  {creatingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowCreateProfile(false)
-                    setNewProfileName("")
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2 min-h-[36px] p-2 border rounded-md bg-background">
-              {(dispatcharr.default_channel_profile_ids ?? []).map((profileId) => {
-                const profile = channelProfilesQuery.data?.find(p => p.id === profileId)
-                return (
-                  <Badge key={profileId} variant="secondary" className="gap-1">
-                    {profile?.name ?? `Profile ${profileId}`}
-                    <button
-                      type="button"
-                      className="ml-1 hover:text-destructive"
-                      onClick={() => {
-                        setDispatcharr({
-                          ...dispatcharr,
-                          default_channel_profile_ids: (dispatcharr.default_channel_profile_ids ?? []).filter(id => id !== profileId),
-                        })
-                      }}
-                    >
-                      ×
-                    </button>
-                  </Badge>
-                )
-              })}
-              {(dispatcharr.default_channel_profile_ids ?? []).length === 0 && (
-                <span className="text-sm text-muted-foreground">No profiles selected (defaults to all profiles)</span>
-              )}
-            </div>
-            <Select
-              value=""
-              onChange={(e) => {
-                const profileId = parseInt(e.target.value)
-                if (profileId && !(dispatcharr.default_channel_profile_ids ?? []).includes(profileId)) {
-                  setDispatcharr({
-                    ...dispatcharr,
-                    default_channel_profile_ids: [...(dispatcharr.default_channel_profile_ids ?? []), profileId],
-                  })
-                }
-              }}
+            <Label>Default Channel Profiles</Label>
+            <ChannelProfileSelector
+              selectedIds={selectedProfileIds}
+              onChange={setSelectedProfileIds}
               disabled={!dispatcharrStatus.data?.connected}
-            >
-              <option value="">Add profile...</option>
-              {channelProfilesQuery.data
-                ?.filter(p => !(dispatcharr.default_channel_profile_ids ?? []).includes(p.id))
-                .map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-            </Select>
+            />
             <p className="text-xs text-muted-foreground">
-              Default profiles for new event channels. If none selected, channels are added to all profiles.
+              These defaults apply to all groups unless overridden in individual group settings.
+              Profile assignment is enforced on every EPG generation run.
             </p>
           </div>
 

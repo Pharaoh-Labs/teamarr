@@ -53,6 +53,7 @@ import { useTemplates } from "@/hooks/useTemplates"
 import type { EventGroup, PreviewGroupResponse, TeamFilterEntry } from "@/api/types"
 import { TeamPicker } from "@/components/TeamPicker"
 import { LeaguePicker } from "@/components/LeaguePicker"
+import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
 import { getUniqueSports, filterLeaguesBySport } from "@/lib/utils"
 
 // Fetch leagues for logo lookup, sport mapping, and display alias
@@ -69,13 +70,6 @@ async function fetchChannelGroups(): Promise<{ id: number; name: string }[]> {
   if (!response.ok) return []
   const data = await response.json()
   return data.groups || []
-}
-
-// Fetch Dispatcharr channel profiles
-async function fetchChannelProfiles(): Promise<{ id: number; name: string }[]> {
-  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-  if (!response.ok) return []
-  return response.json()
 }
 
 // ============================================================================
@@ -145,7 +139,6 @@ export function EventGroups() {
   const { data: templates } = useTemplates()
   const { data: cachedLeagues } = useQuery({ queryKey: ["leagues"], queryFn: fetchLeagues })
   const { data: channelGroups } = useQuery({ queryKey: ["dispatcharr-channel-groups"], queryFn: fetchChannelGroups })
-  const { data: channelProfiles } = useQuery({ queryKey: ["dispatcharr-channel-profiles"], queryFn: fetchChannelProfiles })
   const deleteMutation = useDeleteGroup()
   const toggleMutation = useToggleGroup()
   const bulkUpdateMutation = useBulkUpdateGroups()
@@ -1797,37 +1790,13 @@ export function EventGroups() {
                 <label className="text-sm font-medium">Channel Profiles</label>
               </div>
               {bulkEditProfilesEnabled && (
-                <>
-                  <div className="space-y-1">
-                    {channelProfiles?.map((profile) => (
-                      <div key={profile.id} className="flex items-center gap-2">
-                        <Checkbox
-                          checked={bulkEditProfileIds.includes(profile.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setBulkEditProfileIds([...bulkEditProfileIds, profile.id])
-                            } else {
-                              setBulkEditProfileIds(bulkEditProfileIds.filter(id => id !== profile.id))
-                            }
-                            setBulkEditClearProfiles(false)
-                          }}
-                          disabled={bulkEditClearProfiles}
-                        />
-                        <label className="text-sm">{profile.name}</label>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={bulkEditClearProfiles}
-                      onCheckedChange={(checked) => {
-                        setBulkEditClearProfiles(!!checked)
-                        if (checked) setBulkEditProfileIds([])
-                      }}
-                    />
-                    <label className="text-xs text-muted-foreground">Clear (remove all profiles)</label>
-                  </div>
-                </>
+                <ChannelProfileSelector
+                  selectedIds={bulkEditProfileIds}
+                  onChange={(ids) => {
+                    setBulkEditProfileIds(ids)
+                    setBulkEditClearProfiles(false)
+                  }}
+                />
               )}
             </div>
           </div>

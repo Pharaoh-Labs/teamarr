@@ -192,12 +192,15 @@ class ChannelLifecycleService:
                 duplicate_mode = group_config.get("duplicate_event_handling", "consolidate")
 
                 channel_group_id = group_config.get("channel_group_id")
-                channel_profile_ids = self._parse_profile_ids(
-                    group_config.get("channel_profile_ids")
-                )
 
-                # Fallback to default profiles from settings if group has none
-                if not channel_profile_ids:
+                # Parse profile IDs from group config
+                # Returns None if not configured, [] if explicitly empty, [1,2,...] if set
+                raw_profile_ids = group_config.get("channel_profile_ids")
+                channel_profile_ids = self._parse_profile_ids(raw_profile_ids)
+
+                # Fallback to default profiles from settings ONLY if group hasn't configured
+                # (raw value is None/missing). If group explicitly set [] for no profiles, use that.
+                if raw_profile_ids is None and not channel_profile_ids:
                     from teamarr.database.settings import get_dispatcharr_settings
 
                     dispatcharr_settings = get_dispatcharr_settings(conn)
@@ -786,11 +789,15 @@ class ChannelLifecycleService:
 
                 # Create channel with channel_profile_ids
                 # Dispatcharr profile semantics (as of commit 6b873be):
-                #   [] = NO profiles
+                #   [] = NO profiles (explicit)
                 #   [0] = ALL profiles (sentinel)
                 #   [1, 2, ...] = specific profile IDs
-                # If no profiles configured, default to ALL profiles for backwards compatibility
-                effective_profile_ids = channel_profile_ids if channel_profile_ids else [0]
+                #
+                # Logic:
+                #   None = not configured → default to [0] (all profiles, backwards compat)
+                #   [] = explicitly no profiles → send [] (no profiles)
+                #   [1, 2, ...] = specific profiles → send those
+                effective_profile_ids = channel_profile_ids if channel_profile_ids is not None else [0]
                 create_result = self._channel_manager.create_channel(
                     name=channel_name,
                     channel_number=channel_number,
@@ -1145,40 +1152,68 @@ class ChannelLifecycleService:
             if db_updates:
                 update_managed_channel(conn, existing.id, db_updates)
 
-            # 7. Sync channel_profile_ids - V1 parity
-            group_profile_ids = self._parse_profile_ids(group_config.get("channel_profile_ids"))
+            # 7. Sync channel_profile_ids
+            # Dispatcharr profile semantics (commit 6b873be):
+            #   [] = NO profiles
+            #   [0] = ALL profiles (sentinel)
+            #   [1, 2, ...] = specific profile IDs
+            raw_group_profiles = group_config.get("channel_profile_ids")
+            group_profile_ids = self._parse_profile_ids(raw_group_profiles)
             stored_profile_ids = self._parse_profile_ids(
                 getattr(existing, "channel_profile_ids", None)
             )
 
-            profiles_to_add = set(group_profile_ids) - set(stored_profile_ids)
-            profiles_to_remove = set(stored_profile_ids) - set(group_profile_ids)
+            # Determine effective profile IDs to use
+            # None (not configured) → default to [0] (all profiles)
+            # [] (explicitly no profiles) → use []
+            # [1, 2, ...] (specific) → use those
+            effective_profile_ids = group_profile_ids if raw_group_profiles is not None else [0]
 
-            if profiles_to_add or profiles_to_remove:
-                with self._dispatcharr_lock:
-                    for profile_id in profiles_to_remove:
-                        try:
-                            self._channel_manager.remove_from_profile(
-                                profile_id, existing.dispatcharr_channel_id
-                            )
-                            changes_made.append(f"removed from profile {profile_id}")
-                        except Exception as e:
-                            logger.debug(f"Failed to remove channel from profile {profile_id}: {e}")
+            # Check if profiles changed
+            if effective_profile_ids != stored_profile_ids:
+                # For sentinel values ([0] or []), PATCH the channel directly
+                # This lets Dispatcharr handle the "all profiles" or "no profiles" logic
+                is_sentinel = effective_profile_ids in ([0], [])
 
-                    for profile_id in profiles_to_add:
-                        try:
-                            self._channel_manager.add_to_profile(
-                                profile_id, existing.dispatcharr_channel_id
-                            )
-                            changes_made.append(f"added to profile {profile_id}")
-                        except Exception as e:
-                            logger.debug(f"Failed to add channel to profile {profile_id}: {e}")
+                if is_sentinel:
+                    # PATCH channel_profile_ids directly with sentinel
+                    with self._dispatcharr_lock:
+                        self._channel_manager.update_channel(
+                            existing.dispatcharr_channel_id,
+                            {"channel_profile_ids": effective_profile_ids},
+                        )
+                    if effective_profile_ids == [0]:
+                        changes_made.append("profiles: all profiles")
+                    else:
+                        changes_made.append("profiles: no profiles")
+                else:
+                    # Specific profile IDs - use add/remove for granular control
+                    profiles_to_add = set(effective_profile_ids) - set(stored_profile_ids)
+                    profiles_to_remove = set(stored_profile_ids) - set(effective_profile_ids)
+
+                    with self._dispatcharr_lock:
+                        for profile_id in profiles_to_remove:
+                            try:
+                                self._channel_manager.remove_from_profile(
+                                    profile_id, existing.dispatcharr_channel_id
+                                )
+                                changes_made.append(f"removed from profile {profile_id}")
+                            except Exception as e:
+                                logger.debug(f"Failed to remove channel from profile {profile_id}: {e}")
+
+                        for profile_id in profiles_to_add:
+                            try:
+                                self._channel_manager.add_to_profile(
+                                    profile_id, existing.dispatcharr_channel_id
+                                )
+                                changes_made.append(f"added to profile {profile_id}")
+                            except Exception as e:
+                                logger.debug(f"Failed to add channel to profile {profile_id}: {e}")
 
                 # Update stored profile IDs in DB
-                if group_profile_ids != stored_profile_ids:
-                    update_managed_channel(
-                        conn, existing.id, {"channel_profile_ids": json.dumps(group_profile_ids)}
-                    )
+                update_managed_channel(
+                    conn, existing.id, {"channel_profile_ids": json.dumps(effective_profile_ids)}
+                )
 
             # 8. Sync logo - handles both updates and removals
             logo_url = self._resolve_logo_url(event, template)

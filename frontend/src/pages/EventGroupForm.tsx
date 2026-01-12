@@ -22,6 +22,7 @@ import { useTemplates } from "@/hooks/useTemplates"
 import type { EventGroupCreate, EventGroupUpdate } from "@/api/types"
 import { TeamPicker } from "@/components/TeamPicker"
 import { LeaguePicker } from "@/components/LeaguePicker"
+import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
 
 // Group mode
 type GroupMode = "single" | "multi" | null
@@ -48,24 +49,10 @@ interface ChannelGroup {
   name: string
 }
 
-// Dispatcharr channel profile
-interface ChannelProfile {
-  id: number
-  name: string
-}
-
 async function fetchChannelGroups(): Promise<ChannelGroup[]> {
   const response = await fetch("/api/v1/dispatcharr/channel-groups")
   if (!response.ok) {
     throw new Error(response.status === 503 ? "Dispatcharr not connected" : "Failed to fetch channel groups")
-  }
-  return response.json()
-}
-
-async function fetchChannelProfiles(): Promise<ChannelProfile[]> {
-  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-  if (!response.ok) {
-    throw new Error(response.status === 503 ? "Dispatcharr not connected" : "Failed to fetch channel profiles")
   }
   return response.json()
 }
@@ -77,15 +64,6 @@ async function createChannelGroup(name: string): Promise<ChannelGroup | null> {
   if (!response.ok) return null
   return response.json()
 }
-
-async function createChannelProfile(name: string): Promise<ChannelProfile | null> {
-  const response = await fetch(`/api/v1/dispatcharr/channel-profiles?name=${encodeURIComponent(name)}`, {
-    method: "POST",
-  })
-  if (!response.ok) return null
-  return response.json()
-}
-
 
 export function EventGroupForm() {
   const { groupId } = useParams<{ groupId: string }>()
@@ -154,37 +132,18 @@ export function EventGroupForm() {
     queryFn: fetchLeagues,
   })
 
-  // Fetch channel groups and profiles from Dispatcharr
+  // Fetch channel groups from Dispatcharr
   const { data: channelGroups, refetch: refetchChannelGroups, isError: channelGroupsError, error: channelGroupsErrorMsg } = useQuery({
     queryKey: ["dispatcharr-channel-groups"],
     queryFn: fetchChannelGroups,
     retry: false,  // Don't retry on connection errors
   })
-  const { data: channelProfiles, refetch: refetchChannelProfiles, isError: channelProfilesError, error: channelProfilesErrorMsg } = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: fetchChannelProfiles,
-    retry: false,  // Don't retry on connection errors
-  })
 
-  // Fetch default channel profiles from settings
-  const { data: defaultProfileIds } = useQuery({
-    queryKey: ["settings-default-profiles"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/settings/dispatcharr")
-      if (!response.ok) return []
-      const data = await response.json()
-      return (data.default_channel_profile_ids || []) as number[]
-    },
-    retry: false,
-  })
 
   // Inline create state
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState("")
   const [creatingGroup, setCreatingGroup] = useState(false)
-  const [showCreateProfile, setShowCreateProfile] = useState(false)
-  const [newProfileName, setNewProfileName] = useState("")
-  const [creatingProfile, setCreatingProfile] = useState(false)
 
   // Filter state for channel groups
   const [channelGroupFilter, setChannelGroupFilter] = useState("")
@@ -255,18 +214,6 @@ export function EventGroupForm() {
     }
   }, [group, cachedLeagues])
 
-  // Pre-populate channel_profile_ids with defaults for new groups
-  useEffect(() => {
-    if (!isEdit && defaultProfileIds && defaultProfileIds.length > 0) {
-      // Only set if not already set by user
-      if (!formData.channel_profile_ids || formData.channel_profile_ids.length === 0) {
-        setFormData(prev => ({
-          ...prev,
-          channel_profile_ids: defaultProfileIds,
-        }))
-      }
-    }
-  }, [isEdit, defaultProfileIds])
 
   // Sync selectedLeague/selectedLeagues to formData.leagues during create
   // This ensures the UI shows correct mode badge and Multi-Sport Settings appear
@@ -909,126 +856,11 @@ export function EventGroupForm() {
 
               {/* Channel Profiles */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Channel Profiles</Label>
-                  <div className="flex gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-muted-foreground"
-                      onClick={() => setFormData({ ...formData, channel_profile_ids: defaultProfileIds || [] })}
-                      title={defaultProfileIds?.length ? `Reset to defaults: ${defaultProfileIds.length} profile(s)` : "Clear selection"}
-                    >
-                      {defaultProfileIds?.length ? "Reset to Defaults" : "Clear"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      onClick={() => setShowCreateProfile(!showCreateProfile)}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      New
-                    </Button>
-                  </div>
-                </div>
-                {showCreateProfile && (
-                  <div className="flex gap-2 p-2 bg-muted/50 rounded-md">
-                    <Input
-                      placeholder="New profile name..."
-                      value={newProfileName}
-                      onChange={(e) => setNewProfileName(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={creatingProfile || !newProfileName.trim()}
-                      onClick={async () => {
-                        setCreatingProfile(true)
-                        const created = await createChannelProfile(newProfileName.trim())
-                        setCreatingProfile(false)
-                        if (created) {
-                          toast.success(`Created profile "${created.name}"`)
-                          setFormData({
-                            ...formData,
-                            channel_profile_ids: [...(formData.channel_profile_ids || []), created.id],
-                          })
-                          setNewProfileName("")
-                          setShowCreateProfile(false)
-                          refetchChannelProfiles()
-                        } else {
-                          toast.error("Failed to create profile")
-                        }
-                      }}
-                    >
-                      {creatingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setShowCreateProfile(false)
-                        setNewProfileName("")
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-                <div className="border rounded-md max-h-40 overflow-y-auto">
-                  {channelProfilesError ? (
-                    <div className="p-3 text-sm text-destructive text-center">
-                      {channelProfilesErrorMsg instanceof Error ? channelProfilesErrorMsg.message : "Failed to load channel profiles"}
-                    </div>
-                  ) : channelProfiles?.length === 0 ? (
-                    <div className="p-3 text-sm text-muted-foreground text-center">
-                      No profiles found
-                    </div>
-                  ) : (
-                    channelProfiles?.map((p) => {
-                      const isSelected = formData.channel_profile_ids?.includes(p.id) || false
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          className={cn(
-                            "w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent border-b last:border-b-0",
-                            isSelected && "bg-primary/10"
-                          )}
-                          onClick={() => {
-                            const current = formData.channel_profile_ids || []
-                            if (isSelected) {
-                              setFormData({
-                                ...formData,
-                                channel_profile_ids: current.filter((id) => id !== p.id),
-                              })
-                            } else {
-                              setFormData({
-                                ...formData,
-                                channel_profile_ids: [...current, p.id],
-                              })
-                            }
-                          }}
-                        >
-                          <div className={cn(
-                            "w-4 h-4 border rounded flex items-center justify-center",
-                            isSelected && "bg-primary border-primary"
-                          )}>
-                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                          </div>
-                          <span className="flex-1">{p.name}</span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Select profiles to add channels to. If none selected, will use default profiles from Settings.
-                </p>
+                <Label>Channel Profiles</Label>
+                <ChannelProfileSelector
+                  selectedIds={formData.channel_profile_ids || []}
+                  onChange={(ids) => setFormData({ ...formData, channel_profile_ids: ids })}
+                />
               </div>
             </CardContent>
           </Card>}

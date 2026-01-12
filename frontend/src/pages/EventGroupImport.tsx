@@ -17,8 +17,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { Loader2, Tv, Eye, Plus, Check, AlertCircle, Info } from "lucide-react"
+import { Loader2, Tv, Eye, Plus, AlertCircle, Info, Check } from "lucide-react"
 import { LeaguePicker } from "@/components/LeaguePicker"
+import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
 
 // Types
 interface M3UAccount {
@@ -63,11 +64,6 @@ interface ChannelGroup {
   name: string
 }
 
-interface ChannelProfile {
-  id: number
-  name: string
-}
-
 interface BulkCreateResponse {
   total_created: number
   total_failed: number
@@ -103,20 +99,6 @@ async function fetchTemplates(): Promise<Template[]> {
 async function fetchChannelGroups(): Promise<ChannelGroup[]> {
   return api.get("/dispatcharr/channel-groups")
 }
-
-async function fetchChannelProfiles(): Promise<ChannelProfile[]> {
-  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-  if (!response.ok) return []
-  return response.json()
-}
-
-async function fetchDefaultChannelProfileIds(): Promise<number[]> {
-  const response = await fetch("/api/v1/settings/dispatcharr")
-  if (!response.ok) return []
-  const data = await response.json()
-  return data.default_channel_profile_ids || []
-}
-
 
 export function EventGroupImport() {
   const navigate = useNavigate()
@@ -169,16 +151,6 @@ export function EventGroupImport() {
   const channelGroupsQuery = useQuery({
     queryKey: ["dispatcharr-channel-groups"],
     queryFn: fetchChannelGroups,
-  })
-
-  const channelProfilesQuery = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: fetchChannelProfiles,
-  })
-
-  const defaultProfileIdsQuery = useQuery({
-    queryKey: ["default-channel-profile-ids"],
-    queryFn: fetchDefaultChannelProfileIds,
   })
 
   // Get set of already-enabled (account_id, group_id) pairs
@@ -739,49 +711,11 @@ export function EventGroupImport() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Channel Profiles</Label>
-                    {(defaultProfileIdsQuery.data?.length ?? 0) > 0 && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setBulkChannelProfileIds(defaultProfileIdsQuery.data ?? [])}
-                      >
-                        Use Defaults
-                      </button>
-                    )}
-                  </div>
-                  <div className="border rounded-md max-h-24 overflow-y-auto">
-                    {(channelProfilesQuery.data ?? []).length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground text-center">
-                        No profiles found
-                      </div>
-                    ) : (
-                      (channelProfilesQuery.data ?? []).map((p) => {
-                        const isSelected = bulkChannelProfileIds.includes(p.id)
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            className={cn(
-                              "w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center justify-between",
-                              isSelected && "bg-primary/10"
-                            )}
-                            onClick={() => {
-                              if (isSelected) {
-                                setBulkChannelProfileIds(bulkChannelProfileIds.filter((id) => id !== p.id))
-                              } else {
-                                setBulkChannelProfileIds([...bulkChannelProfileIds, p.id])
-                              }
-                            }}
-                          >
-                            <span>{p.name}</span>
-                            {isSelected && <Check className="h-3 w-3" />}
-                          </button>
-                        )
-                      })
-                    )}
-                  </div>
+                  <Label className="text-xs text-muted-foreground">Channel Profiles</Label>
+                  <ChannelProfileSelector
+                    selectedIds={bulkChannelProfileIds}
+                    onChange={setBulkChannelProfileIds}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Enabled</Label>
