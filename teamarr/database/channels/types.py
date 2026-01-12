@@ -28,7 +28,6 @@ class ManagedChannel:
 
     # Channel settings
     channel_group_id: int | None = None
-    stream_profile_id: int | None = None
     channel_profile_ids: list[int] = field(default_factory=list)
     primary_stream_id: int | None = None
     exception_keyword: str | None = None
@@ -78,7 +77,6 @@ class ManagedChannel:
             dispatcharr_uuid=row.get("dispatcharr_uuid"),
             dispatcharr_logo_id=row.get("dispatcharr_logo_id"),
             channel_group_id=row.get("channel_group_id"),
-            stream_profile_id=row.get("stream_profile_id"),
             channel_profile_ids=profile_ids or [],
             primary_stream_id=row.get("primary_stream_id"),
             exception_keyword=row.get("exception_keyword"),

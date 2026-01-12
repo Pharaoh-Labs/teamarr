@@ -20,7 +20,6 @@ class DispatcharrChannel:
     channel_group_name: str | None = None
     logo_id: int | None = None
     logo_url: str | None = None
-    stream_profile_id: int | None = None
     streams: tuple[int, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -39,7 +38,6 @@ class DispatcharrChannel:
             channel_group_name=data.get("channel_group_name"),
             logo_id=data.get("logo_id"),
             logo_url=data.get("logo_url"),
-            stream_profile_id=data.get("stream_profile_id"),
             streams=streams,
         )
 

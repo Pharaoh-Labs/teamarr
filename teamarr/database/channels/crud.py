@@ -56,7 +56,6 @@ def create_managed_channel(
         "dispatcharr_uuid",
         "dispatcharr_logo_id",
         "channel_group_id",
-        "stream_profile_id",
         "channel_profile_ids",
         "primary_stream_id",
         "exception_keyword",

@@ -21,7 +21,6 @@ class EventEPGGroup:
     template_id: int | None = None
     channel_start_number: int | None = None
     channel_group_id: int | None = None
-    stream_profile_id: int | None = None
     channel_profile_ids: list[int] = field(default_factory=list)
     duplicate_event_handling: str = "consolidate"
     channel_assignment_mode: str = "auto"
@@ -112,7 +111,6 @@ def _row_to_group(row) -> EventEPGGroup:
         template_id=row["template_id"],
         channel_start_number=row["channel_start_number"],
         channel_group_id=row["channel_group_id"],
-        stream_profile_id=row["stream_profile_id"],
         channel_profile_ids=channel_profile_ids,
         duplicate_event_handling=row["duplicate_event_handling"] or "consolidate",
         channel_assignment_mode=row["channel_assignment_mode"] or "auto",
@@ -213,17 +211,24 @@ def get_group(conn: Connection, group_id: int) -> EventEPGGroup | None:
     return _row_to_group(row) if row else None
 
 
-def get_group_by_name(conn: Connection, name: str) -> EventEPGGroup | None:
-    """Get a single event EPG group by name.
+def get_group_by_name(conn: Connection, name: str, m3u_account_id: int | None = None) -> EventEPGGroup | None:
+    """Get a single event EPG group by name (optionally scoped to account).
 
     Args:
         conn: Database connection
         name: Group name
+        m3u_account_id: If provided, checks for name within this account only
 
     Returns:
         EventEPGGroup or None if not found
     """
-    cursor = conn.execute("SELECT * FROM event_epg_groups WHERE name = ?", (name,))
+    if m3u_account_id is not None:
+        cursor = conn.execute(
+            "SELECT * FROM event_epg_groups WHERE name = ? AND m3u_account_id = ?",
+            (name, m3u_account_id)
+        )
+    else:
+        cursor = conn.execute("SELECT * FROM event_epg_groups WHERE name = ?", (name,))
     row = cursor.fetchone()
     return _row_to_group(row) if row else None
 
@@ -265,7 +270,6 @@ def create_group(
     template_id: int | None = None,
     channel_start_number: int | None = None,
     channel_group_id: int | None = None,
-    stream_profile_id: int | None = None,
     channel_profile_ids: list[int] | None = None,
     duplicate_event_handling: str = "consolidate",
     channel_assignment_mode: str = "auto",
@@ -306,7 +310,6 @@ def create_group(
         template_id: Optional template ID
         channel_start_number: Starting channel number (for MANUAL mode)
         channel_group_id: Dispatcharr channel group ID
-        stream_profile_id: Dispatcharr stream profile ID
         channel_profile_ids: List of channel profile IDs
         duplicate_event_handling: How to handle duplicate events
         channel_assignment_mode: 'auto' or 'manual'
@@ -335,7 +338,7 @@ def create_group(
     cursor = conn.execute(
         """INSERT INTO event_epg_groups (
             name, display_name, leagues, group_mode, template_id, channel_start_number,
-            channel_group_id, stream_profile_id, channel_profile_ids,
+            channel_group_id, channel_profile_ids,
             duplicate_event_handling, channel_assignment_mode, sort_order,
             total_stream_count, parent_group_id, m3u_group_id, m3u_group_name,
             m3u_account_id, m3u_account_name,
@@ -347,7 +350,7 @@ def create_group(
             skip_builtin_filter,
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name,
             display_name,
@@ -356,7 +359,6 @@ def create_group(
             template_id,
             channel_start_number,
             channel_group_id,
-            stream_profile_id,
             json.dumps(channel_profile_ids) if channel_profile_ids else None,
             duplicate_event_handling,
             channel_assignment_mode,
@@ -404,7 +406,6 @@ def update_group(
     template_id: int | None = None,
     channel_start_number: int | None = None,
     channel_group_id: int | None = None,
-    stream_profile_id: int | None = None,
     channel_profile_ids: list[int] | None = None,
     duplicate_event_handling: str | None = None,
     channel_assignment_mode: str | None = None,
@@ -440,7 +441,6 @@ def update_group(
     clear_template: bool = False,
     clear_channel_start_number: bool = False,
     clear_channel_group_id: bool = False,
-    clear_stream_profile_id: bool = False,
     clear_channel_profile_ids: bool = False,
     clear_parent_group_id: bool = False,
     clear_m3u_group_id: bool = False,
@@ -507,12 +507,6 @@ def update_group(
         values.append(channel_group_id)
     elif clear_channel_group_id:
         updates.append("channel_group_id = NULL")
-
-    if stream_profile_id is not None:
-        updates.append("stream_profile_id = ?")
-        values.append(stream_profile_id)
-    elif clear_stream_profile_id:
-        updates.append("stream_profile_id = NULL")
 
     if channel_profile_ids is not None:
         updates.append("channel_profile_ids = ?")

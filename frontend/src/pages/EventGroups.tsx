@@ -84,14 +84,6 @@ interface TeamAlias {
   created_at: string | null
 }
 
-interface CachedTeam {
-  id: string
-  name: string
-  short_name: string
-  abbreviation: string
-  logo_url: string | null
-}
-
 async function fetchAliases(): Promise<TeamAlias[]> {
   const response = await fetch("/api/v1/aliases")
   if (!response.ok) return []
@@ -116,13 +108,6 @@ async function deleteAlias(id: number): Promise<void> {
   if (!response.ok) {
     throw new Error("Failed to delete alias")
   }
-}
-
-async function fetchTeamsByLeague(leagueSlug: string): Promise<CachedTeam[]> {
-  const response = await fetch(`/api/v1/cache/leagues/${encodeURIComponent(leagueSlug)}/teams`)
-  if (!response.ok) return []
-  const data = await response.json()
-  return data.teams || []
 }
 
 // Helper to get display name (prefer display_name over name)

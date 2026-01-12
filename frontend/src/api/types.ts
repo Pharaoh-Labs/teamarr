@@ -18,7 +18,6 @@ export interface EventGroup {
   template_id: number | null
   channel_start_number: number | null
   channel_group_id: number | null
-  stream_profile_id: number | null
   channel_profile_ids: number[]
   duplicate_event_handling: string
   channel_assignment_mode: string
@@ -79,7 +78,6 @@ export interface EventGroupCreate {
   template_id?: number | null
   channel_start_number?: number | null
   channel_group_id?: number | null
-  stream_profile_id?: number | null
   channel_profile_ids?: number[]
   duplicate_event_handling?: string
   channel_assignment_mode?: string
@@ -117,7 +115,6 @@ export interface EventGroupUpdate extends Partial<EventGroupCreate> {
   clear_template?: boolean
   clear_channel_start_number?: boolean
   clear_channel_group_id?: boolean
-  clear_stream_profile_id?: boolean
   clear_channel_profile_ids?: boolean
   clear_m3u_group_id?: boolean
   clear_m3u_group_name?: boolean
@@ -169,7 +166,6 @@ export interface Team {
   template_id: number | null
   channel_number: string | null
   channel_group_id: number | null
-  stream_profile_id: number | null
   channel_profile_ids: number[]
   active: boolean
   created_at: string | null

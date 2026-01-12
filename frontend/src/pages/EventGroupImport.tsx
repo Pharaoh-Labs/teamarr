@@ -1,17 +1,23 @@
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState, useMemo } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { api } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { Loader2, Tv, Eye, Plus, Check, AlertCircle } from "lucide-react"
+import { Loader2, Tv, Eye, Plus, Check, AlertCircle, X, Info } from "lucide-react"
 
 // Types
 interface M3UAccount {
@@ -37,17 +43,52 @@ interface EnabledGroup {
   m3u_account_id: number | null
 }
 
-// Fetch M3U accounts from Dispatcharr
+interface SelectedGroup {
+  m3u_account_id: number
+  m3u_account_name: string
+  m3u_group_id: number
+  m3u_group_name: string
+  stream_count?: number
+}
+
+interface CachedLeague {
+  slug: string
+  name: string
+  sport: string
+  logo_url?: string
+}
+
+interface Template {
+  id: number
+  name: string
+  template_type: string
+}
+
+interface ChannelGroup {
+  id: number
+  name: string
+}
+
+interface ChannelProfile {
+  id: number
+  name: string
+}
+
+interface BulkCreateResponse {
+  total_created: number
+  total_failed: number
+  created: Array<{ group_id: number; name: string; success: boolean }>
+}
+
+// Fetch functions
 async function fetchM3UAccounts(): Promise<M3UAccount[]> {
   return api.get("/dispatcharr/m3u-accounts")
 }
 
-// Fetch groups for an M3U account
 async function fetchM3UGroups(accountId: number): Promise<M3UGroup[]> {
   return api.get(`/dispatcharr/m3u-accounts/${accountId}/groups`)
 }
 
-// Fetch streams in a group (for preview)
 async function fetchGroupStreams(
   accountId: number,
   groupId: number
@@ -55,42 +96,107 @@ async function fetchGroupStreams(
   return api.get(`/dispatcharr/m3u-accounts/${accountId}/groups/${groupId}/streams`)
 }
 
-// Fetch enabled event groups to check which M3U groups are already imported
 async function fetchEnabledGroups(): Promise<EnabledGroup[]> {
   const response = await api.get<{ groups: EnabledGroup[] }>("/groups?include_disabled=true")
   return response.groups
 }
 
+async function fetchLeagues(): Promise<CachedLeague[]> {
+  const response = await api.get<{ leagues: CachedLeague[] }>("/cache/leagues")
+  return response.leagues
+}
+
+async function fetchTemplates(): Promise<Template[]> {
+  const response = await api.get<{ templates: Template[] }>("/templates")
+  return response.templates
+}
+
+async function fetchChannelGroups(): Promise<ChannelGroup[]> {
+  return api.get("/dispatcharr/channel-groups")
+}
+
+async function fetchChannelProfiles(): Promise<ChannelProfile[]> {
+  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
+  if (!response.ok) return []
+  return response.json()
+}
+
+async function fetchDefaultChannelProfileIds(): Promise<number[]> {
+  const response = await fetch("/api/v1/settings/dispatcharr")
+  if (!response.ok) return []
+  const data = await response.json()
+  return data.default_channel_profile_ids || []
+}
+
+
 export function EventGroupImport() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [selectedAccount, setSelectedAccount] = useState<M3UAccount | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [previewGroup, setPreviewGroup] = useState<M3UGroup | null>(null)
 
-  // Fetch M3U accounts
+  // Bulk selection state - persists across accounts and search
+  const [selectedGroups, setSelectedGroups] = useState<Map<string, SelectedGroup>>(new Map())
+
+  // Bulk import modal state
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkMode, setBulkMode] = useState<"single" | "multi">("single")
+  const [bulkLeagues, setBulkLeagues] = useState<Set<string>>(new Set())
+  const [bulkTemplateId, setBulkTemplateId] = useState<number | null>(null)
+  const [bulkChannelGroupId, setBulkChannelGroupId] = useState<number | null>(null)
+  const [bulkChannelProfileIds, setBulkChannelProfileIds] = useState<number[]>([])
+  const [bulkEnabled, setBulkEnabled] = useState(true)
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const [bulkSport, setBulkSport] = useState<string>("")
+  const [bulkLeagueSearch, setBulkLeagueSearch] = useState("")
+
+  // Queries
   const accountsQuery = useQuery({
     queryKey: ["dispatcharr-m3u-accounts"],
     queryFn: fetchM3UAccounts,
   })
 
-  // Fetch groups for selected account
   const groupsQuery = useQuery({
     queryKey: ["dispatcharr-m3u-groups", selectedAccount?.id],
     queryFn: () => fetchM3UGroups(selectedAccount!.id),
     enabled: !!selectedAccount,
   })
 
-  // Fetch enabled groups
   const enabledQuery = useQuery({
     queryKey: ["event-groups-enabled"],
     queryFn: fetchEnabledGroups,
   })
 
-  // Fetch streams for preview
   const streamsQuery = useQuery({
     queryKey: ["dispatcharr-group-streams", selectedAccount?.id, previewGroup?.id],
     queryFn: () => fetchGroupStreams(selectedAccount!.id, previewGroup!.id),
     enabled: !!selectedAccount && !!previewGroup,
+  })
+
+  const leaguesQuery = useQuery({
+    queryKey: ["cached-leagues"],
+    queryFn: fetchLeagues,
+  })
+
+  const templatesQuery = useQuery({
+    queryKey: ["templates"],
+    queryFn: fetchTemplates,
+  })
+
+  const channelGroupsQuery = useQuery({
+    queryKey: ["dispatcharr-channel-groups"],
+    queryFn: fetchChannelGroups,
+  })
+
+  const channelProfilesQuery = useQuery({
+    queryKey: ["dispatcharr-channel-profiles"],
+    queryFn: fetchChannelProfiles,
+  })
+
+  const defaultProfileIdsQuery = useQuery({
+    queryKey: ["default-channel-profile-ids"],
+    queryFn: fetchDefaultChannelProfileIds,
   })
 
   // Get set of already-enabled (account_id, group_id) pairs
@@ -105,8 +211,95 @@ export function EventGroupImport() {
     g.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  // Get selectable groups (not already enabled)
+  const selectableGroups = filteredGroups.filter(
+    (g) => !enabledGroupKeys.has(`${selectedAccount?.id}:${g.id}`)
+  )
+
+  // Check if all visible selectable groups are selected
+  const allVisibleSelected = selectedAccount && selectableGroups.length > 0 &&
+    selectableGroups.every((g) => selectedGroups.has(`${selectedAccount.id}:${g.id}`))
+
+  // Group leagues by sport
+  const leaguesBySport = useMemo(() => {
+    if (!leaguesQuery.data) return {}
+    const grouped: Record<string, CachedLeague[]> = {}
+    for (const league of leaguesQuery.data) {
+      const sport = league.sport || "Other"
+      if (!grouped[sport]) grouped[sport] = []
+      grouped[sport].push(league)
+    }
+    return grouped
+  }, [leaguesQuery.data])
+
+  const sports = Object.keys(leaguesBySport).sort()
+
+  // Filter templates by type
+  const eventTemplates = (templatesQuery.data ?? []).filter(
+    (t) => t.template_type === "event"
+  )
+
+  // Selection helpers
+  const toggleGroupSelection = (group: M3UGroup) => {
+    if (!selectedAccount) return
+    const key = `${selectedAccount.id}:${group.id}`
+    const newSelected = new Map(selectedGroups)
+    if (newSelected.has(key)) {
+      newSelected.delete(key)
+    } else {
+      newSelected.set(key, {
+        m3u_account_id: selectedAccount.id,
+        m3u_account_name: selectedAccount.name,
+        m3u_group_id: group.id,
+        m3u_group_name: group.name,
+        stream_count: group.stream_count,
+      })
+    }
+    setSelectedGroups(newSelected)
+  }
+
+  const selectAllVisible = () => {
+    if (!selectedAccount) return
+    const newSelected = new Map(selectedGroups)
+    for (const group of selectableGroups) {
+      const key = `${selectedAccount.id}:${group.id}`
+      if (!newSelected.has(key)) {
+        newSelected.set(key, {
+          m3u_account_id: selectedAccount.id,
+          m3u_account_name: selectedAccount.name,
+          m3u_group_id: group.id,
+          m3u_group_name: group.name,
+          stream_count: group.stream_count,
+        })
+      }
+    }
+    setSelectedGroups(newSelected)
+  }
+
+  const deselectAllVisible = () => {
+    if (!selectedAccount) return
+    const newSelected = new Map(selectedGroups)
+    for (const group of selectableGroups) {
+      newSelected.delete(`${selectedAccount.id}:${group.id}`)
+    }
+    setSelectedGroups(newSelected)
+  }
+
+  const clearAllSelections = () => {
+    setSelectedGroups(new Map())
+  }
+
+  // Get selection summary by account
+  const selectionByAccount = useMemo(() => {
+    const byAccount: Record<string, number> = {}
+    for (const [, group] of selectedGroups) {
+      byAccount[group.m3u_account_name] = (byAccount[group.m3u_account_name] || 0) + 1
+    }
+    return byAccount
+  }, [selectedGroups])
+
+  // Handle single import (existing behavior)
   const handleImport = (group: M3UGroup) => {
-    // Navigate to event group form with M3U group data
     const params = new URLSearchParams({
       m3u_group_id: String(group.id),
       m3u_group_name: group.name,
@@ -114,6 +307,61 @@ export function EventGroupImport() {
       m3u_account_name: selectedAccount!.name,
     })
     navigate(`/event-groups/new?${params.toString()}`)
+  }
+
+  // Handle bulk import
+  const handleBulkImport = async () => {
+    if (bulkLeagues.size === 0) return
+
+    setBulkImporting(true)
+    try {
+      const response = await api.post<BulkCreateResponse>("/groups/bulk", {
+        groups: Array.from(selectedGroups.values()).map((g) => ({
+          m3u_group_id: g.m3u_group_id,
+          m3u_group_name: g.m3u_group_name,
+          m3u_account_id: g.m3u_account_id,
+          m3u_account_name: g.m3u_account_name,
+        })),
+        settings: {
+          group_mode: bulkMode,
+          leagues: Array.from(bulkLeagues),
+          template_id: bulkTemplateId,
+          channel_group_id: bulkChannelGroupId,
+          channel_profile_ids: bulkChannelProfileIds.length > 0 ? bulkChannelProfileIds : null,
+          enabled: bulkEnabled,
+        },
+      })
+
+      // Refresh queries
+      await queryClient.invalidateQueries({ queryKey: ["event-groups-enabled"] })
+      await queryClient.invalidateQueries({ queryKey: ["event-groups"] })
+
+      // Clear selections and close modal
+      setSelectedGroups(new Map())
+      setShowBulkModal(false)
+
+      // Show success or navigate
+      if (response.total_created > 0) {
+        navigate("/event-groups")
+      }
+    } catch (error) {
+      console.error("Bulk import failed:", error)
+    } finally {
+      setBulkImporting(false)
+    }
+  }
+
+  // Reset bulk modal state
+  const openBulkModal = () => {
+    setBulkMode("single")
+    setBulkLeagues(new Set())
+    setBulkTemplateId(null)
+    setBulkChannelGroupId(null)
+    setBulkChannelProfileIds([])
+    setBulkEnabled(true)
+    setBulkSport("")
+    setBulkLeagueSearch("")
+    setShowBulkModal(true)
   }
 
   const isDispatcharrConfigured = accountsQuery.data && accountsQuery.data.length > 0
@@ -158,23 +406,32 @@ export function EventGroupImport() {
           </div>
         ) : (
           <div className="py-1">
-            {[...accountsQuery.data].sort((a, b) => a.name.localeCompare(b.name)).map((account) => (
-              <button
-                key={account.id}
-                onClick={() => {
-                  setSelectedAccount(account)
-                  setSearchTerm("")
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 border-l-2 border-transparent",
-                  selectedAccount?.id === account.id &&
-                    "bg-muted border-l-primary"
-                )}
-              >
-                <Tv className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate flex-1 text-left">{account.name}</span>
-              </button>
-            ))}
+            {[...accountsQuery.data].sort((a, b) => a.name.localeCompare(b.name)).map((account) => {
+              const accountSelectionCount = Array.from(selectedGroups.values())
+                .filter((g) => g.m3u_account_id === account.id).length
+              return (
+                <button
+                  key={account.id}
+                  onClick={() => {
+                    setSelectedAccount(account)
+                    setSearchTerm("")
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 border-l-2 border-transparent",
+                    selectedAccount?.id === account.id &&
+                      "bg-muted border-l-primary"
+                  )}
+                >
+                  <Tv className="h-4 w-4 text-muted-foreground" />
+                  <span className="truncate flex-1 text-left">{account.name}</span>
+                  {accountSelectionCount > 0 && (
+                    <Badge variant="secondary" className="h-5 text-xs">
+                      {accountSelectionCount}
+                    </Badge>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -201,18 +458,29 @@ export function EventGroupImport() {
                     {groupsQuery.data?.length ?? 0} groups
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => groupsQuery.refetch()}
-                  disabled={groupsQuery.isFetching}
-                >
-                  {groupsQuery.isFetching ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Reload"
+                <div className="flex items-center gap-2">
+                  {selectableGroups.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={allVisibleSelected ? deselectAllVisible : selectAllVisible}
+                    >
+                      {allVisibleSelected ? "Deselect All" : "Select All"}
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => groupsQuery.refetch()}
+                    disabled={groupsQuery.isFetching}
+                  >
+                    {groupsQuery.isFetching ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Reload"
+                    )}
+                  </Button>
+                </div>
               </div>
               <Input
                 placeholder="Search groups..."
@@ -223,7 +491,7 @@ export function EventGroupImport() {
             </div>
 
             {/* Groups Grid */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 pb-20">
               {groupsQuery.isLoading ? (
                 <div className="flex items-center justify-center p-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -239,27 +507,43 @@ export function EventGroupImport() {
               ) : (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">
                   {filteredGroups.map((group) => {
-                    const isEnabled = enabledGroupKeys.has(`${selectedAccount!.id}:${group.id}`)
+                    const key = `${selectedAccount.id}:${group.id}`
+                    const isEnabled = enabledGroupKeys.has(key)
+                    const isSelected = selectedGroups.has(key)
 
                     return (
                       <div
                         key={group.id}
                         className={cn(
-                          "p-3 rounded-md border transition-colors",
+                          "p-3 rounded-md border transition-colors relative",
                           isEnabled
                             ? "opacity-60 border-green-500/50 bg-green-500/5"
-                            : "hover:border-primary/50 cursor-pointer"
+                            : isSelected
+                            ? "border-primary bg-primary/5"
+                            : "hover:border-primary/50"
                         )}
-                        onClick={() => !isEnabled && handleImport(group)}
                       >
-                        <div className="flex items-start justify-between gap-2 mb-2">
+                        {/* Checkbox for non-enabled groups */}
+                        {!isEnabled && (
+                          <div className="absolute top-2 left-2">
+                            <Checkbox
+                              checked={isSelected}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleGroupSelection(group)
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex items-start justify-between gap-2 mb-2 ml-6">
                           <div className="min-w-0 flex-1">
                             <div className="font-medium text-sm truncate flex items-center gap-1">
                               {group.name}
                               {isEnabled && (
                                 <span className="inline-flex items-center gap-0.5 text-[10px] bg-green-500/20 text-green-600 px-1 rounded">
                                   <Check className="h-2.5 w-2.5" />
-                                  Enabled
+                                  Imported
                                 </span>
                               )}
                             </div>
@@ -269,7 +553,7 @@ export function EventGroupImport() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between ml-6">
                           <span className="text-xs text-muted-foreground">
                             {group.stream_count ?? "?"} streams
                           </span>
@@ -309,6 +593,34 @@ export function EventGroupImport() {
           </>
         )}
       </div>
+
+      {/* Floating Action Bar */}
+      {selectedGroups.size > 0 && (
+        <div className="fixed bottom-0 left-60 right-0 border-t bg-background p-3 flex items-center justify-between shadow-lg z-50">
+          <div className="flex items-center gap-4">
+            <Checkbox
+              checked={selectedGroups.size > 0}
+              onClick={clearAllSelections}
+            />
+            <span className="text-sm font-medium">
+              {selectedGroups.size} selected
+              {Object.keys(selectionByAccount).length > 1 && (
+                <span className="text-muted-foreground ml-1">
+                  ({Object.entries(selectionByAccount).map(([name, count]) => `${count} from ${name}`).join(", ")})
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={clearAllSelections}>
+              Clear All
+            </Button>
+            <Button onClick={openBulkModal}>
+              Import {selectedGroups.size} Groups
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Preview Modal */}
       <Dialog open={!!previewGroup} onOpenChange={() => setPreviewGroup(null)}>
@@ -354,6 +666,296 @@ export function EventGroupImport() {
                 </div>
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Import Modal */}
+      <Dialog open={showBulkModal} onOpenChange={setShowBulkModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" onClose={() => setShowBulkModal(false)}>
+          <DialogHeader>
+            <DialogTitle>Import {selectedGroups.size} Groups</DialogTitle>
+            <DialogDescription>
+              <div className="flex items-start gap-2 mt-2 p-3 bg-muted/50 rounded-md">
+                <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <span className="text-sm text-muted-foreground">
+                  All groups will use the same settings. You can customize individual groups after import.
+                </span>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-6">
+            {/* Group Type */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Group Type</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkMode("single")
+                    setBulkLeagues(new Set())
+                  }}
+                  className={cn(
+                    "flex flex-col items-start p-3 rounded-lg border-2 text-left transition-all",
+                    bulkMode === "single"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <span className="font-medium text-sm">Single League</span>
+                  <span className="text-xs text-muted-foreground mt-1">
+                    One league per group (NFL, EPL, etc.)
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkMode("multi")
+                    setBulkLeagues(new Set())
+                  }}
+                  className={cn(
+                    "flex flex-col items-start p-3 rounded-lg border-2 text-left transition-all",
+                    bulkMode === "multi"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <span className="font-medium text-sm">Multi-Sport</span>
+                  <span className="text-xs text-muted-foreground mt-1">
+                    Multiple leagues (ESPN+, etc.)
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* League Selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">
+                {bulkMode === "single" ? "League" : "Leagues"}
+              </Label>
+
+              {bulkMode === "single" ? (
+                <div className="space-y-2">
+                  <Select
+                    value={bulkSport}
+                    onChange={(e) => {
+                      setBulkSport(e.target.value)
+                      setBulkLeagues(new Set())
+                    }}
+                  >
+                    <option value="">Select sport...</option>
+                    {sports.map((sport) => (
+                      <option key={sport} value={sport}>{sport}</option>
+                    ))}
+                  </Select>
+                  {bulkSport && (
+                    <Select
+                      value={bulkLeagues.size === 1 ? Array.from(bulkLeagues)[0] : ""}
+                      onChange={(e) => setBulkLeagues(new Set(e.target.value ? [e.target.value] : []))}
+                    >
+                      <option value="">Select league...</option>
+                      {(leaguesBySport[bulkSport] || []).map((league) => (
+                        <option key={league.slug} value={league.slug}>{league.name}</option>
+                      ))}
+                    </Select>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Search leagues..."
+                    value={bulkLeagueSearch}
+                    onChange={(e) => setBulkLeagueSearch(e.target.value)}
+                  />
+                  {bulkLeagues.size > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {Array.from(bulkLeagues).map((slug) => {
+                        const league = leaguesQuery.data?.find((l) => l.slug === slug)
+                        return (
+                          <Badge key={slug} variant="secondary" className="gap-1">
+                            {league?.name || slug}
+                            <button
+                              onClick={() => {
+                                const newLeagues = new Set(bulkLeagues)
+                                newLeagues.delete(slug)
+                                setBulkLeagues(newLeagues)
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
+                    {sports
+                      .filter((sport) =>
+                        !bulkLeagueSearch ||
+                        sport.toLowerCase().includes(bulkLeagueSearch.toLowerCase()) ||
+                        leaguesBySport[sport].some((l) =>
+                          l.name.toLowerCase().includes(bulkLeagueSearch.toLowerCase())
+                        )
+                      )
+                      .map((sport) => {
+                        const leagues = leaguesBySport[sport].filter((l) =>
+                          !bulkLeagueSearch ||
+                          l.name.toLowerCase().includes(bulkLeagueSearch.toLowerCase())
+                        )
+                        if (leagues.length === 0) return null
+                        return (
+                          <div key={sport} className="p-2">
+                            <div className="text-xs font-medium text-muted-foreground mb-1">{sport}</div>
+                            <div className="space-y-1">
+                              {leagues.map((league) => (
+                                <label
+                                  key={league.slug}
+                                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded"
+                                >
+                                  <Checkbox
+                                    checked={bulkLeagues.has(league.slug)}
+                                    onClick={() => {
+                                      const newLeagues = new Set(bulkLeagues)
+                                      if (newLeagues.has(league.slug)) {
+                                        newLeagues.delete(league.slug)
+                                      } else {
+                                        newLeagues.add(league.slug)
+                                      }
+                                      setBulkLeagues(newLeagues)
+                                    }}
+                                  />
+                                  {league.name}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Settings */}
+            <div className="space-y-4">
+              <Label className="text-sm font-medium">Settings</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Template</Label>
+                  <Select
+                    value={bulkTemplateId?.toString() || ""}
+                    onChange={(e) => setBulkTemplateId(e.target.value ? parseInt(e.target.value) : null)}
+                  >
+                    <option value="">None</option>
+                    {eventTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Channel Group</Label>
+                  <Select
+                    value={bulkChannelGroupId?.toString() || ""}
+                    onChange={(e) => setBulkChannelGroupId(e.target.value ? parseInt(e.target.value) : null)}
+                  >
+                    <option value="">None</option>
+                    {(channelGroupsQuery.data ?? []).map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Channel Profiles</Label>
+                    {(defaultProfileIdsQuery.data?.length ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => setBulkChannelProfileIds(defaultProfileIdsQuery.data ?? [])}
+                      >
+                        Use Defaults
+                      </button>
+                    )}
+                  </div>
+                  <div className="border rounded-md max-h-24 overflow-y-auto">
+                    {(channelProfilesQuery.data ?? []).length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        No profiles found
+                      </div>
+                    ) : (
+                      (channelProfilesQuery.data ?? []).map((p) => {
+                        const isSelected = bulkChannelProfileIds.includes(p.id)
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className={cn(
+                              "w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center justify-between",
+                              isSelected && "bg-primary/10"
+                            )}
+                            onClick={() => {
+                              if (isSelected) {
+                                setBulkChannelProfileIds(bulkChannelProfileIds.filter((id) => id !== p.id))
+                              } else {
+                                setBulkChannelProfileIds([...bulkChannelProfileIds, p.id])
+                              }
+                            }}
+                          >
+                            <span>{p.name}</span>
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Enabled</Label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Switch
+                      checked={bulkEnabled}
+                      onCheckedChange={setBulkEnabled}
+                    />
+                    <span className="text-sm">{bulkEnabled ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Groups to import */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Groups to import</Label>
+              <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
+                {Array.from(selectedGroups.values()).map((group) => (
+                  <div key={`${group.m3u_account_id}:${group.m3u_group_id}`} className="flex items-center justify-between text-sm">
+                    <span className="truncate">{group.m3u_group_name}</span>
+                    <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                      {group.stream_count ?? "?"} streams
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="ghost" onClick={() => setShowBulkModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkImport}
+              disabled={bulkImporting || bulkLeagues.size === 0}
+            >
+              {bulkImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Importing...
+                </>
+              ) : (
+                `Import ${selectedGroups.size} Groups`
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

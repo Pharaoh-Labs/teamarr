@@ -209,7 +209,6 @@ export function EventGroupForm() {
         template_id: group.template_id,
         channel_start_number: group.channel_start_number,
         channel_group_id: group.channel_group_id,
-        stream_profile_id: group.stream_profile_id,
         channel_profile_ids: group.channel_profile_ids || [],
         duplicate_event_handling: group.duplicate_event_handling,
         channel_assignment_mode: group.channel_assignment_mode,
@@ -372,9 +371,6 @@ export function EventGroupForm() {
 
           if (shouldClear(group.channel_group_id, formData.channel_group_id)) {
             updateData.clear_channel_group_id = true
-          }
-          if (shouldClear(group.stream_profile_id, formData.stream_profile_id)) {
-            updateData.clear_stream_profile_id = true
           }
           if (shouldClear(group.template_id, formData.template_id)) {
             updateData.clear_template = true

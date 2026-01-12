@@ -1882,7 +1882,6 @@ class EventGroupProcessor:
             "id": group.id,
             "duplicate_event_handling": group.duplicate_event_handling,
             "channel_group_id": group.channel_group_id,
-            "stream_profile_id": group.stream_profile_id,
             "channel_profile_ids": group.channel_profile_ids,
             "channel_start_number": group.channel_start_number,
             # For cross-group consolidation

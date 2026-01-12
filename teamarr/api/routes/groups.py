@@ -43,7 +43,6 @@ class GroupCreate(BaseModel):
     template_id: int | None = None
     channel_start_number: int | None = Field(None, ge=1)
     channel_group_id: int | None = None
-    stream_profile_id: int | None = None
     channel_profile_ids: list[int] | None = None
     duplicate_event_handling: str = "consolidate"
     channel_assignment_mode: str = "auto"
@@ -86,7 +85,6 @@ class GroupUpdate(BaseModel):
     template_id: int | None = None
     channel_start_number: int | None = None
     channel_group_id: int | None = None
-    stream_profile_id: int | None = None
     channel_profile_ids: list[int] | None = None
     duplicate_event_handling: str | None = None
     channel_assignment_mode: str | None = None
@@ -123,7 +121,6 @@ class GroupUpdate(BaseModel):
     clear_template: bool = False
     clear_channel_start_number: bool = False
     clear_channel_group_id: bool = False
-    clear_stream_profile_id: bool = False
     clear_channel_profile_ids: bool = False
     clear_m3u_group_id: bool = False
     clear_m3u_group_name: bool = False
@@ -150,7 +147,6 @@ class GroupResponse(BaseModel):
     template_id: int | None = None
     channel_start_number: int | None = None
     channel_group_id: int | None = None
-    stream_profile_id: int | None = None
     channel_profile_ids: list[int] = []
     duplicate_event_handling: str = "consolidate"
     channel_assignment_mode: str = "auto"
@@ -231,6 +227,56 @@ class M3UGroupListResponse(BaseModel):
 
     groups: list[M3UGroupResponse]
     total: int
+
+
+class BulkGroupItem(BaseModel):
+    """Single group to create in bulk import."""
+
+    m3u_group_id: int
+    m3u_group_name: str
+    m3u_account_id: int
+    m3u_account_name: str
+
+
+class BulkGroupSettings(BaseModel):
+    """Shared settings for bulk group creation."""
+
+    group_mode: str = "single"  # "single" or "multi"
+    leagues: list[str] = Field(..., min_length=1)
+    template_id: int | None = None
+    channel_group_id: int | None = None
+    channel_profile_ids: list[int] | None = None
+    duplicate_event_handling: str = "consolidate"
+    channel_sort_order: str = "time"
+    overlap_handling: str = "add_stream"
+    enabled: bool = True
+
+
+class BulkGroupCreateRequest(BaseModel):
+    """Bulk create event EPG groups request."""
+
+    groups: list[BulkGroupItem] = Field(..., min_length=1)
+    settings: BulkGroupSettings
+
+
+class BulkGroupCreateResult(BaseModel):
+    """Result of a single group creation in bulk."""
+
+    m3u_group_id: int
+    m3u_account_id: int
+    group_id: int | None = None
+    name: str
+    success: bool
+    error: str | None = None
+
+
+class BulkGroupCreateResponse(BaseModel):
+    """Response from bulk group creation."""
+
+    created: list[BulkGroupCreateResult]
+    total_requested: int
+    total_created: int
+    total_failed: int
 
 
 # =============================================================================
@@ -323,7 +369,6 @@ def list_groups(
                 template_id=g.template_id,
                 channel_start_number=g.channel_start_number,
                 channel_group_id=g.channel_group_id,
-                stream_profile_id=g.stream_profile_id,
                 channel_profile_ids=g.channel_profile_ids,
                 duplicate_event_handling=g.duplicate_event_handling,
                 channel_assignment_mode=g.channel_assignment_mode,
@@ -386,12 +431,12 @@ def create_group(request: GroupCreate):
     )
 
     with get_db() as conn:
-        # Check for duplicate name
-        existing = get_group_by_name(conn, request.name)
+        # Check for duplicate name within same M3U account
+        existing = get_group_by_name(conn, request.name, request.m3u_account_id)
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Group with name '{request.name}' already exists",
+                detail=f"Group with name '{request.name}' already exists for this M3U account",
             )
 
         group_id = create_group(
@@ -404,7 +449,6 @@ def create_group(request: GroupCreate):
             template_id=request.template_id,
             channel_start_number=request.channel_start_number,
             channel_group_id=request.channel_group_id,
-            stream_profile_id=request.stream_profile_id,
             channel_profile_ids=request.channel_profile_ids,
             duplicate_event_handling=request.duplicate_event_handling,
             channel_assignment_mode=request.channel_assignment_mode,
@@ -445,7 +489,6 @@ def create_group(request: GroupCreate):
         template_id=group.template_id,
         channel_start_number=group.channel_start_number,
         channel_group_id=group.channel_group_id,
-        stream_profile_id=group.stream_profile_id,
         channel_profile_ids=group.channel_profile_ids,
         duplicate_event_handling=group.duplicate_event_handling,
         channel_assignment_mode=group.channel_assignment_mode,
@@ -490,6 +533,88 @@ def create_group(request: GroupCreate):
     )
 
 
+@router.post("/bulk", response_model=BulkGroupCreateResponse, status_code=status.HTTP_201_CREATED)
+def create_groups_bulk(request: BulkGroupCreateRequest):
+    """Bulk create event EPG groups with shared settings.
+
+    All groups will be created with the same mode, leagues, and settings.
+    Useful for importing multiple groups from the same M3U account.
+    """
+    from teamarr.database.groups import create_group, get_group_by_name
+
+    # Validate settings
+    validate_group_fields(
+        duplicate_event_handling=request.settings.duplicate_event_handling,
+        channel_sort_order=request.settings.channel_sort_order,
+        overlap_handling=request.settings.overlap_handling,
+    )
+
+    results: list[BulkGroupCreateResult] = []
+    total_created = 0
+    total_failed = 0
+
+    with get_db() as conn:
+        for item in request.groups:
+            try:
+                # Check for duplicate name within same M3U account
+                existing = get_group_by_name(conn, item.m3u_group_name, item.m3u_account_id)
+                if existing:
+                    results.append(BulkGroupCreateResult(
+                        m3u_group_id=item.m3u_group_id,
+                        m3u_account_id=item.m3u_account_id,
+                        name=item.m3u_group_name,
+                        success=False,
+                        error=f"Group already exists for this M3U account",
+                    ))
+                    total_failed += 1
+                    continue
+
+                # Create the group
+                group_id = create_group(
+                    conn,
+                    name=item.m3u_group_name,
+                    leagues=request.settings.leagues,
+                    group_mode=request.settings.group_mode,
+                    template_id=request.settings.template_id,
+                    channel_group_id=request.settings.channel_group_id,
+                    channel_profile_ids=request.settings.channel_profile_ids,
+                    duplicate_event_handling=request.settings.duplicate_event_handling,
+                    channel_sort_order=request.settings.channel_sort_order,
+                    overlap_handling=request.settings.overlap_handling,
+                    m3u_group_id=item.m3u_group_id,
+                    m3u_group_name=item.m3u_group_name,
+                    m3u_account_id=item.m3u_account_id,
+                    m3u_account_name=item.m3u_account_name,
+                    enabled=request.settings.enabled,
+                )
+
+                results.append(BulkGroupCreateResult(
+                    m3u_group_id=item.m3u_group_id,
+                    m3u_account_id=item.m3u_account_id,
+                    group_id=group_id,
+                    name=item.m3u_group_name,
+                    success=True,
+                ))
+                total_created += 1
+
+            except Exception as e:
+                results.append(BulkGroupCreateResult(
+                    m3u_group_id=item.m3u_group_id,
+                    m3u_account_id=item.m3u_account_id,
+                    name=item.m3u_group_name,
+                    success=False,
+                    error=str(e),
+                ))
+                total_failed += 1
+
+    return BulkGroupCreateResponse(
+        created=results,
+        total_requested=len(request.groups),
+        total_created=total_created,
+        total_failed=total_failed,
+    )
+
+
 @router.get("/{group_id}", response_model=GroupResponse)
 def get_group_by_id(group_id: int):
     """Get a single event EPG group."""
@@ -530,7 +655,6 @@ def get_group_by_id(group_id: int):
         template_id=group.template_id,
         channel_start_number=group.channel_start_number,
         channel_group_id=group.channel_group_id,
-        stream_profile_id=group.stream_profile_id,
         channel_profile_ids=group.channel_profile_ids,
         duplicate_event_handling=group.duplicate_event_handling,
         channel_assignment_mode=group.channel_assignment_mode,
@@ -601,13 +725,20 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 detail=f"Group {group_id} not found",
             )
 
-        # Check for duplicate name if changing
-        if request.name and request.name != group.name:
-            existing = get_group_by_name(conn, request.name)
-            if existing:
+        # Check for duplicate name if changing (within same M3U account)
+        # Determine the target account_id (could be changing)
+        target_account_id = (
+            None if request.clear_m3u_account_id
+            else request.m3u_account_id if request.m3u_account_id is not None
+            else group.m3u_account_id
+        )
+        target_name = request.name if request.name else group.name
+        if target_name != group.name or target_account_id != group.m3u_account_id:
+            existing = get_group_by_name(conn, target_name, target_account_id)
+            if existing and existing.id != group_id:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Group with name '{request.name}' already exists",
+                    detail=f"Group with name '{target_name}' already exists for this M3U account",
                 )
 
         update_group(
@@ -621,7 +752,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             template_id=request.template_id,
             channel_start_number=request.channel_start_number,
             channel_group_id=request.channel_group_id,
-            stream_profile_id=request.stream_profile_id,
             channel_profile_ids=request.channel_profile_ids,
             duplicate_event_handling=request.duplicate_event_handling,
             channel_assignment_mode=request.channel_assignment_mode,
@@ -653,7 +783,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             clear_template=request.clear_template,
             clear_channel_start_number=request.clear_channel_start_number,
             clear_channel_group_id=request.clear_channel_group_id,
-            clear_stream_profile_id=request.clear_stream_profile_id,
             clear_channel_profile_ids=request.clear_channel_profile_ids,
             clear_m3u_group_id=request.clear_m3u_group_id,
             clear_m3u_group_name=request.clear_m3u_group_name,
@@ -685,7 +814,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         template_id=group.template_id,
         channel_start_number=group.channel_start_number,
         channel_group_id=group.channel_group_id,
-        stream_profile_id=group.stream_profile_id,
         channel_profile_ids=group.channel_profile_ids,
         duplicate_event_handling=group.duplicate_event_handling,
         channel_assignment_mode=group.channel_assignment_mode,

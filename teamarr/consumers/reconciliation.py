@@ -501,18 +501,6 @@ class ChannelReconciler:
                     }
                 )
 
-            # Check stream_profile_id
-            expected_profile = channel.stream_profile_id
-            actual_profile = dispatcharr_channel.stream_profile_id
-            if expected_profile and expected_profile != actual_profile:
-                drift_fields.append(
-                    {
-                        "field": "stream_profile_id",
-                        "expected": channel.stream_profile_id,
-                        "actual": dispatcharr_channel.stream_profile_id,
-                    }
-                )
-
             if drift_fields:
                 issues.append(
                     ReconciliationIssue(

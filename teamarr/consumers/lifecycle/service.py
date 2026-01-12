@@ -192,7 +192,6 @@ class ChannelLifecycleService:
                 duplicate_mode = group_config.get("duplicate_event_handling", "consolidate")
 
                 channel_group_id = group_config.get("channel_group_id")
-                stream_profile_id = group_config.get("stream_profile_id")
                 channel_profile_ids = self._parse_profile_ids(
                     group_config.get("channel_profile_ids")
                 )
@@ -347,7 +346,6 @@ class ChannelLifecycleService:
                         template=template,
                         matched_keyword=matched_keyword,
                         channel_group_id=channel_group_id,
-                        stream_profile_id=stream_profile_id,
                         channel_profile_ids=channel_profile_ids,
                     )
 
@@ -735,7 +733,6 @@ class ChannelLifecycleService:
         template: dict | None,
         matched_keyword: str | None,
         channel_group_id: int | None,
-        stream_profile_id: int | None,
         channel_profile_ids: list[int],
     ) -> ChannelCreationResult:
         """Create a new channel in DB and Dispatcharr."""
@@ -797,7 +794,6 @@ class ChannelLifecycleService:
                     tvg_id=tvg_id,
                     channel_group_id=channel_group_id,
                     logo_id=dispatcharr_logo_id,
-                    stream_profile_id=stream_profile_id,
                     channel_profile_ids=channel_profile_ids if channel_profile_ids else None,
                 )
 
@@ -826,7 +822,6 @@ class ChannelLifecycleService:
                 dispatcharr_uuid=dispatcharr_uuid,
                 dispatcharr_logo_id=dispatcharr_logo_id,
                 channel_group_id=channel_group_id,
-                stream_profile_id=stream_profile_id,
                 channel_profile_ids=channel_profile_ids,
                 primary_stream_id=stream_id,
                 exception_keyword=matched_keyword,
@@ -1022,7 +1017,6 @@ class ChannelLifecycleService:
         | template            | name                | Template variable resolution|
         | group.channel_start | channel_number      | Range validation/reassign   |
         | group               | channel_group_id    | Simple compare              |
-        | group               | stream_profile_id   | Simple compare              |
         | current_stream      | streams             | M3U ID lookup               |
         | group               | channel_profile_ids | Add/remove via profile API  |
         | template            | logo_id             | Upload/update if different  |
@@ -1103,14 +1097,7 @@ class ChannelLifecycleService:
                 update_data["channel_group_id"] = new_group_id
                 changes_made.append(f"channel_group_id: {old_group_id} → {new_group_id}")
 
-            # 4. Check stream_profile_id
-            new_profile_id = group_config.get("stream_profile_id")
-            old_profile_id = current_channel.stream_profile_id
-            if new_profile_id != old_profile_id:
-                update_data["stream_profile_id"] = new_profile_id
-                changes_made.append(f"stream_profile_id: {old_profile_id} → {new_profile_id}")
-
-            # 5. Check streams (M3U ID sync) - V1 parity
+            # 4. Check streams (M3U ID sync) - V1 parity
             stream_id = stream.get("id") if stream else None
             if stream_id:
                 # streams is already tuple[int, ...] of stream IDs

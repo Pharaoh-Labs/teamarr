@@ -351,6 +351,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     - 16-22: Various additions (see individual migrations)
     - 23: Added default_channel_profile_ids to settings
     - 24: Added excluded and exclusion_reason to epg_matched_streams
+    - 25: Changed event_epg_groups name uniqueness from global to per-account
     """
     # Get current schema version
     try:
@@ -695,6 +696,195 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("UPDATE settings SET schema_version = 24 WHERE id = 1")
         logger.info("Schema upgraded to version 24 (epg_matched_streams excluded columns)")
         current_version = 24
+
+    # Version 25: Change event_epg_groups name unique constraint from global to per-account
+    # Allows same group name from different M3U providers (e.g., "US - NFL" from Provider A and B)
+    if current_version < 25:
+        _migrate_event_groups_name_unique(conn)
+        conn.execute("UPDATE settings SET schema_version = 25 WHERE id = 1")
+        logger.info("Schema upgraded to version 25 (per-account group name uniqueness)")
+        current_version = 25
+
+    # Version 26: Remove stream_profile_id column (not used)
+    if current_version < 26:
+        _drop_stream_profile_columns(conn)
+        conn.execute("UPDATE settings SET schema_version = 26 WHERE id = 1")
+        logger.info("Schema upgraded to version 26 (removed stream_profile_id)")
+        current_version = 26
+
+
+def _drop_stream_profile_columns(conn: sqlite3.Connection) -> None:
+    """Remove stream_profile_id from event_epg_groups and managed_channels.
+
+    SQLite 3.35+ supports ALTER TABLE DROP COLUMN. For older versions,
+    we silently skip (the column will just be unused).
+    """
+    for table in ["event_epg_groups", "managed_channels"]:
+        # Check if column exists
+        cursor = conn.execute(f"PRAGMA table_info({table})")
+        columns = {row["name"] for row in cursor.fetchall()}
+        if "stream_profile_id" not in columns:
+            continue
+
+        try:
+            conn.execute(f"ALTER TABLE {table} DROP COLUMN stream_profile_id")
+            logger.info(f"Dropped stream_profile_id from {table}")
+        except Exception as e:
+            # SQLite < 3.35 doesn't support DROP COLUMN
+            logger.debug(f"Could not drop stream_profile_id from {table}: {e}")
+
+
+def _migrate_event_groups_name_unique(conn: sqlite3.Connection) -> None:
+    """Change name uniqueness from global to per-account.
+
+    SQLite requires table recreation to change inline UNIQUE constraints.
+    This allows groups with the same name from different M3U accounts.
+    """
+    # Check if global unique constraint exists on name
+    cursor = conn.execute("""
+        SELECT sql FROM sqlite_master
+        WHERE type = 'table' AND name = 'event_epg_groups'
+    """)
+    row = cursor.fetchone()
+    if not row:
+        logger.debug("event_epg_groups table not found, skipping migration")
+        return
+
+    table_sql = row[0] or ""
+    # Check for inline UNIQUE on name (not the composite index we want)
+    if "name TEXT NOT NULL UNIQUE" not in table_sql and "name TEXT NOT NULL," in table_sql:
+        logger.debug("Global name UNIQUE constraint not present, skipping migration")
+        # Just ensure the new index exists
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
+            ON event_epg_groups(name, m3u_account_id)
+        """)
+        return
+
+    logger.info("Migrating event_epg_groups: changing name uniqueness to per-account")
+
+    # Disable foreign keys for table recreation
+    conn.execute("PRAGMA foreign_keys = OFF")
+
+    try:
+        # Create new table without global UNIQUE on name
+        conn.execute("""
+            CREATE TABLE event_epg_groups_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                name TEXT NOT NULL,
+                display_name TEXT,
+                group_mode TEXT DEFAULT 'single' CHECK(group_mode IN ('single', 'multi')),
+                leagues JSON NOT NULL,
+                template_id INTEGER,
+                channel_start_number INTEGER,
+                channel_group_id INTEGER,
+                channel_profile_ids TEXT,
+                duplicate_event_handling TEXT DEFAULT 'consolidate'
+                    CHECK(duplicate_event_handling IN ('consolidate', 'separate', 'ignore')),
+                channel_assignment_mode TEXT DEFAULT 'auto'
+                    CHECK(channel_assignment_mode IN ('auto', 'manual')),
+                sort_order INTEGER DEFAULT 0,
+                total_stream_count INTEGER DEFAULT 0,
+                parent_group_id INTEGER,
+                m3u_group_id INTEGER,
+                m3u_group_name TEXT,
+                m3u_account_id INTEGER,
+                m3u_account_name TEXT,
+                last_refresh TIMESTAMP,
+                stream_count INTEGER DEFAULT 0,
+                matched_count INTEGER DEFAULT 0,
+                stream_include_regex TEXT,
+                stream_include_regex_enabled BOOLEAN DEFAULT 0,
+                stream_exclude_regex TEXT,
+                stream_exclude_regex_enabled BOOLEAN DEFAULT 0,
+                custom_regex_teams TEXT,
+                custom_regex_teams_enabled BOOLEAN DEFAULT 0,
+                custom_regex_date TEXT,
+                custom_regex_date_enabled BOOLEAN DEFAULT 0,
+                custom_regex_time TEXT,
+                custom_regex_time_enabled BOOLEAN DEFAULT 0,
+                skip_builtin_filter BOOLEAN DEFAULT 0,
+                include_teams JSON,
+                exclude_teams JSON,
+                team_filter_mode TEXT DEFAULT 'include'
+                    CHECK(team_filter_mode IN ('include', 'exclude')),
+                filtered_include_regex INTEGER DEFAULT 0,
+                filtered_exclude_regex INTEGER DEFAULT 0,
+                filtered_not_event INTEGER DEFAULT 0,
+                filtered_team INTEGER DEFAULT 0,
+                failed_count INTEGER DEFAULT 0,
+                streams_excluded INTEGER DEFAULT 0,
+                excluded_event_final INTEGER DEFAULT 0,
+                excluded_event_past INTEGER DEFAULT 0,
+                excluded_before_window INTEGER DEFAULT 0,
+                excluded_league_not_included INTEGER DEFAULT 0,
+                channel_sort_order TEXT DEFAULT 'time'
+                    CHECK(channel_sort_order IN ('time', 'sport_time', 'league_time')),
+                overlap_handling TEXT DEFAULT 'add_stream'
+                    CHECK(overlap_handling IN ('add_stream', 'add_only', 'create_all', 'skip')),
+                enabled BOOLEAN DEFAULT 1,
+                FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL
+            )
+        """)
+
+        # Get column list from old table for safe copy
+        cursor = conn.execute("PRAGMA table_info(event_epg_groups)")
+        old_columns = [row["name"] for row in cursor.fetchall()]
+
+        # Get column list from new table
+        cursor = conn.execute("PRAGMA table_info(event_epg_groups_new)")
+        new_columns = [row["name"] for row in cursor.fetchall()]
+
+        # Use only columns that exist in both
+        common_columns = [c for c in new_columns if c in old_columns]
+        columns_str = ", ".join(common_columns)
+
+        # Copy data
+        conn.execute(f"""
+            INSERT INTO event_epg_groups_new ({columns_str})
+            SELECT {columns_str} FROM event_epg_groups
+        """)
+
+        # Drop old table and rename
+        conn.execute("DROP TABLE event_epg_groups")
+        conn.execute("ALTER TABLE event_epg_groups_new RENAME TO event_epg_groups")
+
+        # Recreate indexes
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_event_epg_groups_enabled
+            ON event_epg_groups(enabled)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_event_epg_groups_sort_order
+            ON event_epg_groups(sort_order)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_event_epg_groups_name
+            ON event_epg_groups(name)
+        """)
+        # New per-account unique index
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
+            ON event_epg_groups(name, m3u_account_id)
+        """)
+
+        # Recreate trigger
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS update_event_epg_groups_timestamp
+            AFTER UPDATE ON event_epg_groups
+            BEGIN
+                UPDATE event_epg_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END
+        """)
+
+        conn.commit()
+        logger.info("Successfully migrated event_epg_groups to per-account name uniqueness")
+
+    finally:
+        # Re-enable foreign keys
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def _rename_filtered_no_match_to_failed_count(conn: sqlite3.Connection) -> None:

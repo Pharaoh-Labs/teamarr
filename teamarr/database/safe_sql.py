@@ -46,7 +46,6 @@ VALID_COLUMNS: dict[str, set[str]] = {
         "template_id",
         "channel_start_number",
         "channel_group_id",
-        "stream_profile_id",
         "channel_profile_ids",
         "create_timing",
         "delete_timing",

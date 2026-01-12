@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS settings (
     stream_filter_exclude_patterns JSON DEFAULT '[]',
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 24
+    schema_version INTEGER DEFAULT 25
 );
 
 -- Insert default settings
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     -- Identity
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,                      -- Unique per m3u_account_id (see index below)
     display_name TEXT,                       -- Optional display name override for UI
     group_mode TEXT DEFAULT 'single'         -- 'single' or 'multi' - preserves original mode
         CHECK(group_mode IN ('single', 'multi')),
@@ -293,7 +293,6 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     -- Channel Settings
     channel_start_number INTEGER,            -- Starting channel number for this group
     channel_group_id INTEGER,                -- Dispatcharr channel group to assign
-    stream_profile_id INTEGER,               -- Dispatcharr stream profile
     channel_profile_ids TEXT,                -- JSON array of channel profile IDs
 
     -- Duplicate Event Handling (uses global lifecycle settings)
@@ -374,6 +373,9 @@ END;
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_enabled ON event_epg_groups(enabled);
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_sort_order ON event_epg_groups(sort_order);
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_name ON event_epg_groups(name);
+-- Allow same group name from different M3U accounts (e.g., "US - NFL" from Provider A and B)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
+    ON event_epg_groups(name, m3u_account_id);
 
 
 -- =============================================================================
@@ -406,7 +408,6 @@ CREATE TABLE IF NOT EXISTS managed_channels (
 
     -- Channel Settings (from group config)
     channel_group_id INTEGER,                -- Dispatcharr channel group
-    stream_profile_id INTEGER,               -- Dispatcharr stream profile
     channel_profile_ids TEXT,                -- JSON array of channel profile IDs
 
     -- Primary stream (first/main stream for this channel)
