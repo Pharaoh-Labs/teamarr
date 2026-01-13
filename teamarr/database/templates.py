@@ -565,7 +565,8 @@ def template_to_event_config(template: Template) -> EventTemplateConfig:
 def seed_default_templates(conn: Connection) -> None:
     """Seed default templates if none exist.
 
-    Creates a basic team template and event template for getting started.
+    Creates a team template and event template for getting started.
+    Art URLs use localhost placeholder - replace with your own image server.
     """
     existing = get_all_templates(conn)
     if existing:
@@ -574,46 +575,133 @@ def seed_default_templates(conn: Connection) -> None:
     # Default team template
     create_template(
         conn,
-        name="Default Team",
+        name="Team",
         template_type="team",
-        title_format="{team_name} {sport}",
-        subtitle_template="{venue_full}",
+        title_format="{gracenote_category}",
+        subtitle_template="{away_team} at {home_team}",
+        program_art_url="http://localhost:3000/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png",
+        game_duration_mode="sport",
+        pregame_enabled=True,
+        postgame_enabled=True,
+        idle_enabled=True,
+        xmltv_flags={"new": True, "live": True, "date": True},
+        xmltv_video={"enabled": False, "quality": "HDTV"},
+        xmltv_categories=["Sports", "{sport}", "Sports Event"],
+        categories_apply_to="events",
+        pregame_periods=[],
         pregame_fallback={
-            "title": "Pregame Coverage",
-            "description": "{team_name} vs {opponent.next} | {game_time.next} | {venue.next}",
+            "title": "Coming up: {gracenote_category} starting at {game_time.next}",
+            "subtitle": "{away_team.next} at {home_team.next}",
+            "description": "The {away_team_record.next} {away_team.next} travel to {venue_city.next}, {venue_state.next} to play the {home_team_record.next} {home_team.next} {today_tonight.next} at {game_time.next}.",
+            "art_url": "http://localhost:3000/{league_id}/{away_team_pascal.next}/{home_team_pascal.next}/cover.png",
         },
+        postgame_periods=[],
         postgame_fallback={
-            "title": "Postgame Recap",
-            "description": "{team_name} {result_text.last} {opponent.last} {final_score.last}",
+            "title": "{gracenote_category}: {team_name} Postgame Recap",
+            "subtitle": "{away_team.last} at {home_team.last}",
+            "description": "{team_name} {result_text.last} the {opponent.last} {final_score.last}",
+            "art_url": "http://localhost:3000/{league_id}/{away_team_pascal.last}/{home_team_pascal.last}/cover.png",
+        },
+        postgame_conditional={
+            "enabled": True,
+            "description_final": "The {team_name} {result_text.last} the {opponent.last} {final_score.last} {overtime_text.last}",
+            "description_not_final": "The game between the {team_name} and the {opponent.last} on {game_date.last} has not yet ended as of the last update.",
         },
         idle_content={
-            "title": "{team_name} Programming",
-            "description": "Next game: {game_day.next} {game_date_short.next} vs {opponent.next}",
+            "title": "No {team_name} Game Today",
+            "subtitle": "Next game: {game_date.next} at {game_time.next} {vs_at.next} the {opponent.next}",
+            "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}",
+            "art_url": "",
+        },
+        idle_conditional={
+            "enabled": True,
+            "description_final": "The {team_name} {result_text.last} the {opponent.last} {final_score.last} {overtime_text.last} on {game_date.last}. Next game will be with the {opponent.next} on {game_date.next}",
+            "description_not_final": "The {team_name} last played against the {opponent.last} on {game_date.last}.",
+        },
+        idle_offseason={
+            "title_enabled": False,
+            "title": None,
+            "subtitle_enabled": True,
+            "subtitle": "No upcoming game currently on schedule in next 30 days",
+            "description_enabled": True,
+            "description": "No upcoming {team_name} games scheduled.",
         },
         conditional_descriptions=[
             {
-                "condition": "is_home",
-                "priority": 50,
-                "template": "{team_name} hosts {opponent} at {venue}",
-            },
-            {
-                "condition": "is_away",
-                "priority": 50,
-                "template": "{team_name} travels to face {opponent}",
-            },
-            {"priority": 100, "template": "{team_name} vs {opponent}"},
+                "condition": None,
+                "condition_value": None,
+                "template": "The {away_team_record} {away_team} travel to {venue_city}, {venue_state} to take on the {home_team_record} {home_team} at {venue}.",
+                "priority": 100,
+                "label": "Default",
+            }
         ],
+        event_channel_name="{away_team} @ {home_team}",
+        event_channel_logo_url="",
     )
 
     # Default event template
     create_template(
         conn,
-        name="Default Event",
+        name="Event",
         template_type="event",
-        title_format="{away_team} @ {home_team}",
-        subtitle_template="{venue_full}",
-        event_channel_name="{away_team_abbrev} @ {home_team_abbrev}",
+        title_format="{gracenote_category}",
+        subtitle_template="{away_team} at {home_team}",
+        program_art_url="http://localhost:3000/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png",
+        game_duration_mode="sport",
+        pregame_enabled=True,
+        postgame_enabled=True,
+        idle_enabled=False,
+        xmltv_flags={"new": True, "live": True, "date": True},
+        xmltv_video={"enabled": False, "quality": "HDTV"},
+        xmltv_categories=["Sports", "{sport}", "Sporting Event"],
+        categories_apply_to="events",
+        pregame_periods=[],
+        pregame_fallback={
+            "title": "Coming up: {gracenote_category} starting at {game_time}",
+            "subtitle": "{away_team} at {home_team}",
+            "description": "The {away_team_record} {away_team} travel to {venue_city}, {venue_state} to play the {home_team_record} {home_team} {today_tonight} at {game_time}.",
+            "art_url": "http://localhost:3000/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png",
+        },
+        postgame_periods=[],
+        postgame_fallback={
+            "title": "{gracenote_category}: Postgame Recap",
+            "subtitle": "{away_team} at {home_team}",
+            "description": "The {team_name} {result_text} the {opponent} {final_score} {overtime_text}",
+            "art_url": "http://localhost:3000/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png",
+        },
+        postgame_conditional={
+            "enabled": True,
+            "description_final": "The {team_name} {result_text} the {opponent} {final_score} {overtime_text}",
+            "description_not_final": "The game between the {away_team} and {home_team} has not yet ended as of the last update.",
+        },
+        idle_content={
+            "title": "{team_name} Programming",
+            "subtitle": "",
+            "description": "",
+            "art_url": "",
+        },
+        idle_conditional={
+            "enabled": False,
+            "description_final": "",
+            "description_not_final": "",
+        },
+        idle_offseason={
+            "title_enabled": False,
+            "title": None,
+            "subtitle_enabled": False,
+            "subtitle": "",
+            "description_enabled": False,
+            "description": "No upcoming {team_name} games scheduled.",
+        },
         conditional_descriptions=[
-            {"priority": 100, "template": "{matchup} | {venue_city} | {game_time}"},
+            {
+                "condition": "",
+                "condition_value": None,
+                "template": "The {away_team_record} {away_team} travel to {venue_city}, {venue_state} to play the {home_team_record} {home_team} at {venue}.",
+                "priority": 100,
+                "label": "Default",
+            }
         ],
+        event_channel_name="{away_team} at {home_team}",
+        event_channel_logo_url="http://localhost:3000/{league_id}/{away_team_pascal}/{home_team_pascal}/logo.png",
     )
