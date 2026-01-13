@@ -428,48 +428,89 @@ export function Settings() {
           <CardTitle>System Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="epg-timezone">Timezone</Label>
-              <Input
-                id="epg-timezone"
-                value={epg?.epg_timezone ?? "America/New_York"}
-                onChange={(e) => epg && setEPG({ ...epg, epg_timezone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Time Format</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={display?.time_format === "12h" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => display && setDisplay({ ...display, time_format: "12h" })}
-                >
-                  12-hour
-                </Button>
-                <Button
-                  type="button"
-                  variant={display?.time_format === "24h" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => display && setDisplay({ ...display, time_format: "24h" })}
-                >
-                  24-hour
-                </Button>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left column: Timezones */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="ui-timezone">UI Display Timezone</Label>
+                <Input
+                  id="ui-timezone"
+                  value={settings?.ui_timezone ?? "America/New_York"}
+                  disabled
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This can be changed by setting the TZ environment variable
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="epg-timezone">EPG Output Timezone</Label>
+                <Input
+                  id="epg-timezone"
+                  value={epg?.epg_timezone ?? "America/New_York"}
+                  onChange={(e) => epg && setEPG({ ...epg, epg_timezone: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used for template variables like {"{game_time}"}
+                </p>
               </div>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 pt-6">
-                <Switch
-                  checked={display?.show_timezone ?? true}
-                  onCheckedChange={(checked) =>
-                    display && setDisplay({ ...display, show_timezone: checked })
-                  }
-                />
-                <Label>Show Timezone</Label>
+
+            {/* Right column: Time Format and Show Timezone */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Time Format</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={display?.time_format === "12h" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => display && setDisplay({ ...display, time_format: "12h" })}
+                  >
+                    12-hour
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={display?.time_format === "24h" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => display && setDisplay({ ...display, time_format: "24h" })}
+                  >
+                    24-hour
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Applies to UI display and EPG output
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={display?.show_timezone ?? true}
+                    onCheckedChange={(checked) =>
+                      display && setDisplay({ ...display, show_timezone: checked })
+                    }
+                  />
+                  <Label>Show Timezone Abbreviation</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Applies to UI display and EPG output
+                </p>
               </div>
             </div>
           </div>
+
+          {/* Info box when timezones differ */}
+          {settings?.ui_timezone_source === "env" &&
+           settings?.ui_timezone !== epg?.epg_timezone && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md text-sm">
+              <p className="font-medium text-blue-900 dark:text-blue-100">Two timezones configured:</p>
+              <ul className="list-disc list-inside mt-1 text-blue-800 dark:text-blue-200">
+                <li><strong>UI Display</strong>: {settings.ui_timezone} (from $TZ)</li>
+                <li><strong>EPG Output</strong>: {epg?.epg_timezone} (user setting)</li>
+              </ul>
+            </div>
+          )}
 
           <Button
             onClick={handleSaveEPGAndDisplay}

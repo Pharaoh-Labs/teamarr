@@ -190,3 +190,7 @@ class AllSettingsModel(BaseModel):
     team_filter: TeamFilterSettingsModel | None = None
     epg_generation_counter: int = 0
     schema_version: int = 22
+
+    # UI timezone info (read-only, from environment or fallback to epg_timezone)
+    ui_timezone: str = "America/New_York"
+    ui_timezone_source: str = "epg"  # "env" if from UI_TIMEZONE env var, "epg" if fallback

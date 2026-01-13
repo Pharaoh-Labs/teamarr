@@ -107,6 +107,9 @@ export interface AllSettings {
   team_filter?: TeamFilterSettings
   epg_generation_counter: number
   schema_version: number
+  // UI timezone info (read-only, from environment or fallback to epg_timezone)
+  ui_timezone: string
+  ui_timezone_source: "env" | "epg"
 }
 
 export interface ConnectionTestResponse {

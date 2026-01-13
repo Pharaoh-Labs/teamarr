@@ -110,9 +110,13 @@ class Config:
     Config does NOT import from database layer (layer separation).
     """
 
-    # Timezone - From TZ env var or loaded from DB at startup
+    # EPG Timezone - From TZ env var or loaded from DB at startup
     _timezone_from_env: str | None = os.getenv("TZ") or os.getenv("USER_TIMEZONE")
     _timezone_cache: str | None = None
+
+    # UI Timezone - From TZ env var (immutable at runtime)
+    # Falls back to EPG timezone if not set
+    _ui_timezone_from_env: str | None = os.getenv("TZ")
 
     # Display settings - Loaded from DB at startup
     _display_settings_cache: dict | None = None
@@ -187,6 +191,7 @@ class Config:
         """
         load_dotenv(_ENV_FILE, override=True)
         cls._timezone_from_env = os.getenv("TZ") or os.getenv("USER_TIMEZONE")
+        cls._ui_timezone_from_env = os.getenv("TZ")
 
     @classmethod
     def get_display_settings(cls) -> dict:
@@ -225,6 +230,48 @@ class Config:
     def clear_timezone_cache(cls) -> None:
         """Clear cached timezone (forces reload on next access)."""
         cls._timezone_cache = None
+
+    # =========================================================================
+    # UI Timezone (for frontend display, from env var)
+    # =========================================================================
+
+    @classmethod
+    def get_ui_timezone_str(cls) -> str:
+        """Get the UI display timezone as a string.
+
+        Priority:
+        1. TZ env var (if set and valid)
+        2. Fall back to EPG timezone (user-configurable)
+        """
+        if cls._ui_timezone_from_env:
+            # Validate timezone string
+            try:
+                ZoneInfo(cls._ui_timezone_from_env)
+                return cls._ui_timezone_from_env
+            except Exception:
+                # Invalid timezone, fall back to EPG timezone
+                pass
+        return cls.get_timezone_str()
+
+    @classmethod
+    def get_ui_timezone(cls) -> ZoneInfo:
+        """Get the UI display timezone as a ZoneInfo object."""
+        return ZoneInfo(cls.get_ui_timezone_str())
+
+    @classmethod
+    def is_ui_timezone_from_env(cls) -> bool:
+        """Check if UI timezone is set via environment variable.
+
+        Returns True if TZ env var is set AND valid.
+        """
+        if not cls._ui_timezone_from_env:
+            return False
+        # Validate it's a valid timezone
+        try:
+            ZoneInfo(cls._ui_timezone_from_env)
+            return True
+        except Exception:
+            return False
 
 
 def get_user_timezone() -> ZoneInfo:
@@ -290,3 +337,27 @@ def get_show_timezone() -> bool:
 def clear_display_cache() -> None:
     """Clear cached display settings (call after settings update)."""
     Config.clear_display_cache()
+
+
+# =============================================================================
+# UI Timezone exports (for frontend display)
+# =============================================================================
+
+
+def get_ui_timezone() -> ZoneInfo:
+    """Get the UI display timezone.
+
+    Used for frontend date/time display. Falls back to EPG timezone if
+    TZ env var is not set.
+    """
+    return Config.get_ui_timezone()
+
+
+def get_ui_timezone_str() -> str:
+    """Get the UI display timezone as a string."""
+    return Config.get_ui_timezone_str()
+
+
+def is_ui_timezone_from_env() -> bool:
+    """Check if UI timezone is from environment variable (immutable)."""
+    return Config.is_ui_timezone_from_env()

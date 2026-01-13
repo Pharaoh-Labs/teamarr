@@ -1,15 +1,21 @@
 import { useCallback, useMemo } from "react"
-import { useDisplaySettings, useEPGSettings } from "./useSettings"
+import { useDisplaySettings, useSettings } from "./useSettings"
 
 /**
  * Hook for formatting dates according to user preferences.
- * Uses EPG timezone and display settings (time_format, show_timezone).
+ * Uses UI timezone for display and display settings (time_format, show_timezone).
+ *
+ * UI timezone is either:
+ * - From TZ environment variable (immutable)
+ * - Falls back to EPG timezone setting (user-configurable)
  */
 export function useDateFormat() {
   const { data: displaySettings } = useDisplaySettings()
-  const { data: epgSettings } = useEPGSettings()
+  const { data: settings } = useSettings()
 
-  const timezone = epgSettings?.epg_timezone || "UTC"
+  // Use UI timezone for display (falls back to EPG timezone if not set via env var)
+  const timezone = settings?.ui_timezone || "UTC"
+  const timezoneSource = settings?.ui_timezone_source || "epg"
   const timeFormat = displaySettings?.time_format || "12h"
   const showTimezone = displaySettings?.show_timezone ?? true
 
@@ -90,6 +96,7 @@ export function useDateFormat() {
     formatRelativeTime,
     formatDateTimeWithRelative,
     timezone,
+    timezoneSource,
     timeFormat,
     showTimezone,
   }

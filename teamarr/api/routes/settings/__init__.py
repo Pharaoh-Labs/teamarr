@@ -48,6 +48,7 @@ router.include_router(team_filter_router)
 @router.get("/settings", response_model=AllSettingsModel)
 def get_settings():
     """Get all application settings."""
+    from teamarr.config import get_ui_timezone_str, is_ui_timezone_from_env
     from teamarr.database.settings import get_all_settings
 
     with get_db() as conn:
@@ -106,6 +107,9 @@ def get_settings():
         ),
         epg_generation_counter=settings.epg_generation_counter,
         schema_version=settings.schema_version,
+        # UI timezone info (read-only)
+        ui_timezone=get_ui_timezone_str(),
+        ui_timezone_source="env" if is_ui_timezone_from_env() else "epg",
     )
 
 
