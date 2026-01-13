@@ -185,15 +185,24 @@ _app_state: dict = {}
 async def lifespan(app: FastAPI):
     """Application lifespan handler - runs on startup and shutdown."""
     from teamarr.database import get_db, init_db
+    from teamarr.database.connection import is_v1_database_detected
     from teamarr.dispatcharr import close_dispatcharr
 
     # Startup - minimal blocking, then background tasks
     setup_logging()
     logger.info("Starting Teamarr V2...")
 
-    # Initialize database (fast)
+    # Initialize database (fast) - this also detects V1 databases
     init_db()
 
+    # If V1 database detected, skip V2 initialization - only serve migration endpoints
+    if is_v1_database_detected():
+        logger.warning("V1 database detected - running in migration mode only")
+        yield
+        logger.info("Teamarr V2 stopped (migration mode)")
+        return
+
+    # Normal V2 startup continues...
     # Cleanup any stuck processing runs from previous crashes
     from teamarr.database.stats import cleanup_stuck_runs
 

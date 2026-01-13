@@ -43,15 +43,29 @@ async function fetchMigrationStatus(): Promise<MigrationStatus> {
 }
 
 function AppContent() {
-  const { data: migrationStatus, isLoading } = useQuery({
+  const { data: migrationStatus, isLoading: migrationLoading } = useQuery({
     queryKey: ["migration-status"],
     queryFn: fetchMigrationStatus,
-    retry: false,
+    retry: 3,
+    retryDelay: 1000,
     staleTime: Infinity, // Only check once per session
   })
 
-  // Show V1 upgrade page if V1 database detected
-  if (!isLoading && migrationStatus?.is_v1_database) {
+  // Show loading while checking migration status
+  if (migrationLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Teamarr</h1>
+          <p className="text-sm text-muted-foreground">Checking database...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show V1 upgrade page if V1 database detected OR has archived backup (so user can download)
+  // This check happens BEFORE StartupOverlay to avoid V2 initialization errors
+  if (migrationStatus?.is_v1_database || migrationStatus?.has_archived_backup) {
     return <V1UpgradePage />
   }
 

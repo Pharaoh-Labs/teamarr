@@ -144,3 +144,74 @@ async def download_v1_backup():
         filename="teamarr-v1-backup.db",
         media_type="application/x-sqlite3",
     )
+
+
+@router.post("/clear-backup")
+async def clear_v1_backup():
+    """Move V1 backup to backups subfolder after user proceeds to V2.
+
+    Preserves the backup for future reference but removes it from the
+    detection path so the upgrade page won't show again.
+    """
+    backup_path = get_backup_path()
+
+    if backup_path.exists():
+        try:
+            # Create backups subfolder
+            backups_dir = backup_path.parent / "backups"
+            backups_dir.mkdir(exist_ok=True)
+
+            # Move backup to subfolder with timestamp
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dest_path = backups_dir / f"teamarr-v1-{timestamp}.db"
+
+            shutil.move(str(backup_path), str(dest_path))
+            logger.info(f"V1 backup moved to {dest_path}")
+
+            return {"success": True, "message": f"Backup moved to {dest_path}"}
+        except Exception as e:
+            logger.error(f"Failed to move V1 backup: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to move backup: {str(e)}")
+
+    return {"success": True, "message": "No backup to move"}
+
+
+@router.post("/restart")
+async def trigger_restart():
+    """Trigger application restart after V1 migration.
+
+    Moves backup to subfolder and schedules an immediate exit.
+    Docker (with restart policy) or supervisor will restart the process.
+    """
+    import asyncio
+    import sys
+
+    backup_path = get_backup_path()
+
+    # Move backup if it exists
+    if backup_path.exists():
+        try:
+            backups_dir = backup_path.parent / "backups"
+            backups_dir.mkdir(exist_ok=True)
+
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dest_path = backups_dir / f"teamarr-v1-{timestamp}.db"
+
+            shutil.move(str(backup_path), str(dest_path))
+            logger.info(f"V1 backup moved to {dest_path}")
+        except Exception as e:
+            logger.warning(f"Failed to move V1 backup: {e}")
+
+    logger.info("Triggering application restart for V2 initialization...")
+
+    # Schedule exit after response is sent
+    async def delayed_exit():
+        await asyncio.sleep(0.5)  # Give time for response to be sent
+        logger.info("Exiting for restart...")
+        sys.exit(0)
+
+    asyncio.create_task(delayed_exit())
+
+    return {"success": True, "message": "Restart triggered"}

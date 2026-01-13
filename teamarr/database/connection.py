@@ -17,6 +17,14 @@ DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "teamarr.db"
 # Schema file location
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
+# Global flag for V1 database detection (set during init, checked by migration)
+_v1_database_detected = False
+
+
+def is_v1_database_detected() -> bool:
+    """Check if a V1 database was detected during initialization."""
+    return _v1_database_detected
+
 
 def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     """Get a database connection.
@@ -87,6 +95,11 @@ def init_db(db_path: Path | str | None = None) -> None:
             # First, verify this is a valid V2-compatible database by checking integrity
             # and querying a core table. This catches both corruption AND V1 databases.
             _verify_database_integrity(conn, path)
+
+            # If V1 database detected, skip schema initialization - only migration endpoints work
+            if _v1_database_detected:
+                logger.info("Skipping V2 schema initialization for V1 database")
+                return
 
             # Pre-migration: rename league_id_alias -> league_id before schema.sql runs
             # (schema.sql references league_id column in INSERT OR REPLACE)
@@ -175,19 +188,14 @@ def _verify_database_integrity(conn: sqlite3.Connection, path: Path) -> None:
     v1_tables_found = v1_indicators & existing_tables
 
     if v1_tables_found:
-        logger.error(
+        logger.warning(
             f"Database file '{path}' appears to be a V1 database. "
             f"Found V1-specific tables: {v1_tables_found}. "
-            "V2 requires a fresh database - please either:\n"
-            "  1. Use a different data directory for V2, or\n"
-            "  2. Backup and delete the existing database file"
+            "V2 migration page will be shown to the user."
         )
-        raise RuntimeError(
-            f"V1 database detected at '{path}'. "
-            f"Found V1 tables: {v1_tables_found}. "
-            "V2 is not compatible with V1 databases. "
-            "Please use a fresh data directory or delete the existing database."
-        )
+        # Set global flag for V1 detection - don't raise error, let migration handle it
+        global _v1_database_detected
+        _v1_database_detected = True
 
 
 def _rename_league_id_column_if_needed(conn: sqlite3.Connection) -> None:
