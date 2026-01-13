@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query"
 import { MainLayout } from "@/layouts/MainLayout"
 import { GenerationProvider } from "@/contexts/GenerationContext"
 import { StartupOverlay } from "@/components/StartupOverlay"
@@ -15,6 +15,7 @@ import {
   EPG,
   Channels,
   Settings,
+  V1UpgradePage,
 } from "@/pages"
 
 const queryClient = new QueryClient({
@@ -26,10 +27,36 @@ const queryClient = new QueryClient({
   },
 })
 
-function App() {
+interface MigrationStatus {
+  is_v1_database: boolean
+  has_archived_backup: boolean
+  database_path: string
+  backup_path: string | null
+}
+
+async function fetchMigrationStatus(): Promise<MigrationStatus> {
+  const response = await fetch("/api/v1/migration/status")
+  if (!response.ok) {
+    throw new Error("Failed to fetch migration status")
+  }
+  return response.json()
+}
+
+function AppContent() {
+  const { data: migrationStatus, isLoading } = useQuery({
+    queryKey: ["migration-status"],
+    queryFn: fetchMigrationStatus,
+    retry: false,
+    staleTime: Infinity, // Only check once per session
+  })
+
+  // Show V1 upgrade page if V1 database detected
+  if (!isLoading && migrationStatus?.is_v1_database) {
+    return <V1UpgradePage />
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <GenerationProvider>
+    <>
       <StartupOverlay />
       <BrowserRouter>
         <Routes>
@@ -50,6 +77,15 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+    </>
+  )
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GenerationProvider>
+        <AppContent />
       </GenerationProvider>
     </QueryClientProvider>
   )
