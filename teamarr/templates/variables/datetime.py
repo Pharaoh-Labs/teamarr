@@ -132,17 +132,3 @@ def extract_days_until(ctx: TemplateContext, game_ctx: GameContext | None) -> st
     return str(max(0, delta.days))
 
 
-@register_variable(
-    name="hours_until",
-    category=Category.DATETIME,
-    suffix_rules=SuffixRules.ALL,
-    description="Hours until game (e.g., '24')",
-)
-def extract_hours_until(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    dt = _get_local_time(game_ctx)
-    if not dt:
-        return ""
-    now = now_user()
-    delta = dt - now
-    hours = int(delta.total_seconds() / 3600)
-    return str(max(0, hours))

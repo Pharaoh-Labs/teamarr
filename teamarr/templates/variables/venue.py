@@ -61,14 +61,3 @@ def extract_venue_full(ctx: TemplateContext, game_ctx: GameContext | None) -> st
     return ", ".join(parts)
 
 
-@register_variable(
-    name="attendance",
-    category=Category.VENUE,
-    suffix_rules=SuffixRules.LAST_ONLY,
-    description="Game attendance (formatted with commas)",
-)
-def extract_attendance(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    # Attendance would need to be added to Event dataclass
-    # Available in ESPN competition data as competition.attendance
-    # For now, return empty - can be populated when parsing events
-    return ""
