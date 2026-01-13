@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, Save, ChevronDown, Search, X, BookOpen, Download, Upload, Trash2, ChevronRight } from "lucide-react"
+import { ArrowLeft, Loader2, Save, ChevronDown, Search, X, BookOpen, Download, Upload, Trash2, ChevronRight, AlertTriangle } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +23,10 @@ import {
   type ConditionalDescription,
 } from "@/api/templates"
 import { fetchVariables, fetchSamples, fetchConditions, type VariableCategory } from "@/api/variables"
+import {
+  buildValidVariableSet,
+  validateTemplate,
+} from "@/utils/templateValidation"
 import { usePresets, useCreatePreset, useDeletePreset } from "@/hooks/usePresets"
 import type { ConditionPreset } from "@/api/presets"
 import {
@@ -150,6 +154,15 @@ export function TemplateForm() {
   const sampleData = samplesData?.samples ?? DEFAULT_SAMPLE_DATA
   const resolveTemplate = createResolver(sampleData)
   const availableSports = samplesData?.available_sports ?? variablesData?.available_sports ?? ["NBA", "NFL", "MLB", "NHL"]
+
+  // Build validation set from variables data
+  const validationData = useMemo(() => {
+    if (!variablesData?.categories) {
+      return { validNames: new Set<string>(), baseNames: new Set<string>() }
+    }
+    const { validNames, baseNames } = buildValidVariableSet(variablesData.categories)
+    return { validNames, baseNames }
+  }, [variablesData?.categories])
 
   // Helper to merge filler content with defaults, ensuring no null values
   const mergeFillerContent = (content: FillerContent | null, defaults: FillerContent): FillerContent => {
@@ -441,6 +454,8 @@ export function TemplateForm() {
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isTeamTemplate={isTeamTemplate}
             />
           )}
           {activeTab === "defaults" && (
@@ -451,6 +466,7 @@ export function TemplateForm() {
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
             />
           )}
           {activeTab === "conditions" && (
@@ -459,6 +475,7 @@ export function TemplateForm() {
               setFormData={setFormData}
               resolveTemplate={resolveTemplate}
               isTeamTemplate={isTeamTemplate}
+              validationData={validationData}
             />
           )}
           {activeTab === "fillers" && (
@@ -469,10 +486,11 @@ export function TemplateForm() {
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
             />
           )}
           {activeTab === "xmltv" && (
-            <XmltvTab formData={formData} setFormData={setFormData} resolveTemplate={resolveTemplate} />
+            <XmltvTab formData={formData} setFormData={setFormData} resolveTemplate={resolveTemplate} validationData={validationData} isTeamTemplate={isTeamTemplate} />
           )}
         </div>
 
@@ -848,9 +866,10 @@ interface TabProps {
   setLastFocusedField?: (field: string | null) => void
   isTeamTemplate?: boolean
   resolveTemplate: (template: string) => string
+  validationData?: { validNames: Set<string>; baseNames: Set<string> }
 }
 
-// Template field with inline preview
+// Template field with inline preview and validation
 interface TemplateFieldProps {
   id: string
   label: string
@@ -862,6 +881,8 @@ interface TemplateFieldProps {
   setLastFocusedField?: (field: string | null) => void
   multiline?: boolean
   resolveTemplate?: (template: string) => string
+  validationData?: { validNames: Set<string>; baseNames: Set<string> }
+  isEventTemplate?: boolean
 }
 
 // Default resolver that just returns the template unchanged
@@ -878,8 +899,23 @@ function TemplateField({
   setLastFocusedField,
   multiline = false,
   resolveTemplate = defaultResolver,
+  validationData,
+  isEventTemplate = false,
 }: TemplateFieldProps) {
   const preview = resolveTemplate(value)
+
+  // Compute validation warnings
+  const warnings = useMemo(() => {
+    if (!validationData || !value) return []
+    return validateTemplate(
+      value,
+      validationData.validNames,
+      validationData.baseNames,
+      isEventTemplate
+    )
+  }, [value, validationData, isEventTemplate])
+
+  const hasWarnings = warnings.length > 0
 
   return (
     <div className="space-y-1">
@@ -894,7 +930,7 @@ function TemplateField({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setLastFocusedField?.(id)}
           placeholder={placeholder}
-          className="font-mono text-sm min-h-[80px]"
+          className={`font-mono text-sm min-h-[80px] ${hasWarnings ? "border-amber-500/50 focus:border-amber-500" : ""}`}
         />
       ) : (
         <Input
@@ -906,8 +942,23 @@ function TemplateField({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setLastFocusedField?.(id)}
           placeholder={placeholder}
-          className="font-mono text-sm"
+          className={`font-mono text-sm ${hasWarnings ? "border-amber-500/50 focus:border-amber-500" : ""}`}
         />
+      )}
+      {/* Validation Warnings */}
+      {hasWarnings && (
+        <div className="mt-1 px-2 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-sm">
+          <div className="flex items-start gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              {warnings.map((w, i) => (
+                <p key={i} className="text-xs text-amber-400">
+                  {w.message}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
       {value && (
         <div className="mt-1 px-2 py-1 bg-secondary/50 border-l-2 border-primary rounded-sm">
@@ -1010,7 +1061,8 @@ function BasicTab({ formData, setFormData, fieldRefs, setLastFocusedField, resol
   )
 }
 
-function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate }: TabProps) {
+function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate, validationData }: TabProps) {
+  const isEventTemplate = !isTeamTemplate
   // Extract fallback descriptions from conditional_descriptions (priority === 100)
   const fallbacks = useMemo(() => {
     const all = formData.conditional_descriptions || []
@@ -1126,6 +1178,8 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
             <TemplateField
               id="event_channel_logo_url"
@@ -1137,6 +1191,8 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
           </CardContent>
         </Card>
@@ -1157,6 +1213,8 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
             fieldRefs={fieldRefs}
             setLastFocusedField={setLastFocusedField}
             resolveTemplate={resolveTemplate}
+            validationData={validationData}
+            isEventTemplate={isEventTemplate}
           />
           <TemplateField
             id="subtitle_template"
@@ -1167,6 +1225,8 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
             fieldRefs={fieldRefs}
             setLastFocusedField={setLastFocusedField}
             resolveTemplate={resolveTemplate}
+            validationData={validationData}
+            isEventTemplate={isEventTemplate}
           />
         </CardContent>
       </Card>
@@ -1265,6 +1325,8 @@ function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLast
             fieldRefs={fieldRefs}
             setLastFocusedField={setLastFocusedField}
             resolveTemplate={resolveTemplate}
+            validationData={validationData}
+            isEventTemplate={isEventTemplate}
           />
         </CardContent>
       </Card>
@@ -1710,7 +1772,8 @@ function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate 
   )
 }
 
-function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate }: TabProps) {
+function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate, validationData }: TabProps) {
+  const isEventTemplate = !isTeamTemplate
   const pregame = formData.pregame_fallback || DEFAULT_PREGAME
   const postgame = formData.postgame_fallback || DEFAULT_POSTGAME
   const idle = formData.idle_content || DEFAULT_IDLE
@@ -1781,6 +1844,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
             <TemplateField
               id="pregame_fallback.subtitle"
@@ -1791,6 +1856,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
             <TemplateField
               id="pregame_fallback.description"
@@ -1800,6 +1867,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
             <TemplateField
               id="pregame_fallback.art_url"
@@ -1810,6 +1879,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
           </CardContent>
         )}
@@ -1834,6 +1905,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
             <TemplateField
               id="postgame_fallback.subtitle"
@@ -1844,6 +1917,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
             <TemplateField
               id="postgame_fallback.description"
@@ -1853,6 +1928,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
 
             {/* Conditional postgame */}
@@ -1899,6 +1976,8 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
               fieldRefs={fieldRefs}
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
             />
           </CardContent>
         )}
@@ -2066,7 +2145,7 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
   )
 }
 
-function XmltvTab({ formData, setFormData, resolveTemplate: _resolveTemplate }: TabProps) {
+function XmltvTab({ formData, setFormData }: TabProps) {
   const flags = formData.xmltv_flags || { new: true, live: false, date: false }
   const categories = formData.xmltv_categories || ["Sports"]
 
