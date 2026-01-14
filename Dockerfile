@@ -20,17 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies from pyproject.toml (single source of truth)
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir \
-    httpx>=0.27.0 \
-    "fastapi>=0.115.0" \
-    "uvicorn[standard]>=0.32.0" \
-    pydantic>=2.0.0 \
-    python-multipart>=0.0.9 \
-    rapidfuzz>=3.0.0 \
-    croniter>=2.0.0 \
-    unidecode>=1.3.0
+RUN python -c "import tomllib; deps=tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']; print('\n'.join(deps))" \
+    | pip install --no-cache-dir -r /dev/stdin
 
 # Copy application code
 COPY teamarr/ ./teamarr/
