@@ -175,18 +175,16 @@ class Config:
 
     @classmethod
     def get_timezone_str(cls) -> str:
-        """Get the user timezone as a string.
+        """Get the EPG timezone as a string.
+
+        This returns the user-configured epg_timezone from the database.
+        The TZ env var does NOT override this - it only affects ui_timezone.
 
         Priority:
-        1. TZ env var (if set)
-        2. Cached value from database (set at startup)
-        3. Default timezone
+        1. Cached value from database (set at startup from epg_timezone setting)
+        2. Default timezone (before DB is loaded)
         """
-        # TZ env var takes precedence
-        if cls._timezone_from_env:
-            return cls._timezone_from_env
-
-        # Use cached value from DB
+        # Use cached value from DB (user's epg_timezone setting)
         if cls._timezone_cache:
             return cls._timezone_cache
 
