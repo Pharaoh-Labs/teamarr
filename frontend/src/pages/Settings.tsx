@@ -989,7 +989,7 @@ export function Settings() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="epg-lookback">Lookback Hours</Label>
+              <Label htmlFor="epg-lookback">EPG Start (Hours Ago)</Label>
               <Input
                 id="epg-lookback"
                 type="number"
