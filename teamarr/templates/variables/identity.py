@@ -13,8 +13,23 @@ from teamarr.templates.variables.registry import (
 
 
 def _to_pascal_case(name: str) -> str:
-    """Convert team name to PascalCase for channel IDs."""
-    return "".join(word.capitalize() for word in name.split())
+    """Convert team name to PascalCase for channel IDs.
+
+    Strips non-alphanumeric characters and normalizes accents.
+    Examples:
+        "Detroit Lions" → "DetroitLions"
+        "D.C. United" → "DcUnited"
+        "Atlético Madrid" → "AtleticoMadrid"
+    """
+    import re
+    import unicodedata
+
+    # Normalize unicode (é → e)
+    normalized = unicodedata.normalize('NFKD', name)
+    ascii_name = normalized.encode('ascii', 'ignore').decode('ascii')
+    # Keep only alphanumeric, split on non-alpha
+    words = re.split(r'[^a-zA-Z0-9]+', ascii_name)
+    return "".join(word.capitalize() for word in words if word)
 
 
 def _get_opponent(ctx: TemplateContext, game_ctx: GameContext | None):
