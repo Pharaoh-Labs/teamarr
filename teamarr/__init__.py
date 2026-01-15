@@ -1,3 +1,3 @@
 """Teamarr v2 - Provider-agnostic sports data layer."""
 
-__version__ = "2.0.0-dev"
+from teamarr.config import VERSION as __version__

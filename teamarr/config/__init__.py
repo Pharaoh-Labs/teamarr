@@ -17,15 +17,8 @@ from dotenv import load_dotenv
 
 
 def _get_base_version() -> str:
-    """Read version - prefer installed metadata, fall back to pyproject.toml."""
-    # Try installed package first (works in Docker/pip install)
-    try:
-        from importlib.metadata import version
-        return version("teamarr")
-    except Exception:
-        pass
-
-    # Fall back to pyproject.toml (works from source)
+    """Read version - prefer pyproject.toml (source of truth), fall back to installed metadata."""
+    # Try pyproject.toml first (single source of truth, works in dev and Docker)
     try:
         import tomllib
         pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
@@ -33,6 +26,13 @@ def _get_base_version() -> str:
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
                 return data.get("project", {}).get("version", "0.0.0")
+    except Exception:
+        pass
+
+    # Fall back to installed package metadata (pip install without source)
+    try:
+        from importlib.metadata import version
+        return version("teamarr")
     except Exception:
         pass
 
