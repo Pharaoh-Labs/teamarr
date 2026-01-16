@@ -319,8 +319,9 @@ class StreamMatcher:
         Instead, fetch all events ONCE and reuse for all streams.
 
         Strategy:
-        - Past dates (up to MATCH_WINDOW_DAYS back): use cache for stats tracking
-        - Today + days_ahead: fetch from API (ESPN) or cache (TSDB)
+        - Past dates: always cache-only (for stats tracking)
+        - Today: fetch from API for group's configured leagues, cache for others
+        - Future days: fetch from API ONLY for group's configured leagues
         - TSDB leagues: always cache-only
         """
         self._prefetched_events = {}
@@ -329,12 +330,24 @@ class StreamMatcher:
         for league in self._search_leagues:
             league_events: list[Event] = []
             is_tsdb = self._service.get_provider_name(league) == "tsdb"
+            is_group_league = league in self._include_leagues
 
             # Range: from -MATCH_WINDOW_DAYS to +days_ahead (inclusive)
             for offset in range(-MATCH_WINDOW_DAYS, self._days_ahead + 1):
                 fetch_date = target_date + timedelta(days=offset)
-                # Today and future: fetch from API (ESPN); Past/TSDB: cache only
-                cache_only = is_tsdb or offset < 0
+                # Cache-only rules:
+                # - TSDB: always cache-only
+                # - Past days: always cache-only
+                # - Future days: only fetch from API for group's configured leagues
+                # - Today: fetch from API for group's leagues, cache for others
+                if is_tsdb or offset < 0:
+                    cache_only = True
+                elif offset > 0:
+                    # Future days: only fetch from API for group's leagues
+                    cache_only = not is_group_league
+                else:
+                    # Today: fetch from API for group's leagues, cache for others
+                    cache_only = not is_group_league
                 events = self._service.get_events(league, fetch_date, cache_only=cache_only)
                 league_events.extend(events)
 
