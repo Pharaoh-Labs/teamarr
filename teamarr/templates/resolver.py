@@ -71,7 +71,27 @@ class TemplateResolver:
         if unreplaced:
             logger.debug("[UNREPLACED] Template variables: %s", unreplaced)
 
+        # Clean up artifacts from empty variables (e.g., double spaces, empty wrappers)
+        result = self._cleanup_result(result)
+
         return result
+
+    def _cleanup_result(self, text: str) -> str:
+        """Clean up artifacts left when variables resolve to empty strings.
+
+        Removes:
+        - Empty parentheses/brackets: () []
+        - Multiple consecutive spaces
+        - Leading/trailing whitespace
+        """
+        # Remove empty parentheses and brackets
+        text = re.sub(r"\s*\(\s*\)", "", text)
+        text = re.sub(r"\s*\[\s*\]", "", text)
+
+        # Collapse multiple spaces into one
+        text = re.sub(r" {2,}", " ", text)
+
+        return text.strip()
 
     def _build_all_variables(self, ctx: TemplateContext) -> dict[str, str]:
         """Build complete variable dict with all suffixes.
