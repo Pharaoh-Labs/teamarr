@@ -889,8 +889,8 @@ class ChannelLifecycleService:
         # Calculate delete time
         delete_time = self._timing_manager.calculate_delete_time(event)
 
-        # Resolve logo URL from template (supports template variables)
-        logo_url = self._resolve_logo_url(event, template)
+        # Resolve logo URL from template (supports template variables including {exception_keyword})
+        logo_url = self._resolve_logo_url(event, template, matched_keyword)
 
         # Create in Dispatcharr
         dispatcharr_channel_id = None
@@ -1025,6 +1025,11 @@ class ChannelLifecycleService:
         Uses full template engine (141 variables) when service is available.
         Otherwise falls back to default "Away @ Home" format.
 
+        Supports {exception_keyword} variable in templates. If the template
+        includes {exception_keyword}, the value is substituted directly.
+        If not included and a keyword is present, it's auto-appended as
+        "(Keyword)" to maintain backward compatibility.
+
         Args:
             event: Event data
             template: Can be dict, EventTemplateConfig dataclass, or None
@@ -1041,26 +1046,42 @@ class ChannelLifecycleService:
                 # Dict with event_channel_name
                 name_format = template.get("event_channel_name")
 
+        # Build extra variables for template resolution
+        # Always include exception_keyword - resolves to "" if None (graceful disappear)
+        extra_vars = {
+            "exception_keyword": exception_keyword.title() if exception_keyword else "",
+        }
+
         if name_format:
-            # Resolve using full template engine
+            # Check if template uses {exception_keyword} - if so, don't auto-append
+            template_uses_keyword = "{exception_keyword}" in name_format
+
+            # Resolve using full template engine with extra variables
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
-            base_name = self._resolve_template(name_format, event)
+            base_name = self._resolve_template(name_format, event, extra_vars)
+
+            # Auto-append keyword only if template didn't use {exception_keyword}
+            if exception_keyword and not template_uses_keyword:
+                return f"{base_name} ({exception_keyword.title()})"
+
+            return base_name
         else:
             # Default format: "Away @ Home"
             home_name = event.home_team.short_name if event.home_team else "Home"
             away_name = event.away_team.short_name if event.away_team else "Away"
             base_name = f"{away_name} @ {home_name}"
 
-        # Append keyword if present
-        if exception_keyword:
-            return f"{base_name} ({exception_keyword.title()})"
+            # Append keyword if present (default format doesn't support template vars)
+            if exception_keyword:
+                return f"{base_name} ({exception_keyword.title()})"
 
-        return base_name
+            return base_name
 
     def _resolve_logo_url(
         self,
         event: Event,
         template,
+        exception_keyword: str | None = None,
     ) -> str | None:
         """Resolve logo URL from template.
 
@@ -1070,6 +1091,7 @@ class ChannelLifecycleService:
         Args:
             event: Event data
             template: Can be dict, EventTemplateConfig dataclass, or None
+            exception_keyword: Optional keyword for {exception_keyword} variable
         """
         logo_url = None
         if template:
@@ -1085,23 +1107,38 @@ class ChannelLifecycleService:
             # Resolve template variables if present
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             if "{" in logo_url:
-                return self._resolve_template(logo_url, event)
+                extra_vars = {
+                    "exception_keyword": exception_keyword.title() if exception_keyword else "",
+                }
+                return self._resolve_template(logo_url, event, extra_vars)
             return logo_url
 
         return None
 
-    def _resolve_template(self, template_str: str, event: Event) -> str:
+    def _resolve_template(
+        self,
+        template_str: str,
+        event: Event,
+        extra_variables: dict[str, str] | None = None,
+    ) -> str:
         """Resolve template string using full template engine.
 
-        Supports all 141 template variables.
+        Supports all 141+ template variables plus optional extra variables.
 
         Args:
             template_str: Template string with {variable} placeholders
             event: Event to extract context from
+            extra_variables: Optional dict of additional variables to resolve
+                (e.g., {"exception_keyword": "Spanish"})
 
         Returns:
             Resolved string with variables replaced
         """
+        # Handle extra variables first (simple replacement)
+        if extra_variables:
+            for var_name, value in extra_variables.items():
+                template_str = template_str.replace(f"{{{var_name}}}", value)
+
         context = self._context_builder.build_for_event(
             event=event,
             team_id=event.home_team.id if event.home_team else "",
@@ -1311,7 +1348,7 @@ class ChannelLifecycleService:
                 )
 
             # 8. Sync logo - handles both updates and removals
-            logo_url = self._resolve_logo_url(event, template)
+            logo_url = self._resolve_logo_url(event, template, matched_keyword)
             current_logo_id = getattr(existing, "dispatcharr_logo_id", None)
             stored_logo_url = getattr(existing, "logo_url", None)
 
