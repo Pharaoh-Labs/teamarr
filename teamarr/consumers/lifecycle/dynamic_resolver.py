@@ -210,17 +210,28 @@ class DynamicResolver:
         Returns:
             Resolved group ID or None
         """
+        logger.debug(
+            "[RESOLVER] resolve_channel_group called: mode=%s, static_id=%s, sport=%s, league=%s",
+            mode, static_group_id, event_sport, event_league,
+        )
+
         if mode == "static":
             return static_group_id
 
         if mode == "sport" and event_sport:
             display_name = self.get_sport_display_name(event_sport)
-            return self._get_or_create_group(display_name)
+            group_id = self._get_or_create_group(display_name)
+            logger.info("[RESOLVER] Sport mode: %s -> '%s' -> group_id=%s", event_sport, display_name, group_id)
+            return group_id
 
         if mode == "league" and event_league:
             display_name = self.get_league_display_name(event_league)
-            return self._get_or_create_group(display_name)
+            group_id = self._get_or_create_group(display_name)
+            logger.info("[RESOLVER] League mode: %s -> '%s' -> group_id=%s", event_league, display_name, group_id)
+            return group_id
 
+        logger.warning("[RESOLVER] Falling back to static_group_id=%s (mode=%s, sport=%s, league=%s)",
+                      static_group_id, mode, event_sport, event_league)
         return static_group_id  # Fallback
 
     def resolve_channel_profiles(

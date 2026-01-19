@@ -159,7 +159,7 @@ def get_next_channel_number(
     for row in used_rows:
         if row["channel_number"]:
             try:
-                used_set.add(int(row["channel_number"]))
+                used_set.add(int(float(row["channel_number"])))
             except (ValueError, TypeError):
                 pass  # Skip invalid channel numbers
 
@@ -224,7 +224,7 @@ def _get_all_auto_used_channels(conn: Connection) -> set[int]:
     for row in cursor.fetchall():
         if row["channel_number"]:
             try:
-                used_set.add(int(row["channel_number"]))
+                used_set.add(int(float(row["channel_number"])))
             except (ValueError, TypeError):
                 pass
     return used_set

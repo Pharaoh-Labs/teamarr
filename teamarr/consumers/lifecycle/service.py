@@ -1257,16 +1257,29 @@ class ChannelLifecycleService:
                 changes_made.append(f"name: {current_channel.name} → {expected_name}")
 
             # 2. Check channel number - Teamarr DB is source of truth
-            expected_number = int(existing.channel_number) if existing.channel_number else None
+            # Handle channel numbers that may be floats as strings (e.g., "8121.0")
+            expected_number = int(float(existing.channel_number)) if existing.channel_number else None
             current_number = (
-                int(current_channel.channel_number) if current_channel.channel_number else None
+                int(float(current_channel.channel_number)) if current_channel.channel_number else None
             )
             if expected_number and expected_number != current_number:
                 update_data["channel_number"] = expected_number
                 changes_made.append(f"number: {current_number} → {expected_number}")
 
-            # 3. Check channel_group_id
-            new_group_id = group_config.get("channel_group_id")
+            # 3. Check channel_group_id (supports dynamic sport/league resolution)
+            channel_group_mode = group_config.get("channel_group_mode", "static")
+            static_group_id = group_config.get("channel_group_id")
+            event_sport = getattr(event, "sport", None)
+            event_league = getattr(event, "league", None)
+
+            # Resolve dynamic group ID (creates group in Dispatcharr if needed)
+            new_group_id = self._dynamic_resolver.resolve_channel_group(
+                mode=channel_group_mode,
+                static_group_id=static_group_id,
+                event_sport=event_sport,
+                event_league=event_league,
+            )
+
             old_group_id = current_channel.channel_group_id
             if new_group_id != old_group_id:
                 update_data["channel_group_id"] = new_group_id
@@ -1316,27 +1329,32 @@ class ChannelLifecycleService:
             if db_updates:
                 update_managed_channel(conn, existing.id, db_updates)
 
-            # 7. Sync channel_profile_ids
+            # 7. Sync channel_profile_ids (supports dynamic {sport}/{league} resolution)
             # Dispatcharr profile semantics (commit 6b873be):
             #   [] = NO profiles
             #   [0] = ALL profiles (sentinel)
             #   [1, 2, ...] = specific profile IDs
             raw_group_profiles = group_config.get("channel_profile_ids")
-            group_profile_ids = self._parse_profile_ids(raw_group_profiles)
             stored_profile_ids = self._parse_profile_ids(
                 getattr(existing, "channel_profile_ids", None)
             )
 
-            # Determine effective profile IDs to use
-            # None (not configured) → default to [0] (all profiles)
-            # [] (explicitly no profiles) → use []
-            # [1, 2, ...] (specific) → use those
-            effective_profile_ids = group_profile_ids if raw_group_profiles is not None else [0]
+            # Resolve dynamic profile IDs (expands "{sport}" and "{league}" wildcards)
+            if raw_group_profiles is not None:
+                resolved_profile_ids = self._dynamic_resolver.resolve_channel_profiles(
+                    profile_ids=raw_group_profiles,
+                    event_sport=event_sport,
+                    event_league=event_league,
+                )
+                effective_profile_ids = resolved_profile_ids if resolved_profile_ids else []
+            else:
+                # None (not configured) → default to [0] (all profiles)
+                effective_profile_ids = [0]
 
             logger.debug(
                 f"Channel '{existing.channel_name}' profile sync: "
-                f"raw={raw_group_profiles}, parsed={group_profile_ids}, "
-                f"stored={stored_profile_ids}, effective={effective_profile_ids}"
+                f"raw={raw_group_profiles}, resolved={effective_profile_ids}, "
+                f"stored={stored_profile_ids}"
             )
 
             # Check if profiles changed
@@ -1999,13 +2017,13 @@ class ChannelLifecycleService:
 
                 # Sort by current channel number to maintain relative order
                 sorted_channels = sorted(
-                    channels, key=lambda c: int(c.channel_number) if c.channel_number else 9999
+                    channels, key=lambda c: int(float(c.channel_number)) if c.channel_number else 9999
                 )
 
                 # Reassign to compact range
                 next_number = range_start
                 for channel in sorted_channels:
-                    current_number = int(channel.channel_number) if channel.channel_number else None
+                    current_number = int(float(channel.channel_number)) if channel.channel_number else None
 
                     if current_number == next_number:
                         # Already at correct position
@@ -2152,14 +2170,14 @@ class ChannelLifecycleService:
                         continue
 
                     sorted_channels = sorted(
-                        channels, key=lambda c: int(c.channel_number) if c.channel_number else 9999
+                        channels, key=lambda c: int(float(c.channel_number)) if c.channel_number else 9999
                     )
 
                     # Reassign to ideal range
                     next_number = ideal_start
                     for channel in sorted_channels:
                         current_num = (
-                            int(channel.channel_number) if channel.channel_number else None
+                            int(float(channel.channel_number)) if channel.channel_number else None
                         )
 
                         if current_num == next_number:
