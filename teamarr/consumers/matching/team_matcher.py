@@ -31,6 +31,9 @@ from teamarr.utilities.fuzzy_match import get_matcher, normalize_text
 
 logger = logging.getLogger(__name__)
 
+# Type alias for user-defined aliases: (alias_text, league) -> team_name
+UserAliasCache = dict[tuple[str, str], str]
+
 # Thresholds for matching
 HIGH_CONFIDENCE_THRESHOLD = 85.0  # Accept without date validation
 ACCEPT_WITH_DATE_THRESHOLD = 75.0  # Accept only if date/time validates
@@ -110,6 +113,8 @@ class TeamMatcher:
         self._db = db_factory
         self._fuzzy = get_matcher()
         self._days_ahead = days_ahead
+        # Load user-defined aliases from database
+        self._user_aliases: UserAliasCache = self._load_user_aliases()
 
     def match_single_league(
         self,
@@ -755,6 +760,35 @@ class TeamMatcher:
 
         return None
 
+    def _resolve_alias(self, team_name: str, league: str | None) -> str | None:
+        """Resolve a team name to its canonical form via alias lookup.
+
+        Priority:
+        1. Built-in aliases (TEAM_ALIASES constant) - league-agnostic
+        2. User-defined aliases (database) - league-specific
+
+        Args:
+            team_name: The team name to look up
+            league: The league code for user-defined alias lookup
+
+        Returns:
+            Canonical team name if alias found, None otherwise
+        """
+        normalized = team_name.lower()
+
+        # First check built-in aliases (league-agnostic)
+        canonical = TEAM_ALIASES.get(normalized)
+        if canonical:
+            return canonical
+
+        # Then check user-defined aliases (league-specific)
+        if league and self._user_aliases:
+            user_canonical = self._lookup_user_alias(normalized, league)
+            if user_canonical:
+                return user_canonical
+
+        return None
+
     def _check_alias_match(
         self,
         team1: str | None,
@@ -765,6 +799,9 @@ class TeamMatcher:
 
         Aliases provide 100% confidence matches for known abbreviations:
         "Man U" → "Manchester United"
+
+        Checks both built-in aliases (constants.py) and user-defined aliases
+        (database). User-defined aliases are league-specific.
 
         Args:
             team1: First extracted team name (normalized)
@@ -781,21 +818,24 @@ class TeamMatcher:
         home_patterns = self._fuzzy.generate_team_patterns(event.home_team)
         away_patterns = self._fuzzy.generate_team_patterns(event.away_team)
 
+        # Get event league for user-defined alias lookup
+        event_league = event.league
+
         team1_match = False
         team2_match = False
 
-        # Check team1 against aliases
+        # Check team1 against aliases (built-in first, then user-defined)
         if team1:
-            canonical = TEAM_ALIASES.get(team1.lower())
+            canonical = self._resolve_alias(team1, event_league)
             if canonical:
                 if any(canonical in tp.pattern for tp in home_patterns):
                     team1_match = True
                 elif any(canonical in tp.pattern for tp in away_patterns):
                     team1_match = True
 
-        # Check team2 against aliases
+        # Check team2 against aliases (built-in first, then user-defined)
         if team2:
-            canonical = TEAM_ALIASES.get(team2.lower())
+            canonical = self._resolve_alias(team2, event_league)
             if canonical:
                 if any(canonical in tp.pattern for tp in home_patterns):
                     team2_match = True
@@ -812,6 +852,56 @@ class TeamMatcher:
             return (MatchMethod.ALIAS, 100.0)
 
         return None
+
+    def _load_user_aliases(self) -> UserAliasCache:
+        """Load user-defined aliases from database into memory cache.
+
+        Aliases are keyed by (alias_text, league) for efficient lookup.
+        Called once at matcher initialization.
+
+        Returns:
+            Dict mapping (alias, league) -> team_name
+        """
+        if not self._db:
+            return {}
+
+        try:
+            from teamarr.database.aliases import list_aliases
+
+            with self._db() as conn:
+                aliases = list_aliases(conn)
+
+            cache: UserAliasCache = {}
+            for alias in aliases:
+                # Key by (normalized alias, normalized league)
+                key = (alias.alias.lower(), alias.league.lower())
+                cache[key] = alias.team_name.lower()
+
+            if cache:
+                logger.debug(
+                    "[ALIAS] Loaded %d user-defined aliases from database", len(cache)
+                )
+            return cache
+
+        except Exception as e:
+            logger.warning("[ALIAS] Failed to load user aliases from database: %s", e)
+            return {}
+
+    def _lookup_user_alias(self, team_name: str, league: str) -> str | None:
+        """Look up a team name in user-defined aliases.
+
+        Args:
+            team_name: The team name to look up (will be normalized)
+            league: The league code to filter by
+
+        Returns:
+            Canonical team name if alias found, None otherwise
+        """
+        if not self._user_aliases:
+            return None
+
+        key = (team_name.lower(), league.lower())
+        return self._user_aliases.get(key)
 
     def _disambiguate_by_time(
         self,
