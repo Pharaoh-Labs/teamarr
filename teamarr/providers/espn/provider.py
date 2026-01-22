@@ -16,7 +16,7 @@ from teamarr.core import (
     Venue,
 )
 from teamarr.core.sports import normalize_sport
-from teamarr.providers.espn.client import ESPNClient
+from teamarr.providers.espn.client import ESPN_TEAM_ID_CORRECTIONS, ESPNClient
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
 from teamarr.providers.espn.tournament import TournamentParserMixin
 from teamarr.providers.espn.ufc import UFCParserMixin
@@ -138,6 +138,12 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         This hybrid approach ensures .last variables work even during long breaks
         (bye weeks, all-star break, offseason) while still capturing playoffs.
         """
+        # Apply team ID correction for known ESPN mismatches
+        corrected_id = ESPN_TEAM_ID_CORRECTIONS.get((league, team_id))
+        if corrected_id:
+            logger.info("[ESPN] Correcting team ID %s -> %s for %s", team_id, corrected_id, league)
+            team_id = corrected_id
+
         sport_league = self._get_sport_league_from_db(league)
         events = []
         today = date.today()
