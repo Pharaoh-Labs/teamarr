@@ -1,7 +1,7 @@
 {
   "generated_at": "2026-01-21T12:00:00.000000Z",
   "generated_with": "premium_key",
-  "note": "Rugby (NRL, Super Rugby), Cricket (IPL, BBL, SA20), and Norwegian Hockey.",
+  "note": "Rugby (NRL, Super Rugby), Cricket (IPL, BBL, SA20), Norwegian Hockey, and AFL.",
   "leagues": [
     {
       "code": "nrl",
@@ -44,6 +44,13 @@
       "provider_league_name": "Norwegian Fjordkraft-ligaen",
       "sport": "Ice Hockey",
       "team_count": 10
+    },
+    {
+      "code": "afl",
+      "provider_league_id": "4456",
+      "provider_league_name": "Australian AFL",
+      "sport": "Australian Football",
+      "team_count": 18
     }
   ],
   "teams": [
@@ -113,6 +120,25 @@
     {"provider_team_id": "140840", "team_name": "Stavanger Oilers", "team_abbrev": "", "league": "norwegian-hockey", "sport": "Ice Hockey", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/e26kq11622516396.png"},
     {"provider_team_id": "140841", "team_name": "Stjernen", "team_abbrev": "", "league": "norwegian-hockey", "sport": "Ice Hockey", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/tdkfjd1697194381.png"},
     {"provider_team_id": "140842", "team_name": "Storhamar", "team_abbrev": "", "league": "norwegian-hockey", "sport": "Ice Hockey", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/mwtp8b1697194388.png"},
-    {"provider_team_id": "140843", "team_name": "Vålerenga", "team_abbrev": "", "league": "norwegian-hockey", "sport": "Ice Hockey", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/tf4ziz1697194396.png"}
+    {"provider_team_id": "140843", "team_name": "Vålerenga", "team_abbrev": "", "league": "norwegian-hockey", "sport": "Ice Hockey", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/tf4ziz1697194396.png"},
+
+    {"provider_team_id": "135684", "team_name": "Adelaide Football Club", "team_abbrev": "ADE", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/2nh2z01731592341.png"},
+    {"provider_team_id": "135685", "team_name": "Brisbane Lions", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/tvvxvp1474038810.png"},
+    {"provider_team_id": "135686", "team_name": "Carlton Football Club", "team_abbrev": "CAR", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/k9no791584810309.png"},
+    {"provider_team_id": "135687", "team_name": "Collingwood Football Club", "team_abbrev": "COL", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/a2uqkd1584810538.png"},
+    {"provider_team_id": "135688", "team_name": "Essendon Football Club", "team_abbrev": "ESS", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/xwupps1474039541.png"},
+    {"provider_team_id": "135689", "team_name": "Fremantle Football Club", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/hw34ii1647870691.png"},
+    {"provider_team_id": "135690", "team_name": "Geelong Football Club", "team_abbrev": "GEE", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/xapo7t1647870681.png"},
+    {"provider_team_id": "135691", "team_name": "Gold Coast Football Club", "team_abbrev": "GCF", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/4os77n1731592560.png"},
+    {"provider_team_id": "135692", "team_name": "Greater Western Sydney Giants", "team_abbrev": "GWS", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/ef6rqs1647870839.png"},
+    {"provider_team_id": "135693", "team_name": "Hawthorn Football Club", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/18y3ks1647870779.png"},
+    {"provider_team_id": "135694", "team_name": "Melbourne Football Club", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/xvtstv1474039391.png"},
+    {"provider_team_id": "135695", "team_name": "North Melbourne Football Club", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/u5x1ok1584811490.png"},
+    {"provider_team_id": "135696", "team_name": "Port Adelaide Football Club", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/7qvqn81584810882.png"},
+    {"provider_team_id": "135697", "team_name": "Richmond Football Club", "team_abbrev": "", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/xkqlvb1647870792.png"},
+    {"provider_team_id": "135698", "team_name": "St Kilda Football Club", "team_abbrev": "STK", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/fvj5ez1732026459.png"},
+    {"provider_team_id": "135699", "team_name": "Sydney Swans", "team_abbrev": "SYD", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/ndeir91647870648.png"},
+    {"provider_team_id": "135700", "team_name": "West Coast Eagles", "team_abbrev": "WCE", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/xpcp2f1647870746.png"},
+    {"provider_team_id": "135701", "team_name": "Western Bulldogs", "team_abbrev": "WB", "league": "afl", "sport": "Australian Football", "logo_url": "https://r2.thesportsdb.com/images/media/team/badge/e3hg551647870757.png"}
   ]
 }
