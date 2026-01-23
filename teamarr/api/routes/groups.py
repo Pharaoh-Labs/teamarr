@@ -348,6 +348,26 @@ class BulkGroupUpdateRequest(BaseModel):
 
     group_ids: list[int] = Field(..., min_length=1)
 
+    # Updateable fields (all optional - only provided fields are applied)
+    template_id: int | None = None
+    channel_group_id: int | None = None
+    channel_group_mode: str | None = None
+    channel_profile_ids: list[str | int] | None = None
+    duplicate_event_handling: str | None = None
+    channel_sort_order: str | None = None
+    overlap_handling: str | None = None
+    enabled: bool | None = None
+
+    # Clear flags to explicitly set fields to NULL
+    clear_template_id: bool = False
+    clear_channel_group_id: bool = False
+    clear_channel_profile_ids: bool = False
+
+    @field_validator("channel_profile_ids", mode="before")
+    @classmethod
+    def validate_profile_ids(cls, v: Any) -> list[str | int] | None:
+        return _validate_profile_ids(v)
+
 
 class ClearCacheRequest(BaseModel):
     """Request to clear stream match cache for multiple groups."""
