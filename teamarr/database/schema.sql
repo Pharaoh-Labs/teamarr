@@ -281,7 +281,7 @@ CREATE TABLE IF NOT EXISTS settings (
     stream_ordering_rules JSON DEFAULT '[]',
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 36
+    schema_version INTEGER DEFAULT 37
 );
 
 -- Insert default settings
@@ -358,6 +358,8 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     custom_regex_date_enabled BOOLEAN DEFAULT 0,
     custom_regex_time TEXT,                  -- Custom pattern to extract time
     custom_regex_time_enabled BOOLEAN DEFAULT 0,
+    custom_regex_league TEXT,                -- Custom pattern to extract league hint
+    custom_regex_league_enabled BOOLEAN DEFAULT 0,
     skip_builtin_filter BOOLEAN DEFAULT 0,   -- Skip built-in stream filtering (placeholder, unsupported sports, event patterns)
 
     -- Team Filtering (canonical team selection, inherited by children)

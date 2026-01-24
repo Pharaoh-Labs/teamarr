@@ -163,6 +163,8 @@ class StreamMatcher:
         custom_regex_date_enabled: bool = False,
         custom_regex_time: str | None = None,
         custom_regex_time_enabled: bool = False,
+        custom_regex_league: str | None = None,
+        custom_regex_league_enabled: bool = False,
         days_ahead: int | None = None,
         shared_events: dict[str, list[Event]] | None = None,
     ):
@@ -184,6 +186,8 @@ class StreamMatcher:
             custom_regex_date_enabled: Whether custom regex for date is enabled
             custom_regex_time: Custom regex pattern for extracting time
             custom_regex_time_enabled: Whether custom regex for time is enabled
+            custom_regex_league: Custom regex pattern for extracting league hint
+            custom_regex_league_enabled: Whether custom regex for league is enabled
             days_ahead: Days to look ahead for events (if None, loaded from settings)
             shared_events: Shared events cache dict (keyed by "league:date") to reuse
                            across multiple matchers in a single generation run
@@ -210,7 +214,8 @@ class StreamMatcher:
         has_custom_regex = (
             (custom_regex_teams_enabled and custom_regex_teams) or
             (custom_regex_date_enabled and custom_regex_date) or
-            (custom_regex_time_enabled and custom_regex_time)
+            (custom_regex_time_enabled and custom_regex_time) or
+            (custom_regex_league_enabled and custom_regex_league)
         )
         self._custom_regex = CustomRegexConfig(
             teams_pattern=custom_regex_teams,
@@ -219,6 +224,8 @@ class StreamMatcher:
             date_enabled=custom_regex_date_enabled,
             time_pattern=custom_regex_time,
             time_enabled=custom_regex_time_enabled,
+            league_pattern=custom_regex_league,
+            league_enabled=custom_regex_league_enabled,
         ) if has_custom_regex else None
 
         # Initialize cache

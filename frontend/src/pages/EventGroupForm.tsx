@@ -182,6 +182,8 @@ export function EventGroupForm() {
         custom_regex_date_enabled: group.custom_regex_date_enabled,
         custom_regex_time: group.custom_regex_time,
         custom_regex_time_enabled: group.custom_regex_time_enabled,
+        custom_regex_league: group.custom_regex_league,
+        custom_regex_league_enabled: group.custom_regex_league_enabled,
         skip_builtin_filter: group.skip_builtin_filter,
         // Team filtering
         include_teams: group.include_teams,
@@ -1170,6 +1172,34 @@ export function EventGroupForm() {
                     />
                     <p className="text-xs text-muted-foreground">
                       Extract time from stream name. Use named group: (?P&lt;time&gt;...)
+                    </p>
+                  </div>
+
+                  {/* League Pattern */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="league_enabled"
+                        checked={formData.custom_regex_league_enabled || false}
+                        onClick={() =>
+                          setFormData({ ...formData, custom_regex_league_enabled: !formData.custom_regex_league_enabled })
+                        }
+                      />
+                      <Label htmlFor="league_enabled" className="font-normal cursor-pointer">
+                        League Pattern
+                      </Label>
+                    </div>
+                    <Input
+                      value={formData.custom_regex_league || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, custom_regex_league: e.target.value || null })
+                      }
+                      placeholder="(?P<league>NHL|NBA|NFL|MLB)"
+                      disabled={!formData.custom_regex_league_enabled}
+                      className={cn("font-mono text-sm", !formData.custom_regex_league_enabled && "opacity-50")}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Extract league code from stream name. Use named group: (?P&lt;league&gt;...)
                     </p>
                   </div>
 

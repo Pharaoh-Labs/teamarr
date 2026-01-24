@@ -98,6 +98,8 @@ class GroupCreate(BaseModel):
     custom_regex_date_enabled: bool = False
     custom_regex_time: str | None = None
     custom_regex_time_enabled: bool = False
+    custom_regex_league: str | None = None
+    custom_regex_league_enabled: bool = False
     skip_builtin_filter: bool = False
     # Team filtering (canonical team selection, inherited by children)
     include_teams: list[TeamFilterEntry] | None = None
@@ -146,6 +148,8 @@ class GroupUpdate(BaseModel):
     custom_regex_date_enabled: bool | None = None
     custom_regex_time: str | None = None
     custom_regex_time_enabled: bool | None = None
+    custom_regex_league: str | None = None
+    custom_regex_league_enabled: bool | None = None
     skip_builtin_filter: bool | None = None
     # Team filtering (canonical team selection, inherited by children)
     include_teams: list[TeamFilterEntry] | None = None
@@ -172,6 +176,7 @@ class GroupUpdate(BaseModel):
     clear_custom_regex_teams: bool = False
     clear_custom_regex_date: bool = False
     clear_custom_regex_time: bool = False
+    clear_custom_regex_league: bool = False
     clear_include_teams: bool = False
     clear_exclude_teams: bool = False
 
@@ -214,6 +219,8 @@ class GroupResponse(BaseModel):
     custom_regex_date_enabled: bool = False
     custom_regex_time: str | None = None
     custom_regex_time_enabled: bool = False
+    custom_regex_league: str | None = None
+    custom_regex_league_enabled: bool = False
     skip_builtin_filter: bool = False
     # Team filtering (canonical team selection, inherited by children)
     include_teams: list[TeamFilterEntry] | None = None
@@ -537,6 +544,8 @@ def list_groups(
                 custom_regex_date_enabled=g.custom_regex_date_enabled,
                 custom_regex_time=g.custom_regex_time,
                 custom_regex_time_enabled=g.custom_regex_time_enabled,
+                custom_regex_league=g.custom_regex_league,
+                custom_regex_league_enabled=g.custom_regex_league_enabled,
                 skip_builtin_filter=g.skip_builtin_filter,
                 include_teams=[TeamFilterEntry(**t) for t in g.include_teams] if g.include_teams else None,
                 exclude_teams=[TeamFilterEntry(**t) for t in g.exclude_teams] if g.exclude_teams else None,
@@ -619,6 +628,8 @@ def create_group(request: GroupCreate):
             custom_regex_date_enabled=request.custom_regex_date_enabled,
             custom_regex_time=request.custom_regex_time,
             custom_regex_time_enabled=request.custom_regex_time_enabled,
+            custom_regex_league=request.custom_regex_league,
+            custom_regex_league_enabled=request.custom_regex_league_enabled,
             skip_builtin_filter=request.skip_builtin_filter,
             include_teams=[t.model_dump() for t in request.include_teams] if request.include_teams is not None else None,
             exclude_teams=[t.model_dump() for t in request.exclude_teams] if request.exclude_teams is not None else None,
@@ -1011,6 +1022,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             custom_regex_date_enabled=request.custom_regex_date_enabled,
             custom_regex_time=request.custom_regex_time,
             custom_regex_time_enabled=request.custom_regex_time_enabled,
+            custom_regex_league=request.custom_regex_league,
+            custom_regex_league_enabled=request.custom_regex_league_enabled,
             skip_builtin_filter=request.skip_builtin_filter,
             include_teams=[t.model_dump() for t in request.include_teams] if request.include_teams is not None else None,
             exclude_teams=[t.model_dump() for t in request.exclude_teams] if request.exclude_teams is not None else None,
@@ -1033,6 +1046,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             clear_custom_regex_teams=request.clear_custom_regex_teams,
             clear_custom_regex_date=request.clear_custom_regex_date,
             clear_custom_regex_time=request.clear_custom_regex_time,
+            clear_custom_regex_league=request.clear_custom_regex_league,
             clear_include_teams=request.clear_include_teams,
             clear_exclude_teams=request.clear_exclude_teams,
         )

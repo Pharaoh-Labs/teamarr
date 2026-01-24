@@ -50,6 +50,8 @@ class EventEPGGroup:
     custom_regex_date_enabled: bool = False
     custom_regex_time: str | None = None
     custom_regex_time_enabled: bool = False
+    custom_regex_league: str | None = None
+    custom_regex_league_enabled: bool = False
     skip_builtin_filter: bool = False
     # Team filtering (canonical team selection, inherited by children)
     include_teams: list[dict] | None = None
@@ -144,6 +146,10 @@ def _row_to_group(row) -> EventEPGGroup:
         custom_regex_time=row["custom_regex_time"] if "custom_regex_time" in row.keys() else None,
         custom_regex_time_enabled=bool(row["custom_regex_time_enabled"])
         if "custom_regex_time_enabled" in row.keys()
+        else False,
+        custom_regex_league=row["custom_regex_league"] if "custom_regex_league" in row.keys() else None,
+        custom_regex_league_enabled=bool(row["custom_regex_league_enabled"])
+        if "custom_regex_league_enabled" in row.keys()
         else False,
         skip_builtin_filter=bool(row["skip_builtin_filter"]),
         # Team filtering
@@ -299,6 +305,8 @@ def create_group(
     custom_regex_date_enabled: bool = False,
     custom_regex_time: str | None = None,
     custom_regex_time_enabled: bool = False,
+    custom_regex_league: str | None = None,
+    custom_regex_league_enabled: bool = False,
     skip_builtin_filter: bool = False,
     # Team filtering
     include_teams: list[dict] | None = None,
@@ -355,10 +363,11 @@ def create_group(
             custom_regex_teams, custom_regex_teams_enabled,
             custom_regex_date, custom_regex_date_enabled,
             custom_regex_time, custom_regex_time_enabled,
+            custom_regex_league, custom_regex_league_enabled,
             skip_builtin_filter,
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name,
             display_name,
@@ -388,6 +397,8 @@ def create_group(
             int(custom_regex_date_enabled),
             custom_regex_time,
             int(custom_regex_time_enabled),
+            custom_regex_league,
+            int(custom_regex_league_enabled),
             int(skip_builtin_filter),
             json.dumps(include_teams) if include_teams else None,
             json.dumps(exclude_teams) if exclude_teams else None,
@@ -439,6 +450,8 @@ def update_group(
     custom_regex_date_enabled: bool | None = None,
     custom_regex_time: str | None = None,
     custom_regex_time_enabled: bool | None = None,
+    custom_regex_league: str | None = None,
+    custom_regex_league_enabled: bool | None = None,
     skip_builtin_filter: bool | None = None,
     # Team filtering
     include_teams: list[dict] | None = None,
@@ -464,6 +477,7 @@ def update_group(
     clear_custom_regex_teams: bool = False,
     clear_custom_regex_date: bool = False,
     clear_custom_regex_time: bool = False,
+    clear_custom_regex_league: bool = False,
     clear_include_teams: bool = False,
     clear_exclude_teams: bool = False,
 ) -> bool:
@@ -626,6 +640,16 @@ def update_group(
     if custom_regex_time_enabled is not None:
         updates.append("custom_regex_time_enabled = ?")
         values.append(int(custom_regex_time_enabled))
+
+    if custom_regex_league is not None:
+        updates.append("custom_regex_league = ?")
+        values.append(custom_regex_league)
+    elif clear_custom_regex_league:
+        updates.append("custom_regex_league = NULL")
+
+    if custom_regex_league_enabled is not None:
+        updates.append("custom_regex_league_enabled = ?")
+        values.append(int(custom_regex_league_enabled))
 
     if skip_builtin_filter is not None:
         updates.append("skip_builtin_filter = ?")

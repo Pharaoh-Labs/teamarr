@@ -934,6 +934,19 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         logger.info("[MIGRATE] Schema upgraded to version 36 (stream_ordering_rules)")
         current_version = 36
 
+    # Version 37: Add custom_regex_league columns to event_epg_groups
+    # Allows extracting league hint from stream names using custom regex
+    if current_version < 37:
+        _add_column_if_not_exists(
+            conn, "event_epg_groups", "custom_regex_league", "TEXT"
+        )
+        _add_column_if_not_exists(
+            conn, "event_epg_groups", "custom_regex_league_enabled", "BOOLEAN DEFAULT 0"
+        )
+        conn.execute("UPDATE settings SET schema_version = 37 WHERE id = 1")
+        logger.info("[MIGRATE] Schema upgraded to version 37 (custom_regex_league)")
+        current_version = 37
+
 
 def _migrate_to_v35(conn: sqlite3.Connection) -> None:
     """Restructure exception keywords table: keywords -> match_terms, display_name -> label.

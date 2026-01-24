@@ -61,7 +61,7 @@ class ClassifiedStream:
 
 @dataclass
 class CustomRegexConfig:
-    """Configuration for custom regex extraction (teams, date, time)."""
+    """Configuration for custom regex extraction (teams, date, time, league)."""
 
     teams_pattern: str | None = None
     teams_enabled: bool = False
@@ -69,11 +69,14 @@ class CustomRegexConfig:
     date_enabled: bool = False
     time_pattern: str | None = None
     time_enabled: bool = False
+    league_pattern: str | None = None
+    league_enabled: bool = False
 
     # Compiled patterns (cached)
     _compiled_teams: Pattern | None = None
     _compiled_date: Pattern | None = None
     _compiled_time: Pattern | None = None
+    _compiled_league: Pattern | None = None
 
     def get_pattern(self) -> Pattern | None:
         """Get compiled teams regex pattern, compiling on first access."""
@@ -116,6 +119,20 @@ class CustomRegexConfig:
                 return None
 
         return self._compiled_time
+
+    def get_league_pattern(self) -> Pattern | None:
+        """Get compiled league regex pattern, compiling on first access."""
+        if not self.league_enabled or not self.league_pattern:
+            return None
+
+        if self._compiled_league is None:
+            try:
+                self._compiled_league = re.compile(self.league_pattern, re.IGNORECASE)
+            except re.error as e:
+                logger.warning("[CLASSIFY] Invalid custom league regex pattern: %s", e)
+                return None
+
+        return self._compiled_league
 
 
 def extract_teams_with_custom_regex(
@@ -379,6 +396,51 @@ def _parse_time_string(time_str: str) -> time | None:
                 return parsed.time()
             except ValueError:
                 continue
+
+    return None
+
+
+def extract_league_with_custom_regex(
+    text: str,
+    config: CustomRegexConfig,
+) -> str | None:
+    """Extract league hint using custom regex pattern.
+
+    Supports:
+    - Named group: (?P<league>...) - returns the captured league code
+    - Single capture group - returns the captured string
+
+    Args:
+        text: Stream name (original, not normalized)
+        config: Custom regex configuration
+
+    Returns:
+        Extracted league code or None
+    """
+    pattern = config.get_league_pattern()
+    if not pattern:
+        return None
+
+    match = pattern.search(text)
+    if not match:
+        return None
+
+    try:
+        # Try named group 'league' first
+        try:
+            league = match.group("league")
+            if league:
+                return league.strip().lower()
+        except (IndexError, re.error):
+            pass
+
+        # Try first capture group
+        groups = match.groups()
+        if groups and groups[0]:
+            return groups[0].strip().lower()
+
+    except (ValueError, TypeError) as e:
+        logger.debug("[CLASSIFY] Failed to extract custom league: %s", e)
 
     return None
 
@@ -821,6 +883,17 @@ def classify_stream(
         # Detect league and sport hints (useful for all categories)
         league_hint = detect_league_hint(text)
         sport_hint = detect_sport_hint(text)
+
+        # Step 1c: Apply custom league regex to override built-in detection
+        # Uses ORIGINAL stream name (not normalized) for more flexible matching
+        if custom_regex and custom_regex.league_enabled:
+            custom_league = extract_league_with_custom_regex(stream_name, custom_regex)
+            if custom_league:
+                league_hint = custom_league
+                logger.debug(
+                    "[CLASSIFY] Custom league regex extracted: %s from '%s'",
+                    custom_league, stream_name[:50]
+                )
 
         # Step 2: Check for event card
         if is_event_card(text, league_event_type):

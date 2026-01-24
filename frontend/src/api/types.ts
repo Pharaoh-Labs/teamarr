@@ -39,6 +39,8 @@ export interface EventGroup {
   custom_regex_date_enabled: boolean
   custom_regex_time: string | null
   custom_regex_time_enabled: boolean
+  custom_regex_league: string | null
+  custom_regex_league_enabled: boolean
   skip_builtin_filter: boolean
   // Team filtering (canonical team selection, inherited by children)
   include_teams: TeamFilterEntry[] | null
@@ -100,6 +102,8 @@ export interface EventGroupCreate {
   custom_regex_date_enabled?: boolean
   custom_regex_time?: string | null
   custom_regex_time_enabled?: boolean
+  custom_regex_league?: string | null
+  custom_regex_league_enabled?: boolean
   skip_builtin_filter?: boolean
   // Team filtering (canonical team selection, inherited by children)
   include_teams?: TeamFilterEntry[] | null
@@ -127,6 +131,7 @@ export interface EventGroupUpdate extends Partial<EventGroupCreate> {
   clear_custom_regex_teams?: boolean
   clear_custom_regex_date?: boolean
   clear_custom_regex_time?: boolean
+  clear_custom_regex_league?: boolean
   clear_include_teams?: boolean
   clear_exclude_teams?: boolean
 }
