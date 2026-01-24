@@ -2437,17 +2437,42 @@ class EventGroupProcessor:
             if not event:
                 continue
 
+            # UFC segment support: extract segment info if present
+            segment = stream_match.get("segment")
+            segment_start = stream_match.get("segment_start")
+            segment_end = stream_match.get("segment_end")
+
             # Use consistent tvg_id matching EventEPGGenerator and ChannelLifecycleService
             from teamarr.consumers.lifecycle import generate_event_tvg_id
 
-            channel_id = generate_event_tvg_id(event.id, event.provider)
+            channel_id = generate_event_tvg_id(event.id, event.provider, segment)
+
+            # For UFC segments, override event times with segment-specific times
+            if segment_start and segment_end:
+                segment_options = EventFillerOptions(
+                    epg_start=epg_start,
+                    epg_end=segment_end + timedelta(hours=24),
+                    epg_timezone=str(tz),
+                    sport_durations=sport_durations,
+                    default_duration=3.0,
+                    postgame_buffer_hours=24.0,
+                    event_end_override=segment_end,  # Use exact segment end time
+                )
+                # Create a modified event with segment start time
+                from dataclasses import replace
+                segment_event = replace(event, start_time=segment_start)
+                use_event = segment_event
+                use_options = segment_options
+            else:
+                use_event = event
+                use_options = options
 
             try:
                 filler_result = filler_generator.generate_with_counts(
-                    event=event,
+                    event=use_event,
                     channel_id=channel_id,
                     config=filler_config,
-                    options=options,
+                    options=use_options,
                 )
                 result.programmes.extend(filler_result.programmes)
                 result.pregame_count += filler_result.pregame_count

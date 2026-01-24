@@ -72,6 +72,9 @@ class EventFillerOptions:
     # Buffer after event for postgame (hours)
     postgame_buffer_hours: float = 24.0
 
+    # Override event end time (for UFC segments with known end times)
+    event_end_override: datetime | None = None
+
 
 @dataclass
 class EventFillerResult:
@@ -129,10 +132,14 @@ class EventFillerGenerator:
 
         # Calculate event times
         event_start = event.start_time
-        event_duration = get_sport_duration(
-            event.sport, options.sport_durations, options.default_duration
-        )
-        event_end = event_start + timedelta(hours=event_duration)
+        # Use override if provided (e.g., UFC segment end times)
+        if options.event_end_override:
+            event_end = options.event_end_override
+        else:
+            event_duration = get_sport_duration(
+                event.sport, options.sport_durations, options.default_duration
+            )
+            event_end = event_start + timedelta(hours=event_duration)
 
         # Calculate EPG window
         epg_start = options.epg_start or datetime.now(event_start.tzinfo)
@@ -202,10 +209,14 @@ class EventFillerGenerator:
 
         # Calculate event times
         event_start = event.start_time
-        event_duration = get_sport_duration(
-            event.sport, options.sport_durations, options.default_duration
-        )
-        event_end = event_start + timedelta(hours=event_duration)
+        # Use override if provided (e.g., UFC segment end times)
+        if options.event_end_override:
+            event_end = options.event_end_override
+        else:
+            event_duration = get_sport_duration(
+                event.sport, options.sport_durations, options.default_duration
+            )
+            event_end = event_start + timedelta(hours=event_duration)
 
         # Calculate EPG window
         epg_start = options.epg_start or datetime.now(event_start.tzinfo)
