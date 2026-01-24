@@ -265,6 +265,11 @@ class SportsDataService:
                 event.status.state if event.status else "N/A",
                 fresh_event.status.state if fresh_event.status else "N/A",
             )
+            # Preserve segment_times from original (summary endpoint doesn't have them)
+            if event.segment_times and not fresh_event.segment_times:
+                fresh_event.segment_times = event.segment_times
+            if event.main_card_start and not fresh_event.main_card_start:
+                fresh_event.main_card_start = event.main_card_start
             return fresh_event
 
         # Return original if refresh fails
