@@ -1670,10 +1670,10 @@ class EventGroupProcessor:
                         old_status,
                         new_status,
                     )
-                enriched.append({
-                    "stream": match.get("stream"),
-                    "event": refreshed,
-                })
+                # Preserve all keys (including segment info for UFC)
+                enriched_match = dict(match)
+                enriched_match["event"] = refreshed
+                enriched.append(enriched_match)
             else:
                 enriched.append(match)
 
