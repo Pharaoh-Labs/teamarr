@@ -236,7 +236,9 @@ class StreamMatcher:
         self._generation_provided = generation is not None
 
         # Initialize sub-matchers
-        self._team_matcher = TeamMatcher(service, self._cache, days_ahead=self._days_ahead)
+        self._team_matcher = TeamMatcher(
+            service, self._cache, days_ahead=self._days_ahead, db_factory=db_factory
+        )
         self._event_matcher = EventCardMatcher(service, self._cache)
 
         # League event types cache
