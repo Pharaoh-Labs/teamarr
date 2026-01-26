@@ -153,9 +153,6 @@ function UpdateCheckSettingsSection() {
       // Force a fresh check by calling the API with force=true
       const response = await fetch("/api/v1/updates/status?force=true")
       if (response.ok) {
-        // Clear localStorage dismissal so notification banner appears if update is found
-        localStorage.removeItem("update-dismissed-version")
-        
         // Invalidate all update status queries - this automatically triggers refetch
         await queryClient.invalidateQueries({ queryKey: ["update-status"] })
         

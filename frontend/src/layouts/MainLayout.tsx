@@ -37,8 +37,7 @@ export function MainLayout() {
   const { data: updateInfo } = useQuery<UpdateInfo>({
     queryKey: ["update-status"],
     queryFn: () => getUpdateStatus(false),
-    refetchInterval: 6 * 60 * 60 * 1000, // 6 hours
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: Infinity, // Don't auto-refetch, only manual refresh
     retry: 1,
   })
 
@@ -52,35 +51,24 @@ export function MainLayout() {
     localStorage.setItem("theme", theme)
   }, [theme])
 
-  // Show toast notification when update is available
+  // Show toast notification on page load if update is available and settings allow
   useEffect(() => {
     if (!updateInfo?.update_available || !updateInfo.latest_version) {
       return
     }
 
-    // Check if user already dismissed this version
-    const dismissedVersion = localStorage.getItem("update-dismissed-version")
-    if (dismissedVersion === updateInfo.latest_version) {
+    // Only notify if notification settings are enabled
+    if (!updateInfo.settings.enabled) {
       return
     }
 
-    // Check notification settings only if enabled
-    if (updateInfo.settings.enabled) {
-      // Don't notify for dev updates if disabled
-      if (
-        updateInfo.build_type === "dev" &&
-        !updateInfo.settings.notify_dev_updates
-      ) {
-        return
-      }
+    // Check notification preferences for build type
+    if (updateInfo.build_type === "dev" && !updateInfo.settings.notify_dev_updates) {
+      return
+    }
 
-      // Don't notify for stable updates if disabled
-      if (
-        updateInfo.build_type === "stable" &&
-        !updateInfo.settings.notify_stable_updates
-      ) {
-        return
-      }
+    if (updateInfo.build_type === "stable" && !updateInfo.settings.notify_stable_updates) {
+      return
     }
 
     const isDevBuild = updateInfo.build_type === "dev"
@@ -96,15 +84,9 @@ export function MainLayout() {
             label: isDevBuild ? "Pull Image" : "View Release",
             onClick: () => {
               window.open(updateInfo.download_url!, "_blank", "noopener,noreferrer")
-              // Mark as dismissed when user clicks the action
-              localStorage.setItem("update-dismissed-version", updateInfo.latest_version!)
             },
           }
         : undefined,
-      onDismiss: () => {
-        // Mark as dismissed when user manually dismisses the toast
-        localStorage.setItem("update-dismissed-version", updateInfo.latest_version!)
-      },
     })
   }, [updateInfo])
 
