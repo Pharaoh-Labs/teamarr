@@ -1,0 +1,71 @@
+/**
+ * Updates API client
+ */
+
+export interface UpdateInfo {
+  current_version: string
+  latest_version: string | null
+  update_available: boolean
+  build_type: "stable" | "dev" | "unknown"
+  download_url: string | null
+  release_notes_url: string | null
+  checked_at: string | null
+  settings: UpdateSettings
+}
+
+export interface UpdateSettings {
+  enabled: boolean
+  check_interval_hours: number
+  notify_stable_updates: boolean
+  notify_dev_updates: boolean
+  github_owner: string
+  github_repo: string
+  ghcr_owner: string
+  ghcr_image: string
+  dev_tag: string
+}
+
+export interface UpdateSettingsRequest {
+  enabled?: boolean
+  check_interval_hours?: number
+  notify_stable_updates?: boolean
+  notify_dev_updates?: boolean
+  github_owner?: string
+  github_repo?: string
+  ghcr_owner?: string
+  ghcr_image?: string
+  dev_tag?: string
+}
+
+/**
+ * Get current update status
+ */
+export async function getUpdateStatus(force = false): Promise<UpdateInfo> {
+  const url = force
+    ? "/api/v1/updates/status?force=true"
+    : "/api/v1/updates/status"
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch update status: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * Update settings
+ */
+export async function updateSettings(
+  settings: UpdateSettingsRequest
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch("/api/v1/updates/settings", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(settings),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to update settings: ${response.statusText}`)
+  }
+  return response.json()
+}

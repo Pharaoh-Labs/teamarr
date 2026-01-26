@@ -3,6 +3,7 @@ import { Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Toaster } from "sonner"
 import { useQuery } from "@tanstack/react-query"
+import { UpdateNotification } from "@/components/UpdateNotification"
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard" },
@@ -108,6 +109,9 @@ export function MainLayout() {
           </div>
         </div>
       </nav>
+
+      {/* Update Notification Banner */}
+      <UpdateNotification />
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-4 py-4">

@@ -52,6 +52,8 @@ import {
   useDeleteExceptionKeyword,
   useChannelNumberingSettings,
   useUpdateChannelNumberingSettings,
+  useUpdateCheckStatus,
+  useUpdateCheckSettings,
 } from "@/hooks/useSettings"
 import { TeamPicker } from "@/components/TeamPicker"
 import { SortPriorityManager } from "@/components/SortPriorityManager"
@@ -109,6 +111,255 @@ function CronPreview({ expression }: { expression: string }) {
     <p className="text-xs text-muted-foreground">
       {humanReadable}
     </p>
+  )
+}
+
+function UpdateCheckSettingsSection() {
+  const { data: updateStatus } = useUpdateCheckStatus()
+  const updateSettings = useUpdateCheckSettings()
+  const [localSettings, setLocalSettings] = useState({
+    enabled: true,
+    check_interval_hours: 24,
+    notify_stable_updates: true,
+    notify_dev_updates: false,
+    github_owner: "Pharaoh-Labs",
+    github_repo: "teamarr",
+    ghcr_owner: "pharaoh-labs",
+    ghcr_image: "teamarr",
+    dev_tag: "dev",
+  })
+
+  // Update local state when API data loads
+  useEffect(() => {
+    if (updateStatus?.settings) {
+      setLocalSettings(updateStatus.settings)
+    }
+  }, [updateStatus])
+
+  const handleSave = async () => {
+    try {
+      await updateSettings.mutateAsync(localSettings)
+      toast.success("Update check settings saved")
+    } catch (error) {
+      toast.error("Failed to save settings")
+    }
+  }
+
+  const isDirty = updateStatus?.settings && JSON.stringify(localSettings) !== JSON.stringify(updateStatus.settings)
+
+  return (
+    <div className="space-y-4">
+      {/* Update Status Display */}
+      {updateStatus && (
+        <div className="rounded-md bg-muted/50 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Current Version</span>
+            <code className="text-xs bg-background px-2 py-0.5 rounded">
+              {updateStatus.current_version}
+            </code>
+          </div>
+          {updateStatus.latest_version && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Latest Version</span>
+              <code className="text-xs bg-background px-2 py-0.5 rounded">
+                {updateStatus.latest_version}
+              </code>
+            </div>
+          )}
+          {updateStatus.update_available && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle className="h-4 w-4" />
+              <span>Update available!</span>
+            </div>
+          )}
+          {updateStatus.checked_at && (
+            <div className="text-xs text-muted-foreground">
+              Last checked: {formatRelativeTime(updateStatus.checked_at)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="update-enabled" className="text-sm font-medium">
+            Enable Update Checking
+          </Label>
+          <Switch
+            id="update-enabled"
+            checked={localSettings.enabled}
+            onCheckedChange={(enabled) =>
+              setLocalSettings({ ...localSettings, enabled })
+            }
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="check-interval" className="text-sm font-medium">
+            Check Interval (hours)
+          </Label>
+          <Input
+            id="check-interval"
+            type="number"
+            min="1"
+            max="168"
+            value={localSettings.check_interval_hours}
+            onChange={(e) =>
+              setLocalSettings({
+                ...localSettings,
+                check_interval_hours: parseInt(e.target.value) || 24,
+              })
+            }
+            disabled={!localSettings.enabled}
+          />
+          <p className="text-xs text-muted-foreground">
+            How often to check for updates (1-168 hours)
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label htmlFor="notify-stable" className="text-sm font-medium">
+              Notify for Stable Releases
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Show notification when new stable versions are released
+            </p>
+          </div>
+          <Switch
+            id="notify-stable"
+            checked={localSettings.notify_stable_updates}
+            onCheckedChange={(notify_stable_updates) =>
+              setLocalSettings({ ...localSettings, notify_stable_updates })
+            }
+            disabled={!localSettings.enabled}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <Label htmlFor="notify-dev" className="text-sm font-medium">
+              Notify for Dev Builds
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Show notification when new dev builds are available
+            </p>
+          </div>
+          <Switch
+            id="notify-dev"
+            checked={localSettings.notify_dev_updates}
+            onCheckedChange={(notify_dev_updates) =>
+              setLocalSettings({ ...localSettings, notify_dev_updates })
+            }
+            disabled={!localSettings.enabled}
+          />
+        </div>
+      </div>
+
+      {/* Advanced Repository Settings */}
+      <details className="rounded-md border border-border">
+        <summary className="cursor-pointer p-3 text-sm font-medium hover:bg-muted/50">
+          Advanced: Repository Configuration
+        </summary>
+        <div className="p-3 pt-0 space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Configure custom repositories for forks or alternative registries
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="github-owner" className="text-xs">
+                GitHub Owner
+              </Label>
+              <Input
+                id="github-owner"
+                value={localSettings.github_owner}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    github_owner: e.target.value,
+                  })
+                }
+                placeholder="Pharaoh-Labs"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="github-repo" className="text-xs">
+                GitHub Repo
+              </Label>
+              <Input
+                id="github-repo"
+                value={localSettings.github_repo}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    github_repo: e.target.value,
+                  })
+                }
+                placeholder="teamarr"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ghcr-owner" className="text-xs">
+                GHCR Owner
+              </Label>
+              <Input
+                id="ghcr-owner"
+                value={localSettings.ghcr_owner}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    ghcr_owner: e.target.value,
+                  })
+                }
+                placeholder="pharaoh-labs"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ghcr-image" className="text-xs">
+                GHCR Image
+              </Label>
+              <Input
+                id="ghcr-image"
+                value={localSettings.ghcr_image}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    ghcr_image: e.target.value,
+                  })
+                }
+                placeholder="teamarr"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dev-tag" className="text-xs">
+                Dev Tag
+              </Label>
+              <Input
+                id="dev-tag"
+                value={localSettings.dev_tag}
+                onChange={(e) =>
+                  setLocalSettings({ ...localSettings, dev_tag: e.target.value })
+                }
+                placeholder="dev"
+              />
+            </div>
+          </div>
+        </div>
+      </details>
+
+      {/* Save Button */}
+      {isDirty && (
+        <Button onClick={handleSave} disabled={updateSettings.isPending}>
+          {updateSettings.isPending && (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          )}
+          <Save className="h-4 w-4 mr-2" />
+          Save Update Settings
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -2035,6 +2286,17 @@ export function Settings() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Update Check Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Update Notifications</CardTitle>
+          <CardDescription>Configure update checking for stable releases and dev builds</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <UpdateCheckSettingsSection />
         </CardContent>
       </Card>
       </>
