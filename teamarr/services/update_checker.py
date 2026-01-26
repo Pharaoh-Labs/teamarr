@@ -141,6 +141,12 @@ class ComprehensiveUpdateChecker:
         """Calculate how many commits behind the current SHA is from latest.
 
         Uses GitHub's compare API to determine the number of commits between two SHAs.
+        
+        The API compares base (current_sha) to head (latest_sha):
+        - If base is behind head: status="behind", behind_by shows how many commits behind
+        - If base is ahead of head: status="ahead", ahead_by shows how many commits ahead
+        - If same: status="identical", both counts are 0
+        - If diverged: status="diverged", both counts show divergence
 
         Args:
             current_sha: Current commit SHA (can be short or full)
@@ -151,20 +157,36 @@ class ComprehensiveUpdateChecker:
         """
         try:
             # Use GitHub compare API: base...head
+            # Comparing current_sha (base) to latest_sha (head)
             url = f"https://api.github.com/repos/{self.owner}/{self.repo}/compare/{current_sha}...{latest_sha}"
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.get(url)
                 response.raise_for_status()
                 data = response.json()
                 
-                # Get number of commits ahead
-                commits_ahead = data.get("ahead_by", 0)
+                status = data.get("status", "")
+                logger.debug(
+                    "[UPDATE_CHECKER] Compare API result: status=%s, behind_by=%s, ahead_by=%s",
+                    status,
+                    data.get("behind_by"),
+                    data.get("ahead_by"),
+                )
                 
-                # If status is "behind" or "diverged", we're behind
-                if data.get("status") in ["behind", "diverged"]:
-                    return commits_ahead
+                # If current is behind or diverged from latest, we're behind
+                if status == "behind":
+                    # behind_by tells us how many commits the base is behind the head
+                    return data.get("behind_by", 0)
+                elif status == "diverged":
+                    # In diverged case, behind_by tells us commits from base to common ancestor
+                    # but for user notification, ahead_by is more useful (how many commits in head they don't have)
+                    return data.get("ahead_by", 0)
+                elif status == "identical":
+                    return 0
+                elif status == "ahead":
+                    # Current is ahead of latest (shouldn't happen in normal update flow)
+                    return 0
                 
-                return 0 if commits_ahead == 0 else None
+                return None
         except Exception as e:
             logger.debug("[UPDATE_CHECKER] Failed to calculate commits behind: %s", e)
             return None
@@ -195,9 +217,9 @@ class ComprehensiveUpdateChecker:
                 min_len = min(len(current_sha), len(latest_current_branch_sha))
                 update_available = latest_current_branch_sha[:min_len].lower() != current_sha[:min_len].lower()
                 
-                # Calculate commits behind if update available
-                if update_available:
-                    commits_behind = self._fetch_commits_behind(current_sha, latest_current_branch_sha)
+                # Always try to calculate commits behind when we have both SHAs
+                # This works even when update_available is False (returns 0)
+                commits_behind = self._fetch_commits_behind(current_sha, latest_current_branch_sha)
                 
                 logger.debug(
                     "[UPDATE_CHECKER] Dev commit comparison: current=%s, latest=%s, update=%s, behind=%s",
