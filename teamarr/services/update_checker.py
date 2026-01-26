@@ -127,14 +127,17 @@ class ComprehensiveUpdateChecker:
         """
         try:
             url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{branch}"
+            logger.debug("[UPDATE_CHECKER] Fetching latest commit from branch: %s (URL: %s)", branch, url)
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.get(url)
                 response.raise_for_status()
                 data = response.json()
                 full_sha = data.get("sha", "")
-                return full_sha[:7] if full_sha else None
+                short_sha = full_sha[:7] if full_sha else None
+                logger.debug("[UPDATE_CHECKER] Fetched SHA for branch %s: %s", branch, short_sha)
+                return short_sha
         except Exception as e:
-            logger.debug("[UPDATE_CHECKER] Failed to fetch latest commit from branch %s: %s", branch, e)
+            logger.warning("[UPDATE_CHECKER] Failed to fetch latest commit from branch '%s': %s", branch, e)
             return None
 
     def _fetch_commits_behind(self, current_sha: str, latest_sha: str) -> int | None:
