@@ -14,6 +14,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _build_settings_dict(update_settings) -> dict:
+    """Build settings dictionary from UpdateCheckSettings.
+    
+    Args:
+        update_settings: UpdateCheckSettings instance
+        
+    Returns:
+        Dictionary with settings
+    """
+    return {
+        "enabled": update_settings.enabled,
+        "check_interval_hours": update_settings.check_interval_hours,
+        "notify_stable_updates": update_settings.notify_stable_updates,
+        "notify_dev_updates": update_settings.notify_dev_updates,
+        "github_owner": update_settings.github_owner,
+        "github_repo": update_settings.github_repo,
+        "dev_branch": update_settings.dev_branch,
+    }
+
+
 class UpdateStatusResponse(BaseModel):
     """Response model for update status."""
 
@@ -51,8 +71,6 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
     Returns:
         Update status information
     """
-    global _last_update_info
-
     with get_db() as conn:
         settings = get_all_settings(conn)
         update_settings = settings.update_check
@@ -67,15 +85,7 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
             download_url=None,
             release_notes_url=None,
             checked_at=None,
-            settings={
-                "enabled": False,
-                "check_interval_hours": update_settings.check_interval_hours,
-                "notify_stable_updates": update_settings.notify_stable_updates,
-                "notify_dev_updates": update_settings.notify_dev_updates,
-                "github_owner": update_settings.github_owner,
-                "github_repo": update_settings.github_repo,
-                "dev_branch": update_settings.dev_branch,
-            },
+            settings=_build_settings_dict(update_settings),
         )
 
     # Check for updates with configured repositories
@@ -100,15 +110,7 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
             checked_at=update_info.checked_at.isoformat(),
             latest_stable=update_info.latest_stable,
             latest_dev=update_info.latest_dev,
-            settings={
-                "enabled": True,
-                "check_interval_hours": update_settings.check_interval_hours,
-                "notify_stable_updates": update_settings.notify_stable_updates,
-                "notify_dev_updates": update_settings.notify_dev_updates,
-                "github_owner": update_settings.github_owner,
-                "github_repo": update_settings.github_repo,
-                "dev_branch": update_settings.dev_branch,
-            },
+            settings=_build_settings_dict(update_settings),
         )
     else:
         # Check failed, return current version
@@ -122,15 +124,7 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
             checked_at=None,
             latest_stable=None,
             latest_dev=None,
-            settings={
-                "enabled": True,
-                "check_interval_hours": update_settings.check_interval_hours,
-                "notify_stable_updates": update_settings.notify_stable_updates,
-                "notify_dev_updates": update_settings.notify_dev_updates,
-                "github_owner": update_settings.github_owner,
-                "github_repo": update_settings.github_repo,
-                "dev_branch": update_settings.dev_branch,
-            },
+            settings=_build_settings_dict(update_settings),
         )
 
 
