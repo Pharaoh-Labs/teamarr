@@ -1024,7 +1024,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
                     conn, "settings", "update_notify_stable", "INTEGER DEFAULT 1"
                 )
                 _add_column_if_not_exists(
-                    conn, "settings", "update_notify_dev", "INTEGER DEFAULT 0"
+                    conn, "settings", "update_notify_dev", "INTEGER DEFAULT 1"
                 )
                 _add_column_if_not_exists(
                     conn, "settings", "update_github_owner", "TEXT DEFAULT 'Pharaoh-Labs'"

@@ -279,7 +279,6 @@ def create_update_checker(
     owner: str = "Pharaoh-Labs",
     repo: str = "teamarr",
     dev_branch: str = "dev",
-    display_dev_branch: str | None = None,
     cache_duration_hours: int = 6,
 ) -> ComprehensiveUpdateChecker:
     """Factory function to create update checker.
@@ -292,7 +291,6 @@ def create_update_checker(
         owner: GitHub repository owner (default: "Pharaoh-Labs")
         repo: GitHub repository name (default: "teamarr")
         dev_branch: Git branch to check for dev builds (default: "dev")
-        display_dev_branch: Branch to use for fetching latest_dev display (default: same as dev_branch)
         cache_duration_hours: How long to cache results (default: 6 hours)
 
     Returns:
@@ -303,7 +301,6 @@ def create_update_checker(
         owner=owner,
         repo=repo,
         dev_branch=dev_branch,
-        display_dev_branch=display_dev_branch,
         cache_duration_hours=cache_duration_hours,
     )
 
