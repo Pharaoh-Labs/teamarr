@@ -43,6 +43,7 @@ class ComprehensiveUpdateChecker:
         owner: str = "Pharaoh-Labs",
         repo: str = "teamarr",
         dev_branch: str = "dev",
+        display_dev_branch: str | None = None,
         cache_duration_hours: int = 6,
         timeout_seconds: int = 10,
     ):
@@ -53,6 +54,7 @@ class ComprehensiveUpdateChecker:
             owner: GitHub repository owner (default: "Pharaoh-Labs")
             repo: GitHub repository name (default: "teamarr")
             dev_branch: Git branch to check for dev builds (default: "dev")
+            display_dev_branch: Branch to use for fetching latest_dev (default: same as dev_branch)
             cache_duration_hours: How long to cache results (default: 6 hours)
             timeout_seconds: HTTP request timeout (default: 10 seconds)
         """
@@ -60,6 +62,7 @@ class ComprehensiveUpdateChecker:
         self.owner = owner
         self.repo = repo
         self.dev_branch = dev_branch
+        self.display_dev_branch = display_dev_branch or dev_branch
         self.cache_duration_hours = cache_duration_hours
         self.timeout_seconds = timeout_seconds
         self._cached_result: UpdateInfo | None = None
@@ -116,14 +119,17 @@ class ComprehensiveUpdateChecker:
             logger.debug("[UPDATE_CHECKER] Failed to fetch latest stable release: %s", e)
             return None
 
-    def _fetch_latest_dev_sha(self) -> str | None:
-        """Fetch latest commit SHA from dev branch.
+    def _fetch_latest_dev_sha_from_branch(self, branch: str) -> str | None:
+        """Fetch latest commit SHA from specified branch.
 
+        Args:
+            branch: Branch name to fetch from
+            
         Returns:
             Latest commit SHA (short, 7 chars) or None if failed
         """
         try:
-            url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{self.dev_branch}"
+            url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{branch}"
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 response = client.get(url)
                 response.raise_for_status()
@@ -131,7 +137,7 @@ class ComprehensiveUpdateChecker:
                 full_sha = data.get("sha", "")
                 return full_sha[:7] if full_sha else None
         except Exception as e:
-            logger.debug("[UPDATE_CHECKER] Failed to fetch latest dev commit: %s", e)
+            logger.debug("[UPDATE_CHECKER] Failed to fetch latest commit from branch %s: %s", branch, e)
             return None
 
     def _fetch_commits_behind(self, current_sha: str, latest_sha: str) -> int | None:
@@ -174,7 +180,10 @@ class ComprehensiveUpdateChecker:
         """
         # Fetch both stable and dev info
         latest_stable = self._fetch_latest_stable()
-        latest_dev_sha = self._fetch_latest_dev_sha()
+        
+        # Always fetch latest dev SHA from the display branch (usually "dev")
+        # This ensures we show Latest Dev Build even when auto-detect finds a feature branch
+        latest_dev_sha = self._fetch_latest_dev_sha_from_branch(self.display_dev_branch)
 
         # Determine update availability based on build type
         update_available = False
@@ -182,25 +191,27 @@ class ComprehensiveUpdateChecker:
         commits_behind = None
         
         if self.is_dev:
-            # Dev build - check against latest dev commit
+            # Dev build - check against latest commit on the current branch (may be feature branch)
             current_sha = self._extract_sha(self.current_version)
-            if current_sha and latest_dev_sha:
-                min_len = min(len(current_sha), len(latest_dev_sha))
-                update_available = latest_dev_sha[:min_len].lower() != current_sha[:min_len].lower()
+            latest_current_branch_sha = self._fetch_latest_dev_sha_from_branch(self.dev_branch)
+            
+            if current_sha and latest_current_branch_sha:
+                min_len = min(len(current_sha), len(latest_current_branch_sha))
+                update_available = latest_current_branch_sha[:min_len].lower() != current_sha[:min_len].lower()
                 
                 # Calculate commits behind if update available
                 if update_available:
-                    commits_behind = self._fetch_commits_behind(current_sha, latest_dev_sha)
+                    commits_behind = self._fetch_commits_behind(current_sha, latest_current_branch_sha)
                 
                 logger.debug(
                     "[UPDATE_CHECKER] Dev commit comparison: current=%s, latest=%s, update=%s, behind=%s",
                     current_sha,
-                    latest_dev_sha,
+                    latest_current_branch_sha,
                     update_available,
                     commits_behind,
                 )
             
-            latest_version = latest_dev_sha if latest_dev_sha else "unknown"
+            latest_version = latest_current_branch_sha if latest_current_branch_sha else "unknown"
             download_url = f"https://github.com/{self.owner}/{self.repo}/tree/{self.dev_branch}"
         else:
             # Stable build - check against latest stable release
@@ -225,7 +236,7 @@ class ComprehensiveUpdateChecker:
             build_type=build_type,
             download_url=download_url,
             latest_stable=latest_stable,
-            latest_dev=latest_dev_sha,
+            latest_dev=latest_dev_sha,  # Always from display branch
             commits_behind=commits_behind,
         )
 
@@ -272,6 +283,7 @@ def create_update_checker(
     owner: str = "Pharaoh-Labs",
     repo: str = "teamarr",
     dev_branch: str = "dev",
+    display_dev_branch: str | None = None,
     cache_duration_hours: int = 6,
 ) -> ComprehensiveUpdateChecker:
     """Factory function to create update checker.
@@ -284,6 +296,7 @@ def create_update_checker(
         owner: GitHub repository owner (default: "Pharaoh-Labs")
         repo: GitHub repository name (default: "teamarr")
         dev_branch: Git branch to check for dev builds (default: "dev")
+        display_dev_branch: Branch to use for fetching latest_dev display (default: same as dev_branch)
         cache_duration_hours: How long to cache results (default: 6 hours)
 
     Returns:
@@ -294,6 +307,7 @@ def create_update_checker(
         owner=owner,
         repo=repo,
         dev_branch=dev_branch,
+        display_dev_branch=display_dev_branch,
         cache_duration_hours=cache_duration_hours,
     )
 
