@@ -102,14 +102,16 @@ def get_all_settings(conn: Connection) -> AllSettings:
         ),
         update_check=UpdateCheckSettings(
             enabled=bool(row["update_check_enabled"])
-            if row.get("update_check_enabled") is not None
+            if "update_check_enabled" in row.keys() and row["update_check_enabled"] is not None
             else True,
-            check_interval_hours=row.get("update_check_interval_hours") or 24,
-            notify_stable_updates=bool(row.get("update_notify_stable"))
-            if row.get("update_notify_stable") is not None
+            check_interval_hours=row["update_check_interval_hours"]
+            if "update_check_interval_hours" in row.keys()
+            else 24,
+            notify_stable_updates=bool(row["update_notify_stable"])
+            if "update_notify_stable" in row.keys() and row["update_notify_stable"] is not None
             else True,
-            notify_dev_updates=bool(row.get("update_notify_dev"))
-            if row.get("update_notify_dev") is not None
+            notify_dev_updates=bool(row["update_notify_dev"])
+            if "update_notify_dev" in row.keys() and row["update_notify_dev"] is not None
             else False,
         ),
         epg=EPGSettings(

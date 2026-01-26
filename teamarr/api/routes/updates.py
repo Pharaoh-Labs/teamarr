@@ -1,13 +1,12 @@
 """Update check endpoints."""
 
 import logging
-from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from teamarr.api.dependencies import get_db_connection
 from teamarr.config import VERSION
+from teamarr.database import get_db
 from teamarr.database.settings import get_all_settings, update_update_check_settings
 from teamarr.services.update_checker import UpdateInfo, create_update_checker
 
@@ -50,14 +49,10 @@ class UpdateCheckSettingsRequest(BaseModel):
 
 
 @router.get("/updates/status")
-def get_update_status(
-    conn: Annotated[object, Depends(get_db_connection)],
-    force: bool = False,
-) -> UpdateStatusResponse:
+def get_update_status(force: bool = False) -> UpdateStatusResponse:
     """Get current update status.
 
     Args:
-        conn: Database connection
         force: Force a fresh check, bypassing cache
 
     Returns:
@@ -65,8 +60,9 @@ def get_update_status(
     """
     global _last_update_info
 
-    settings = get_all_settings(conn)
-    update_settings = settings.update_check
+    with get_db() as conn:
+        settings = get_all_settings(conn)
+        update_settings = settings.update_check
 
     # If update checking is disabled, return current version only
     if not update_settings.enabled:
@@ -131,29 +127,26 @@ def get_update_status(
 
 
 @router.patch("/updates/settings")
-def update_settings(
-    request: UpdateCheckSettingsRequest,
-    conn: Annotated[object, Depends(get_db_connection)],
-) -> dict:
+def update_settings(request: UpdateCheckSettingsRequest) -> dict:
     """Update update check settings.
 
     Args:
         request: Update settings request
-        conn: Database connection
 
     Returns:
         Success status
     """
-    updated = update_update_check_settings(
-        conn,
-        enabled=request.enabled,
-        check_interval_hours=request.check_interval_hours,
-        notify_stable_updates=request.notify_stable_updates,
-        notify_dev_updates=request.notify_dev_updates,
-    )
+    with get_db() as conn:
+        updated = update_update_check_settings(
+            conn,
+            enabled=request.enabled,
+            check_interval_hours=request.check_interval_hours,
+            notify_stable_updates=request.notify_stable_updates,
+            notify_dev_updates=request.notify_dev_updates,
+        )
 
-    if updated:
-        conn.commit()
-        return {"success": True, "message": "Update check settings updated"}
-    else:
-        return {"success": False, "message": "No changes made"}
+        if updated:
+            conn.commit()
+            return {"success": True, "message": "Update check settings updated"}
+        else:
+            return {"success": False, "message": "No changes made"}

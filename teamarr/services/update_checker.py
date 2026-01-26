@@ -7,7 +7,7 @@ Supports optional notifications, caching, and rate limiting.
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Literal
 
 import httpx
@@ -202,8 +202,6 @@ class DevUpdateChecker(UpdateChecker):
         - Parse image metadata for build timestamps
         - Use authenticated requests for higher rate limits
         """
-        current_sha = self._extract_sha_from_version(self.current_version)
-
         # For dev builds, we check the manifest of the 'dev' tag
         # A more sophisticated approach would compare digests
         url = f"https://ghcr.io/v2/{self.owner}/{self.image}/manifests/dev"
