@@ -28,6 +28,7 @@ class UpdateInfo:
     release_notes_url: str | None = None
     latest_stable: str | None = None
     latest_dev: str | None = None
+    commits_behind: int | None = None  # For dev builds: how many commits behind
 
 
 class ComprehensiveUpdateChecker:
@@ -134,6 +135,38 @@ class ComprehensiveUpdateChecker:
             logger.debug("[UPDATE_CHECKER] Failed to fetch latest dev commit: %s", e)
             return None
 
+    def _fetch_commits_behind(self, current_sha: str, latest_sha: str) -> int | None:
+        """Calculate how many commits behind the current SHA is from latest.
+
+        Uses GitHub's compare API to determine the number of commits between two SHAs.
+
+        Args:
+            current_sha: Current commit SHA (can be short or full)
+            latest_sha: Latest commit SHA (can be short or full)
+
+        Returns:
+            Number of commits behind, or None if cannot be determined
+        """
+        try:
+            # Use GitHub compare API: base...head
+            url = f"https://api.github.com/repos/{self.owner}/{self.repo}/compare/{current_sha}...{latest_sha}"
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Get number of commits ahead
+                commits_ahead = data.get("ahead_by", 0)
+                
+                # If status is "behind" or "diverged", we're behind
+                if data.get("status") in ["behind", "diverged"]:
+                    return commits_ahead
+                
+                return 0 if commits_ahead == 0 else None
+        except Exception as e:
+            logger.debug("[UPDATE_CHECKER] Failed to calculate commits behind: %s", e)
+            return None
+
     def _fetch_update_info(self) -> UpdateInfo:
         """Fetch both stable and dev update information.
 
@@ -147,6 +180,7 @@ class ComprehensiveUpdateChecker:
         # Determine update availability based on build type
         update_available = False
         build_type = "dev" if self.is_dev else "stable"
+        commits_behind = None
         
         if self.is_dev:
             # Dev build - check against latest dev commit
@@ -154,14 +188,20 @@ class ComprehensiveUpdateChecker:
             if current_sha and latest_dev_sha:
                 min_len = min(len(current_sha), len(latest_dev_sha))
                 update_available = latest_dev_sha[:min_len].lower() != current_sha[:min_len].lower()
+                
+                # Calculate commits behind if update available
+                if update_available:
+                    commits_behind = self._fetch_commits_behind(current_sha, latest_dev_sha)
+                
                 logger.debug(
-                    "[UPDATE_CHECKER] Dev commit comparison: current=%s, latest=%s, update=%s",
+                    "[UPDATE_CHECKER] Dev commit comparison: current=%s, latest=%s, update=%s, behind=%s",
                     current_sha,
                     latest_dev_sha,
                     update_available,
+                    commits_behind,
                 )
             
-            latest_version = f"{self.dev_branch} ({latest_dev_sha if latest_dev_sha else 'unknown'})"
+            latest_version = latest_dev_sha if latest_dev_sha else "unknown"
             download_url = f"https://github.com/{self.owner}/{self.repo}/tree/{self.dev_branch}"
             release_notes_url = None
         else:
@@ -190,6 +230,7 @@ class ComprehensiveUpdateChecker:
             release_notes_url=release_notes_url,
             latest_stable=latest_stable,
             latest_dev=latest_dev_sha,
+            commits_behind=commits_behind,
         )
 
     @staticmethod

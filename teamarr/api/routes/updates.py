@@ -45,7 +45,8 @@ class UpdateStatusResponse(BaseModel):
     checked_at: str | None
     settings: dict
     latest_stable: str | None = None  # Latest stable release version
-    latest_dev: str | None = None  # Latest dev build digest (short)
+    latest_dev: str | None = None  # Latest dev build SHA (short)
+    commits_behind: int | None = None  # For dev builds: number of commits behind
 
 
 class UpdateCheckSettingsRequest(BaseModel):
@@ -107,6 +108,7 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
             checked_at=update_info.checked_at.isoformat(),
             latest_stable=update_info.latest_stable,
             latest_dev=update_info.latest_dev,
+            commits_behind=update_info.commits_behind,
             settings=_build_settings_dict(update_settings),
         )
     else:
@@ -121,6 +123,7 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
             checked_at=None,
             latest_stable=None,
             latest_dev=None,
+            commits_behind=None,
             settings=_build_settings_dict(update_settings),
         )
 

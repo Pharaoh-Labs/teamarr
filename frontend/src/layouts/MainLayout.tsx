@@ -72,9 +72,22 @@ export function MainLayout() {
     }
 
     const isDevBuild = updateInfo.build_type === "dev"
-    const message = isDevBuild
-      ? `Dev build update available: ${updateInfo.current_version} → ${updateInfo.latest_version}`
-      : `New version available: ${updateInfo.current_version} → ${updateInfo.latest_version}`
+    
+    let message: string
+    if (isDevBuild) {
+      // Extract current and latest SHAs for dev builds
+      const currentSha = updateInfo.current_version.split('+')[1] || updateInfo.current_version
+      const latestSha = updateInfo.latest_dev || updateInfo.latest_version
+      
+      // Build message with commits behind if available
+      if (updateInfo.commits_behind && updateInfo.commits_behind > 0) {
+        message = `Dev build update available: ${currentSha} → ${latestSha} (${updateInfo.commits_behind} commit${updateInfo.commits_behind > 1 ? 's' : ''} behind)`
+      } else {
+        message = `Dev build update available: ${currentSha} → ${latestSha}`
+      }
+    } else {
+      message = `New version available: ${updateInfo.current_version} → ${updateInfo.latest_version}`
+    }
 
     // Show simple toast notification
     toast.success(message, {

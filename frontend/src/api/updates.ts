@@ -13,11 +13,11 @@ export interface UpdateInfo {
   settings: UpdateSettings
   latest_stable: string | null
   latest_dev: string | null
+  commits_behind: number | null
 }
 
 export interface UpdateSettings {
   enabled: boolean
-  check_interval_hours: number
   notify_stable_updates: boolean
   notify_dev_updates: boolean
   github_owner: string
@@ -27,7 +27,6 @@ export interface UpdateSettings {
 
 export interface UpdateSettingsRequest {
   enabled?: boolean
-  check_interval_hours?: number
   notify_stable_updates?: boolean
   notify_dev_updates?: boolean
   github_owner?: string
