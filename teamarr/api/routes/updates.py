@@ -93,7 +93,8 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
     
     if update_settings.auto_detect_dev_branch and "-" in VERSION and "+" in VERSION:
         # Extract branch from version string (e.g., "2.0.11-copilot/add-update-notification-feature+051741")
-        detected_branch = VERSION.split("-")[1].split("+")[0]
+        # Use split with maxsplit=1 to only split on the FIRST hyphen
+        detected_branch = VERSION.split("-", 1)[1].split("+")[0]
         if detected_branch:
             dev_branch = detected_branch
             logger.debug("[UPDATE_CHECKER] Auto-detected dev branch from version: %s", dev_branch)
