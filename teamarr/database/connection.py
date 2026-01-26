@@ -1164,55 +1164,50 @@ def _migrate_channel_group_mode_to_patterns(conn: sqlite3.Connection) -> None:
             removed = set(all_columns) - set(columns)
             logger.info("[MIGRATE] Filtering out legacy columns: %s", removed)
 
-        # CRITICAL: Convert old values in source table BEFORE copying to new table
-        # This prevents CHECK constraint violations during INSERT
+        # NOTE: We do NOT update the old table in place because it may have CHECK constraints
+        # that prevent the new values (e.g., channel_group_mode CHECK only allows 'static','sport','league')
+        # Instead, we convert values during the INSERT using CASE expressions
 
-        # Convert channel_group_mode: 'sport' -> '{sport}', 'league' -> '{league}'
-        conn.execute("""
-            UPDATE event_epg_groups
-            SET channel_group_mode = '{sport}'
-            WHERE channel_group_mode = 'sport'
-        """)
-        conn.execute("""
-            UPDATE event_epg_groups
-            SET channel_group_mode = '{league}'
-            WHERE channel_group_mode = 'league'
-        """)
-
-        # Convert channel_assignment_mode: 'one_per_event'/'one_per_stream' -> 'auto'/'manual'
-        # IMPORTANT: Convert specific values FIRST, then catch-all
-        if "channel_assignment_mode" in columns:
-            # First: 'one_per_stream' -> 'manual' (specific conversion)
-            conn.execute("""
-                UPDATE event_epg_groups
-                SET channel_assignment_mode = 'manual'
-                WHERE channel_assignment_mode = 'one_per_stream'
-            """)
-            # Second: 'one_per_event' and any other invalid values -> 'auto' (catch-all)
-            conn.execute("""
-                UPDATE event_epg_groups
-                SET channel_assignment_mode = 'auto'
-                WHERE channel_assignment_mode NOT IN ('auto', 'manual')
-            """)
-
-        # Convert channel_sort_order: 'start_time' -> 'time'
-        if "channel_sort_order" in columns:
-            conn.execute("""
-                UPDATE event_epg_groups
-                SET channel_sort_order = 'time'
-                WHERE channel_sort_order NOT IN ('time', 'sport_time', 'league_time')
-            """)
-
-        # Convert overlap_handling: 'allow' -> 'add_stream'
-        if "overlap_handling" in columns:
-            conn.execute("""
-                UPDATE event_epg_groups
-                SET overlap_handling = 'add_stream'
-                WHERE overlap_handling NOT IN ('add_stream', 'add_only', 'create_all', 'skip')
-            """)
-
-        # Build column list for copy (all columns)
+        # Build column list for copy - we'll use CASE for conversions
         col_list = ", ".join(columns)
+
+        # Build SELECT expressions with CASE for value conversions
+        select_exprs = []
+        for col in columns:
+            if col == "channel_group_mode":
+                # Convert 'sport' -> '{sport}', 'league' -> '{league}'
+                select_exprs.append("""
+                    CASE channel_group_mode
+                        WHEN 'sport' THEN '{sport}'
+                        WHEN 'league' THEN '{league}'
+                        ELSE channel_group_mode
+                    END""")
+            elif col == "channel_assignment_mode":
+                # Convert 'one_per_stream' -> 'manual', others -> 'auto'
+                select_exprs.append("""
+                    CASE
+                        WHEN channel_assignment_mode = 'one_per_stream' THEN 'manual'
+                        WHEN channel_assignment_mode IN ('auto', 'manual') THEN channel_assignment_mode
+                        ELSE 'auto'
+                    END""")
+            elif col == "channel_sort_order":
+                # Convert invalid values to 'time'
+                select_exprs.append("""
+                    CASE
+                        WHEN channel_sort_order IN ('time', 'sport_time', 'league_time') THEN channel_sort_order
+                        ELSE 'time'
+                    END""")
+            elif col == "overlap_handling":
+                # Convert invalid values to 'add_stream'
+                select_exprs.append("""
+                    CASE
+                        WHEN overlap_handling IN ('add_stream', 'add_only', 'create_all', 'skip') THEN overlap_handling
+                        ELSE 'add_stream'
+                    END""")
+            else:
+                select_exprs.append(col)
+
+        select_list = ", ".join(select_exprs)
 
         # Create new table without CHECK constraint on channel_group_mode
         # Copy the exact schema but remove the CHECK constraint
@@ -1279,10 +1274,10 @@ def _migrate_channel_group_mode_to_patterns(conn: sqlite3.Connection) -> None:
             )
         """)
 
-        # Copy data (values already converted above)
+        # Copy data with value conversions via CASE expressions
         conn.execute(f"""
             INSERT INTO event_epg_groups_new ({col_list})
-            SELECT {col_list} FROM event_epg_groups
+            SELECT {select_list} FROM event_epg_groups
         """)
 
         # Drop old table and rename
