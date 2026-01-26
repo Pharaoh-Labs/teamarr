@@ -57,9 +57,8 @@ class UpdateCheckSettings:
     """Update notification settings."""
 
     enabled: bool = True
-    check_interval_hours: int = 24
     notify_stable_updates: bool = True
-    notify_dev_updates: bool = False
+    notify_dev_updates: bool = True
     github_owner: str = "Pharaoh-Labs"
     github_repo: str = "teamarr"
     dev_branch: str = "dev"

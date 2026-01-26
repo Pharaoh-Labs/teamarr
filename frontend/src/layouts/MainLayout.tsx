@@ -76,17 +76,9 @@ export function MainLayout() {
       ? `Dev build update available: ${updateInfo.current_version} → ${updateInfo.latest_version}`
       : `New version available: ${updateInfo.current_version} → ${updateInfo.latest_version}`
 
-    // Show toast with action button
+    // Show simple toast notification
     toast.success(message, {
       duration: Infinity, // Keep toast until manually dismissed
-      action: updateInfo.download_url
-        ? {
-            label: isDevBuild ? "Pull Image" : "View Release",
-            onClick: () => {
-              window.open(updateInfo.download_url!, "_blank", "noopener,noreferrer")
-            },
-          }
-        : undefined,
     })
   }, [updateInfo])
 

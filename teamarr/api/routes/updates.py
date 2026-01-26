@@ -25,7 +25,6 @@ def _build_settings_dict(update_settings) -> dict:
     """
     return {
         "enabled": update_settings.enabled,
-        "check_interval_hours": update_settings.check_interval_hours,
         "notify_stable_updates": update_settings.notify_stable_updates,
         "notify_dev_updates": update_settings.notify_dev_updates,
         "github_owner": update_settings.github_owner,
@@ -53,7 +52,6 @@ class UpdateCheckSettingsRequest(BaseModel):
     """Request model for updating update check settings."""
 
     enabled: bool | None = None
-    check_interval_hours: int | None = None
     notify_stable_updates: bool | None = None
     notify_dev_updates: bool | None = None
     github_owner: str | None = None
@@ -94,7 +92,6 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
         owner=update_settings.github_owner,
         repo=update_settings.github_repo,
         dev_branch=update_settings.dev_branch if hasattr(update_settings, 'dev_branch') else "dev",
-        cache_duration_hours=update_settings.check_interval_hours,
     )
     update_info = checker.check_for_updates(force=force)
 
@@ -142,7 +139,6 @@ def update_settings(request: UpdateCheckSettingsRequest) -> dict:
         updated = update_update_check_settings(
             conn,
             enabled=request.enabled,
-            check_interval_hours=request.check_interval_hours,
             notify_stable_updates=request.notify_stable_updates,
             notify_dev_updates=request.notify_dev_updates,
             github_owner=request.github_owner,

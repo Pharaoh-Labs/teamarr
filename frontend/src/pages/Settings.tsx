@@ -121,9 +121,8 @@ function UpdateCheckSettingsSection() {
   const [isChecking, setIsChecking] = useState(false)
   const [localSettings, setLocalSettings] = useState({
     enabled: true,
-    check_interval_hours: 24,
     notify_stable_updates: true,
-    notify_dev_updates: false,
+    notify_dev_updates: true,
     github_owner: "Pharaoh-Labs",
     github_repo: "teamarr",
     dev_branch: "dev",
@@ -252,29 +251,6 @@ function UpdateCheckSettingsSection() {
               setLocalSettings({ ...localSettings, enabled })
             }
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="check-interval" className="text-sm font-medium">
-            Check Interval (hours)
-          </Label>
-          <Input
-            id="check-interval"
-            type="number"
-            min="1"
-            max="168"
-            value={localSettings.check_interval_hours}
-            onChange={(e) =>
-              setLocalSettings({
-                ...localSettings,
-                check_interval_hours: parseInt(e.target.value) || 24,
-              })
-            }
-            disabled={!localSettings.enabled}
-          />
-          <p className="text-xs text-muted-foreground">
-            How often to check for updates (1-168 hours)
-          </p>
         </div>
 
         <div className="flex items-center justify-between">
