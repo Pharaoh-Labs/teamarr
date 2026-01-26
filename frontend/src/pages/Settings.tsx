@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
 import cronstrue from "cronstrue"
 import { getSportDisplayName } from "@/lib/utils"
 import {
@@ -144,15 +145,21 @@ function UpdateCheckSettingsSection() {
     }
   }
 
+  const queryClient = useQueryClient()
+  
   const handleCheckNow = async () => {
     setIsChecking(true)
     try {
       // Force a fresh check by calling the API with force=true
       const response = await fetch("/api/v1/updates/status?force=true")
       if (response.ok) {
-        await refetch()
         // Clear localStorage dismissal so notification banner appears if update is found
         localStorage.removeItem("update-dismissed-version")
+        
+        // Invalidate and refetch all update status queries to trigger banner
+        await queryClient.invalidateQueries({ queryKey: ["update-status"] })
+        await refetch()
+        
         toast.success("Update check complete")
       } else {
         throw new Error("Check failed")

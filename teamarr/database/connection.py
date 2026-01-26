@@ -1005,45 +1005,50 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     # Version 44: Add update check settings
     if current_version < 44:
-        _add_column_if_not_exists(
-            conn, "settings", "update_check_enabled", "INTEGER DEFAULT 1"
-        )
-        _add_column_if_not_exists(
-            conn, "settings", "update_check_interval_hours", "INTEGER DEFAULT 24"
-        )
-        _add_column_if_not_exists(
-            conn, "settings", "update_notify_stable", "INTEGER DEFAULT 1"
-        )
-        _add_column_if_not_exists(
-            conn, "settings", "update_notify_dev", "INTEGER DEFAULT 0"
-        )
-        _add_column_if_not_exists(
-            conn, "settings", "update_github_owner", "TEXT DEFAULT 'Pharaoh-Labs'"
-        )
-        _add_column_if_not_exists(
-            conn, "settings", "update_github_repo", "TEXT DEFAULT 'teamarr'"
-        )
-        _add_column_if_not_exists(
-            conn, "settings", "update_dev_branch", "TEXT DEFAULT 'dev'"
-        )
-
-        # Create table to track dev build digests for update detection
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS update_tracker (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                current_dev_digest TEXT,
-                last_checked_at TIMESTAMP,
-                last_notified_at TIMESTAMP
+        try:
+            _add_column_if_not_exists(
+                conn, "settings", "update_check_enabled", "INTEGER DEFAULT 1"
             )
-        """)
-        # Initialize with single row
-        conn.execute("""
-            INSERT OR IGNORE INTO update_tracker (id) VALUES (1)
-        """)
+            _add_column_if_not_exists(
+                conn, "settings", "update_check_interval_hours", "INTEGER DEFAULT 24"
+            )
+            _add_column_if_not_exists(
+                conn, "settings", "update_notify_stable", "INTEGER DEFAULT 1"
+            )
+            _add_column_if_not_exists(
+                conn, "settings", "update_notify_dev", "INTEGER DEFAULT 0"
+            )
+            _add_column_if_not_exists(
+                conn, "settings", "update_github_owner", "TEXT DEFAULT 'Pharaoh-Labs'"
+            )
+            _add_column_if_not_exists(
+                conn, "settings", "update_github_repo", "TEXT DEFAULT 'teamarr'"
+            )
+            _add_column_if_not_exists(
+                conn, "settings", "update_dev_branch", "TEXT DEFAULT 'dev'"
+            )
 
-        conn.execute("UPDATE settings SET schema_version = 44 WHERE id = 1")
-        logger.info("[MIGRATE] Schema upgraded to version 44 (update check settings)")
-        current_version = 44
+            # Create table to track dev build digests for update detection
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS update_tracker (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    current_dev_digest TEXT,
+                    last_checked_at TIMESTAMP,
+                    last_notified_at TIMESTAMP
+                )
+            """)
+            # Initialize with single row
+            conn.execute("""
+                INSERT OR IGNORE INTO update_tracker (id) VALUES (1)
+            """)
+
+            conn.execute("UPDATE settings SET schema_version = 44 WHERE id = 1")
+            logger.info("[MIGRATE] Schema upgraded to version 44 (update check settings)")
+            current_version = 44
+        except sqlite3.OperationalError as e:
+            logger.error("[MIGRATE] Failed to upgrade to version 44: %s", e)
+            # Don't increment version if migration failed
+            raise
 
 
 def _migrate_cleanup_legacy_columns(conn: sqlite3.Connection) -> None:
@@ -2077,6 +2082,7 @@ def _add_column_if_not_exists(
     columns = {row["name"] for row in cursor.fetchall()}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+        logger.info("[MIGRATE] Added %s.%s", table, column)
 
 
 def _recreate_managed_channels_without_unique_constraint(

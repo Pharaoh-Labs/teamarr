@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { Toaster } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import { UpdateNotification } from "@/components/UpdateNotification"
+import { getUpdateStatus, type UpdateInfo } from "@/api/updates"
+import { Badge } from "@/components/ui/badge"
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard" },
@@ -32,7 +34,17 @@ export function MainLayout() {
     staleTime: Infinity, // Version won't change during session
   })
 
+  // Query update status to show "Update Available" badge
+  const { data: updateInfo } = useQuery<UpdateInfo>({
+    queryKey: ["update-status"],
+    queryFn: () => getUpdateStatus(false),
+    refetchInterval: 6 * 60 * 60 * 1000, // 6 hours
+    staleTime: 6 * 60 * 60 * 1000,
+    retry: 1,
+  })
+
   const version = healthQuery.data?.version || "v2.0.0"
+  const updateAvailable = updateInfo?.update_available && updateInfo?.settings?.enabled
 
   useEffect(() => {
     document.documentElement.classList.remove("light", "dark")
@@ -91,9 +103,16 @@ export function MainLayout() {
 
             {/* Right side */}
             <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                {version}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                  {version}
+                </span>
+                {updateAvailable && (
+                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-green-500 hover:bg-green-600 text-white">
+                    Update
+                  </Badge>
+                )}
+              </div>
               <button
                 onClick={toggleTheme}
                 className="p-2 rounded-md hover:bg-accent transition-colors"
@@ -130,7 +149,14 @@ export function MainLayout() {
                 e.currentTarget.style.display = "none"
               }}
             />
-            <span>Teamarr - Dynamic Sports EPG Generator for Dispatcharr | {version}{window.location.port && ` | Port ${window.location.port}`}</span>
+            <span className="flex items-center gap-2">
+              Teamarr - Dynamic Sports EPG Generator for Dispatcharr | {version}{window.location.port && ` | Port ${window.location.port}`}
+              {updateAvailable && (
+                <Badge variant="default" className="text-[10px] px-1.5 py-0.5 bg-green-500 hover:bg-green-600 text-white ml-1">
+                  Update Available
+                </Badge>
+              )}
+            </span>
           </div>
         </div>
       </footer>
