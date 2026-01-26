@@ -115,8 +115,9 @@ function CronPreview({ expression }: { expression: string }) {
 }
 
 function UpdateCheckSettingsSection() {
-  const { data: updateStatus } = useUpdateCheckStatus()
+  const { data: updateStatus, refetch } = useUpdateCheckStatus()
   const updateSettings = useUpdateCheckSettings()
+  const [isChecking, setIsChecking] = useState(false)
   const [localSettings, setLocalSettings] = useState({
     enabled: true,
     check_interval_hours: 24,
@@ -145,6 +146,24 @@ function UpdateCheckSettingsSection() {
     }
   }
 
+  const handleCheckNow = async () => {
+    setIsChecking(true)
+    try {
+      // Force a fresh check by calling the API with force=true
+      const response = await fetch("/api/v1/updates/status?force=true")
+      if (response.ok) {
+        await refetch()
+        toast.success("Update check complete")
+      } else {
+        throw new Error("Check failed")
+      }
+    } catch (error) {
+      toast.error("Failed to check for updates")
+    } finally {
+      setIsChecking(false)
+    }
+  }
+
   const isDirty = updateStatus?.settings && JSON.stringify(localSettings) !== JSON.stringify(updateStatus.settings)
 
   return (
@@ -152,13 +171,49 @@ function UpdateCheckSettingsSection() {
       {/* Update Status Display */}
       {updateStatus && (
         <div className="rounded-md bg-muted/50 p-4 space-y-2">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium">Version Information</h4>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCheckNow}
+              disabled={isChecking || !localSettings.enabled}
+            >
+              {isChecking ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <TestTube className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Check Now
+            </Button>
+          </div>
+
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Current Version</span>
             <code className="text-xs bg-background px-2 py-0.5 rounded">
               {updateStatus.current_version}
             </code>
           </div>
-          {updateStatus.latest_version && (
+
+          {updateStatus.latest_stable && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Latest Stable</span>
+              <code className="text-xs bg-background px-2 py-0.5 rounded">
+                {updateStatus.latest_stable}
+              </code>
+            </div>
+          )}
+
+          {updateStatus.latest_dev && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Latest Dev Build</span>
+              <code className="text-xs bg-background px-2 py-0.5 rounded">
+                {updateStatus.latest_dev}
+              </code>
+            </div>
+          )}
+
+          {updateStatus.latest_version && !updateStatus.latest_stable && !updateStatus.latest_dev && (
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Latest Version</span>
               <code className="text-xs bg-background px-2 py-0.5 rounded">
@@ -166,6 +221,7 @@ function UpdateCheckSettingsSection() {
               </code>
             </div>
           )}
+
           {updateStatus.update_available && (
             <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
               <CheckCircle className="h-4 w-4" />

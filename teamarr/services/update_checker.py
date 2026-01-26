@@ -23,9 +23,11 @@ class UpdateInfo:
     latest_version: str | None
     update_available: bool
     checked_at: datetime
-    build_type: Literal["stable", "dev"]
+    build_type: Literal["stable", "dev", "unknown"]
     download_url: str | None = None
     release_notes_url: str | None = None
+    latest_stable: str | None = None  # Always fetch stable version
+    latest_dev: str | None = None  # Always fetch dev version (if available)
 
 
 class UpdateChecker:
@@ -131,6 +133,8 @@ class StableUpdateChecker(UpdateChecker):
             build_type="stable",
             download_url=data.get("html_url"),
             release_notes_url=data.get("html_url"),
+            latest_stable=latest_version,
+            latest_dev=None,  # Stable checker doesn't fetch dev info
         )
 
     @staticmethod
@@ -271,6 +275,8 @@ class DevUpdateChecker(UpdateChecker):
             checked_at=datetime.now(UTC),
             build_type="dev",
             download_url=f"https://ghcr.io/{self.owner}/{self.image}:{self.dev_tag}",
+            latest_stable=None,  # Dev checker doesn't fetch stable info
+            latest_dev=latest_digest[:12] if latest_digest else None,
         )
 
 

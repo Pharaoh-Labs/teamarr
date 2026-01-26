@@ -11,6 +11,8 @@ export interface UpdateInfo {
   release_notes_url: string | null
   checked_at: string | null
   settings: UpdateSettings
+  latest_stable: string | null
+  latest_dev: string | null
 }
 
 export interface UpdateSettings {
