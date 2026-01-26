@@ -60,6 +60,11 @@ class UpdateCheckSettings:
     check_interval_hours: int = 24
     notify_stable_updates: bool = True
     notify_dev_updates: bool = False
+    github_owner: str = "Pharaoh-Labs"
+    github_repo: str = "teamarr"
+    ghcr_owner: str = "pharaoh-labs"
+    ghcr_image: str = "teamarr"
+    dev_tag: str = "dev"
 
 
 @dataclass

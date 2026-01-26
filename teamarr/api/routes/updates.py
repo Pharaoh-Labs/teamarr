@@ -8,22 +8,10 @@ from pydantic import BaseModel
 from teamarr.config import VERSION
 from teamarr.database import get_db
 from teamarr.database.settings import get_all_settings, update_update_check_settings
-from teamarr.services.update_checker import UpdateInfo, create_update_checker
+from teamarr.services.update_checker import create_update_checker
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# Global update checker instance (cached)
-_update_checker = None
-_last_update_info: UpdateInfo | None = None
-
-
-def get_update_checker():
-    """Get or create the update checker instance."""
-    global _update_checker
-    if _update_checker is None:
-        _update_checker = create_update_checker(VERSION)
-    return _update_checker
 
 
 class UpdateStatusResponse(BaseModel):
@@ -46,6 +34,11 @@ class UpdateCheckSettingsRequest(BaseModel):
     check_interval_hours: int | None = None
     notify_stable_updates: bool | None = None
     notify_dev_updates: bool | None = None
+    github_owner: str | None = None
+    github_repo: str | None = None
+    ghcr_owner: str | None = None
+    ghcr_image: str | None = None
+    dev_tag: str | None = None
 
 
 @router.get("/updates/status")
@@ -79,16 +72,25 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
                 "check_interval_hours": update_settings.check_interval_hours,
                 "notify_stable_updates": update_settings.notify_stable_updates,
                 "notify_dev_updates": update_settings.notify_dev_updates,
+                "github_owner": update_settings.github_owner,
+                "github_repo": update_settings.github_repo,
+                "ghcr_owner": update_settings.ghcr_owner,
+                "ghcr_image": update_settings.ghcr_image,
+                "dev_tag": update_settings.dev_tag,
             },
         )
 
-    # Check for updates
-    checker = get_update_checker()
+    # Check for updates with configured repositories
+    checker = create_update_checker(
+        version=VERSION,
+        owner=update_settings.github_owner,
+        repo=update_settings.github_repo,
+        ghcr_owner=update_settings.ghcr_owner,
+        ghcr_image=update_settings.ghcr_image,
+        dev_tag=update_settings.dev_tag,
+        cache_duration_hours=update_settings.check_interval_hours,
+    )
     update_info = checker.check_for_updates(force=force)
-
-    # Store last check for other uses
-    if update_info:
-        _last_update_info = update_info
 
     # Return status
     if update_info:
@@ -105,6 +107,11 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
                 "check_interval_hours": update_settings.check_interval_hours,
                 "notify_stable_updates": update_settings.notify_stable_updates,
                 "notify_dev_updates": update_settings.notify_dev_updates,
+                "github_owner": update_settings.github_owner,
+                "github_repo": update_settings.github_repo,
+                "ghcr_owner": update_settings.ghcr_owner,
+                "ghcr_image": update_settings.ghcr_image,
+                "dev_tag": update_settings.dev_tag,
             },
         )
     else:
@@ -122,6 +129,11 @@ def get_update_status(force: bool = False) -> UpdateStatusResponse:
                 "check_interval_hours": update_settings.check_interval_hours,
                 "notify_stable_updates": update_settings.notify_stable_updates,
                 "notify_dev_updates": update_settings.notify_dev_updates,
+                "github_owner": update_settings.github_owner,
+                "github_repo": update_settings.github_repo,
+                "ghcr_owner": update_settings.ghcr_owner,
+                "ghcr_image": update_settings.ghcr_image,
+                "dev_tag": update_settings.dev_tag,
             },
         )
 
@@ -143,6 +155,11 @@ def update_settings(request: UpdateCheckSettingsRequest) -> dict:
             check_interval_hours=request.check_interval_hours,
             notify_stable_updates=request.notify_stable_updates,
             notify_dev_updates=request.notify_dev_updates,
+            github_owner=request.github_owner,
+            github_repo=request.github_repo,
+            ghcr_owner=request.ghcr_owner,
+            ghcr_image=request.ghcr_image,
+            dev_tag=request.dev_tag,
         )
 
         if updated:

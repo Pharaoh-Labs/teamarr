@@ -92,7 +92,7 @@ class StableUpdateChecker(UpdateChecker):
     def __init__(
         self,
         current_version: str,
-        owner: str = "pharaoh-labs",
+        owner: str = "Pharaoh-Labs",
         repo: str = "teamarr",
         **kwargs,
     ):
@@ -100,8 +100,8 @@ class StableUpdateChecker(UpdateChecker):
 
         Args:
             current_version: Current application version
-            owner: GitHub repository owner
-            repo: GitHub repository name
+            owner: GitHub repository owner (default: "Pharaoh-Labs")
+            repo: GitHub repository name (default: "teamarr")
             **kwargs: Additional arguments passed to UpdateChecker
         """
         super().__init__(current_version, **kwargs)
@@ -167,6 +167,7 @@ class DevUpdateChecker(UpdateChecker):
         current_version: str,
         owner: str = "pharaoh-labs",
         image: str = "teamarr",
+        dev_tag: str = "dev",
         **kwargs,
     ):
         """Initialize dev update checker.
@@ -175,11 +176,13 @@ class DevUpdateChecker(UpdateChecker):
             current_version: Current application version with commit SHA
             owner: GitHub repository owner
             image: Container image name
+            dev_tag: Docker tag to check (default: "dev")
             **kwargs: Additional arguments passed to UpdateChecker
         """
         super().__init__(current_version, **kwargs)
         self.owner = owner
         self.image = image
+        self.dev_tag = dev_tag
 
     def _extract_sha_from_version(self, version: str) -> str | None:
         """Extract commit SHA from version string.
@@ -202,9 +205,9 @@ class DevUpdateChecker(UpdateChecker):
         - Parse image metadata for build timestamps
         - Use authenticated requests for higher rate limits
         """
-        # For dev builds, we check the manifest of the 'dev' tag
+        # For dev builds, we check the manifest of the configured tag
         # A more sophisticated approach would compare digests
-        url = f"https://ghcr.io/v2/{self.owner}/{self.image}/manifests/dev"
+        url = f"https://ghcr.io/v2/{self.owner}/{self.image}/manifests/{self.dev_tag}"
 
         headers = {
             "Accept": "application/vnd.docker.distribution.manifest.v2+json",
@@ -224,31 +227,43 @@ class DevUpdateChecker(UpdateChecker):
 
         return UpdateInfo(
             current_version=self.current_version,
-            latest_version=f"dev ({latest_digest[:12] if latest_digest else 'unknown'})",
+            latest_version=f"{self.dev_tag} ({latest_digest[:12] if latest_digest else 'unknown'})",
             update_available=update_available,
             checked_at=datetime.now(),
             build_type="dev",
-            download_url=f"https://ghcr.io/{self.owner}/{self.image}:dev",
+            download_url=f"https://ghcr.io/{self.owner}/{self.image}:{self.dev_tag}",
         )
 
 
 def create_update_checker(
     version: str,
-    owner: str = "pharaoh-labs",
+    owner: str = "Pharaoh-Labs",
     repo: str = "teamarr",
+    ghcr_owner: str | None = None,
+    ghcr_image: str | None = None,
+    dev_tag: str = "dev",
     cache_duration_hours: int = 6,
 ) -> UpdateChecker:
     """Factory function to create appropriate update checker.
 
     Args:
         version: Current application version
-        owner: GitHub repository owner
-        repo: GitHub repository name
+        owner: GitHub repository owner for stable releases (default: "Pharaoh-Labs")
+        repo: GitHub repository name (default: "teamarr")
+        ghcr_owner: GHCR repository owner for dev builds (defaults to "pharaoh-labs")
+        ghcr_image: GHCR image name for dev builds (defaults to repo)
+        dev_tag: Docker tag to check for dev builds (default: "dev")
         cache_duration_hours: How long to cache results
 
     Returns:
         StableUpdateChecker for stable releases, DevUpdateChecker for dev builds
     """
+    # Use lowercase for GHCR if not specified (Docker registry is case-sensitive lowercase)
+    if ghcr_owner is None:
+        ghcr_owner = "pharaoh-labs"
+    if ghcr_image is None:
+        ghcr_image = repo
+
     # Detect build type from version string
     # Dev builds have "-dev" or "-branch" in version
     is_dev = "-dev" in version or ("-" in version and "+" in version)
@@ -256,8 +271,9 @@ def create_update_checker(
     if is_dev:
         return DevUpdateChecker(
             current_version=version,
-            owner=owner,
-            image=repo,
+            owner=ghcr_owner,
+            image=ghcr_image,
+            dev_tag=dev_tag,
             cache_duration_hours=cache_duration_hours,
         )
     else:

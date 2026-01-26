@@ -113,6 +113,21 @@ def get_all_settings(conn: Connection) -> AllSettings:
             notify_dev_updates=bool(row["update_notify_dev"])
             if "update_notify_dev" in row.keys() and row["update_notify_dev"] is not None
             else False,
+            github_owner=row["update_github_owner"]
+            if "update_github_owner" in row.keys() and row["update_github_owner"]
+            else "Pharaoh-Labs",
+            github_repo=row["update_github_repo"]
+            if "update_github_repo" in row.keys() and row["update_github_repo"]
+            else "teamarr",
+            ghcr_owner=row["update_ghcr_owner"]
+            if "update_ghcr_owner" in row.keys() and row["update_ghcr_owner"]
+            else "pharaoh-labs",
+            ghcr_image=row["update_ghcr_image"]
+            if "update_ghcr_image" in row.keys() and row["update_ghcr_image"]
+            else "teamarr",
+            dev_tag=row["update_dev_tag"]
+            if "update_dev_tag" in row.keys() and row["update_dev_tag"]
+            else "dev",
         ),
         epg=EPGSettings(
             team_schedule_days_ahead=row["team_schedule_days_ahead"] or 30,

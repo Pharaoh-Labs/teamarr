@@ -1017,6 +1017,21 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _add_column_if_not_exists(
             conn, "settings", "update_notify_dev", "INTEGER DEFAULT 0"
         )
+        _add_column_if_not_exists(
+            conn, "settings", "update_github_owner", "TEXT DEFAULT 'Pharaoh-Labs'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_github_repo", "TEXT DEFAULT 'teamarr'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_ghcr_owner", "TEXT DEFAULT 'pharaoh-labs'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_ghcr_image", "TEXT DEFAULT 'teamarr'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_dev_tag", "TEXT DEFAULT 'dev'"
+        )
         conn.execute("UPDATE settings SET schema_version = 44 WHERE id = 1")
         logger.info("[MIGRATE] Schema upgraded to version 44 (update check settings)")
         current_version = 44
