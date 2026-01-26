@@ -7,7 +7,7 @@ Supports optional notifications, caching, and rate limiting.
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 import httpx
@@ -127,7 +127,7 @@ class StableUpdateChecker(UpdateChecker):
             current_version=self.current_version,
             latest_version=latest_version,
             update_available=update_available,
-            checked_at=datetime.now(),
+            checked_at=datetime.now(UTC),
             build_type="stable",
             download_url=data.get("html_url"),
             release_notes_url=data.get("html_url"),
@@ -200,10 +200,20 @@ class DevUpdateChecker(UpdateChecker):
     def _fetch_update_info(self) -> UpdateInfo:
         """Fetch latest dev build from GHCR.
 
-        Note: This is a simplified implementation. In production, you might want to:
-        - Compare manifest digests for more accurate detection
-        - Parse image metadata for build timestamps
-        - Use authenticated requests for higher rate limits
+        LIMITATION: This implementation cannot reliably detect if updates are available
+        for dev builds. It fetches the manifest digest but always returns
+        update_available=false because:
+        1. We don't persist the previous digest to compare against
+        2. Build timestamps aren't directly comparable without image metadata
+        3. Digest comparison would require storing state
+
+        A full implementation would need to:
+        - Store the last seen digest in database
+        - Compare current manifest digest with stored digest
+        - Or parse image labels/metadata for build timestamps
+
+        For now, this provides visibility into the latest dev build but doesn't
+        actively notify of updates. Users can manually check the digest changes.
         """
         # For dev builds, we check the manifest of the configured tag
         # A more sophisticated approach would compare digests
@@ -220,16 +230,14 @@ class DevUpdateChecker(UpdateChecker):
             # Get the digest from the Docker-Content-Digest header
             latest_digest = response.headers.get("Docker-Content-Digest", "")
 
-        # For dev builds, we can't easily compare versions without more metadata
-        # A production implementation might store the last known digest and compare
-        # For now, we'll indicate that checking dev updates requires additional work
-        update_available = False  # Conservative: don't claim updates unless we're sure
+        # Conservative: don't claim updates unless we can reliably detect them
+        update_available = False
 
         return UpdateInfo(
             current_version=self.current_version,
             latest_version=f"{self.dev_tag} ({latest_digest[:12] if latest_digest else 'unknown'})",
             update_available=update_available,
-            checked_at=datetime.now(),
+            checked_at=datetime.now(UTC),
             build_type="dev",
             download_url=f"https://ghcr.io/{self.owner}/{self.image}:{self.dev_tag}",
         )
@@ -265,8 +273,10 @@ def create_update_checker(
         ghcr_image = repo
 
     # Detect build type from version string
-    # Dev builds have "-dev" or "-branch" in version
-    is_dev = "-dev" in version or ("-" in version and "+" in version)
+    # Stable: X.Y.Z (e.g., "2.0.11")
+    # Dev: X.Y.Z-branch+sha (e.g., "2.0.11-dev+abc123", "2.0.11-feature/xyz+def456")
+    # The presence of both "-" and "+" indicates a dev build with branch and commit info
+    is_dev = "-" in version and "+" in version
 
     if is_dev:
         return DevUpdateChecker(

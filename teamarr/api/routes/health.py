@@ -1,5 +1,7 @@
 """Health check endpoint."""
 
+import logging
+
 from fastapi import APIRouter
 
 from teamarr.api.startup_state import get_startup_state
@@ -8,6 +10,7 @@ from teamarr.database import get_db
 from teamarr.database.settings import get_all_settings
 from teamarr.services.update_checker import create_update_checker
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -45,8 +48,10 @@ def health_check() -> dict:
                         "build_type": result.build_type,
                         "checked_at": result.checked_at.isoformat() if result.checked_at else None,
                     }
-            except Exception:
+            except Exception as e:
                 # Silently ignore update check failures in health endpoint
+                # But log at debug level for troubleshooting
+                logger.debug("[HEALTH] Update check failed: %s", e)
                 pass
 
     response = {
