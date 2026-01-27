@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Event",
+    "template_type": "event",
+    "sport": null,
+    "league": null,
+    "title_format": "{gracenote_category}",
+    "subtitle_template": "{away_team} at {home_team}",
+    "program_art_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=6&logo=true&fallback=true",
+    "game_duration_mode": "sport",
+    "game_duration_override": null,
+    "pregame_enabled": true,
+    "postgame_enabled": true,
+    "idle_enabled": false,
+    "xmltv_flags": {
+      "new": true,
+      "live": true,
+      "date": true
+    },
+    "xmltv_video": {
+      "enabled": false,
+      "quality": "HDTV"
+    },
+    "xmltv_categories": [
+      "Sports",
+      "{sport}",
+      "Sporting Event"
+    ],
+    "categories_apply_to": "events",
+    "pregame_periods": [],
+    "pregame_fallback": {
+      "title": "Coming up: {gracenote_category} starting at {game_time}",
+      "subtitle": "{away_team} at {home_team}",
+      "description": "The {away_team_record} {away_team} travel to {venue_city}, {venue_state} to play the {home_team_record} {home_team} {today_tonight} at {game_time}.",
+      "art_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=5&logo=true&fallback=true"
+    },
+    "postgame_periods": [],
+    "postgame_fallback": {
+      "title": "{gracenote_category}: Postgame Recap",
+      "subtitle": "{away_team} at {home_team}",
+      "description": "The {team_name} {result_text} the {opponent} {final_score} {overtime_text}",
+      "art_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=5&logo=true&fallback=true"
+    },
+    "postgame_conditional": {
+      "enabled": true,
+      "description_final": "The {team_name} {result_text} the {opponent} {final_score} {overtime_text}",
+      "description_not_final": "The game between the {away_team} and {home_team} has not yet ended as of the last update."
+    },
+    "idle_content": {
+      "title": "{team_name} Programming",
+      "subtitle": "",
+      "description": "",
+      "art_url": ""
+    },
+    "idle_conditional": {
+      "enabled": false,
+      "description_final": "",
+      "description_not_final": ""
+    },
+    "idle_offseason": {
+      "title_enabled": false,
+      "title": null,
+      "subtitle_enabled": false,
+      "subtitle": "",
+      "description_enabled": false,
+      "description": "No upcoming {team_name} games scheduled."
+    },
+    "conditional_descriptions": [
+      {
+        "condition": "",
+        "condition_value": null,
+        "template": "The {away_team_record} {away_team} travel to {venue_city}, {venue_state} to play the {home_team_record} {home_team} at {venue}.",
+        "priority": 100,
+        "label": "Default"
+      }
+    ],
+    "event_channel_name": "{away_team} at {home_team}",
+    "event_channel_logo_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal}/{home_team_pascal}/logo.png?style=1&logo=true&fallback=true&badge={broadcast_national_network}%20{exception_keyword}"
+  }
+]

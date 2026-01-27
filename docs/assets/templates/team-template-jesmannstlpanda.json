@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Team",
+    "template_type": "team",
+    "sport": null,
+    "league": null,
+    "title_format": "{gracenote_category}",
+    "subtitle_template": "{away_team} at {home_team}",
+    "program_art_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=1&logo=true&fallback=true",
+    "game_duration_mode": "sport",
+    "game_duration_override": null,
+    "pregame_enabled": true,
+    "postgame_enabled": true,
+    "idle_enabled": true,
+    "xmltv_flags": {
+      "new": true,
+      "live": true,
+      "date": true
+    },
+    "xmltv_video": {
+      "enabled": false,
+      "quality": "HDTV"
+    },
+    "xmltv_categories": [
+      "Sports",
+      "{sport}",
+      "Sports Event"
+    ],
+    "categories_apply_to": "events",
+    "pregame_periods": [],
+    "pregame_fallback": {
+      "title": "Coming up: {gracenote_category} starting at {game_time.next}",
+      "subtitle": "{away_team.next} at {home_team.next}",
+      "description": "The {away_team_record.next} {away_team.next} travel to {venue_city.next}, {venue_state.next} to play the {home_team_record.next} {home_team.next} {today_tonight.next} at {game_time.next}.",
+      "art_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal.next}/{home_team_pascal.next}/cover.png?style=1&logo=true&fallback=true"
+    },
+    "postgame_periods": [],
+    "postgame_fallback": {
+      "title": "{gracenote_category}: {team_name} Postgame Recap",
+      "subtitle": "{away_team.last} at {home_team.last}",
+      "description": "{team_name} {result_text.last} the {opponent.last} {final_score.last}",
+      "art_url": "<game-thumbs-base-url>/{league_id}/{away_team_pascal.last}/{home_team_pascal.last}/cover.png?style=1&logo=true&fallback=true"
+    },
+    "postgame_conditional": {
+      "enabled": true,
+      "description_final": "The {team_name} {result_text.last} the {opponent.last} {final_score.last} {overtime_text.last}",
+      "description_not_final": "The game between the {team_name} and the {opponent.last} on {game_date.last} has not yet ended as of the last update."
+    },
+    "idle_content": {
+      "title": "No {team_name} Game Today",
+      "subtitle": "Next game: {game_date.next} at {game_time.next} {vs_at.next} the {opponent.next}",
+      "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}",
+      "art_url": ""
+    },
+    "idle_conditional": {
+      "enabled": true,
+      "description_final": "The {team_name} {result_text.last} the {opponent.last} {final_score.last} {overtime_text.last} on {game_date.last}. Next game will be with the {opponent.next} on {game_date.next}",
+      "description_not_final": "The {team_name} last played against the {opponent.last} on {game_date.last}."
+    },
+    "idle_offseason": {
+      "title_enabled": false,
+      "title": null,
+      "subtitle_enabled": true,
+      "subtitle": "No upcoming game currently on schedule in next 30 days",
+      "description_enabled": true,
+      "description": "No upcoming {team_name} games scheduled."
+    },
+    "conditional_descriptions": [
+      {
+        "condition": null,
+        "condition_value": null,
+        "template": "The {away_team_record} {away_team} travel to {venue_city}, {venue_state} to take on the {home_team_record} {home_team} at {venue}.",
+        "priority": 100,
+        "label": "Default"
+      }
+    ],
+    "event_channel_name": "{away_team} @ {home_team}",
+    "event_channel_logo_url": ""
+  }
+]
