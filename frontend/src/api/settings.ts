@@ -111,6 +111,37 @@ export interface StreamOrderingSettingsUpdate {
   rules: StreamOrderingRule[]
 }
 
+export interface UpdateCheckSettings {
+  enabled: boolean
+  notify_stable: boolean
+  notify_dev: boolean
+  github_owner: string
+  github_repo: string
+  dev_branch: string
+  auto_detect_branch: boolean
+}
+
+export interface UpdateCheckSettingsUpdate {
+  enabled?: boolean
+  notify_stable?: boolean
+  notify_dev?: boolean
+  github_owner?: string
+  github_repo?: string
+  dev_branch?: string
+  auto_detect_branch?: boolean
+}
+
+export interface UpdateInfo {
+  current_version: string
+  latest_version: string | null
+  update_available: boolean
+  checked_at: string
+  build_type: "stable" | "dev" | "unknown"
+  download_url: string | null
+  latest_stable: string | null
+  latest_dev: string | null
+  latest_date: string | null  // ISO timestamp of when latest version was released
+}
 
 export interface ExceptionKeyword {
   id: number
@@ -137,6 +168,7 @@ export interface AllSettings {
   team_filter?: TeamFilterSettings
   channel_numbering?: ChannelNumberingSettings
   stream_ordering?: StreamOrderingSettings
+  update_check?: UpdateCheckSettings
   epg_generation_counter: number
   schema_version: number
   // UI timezone info (read-only, from environment or fallback to epg_timezone)
@@ -339,5 +371,21 @@ export async function updateStreamOrderingSettings(
   data: StreamOrderingSettingsUpdate
 ): Promise<StreamOrderingSettings> {
   return api.put("/settings/stream-ordering", data)
+}
+
+// Update Check Settings API
+export async function getUpdateCheckSettings(): Promise<UpdateCheckSettings> {
+  return api.get("/settings/update-check")
+}
+
+export async function updateUpdateCheckSettings(
+  data: UpdateCheckSettingsUpdate
+): Promise<UpdateCheckSettings> {
+  return api.put("/settings/update-check", data)
+}
+
+// Check for updates
+export async function checkForUpdates(force: boolean = false): Promise<UpdateInfo> {
+  return api.get(`/updates/check?force=${force}`)
 }
 

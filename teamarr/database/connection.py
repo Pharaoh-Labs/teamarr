@@ -1046,6 +1046,38 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     # Everything above this line (back to "LEGACY MIGRATIONS" header) can be
     # deleted once checkpoint_v43 stability is confirmed after 2-3 releases.
 
+    # ==========================================================================
+    # v44+: NEW MIGRATIONS (using checkpoint patterns)
+    # ==========================================================================
+
+    # v44: Update Check Settings
+    # Adds settings for update notifications (GitHub releases/commits)
+    if current_version < 44:
+        _add_column_if_not_exists(
+            conn, "settings", "update_check_enabled", "BOOLEAN DEFAULT 1"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_notify_stable", "BOOLEAN DEFAULT 1"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_notify_dev", "BOOLEAN DEFAULT 1"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_github_owner", "TEXT DEFAULT 'Pharaoh-Labs'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_github_repo", "TEXT DEFAULT 'teamarr'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_dev_branch", "TEXT DEFAULT 'dev'"
+        )
+        _add_column_if_not_exists(
+            conn, "settings", "update_auto_detect_branch", "BOOLEAN DEFAULT 1"
+        )
+        conn.execute("UPDATE settings SET schema_version = 44 WHERE id = 1")
+        logger.info("[MIGRATE] Schema upgraded to version 44 (update check settings)")
+        current_version = 44
+
 
 # =============================================================================
 # LEGACY MIGRATION HELPER FUNCTIONS

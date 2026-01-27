@@ -19,6 +19,7 @@ from .epg import router as epg_router
 from .lifecycle import router as lifecycle_router
 from .stream_ordering import router as stream_ordering_router
 from .team_filter import router as team_filter_router
+from .update_check import router as update_check_router
 from .models import (
     AllSettingsModel,
     ChannelNumberingSettingsModel,
@@ -32,6 +33,7 @@ from .models import (
     StreamOrderingRuleModel,
     StreamOrderingSettingsModel,
     TeamFilterSettingsModel,
+    UpdateCheckSettingsModel,
 )
 
 # Main router that includes all sub-routers
@@ -45,6 +47,7 @@ router.include_router(display_router)
 router.include_router(team_filter_router)
 router.include_router(channel_numbering_router)
 router.include_router(stream_ordering_router)
+router.include_router(update_check_router)
 
 
 # =============================================================================
@@ -128,6 +131,15 @@ def get_settings():
                 for rule in settings.stream_ordering.rules
             ]
         ),
+        update_check=UpdateCheckSettingsModel(
+            enabled=settings.update_check.enabled,
+            notify_stable=settings.update_check.notify_stable,
+            notify_dev=settings.update_check.notify_dev,
+            github_owner=settings.update_check.github_owner,
+            github_repo=settings.update_check.github_repo,
+            dev_branch=settings.update_check.dev_branch,
+            auto_detect_branch=settings.update_check.auto_detect_branch,
+        ),
         epg_generation_counter=settings.epg_generation_counter,
         schema_version=settings.schema_version,
         # UI timezone info (read-only)
@@ -151,4 +163,5 @@ __all__ = [
     "StreamOrderingRuleModel",
     "StreamOrderingSettingsModel",
     "TeamFilterSettingsModel",
+    "UpdateCheckSettingsModel",
 ]

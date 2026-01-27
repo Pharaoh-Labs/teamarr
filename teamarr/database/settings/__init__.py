@@ -15,6 +15,7 @@ from .read import (
     get_stream_filter_settings,
     get_stream_ordering_settings,
     get_team_filter_settings,
+    get_update_check_settings,
 )
 from .types import (
     AllSettings,
@@ -31,6 +32,7 @@ from .types import (
     StreamOrderingRule,
     StreamOrderingSettings,
     TeamFilterSettings,
+    UpdateCheckSettings,
 )
 from .update import (
     increment_epg_generation_counter,
@@ -44,6 +46,7 @@ from .update import (
     update_scheduler_settings,
     update_stream_ordering_rules,
     update_team_filter_settings,
+    update_update_check_settings,
 )
 
 __all__ = [
@@ -61,6 +64,7 @@ __all__ = [
     "StreamOrderingSettings",
     "TeamFilterSettings",
     "ChannelNumberingSettings",
+    "UpdateCheckSettings",
     "AllSettings",
     # Read operations
     "get_all_settings",
@@ -73,6 +77,7 @@ __all__ = [
     "get_stream_ordering_settings",
     "get_team_filter_settings",
     "get_channel_numbering_settings",
+    "get_update_check_settings",
     # Update operations
     "update_dispatcharr_settings",
     "update_scheduler_settings",
@@ -84,5 +89,6 @@ __all__ = [
     "update_stream_ordering_rules",
     "update_team_filter_settings",
     "update_channel_numbering_settings",
+    "update_update_check_settings",
     "increment_epg_generation_counter",
 ]

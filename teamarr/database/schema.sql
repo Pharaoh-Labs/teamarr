@@ -285,8 +285,18 @@ CREATE TABLE IF NOT EXISTS settings (
     -- for events with status.state = "postponed"
     prepend_postponed_label BOOLEAN DEFAULT 1,
 
+    -- Update Check Settings
+    -- Allows users to receive notifications about new versions
+    update_check_enabled BOOLEAN DEFAULT 1,              -- Master toggle for update checking
+    update_notify_stable BOOLEAN DEFAULT 1,              -- Notify about stable releases
+    update_notify_dev BOOLEAN DEFAULT 1,                 -- Notify about dev builds (if running dev)
+    update_github_owner TEXT DEFAULT 'Pharaoh-Labs',     -- GitHub repo owner (for forks)
+    update_github_repo TEXT DEFAULT 'teamarr',           -- GitHub repo name (for forks)
+    update_dev_branch TEXT DEFAULT 'dev',                -- Branch to check for dev builds
+    update_auto_detect_branch BOOLEAN DEFAULT 1,         -- Auto-detect branch from version string
+
     -- Schema Version
-    schema_version INTEGER DEFAULT 43
+    schema_version INTEGER DEFAULT 44
 );
 
 -- Insert default settings

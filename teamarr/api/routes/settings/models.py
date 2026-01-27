@@ -269,6 +269,49 @@ class StreamOrderingSettingsUpdate(BaseModel):
 
 
 # =============================================================================
+# UPDATE CHECK SETTINGS
+# =============================================================================
+
+
+class UpdateCheckSettingsModel(BaseModel):
+    """Update check and notification settings."""
+
+    enabled: bool = True  # Master toggle for update checking
+    notify_stable: bool = True  # Notify about stable releases
+    notify_dev: bool = True  # Notify about dev builds (if running dev)
+    github_owner: str = "Pharaoh-Labs"  # Repository owner (for forks)
+    github_repo: str = "teamarr"  # Repository name (for forks)
+    dev_branch: str = "dev"  # Branch to check for dev builds
+    auto_detect_branch: bool = True  # Auto-detect branch from version string
+
+
+class UpdateCheckSettingsUpdate(BaseModel):
+    """Update model for update check settings (all fields optional)."""
+
+    enabled: bool | None = None
+    notify_stable: bool | None = None
+    notify_dev: bool | None = None
+    github_owner: str | None = None
+    github_repo: str | None = None
+    dev_branch: str | None = None
+    auto_detect_branch: bool | None = None
+
+
+class UpdateInfoModel(BaseModel):
+    """Information about available updates."""
+
+    current_version: str
+    latest_version: str | None
+    update_available: bool
+    checked_at: str  # ISO timestamp
+    build_type: str  # "stable", "dev", or "unknown"
+    download_url: str | None = None
+    latest_stable: str | None = None
+    latest_dev: str | None = None
+    latest_date: str | None = None  # ISO timestamp of when latest version was released
+
+
+# =============================================================================
 # ALL SETTINGS
 # =============================================================================
 
@@ -286,8 +329,9 @@ class AllSettingsModel(BaseModel):
     team_filter: TeamFilterSettingsModel | None = None
     channel_numbering: ChannelNumberingSettingsModel | None = None
     stream_ordering: StreamOrderingSettingsModel | None = None
+    update_check: UpdateCheckSettingsModel | None = None
     epg_generation_counter: int = 0
-    schema_version: int = 34
+    schema_version: int = 44
 
     # UI timezone info (read-only, from environment or fallback to epg_timezone)
     ui_timezone: str = "America/New_York"

@@ -162,6 +162,24 @@ class StreamOrderingSettings:
 
 
 @dataclass
+class UpdateCheckSettings:
+    """Update notification settings.
+
+    Controls how and when users are notified about new versions.
+    Supports both stable releases and dev builds, with configurable
+    repository settings for forks.
+    """
+
+    enabled: bool = True  # Master toggle for update checking
+    notify_stable: bool = True  # Notify about stable releases
+    notify_dev: bool = True  # Notify about dev builds (if running dev)
+    github_owner: str = "Pharaoh-Labs"  # Repository owner (for forks)
+    github_repo: str = "teamarr"  # Repository name (for forks)
+    dev_branch: str = "dev"  # Branch to check for dev builds
+    auto_detect_branch: bool = True  # Auto-detect branch from version string
+
+
+@dataclass
 class ChannelNumberingSettings:
     """Channel numbering and sorting settings for AUTO groups.
 
@@ -207,5 +225,6 @@ class AllSettings:
     stream_ordering: StreamOrderingSettings = field(
         default_factory=StreamOrderingSettings
     )
+    update_check: UpdateCheckSettings = field(default_factory=UpdateCheckSettings)
     epg_generation_counter: int = 0
-    schema_version: int = 43
+    schema_version: int = 44

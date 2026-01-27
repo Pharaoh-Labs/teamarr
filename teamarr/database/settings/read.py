@@ -21,6 +21,7 @@ from .types import (
     StreamOrderingRule,
     StreamOrderingSettings,
     TeamFilterSettings,
+    UpdateCheckSettings,
 )
 
 # Single source of truth for defaults - the dataclass itself
@@ -164,6 +165,7 @@ def get_all_settings(conn: Connection) -> AllSettings:
         stream_ordering=StreamOrderingSettings(
             rules=_parse_stream_ordering_rules(row["stream_ordering_rules"])
         ),
+        update_check=_build_update_check_settings(row),
         epg_generation_counter=row["epg_generation_counter"] or 0,
         schema_version=row["schema_version"] or 2,
     )
@@ -451,3 +453,52 @@ def get_stream_ordering_settings(conn: Connection) -> StreamOrderingSettings:
     return StreamOrderingSettings(
         rules=_parse_stream_ordering_rules(row["stream_ordering_rules"])
     )
+
+
+# Single source of truth for update check defaults
+_UPDATE_CHECK_DEFAULTS = UpdateCheckSettings()
+
+
+def _build_update_check_settings(row) -> UpdateCheckSettings:
+    """Build UpdateCheckSettings from DB row, using dataclass defaults for NULL values."""
+    d = _UPDATE_CHECK_DEFAULTS
+    return UpdateCheckSettings(
+        enabled=bool(row["update_check_enabled"])
+        if row["update_check_enabled"] is not None
+        else d.enabled,
+        notify_stable=bool(row["update_notify_stable"])
+        if row["update_notify_stable"] is not None
+        else d.notify_stable,
+        notify_dev=bool(row["update_notify_dev"])
+        if row["update_notify_dev"] is not None
+        else d.notify_dev,
+        github_owner=row["update_github_owner"] or d.github_owner,
+        github_repo=row["update_github_repo"] or d.github_repo,
+        dev_branch=row["update_dev_branch"] or d.dev_branch,
+        auto_detect_branch=bool(row["update_auto_detect_branch"])
+        if row["update_auto_detect_branch"] is not None
+        else d.auto_detect_branch,
+    )
+
+
+def get_update_check_settings(conn: Connection) -> UpdateCheckSettings:
+    """Get update check settings.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        UpdateCheckSettings object with update notification configuration
+    """
+    cursor = conn.execute(
+        """SELECT update_check_enabled, update_notify_stable, update_notify_dev,
+                  update_github_owner, update_github_repo, update_dev_branch,
+                  update_auto_detect_branch
+           FROM settings WHERE id = 1"""
+    )
+    row = cursor.fetchone()
+
+    if not row:
+        return UpdateCheckSettings()
+
+    return _build_update_check_settings(row)

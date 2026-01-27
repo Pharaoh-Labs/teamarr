@@ -29,6 +29,9 @@ import {
   updateChannelNumberingSettings,
   getStreamOrderingSettings,
   updateStreamOrderingSettings,
+  getUpdateCheckSettings,
+  updateUpdateCheckSettings,
+  checkForUpdates,
 } from "@/api/settings"
 import type {
   DispatcharrSettings,
@@ -41,6 +44,7 @@ import type {
   TeamFilterSettingsUpdate,
   ChannelNumberingSettingsUpdate,
   StreamOrderingSettingsUpdate,
+  UpdateCheckSettingsUpdate,
 } from "@/api/settings"
 
 export function useSettings() {
@@ -305,6 +309,47 @@ export function useUpdateStreamOrderingSettings() {
       updateStreamOrderingSettings(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+  })
+}
+
+export function useUpdateCheckSettings() {
+  return useQuery({
+    queryKey: ["settings", "update-check"],
+    queryFn: getUpdateCheckSettings,
+  })
+}
+
+export function useUpdateUpdateCheckSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: UpdateCheckSettingsUpdate) =>
+      updateUpdateCheckSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+  })
+}
+
+export function useCheckForUpdates(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["updates", "check"],
+    queryFn: () => checkForUpdates(false),
+    enabled,
+    staleTime: 1000 * 60 * 60, // 1 hour (matches backend cache)
+    refetchInterval: 1000 * 60 * 60, // Refetch every hour
+    refetchOnWindowFocus: false, // Don't spam GitHub API
+  })
+}
+
+export function useForceCheckForUpdates() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => checkForUpdates(true),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["updates", "check"], data)
     },
   })
 }

@@ -18,6 +18,8 @@ import {
   Pencil,
   Check,
   X,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react"
 import {
   ChannelProfileSelector,
@@ -52,6 +54,10 @@ import {
   useDeleteExceptionKeyword,
   useChannelNumberingSettings,
   useUpdateChannelNumberingSettings,
+  useUpdateCheckSettings,
+  useUpdateUpdateCheckSettings,
+  useCheckForUpdates,
+  useForceCheckForUpdates,
 } from "@/hooks/useSettings"
 import { TeamPicker } from "@/components/TeamPicker"
 import { SortPriorityManager } from "@/components/SortPriorityManager"
@@ -60,6 +66,7 @@ import { getLeagues, getSports } from "@/api/teams"
 import { downloadBackup, restoreBackup } from "@/api/backup"
 import { useQuery } from "@tanstack/react-query"
 import { useCacheStatus, useRefreshCache } from "@/hooks/useEPG"
+import { useDateFormat } from "@/hooks/useDateFormat"
 import type {
   DispatcharrSettings,
   LifecycleSettings,
@@ -70,6 +77,7 @@ import type {
   ReconciliationSettings,
   TeamFilterSettings,
   ChannelNumberingSettings,
+  UpdateCheckSettings,
 } from "@/api/settings"
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -168,6 +176,13 @@ export function Settings() {
   const { data: channelNumberingData } = useChannelNumberingSettings()
   const updateChannelNumbering = useUpdateChannelNumberingSettings()
 
+  // Update check settings
+  const { data: updateCheckData } = useUpdateCheckSettings()
+  const updateUpdateCheck = useUpdateUpdateCheckSettings()
+  const updateInfoQuery = useCheckForUpdates(updateCheckData?.enabled ?? true)
+  const forceCheckUpdates = useForceCheckForUpdates()
+  const { formatDateTime } = useDateFormat()
+
   const { data: leaguesData } = useQuery({
     queryKey: ["cache", "leagues"],
     queryFn: () => getLeagues(),
@@ -199,6 +214,15 @@ export function Settings() {
     numbering_mode: "strict_block",
     sorting_scope: "per_group",
     sort_by: "time",
+  })
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckSettings>({
+    enabled: true,
+    notify_stable: true,
+    notify_dev: true,
+    github_owner: "Pharaoh-Labs",
+    github_repo: "teamarr",
+    dev_branch: "dev",
+    auto_detect_branch: true,
   })
   const [newKeyword, setNewKeyword] = useState({ label: "", match_terms: "", behavior: "consolidate" })
   const [editingKeyword, setEditingKeyword] = useState<{ id: number; label: string; match_terms: string } | null>(null)
@@ -253,6 +277,13 @@ export function Settings() {
       setChannelNumbering(channelNumberingData)
     }
   }, [channelNumberingData])
+
+  // Sync update check state when data loads
+  useEffect(() => {
+    if (updateCheckData) {
+      setUpdateCheck(updateCheckData)
+    }
+  }, [updateCheckData])
 
   // Sync channel range inputs from lifecycle on initial load only
   const channelRangeInitializedRef = useRef(false)
@@ -1974,6 +2005,139 @@ export function Settings() {
 
           <Button onClick={handleSaveDisplay} disabled={updateDisplay.isPending}>
             {updateDisplay.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            Save
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Update Notifications</CardTitle>
+              <CardDescription>Check for new versions of Teamarr</CardDescription>
+            </div>
+            {updateInfoQuery.data?.update_available && (
+              <Badge variant="warning">Update Available</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Current Version and Update Status */}
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div>
+              <p className="text-sm font-medium">
+                Current Version: {updateInfoQuery.data?.current_version ?? "Loading..."}
+              </p>
+              {updateInfoQuery.data?.update_available && updateInfoQuery.data?.latest_version && (
+                <p className="text-sm text-muted-foreground">
+                  Latest: {updateInfoQuery.data.latest_version}
+                  {updateInfoQuery.data.build_type === "dev" && " (dev)"}
+                  {updateInfoQuery.data.latest_date && (
+                    <span className="ml-2 text-xs">
+                      ({formatDateTime(updateInfoQuery.data.latest_date)})
+                    </span>
+                  )}
+                </p>
+              )}
+              {!updateInfoQuery.data?.update_available && updateInfoQuery.data?.latest_date && (
+                <p className="text-xs text-muted-foreground">
+                  Released: {formatDateTime(updateInfoQuery.data.latest_date)}
+                </p>
+              )}
+              {updateInfoQuery.data?.checked_at && (
+                <p className="text-xs text-muted-foreground">
+                  Last checked: {formatRelativeTime(updateInfoQuery.data.checked_at)}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {updateInfoQuery.data?.update_available && updateInfoQuery.data?.download_url && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => window.open(updateInfoQuery.data!.download_url!, "_blank")}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  View Update
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => forceCheckUpdates.mutate()}
+                disabled={forceCheckUpdates.isPending}
+              >
+                {forceCheckUpdates.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                )}
+                Check Now
+              </Button>
+            </div>
+          </div>
+
+          {/* Update Check Settings */}
+          <div className="space-y-4 pt-2 border-t">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={updateCheck.enabled}
+                onCheckedChange={(checked) => setUpdateCheck({ ...updateCheck, enabled: checked })}
+              />
+              <Label>Enable Automatic Update Checks</Label>
+            </div>
+
+            {updateCheck.enabled && (
+              <>
+                <div className="flex items-center gap-4 pl-6">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={updateCheck.notify_stable}
+                      onCheckedChange={(checked) =>
+                        setUpdateCheck({ ...updateCheck, notify_stable: checked })
+                      }
+                    />
+                    <Label className="text-sm">Notify about stable releases</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={updateCheck.notify_dev}
+                      onCheckedChange={(checked) =>
+                        setUpdateCheck({ ...updateCheck, notify_dev: checked })
+                      }
+                    />
+                    <Label className="text-sm">Notify about dev builds</Label>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pl-6">
+                  <Switch
+                    checked={updateCheck.auto_detect_branch}
+                    onCheckedChange={(checked) =>
+                      setUpdateCheck({ ...updateCheck, auto_detect_branch: checked })
+                    }
+                  />
+                  <Label className="text-sm">Auto-detect branch from version</Label>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Button
+            onClick={() => {
+              updateUpdateCheck.mutate(updateCheck, {
+                onSuccess: () => toast.success("Update check settings saved"),
+                onError: () => toast.error("Failed to save update check settings"),
+              })
+            }}
+            disabled={updateUpdateCheck.isPending}
+          >
+            {updateUpdateCheck.isPending ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <Save className="h-4 w-4 mr-1" />
