@@ -1,6 +1,7 @@
 """FastAPI application factory - Clean V2 API with React UI."""
 
 import logging
+import os
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -164,11 +165,17 @@ def _run_startup_tasks():
         _run_ufc_segment_migration(get_db, "ufc_segment_fix_v3")
 
         # Refresh team/league cache (this takes time)
-        startup_state.set_phase(StartupPhase.REFRESHING_CACHE)
-        cache_service = create_cache_service(get_db)
-        logger.info("[STARTUP] Refreshing team/league cache on startup...")
-        cache_service.refresh()
-        logger.info("[STARTUP] Team/league cache refreshed")
+        skip_cache = os.getenv("SKIP_CACHE_REFRESH", "").lower() in (
+            "1", "true", "yes",
+        )
+        if skip_cache:
+            logger.info("[STARTUP] Cache refresh skipped (SKIP_CACHE_REFRESH set)")
+        else:
+            startup_state.set_phase(StartupPhase.REFRESHING_CACHE)
+            cache_service = create_cache_service(get_db)
+            logger.info("[STARTUP] Refreshing team/league cache on startup...")
+            cache_service.refresh()
+            logger.info("[STARTUP] Team/league cache refreshed")
 
         # Reload league mapping service to pick up new league names from cache
         league_mapping_service.reload()

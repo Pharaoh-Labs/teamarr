@@ -6,6 +6,7 @@ Provides REST API for:
 - M3U group discovery from Dispatcharr
 """
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -13,7 +14,6 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
 from teamarr.database import get_db
-import logging
 
 logger = logging.getLogger(__name__)
 
