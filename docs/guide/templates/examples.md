@@ -17,7 +17,6 @@ Production-ready templates designed to match real Gracenote EPG data as closely 
 
 - **Gracenote-accurate formatting** - Titles, descriptions, and categories that match real EPG feeds
 - **Dynamic artwork** - Matchup thumbnails generated on-the-fly showing team logos, scores, and game info
-- **Conditional descriptions** - Different content based on win streaks, rankings, home/away status
 - **Full filler content** - Pregame, postgame, and idle programmes with detailed descriptions
 
 ### Team Template

@@ -2,8 +2,6 @@ title: Teamarr
 description: Sports EPG Generator for Dispatcharr
 remote_theme: just-the-docs/just-the-docs
 
-# Logo in header (inline with title)
-logo: /assets/images/logo.svg
 
 plugins:
   - jekyll-remote-theme
