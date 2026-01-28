@@ -643,6 +643,9 @@ def _normalize_data_v43(conn: sqlite3.Connection) -> None:
                 from teamarr.database.connection import _migrate_channel_group_mode_to_patterns
                 logger.info("[CHECKPOINT] Recreating event_epg_groups to remove CHECK constraint")
                 _migrate_channel_group_mode_to_patterns(conn)
+                # Restore FK state — the migration function re-enables foreign keys
+                # in its finally block, but the checkpoint needs them OFF for Phase 5
+                conn.execute("PRAGMA foreign_keys = OFF")
                 # Table recreation handles all column conversions, skip remaining UPDATEs
             else:
                 # No CHECK constraint - safe to UPDATE in place
