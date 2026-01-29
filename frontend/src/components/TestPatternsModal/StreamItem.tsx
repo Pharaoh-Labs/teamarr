@@ -35,8 +35,10 @@ export interface StreamItemProps {
   includeMatch: boolean | null // null = no include regex set
   /** Whether stream matches the exclude regex */
   excludeMatch: boolean
-  /** Whether stream would be filtered by built-in rules */
-  builtinFiltered: boolean
+  /** Whether stream matches built-in filter patterns */
+  matchesBuiltinFilter: boolean
+  /** Whether built-in filtering is skipped (shows "would be filtered" vs "filtered") */
+  skipBuiltinFilter: boolean
   /** Called when user selects text for interactive pattern generation */
   onTextSelect?: (text: string, streamName: string) => void
 }
@@ -99,7 +101,8 @@ export function StreamItem({
   extractionRanges,
   includeMatch,
   excludeMatch,
-  builtinFiltered,
+  matchesBuiltinFilter,
+  skipBuiltinFilter,
   onTextSelect,
 }: StreamItemProps) {
   const segments = useMemo(
@@ -107,7 +110,11 @@ export function StreamItem({
     [name, extractionRanges]
   )
 
-  const isExcluded = excludeMatch || builtinFiltered
+  // When skip is OFF: actually filtered; when skip is ON: just marked (not filtered)
+  const isBuiltinFiltered = !skipBuiltinFilter && matchesBuiltinFilter
+  const wouldBeBuiltinFiltered = skipBuiltinFilter && matchesBuiltinFilter
+
+  const isExcluded = excludeMatch || isBuiltinFiltered
   const isFilteredByInclude = includeMatch === false // include regex set but doesn't match
 
   const handleMouseUp = () => {
@@ -126,8 +133,9 @@ export function StreamItem({
         "flex items-start gap-2 px-3 py-1.5 text-xs font-mono border-l-2",
         isExcluded && "opacity-40 line-through border-l-destructive/50",
         isFilteredByInclude && "opacity-40 border-l-muted",
-        !isExcluded && !isFilteredByInclude && includeMatch && "border-l-success/70",
-        !isExcluded && !isFilteredByInclude && includeMatch === null && "border-l-transparent",
+        wouldBeBuiltinFiltered && "opacity-70 border-l-yellow-500/70 border-dashed",
+        !isExcluded && !isFilteredByInclude && !wouldBeBuiltinFiltered && includeMatch && "border-l-success/70",
+        !isExcluded && !isFilteredByInclude && !wouldBeBuiltinFiltered && includeMatch === null && "border-l-transparent",
       )}
       onMouseUp={handleMouseUp}
     >

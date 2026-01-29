@@ -73,12 +73,11 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
           ? testMatch(patterns.stream_exclude_regex, name)
           : false
 
-      // Built-in filter (only when skip_builtin is off)
-      const builtinFiltered = !patterns.skip_builtin_filter && (
+      // Built-in filter match (always computed; skip_builtin decides display treatment)
+      const matchesBuiltinFilter =
         PLACEHOLDER_RE.test(name) || UNSUPPORTED_SPORT_RE.test(name)
-      )
 
-      return { extractionRanges, includeMatch, excludeMatch, builtinFiltered }
+      return { extractionRanges, includeMatch, excludeMatch, matchesBuiltinFilter }
     })
   }, [streams, patterns])
 
@@ -90,8 +89,13 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
     let withExtractions = 0
 
     for (const r of results) {
-      if (r.builtinFiltered) builtinFiltered++
-      else if (r.excludeMatch) excluded++
+      // Count streams matching builtin filters (tracked separately)
+      if (r.matchesBuiltinFilter) builtinFiltered++
+
+      // For inclusion stats, respect skip_builtin_filter setting
+      const effectivelyFiltered = !patterns.skip_builtin_filter && r.matchesBuiltinFilter
+      if (effectivelyFiltered) continue
+      if (r.excludeMatch) excluded++
       else if (r.includeMatch === false) excluded++
       else {
         included++
@@ -99,8 +103,15 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
       }
     }
 
-    return { included, excluded, builtinFiltered, withExtractions, total: streams.length }
-  }, [results, streams.length])
+    return {
+      included,
+      excluded,
+      builtinFiltered,
+      withExtractions,
+      total: streams.length,
+      skipBuiltin: patterns.skip_builtin_filter,
+    }
+  }, [results, streams.length, patterns.skip_builtin_filter])
 
   const virtualizer = useVirtualizer({
     count: streams.length,
@@ -121,7 +132,9 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
           <span className="text-destructive">{stats.excluded} excluded</span>
         )}
         {stats.builtinFiltered > 0 && (
-          <span className="text-muted-foreground/50">{stats.builtinFiltered} filtered (builtin)</span>
+          <span className={stats.skipBuiltin ? "text-yellow-500" : "text-muted-foreground/50"}>
+            {stats.builtinFiltered} {stats.skipBuiltin ? "would be filtered (builtin skipped)" : "filtered (builtin)"}
+          </span>
         )}
       </div>
 
@@ -158,7 +171,8 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
                   extractionRanges={r.extractionRanges}
                   includeMatch={r.includeMatch}
                   excludeMatch={r.excludeMatch}
-                  builtinFiltered={r.builtinFiltered}
+                  matchesBuiltinFilter={r.matchesBuiltinFilter}
+                  skipBuiltinFilter={patterns.skip_builtin_filter}
                   onTextSelect={onTextSelect}
                 />
               </div>
