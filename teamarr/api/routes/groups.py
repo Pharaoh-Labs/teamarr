@@ -115,6 +115,9 @@ class GroupCreate(BaseModel):
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str = "time"
     overlap_handling: str = "add_stream"
+    # Unmatched stream handling
+    create_unmatched_channels: bool = False
+    unmatched_channel_epg_source_id: int | None = None
     enabled: bool = True
     # Template assignments for multi-league groups (optional, created after group)
     template_assignments: list["GroupTemplateCreate"] | None = None
@@ -174,6 +177,8 @@ class GroupUpdate(BaseModel):
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str | None = None
     overlap_handling: str | None = None
+    create_unmatched_channels: bool | None = None
+    unmatched_channel_epg_source_id: int | None = None
     enabled: bool | None = None
 
     # Clear flags for nullable fields
@@ -199,6 +204,7 @@ class GroupUpdate(BaseModel):
     clear_custom_regex_event_name: bool = False
     clear_include_teams: bool = False
     clear_exclude_teams: bool = False
+    clear_unmatched_channel_epg_source_id: bool = False
 
     @field_validator("channel_profile_ids", mode="before")
     @classmethod
@@ -273,6 +279,9 @@ class GroupResponse(BaseModel):
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str = "time"
     overlap_handling: str = "add_stream"
+    # Unmatched stream handling
+    create_unmatched_channels: bool = False
+    unmatched_channel_epg_source_id: int | None = None
     enabled: bool = True
     created_at: str | None = None
     updated_at: str | None = None
@@ -340,6 +349,9 @@ class BulkGroupSettings(BaseModel):
     duplicate_event_handling: str = "consolidate"
     channel_sort_order: str = "time"
     overlap_handling: str = "add_stream"
+    # Unmatched stream handling
+    create_unmatched_channels: bool = False
+    unmatched_channel_epg_source_id: int | None = None
     enabled: bool = True
 
     @field_validator("channel_profile_ids", mode="before")
@@ -395,6 +407,8 @@ class BulkGroupUpdateRequest(BaseModel):
     duplicate_event_handling: str | None = None
     channel_sort_order: str | None = None
     overlap_handling: str | None = None
+    create_unmatched_channels: bool | None = None
+    unmatched_channel_epg_source_id: int | None = None
     enabled: bool | None = None
 
     # Clear flags to explicitly set fields to NULL
@@ -403,6 +417,7 @@ class BulkGroupUpdateRequest(BaseModel):
     clear_channel_profile_ids: bool = False
     clear_stream_profile_id: bool = False
     clear_stream_timezone: bool = False
+    clear_unmatched_channel_epg_source_id: bool = False
 
     @field_validator("channel_profile_ids", mode="before")
     @classmethod
@@ -608,6 +623,8 @@ def list_groups(
                 excluded_league_not_included=g.excluded_league_not_included,
                 channel_sort_order=g.channel_sort_order,
                 overlap_handling=g.overlap_handling,
+                create_unmatched_channels=g.create_unmatched_channels,
+                unmatched_channel_epg_source_id=g.unmatched_channel_epg_source_id,
                 enabled=g.enabled,
                 created_at=g.created_at.isoformat() if g.created_at else None,
                 updated_at=g.updated_at.isoformat() if g.updated_at else None,
@@ -693,6 +710,8 @@ def create_group(request: GroupCreate):
             team_filter_mode=request.team_filter_mode,
             channel_sort_order=request.channel_sort_order,
             overlap_handling=request.overlap_handling,
+            create_unmatched_channels=request.create_unmatched_channels,
+            unmatched_channel_epg_source_id=request.unmatched_channel_epg_source_id,
             enabled=request.enabled,
         )
 
@@ -767,6 +786,8 @@ def create_group(request: GroupCreate):
         excluded_league_not_included=group.excluded_league_not_included,
         channel_sort_order=group.channel_sort_order,
         overlap_handling=group.overlap_handling,
+        create_unmatched_channels=group.create_unmatched_channels,
+        unmatched_channel_epg_source_id=group.unmatched_channel_epg_source_id,
         enabled=group.enabled,
         created_at=group.created_at.isoformat() if group.created_at else None,
         updated_at=group.updated_at.isoformat() if group.updated_at else None,
@@ -826,6 +847,8 @@ def create_groups_bulk(request: BulkGroupCreateRequest):
                     duplicate_event_handling=request.settings.duplicate_event_handling,
                     channel_sort_order=request.settings.channel_sort_order,
                     overlap_handling=request.settings.overlap_handling,
+                    create_unmatched_channels=request.settings.create_unmatched_channels,
+                    unmatched_channel_epg_source_id=request.settings.unmatched_channel_epg_source_id,
                     m3u_group_id=item.m3u_group_id,
                     m3u_group_name=item.m3u_group_name,
                     m3u_account_id=item.m3u_account_id,
@@ -919,12 +942,15 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                     duplicate_event_handling=request.duplicate_event_handling,
                     channel_sort_order=request.channel_sort_order,
                     overlap_handling=request.overlap_handling,
+                    create_unmatched_channels=request.create_unmatched_channels,
+                    unmatched_channel_epg_source_id=request.unmatched_channel_epg_source_id,
                     enabled=request.enabled,
                     clear_template=request.clear_template,
                     clear_channel_group_id=request.clear_channel_group_id,
                     clear_channel_profile_ids=request.clear_channel_profile_ids,
                     clear_stream_profile_id=request.clear_stream_profile_id,
                     clear_stream_timezone=request.clear_stream_timezone,
+                    clear_unmatched_channel_epg_source_id=request.clear_unmatched_channel_epg_source_id,
                 )
 
                 results.append(
@@ -1044,6 +1070,8 @@ def get_group_by_id(group_id: int):
         excluded_league_not_included=group.excluded_league_not_included,
         channel_sort_order=group.channel_sort_order,
         overlap_handling=group.overlap_handling,
+        create_unmatched_channels=group.create_unmatched_channels,
+        unmatched_channel_epg_source_id=group.unmatched_channel_epg_source_id,
         enabled=group.enabled,
         created_at=group.created_at.isoformat() if group.created_at else None,
         updated_at=group.updated_at.isoformat() if group.updated_at else None,
@@ -1239,6 +1267,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         excluded_league_not_included=group.excluded_league_not_included,
         channel_sort_order=group.channel_sort_order,
         overlap_handling=group.overlap_handling,
+        create_unmatched_channels=group.create_unmatched_channels,
+        unmatched_channel_epg_source_id=group.unmatched_channel_epg_source_id,
         enabled=group.enabled,
         created_at=group.created_at.isoformat() if group.created_at else None,
         updated_at=group.updated_at.isoformat() if group.updated_at else None,

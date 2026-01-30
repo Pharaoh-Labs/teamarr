@@ -80,6 +80,9 @@ class EventEPGGroup:
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str = "time"
     overlap_handling: str = "add_stream"
+    # Unmatched stream handling
+    create_unmatched_channels: bool = False
+    unmatched_channel_epg_source_id: int | None = None
     enabled: bool = True
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -213,6 +216,13 @@ def _row_to_group(row) -> EventEPGGroup:
         # Multi-sport enhancements
         channel_sort_order=row["channel_sort_order"] or "time",
         overlap_handling=row["overlap_handling"] or "add_stream",
+        # Unmatched stream handling
+        create_unmatched_channels=bool(row["create_unmatched_channels"])
+        if "create_unmatched_channels" in row.keys()
+        else False,
+        unmatched_channel_epg_source_id=row["unmatched_channel_epg_source_id"]
+        if "unmatched_channel_epg_source_id" in row.keys()
+        else None,
         enabled=bool(row["enabled"]),
         created_at=created_at,
         updated_at=updated_at,
@@ -359,6 +369,9 @@ def create_group(
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str = "time",
     overlap_handling: str = "add_stream",
+    # Unmatched stream handling
+    create_unmatched_channels: bool = False,
+    unmatched_channel_epg_source_id: int | None = None,
     enabled: bool = True,
 ) -> int:
     """Create a new event EPG group.
@@ -412,8 +425,10 @@ def create_group(
             custom_regex_event_name, custom_regex_event_name_enabled,
             skip_builtin_filter,
             include_teams, exclude_teams, team_filter_mode,
-            channel_sort_order, overlap_handling, enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+            channel_sort_order, overlap_handling,
+            create_unmatched_channels, unmatched_channel_epg_source_id,
+            enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -457,6 +472,8 @@ def create_group(
             team_filter_mode,
             channel_sort_order,
             overlap_handling,
+            int(create_unmatched_channels),
+            unmatched_channel_epg_source_id,
             int(enabled),
         ),
     )
@@ -519,6 +536,9 @@ def update_group(
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str | None = None,
     overlap_handling: str | None = None,
+    # Unmatched stream handling
+    create_unmatched_channels: bool | None = None,
+    unmatched_channel_epg_source_id: int | None = None,
     enabled: bool | None = None,
     # Clear flags
     clear_display_name: bool = False,
@@ -543,6 +563,7 @@ def update_group(
     clear_custom_regex_event_name: bool = False,
     clear_include_teams: bool = False,
     clear_exclude_teams: bool = False,
+    clear_unmatched_channel_epg_source_id: bool = False,
 ) -> bool:
     """Update an event EPG group.
 
@@ -854,6 +875,16 @@ def update_group(
     if overlap_handling is not None:
         updates.append("overlap_handling = ?")
         values.append(overlap_handling)
+
+    if create_unmatched_channels is not None:
+        updates.append("create_unmatched_channels = ?")
+        values.append(int(create_unmatched_channels))
+
+    if unmatched_channel_epg_source_id is not None:
+        updates.append("unmatched_channel_epg_source_id = ?")
+        values.append(unmatched_channel_epg_source_id)
+    elif clear_unmatched_channel_epg_source_id:
+        updates.append("unmatched_channel_epg_source_id = NULL")
 
     if enabled is not None:
         updates.append("enabled = ?")

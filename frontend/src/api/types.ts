@@ -73,6 +73,9 @@ export interface EventGroup {
   // Multi-sport enhancements (Phase 3)
   channel_sort_order: string
   overlap_handling: string
+  // Unmatched Stream Handling
+  create_unmatched_channels: boolean
+  unmatched_channel_epg_source_id: number | null
   enabled: boolean
   created_at: string | null
   updated_at: string | null
@@ -126,6 +129,9 @@ export interface EventGroupCreate {
   // Multi-sport enhancements (Phase 3)
   channel_sort_order?: string
   overlap_handling?: string
+  // Unmatched Stream Handling
+  create_unmatched_channels?: boolean
+  unmatched_channel_epg_source_id?: number | null
   enabled?: boolean
   // Template assignments for multi-league groups (created with the group)
   template_assignments?: Array<{
@@ -156,6 +162,7 @@ export interface EventGroupUpdate extends Partial<EventGroupCreate> {
   clear_custom_regex_league?: boolean
   clear_include_teams?: boolean
   clear_exclude_teams?: boolean
+  clear_unmatched_channel_epg_source_id?: boolean
 }
 
 export interface EventGroupListResponse {
