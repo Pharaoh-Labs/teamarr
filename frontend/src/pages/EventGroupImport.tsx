@@ -124,6 +124,8 @@ export function EventGroupImport() {
   const [bulkStreamTimezone, setBulkStreamTimezone] = useState<string | null>(null)
   const [bulkChannelSortOrder, setBulkChannelSortOrder] = useState<string>("time")
   const [bulkOverlapHandling, setBulkOverlapHandling] = useState<string>("add_stream")
+  const [bulkCreateUnmatchedChannels, setBulkCreateUnmatchedChannels] = useState(false)
+  const [bulkUnmatchedChannelEpgSourceId, setBulkUnmatchedChannelEpgSourceId] = useState<number | null>(null)
   const [bulkEnabled, setBulkEnabled] = useState(true)
   const [bulkImporting, setBulkImporting] = useState(false)
 
@@ -158,6 +160,16 @@ export function EventGroupImport() {
   const channelGroupsQuery = useQuery({
     queryKey: ["dispatcharr-channel-groups"],
     queryFn: fetchChannelGroups,
+  })
+
+  const epgSourcesQuery = useQuery({
+    queryKey: ["dispatcharr-epg-sources"],
+    queryFn: async () => {
+      const res = await api.get<any>(
+        "/dispatcharr/epg-sources?include_dummy=true",
+      )
+      return res.sources || []
+    },
   })
 
   // Get set of already-enabled (account_id, group_id) pairs
@@ -280,6 +292,8 @@ export function EventGroupImport() {
           stream_timezone: bulkStreamTimezone,
           channel_sort_order: bulkChannelSortOrder,
           overlap_handling: bulkOverlapHandling,
+          create_unmatched_channels: bulkCreateUnmatchedChannels,
+          unmatched_channel_epg_source_id: bulkUnmatchedChannelEpgSourceId,
           enabled: bulkEnabled,
         },
       })
@@ -314,6 +328,8 @@ export function EventGroupImport() {
     setBulkStreamTimezone(null)
     setBulkChannelSortOrder("time")
     setBulkOverlapHandling("add_stream")
+    setBulkCreateUnmatchedChannels(false)
+    setBulkUnmatchedChannelEpgSourceId(null)
     setBulkEnabled(true)
     setShowBulkModal(true)
   }
@@ -373,7 +389,7 @@ export function EventGroupImport() {
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 border-l-2 border-transparent",
                     selectedAccount?.id === account.id &&
-                      "bg-muted border-l-primary"
+                    "bg-muted border-l-primary"
                   )}
                 >
                   <Tv className="h-4 w-4 text-muted-foreground" />
@@ -473,8 +489,8 @@ export function EventGroupImport() {
                           isEnabled
                             ? "opacity-60 border-green-500/50 bg-green-500/5"
                             : isSelected
-                            ? "border-primary bg-primary/5"
-                            : "hover:border-primary/50"
+                              ? "border-primary bg-primary/5"
+                              : "hover:border-primary/50"
                         )}
                       >
                         {/* Checkbox for non-enabled groups */}
@@ -842,6 +858,47 @@ export function EventGroupImport() {
                   </div>
                 </div>
               )}
+
+              {/* Unmatched Stream Handling */}
+              <div className="pt-2 border-t space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm">Create Channels for Unmatched Streams</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Create channels for streams that don't match any events
+                    </p>
+                  </div>
+                  <Switch
+                    checked={bulkCreateUnmatchedChannels}
+                    onCheckedChange={setBulkCreateUnmatchedChannels}
+                  />
+                </div>
+
+                {bulkCreateUnmatchedChannels && (
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs text-muted-foreground">Dummy EPG Source</Label>
+                    <Select
+                      value={bulkUnmatchedChannelEpgSourceId?.toString() || ""}
+                      onChange={(e) => setBulkUnmatchedChannelEpgSourceId(e.target.value ? parseInt(e.target.value) : null)}
+                    >
+                      <option value="">Select a dummy EPG source...</option>
+                      {(epgSourcesQuery.data ?? []).filter((s: any) => s.source_type === "dummy").map((source: any) => (
+                        <option key={source.id} value={source.id}>
+                          {source.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Channels created for unmatched streams will use this EPG source for placeholder data.
+                      {epgSourcesQuery.data && !(epgSourcesQuery.data as any[]).some((s: any) => s.source_type === "dummy") && (
+                        <span className="text-destructive block mt-1">
+                          No dummy EPG sources found. Please create one in Dispatcharr first.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Groups to import */}
