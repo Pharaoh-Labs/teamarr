@@ -22,6 +22,7 @@ import { LeaguePicker } from "@/components/LeaguePicker"
 import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
 import { StreamProfileSelector } from "@/components/StreamProfileSelector"
 import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
+import type { EPGSource } from "@/api/settings"
 
 // Types
 interface M3UAccount {
@@ -882,7 +883,7 @@ export function EventGroupImport() {
                       onChange={(e) => setBulkUnmatchedChannelEpgSourceId(e.target.value ? parseInt(e.target.value) : null)}
                     >
                       <option value="">Select a dummy EPG source...</option>
-                      {(epgSourcesQuery.data ?? []).filter((s: any) => s.source_type === "dummy").map((source: any) => (
+                      {(epgSourcesQuery.data ?? []).filter((s: EPGSource) => s.source_type === "dummy").map((source: EPGSource) => (
                         <option key={source.id} value={source.id}>
                           {source.name}
                         </option>
@@ -890,7 +891,7 @@ export function EventGroupImport() {
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       Channels created for unmatched streams will use this EPG source for placeholder data.
-                      {epgSourcesQuery.data && !(epgSourcesQuery.data as any[]).some((s: any) => s.source_type === "dummy") && (
+                      {epgSourcesQuery.data && !(epgSourcesQuery.data as EPGSource[]).some((s: EPGSource) => s.source_type === "dummy") && (
                         <span className="text-destructive block mt-1">
                           No dummy EPG sources found. Please create one in Dispatcharr first.
                         </span>
