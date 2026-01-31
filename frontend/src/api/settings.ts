@@ -66,6 +66,18 @@ export interface DisplaySettings {
   tsdb_api_key: string | null  // Optional TheSportsDB premium API key
 }
 
+export interface StreamFilterSettings {
+  require_event_pattern: boolean
+  include_patterns: string[]
+  exclude_patterns: string[]
+}
+
+export interface StreamFilterSettingsUpdate {
+  require_event_pattern?: boolean
+  include_patterns?: string[]
+  exclude_patterns?: string[]
+}
+
 export interface TeamFilterEntry {
   provider: string
   team_id: string
@@ -173,6 +185,7 @@ export interface AllSettings {
   channel_numbering?: ChannelNumberingSettings
   stream_ordering?: StreamOrderingSettings
   update_check?: UpdateCheckSettings
+  stream_filter?: StreamFilterSettings
   epg_generation_counter: number
   schema_version: number
   // UI timezone info (read-only, from environment or fallback to epg_timezone)
@@ -310,6 +323,16 @@ export async function updateDisplaySettings(
   data: DisplaySettings
 ): Promise<DisplaySettings> {
   return api.put("/settings/display", data)
+}
+
+export async function getStreamFilterSettings(): Promise<StreamFilterSettings> {
+  return api.get("/settings/stream-filter")
+}
+
+export async function updateStreamFilterSettings(
+  data: StreamFilterSettingsUpdate
+): Promise<StreamFilterSettings> {
+  return api.put("/settings/stream-filter", data)
 }
 
 // Team Filter Settings API

@@ -19,6 +19,8 @@ import {
   updateReconciliationSettings,
   getDisplaySettings,
   updateDisplaySettings,
+  getStreamFilterSettings,
+  updateStreamFilterSettings,
   getTeamFilterSettings,
   updateTeamFilterSettings,
   getExceptionKeywords,
@@ -41,6 +43,7 @@ import type {
   DurationSettings,
   ReconciliationSettings,
   DisplaySettings,
+  StreamFilterSettingsUpdate,
   TeamFilterSettingsUpdate,
   ChannelNumberingSettingsUpdate,
   StreamOrderingSettingsUpdate,
@@ -211,6 +214,25 @@ export function useUpdateDisplaySettings() {
     mutationFn: (data: DisplaySettings) => updateDisplaySettings(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+  })
+}
+
+export function useStreamFilterSettings() {
+  return useQuery({
+    queryKey: ["settings", "stream-filter"],
+    queryFn: getStreamFilterSettings,
+  })
+}
+
+export function useUpdateStreamFilterSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: StreamFilterSettingsUpdate) => updateStreamFilterSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+      queryClient.invalidateQueries({ queryKey: ["settings", "stream-filter"] })
     },
   })
 }

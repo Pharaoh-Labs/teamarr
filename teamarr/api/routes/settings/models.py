@@ -225,6 +225,27 @@ class TeamFilterSettingsUpdate(BaseModel):
 
 
 # =============================================================================
+# STREAM FILTER SETTINGS
+# =============================================================================
+
+
+class StreamFilterSettingsModel(BaseModel):
+    """Global stream filtering settings."""
+
+    require_event_pattern: bool = True
+    include_patterns: list[str] = Field(default_factory=list)
+    exclude_patterns: list[str] = Field(default_factory=list)
+
+
+class StreamFilterSettingsUpdate(BaseModel):
+    """Update model for stream filter settings."""
+
+    require_event_pattern: bool | None = None
+    include_patterns: list[str] | None = None
+    exclude_patterns: list[str] | None = None
+
+
+# =============================================================================
 # CHANNEL NUMBERING SETTINGS
 # =============================================================================
 
@@ -332,6 +353,7 @@ class AllSettingsModel(BaseModel):
     epg: EPGSettingsModel
     durations: DurationSettingsModel
     display: DisplaySettingsModel
+    stream_filter: StreamFilterSettingsModel | None = None
     team_filter: TeamFilterSettingsModel | None = None
     channel_numbering: ChannelNumberingSettingsModel | None = None
     stream_ordering: StreamOrderingSettingsModel | None = None
