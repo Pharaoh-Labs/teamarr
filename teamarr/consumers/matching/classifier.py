@@ -765,6 +765,62 @@ def _clean_team_name(name: str) -> str:
         flags=re.IGNORECASE,
     )
 
+    # Strip European league prefixes with channel numbers (common in multi-sport channels)
+    # "Ligue 1 01: psg" → "psg"
+    # "Bundesliga 07x: Hamburger SV" → "Hamburger SV"
+    # "Serie A 08x: Parma Calcio" → "Parma Calcio"
+    # "La Liga 04: Levante UD" → "Levante UD"
+    # "2. Bundesliga: 1 FC Kaiserslautern" → "1 FC Kaiserslautern"
+    name = re.sub(
+        r"^(?:Ligue\s*[12]|Bundesliga|2\.\s*Bundesliga|Serie\s*[ABC]|La\s*Liga|Premier\s*League|"
+        r"Champions\s*League|Europa\s*League|Conference\s*League|UEFA|EFL|FA\s*Cup|"
+        r"Eredivisie|Primeira\s*Liga|Super\s*Lig|MLS|Liga\s*MX)\s*\d*[x\u2093]?\s*[:\-]?\s*",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip country code + league prefixes (IT, DE, FR, UK, etc. followed by league)
+    # "IT UEFA Champions League HD & Young Boys" → "Young Boys"
+    # "DE NFL Game Pass Dolphins" → "Dolphins"
+    # "FR Ligue 1 PSG" → "PSG"
+    name = re.sub(
+        r"^[A-Z]{2,3}\s+(?:UEFA\s+)?(?:Champions\s+League|Europa\s+League|NFL(?:\s+Game\s+Pass)?|"
+        r"NBA|MLB|NHL|Bundesliga|Ligue\s*\d|Serie\s*[A-C]|La\s*Liga|Premier\s*League|MLS)\s*"
+        r"(?:HD|FHD|4K|UHD)?\s*(?:[&\|\-])?\s*",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip "Event N |" prefixes from multi-sport channels
+    # "DE - Event 12 | NFL | Dolphins" → "Dolphins"
+    # "IT - Event 3009 | NFL Game Pass | Dolphins" → "Dolphins"
+    name = re.sub(
+        r"^[A-Z]{2,3}\s*[-–]\s*Event\s+\d+\s*\|\s*(?:NFL(?:\s+Game\s+Pass)?|NBA|MLB|NHL)\s*\|\s*",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip broadcast show prefixes like "HNIC IN PUNJABI"
+    # "HNIC IN PUNJABI Toronto" → "Toronto"
+    name = re.sub(
+        r"^(?:HNIC(?:\s+IN\s+PUNJABI)?|Hockey\s+Night(?:\s+in\s+Canada)?)\s+",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip language variant prefixes like "En Español"
+    # "En Español Hamburg SV vs FC Bayern München" → "Hamburg SV vs FC Bayern München"
+    name = re.sub(
+        r"^En\s+Espa[nñ]ol\s+",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
     # Re-strip channel numbers in case league prefix revealed one
     # "NFL 03 Bills" → after league strip: "03 Bills" → "Bills"
     name = re.sub(r"^\d{1,2}\s+", "", name)
