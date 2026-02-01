@@ -56,6 +56,8 @@ class LeagueMappingService:
         self._league_cache_names: dict[str, str] = {}
         # {sport}: sport display name (e.g., 'mma' -> 'MMA')
         self._sport_display_names: dict[str, str] = {}
+        # {league_logo}: league logo URL
+        self._league_logos: dict[str, str] = {}
         self._load_all_mappings()
 
     def _load_all_mappings(self) -> None:
@@ -126,6 +128,10 @@ class LeagueMappingService:
                 if row["sport"]:
                     self._league_sports[league_code_lower] = row["sport"]
 
+                # Cache logo_url for {league_logo}
+                if row["logo_url"]:
+                    self._league_logos[league_code_lower] = row["logo_url"]
+
             # Also load league names from league_cache for fallback
             cursor = conn.execute(
                 """
@@ -162,6 +168,7 @@ class LeagueMappingService:
         self._league_display_names.clear()
         self._gracenote_categories.clear()
         self._league_sports.clear()
+        self._league_logos.clear()
         self._league_cache_names.clear()
         self._sport_display_names.clear()
         self._load_all_mappings()
@@ -239,6 +246,20 @@ class LeagueMappingService:
 
         # Final fallback to league_code uppercase
         return league_code.upper()
+
+    def get_league_logo(self, league_code: str) -> str:
+        """Get league logo URL for {league_logo} variable.
+
+        Thread-safe: uses in-memory cache, no DB access.
+
+        Args:
+            league_code: Raw league code (e.g., 'nfl', 'eng.1')
+
+        Returns:
+            Logo URL or empty string if not found
+        """
+        key = league_code.lower()
+        return self._league_logos.get(key, "")
 
     def get_gracenote_category(self, league_code: str) -> str:
         """Get Gracenote-compatible category for {gracenote_category} variable.
