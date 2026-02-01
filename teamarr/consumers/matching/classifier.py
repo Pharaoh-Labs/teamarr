@@ -678,6 +678,7 @@ def _clean_team_name(name: str) -> str:
     # start, keeping the rest intact for the matcher to disambiguate.
     # "NFL | Bills vs Broncos" → "Bills vs Broncos" (NFL is league hint)
     # "Montreal Canadiens | Bell Centre" → "Montreal Canadiens | Bell Centre" (pass through)
+    # "FC Barcelona | Saturday, DATE_MASK 2025" → "FC Barcelona" (strip datetime suffix)
     if "|" in name:
         parts = name.split("|")
         first_part = parts[0].strip()
@@ -710,7 +711,29 @@ def _clean_team_name(name: str) -> str:
                     name = rest
             else:
                 name = rest
-        # else: keep the full pipe-separated string for matcher disambiguation
+        else:
+            # Check if REST (after pipe) is datetime noise that should be stripped
+            # Handles: "FC Barcelona | Saturday, DATE_MASK 2025 TIME_MASK"
+            # Common in European football streams with format "Team | Day, Date Time"
+            rest_stripped = re.sub(r"\bDATE_MASK\b", "", rest)
+            rest_stripped = re.sub(r"\bTIME_MASK\b", "", rest_stripped)
+            rest_stripped = re.sub(r"\b[ECPM][SD]?T\b", "", rest_stripped, flags=re.IGNORECASE)
+            # Remove day names (Monday, Tuesday, etc.)
+            rest_stripped = re.sub(
+                r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b",
+                "",
+                rest_stripped,
+                flags=re.IGNORECASE,
+            )
+            # Remove standalone years (2024, 2025, 2026)
+            rest_stripped = re.sub(r"\b20\d{2}\b", "", rest_stripped)
+            rest_stripped = re.sub(r"[\s\-:.,]+", " ", rest_stripped).strip()
+            rest_is_datetime_noise = len(rest_stripped) < 3
+
+            if rest_is_datetime_noise:
+                # Rest is datetime noise - keep only first part (the team name)
+                name = first_part
+            # else: keep the full pipe-separated string for matcher disambiguation
 
     # Strip channel number prefixes like "02 -", "15 -", "142 -" at the start
     name = re.sub(r"^\d+\s*-\s*", "", name)
@@ -1007,6 +1030,23 @@ def _clean_fighter_name(name: str) -> str | None:
 
     # Strip common noise words at start
     name = re.sub(r"^(?:main\s+english|english|prelims?)\s*:?\s*", "", name, flags=re.IGNORECASE)
+
+    # Strip time SUFFIXES: "Lopes 2 9:pm" → "Lopes 2", "Fighter 9pm" → "Fighter"
+    # Handle unusual format: 9:pm, 9:PM (colon before am/pm)
+    name = re.sub(r"\s+\d{1,2}:?(?:AM|PM)\s*$", "", name, flags=re.IGNORECASE)
+
+    # Strip trailing fight/rematch numbers: "Lopes 2" → "Lopes"
+    # These are rematch numbers like "Fighter vs Opponent 2"
+    name = re.sub(r"\s+\d\s*$", "", name)
+
+    # Strip BACKUP, SD, HD suffixes: "Fighter BACKUP" → "Fighter"
+    name = re.sub(r"\s+(?:BACKUP|SD|HD|FHD|4K)\s*$", "", name, flags=re.IGNORECASE)
+
+    # Strip @ followed by date/time noise: "Fighter @ Jan 31" → "Fighter"
+    name = re.sub(r"\s+@\s+.*$", "", name)
+
+    # Strip provider suffixes: ":Sportsnet+ 11" → ""
+    name = re.sub(r"\s*:\s*[A-Za-z]+\+?\s*\d*\s*$", "", name)
 
     # Clean up whitespace and punctuation
     name = re.sub(r"[\s\-:]+$", "", name)

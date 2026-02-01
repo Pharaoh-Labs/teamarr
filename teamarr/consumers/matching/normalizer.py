@@ -168,7 +168,12 @@ DATE_PATTERNS = [
     # 1/17, 12/31 (MM/DD without year) - infer year based on proximity to today
     # Must come after MM/DD/YYYY to avoid partial matches
     (r"\b(\d{1,2})[/\-](\d{1,2})\b", "DATE_MASK_NO_YEAR"),
-    # 31 Dec, 31 December - check this BEFORE "Dec 31" to prefer "14 Jan" over "Jan 11"
+    # 31 Dec 2025, 31 December 2025 - WITH year (check before without-year patterns)
+    # European football streams: "Saturday, 23 August 2025 20:30"
+    (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTHS})[a-z]*\s+(\d{{4}})\b", "DATE_MASK_WITH_YEAR"),
+    # Dec 31 2025, December 31 2025 - WITH year
+    (rf"\b({_MONTHS})[a-z]*\s+(\d{{1,2}})(?:st|nd|rd|th)?\s+(\d{{4}})\b", "DATE_MASK_WITH_YEAR"),
+    # 31 Dec, 31 December - WITHOUT year (check AFTER with-year patterns)
     (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTHS})[a-z]*\b", "DATE_MASK"),
     # Dec 31, December 31 - use negative lookahead (?!:) to avoid matching "Jan 11:45pm"
     (rf"\b({_MONTHS})[a-z]*\s+(\d{{1,2}})(?:st|nd|rd|th)?(?!:)\b", "DATE_MASK"),
@@ -187,6 +192,9 @@ TIME_PATTERNS = [
     (r"\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?\b", "TIME_MASK"),
     # 7PM, 7 PM
     (r"\b(\d{1,2})\s*(AM|PM|am|pm)\b", "TIME_MASK"),
+    # Unusual format: 9:pm, 9:PM (colon before am/pm, no minutes)
+    # Common in some IPTV providers: "UFC 325 9:pm"
+    (r"\b(\d{1,2}):(AM|PM|am|pm)\b", "TIME_MASK"),
 ]
 
 # Common team suffix/prefix tokens that add noise in soccer matching.
@@ -292,6 +300,14 @@ def _parse_date_match(
                 day_match = re.search(r"(\d{1,2})", text)
                 if day_match:
                     day = int(day_match.group(1))
+                    # Check for year in the text (e.g., "23 August 2025")
+                    year_match = re.search(r"\b(20\d{2})\b", text)
+                    if year_match:
+                        year = int(year_match.group(1))
+                        try:
+                            return date(year, month_num, day)
+                        except ValueError:
+                            return None
                     return _infer_year_for_date(month_num, day)
                 return None
 
