@@ -9,7 +9,7 @@ services:
       - ./data:/app/data
     environment:
       # Timezone for all date/time display and XMLTV output
-      - TZ=America/Detroit
+      - TZ=America/New_York
 
       # Console log level: DEBUG, INFO, WARNING, ERROR (default: INFO)
       # Note: File logging (data/logs/) always captures DEBUG regardless of this setting
