@@ -520,6 +520,19 @@ SPORT_HINT_PATTERNS: list[tuple[str, str]] = [
     # Tennis (not currently supported)
     (r"\btennis\b", "Tennis"),
     # Golf (not currently supported)
+    # Motorsport/Racing (not currently supported - no team vs team matchups)
+    (r"\bformula\s*[1e]\b", "Motorsport"),
+    (r"\bf1\b", "Motorsport"),
+    (r"\bfe\b(?!\w)", "Motorsport"),  # FE = Formula E
+    (r"\bnascar\b", "Motorsport"),
+    (r"\bindycar\b", "Motorsport"),
+    (r"\bmotogp\b", "Motorsport"),
+    (r"\ble\s*mans\b", "Motorsport"),
+    (r"\bwrc\b", "Motorsport"),  # World Rally Championship
+    (r"\bsupercars\b", "Motorsport"),  # Australian Supercars
+    (r"\bgrand\s*prix\b", "Motorsport"),
+    (r"\brace\b.*\b(qualifying|practice|sprint)\b", "Motorsport"),
+    (r"\b(qualifying|practice|sprint)\b.*\brace\b", "Motorsport"),
     (r"\bgolf\b", "Golf"),
 ]
 

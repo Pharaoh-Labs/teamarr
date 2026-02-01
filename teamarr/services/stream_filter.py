@@ -41,6 +41,7 @@ UNSUPPORTED_SPORTS = frozenset(
         "Track and Field",
         "Tennis",
         "Golf",
+        "Motorsport",  # No team vs team matchups
     ]
 )
 
