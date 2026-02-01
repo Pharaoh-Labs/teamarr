@@ -346,6 +346,47 @@ def update_display_settings(conn: Connection, **kwargs) -> bool:
     return False
 
 
+def update_stream_filter_settings(
+    conn: Connection,
+    require_event_pattern: bool | None = None,
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+) -> bool:
+    """Update global stream filter settings.
+
+    Args:
+        conn: Database connection
+        require_event_pattern: Require event-like patterns in stream names
+        include_patterns: Regex patterns that must match (optional)
+        exclude_patterns: Regex patterns that must not match (optional)
+
+    Returns:
+        True if updated
+    """
+    updates = []
+    values = []
+
+    if require_event_pattern is not None:
+        updates.append('stream_filter_require_event_pattern = ?')
+        values.append(int(require_event_pattern))
+    if include_patterns is not None:
+        updates.append('stream_filter_include_patterns = ?')
+        values.append(json.dumps(include_patterns))
+    if exclude_patterns is not None:
+        updates.append('stream_filter_exclude_patterns = ?')
+        values.append(json.dumps(exclude_patterns))
+
+    if not updates:
+        return False
+
+    query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
+    cursor = conn.execute(query, values)
+    if cursor.rowcount > 0:
+        logger.info('[UPDATED] Stream filter settings: %s', [u.split(' = ')[0] for u in updates])
+        return True
+    return False
+
+
 def increment_epg_generation_counter(conn: Connection) -> int:
     """Increment the EPG generation counter and return new value.
 

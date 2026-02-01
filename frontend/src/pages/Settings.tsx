@@ -21,13 +21,10 @@ import {
   RefreshCw,
   ExternalLink,
 } from "lucide-react"
-import {
-  ChannelProfileSelector,
-  profileIdsToApi,
-  apiToProfileIds,
-} from "@/components/ChannelProfileSelector"
+import { ChannelProfileSelector } from '@/components/ChannelProfileSelector';
+import { apiToProfileIds, profileIdsToApi } from '@/lib/channel-profiles';
 import { StreamProfileSelector } from "@/components/StreamProfileSelector"
-import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useGenerationProgress } from "@/contexts/generation-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -48,6 +45,8 @@ import {
   useUpdateDurationSettings,
   useUpdateDisplaySettings,
   useUpdateReconciliationSettings,
+  useStreamFilterSettings,
+  useUpdateStreamFilterSettings,
   useTeamFilterSettings,
   useUpdateTeamFilterSettings,
   useExceptionKeywords,
@@ -76,6 +75,7 @@ import type {
   DurationSettings,
   DisplaySettings,
   ReconciliationSettings,
+  StreamFilterSettings,
   TeamFilterSettings,
   ChannelNumberingSettings,
   UpdateCheckSettings,
@@ -163,6 +163,8 @@ export function Settings() {
   const updateDurations = useUpdateDurationSettings()
   const updateDisplay = useUpdateDisplaySettings()
   const updateReconciliation = useUpdateReconciliationSettings()
+  const { data: streamFilterData } = useStreamFilterSettings()
+  const updateStreamFilter = useUpdateStreamFilterSettings()
 
   // Exception keywords
   const keywordsQuery = useExceptionKeywords()
@@ -205,6 +207,7 @@ export function Settings() {
   const [durations, setDurations] = useState<DurationSettings | null>(null)
   const [display, setDisplay] = useState<DisplaySettings | null>(null)
   const [reconciliation, setReconciliation] = useState<ReconciliationSettings | null>(null)
+  const [streamFilter, setStreamFilter] = useState<StreamFilterSettings | null>(null)
   const [teamFilter, setTeamFilter] = useState<TeamFilterSettings>({
     enabled: true,
     include_teams: null,
@@ -288,6 +291,13 @@ export function Settings() {
     }
   }, [updateCheckData])
 
+  // Sync stream filter settings when data loads
+  useEffect(() => {
+    if (streamFilterData) {
+      setStreamFilter(streamFilterData)
+    }
+  }, [streamFilterData])
+
   // Sync channel range inputs from lifecycle on initial load only
   const channelRangeInitializedRef = useRef(false)
   useEffect(() => {
@@ -340,6 +350,21 @@ export function Settings() {
       }
       await updateDispatcharr.mutateAsync(data)
       toast.success("Dispatcharr settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  const handleSaveStreamFilter = async () => {
+    if (!streamFilter) {
+      return
+    }
+
+    try {
+      await updateStreamFilter.mutateAsync({
+        require_event_pattern: streamFilter.require_event_pattern,
+      })
+      toast.success("Stream filter settings saved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
     }
@@ -485,7 +510,7 @@ export function Settings() {
       setEditingKeyword(null)
       toast.success("Keyword updated")
     } catch (err) {
-      toast.error("Failed to update keyword")
+      toast.error(err instanceof Error ? err.message : "Failed to update keyword")
     }
   }
 
@@ -907,7 +932,7 @@ export function Settings() {
                             keywordsQuery.refetch()
                             toast.success(`Updated behavior to "${newBehavior}"`)
                           } catch (err) {
-                            toast.error("Failed to update keyword behavior")
+                            toast.error(err instanceof Error ? err.message : "Failed to update keyword behavior")
                           }
                         }}
                         className="w-40 h-8"
@@ -2046,6 +2071,37 @@ export function Settings() {
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             )}
             {cacheStatus?.refresh_in_progress ? "Refreshing..." : "Refresh Cache"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stream Filtering</CardTitle>
+          <CardDescription>Global defaults for event group stream filtering</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={streamFilter?.require_event_pattern ?? true}
+              onCheckedChange={(checked) =>
+                streamFilter && setStreamFilter({ ...streamFilter, require_event_pattern: checked })
+              }
+              disabled={!streamFilter}
+            />
+            <Label>Require event pattern in stream names</Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            When enabled, streams must include an event pattern (vs/@/date/time).
+            Group-level "Skip built-in stream filtering" bypasses this rule.
+          </p>
+          <Button onClick={handleSaveStreamFilter} disabled={!streamFilter || updateStreamFilter.isPending}>
+            {updateStreamFilter.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            Save
           </Button>
         </CardContent>
       </Card>

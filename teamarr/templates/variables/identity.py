@@ -296,6 +296,30 @@ def extract_gracenote_category(ctx: TemplateContext, game_ctx: GameContext | Non
 
 
 @register_variable(
+    name="league_logo",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="League logo URL (e.g., ESPN CDN URL for NFL, NBA, EPL logos)",
+)
+def extract_league_logo(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Return league logo URL for channel logos.
+
+    Returns the logo_url from leagues table if available.
+    Empty string if no logo is configured.
+
+    Examples:
+        nfl → https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png
+        eng.1 → https://a.espncdn.com/i/teamlogos/leagues/500/epl.png
+
+    THREAD-SAFE: Uses in-memory cache, no DB access.
+    """
+    from teamarr.services.league_mappings import get_league_mapping_service
+
+    service = get_league_mapping_service()
+    return service.get_league_logo(ctx.team_config.league)
+
+
+@register_variable(
     name="exception_keyword",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.BASE_ONLY,

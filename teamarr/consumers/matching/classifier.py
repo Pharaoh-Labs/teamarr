@@ -558,6 +558,32 @@ def extract_teams_from_separator(
     return team1, team2
 
 
+def extract_teams_from_time_mask(text: str) -> tuple[str | None, str | None]:
+    """Extract team names when time sits between teams.
+
+    Example: "UEFA 01: Napoli TIME_MASK Chelsea DATE_MASK"
+    """
+    if not text or "TIME_MASK" not in text:
+        return None, None
+
+    parts = re.split(r"\bTIME_MASK\b", text, maxsplit=1)
+    if len(parts) != 2:
+        return None, None
+
+    left = parts[0].strip()
+    right = parts[1].strip()
+
+    team1 = _clean_team_name(left)
+    team2 = _clean_team_name(right)
+
+    if not team1 or len(team1) < 3:
+        team1 = None
+    if not team2 or len(team2) < 3:
+        team2 = None
+
+    return team1, team2
+
+
 def _clean_team_name(name: str) -> str:
     """Clean extracted team name."""
     if not name:
@@ -587,6 +613,20 @@ def _clean_team_name(name: str) -> str:
     # These can remain after date/time stripping: "Jan 17 5PM ET" → "ET"
     name = re.sub(
         r"^(E|P|C|M)(S|D)?T$",  # ET, EST, EDT, PT, PST, PDT, CT, CST, CDT, MT, MST, MDT
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove trailing provider suffixes (e.g., ":ESPN+ 10", "ESPN+ 10")
+    name = re.sub(
+        r"\s*[:\-]\s*(ESPN\+?|ESPN\s*PLUS|DAZN|PARAMOUNT\+?|PEACOCK|MAX|APPLE\s*TV\+?|FUBO(?:TV)?|DIRECTV|BEIN(?:\s+SPORTS)?|SKY\s+SPORTS|BT\s+SPORT|TSN|SPORTSNET)\s*\d*\s*$",  # noqa: E501
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+    name = re.sub(
+        r"\s+\b(ESPN\+?|ESPN\s*PLUS|DAZN|PARAMOUNT\+?|PEACOCK|MAX|APPLE\s*TV\+?|FUBO(?:TV)?|DIRECTV|BEIN(?:\s+SPORTS)?|SKY\s+SPORTS|BT\s+SPORT|TSN|SPORTSNET)\s*\d*\s*$",  # noqa: E501
         "",
         name,
         flags=re.IGNORECASE,
@@ -638,6 +678,7 @@ def _clean_team_name(name: str) -> str:
     # start, keeping the rest intact for the matcher to disambiguate.
     # "NFL | Bills vs Broncos" → "Bills vs Broncos" (NFL is league hint)
     # "Montreal Canadiens | Bell Centre" → "Montreal Canadiens | Bell Centre" (pass through)
+    # "FC Barcelona | Saturday, DATE_MASK 2025" → "FC Barcelona" (strip datetime suffix)
     if "|" in name:
         parts = name.split("|")
         first_part = parts[0].strip()
@@ -670,7 +711,29 @@ def _clean_team_name(name: str) -> str:
                     name = rest
             else:
                 name = rest
-        # else: keep the full pipe-separated string for matcher disambiguation
+        else:
+            # Check if REST (after pipe) is datetime noise that should be stripped
+            # Handles: "FC Barcelona | Saturday, DATE_MASK 2025 TIME_MASK"
+            # Common in European football streams with format "Team | Day, Date Time"
+            rest_stripped = re.sub(r"\bDATE_MASK\b", "", rest)
+            rest_stripped = re.sub(r"\bTIME_MASK\b", "", rest_stripped)
+            rest_stripped = re.sub(r"\b[ECPM][SD]?T\b", "", rest_stripped, flags=re.IGNORECASE)
+            # Remove day names (Monday, Tuesday, etc.)
+            rest_stripped = re.sub(
+                r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b",
+                "",
+                rest_stripped,
+                flags=re.IGNORECASE,
+            )
+            # Remove standalone years (2024, 2025, 2026)
+            rest_stripped = re.sub(r"\b20\d{2}\b", "", rest_stripped)
+            rest_stripped = re.sub(r"[\s\-:.,]+", " ", rest_stripped).strip()
+            rest_is_datetime_noise = len(rest_stripped) < 3
+
+            if rest_is_datetime_noise:
+                # Rest is datetime noise - keep only first part (the team name)
+                name = first_part
+            # else: keep the full pipe-separated string for matcher disambiguation
 
     # Strip channel number prefixes like "02 -", "15 -", "142 -" at the start
     name = re.sub(r"^\d+\s*-\s*", "", name)
@@ -697,6 +760,62 @@ def _clean_team_name(name: str) -> str:
     # This handles streams without pipe separators like "NFL 03 3PM Texans at Patriots"
     name = re.sub(
         r"^(NFL|NBA|MLB|NHL|MLS|NCAAF|NCAAB|NCAAW|WNBA|EPL|UCL|UFC|MMA)\s+",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip European league prefixes with channel numbers (common in multi-sport channels)
+    # "Ligue 1 01: psg" → "psg"
+    # "Bundesliga 07x: Hamburger SV" → "Hamburger SV"
+    # "Serie A 08x: Parma Calcio" → "Parma Calcio"
+    # "La Liga 04: Levante UD" → "Levante UD"
+    # "2. Bundesliga: 1 FC Kaiserslautern" → "1 FC Kaiserslautern"
+    name = re.sub(
+        r"^(?:Ligue\s*[12]|Bundesliga|2\.\s*Bundesliga|Serie\s*[ABC]|La\s*Liga|Premier\s*League|"
+        r"Champions\s*League|Europa\s*League|Conference\s*League|UEFA|EFL|FA\s*Cup|"
+        r"Eredivisie|Primeira\s*Liga|Super\s*Lig|MLS|Liga\s*MX)\s*\d*[x\u2093]?\s*[:\-]?\s*",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip country code + league prefixes (IT, DE, FR, UK, etc. followed by league)
+    # "IT UEFA Champions League HD & Young Boys" → "Young Boys"
+    # "DE NFL Game Pass Dolphins" → "Dolphins"
+    # "FR Ligue 1 PSG" → "PSG"
+    name = re.sub(
+        r"^[A-Z]{2,3}\s+(?:UEFA\s+)?(?:Champions\s+League|Europa\s+League|NFL(?:\s+Game\s+Pass)?|"
+        r"NBA|MLB|NHL|Bundesliga|Ligue\s*\d|Serie\s*[A-C]|La\s*Liga|Premier\s*League|MLS)\s*"
+        r"(?:HD|FHD|4K|UHD)?\s*(?:[&\|\-])?\s*",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip "Event N |" prefixes from multi-sport channels
+    # "DE - Event 12 | NFL | Dolphins" → "Dolphins"
+    # "IT - Event 3009 | NFL Game Pass | Dolphins" → "Dolphins"
+    name = re.sub(
+        r"^[A-Z]{2,3}\s*[-–]\s*Event\s+\d+\s*\|\s*(?:NFL(?:\s+Game\s+Pass)?|NBA|MLB|NHL)\s*\|\s*",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip broadcast show prefixes like "HNIC IN PUNJABI"
+    # "HNIC IN PUNJABI Toronto" → "Toronto"
+    name = re.sub(
+        r"^(?:HNIC(?:\s+IN\s+PUNJABI)?|Hockey\s+Night(?:\s+in\s+Canada)?)\s+",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip language variant prefixes like "En Español"
+    # "En Español Hamburg SV vs FC Bayern München" → "Hamburg SV vs FC Bayern München"
+    name = re.sub(
+        r"^En\s+Espa[nñ]ol\s+",
         "",
         name,
         flags=re.IGNORECASE,
@@ -968,6 +1087,23 @@ def _clean_fighter_name(name: str) -> str | None:
     # Strip common noise words at start
     name = re.sub(r"^(?:main\s+english|english|prelims?)\s*:?\s*", "", name, flags=re.IGNORECASE)
 
+    # Strip time SUFFIXES: "Lopes 2 9:pm" → "Lopes 2", "Fighter 9pm" → "Fighter"
+    # Handle unusual format: 9:pm, 9:PM (colon before am/pm)
+    name = re.sub(r"\s+\d{1,2}:?(?:AM|PM)\s*$", "", name, flags=re.IGNORECASE)
+
+    # Strip trailing fight/rematch numbers: "Lopes 2" → "Lopes"
+    # These are rematch numbers like "Fighter vs Opponent 2"
+    name = re.sub(r"\s+\d\s*$", "", name)
+
+    # Strip BACKUP, SD, HD suffixes: "Fighter BACKUP" → "Fighter"
+    name = re.sub(r"\s+(?:BACKUP|SD|HD|FHD|4K)\s*$", "", name, flags=re.IGNORECASE)
+
+    # Strip @ followed by date/time noise: "Fighter @ Jan 31" → "Fighter"
+    name = re.sub(r"\s+@\s+.*$", "", name)
+
+    # Strip provider suffixes: ":Sportsnet+ 11" → ""
+    name = re.sub(r"\s*:\s*[A-Za-z]+\+?\s*\d*\s*$", "", name)
+
     # Clean up whitespace and punctuation
     name = re.sub(r"[\s\-:]+$", "", name)
     name = re.sub(r"^[\s\-:]+", "", name)
@@ -1121,7 +1257,22 @@ def classify_stream(
                         sport_hint=sport_hint,
                     )
 
-        # Step 5: Default to placeholder if we can't classify
+        # Step 5: Check for time between teams (e.g., "Napoli TIME_MASK Chelsea")
+        # Only use this if no game separator was found.
+        if result is None and "TIME_MASK" in text:
+            team1, team2 = extract_teams_from_time_mask(text)
+            if team1 or team2:
+                result = ClassifiedStream(
+                    category=StreamCategory.TEAM_VS_TEAM,
+                    normalized=normalized,
+                    team1=team1,
+                    team2=team2,
+                    separator_found="time",
+                    league_hint=league_hint,
+                    sport_hint=sport_hint,
+                )
+
+        # Step 6: Default to placeholder if we can't classify
         if result is None:
             result = ClassifiedStream(
                 category=StreamCategory.PLACEHOLDER,

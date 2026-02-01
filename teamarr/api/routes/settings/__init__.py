@@ -27,12 +27,14 @@ from .models import (
     LifecycleSettingsModel,
     ReconciliationSettingsModel,
     SchedulerSettingsModel,
+    StreamFilterSettingsModel,
     StreamOrderingRuleModel,
     StreamOrderingSettingsModel,
     TeamFilterSettingsModel,
     UpdateCheckSettingsModel,
 )
 from .stream_ordering import router as stream_ordering_router
+from .stream_filter import router as stream_filter_router
 from .team_filter import router as team_filter_router
 from .update_check import router as update_check_router
 
@@ -44,6 +46,7 @@ router.include_router(dispatcharr_router)
 router.include_router(lifecycle_router)
 router.include_router(epg_router)
 router.include_router(display_router)
+router.include_router(stream_filter_router)
 router.include_router(team_filter_router)
 router.include_router(channel_numbering_router)
 router.include_router(stream_ordering_router)
@@ -111,6 +114,11 @@ def get_settings():
             xmltv_generator_name=settings.display.xmltv_generator_name,
             xmltv_generator_url=settings.display.xmltv_generator_url,
         ),
+        stream_filter=StreamFilterSettingsModel(
+            require_event_pattern=settings.stream_filter.require_event_pattern,
+            include_patterns=settings.stream_filter.include_patterns,
+            exclude_patterns=settings.stream_filter.exclude_patterns,
+        ),
         team_filter=TeamFilterSettingsModel(
             include_teams=settings.team_filter.include_teams,
             exclude_teams=settings.team_filter.exclude_teams,
@@ -160,6 +168,7 @@ __all__ = [
     "LifecycleSettingsModel",
     "ReconciliationSettingsModel",
     "SchedulerSettingsModel",
+    "StreamFilterSettingsModel",
     "StreamOrderingRuleModel",
     "StreamOrderingSettingsModel",
     "TeamFilterSettingsModel",
