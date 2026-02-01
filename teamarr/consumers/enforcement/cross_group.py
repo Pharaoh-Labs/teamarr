@@ -145,7 +145,7 @@ class CrossGroupEnforcer:
                     if overlap_handling == "create_all":
                         logger.debug(
                             "[CROSS_GROUP] Group '%s' has overlap_handling=create_all, skipping",
-                            group.group_name,
+                            group.name,
                         )
                         continue
 
