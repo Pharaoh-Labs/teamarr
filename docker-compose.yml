@@ -1,6 +1,11 @@
 services:
   teamarr:
-    image: ghcr.io/pharaoh-labs/teamarr:latest
+    # Development mode: build from local source
+    # For production, comment out 'build:' and use 'image: ghcr.io/pharaoh-labs/teamarr:latest'
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: teamarr:local
     container_name: teamarr
     restart: unless-stopped
     ports:
