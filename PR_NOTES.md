@@ -4,7 +4,7 @@
 
 ## Summary
 
-This PR improves stream-to-event matching for European football (soccer), UFC, and boxing streams. The changes address parsing issues with common IPTV provider stream name formats that were causing match failures.
+This PR improves stream-to-event matching for European football (soccer), UFC, and boxing streams. The changes address parsing issues with common IPTV provider stream name formats that were causing match failures. Additionally, it adds professional EPG filler content with program artwork and game times.
 
 ## Changes
 
@@ -20,18 +20,24 @@ This PR improves stream-to-event matching for European football (soccer), UFC, a
   - After: `FC Barcelona` → Team2 = correct
 - **Improved fighter name cleaning** - Strips trailing time, fight/rematch numbers, BACKUP/SD tags, and provider suffixes from UFC/boxing streams
 
+### EPG Filler Improvements
+
+#### `database/templates.py`
+- **Default channel name format** - When template fields are NULL, use `{away_team} @ {home_team}` instead of empty string
+- **Prevents empty display-name tags** in XMLTV output
+
+#### Database Templates (via SQL)
+- **All templates updated** with `program_art_url` using jesmann.com sports logos
+- **Pregame filler** now shows: "Game Starting at 7:30 PM EST" (includes actual game time!)
+- **Postgame filler** shows: "Game Complete" with final score
+- **Idle filler** shows upcoming game info with artwork
+- **Team aliases** added for major European soccer teams (PSG, Inter, Juventus, Barcelona, Bayern Munich, etc.)
+
 ### Configuration
-- **`docker-compose.yml`** - Configured for local development builds (can be switched back to published image for production)
-- **Default timezone** - Set to `America/New_York`
+- **docker-compose.yml** - Configured for local development builds
+- **Default timezone** - Set to America/New_York
 
 ## Test Results
-
-### Before Fix
-European football streams like:
-```
-Bundesliga 06: Werder Bremen vs. Borussia Monchengladbach | Saturday, 31 January 2026 14:30
-```
-Would parse Team2 as `Borussia Monchengladbach | Saturday, 2025` (broken) and fail to match.
 
 ### After Fix
 - **Bundesliga**: 17 streams matched ✅
@@ -42,14 +48,36 @@ Would parse Team2 as `Borussia Monchengladbach | Saturday, 2025` (broken) and fa
 - **UEFA Champions League**: 8 streams matched ✅
 
 ### UFC/Boxing
-- Fighter names now cleanly extracted: `Volkanovski` vs `Lopes` (time and fight numbers stripped)
-- `Shakur Stevenson` vs `Teofimo Lopez` (fully clean)
+- Fighter names now cleanly extracted: Volkanovski vs Lopes
+- Shakur Stevenson vs Teofimo Lopez (fully clean)
 
 ## XMLTV Output Validation
-- ✅ Valid XML per `xmllint`
+- ✅ Valid XML per xmllint
 - ✅ UTF-8 encoded
-- ✅ Times in UTC with explicit `+0000` offset (standard XMLTV format)
+- ✅ Times in UTC with explicit +0000 offset
 - ✅ Compatible with Jellyfin, TVHeadend, NextPVR, Plex, Kodi
+
+## Jellyfin Integration Notes
+
+**Important:** When setting up the EPG source in Jellyfin, use the URL with the tvg_id_source parameter:
+
+    http://YOUR_DISPATCHARR_IP:9191/output/epg?tvg_id_source=tvg_id
+
+Without this parameter, Teamarr event channels won't get proper EPG data.
+
+## Filler Content Examples
+
+### Pregame (before game starts)
+- **Title**: "Game Starting at 3:00 PM EST"
+- **Subtitle**: "New Orleans Pelicans at Charlotte Hornets"
+- **Description**: Full venue info with tip-off time
+- **Artwork**: Professional matchup cover from jesmann.com
+
+### Postgame (after game ends)
+- **Title**: "Game Complete"
+- **Subtitle**: Teams that played
+- **Description**: Final score included
+- **Artwork**: Professional matchup cover
 
 ## Development Notes
 
@@ -58,20 +86,12 @@ This PR was developed with AI assistance (Claude/Anthropic via Cursor IDE) for:
 - Database analysis via MCP SQLite integration
 - Testing stream parsing with live data
 - XMLTV validation
+- Deep dive debugging across Teamarr → Dispatcharr → Jellyfin pipeline
 
 ## How to Test
 
 1. Clone this branch
-2. Run `docker compose up -d --build`
+2. Run docker compose up -d --build
 3. Trigger EPG generation via UI or API
 4. Check match results in the Stats page
-
-## Commits
-
-- `89b9055` - chore(dev): configure docker-compose for local development builds
-- `ba2f744` - fix(config): correct default timezone to America/New_York
-- `463b624` - fix(matching): improve European football and UFC/Boxing stream parsing
-- `0be0d2c` - Expose stream filter settings in UI
-- `35485b8` - Improve team extraction for provider suffixes
-- `167a797` - Classify time-separated team streams
-- `41695ca` - Fix Dispatcharr EPG assignment and XMLTV fallback
+5. Verify Jellyfin shows "Game Starting at X:XX PM" instead of generic "Game Starting Soon"

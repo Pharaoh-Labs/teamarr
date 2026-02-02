@@ -554,9 +554,9 @@ def template_to_event_config(template: Template) -> EventTemplateConfig:
     categories = template.xmltv_categories or []
 
     return EventTemplateConfig(
-        # No hardcoded defaults - schema provides them
-        title_format=template.title_format or "",
-        channel_name_format=template.event_channel_name or "",
+        # Use sensible defaults when template fields are NULL
+        title_format=template.title_format or "{away_team} @ {home_team}",
+        channel_name_format=template.event_channel_name or "{away_team} @ {home_team}",
         description_format=template.description_template or "",
         subtitle_format=template.subtitle_template or "",
         program_art_url=template.program_art_url,
