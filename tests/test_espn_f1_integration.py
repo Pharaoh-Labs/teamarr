@@ -140,6 +140,8 @@ class TestESPNF1Integration:
 
         # Should find 2 events (FP1 and FP2) because they both happen on target_date
         assert len(events) == 2
+        fp1 = next(e for e in events if "Free Practice 1" in e.name)
+        assert fp1.short_name == "Abu Dhabi Grand Prix - FP1"
         assert any(e.name == "Abu Dhabi Grand Prix - Free Practice 1" for e in events)
         assert any(e.name == "Abu Dhabi Grand Prix - Free Practice 2" for e in events)
         assert not any("Race" in e.name for e in events)

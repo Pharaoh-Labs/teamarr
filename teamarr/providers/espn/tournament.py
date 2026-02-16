@@ -112,7 +112,14 @@ class TournamentParserMixin:
             else:
                 event_name = base_name
 
-            short_name = comp_data.get("shortName") or event_data.get("shortName") or event_name
+            # Build shortName: "GP ShortName - Session Abbrev"
+            base_short = event_data.get("shortName") or base_name
+            if session_name and session_name not in base_short:
+                # Use abbreviation for shortName (e.g., "Chinese GP - FP1")
+                abbrev = comp_type.get("abbreviation") or session_name
+                short_name = f"{base_short} - {abbrev}"
+            else:
+                short_name = base_short
 
             # For tournaments, create placeholder "teams"
             # This allows the event to work with existing matching logic
