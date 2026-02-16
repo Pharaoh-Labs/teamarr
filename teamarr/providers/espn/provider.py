@@ -283,6 +283,10 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         return False
 
     def get_team(self, team_id: str, league: str) -> Team | None:
+        # Skip placeholder tournament teams
+        if team_id.startswith("tournament_"):
+            return None
+
         # Special case: F1/Racing virtual team
         if league == "f1" and team_id == "f1":
             return Team(
@@ -792,6 +796,14 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         Returns TeamStats with record, rankings, scoring averages,
         and conference/division info.
         """
+        # Skip leagues without teams (F1, UFC, etc.)
+        if league in self.LEAGUES_WITHOUT_TEAMS:
+            return None
+
+        # Skip placeholder tournament teams
+        if team_id.startswith("tournament_"):
+            return None
+
         # Get sport/league from database config
         sport_league = self._get_sport_league_from_db(league)
 

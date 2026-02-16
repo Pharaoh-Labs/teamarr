@@ -455,9 +455,6 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     # ==========================================================================
     (r"\bf1\b", "f1"),
     (r"\bformula\s*1\b", "f1"),
-    (r"\bmotogp\b", "motogp"),
-    (r"\bnascar\b", "nascar"),
-    (r"\bindycar\b", "indycar"),
     # ==========================================================================
     # Rugby
     # ==========================================================================
@@ -529,9 +526,6 @@ SPORT_HINT_PATTERNS: list[tuple[str, str]] = [
     # Racing
     (r"\bf1\b", "Racing"),
     (r"\bformula\s*1\b", "Racing"),
-    (r"\bmotogp\b", "Racing"),
-    (r"\bnascar\b", "Racing"),
-    (r"\bindycar\b", "Racing"),
 ]
 
 
@@ -630,9 +624,6 @@ EVENT_TYPE_KEYWORDS: dict[str, list[str]] = {
         "race",
         "golf",
         "tennis",
-        "nascar",
-        "indycar",
-        "motogp",
     ],
     # =========================================================================
     # TEAM_VS_TEAM - Team sports (detected via separators, no keywords needed)
