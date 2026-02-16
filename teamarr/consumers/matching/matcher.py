@@ -34,7 +34,7 @@ from teamarr.consumers.matching.classifier import (
     classify_stream,
 )
 from teamarr.consumers.matching.constants import MATCH_WINDOW_DAYS
-from teamarr.consumers.matching.event_matcher import EventCardMatcher
+from teamarr.consumers.matching.event_matcher import EventCardMatcher, TournamentMatcher
 from teamarr.consumers.matching.result import (
     ExcludedReason,
     FailedReason,
@@ -272,6 +272,7 @@ class StreamMatcher:
             service, self._cache, days_ahead=self._days_ahead, db_factory=db_factory
         )
         self._event_matcher = EventCardMatcher(service, self._cache)
+        self._tournament_matcher = TournamentMatcher(service, self._cache)
 
         # League event types cache
         self._league_event_types: dict[str, str] = {}
@@ -499,6 +500,12 @@ class StreamMatcher:
                 stream_id=stream_id,
                 target_date=target_date,
             )
+        elif classified.category == StreamCategory.EVENT:
+            outcome = self._match_tournament(
+                classified=classified,
+                stream_id=stream_id,
+                target_date=target_date,
+            )
         else:  # TEAM_VS_TEAM
             outcome = self._match_team_vs_team(
                 classified=classified,
@@ -598,6 +605,48 @@ class StreamMatcher:
             stream_name=classified.normalized.original,
             stream_id=stream_id,
             detail="No matching event card found",
+        )
+
+    def _match_tournament(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        target_date: date,
+    ) -> MatchOutcome:
+        """Match a tournament/individual event stream (F1, Golf)."""
+        # Find tournament leagues in our search leagues
+        tournament_leagues = [
+            lg for lg in self._search_leagues if self._league_event_types.get(lg) == "event"
+        ]
+
+        if not tournament_leagues:
+            return MatchOutcome.filtered(
+                FilteredReason.LEAGUE_NOT_INCLUDED,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+                detail="No tournament/event leagues configured",
+            )
+
+        # Try each tournament league
+        for league in tournament_leagues:
+            outcome = self._tournament_matcher.match(
+                classified=classified,
+                league=league,
+                target_date=target_date,
+                group_id=self._group_id,
+                stream_id=stream_id,
+                generation=self._generation,
+                user_tz=self._user_tz,
+            )
+            if outcome.is_matched:
+                return outcome
+
+        # No match in any tournament league
+        return MatchOutcome.failed(
+            reason=outcome.failed_reason if outcome else None,
+            stream_name=classified.normalized.original,
+            stream_id=stream_id,
+            detail="No matching tournament event found",
         )
 
     def _outcome_to_result(

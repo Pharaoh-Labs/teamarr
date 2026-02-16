@@ -844,6 +844,12 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nrl', 'tsdb', '4416', 'Australian National Rugby League', 'National Rugby League', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gsztcj1552071996.png', NULL, 1, 'NRL', 'nrl', 'team_vs_team', NULL, NULL, NULL),
     ('super-rugby', 'tsdb', '4551', 'Super Rugby', 'Super Rugby Pacific', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/alpxhe1675871443.png', NULL, 1, 'Super Rugby', 'super-rugby', 'team_vs_team', NULL, NULL, NULL),
 
+    -- Racing (ESPN)
+    ('f1', 'espn', 'racing/f1', NULL, 'Formula 1', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/f1.png', NULL, 1, 'F1', 'f1', 'event', 'Formula 1', NULL, NULL),
+    ('nascar', 'espn', 'racing/nascar', NULL, 'NASCAR', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar.png', NULL, 1, 'NASCAR', 'nascar', 'event', 'NASCAR', NULL, NULL),
+    ('indycar', 'espn', 'racing/indycar', NULL, 'IndyCar', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/indy.png', NULL, 1, 'IndyCar', 'indycar', 'event', 'IndyCar', NULL, NULL),
+    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 1, 'MotoGP', 'motogp', 'event', 'MotoGP', NULL, NULL),
+
     -- Boxing (TSDB) - Combat sport with event cards
     ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL);
 

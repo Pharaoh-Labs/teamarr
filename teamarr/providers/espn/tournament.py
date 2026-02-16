@@ -7,7 +7,9 @@ traditional home/away matchups.
 import logging
 from datetime import date, datetime
 
+from teamarr.config import get_user_timezone
 from teamarr.core import Event, EventStatus, Team, Venue
+from teamarr.utilities.tz import to_user_tz
 
 logger = logging.getLogger(__name__)
 
@@ -20,44 +22,97 @@ class TournamentParserMixin:
         - self.name: Provider name ('espn')
     """
 
-    def _get_tournament_events(self, league: str, target_date: date, sport: str) -> list[Event]:
+    def _get_tournament_events(
+        self,
+        league: str,
+        target_date: date,
+        sport: str,
+        sport_league: tuple[str, str] | None = None,
+    ) -> list[Event]:
         """Get events for tournament sports (tennis, golf, racing).
 
         These sports have tournaments/races as events with many competitors,
         not head-to-head matchups with home/away.
         """
         date_str = target_date.strftime("%Y%m%d")
-        data = self._client.get_scoreboard(league, date_str)
+        data = self._client.get_scoreboard(league, date_str, sport_league)
         if not data:
             return []
 
         events = []
+        from teamarr.utilities.tz import to_user_tz
+
         for event_data in data.get("events", []):
-            event = self._parse_tournament_event(event_data, league, sport)
-            if event:
-                events.append(event)
+            # For tournament sports, an "event" (like a Grand Prix) can contain
+            # multiple "competitions" (Practice 1, Practice 2, Qualifying, Race).
+            # We want each competition to be its own Event in Teamarr.
+            competitions = event_data.get("competitions", [])
+            if not competitions:
+                # Fallback to top-level event if no competitions
+                event = self._parse_tournament_event(event_data, event_data, league, sport)
+                if event:
+                    events.append(event)
+                continue
+
+            for comp_data in competitions:
+                event = self._parse_tournament_event(event_data, comp_data, league, sport)
+                if event:
+                    # Filter by target_date in user timezone
+                    if to_user_tz(event.start_time).date() == target_date:
+                        events.append(event)
 
         return events
 
-    def _parse_tournament_event(self, data: dict, league: str, sport: str) -> Event | None:
-        """Parse a tournament-style event (tennis, golf, racing).
+    def _parse_tournament_event(
+        self, event_data: dict, comp_data: dict, league: str, sport: str
+    ) -> Event | None:
+        """Parse a tournament-style competition (session, round, etc.).
 
-        Creates placeholder 'teams' representing the tournament/event itself.
+        Args:
+            event_data: Top-level event data (Grand Prix name, etc.)
+            comp_data: Specific competition/session data
+            league: League code
+            sport: Sport name
+
+        Returns:
+            Event object or None
         """
         try:
-            event_id = data.get("id", "")
+            event_id = comp_data.get("id") or event_data.get("id", "")
             if not event_id:
                 return None
 
-            # Parse start time
-            date_str = data.get("date")
+            # Parse start time from competition
+            date_str = comp_data.get("date") or event_data.get("date")
             if not date_str:
                 return None
 
             start_time = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
 
-            event_name = data.get("name", "")
-            short_name = data.get("shortName", event_name)
+            # Build name: "Grand Prix Name - Session Type"
+            base_name = event_data.get("name", "")
+            comp_type = comp_data.get("type", {})
+            session_name = comp_type.get("shortDetail") or comp_type.get("abbreviation") or ""
+
+            if session_name and session_name not in base_name:
+                # Map abbreviations to friendly names for better matching
+                session_map = {
+                    "FP1": "Free Practice 1",
+                    "FP2": "Free Practice 2",
+                    "FP3": "Free Practice 3",
+                    "Qual": "Qualifying",
+                    "Race": "Race",
+                    "SR": "Sprint Race",
+                    "SS": "Sprint Shootout",
+                    "SQ": "Sprint Qualifying",
+                    "Sprint": "Sprint Qualifying",
+                }
+                friendly_session = session_map.get(session_name, session_name)
+                event_name = f"{base_name} - {friendly_session}"
+            else:
+                event_name = base_name
+
+            short_name = comp_data.get("shortName") or event_data.get("shortName") or event_name
 
             # For tournaments, create placeholder "teams"
             # This allows the event to work with existing matching logic
@@ -73,8 +128,8 @@ class TournamentParserMixin:
                 color=None,
             )
 
-            # Parse status
-            status_data = data.get("status", {})
+            # Parse status from competition
+            status_data = comp_data.get("status", {})
             type_data = status_data.get("type", {}) if status_data else {}
             state = type_data.get("state", "pre")
 
@@ -85,18 +140,26 @@ class TournamentParserMixin:
             else:
                 status = EventStatus(state="scheduled")
 
-            # Parse venue if available
+            # Parse venue
             venue = None
-            competitions = data.get("competitions", [])
-            if competitions:
-                venue_data = competitions[0].get("venue")
-                if venue_data:
-                    venue = Venue(
-                        name=venue_data.get("fullName", ""),
-                        city=venue_data.get("address", {}).get("city", ""),
-                        state=venue_data.get("address", {}).get("state", ""),
-                        country=venue_data.get("address", {}).get("country", ""),
-                    )
+            venue_data = comp_data.get("venue") or event_data.get("venue")
+            if not venue_data and "competitions" in event_data:
+                # Sometimes venue is only in the first competition of the event
+                venue_data = event_data["competitions"][0].get("venue")
+
+            if venue_data:
+                venue = Venue(
+                    name=venue_data.get("fullName", ""),
+                    city=venue_data.get("address", {}).get("city", ""),
+                    state=venue_data.get("address", {}).get("state", ""),
+                    country=venue_data.get("address", {}).get("country", ""),
+                )
+
+            # Parse broadcasts
+            broadcasts = []
+            for b in comp_data.get("broadcasts", []):
+                names = b.get("names", [])
+                broadcasts.extend(names)
 
             return Event(
                 id=str(event_id),
@@ -110,7 +173,7 @@ class TournamentParserMixin:
                 league=league,
                 sport=sport,
                 venue=venue,
-                broadcasts=[],
+                broadcasts=broadcasts,
             )
 
         except Exception as e:

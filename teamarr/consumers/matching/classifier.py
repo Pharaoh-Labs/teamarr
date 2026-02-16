@@ -25,6 +25,7 @@ class StreamCategory(Enum):
 
     TEAM_VS_TEAM = "team_vs_team"  # Standard team matchup (vs/@/at)
     EVENT_CARD = "event_card"  # Combat sports (UFC, Boxing)
+    EVENT = "event"  # Individual/Tournament sports (F1, Golf, Tennis)
     PLACEHOLDER = "placeholder"  # No event info, skip
 
 
@@ -894,6 +895,30 @@ def is_event_card(text: str, league_event_type: str | None = None) -> bool:
     return detected == "EVENT_CARD"
 
 
+def is_event(text: str, league_event_type: str | None = None) -> bool:
+    """Check if stream is an individual/tournament event (F1, Golf).
+
+    Uses detect_event_type() which checks event_type_keywords.
+
+    Args:
+        text: Normalized stream name
+        league_event_type: Optional event_type from leagues table
+
+    Returns:
+        True if stream is an individual/tournament event
+    """
+    if not text:
+        return False
+
+    # If we know the league type, use that
+    if league_event_type == "event":
+        return True
+
+    # Use event type detection - checks EVENT keywords
+    detected = DetectionKeywordService.detect_event_type(text)
+    return detected == "EVENT"
+
+
 def extract_event_card_hint(text: str) -> str | None:
     """Extract event card identifier (e.g., "UFC 315").
 
@@ -1066,6 +1091,36 @@ def _clean_fighter_name(name: str) -> str | None:
     return name
 
 
+def _clean_event_name(text: str) -> str | None:
+    """Clean stream name to extract event name for individual sports.
+
+    Strips league prefixes, quality indicators, and other noise.
+
+    Args:
+        text: Normalized stream name
+
+    Returns:
+        Cleaned event name or None
+    """
+    if not text:
+        return None
+
+    # Use the same cleanup logic as _clean_team_name but specialized
+    name = _clean_team_name(text)
+
+    # Further strip common prefixes that might still be there
+    name = re.sub(r"^(?:f1|formula\s*1|racing|nascar|indycar|golf|tennis)\s*[:\-]?\s*", "", name, flags=re.IGNORECASE)
+
+    # Strip common suffixes
+    name = re.sub(r"\s+[\(\[]?(?:live|hd|sd|fhd|4k|uhd)[\)\]]?\s*$", "", name, flags=re.IGNORECASE)
+
+    # Final cleanup
+    name = re.sub(r"^[\s\-:.,]+", "", name)
+    name = re.sub(r"[\s\-:.,]+$", "", name)
+
+    return name.strip() if len(name) >= 3 else None
+
+
 # =============================================================================
 # MAIN CLASSIFICATION
 # =============================================================================
@@ -1200,6 +1255,18 @@ def classify_stream(
                 league_hint=league_hint,
                 sport_hint=sport_hint,
                 custom_regex_used=custom_regex_used,
+            )
+
+        # Step 2b: Check for individual/tournament event
+        if result is None and is_event(text, league_event_type):
+            event_name = _clean_event_name(text)
+
+            result = ClassifiedStream(
+                category=StreamCategory.EVENT,
+                normalized=normalized,
+                event_hint=event_name,
+                league_hint=league_hint,
+                sport_hint=sport_hint,
             )
 
         # Step 3: Try custom regex for team extraction (if configured)

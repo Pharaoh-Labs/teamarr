@@ -451,6 +451,14 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bnll[:\s-]", "nll"),
     (r"\bpll[:\s-]", "pll"),
     # ==========================================================================
+    # Racing / F1
+    # ==========================================================================
+    (r"\bf1\b", "f1"),
+    (r"\bformula\s*1\b", "f1"),
+    (r"\bmotogp\b", "motogp"),
+    (r"\bnascar\b", "nascar"),
+    (r"\bindycar\b", "indycar"),
+    # ==========================================================================
     # Rugby
     # ==========================================================================
     (r"\bnrl[:\s-]", "nrl"),
@@ -518,6 +526,12 @@ SPORT_HINT_PATTERNS: list[tuple[str, str]] = [
     (r"\btennis\b", "Tennis"),
     # Golf (not currently supported)
     (r"\bgolf\b", "Golf"),
+    # Racing
+    (r"\bf1\b", "Racing"),
+    (r"\bformula\s*1\b", "Racing"),
+    (r"\bmotogp\b", "Racing"),
+    (r"\bnascar\b", "Racing"),
+    (r"\bindycar\b", "Racing"),
 ]
 
 
@@ -601,6 +615,24 @@ EVENT_TYPE_KEYWORDS: dict[str, list[str]] = {
         "ibf",  # International Boxing Federation
         "wbo",  # World Boxing Organization
         "ibo",  # International Boxing Organization
+    ],
+    # =========================================================================
+    # EVENT - Individual/Tournament sports (Formula 1, Golf, Tennis)
+    # These match by event name hint rather than team vs team separators.
+    # =========================================================================
+    "EVENT": [
+        "f1",
+        "formula 1",
+        "grand prix",
+        "grandprix",
+        "qualifying",
+        "practice",
+        "race",
+        "golf",
+        "tennis",
+        "nascar",
+        "indycar",
+        "motogp",
     ],
     # =========================================================================
     # TEAM_VS_TEAM - Team sports (detected via separators, no keywords needed)

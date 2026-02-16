@@ -111,8 +111,8 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
 
         # Check if this is a tournament sport
         sport = self._get_display_sport(league)
-        if sport in TOURNAMENT_SPORTS:
-            return self._get_tournament_events(league, target_date, sport)
+        if sport.lower() in TOURNAMENT_SPORTS:
+            return self._get_tournament_events(league, target_date, sport, sport_league)
 
         date_str = target_date.strftime("%Y%m%d")
         data = self._client.get_scoreboard(league, date_str, sport_league)
@@ -146,6 +146,17 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         This hybrid approach ensures .last variables work even during long breaks
         (bye weeks, all-star break, offseason) while still capturing playoffs.
         """
+        # Special case: F1/Racing virtual team returns full league schedule
+        if league == "f1" and team_id == "f1":
+            events = []
+            today = date.today()
+            sport = self._get_display_sport(league)
+            sport_league = self._get_sport_league_from_db(league)
+            for day_offset in range(days_ahead):
+                target_date = today + timedelta(days=day_offset)
+                events.extend(self._get_tournament_events(league, target_date, sport, sport_league))
+            return sorted(events, key=lambda e: e.start_time)
+
         # Apply team ID correction for known ESPN mismatches
         corrected_id = ESPN_TEAM_ID_CORRECTIONS.get((league, team_id))
         if corrected_id:
@@ -272,6 +283,19 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         return False
 
     def get_team(self, team_id: str, league: str) -> Team | None:
+        # Special case: F1/Racing virtual team
+        if league == "f1" and team_id == "f1":
+            return Team(
+                id="f1",
+                provider=self.name,
+                name="Formula 1",
+                short_name="F1",
+                abbreviation="F1",
+                league="f1",
+                sport="Racing",
+                logo_url="https://a.espncdn.com/i/teamlogos/leagues/500/f1.png",
+            )
+
         # Combat sports don't have teams endpoint - skip to avoid 404 spam
         if league in self.LEAGUES_WITHOUT_TEAMS:
             return None
@@ -326,10 +350,12 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
     # Leagues without teams endpoint support
     # Leagues where /teams endpoint doesn't work or isn't needed:
     # - Combat sports (MMA, boxing): individual fighters, not teams
+    # - Racing (F1): virtual team representing league used instead
     # - Olympics: teams only in events, no team filtering/import needed
     LEAGUES_WITHOUT_TEAMS = {
         "ufc",
         "boxing",
+        "f1",
         "olympics-mens-ice-hockey",
         "olympics-womens-ice-hockey",
     }
@@ -669,6 +695,21 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         Returns:
             List of Team objects for this league
         """
+        # Special case: F1/Racing returns a virtual team representing the league
+        if league == "f1":
+            return [
+                Team(
+                    id="f1",
+                    provider=self.name,
+                    name="Formula 1",
+                    short_name="F1",
+                    abbreviation="F1",
+                    league="f1",
+                    sport="Racing",
+                    logo_url="https://a.espncdn.com/i/teamlogos/leagues/500/f1.png",
+                )
+            ]
+
         # Combat sports don't have teams - skip to avoid 404 spam
         if league in self.LEAGUES_WITHOUT_TEAMS:
             logger.debug("[ESPN] Teams endpoint not available for %s (individual sport)", league)

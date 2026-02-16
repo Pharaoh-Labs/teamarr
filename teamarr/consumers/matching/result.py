@@ -97,6 +97,9 @@ class FailedReason(Enum):
     # Event card failures (UFC, boxing)
     NO_EVENT_CARD_MATCH = "no_event_card_match"  # Could not match to event card
 
+    # Tournament/Individual event failures (F1, Golf)
+    NO_EVENT_MATCH = "no_event_match"  # Could not match to tournament/individual event
+
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
 
@@ -396,6 +399,7 @@ FAILED_DISPLAY: dict[FailedReason, str] = {
     FailedReason.AMBIGUOUS_LEAGUE: "Multiple leagues possible",
     FailedReason.NO_EVENT_FOUND: "No scheduled event found",
     FailedReason.NO_EVENT_CARD_MATCH: "No matching event card",
+    FailedReason.NO_EVENT_MATCH: "No matching event found",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 

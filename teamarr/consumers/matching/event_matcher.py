@@ -97,14 +97,6 @@ class EventCardMatcher:
         Returns:
             MatchOutcome with result
         """
-        if classified.category != StreamCategory.EVENT_CARD:
-            return MatchOutcome.filtered(
-                FilteredReason.NOT_EVENT,
-                stream_name=classified.normalized.original,
-                stream_id=stream_id,
-                detail="Not an event card stream",
-            )
-
         ctx = EventMatchContext(
             stream_name=classified.normalized.original,
             stream_id=stream_id,
@@ -155,6 +147,137 @@ class EventCardMatcher:
             self._cache_result(ctx, result)
 
         return result
+
+
+class TournamentMatcher:
+    """Matches individual/tournament streams (F1, Golf) to provider events.
+
+    Matches by fuzzy matching the extracted event_hint against Event.name.
+    """
+
+    def __init__(
+        self,
+        service: SportsDataService,
+        cache: StreamMatchCache,
+    ):
+        self._service = service
+        self._cache = cache
+
+    def match(
+        self,
+        classified: ClassifiedStream,
+        league: str,
+        target_date: date,
+        group_id: int,
+        stream_id: int,
+        generation: int,
+        user_tz: ZoneInfo,
+    ) -> MatchOutcome:
+        """Match a tournament stream to a provider event."""
+        if not classified.event_hint:
+            return MatchOutcome.failed(
+                FailedReason.NO_EVENT_MATCH,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+                detail="No event hint extracted from stream name",
+            )
+
+        ctx = EventMatchContext(
+            stream_name=classified.normalized.original,
+            stream_id=stream_id,
+            group_id=group_id,
+            target_date=target_date,
+            generation=generation,
+            user_tz=user_tz,
+            classified=classified,
+        )
+
+        # Check cache first
+        cache_result = self._check_cache(ctx)
+        if cache_result:
+            logger.debug(
+                "[CACHE HIT] event_card stream=%s matched=%s",
+                ctx.stream_name[:50],
+                cache_result.event.name if cache_result.event else "None",
+            )
+            return cache_result
+
+        # Get events for this league
+        is_tsdb = self._service.get_provider_name(league) == "tsdb"
+        events = self._service.get_events(league, target_date, cache_only=is_tsdb)
+        if not events:
+            return MatchOutcome.failed(
+                FailedReason.NO_EVENT_MATCH,
+                stream_name=ctx.stream_name,
+                stream_id=stream_id,
+                detail=f"No {league} events for {target_date}",
+            )
+
+        # Filter to events on target date
+        date_events = [e for e in events if e.start_time.astimezone(user_tz).date() == target_date]
+
+        if not date_events:
+            return MatchOutcome.failed(
+                FailedReason.NO_EVENT_MATCH,
+                stream_name=ctx.stream_name,
+                stream_id=stream_id,
+                detail=f"No {league} events on {target_date}",
+            )
+
+        # Try to match by name
+        result = self._match_by_name(ctx, date_events, league)
+
+        # Cache successful matches
+        if result.is_matched and result.event:
+            self._cache_result(ctx, result)
+
+        return result
+
+    def _match_by_name(
+        self,
+        ctx: EventMatchContext,
+        events: list[Event],
+        league: str,
+    ) -> MatchOutcome:
+        """Match stream to event by fuzzy name matching."""
+        hint_norm = normalize_text(ctx.classified.event_hint)
+
+        best_score = 0
+        best_event = None
+
+        for event in events:
+            event_norm = normalize_text(event.name)
+            score = fuzz.token_set_ratio(hint_norm, event_norm)
+
+            if score > best_score:
+                best_score = score
+                best_event = event
+
+        # F1/Racing needs high threshold to distinguish between Practice/Qualifying/Race
+        # but token_set_ratio should handle this if those words are in both
+        if best_score >= 80:
+            confidence = best_score / 100.0
+            logger.debug(
+                "[MATCHED] tournament stream=%s -> %s (score=%d)",
+                ctx.stream_name[:40],
+                best_event.name,
+                best_score,
+            )
+            return MatchOutcome.matched(
+                MatchMethod.FUZZY,
+                best_event,
+                detected_league=league,
+                confidence=confidence,
+                stream_name=ctx.stream_name,
+                stream_id=ctx.stream_id,
+            )
+
+        return MatchOutcome.failed(
+            FailedReason.NO_EVENT_MATCH,
+            stream_name=ctx.stream_name,
+            stream_id=ctx.stream_id,
+            detail=f"No {league} event matched fuzzy name (best score: {best_score})",
+        )
 
     # =========================================================================
     # PRIVATE METHODS
