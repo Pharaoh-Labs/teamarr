@@ -846,7 +846,6 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Racing (ESPN)
     ('f1', 'espn', 'racing/f1', NULL, 'Formula 1', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/f1.png', NULL, 1, 'F1', 'f1', 'event', 'Formula 1', NULL, NULL),
-    ('nascar', 'espn', 'racing/nascar', NULL, 'NASCAR', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar.png', NULL, 1, 'NASCAR', 'nascar', 'event', 'NASCAR', NULL, NULL),
 
     -- Boxing (TSDB) - Combat sport with event cards
     ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL);
