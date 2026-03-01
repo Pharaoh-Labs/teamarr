@@ -441,12 +441,14 @@ class EventGroupProcessor:
         self,
         group_id: int,
         target_date: date | None = None,
+        skip_dispatcharr_refresh: bool = False,
     ) -> ProcessingResult:
         """Process a single event group.
 
         Args:
             group_id: Group ID to process
             target_date: Target date (defaults to today)
+            skip_dispatcharr_refresh: Whether to skip Dispatcharr EPG refresh
 
         Returns:
             ProcessingResult with all details
@@ -461,7 +463,9 @@ class EventGroupProcessor:
                 result.completed_at = datetime.now()
                 return result
 
-            return self._process_group_internal(conn, group, target_date)
+            return self._process_group_internal(
+                conn, group, target_date, skip_dispatcharr_refresh=skip_dispatcharr_refresh
+            )
 
     def preview_group(
         self,
@@ -600,6 +604,7 @@ class EventGroupProcessor:
         run_enforcement: bool = True,
         progress_callback: Callable[[int, int, str], None] | None = None,
         generation: int | None = None,
+        skip_dispatcharr_refresh: bool = False,
     ) -> BatchProcessingResult:
         """Process all active event groups.
 
@@ -614,6 +619,7 @@ class EventGroupProcessor:
             run_enforcement: Whether to run post-processing enforcement
             progress_callback: Optional callback(current, total, group_name)
             generation: Cache generation counter (shared across all groups)
+            skip_dispatcharr_refresh: Whether to skip Dispatcharr EPG refresh for each group
 
         Returns:
             BatchProcessingResult with all group results and combined XMLTV
@@ -694,6 +700,7 @@ class EventGroupProcessor:
                     target_date,
                     stream_progress_callback=stream_cb,
                     status_callback=status_cb,
+                    skip_dispatcharr_refresh=skip_dispatcharr_refresh,
                 )
                 batch_result.results.append(result)
                 processed_group_ids.append(group.id)
@@ -832,6 +839,7 @@ class EventGroupProcessor:
         target_date: date,
         stream_progress_callback: Callable | None = None,
         status_callback: Callable[[str], None] | None = None,
+        skip_dispatcharr_refresh: bool = False,
     ) -> ProcessingResult:
         """Internal processing for a single group.
 
@@ -841,6 +849,7 @@ class EventGroupProcessor:
             target_date: Target date for matching
             stream_progress_callback: Optional callback(current, total, stream_name, matched)
             status_callback: Optional callback(status_message) for phase updates
+            skip_dispatcharr_refresh: Whether to skip Dispatcharr EPG refresh
         """
         result = ProcessingResult(group_id=group.id, group_name=group.name)
 
@@ -1095,7 +1104,7 @@ class EventGroupProcessor:
                 self._store_group_xmltv(conn, group.id, xmltv_content or "")
 
                 # Step 7: Trigger Dispatcharr refresh if configured
-                if xmltv_content and self._dispatcharr_client:
+                if xmltv_content and self._dispatcharr_client and not skip_dispatcharr_refresh:
                     self._trigger_epg_refresh(group)
 
             # Mark run as completed successfully
@@ -2503,7 +2512,9 @@ class EventGroupProcessor:
         """Associate EPG data with managed channels after EPG refresh.
 
         Looks up EPG data by tvg_id and links them to channels in Dispatcharr.
+        Uses parallel execution to speed up processing for large channel sets.
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         from teamarr.database.channels import get_all_managed_channels
 
         try:
@@ -2524,9 +2535,8 @@ class EventGroupProcessor:
                     logger.debug("[EVENT_EPG] No EPG data found in Dispatcharr to associate")
                     return
 
-                associated = 0
-                not_found = 0
-
+                # Prepare tasks for parallel execution
+                tasks = []
                 for channel in channels:
                     if not channel.dispatcharr_channel_id or not channel.tvg_id:
                         continue
@@ -2535,39 +2545,59 @@ class EventGroupProcessor:
                     epg_data = epg_lookup.get(channel.tvg_id)
 
                     if not epg_data:
-                        not_found += 1
                         continue
 
                     # Associate EPG with channel
                     epg_data_id = epg_data.get("id")
                     if not epg_data_id:
-                        not_found += 1
                         continue
 
-                    try:
-                        result = channel_manager.set_channel_epg(
-                            channel.dispatcharr_channel_id,
-                            epg_data_id,
-                        )
-                        if result.success:
-                            associated += 1
-                        else:
+                    tasks.append((channel.dispatcharr_channel_id, epg_data_id, channel.channel_name))
+
+                if not tasks:
+                    return
+
+                associated = 0
+                errors = 0
+
+                logger.debug(
+                    "[EVENT_EPG] Associating EPG for %d channels using up to 10 workers",
+                    len(tasks),
+                )
+
+                # Execute associations in parallel
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    future_to_channel = {
+                        executor.submit(
+                            channel_manager.set_channel_epg,
+                            disp_id,
+                            epg_id,
+                        ): name
+                        for disp_id, epg_id, name in tasks
+                    }
+
+                    for future in as_completed(future_to_channel):
+                        channel_name = future_to_channel[future]
+                        try:
+                            api_result = future.result()
+                            if api_result.success:
+                                associated += 1
+                            else:
+                                logger.debug(
+                                    f"Failed to set EPG for channel "
+                                    f"{channel_name}: {api_result.error}"
+                                )
+                                errors += 1
+                        except Exception as e:
                             logger.debug(
-                                f"Failed to set EPG for channel "
-                                f"{channel.channel_name}: {result.error}"
+                                f"Failed to associate EPG for channel {channel_name}: {e}"
                             )
-                    except Exception as e:
-                        logger.debug(
-                            f"Failed to associate EPG for channel {channel.channel_name}: {e}"
-                        )
+                            errors += 1
 
                 if associated:
                     logger.info("[EVENT_EPG] Associated EPG data with %d channels", associated)
-                if not_found:
-                    logger.debug(
-                        "[EVENT_EPG] EPG data not found for %d channels (pending refresh)",
-                        not_found,
-                    )
+                if errors:
+                    logger.debug("[EVENT_EPG] Encountered %d errors during association", errors)
 
         except Exception as e:
             logger.warning("[EVENT_EPG] Error associating EPG with channels: %s", e)
@@ -2583,6 +2613,7 @@ def process_event_group(
     group_id: int,
     dispatcharr_client: Any = None,
     target_date: date | None = None,
+    skip_dispatcharr_refresh: bool = False,
 ) -> ProcessingResult:
     """Process a single event group.
 
@@ -2593,6 +2624,7 @@ def process_event_group(
         group_id: Group ID to process
         dispatcharr_client: Optional DispatcharrClient
         target_date: Target date (defaults to today)
+        skip_dispatcharr_refresh: Whether to skip Dispatcharr EPG refresh
 
     Returns:
         ProcessingResult
@@ -2601,7 +2633,9 @@ def process_event_group(
         db_factory=db_factory,
         dispatcharr_client=dispatcharr_client,
     )
-    return processor.process_group(group_id, target_date)
+    return processor.process_group(
+        group_id, target_date, skip_dispatcharr_refresh=skip_dispatcharr_refresh
+    )
 
 
 def process_all_event_groups(
@@ -2611,6 +2645,7 @@ def process_all_event_groups(
     progress_callback: Callable[[int, int, str], None] | None = None,
     generation: int | None = None,
     service: SportsDataService | None = None,
+    skip_dispatcharr_refresh: bool = False,
 ) -> BatchProcessingResult:
     """Process all active event groups.
 
@@ -2623,6 +2658,7 @@ def process_all_event_groups(
         progress_callback: Optional callback(current, total, group_name)
         generation: Cache generation counter (shared across all groups in run)
         service: Optional SportsDataService (reuse to maintain cache warmth)
+        skip_dispatcharr_refresh: Whether to skip Dispatcharr EPG refresh
 
     Returns:
         BatchProcessingResult
@@ -2633,7 +2669,10 @@ def process_all_event_groups(
         service=service,
     )
     return processor.process_all_groups(
-        target_date, progress_callback=progress_callback, generation=generation
+        target_date,
+        progress_callback=progress_callback,
+        generation=generation,
+        skip_dispatcharr_refresh=skip_dispatcharr_refresh,
     )
 
 

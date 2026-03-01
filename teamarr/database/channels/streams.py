@@ -300,23 +300,24 @@ def reorder_channel_streams(
     return updated_count
 
 
-def get_ordered_stream_ids(
-    conn: Connection,
-    managed_channel_id: int,
-) -> list[int]:
-    """Get stream IDs for a channel in priority order.
-
-    Args:
-        conn: Database connection
-        managed_channel_id: Channel ID
+def get_all_channels_streams(conn: Connection) -> dict[int, list[int]]:
+    """Get mapping of channel ID to stream IDs for all active channels.
 
     Returns:
-        List of dispatcharr_stream_id values in priority order
+        Dict mapping managed_channel_id to list of dispatcharr_stream_id
     """
     cursor = conn.execute(
-        """SELECT dispatcharr_stream_id FROM managed_channel_streams
-           WHERE managed_channel_id = ? AND removed_at IS NULL
-           ORDER BY priority, added_at""",
-        (managed_channel_id,),
+        """SELECT managed_channel_id, dispatcharr_stream_id
+           FROM managed_channel_streams
+           WHERE removed_at IS NULL
+           ORDER BY managed_channel_id, priority, added_at"""
     )
-    return [row[0] for row in cursor.fetchall()]
+
+    mapping: dict[int, list[int]] = {}
+    for row in cursor.fetchall():
+        ch_id, stream_id = row
+        if ch_id not in mapping:
+            mapping[ch_id] = []
+        mapping[ch_id].append(stream_id)
+
+    return mapping

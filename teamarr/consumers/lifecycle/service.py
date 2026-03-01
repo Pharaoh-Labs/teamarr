@@ -2055,6 +2055,7 @@ class ChannelLifecycleService:
         """Associate EPG data with managed channels after EPG refresh.
 
         Looks up EPGData by tvg_id and calls set_channel_epg to link them.
+        Uses parallel execution to speed up processing for large channel sets.
 
         Args:
             epg_source_id: Optional EPG source ID (uses default from settings if not provided)
@@ -2062,6 +2063,7 @@ class ChannelLifecycleService:
         Returns:
             Dict with success/error counts
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         from teamarr.database.channels import get_all_managed_channels
 
         if not self._channel_manager or not self._epg_manager:
@@ -2079,6 +2081,12 @@ class ChannelLifecycleService:
             # Build EPG data lookup from Dispatcharr (via ChannelManager)
             epg_lookup = self._channel_manager.build_epg_lookup(epg_source_id)
 
+            if not epg_lookup:
+                logger.debug("[LIFECYCLE] No EPG data found in Dispatcharr to associate")
+                return result
+
+            # Prepare tasks for parallel execution
+            tasks = []
             for channel in channels:
                 if not channel.dispatcharr_channel_id or not channel.tvg_id:
                     continue
@@ -2096,20 +2104,47 @@ class ChannelLifecycleService:
                     result["not_found"] += 1
                     continue
 
-                try:
-                    with self._dispatcharr_lock:
-                        self._channel_manager.set_channel_epg(
-                            channel.dispatcharr_channel_id,
-                            epg_data_id,
+                tasks.append((channel.dispatcharr_channel_id, epg_data_id, channel.channel_name))
+
+            if not tasks:
+                return result
+
+            logger.debug(
+                "[LIFECYCLE] Associating EPG for %d channels using up to 10 workers",
+                len(tasks),
+            )
+
+            # Execute associations in parallel
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_channel = {
+                    executor.submit(
+                        self._channel_manager.set_channel_epg,
+                        disp_id,
+                        epg_id,
+                    ): name
+                    for disp_id, epg_id, name in tasks
+                }
+
+                for future in as_completed(future_to_channel):
+                    channel_name = future_to_channel[future]
+                    try:
+                        api_result = future.result()
+                        if api_result.success:
+                            result["associated"] += 1
+                        else:
+                            logger.debug(
+                                "[LIFECYCLE] Failed to associate EPG for channel %s: %s",
+                                channel_name,
+                                api_result.error,
+                            )
+                            result["errors"] += 1
+                    except Exception as e:
+                        logger.debug(
+                            "[LIFECYCLE] Error associating EPG for channel %s: %s",
+                            channel_name,
+                            e,
                         )
-                    result["associated"] += 1
-                except Exception as e:
-                    logger.debug(
-                        "[LIFECYCLE] Failed to associate EPG for channel %s: %s",
-                        channel.channel_name,
-                        e,
-                    )
-                    result["errors"] += 1
+                        result["errors"] += 1
 
         if result["associated"]:
             logger.info("[LIFECYCLE] Associated EPG data with %d channels", result["associated"])

@@ -300,6 +300,7 @@ def run_full_generation(
             progress_callback=group_progress,
             generation=current_generation,  # Share generation across all groups
             service=shared_service,  # Reuse service to maintain warm cache
+            skip_dispatcharr_refresh=True,  # Full generation handles refresh at the end
         )
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes
@@ -600,24 +601,52 @@ def _sync_global_channels(
         if not dispatcharr_client:
             return
 
-        synced = 0
+        # Prepare sync tasks
+        sync_tasks = []
         for ch in global_result.get("drift_details", []):
             disp_id = ch.get("dispatcharr_channel_id")
             new_num = ch.get("new_number")
             if disp_id and new_num:
+                sync_tasks.append((disp_id, new_num, ch.get("channel_name")))
+
+        if not sync_tasks:
+            return
+
+        synced = 0
+        errors = 0
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        logger.debug("[GENERATION] Syncing %d channel numbers in parallel", len(sync_tasks))
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_ch = {
+                executor.submit(
+                    dispatcharr_client.channels.update_channel,
+                    disp_id,
+                    {"channel_number": new_num},
+                ): name
+                for disp_id, new_num, name in sync_tasks
+            }
+
+            for future in as_completed(future_to_ch):
+                channel_name = future_to_ch[future]
                 try:
-                    dispatcharr_client.channels.update_channel(
-                        disp_id, {"channel_number": new_num}
-                    )
-                    synced += 1
+                    res = future.result()
+                    if res.success:
+                        synced += 1
+                    else:
+                        errors += 1
+                        logger.warning(
+                            "[GENERATION] Failed to sync channel %s: %s", channel_name, res.error
+                        )
                 except Exception as e:
-                    logger.warning(
-                        "[GENERATION] Failed to sync channel %s to Dispatcharr: %s",
-                        ch.get("channel_name"),
-                        e,
-                    )
+                    errors += 1
+                    logger.warning("[GENERATION] Error syncing channel %s: %s", channel_name, e)
+
         if synced:
             logger.info("[GENERATION] Synced %d channel numbers to Dispatcharr", synced)
+        if errors:
+            logger.warning("[GENERATION] Failed to sync %d channel numbers", errors)
 
 
 def _apply_stream_ordering(
@@ -665,6 +694,7 @@ def _apply_stream_ordering(
 
             all_channels = get_all_managed_channels(conn, include_deleted=False)
             total_channels = len(all_channels)
+            sync_tasks = []
 
             for idx, channel in enumerate(all_channels):
                 streams = get_channel_streams(conn, channel.id)
@@ -685,23 +715,9 @@ def _apply_stream_ordering(
                     if channel_mgr and channel.dispatcharr_channel_id:
                         ordered_ids = get_ordered_stream_ids(conn, channel.id)
                         if ordered_ids:
-                            logger.info(
-                                "[STREAM_AUDIT] ordering: ch='%s' (d_id=%s) "
-                                "setting streams=%s count=%d",
-                                channel.channel_name,
-                                channel.dispatcharr_channel_id,
-                                ordered_ids,
-                                len(ordered_ids),
+                            sync_tasks.append(
+                                (channel.dispatcharr_channel_id, ordered_ids, channel.channel_name)
                             )
-                            sync_result = channel_mgr.update_channel(
-                                channel.dispatcharr_channel_id, {"streams": ordered_ids}
-                            )
-                            if not sync_result.success:
-                                logger.warning(
-                                    "[ORDERING] Failed to sync channel %s to Dispatcharr: %s",
-                                    channel.channel_name,
-                                    sync_result.error,
-                                )
 
                 if (idx + 1) % 10 == 0 or idx == total_channels - 1:
                     pct = 93 + int(((idx + 1) / total_channels) * 2)
@@ -713,6 +729,38 @@ def _apply_stream_ordering(
                         total_channels,
                         channel.channel_name,
                     )
+
+            if sync_tasks:
+                logger.debug(
+                    "[ORDERING] Syncing %d stream orderings in parallel using 10 workers",
+                    len(sync_tasks),
+                )
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    future_to_ch = {
+                        executor.submit(
+                            channel_mgr.assign_streams, disp_id, stream_ids
+                        ): name
+                        for disp_id, stream_ids, name in sync_tasks
+                    }
+
+                    for future in as_completed(future_to_ch):
+                        channel_name = future_to_ch[future]
+                        try:
+                            res = future.result()
+                            if not res.success:
+                                logger.warning(
+                                    "[ORDERING] Failed to sync channel %s to Dispatcharr: %s",
+                                    channel_name,
+                                    res.error,
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                "[ORDERING] Error syncing channel %s to Dispatcharr: %s",
+                                channel_name,
+                                e,
+                            )
 
             if reorder_result["channels_reordered"] > 0:
                 logger.info(
@@ -736,7 +784,8 @@ def _run_stream_audit(
     Logs any channels where the DB and Dispatcharr disagree on stream
     assignments. This is diagnostic-only — no changes are made.
     """
-    from teamarr.database.channels import get_all_managed_channels, get_channel_streams
+    from teamarr.database.channels import get_all_managed_channels
+    from teamarr.database.channels.streams import get_all_channels_streams
     from teamarr.dispatcharr.managers.channels import ChannelManager
 
     if not dispatcharr_client:
@@ -748,22 +797,24 @@ def _run_stream_audit(
         return
 
     channel_mgr = ChannelManager(raw_client)
+    # Pre-populate Dispatcharr channel cache in one paginated request
+    channel_mgr.get_channels(use_cache=True)
+
     mismatches = []
 
     with db_factory() as conn:
         channels = get_all_managed_channels(conn, include_deleted=False)
+        # Pre-fetch all stream mappings in one DB query
+        all_db_streams = get_all_channels_streams(conn)
 
         for channel in channels:
             if not channel.dispatcharr_channel_id:
                 continue
 
-            db_streams = get_channel_streams(conn, channel.id)
-            db_stream_ids = sorted(
-                s.dispatcharr_stream_id
-                for s in db_streams
-                if getattr(s, "dispatcharr_stream_id", None)
-            )
+            # Get streams from our pre-fetched mapping
+            db_stream_ids = sorted(all_db_streams.get(channel.id, []))
 
+            # get_channel uses the pre-populated cache (O(1))
             d_channel = channel_mgr.get_channel(channel.dispatcharr_channel_id)
             if not d_channel:
                 logger.warning(
