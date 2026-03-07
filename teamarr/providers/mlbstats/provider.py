@@ -136,6 +136,7 @@ class MLBStatsProvider(SportsProvider):
         team_name = team_data.get("teamName", "") or ""
         full_name = team_data.get("name") or f"{location} {team_name}".strip()
         abbrev = team_data.get("abbreviation", "") or team_name[:3].upper()
+        logo_url = f"https://www.mlbstatic.com/team-logos/{team_id}.svg"
 
         return Team(
             id=team_id,
@@ -145,7 +146,7 @@ class MLBStatsProvider(SportsProvider):
             abbreviation=abbrev,
             league=league,
             sport="baseball",
-            logo_url=None,
+            logo_url=logo_url,
             color=None,
         )
 
