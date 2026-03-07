@@ -19,6 +19,7 @@ from teamarr.providers.cricbuzz import CricbuzzClient, CricbuzzProvider
 from teamarr.providers.cricket_hybrid import CricketHybridProvider
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
+from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 
@@ -88,6 +89,13 @@ def _create_hockeytech_provider() -> HockeyTechProvider:
     )
 
 
+def _create_mlbstats_provider() -> MLBStatsProvider:
+    """Factory for MLB Stats provider with injected dependencies."""
+    return MLBStatsProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 def _create_cricbuzz_provider() -> CricbuzzProvider:
     """Factory for Cricbuzz provider with injected dependencies."""
     return CricbuzzProvider(
@@ -133,6 +141,14 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="mlbstats",
+    provider_class=MLBStatsProvider,
+    factory=_create_mlbstats_provider,
+    priority=40,  # MiLB / Triple-A provider
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="cricbuzz",
     provider_class=CricbuzzProvider,
     factory=_create_cricbuzz_provider,
@@ -171,6 +187,9 @@ __all__ = [
     # HockeyTech
     "HockeyTechClient",
     "HockeyTechProvider",
+    # MLB Stats
+    "MLBStatsClient",
+    "MLBStatsProvider",
     # Cricket
     "CricbuzzClient",
     "CricbuzzProvider",

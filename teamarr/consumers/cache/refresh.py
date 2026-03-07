@@ -23,6 +23,7 @@ EXPECTED_LEAGUES = {
     "espn": 280,  # ~52 configured + ~228 discovered soccer leagues
     "tsdb": 6,  # NRL, Boxing, IPL, BBL, BPL, SA20 (cricket primary, Cricbuzz fallback)
     "hockeytech": 6,
+    "mlbstats": 5,  # AAA, AA, High-A, Single-A, Rookie
     "cricbuzz": 0,  # Cricket moved to TSDB primary (Cricbuzz is fallback for schedules only)
 }
 
