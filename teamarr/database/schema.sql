@@ -842,12 +842,12 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Baseball (ESPN)
     ('mlb', 'espn', 'baseball/mlb', NULL, 'Major League Baseball', 'baseball', 'https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png', NULL, 1, 'MLB', 'mlb', 'team_vs_team', 'MLB Baseball', NULL, NULL),
-    ('aaa', 'mlbstats', '11', NULL, 'Triple-A', 'baseball', NULL, NULL, 1, 'AAA', 'aaa', 'team_vs_team', NULL, NULL, NULL),
-    ('aa', 'mlbstats', '12', NULL, 'Double-A', 'baseball', NULL, NULL, 1, 'AA', 'aa', 'team_vs_team', NULL, NULL, NULL),
-    ('higha', 'mlbstats', '13', NULL, 'High-A', 'baseball', NULL, NULL, 1, 'High-A', 'higha', 'team_vs_team', NULL, NULL, NULL),
-    ('a', 'mlbstats', '14', NULL, 'Single-A', 'baseball', NULL, NULL, 1, 'Single-A', 'a', 'team_vs_team', NULL, NULL, NULL),
-    ('rookie', 'mlbstats', '16', NULL, 'Rookie', 'baseball', NULL, NULL, 1, 'Rookie', 'rookie', 'team_vs_team', NULL, NULL, NULL),
-    -- ('milb', 'mlbstats', '21', NULL, 'Minor League Baseball', 'baseball', NULL, NULL, 1, 'MiLB', 'milb', 'team_vs_team', NULL, NULL, NULL),
+    ('aaa', 'mlbstats', '11', NULL, 'Triple-A', 'baseball', 'https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg', NULL, 1, 'AAA', 'aaa', 'team_vs_team', 'MiLB', NULL, NULL),
+    ('aa', 'mlbstats', '12', NULL, 'Double-A', 'baseball', 'https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg', NULL, 1, 'AA', 'aa', 'team_vs_team', NULL, NULL, NULL),
+    ('higha', 'mlbstats', '13', NULL, 'High-A', 'baseball', 'https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg', NULL, 1, 'High-A', 'higha', 'team_vs_team', NULL, NULL, NULL),
+    ('a', 'mlbstats', '14', NULL, 'Single-A', 'baseball', 'https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg', NULL, 1, 'Single-A', 'a', 'team_vs_team', NULL, NULL, NULL),
+    ('rookie', 'mlbstats', '16', NULL, 'Rookie', 'baseball', 'https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg', NULL, 1, 'Rookie', 'rookie', 'team_vs_team', NULL, NULL, NULL),
+    -- ('milb', 'mlbstats', '21', NULL, 'Minor League Baseball', 'baseball', 'https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg', NULL, 1, 'MiLB', 'milb', 'team_vs_team', NULL, NULL, NULL),
     ('college-baseball', 'espn', 'baseball/college-baseball', NULL, 'NCAA Baseball', 'baseball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/baseball.png', NULL, 1, NULL, 'ncaabb', 'team_vs_team', NULL, NULL, NULL),
     ('college-softball', 'espn', 'baseball/college-softball', NULL, 'NCAA Softball', 'softball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/softball.png', NULL, 1, NULL, 'ncaasbw', 'team_vs_team', NULL, NULL, NULL),
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://a.espncdn.com/i/teamlogos/leagues/500/3454.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL),
