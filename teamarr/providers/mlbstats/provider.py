@@ -4,7 +4,10 @@ from datetime import UTC, date, datetime, timedelta
 from teamarr.core import Event, EventStatus, LeagueMappingSource, SportsProvider, Team, Venue
 from teamarr.providers.mlbstats.client import MLBStatsClient
 
+
 logger = logging.getLogger(__name__)
+
+MILB_LEAGUE_LOGO_URL = "https://images.ctfassets.net/iiozhi00a8lc/7eeTdW5zGYe0sW2ZlIle7E/990464d4b5e4e3b3a65cb6c56ce808ea/milb-alt.svg"
 
 
 class MLBStatsProvider(SportsProvider):
@@ -120,12 +123,15 @@ class MLBStatsProvider(SportsProvider):
                 teams.append(team)
 
         logger.info("[MLBSTATS] Loaded %d teams for league=%s", len(teams), league)
+        logger.info("[MLBSTATS] Using MiLB league logo for league=%s: %s", league, MILB_LEAGUE_LOGO_URL)
         return teams
 
     def get_supported_leagues(self) -> list[str]:
         if not self._league_mapping_source:
             return []
-        return [m.league_code for m in self._league_mapping_source.get_leagues_for_provider(self.name)]
+        leagues = [m.league_code for m in self._league_mapping_source.get_leagues_for_provider(self.name)]
+        logger.info("[MLBSTATS] Supported leagues=%s using league logo=%s", leagues, MILB_LEAGUE_LOGO_URL)
+        return leagues
 
     def _parse_team(self, team_data: dict, league: str) -> Team | None:
         team_id = str(team_data.get("id", ""))
@@ -136,7 +142,7 @@ class MLBStatsProvider(SportsProvider):
         team_name = team_data.get("teamName", "") or ""
         full_name = team_data.get("name") or f"{location} {team_name}".strip()
         abbrev = team_data.get("abbreviation", "") or team_name[:3].upper()
-        logo_url = f"https://www.mlbstatic.com/team-logos/{team_id}.svg"
+        logo_url = f"https://www.mlbstatic.com/team-logos/{team_id}.svg" if team_id else MILB_LEAGUE_LOGO_URL
 
         return Team(
             id=team_id,
