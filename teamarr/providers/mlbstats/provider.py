@@ -41,6 +41,8 @@ class MLBStatsProvider(SportsProvider):
         if not sport_id:
             return []
 
+        logger.info("[MLBSTATS] get_events league=%s sport_id=%s target_date=%s", league, sport_id, target_date)
+
         data = self._client.get_schedule(sport_id=sport_id, target_date=target_date)
         if not data:
             return []
@@ -57,6 +59,8 @@ class MLBStatsProvider(SportsProvider):
         sport_id = self._get_sport_id(league)
         if not sport_id:
             return []
+
+        logger.info("[MLBSTATS] get_team_schedule league=%s sport_id=%s team_id=%s", league, sport_id, team_id)
 
         today = date.today()
         end_date = today + timedelta(days=days_ahead)
@@ -102,8 +106,11 @@ class MLBStatsProvider(SportsProvider):
         if not sport_id:
             return []
 
+        logger.info("[MLBSTATS] get_league_teams league=%s sport_id=%s", league, sport_id)
+
         data = self._client.get_teams(sport_id)
         if not data:
+            logger.warning("[MLBSTATS] No team data returned for league=%s sport_id=%s", league, sport_id)
             return []
 
         teams: list[Team] = []
@@ -111,6 +118,8 @@ class MLBStatsProvider(SportsProvider):
             team = self._parse_team(team_data, league)
             if team:
                 teams.append(team)
+
+        logger.info("[MLBSTATS] Loaded %d teams for league=%s", len(teams), league)
         return teams
 
     def get_supported_leagues(self) -> list[str]:
