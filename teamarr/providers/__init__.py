@@ -18,6 +18,7 @@ to inject the LeagueMappingSource into providers.
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
+from teamarr.providers.nfhs import NFHSClient, NFHSProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 
@@ -94,6 +95,11 @@ def _create_mlbstats_provider() -> MLBStatsProvider:
     )
 
 
+def _create_nfhs_provider() -> NFHSProvider:
+    """Factory for NFHS provider."""
+    return NFHSProvider()
+
+
 # =============================================================================
 # PROVIDER REGISTRATION
 # =============================================================================
@@ -125,6 +131,14 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="nfhs",
+    provider_class=NFHSProvider,
+    factory=_create_nfhs_provider,
+    priority=70,  # High school sports provider
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="tsdb",
     provider_class=TSDBProvider,
     factory=_create_tsdb_provider,
@@ -150,6 +164,9 @@ __all__ = [
     # MLB Stats
     "MLBStatsClient",
     "MLBStatsProvider",
+    # NFHS
+    "NFHSClient",
+    "NFHSProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",
