@@ -21,7 +21,8 @@ from teamarr.providers.nfhs.config import (
     REQUEST_TIMEOUT,
     RETRY_COUNT,
     SEARCH_API_BASE,
-    USER_AGENT, CFUNITY_API_BASE,
+    USER_AGENT,
+    CFUNITY_API_BASE,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,7 +301,7 @@ class NFHSClient:
         # filtering and deduplication happen after fetching all rows for a school.
         data = self._request(
             SEARCH_API_BASE,
-            "/v3/search/teams",
+            "/search/teams",
             params={
                 "school_key": school_key,
             },
@@ -327,7 +328,7 @@ class NFHSClient:
                     return rows
 
         logger.warning(
-            "[NFHS] Unexpected v3 search teams payload for school_key=%s",
+            "[NFHS] Unexpected SEARCH teams payload for school_key=%s",
             school_key,
         )
         return []
