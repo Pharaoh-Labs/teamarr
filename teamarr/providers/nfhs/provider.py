@@ -35,13 +35,15 @@ class NFHSProvider(SportsProvider):
     Phase 1 scope:
       - Supported levels from config
       - Selected sports from config
-      - Event discovery from upcoming + live endpoints
+      - Event discovery from SEARCH upcoming events per school
     """
     _shared_schools_by_state_cache: dict[str, list[dict]] = {}
     _shared_school_teams_cache: dict[str, list[dict]] = {}
+    _shared_school_upcoming_events_cache: dict[str, list[dict]] = {}
     _shared_latest_team_rows_cache: dict[tuple[str, ...], list[dict]] = {}
     _shared_schools_lock = threading.RLock()
     _shared_school_teams_lock = threading.RLock()
+    _shared_school_upcoming_events_lock = threading.RLock()
     _shared_latest_team_rows_lock = threading.RLock()
     _shared_raw_team_row_count_cache: dict[tuple[str, ...], int] = {}
 
@@ -124,8 +126,19 @@ class NFHSProvider(SportsProvider):
         skipped_unmapped_league = 0
         skipped_missing_teams = 0
 
-        upcoming = self.client.get_upcoming_events() or []
-        live = self.client.get_live_events() or []
+        upcoming: list[dict] = []
+        if not STATE_FILTER:
+            logger.warning("[NFHS] STATE_FILTER is empty; SEARCH v3 upcoming event discovery requires state-scoped school enumeration")
+        else:
+            for state_code in sorted(STATE_FILTER):
+                schools = self._get_schools_for_state_cached(state_code)
+                for school in schools:
+                    school_key = school.get("key")
+                    if not school_key:
+                        continue
+                    upcoming.extend(self._get_school_upcoming_events_cached(school_key))
+
+        live: list[dict] = []
 
         for event in upcoming + live:
             event_id = event.get("id") or event.get("key")
@@ -145,6 +158,8 @@ class NFHSProvider(SportsProvider):
             content_type = event.get("content_type")
             status = event.get("status")
             state_code = event.get("state_code") or event.get("state")
+            if not content_type:
+                content_type = "game"
 
             if STATE_FILTER and state_code not in STATE_FILTER:
                 skipped_state += 1
@@ -172,7 +187,7 @@ class NFHSProvider(SportsProvider):
                 skipped_unmapped_league += 1
                 continue
 
-            teams = event.get("teams") or event.get("participants") or []
+            teams = event.get("participants") or event.get("teams") or []
 
             if len(teams) < 2:
                 skipped_missing_teams += 1
@@ -192,7 +207,7 @@ class NFHSProvider(SportsProvider):
                 events.append(parsed_event)
 
         logger.info(
-            "[NFHS] %s events discovered (skipped: missing_id=%s duplicate=%s state=%s content_type=%s status=%s level=%s sport=%s unmapped_league=%s missing_teams=%s)",
+            "[NFHS] %s events discovered from SEARCH upcoming per-school fetch (skipped: missing_id=%s duplicate=%s state=%s content_type=%s status=%s level=%s sport=%s unmapped_league=%s missing_teams=%s)",
             len(events),
             skipped_missing_id,
             skipped_duplicate,
@@ -266,7 +281,14 @@ class NFHSProvider(SportsProvider):
                 cls._shared_school_teams_cache[school_key] = self.client.get_school_teams(school_key) or []
             return cls._shared_school_teams_cache[school_key]
 
-    # _get_school_details_cached method removed: raw team discovery now uses SEARCH v3 only.
+    def _get_school_upcoming_events_cached(self, school_key: str) -> list[dict]:
+        """Return cached NFHS SEARCH v3 upcoming event rows for a school, shared across provider instances."""
+        cls = type(self)
+        with cls._shared_school_upcoming_events_lock:
+            if school_key not in cls._shared_school_upcoming_events_cache:
+                cls._shared_school_upcoming_events_cache[school_key] = self.client.get_upcoming_events_for_school(
+                    school_key) or []
+            return cls._shared_school_upcoming_events_cache[school_key]
 
     def _get_raw_team_rows(self) -> list[dict]:
         """Return raw NFHS SEARCH v3 team rows for the configured scope."""

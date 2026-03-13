@@ -333,6 +333,87 @@ class NFHSClient:
         )
         return []
 
+    def get_upcoming_events_for_school(self, school_key: str) -> list[dict[str, Any]]:
+        """Retrieve all upcoming event records for a specific school from NFHS SEARCH v3."""
+        initial = self._request(
+            SEARCH_API_BASE,
+            "/search/events/upcoming",
+            params={
+                "school_key": school_key,
+            },
+        )
+
+        total = 0
+        if isinstance(initial, dict):
+            raw_total = initial.get("total", 0)
+            try:
+                total = int(raw_total or 0)
+            except (TypeError, ValueError):
+                total = 0
+
+        if total <= 0:
+            if isinstance(initial, list):
+                logger.debug(
+                    "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s",
+                    len(initial),
+                    school_key,
+                )
+                return initial
+
+            if isinstance(initial, dict):
+                for key in ("results", "items", "data"):
+                    rows = initial.get(key)
+                    if isinstance(rows, list):
+                        logger.debug(
+                            "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s via %s (no total)",
+                            len(rows),
+                            school_key,
+                            key,
+                        )
+                        return rows
+
+            logger.warning(
+                "[NFHS] Unexpected upcoming SEARCH events payload for school_key=%s",
+                school_key,
+            )
+            return []
+
+        data = self._request(
+            SEARCH_API_BASE,
+            "/search/events/upcoming",
+            params={
+                "school_key": school_key,
+                "size": total,
+            },
+        )
+
+        if isinstance(data, list):
+            logger.debug(
+                "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s",
+                len(data),
+                school_key,
+            )
+            return data
+
+        if isinstance(data, dict):
+            for key in ("results", "items", "data"):
+                rows = data.get(key)
+                if isinstance(rows, list):
+                    logger.debug(
+                        "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s via %s (total=%s)",
+                        len(rows),
+                        school_key,
+                        key,
+                        total,
+                    )
+                    return rows
+
+        logger.warning(
+            "[NFHS] Unexpected upcoming SEARCH events payload for school_key=%s",
+            school_key,
+        )
+        return []
+
     def get_school_details(self, school_key: str) -> dict[str, Any]:
         """Compatibility stub: sport inventory now comes from SEARCH v3 team rows."""
         # Kept for compatibility with older callers; provider discovery now uses
