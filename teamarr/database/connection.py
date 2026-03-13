@@ -1604,27 +1604,27 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         logger.info("[MIGRATE] Schema upgraded to version 69 (feed team channel discrimination)")
         current_version = 69
 
-        # ==========================================================================
-        # v70: NFHS High School Sports settings
-        # ==========================================================================
-        if current_version < 70:
-            _add_column_if_not_exists(
-                conn,
-                "settings",
-                "nfhs_enabled",
-                "BOOLEAN DEFAULT 0",
-            )
+    # ==========================================================================
+    # v70: NFHS High School Sports settings
+    # ==========================================================================
+    if current_version < 70:
+        _add_column_if_not_exists(
+            conn,
+            "settings",
+            "nfhs_enabled",
+            "BOOLEAN DEFAULT 0",
+        )
 
-            _add_column_if_not_exists(
-                conn,
-                "settings",
-                "nfhs_state_codes",
-                "JSON DEFAULT '[]'",
-            )
+        _add_column_if_not_exists(
+            conn,
+            "settings",
+            "nfhs_state_codes",
+            "JSON DEFAULT '[]'",
+        )
 
-            conn.execute("UPDATE settings SET schema_version = 70 WHERE id = 1")
-            logger.info("[MIGRATE] Schema upgraded to version 70 (NFHS settings)")
-            current_version = 70
+        conn.execute("UPDATE settings SET schema_version = 70 WHERE id = 1")
+        logger.info("[MIGRATE] Schema upgraded to version 70 (NFHS settings)")
+        current_version = 70
 
 
 def _dedup_cross_group_channels(conn: sqlite3.Connection) -> None:
