@@ -252,6 +252,28 @@ class TSDBKeyValidationResponse(BaseModel):
     message: str
 
 
+
+# =============================================================================
+# NFHS SETTINGS
+# =============================================================================
+
+
+class NFHSSettingsModel(BaseModel):
+    """NFHS (High School Sports) provider settings."""
+
+    enabled: bool = False
+    state_codes: list[str] = Field(
+        default_factory=list,
+        description="List of 2-letter US state codes to fetch NFHS schools/events",
+    )
+
+
+class NFHSSettingsUpdate(BaseModel):
+    """Update model for NFHS settings (all fields optional)."""
+
+    enabled: bool | None = None
+    state_codes: list[str] | None = None
+
 # =============================================================================
 # TEAM FILTER SETTINGS
 # =============================================================================
@@ -412,6 +434,7 @@ class AllSettingsModel(BaseModel):
     epg: EPGSettingsModel
     durations: DurationSettingsModel
     display: DisplaySettingsModel
+    nfhs: NFHSSettingsModel | None = None
     team_filter: TeamFilterSettingsModel | None = None
     channel_numbering: ChannelNumberingSettingsModel | None = None
     stream_ordering: StreamOrderingSettingsModel | None = None

@@ -82,6 +82,16 @@ export interface DisplaySettings {
   tsdb_api_key: string | null  // Optional TheSportsDB premium API key
 }
 
+export interface NFHSSettings {
+  enabled: boolean
+  state_codes: string[]
+}
+
+export interface NFHSSettingsUpdate {
+  enabled?: boolean
+  state_codes?: string[]
+}
+
 export interface TSDBKeyValidationResult {
   valid: boolean
   is_premium: boolean
@@ -214,6 +224,7 @@ export interface AllSettings {
   durations: DurationSettings
   reconciliation: ReconciliationSettings
   display?: DisplaySettings
+  nfhs?: NFHSSettings
   team_filter?: TeamFilterSettings
   channel_numbering?: ChannelNumberingSettings
   stream_ordering?: StreamOrderingSettings
@@ -356,6 +367,17 @@ export async function updateDisplaySettings(
   data: DisplaySettings
 ): Promise<DisplaySettings> {
   return api.put("/settings/display", data)
+}
+
+// NFHS Settings API
+export async function getNFHSSettings(): Promise<NFHSSettings> {
+  return api.get("/settings/nfhs")
+}
+
+export async function updateNFHSSettings(
+  data: NFHSSettingsUpdate
+): Promise<NFHSSettings> {
+  return api.put("/settings/nfhs", data)
 }
 
 // Team Filter Settings API

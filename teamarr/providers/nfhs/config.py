@@ -8,8 +8,9 @@ CFUNITY_API_BASE = "https://cfunity.nfhsnetwork.com/v2"
 VARSITY_ONLY = True
 INCLUDE_NON_VARSITY = False
 
-# Optional state filter for testing (None = all states)
-STATE_FILTER = {"KY"}
+# Optional state filter for testing / fallback.
+# Keep empty by default so NFHS is disabled unless states are explicitly configured.
+STATE_FILTER: set[str] = set()
 
 # Optional: limit supported sports initially
 SUPPORTED_SPORTS = {

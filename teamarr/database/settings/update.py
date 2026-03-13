@@ -464,6 +464,52 @@ def update_team_filter_settings(
     return False
 
 
+# --- NFHS provider settings ---
+def update_nfhs_settings(
+    conn: Connection,
+    enabled: bool | None = None,
+    state_codes: list[str] | None | object = _NOT_PROVIDED,
+) -> bool:
+    """Update NFHS high school sports settings.
+
+    Args:
+        conn: Database connection
+        enabled: Master toggle for NFHS provider
+        state_codes: List of 2-letter state codes. Use [] to clear, or omit to leave unchanged.
+
+    Returns:
+        True if updated
+    """
+    updates = []
+    values = []
+
+    if enabled is not None:
+        updates.append("nfhs_enabled = ?")
+        values.append(int(enabled))
+
+    if state_codes is not _NOT_PROVIDED:
+        normalized_codes: list[str] = []
+        for code in state_codes or []:
+            if not isinstance(code, str):
+                continue
+            normalized = code.strip().upper()
+            if len(normalized) == 2 and normalized.isalpha() and normalized not in normalized_codes:
+                normalized_codes.append(normalized)
+
+        updates.append("nfhs_state_codes = ?")
+        values.append(json.dumps(normalized_codes))
+
+    if not updates:
+        return False
+
+    query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
+    cursor = conn.execute(query, values)
+    if cursor.rowcount > 0:
+        logger.info("[UPDATED] NFHS settings: %s", [u.split(" = ")[0] for u in updates])
+        return True
+    return False
+
+
 def update_channel_numbering_settings(
     conn: Connection,
     global_channel_mode: str | None = None,

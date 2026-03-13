@@ -17,6 +17,7 @@ from .types import (
     EPGSettings,
     FeedSeparationSettings,
     LifecycleSettings,
+    NFHSSettings,
     ReconciliationSettings,
     SchedulerSettings,
     StreamFilterSettings,
@@ -185,6 +186,7 @@ def get_all_settings(conn: Connection) -> AllSettings:
             else False,
         ),
         channel_numbering=_build_channel_numbering_settings(row),
+        nfhs=_build_nfhs_settings(row),
         stream_ordering=StreamOrderingSettings(
             rules=_parse_stream_ordering_rules(row["stream_ordering_rules"])
         ),
@@ -411,6 +413,7 @@ def get_stream_filter_settings(conn: Connection) -> StreamFilterSettings:
     )
 
 
+
 def get_team_filter_settings(conn: Connection) -> TeamFilterSettings:
     """Get default team filtering settings.
 
@@ -446,6 +449,58 @@ def get_team_filter_settings(conn: Connection) -> TeamFilterSettings:
         and row["default_bypass_filter_for_playoffs"] is not None
         else False,
     )
+
+# Single source of truth for NFHS settings defaults
+_NFHS_DEFAULTS = NFHSSettings()
+
+
+def _build_nfhs_settings(row) -> NFHSSettings:
+    """Build NFHSSettings from DB row, using dataclass defaults for NULL values."""
+    d = _NFHS_DEFAULTS
+
+    state_codes = d.state_codes
+    if "nfhs_state_codes" in row.keys() and row["nfhs_state_codes"]:
+        try:
+            parsed = json.loads(row["nfhs_state_codes"])
+            if isinstance(parsed, list):
+                normalized_codes: list[str] = []
+                for code in parsed:
+                    if not isinstance(code, str):
+                        continue
+                    normalized = code.strip().upper()
+                    if len(normalized) == 2 and normalized.isalpha() and normalized not in normalized_codes:
+                        normalized_codes.append(normalized)
+                state_codes = normalized_codes
+        except json.JSONDecodeError:
+            pass
+
+    return NFHSSettings(
+        enabled=bool(row["nfhs_enabled"])
+        if "nfhs_enabled" in row.keys() and row["nfhs_enabled"] is not None
+        else d.enabled,
+        state_codes=state_codes,
+    )
+
+
+def get_nfhs_settings(conn: Connection) -> NFHSSettings:
+    """Get NFHS high school sports provider settings.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        NFHSSettings object with enabled flag and selected state codes
+    """
+    cursor = conn.execute(
+        """SELECT nfhs_enabled, nfhs_state_codes
+           FROM settings WHERE id = 1"""
+    )
+    row = cursor.fetchone()
+
+    if not row:
+        return NFHSSettings()
+
+    return _build_nfhs_settings(row)
 
 
 def _build_channel_numbering_settings(row) -> ChannelNumberingSettings:

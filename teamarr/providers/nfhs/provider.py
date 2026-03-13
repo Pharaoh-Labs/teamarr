@@ -52,6 +52,10 @@ class NFHSProvider(SportsProvider):
     def __init__(self) -> None:
         self.client = NFHSClient()
 
+    def _provider_enabled(self) -> bool:
+        """Return True if NFHS provider should run (states configured)."""
+        return bool(STATE_FILTER)
+
     # ------------------------------------------------------------------
     # Supported leagues
     # ------------------------------------------------------------------
@@ -71,6 +75,9 @@ class NFHSProvider(SportsProvider):
         """
         Return teams belonging to a canonical league.
         """
+        if not self._provider_enabled():
+            logger.info("[NFHS] Provider disabled (no state codes configured); skipping team discovery")
+            return []
         teams: List[Team] = []
         latest_team_rows = self._get_latest_team_rows()
         raw_team_row_count = self._get_raw_team_row_count()
@@ -114,6 +121,9 @@ class NFHSProvider(SportsProvider):
         """
         Fetch upcoming + live NFHS events.
         """
+        if not self._provider_enabled():
+            logger.info("[NFHS] Provider disabled (no state codes configured); skipping event discovery")
+            return []
         events: List[Event] = []
         seen_events: set[str] = set()
         skipped_missing_id = 0

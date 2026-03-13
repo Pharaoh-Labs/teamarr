@@ -67,6 +67,8 @@ import {
   useLeagueConfigs,
   useUpsertLeagueConfig,
   useDeleteLeagueConfig,
+  useNFHSSettings,
+  useUpdateNFHSSettings,
 } from "@/hooks/useSettings"
 import { SortPriorityManager } from "@/components/SortPriorityManager"
 import { StreamOrderingManager } from "@/components/StreamOrderingManager"
@@ -93,6 +95,7 @@ import type {
   EPGSettings,
   DurationSettings,
   DisplaySettings,
+  NFHSSettings,
   ChannelNumberingSettings,
   UpdateCheckSettings,
   FeedSeparationSettings,
@@ -885,6 +888,8 @@ export function Settings() {
   const updateEPG = useUpdateEPGSettings()
   const updateDurations = useUpdateDurationSettings()
   const updateDisplay = useUpdateDisplaySettings()
+  const { data: nfhsData } = useNFHSSettings()
+  const updateNFHS = useUpdateNFHSSettings()
 
   // Subscription for league filtering
   const { data: subscription } = useSubscription()
@@ -963,6 +968,10 @@ export function Settings() {
   })
   const [newKeyword, setNewKeyword] = useState({ label: "", match_terms: "", behavior: "consolidate" })
   const [editingKeyword, setEditingKeyword] = useState<{ id: number; label: string; match_terms: string } | null>(null)
+  const [nfhs, setNFHS] = useState<NFHSSettings>({
+    enabled: false,
+    state_codes: [],
+  })
 
   // Local state for channel range inputs (allows free typing)
   const [channelRangeStart, setChannelRangeStart] = useState("")
@@ -1055,6 +1064,13 @@ export function Settings() {
       setFeedSeparation(feedSeparationData)
     }
   }, [feedSeparationData])
+
+  // Sync NFHS settings when data loads
+  useEffect(() => {
+    if (nfhsData) {
+      setNFHS(nfhsData)
+    }
+  }, [nfhsData])
 
   // Sync channel range inputs from lifecycle on initial load only
   const channelRangeInitializedRef = useRef(false)
@@ -1156,6 +1172,15 @@ export function Settings() {
     try {
       await updateDisplay.mutateAsync(display)
       toast.success(message || "Display settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  const handleSaveNFHS = async () => {
+    try {
+      await updateNFHS.mutateAsync(nfhs)
+      toast.success("NFHS settings saved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
     }
@@ -1480,6 +1505,62 @@ export function Settings() {
             disabled={updateEPG.isPending || updateDisplay.isPending}
           >
             {(updateEPG.isPending || updateDisplay.isPending) ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            Save
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Activate Additional Sports</CardTitle>
+          <CardDescription>
+            Enable optional sports providers such as NFHS high school sports. Disabled by default to avoid unnecessary API requests.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable High School Sports (NFHS)</Label>
+              <p className="text-xs text-muted-foreground">
+                When enabled, Teamarr will load high school teams and events from the NFHS Network.
+              </p>
+            </div>
+            <Switch
+              checked={nfhs.enabled}
+              onCheckedChange={(checked) => setNFHS({ ...nfhs, enabled: checked })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="nfhs-state-codes">State Codes</Label>
+            <Input
+              id="nfhs-state-codes"
+              value={nfhs.state_codes.join(", ")}
+              onChange={(e) =>
+                setNFHS({
+                  ...nfhs,
+                  state_codes: e.target.value
+                    .split(",")
+                    .map((s) => s.trim().toUpperCase())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="KY, IN, OH"
+              disabled={!nfhs.enabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter one or more two-letter US state codes separated by commas.
+            </p>
+          </div>
+
+          <Button
+            onClick={handleSaveNFHS}
+            disabled={updateNFHS.isPending}
+          >
+            {updateNFHS.isPending ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <Save className="h-4 w-4 mr-1" />

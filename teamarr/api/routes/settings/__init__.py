@@ -17,6 +17,7 @@ from .dispatcharr import router as dispatcharr_router
 from .display import router as display_router
 from .epg import router as epg_router
 from .feed_separation import router as feed_separation_router
+from .nfhs import router as nfhs_router
 from .lifecycle import router as lifecycle_router
 from .models import (
     AllSettingsModel,
@@ -27,6 +28,7 @@ from .models import (
     EPGSettingsModel,
     FeedSeparationSettingsModel,
     LifecycleSettingsModel,
+    NFHSSettingsModel,
     ReconciliationSettingsModel,
     SchedulerSettingsModel,
     StreamOrderingRuleModel,
@@ -46,6 +48,7 @@ router.include_router(dispatcharr_router)
 router.include_router(lifecycle_router)
 router.include_router(epg_router)
 router.include_router(display_router)
+router.include_router(nfhs_router)
 router.include_router(team_filter_router)
 router.include_router(channel_numbering_router)
 router.include_router(stream_ordering_router)
@@ -122,6 +125,10 @@ def get_settings():
             xmltv_generator_url=settings.display.xmltv_generator_url,
             tsdb_api_key=settings.display.tsdb_api_key,
         ),
+        nfhs=NFHSSettingsModel(
+            enabled=settings.nfhs.enabled,
+            state_codes=settings.nfhs.state_codes,
+        ),
         team_filter=TeamFilterSettingsModel(
             include_teams=settings.team_filter.include_teams,
             exclude_teams=settings.team_filter.exclude_teams,
@@ -176,6 +183,7 @@ __all__ = [
     "DurationSettingsModel",
     "EPGSettingsModel",
     "LifecycleSettingsModel",
+    "NFHSSettingsModel",
     "ReconciliationSettingsModel",
     "SchedulerSettingsModel",
     "StreamOrderingRuleModel",

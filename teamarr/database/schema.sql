@@ -349,8 +349,12 @@ CREATE TABLE IF NOT EXISTS settings (
     feed_label_style TEXT DEFAULT 'team_name'           -- How to label feeds in channel names
         CHECK(feed_label_style IN ('team_name', 'short_name', 'home_away')),
 
+    -- NFHS High School Sports
+    nfhs_enabled BOOLEAN DEFAULT 0,                 -- Enable NFHS high school sports integration
+    nfhs_state_codes JSON DEFAULT '[]',             -- Two-letter state codes to import (e.g., ["KY","IN"])
+
     -- Schema Version
-    schema_version INTEGER DEFAULT 69
+    schema_version INTEGER DEFAULT 70
 );
 
 -- Insert default settings

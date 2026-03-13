@@ -37,6 +37,8 @@ import {
   getLeagueConfigs,
   upsertLeagueConfig,
   deleteLeagueConfig,
+  getNFHSSettings,
+  updateNFHSSettings,
 } from "@/api/settings"
 import type {
   DispatcharrSettings,
@@ -51,6 +53,7 @@ import type {
   StreamOrderingSettingsUpdate,
   UpdateCheckSettingsUpdate,
   FeedSeparationSettingsUpdate,
+  NFHSSettingsUpdate,
 } from "@/api/settings"
 
 export function useSettings() {
@@ -411,6 +414,25 @@ export function useDeleteLeagueConfig() {
     mutationFn: (leagueCode: string) => deleteLeagueConfig(leagueCode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["league-configs"] })
+    },
+  })
+}
+
+export function useNFHSSettings() {
+  return useQuery({
+    queryKey: ["settings", "nfhs"],
+    queryFn: getNFHSSettings,
+  })
+}
+
+export function useUpdateNFHSSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: NFHSSettingsUpdate) => updateNFHSSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+      queryClient.invalidateQueries({ queryKey: ["settings", "nfhs"] })
     },
   })
 }

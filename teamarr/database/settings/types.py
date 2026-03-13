@@ -232,6 +232,18 @@ class ChannelNumberingSettings:
 
 
 @dataclass
+class NFHSSettings:
+    """NFHS (High School Sports) provider settings.
+
+    Controls whether the NFHS provider is enabled and which states
+    should be queried for schools, teams, and events.
+    """
+
+    enabled: bool = False  # Disabled by default to avoid unnecessary API work
+    state_codes: list[str] = field(default_factory=list)  # e.g. ["KY", "IN", "OH"]
+
+
+@dataclass
 class FeedSeparationSettings:
     """Feed separation settings for HOME/AWAY stream detection.
 
@@ -262,6 +274,7 @@ class AllSettings:
     stream_filter: StreamFilterSettings = field(default_factory=StreamFilterSettings)
     team_filter: TeamFilterSettings = field(default_factory=TeamFilterSettings)
     channel_numbering: ChannelNumberingSettings = field(default_factory=ChannelNumberingSettings)
+    nfhs: NFHSSettings = field(default_factory=NFHSSettings)
     stream_ordering: StreamOrderingSettings = field(default_factory=StreamOrderingSettings)
     update_check: UpdateCheckSettings = field(default_factory=UpdateCheckSettings)
     backup: BackupSettings = field(default_factory=BackupSettings)
