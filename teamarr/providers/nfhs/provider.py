@@ -410,8 +410,8 @@ class NFHSProvider(SportsProvider):
             or short_name[:3].upper()
         )
         logo_url = (
-            team_data.get("logo")
-            or team_data.get("_resolved_school_logo")
+            team_data.get("_resolved_school_logo")
+            or team_data.get("logo")
             or team_data.get("school", {}).get("logo")
         )
 
