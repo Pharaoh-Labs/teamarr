@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import threading
 from typing import List
+from teamarr.database.connection import get_connection
+from teamarr.database.settings.read import get_nfhs_settings
 
 from teamarr.core import (
     Event,
@@ -17,7 +19,6 @@ from teamarr.providers.nfhs.config import (
     LEAGUE_MAP,
     LEVEL_NORMALIZATION,
     SPORT_NORMALIZATION,
-    STATE_FILTER,
     SUPPORTED_CONTENT_TYPES,
     SUPPORTED_LEVELS,
     SUPPORTED_SPORTS,
@@ -53,8 +54,24 @@ class NFHSProvider(SportsProvider):
         self.client = NFHSClient()
 
     def _provider_enabled(self) -> bool:
-        """Return True if NFHS provider should run (states configured)."""
-        return bool(STATE_FILTER)
+        """Return True if NFHS provider should run (enabled with state codes configured)."""
+        return bool(self._get_runtime_state_filter())
+
+    def _get_runtime_state_filter(self) -> set[str]:
+        """Return enabled NFHS state codes from persisted settings, or config fallback on read failure."""
+        try:
+            with get_connection() as conn:
+                settings = get_nfhs_settings(conn)
+                if not settings.enabled:
+                    return set()
+                return {
+                    code.strip().upper()
+                    for code in settings.state_codes
+                    if isinstance(code, str) and code.strip()
+                }
+        except Exception as exc:
+            logger.warning("[NFHS] Failed to load NFHS settings from database; using config fallback: %s", exc)
+            return set()
 
     # ------------------------------------------------------------------
     # Supported leagues
@@ -78,6 +95,7 @@ class NFHSProvider(SportsProvider):
         if not self._provider_enabled():
             logger.info("[NFHS] Provider disabled (no state codes configured); skipping team discovery")
             return []
+        state_filter = self._get_runtime_state_filter()
         teams: List[Team] = []
         latest_team_rows = self._get_latest_team_rows()
         raw_team_row_count = self._get_raw_team_row_count()
@@ -107,7 +125,7 @@ class NFHSProvider(SportsProvider):
             "[NFHS] %s teams loaded for %s (state_filter=%s skipped_historical_team_rows=%s latest_team_rows=%s)",
             len(teams),
             league_code,
-            sorted(STATE_FILTER) if STATE_FILTER else None,
+            sorted(state_filter) if state_filter else None,
             skipped_duplicate_teams,
             len(latest_team_rows),
         )
@@ -124,6 +142,7 @@ class NFHSProvider(SportsProvider):
         if not self._provider_enabled():
             logger.info("[NFHS] Provider disabled (no state codes configured); skipping event discovery")
             return []
+        state_filter = self._get_runtime_state_filter()
         events: List[Event] = []
         seen_events: set[str] = set()
         skipped_missing_id = 0
@@ -137,10 +156,10 @@ class NFHSProvider(SportsProvider):
         skipped_missing_teams = 0
 
         upcoming: list[dict] = []
-        if not STATE_FILTER:
-            logger.warning("[NFHS] STATE_FILTER is empty; SEARCH v3 upcoming event discovery requires state-scoped school enumeration")
+        if not state_filter:
+            logger.warning("[NFHS] NFHS is enabled but no state codes are configured; skipping upcoming event discovery")
         else:
-            for state_code in sorted(STATE_FILTER):
+            for state_code in sorted(state_filter):
                 schools = self._get_schools_for_state_cached(state_code)
                 for school in schools:
                     school_key = school.get("key")
@@ -171,7 +190,7 @@ class NFHSProvider(SportsProvider):
             if not content_type:
                 content_type = "game"
 
-            if STATE_FILTER and state_code not in STATE_FILTER:
+            if state_filter and state_code not in state_filter:
                 skipped_state += 1
                 continue
 
@@ -303,13 +322,14 @@ class NFHSProvider(SportsProvider):
     def _get_raw_team_rows(self) -> list[dict]:
         """Return raw NFHS SEARCH v3 team rows for the configured scope."""
 
+        state_filter = self._get_runtime_state_filter()
         raw_team_rows: list[dict] = []
 
-        if not STATE_FILTER:
-            logger.warning("[NFHS] STATE_FILTER is empty; SEARCH v3 team discovery requires state-scoped school enumeration")
+        if not state_filter:
+            logger.warning("[NFHS] NFHS is enabled but no state codes are configured; skipping team discovery")
             return raw_team_rows
 
-        for state_code in sorted(STATE_FILTER):
+        for state_code in sorted(state_filter):
             schools = self._get_schools_for_state_cached(state_code)
 
             for school in schools:
@@ -365,7 +385,8 @@ class NFHSProvider(SportsProvider):
 
     def _get_raw_team_row_count(self) -> int:
         """Return the total number of raw NFHS SEARCH v3 team rows before deduplication."""
-        scope_key = tuple(sorted(STATE_FILTER)) if STATE_FILTER else ("ALL",)
+        state_filter = self._get_runtime_state_filter()
+        scope_key = tuple(sorted(state_filter)) if state_filter else ("ALL",)
         cls = type(self)
         with cls._shared_latest_team_rows_lock:
             if scope_key not in cls._shared_raw_team_row_count_cache:
@@ -377,7 +398,8 @@ class NFHSProvider(SportsProvider):
         Return deduplicated NFHS team rows, cached across provider instances by filter scope.
         Source data now comes from the SEARCH API and may contain multiple rows per sport/gender/level.
         """
-        scope_key = tuple(sorted(STATE_FILTER)) if STATE_FILTER else ("ALL",)
+        state_filter = self._get_runtime_state_filter()
+        scope_key = tuple(sorted(state_filter)) if state_filter else ("ALL",)
         cls = type(self)
         with cls._shared_latest_team_rows_lock:
             if scope_key in cls._shared_latest_team_rows_cache:
@@ -408,7 +430,7 @@ class NFHSProvider(SportsProvider):
                 "[NFHS] Cached %s latest team rows from %s raw team rows (state_filter=%s)",
                 len(cls._shared_latest_team_rows_cache[scope_key]),
                 len(raw_team_rows),
-                sorted(STATE_FILTER) if STATE_FILTER else None,
+                sorted(state_filter) if state_filter else None,
             )
             return cls._shared_latest_team_rows_cache[scope_key]
 
