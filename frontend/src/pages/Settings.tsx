@@ -1548,7 +1548,7 @@ export function Settings() {
                     .filter(Boolean),
                 })
               }
-              placeholder="KY, IN, OH"
+              placeholder="CA, NY, FL"
               disabled={!nfhs.enabled}
             />
             <p className="text-xs text-muted-foreground">
