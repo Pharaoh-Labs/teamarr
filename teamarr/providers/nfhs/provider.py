@@ -19,6 +19,7 @@ from teamarr.providers.nfhs.config import (
     SPORT_NORMALIZATION,
     STATE_FILTER,
     SUPPORTED_CONTENT_TYPES,
+    SUPPORTED_LEVELS,
     SUPPORTED_SPORTS,
     SUPPORTED_STATUSES,
 )
@@ -32,17 +33,15 @@ class NFHSProvider(SportsProvider):
     NFHS Network provider (High School sports).
 
     Phase 1 scope:
-      - Varsity only
+      - Supported levels from config
       - Selected sports from config
       - Event discovery from upcoming + live endpoints
     """
     _shared_schools_by_state_cache: dict[str, list[dict]] = {}
     _shared_school_teams_cache: dict[str, list[dict]] = {}
     _shared_latest_team_rows_cache: dict[tuple[str, ...], list[dict]] = {}
-    _shared_school_details_cache: dict[str, dict] = {}
     _shared_schools_lock = threading.RLock()
     _shared_school_teams_lock = threading.RLock()
-    _shared_school_details_lock = threading.RLock()
     _shared_latest_team_rows_lock = threading.RLock()
     _shared_raw_team_row_count_cache: dict[tuple[str, ...], int] = {}
 
@@ -260,7 +259,7 @@ class NFHSProvider(SportsProvider):
             return cls._shared_schools_by_state_cache[state_code]
 
     def _get_school_teams_cached(self, school_key: str) -> list[dict]:
-        """Return cached SEARCH API team rows for a school, shared across provider instances."""
+        """Return cached NFHS SEARCH v3 team rows for a school, shared across provider instances."""
         cls = type(self)
         with cls._shared_school_teams_lock:
             if school_key not in cls._shared_school_teams_cache:
@@ -270,65 +269,70 @@ class NFHSProvider(SportsProvider):
     # _get_school_details_cached method removed: raw team discovery now uses SEARCH v3 only.
 
     def _get_raw_team_rows(self) -> list[dict]:
-        """Return raw NFHS team rows for the configured scope."""
+        """Return raw NFHS SEARCH v3 team rows for the configured scope."""
 
         raw_team_rows: list[dict] = []
 
-        if STATE_FILTER:
-            for state_code in sorted(STATE_FILTER):
-                schools = self._get_schools_for_state_cached(state_code)
+        if not STATE_FILTER:
+            logger.warning("[NFHS] STATE_FILTER is empty; SEARCH v3 team discovery requires state-scoped school enumeration")
+            return raw_team_rows
 
-                for school in schools:
-                    school_key = school.get("key")
-                    if not school_key:
-                        continue
+        for state_code in sorted(STATE_FILTER):
+            schools = self._get_schools_for_state_cached(state_code)
 
-                    latest_team_by_identity: dict[
-                        tuple[str, str | None, str | None, str | None], dict
-                    ] = {}
+            for school in schools:
+                school_key = school.get("key")
+                if not school_key:
+                    continue
 
-                    for team_row in self._get_school_teams_cached(school_key):
-                        sport = SPORT_NORMALIZATION.get(team_row.get("sport"), team_row.get("sport"))
-                        gender = GENDER_NORMALIZATION.get(team_row.get("gender"), team_row.get("gender"))
-                        level = LEVEL_NORMALIZATION.get(team_row.get("level"), team_row.get("level"))
+                latest_team_by_identity: dict[
+                    tuple[str, str | None, str | None, str | None], dict
+                ] = {}
 
-                        dedupe_key = (school_key, sport, gender, level)
-                        updated_at = team_row.get("updated_at") or ""
+                for team_row in self._get_school_teams_cached(school_key):
+                    sport = SPORT_NORMALIZATION.get(team_row.get("sport"), team_row.get("sport"))
+                    gender = GENDER_NORMALIZATION.get(team_row.get("gender"), team_row.get("gender"))
+                    level = LEVEL_NORMALIZATION.get(team_row.get("level"), team_row.get("level"))
 
-                        existing = latest_team_by_identity.get(dedupe_key)
-                        if existing is not None:
-                            existing_updated_at = existing.get("updated_at") or ""
-                            if updated_at <= existing_updated_at:
-                                continue
+                    dedupe_key = (school_key, sport, gender, level)
+                    updated_at = team_row.get("updated_at") or ""
 
-                        resolved_row = dict(team_row)
-                        resolved_row["_resolved_school_key"] = school_key
-                        resolved_row["_resolved_school_name"] = (
-                            school.get("name")
-                            or school.get("short_name")
-                            or school.get("slug")
-                        )
-                        resolved_row["_resolved_school_short_name"] = (
-                            school.get("short_name")
-                            or school.get("name")
-                            or school.get("slug")
-                        )
-                        resolved_row["_resolved_school_logo"] = school.get("logo")
-                        resolved_row["_resolved_school_acronym"] = school.get("acronym")
-                        resolved_row["sport"] = sport
-                        resolved_row["gender"] = gender
-                        resolved_row["level"] = level
+                    existing = latest_team_by_identity.get(dedupe_key)
+                    if existing is not None:
+                        existing_updated_at = existing.get("updated_at") or ""
+                        if updated_at <= existing_updated_at:
+                            continue
 
-                        latest_team_by_identity[dedupe_key] = resolved_row
+                    resolved_row = dict(team_row)
+                    resolved_row["_resolved_school_key"] = school_key
+                    resolved_row["_resolved_school_name"] = (
+                        school.get("name")
+                        or school.get("short_name")
+                        or school.get("slug")
+                    )
+                    resolved_row["_resolved_school_short_name"] = (
+                        school.get("short_name")
+                        or school.get("name")
+                        or school.get("slug")
+                    )
+                    resolved_row["_resolved_school_logo"] = school.get("logo")
+                    resolved_row["_resolved_school_acronym"] = school.get("acronym")
+                    resolved_row["sport"] = sport
+                    resolved_row["gender"] = gender
+                    resolved_row["level"] = level
 
-                    raw_team_rows.extend(latest_team_by_identity.values())
-        else:
-            raw_team_rows = self.client.get_teams() or []
+                    # SEARCH v3 returns colors we do not use downstream.
+                    resolved_row.pop("primary_color", None)
+                    resolved_row.pop("secondary_color", None)
+
+                    latest_team_by_identity[dedupe_key] = resolved_row
+
+                raw_team_rows.extend(latest_team_by_identity.values())
 
         return raw_team_rows
 
     def _get_raw_team_row_count(self) -> int:
-        """Return the total number of raw NFHS team rows before deduplication."""
+        """Return the total number of raw NFHS SEARCH v3 team rows before deduplication."""
         scope_key = tuple(sorted(STATE_FILTER)) if STATE_FILTER else ("ALL",)
         cls = type(self)
         with cls._shared_latest_team_rows_lock:
@@ -406,11 +410,10 @@ class NFHSProvider(SportsProvider):
             or short_name[:3].upper()
         )
         logo_url = (
-            team_data.get("_resolved_school_logo")
-            or team_data.get("logo")
+            team_data.get("logo")
+            or team_data.get("_resolved_school_logo")
             or team_data.get("school", {}).get("logo")
         )
-        color = team_data.get("primary_color")
 
         return Team(
             id=str(team_id),
@@ -421,7 +424,6 @@ class NFHSProvider(SportsProvider):
             league=league,
             sport=sport,
             logo_url=logo_url,
-            color=color,
         )
 
     def _parse_status(self, raw_status: str | None) -> EventStatus:
