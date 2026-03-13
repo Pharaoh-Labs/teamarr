@@ -510,6 +510,15 @@ class NFHSProvider(SportsProvider):
             state=state,
         )
 
+    def _participant_display_name(self, participant: dict) -> str:
+        """Return a safe display name for an event participant without creating a Team."""
+        return (
+            participant.get("name")
+            or participant.get("short_name")
+            or participant.get("acronym")
+            or "TBD"
+        )
+
     def _parse_event(
         self,
         *,
@@ -542,11 +551,18 @@ class NFHSProvider(SportsProvider):
         away_team = self._parse_team(team1, league, sport)
         home_team = self._parse_team(team2, league, sport)
 
-        if not home_team or not away_team:
+        away_name = away_team.short_name if away_team else self._participant_display_name(team1)
+        home_name = home_team.short_name if home_team else self._participant_display_name(team2)
+        away_full_name = away_team.name if away_team else self._participant_display_name(team1)
+        home_full_name = home_team.name if home_team else self._participant_display_name(team2)
+
+        # Safer behavior for NFHS: keep events if at least one side resolves to a Team,
+        # but do not auto-create permanent imported teams for unknown opponents.
+        if not home_team and not away_team:
             return None
 
-        short_name = event.get("title") or f"{away_team.short_name} vs {home_team.short_name}"
-        name = event.get("subheadline") or f"{away_team.name} vs. {home_team.name}"
+        short_name = event.get("title") or f"{away_name} vs {home_name}"
+        name = event.get("subheadline") or f"{away_full_name} vs. {home_full_name}"
         if gender and level:
             name = f"{name} ({level} {gender})"
 
