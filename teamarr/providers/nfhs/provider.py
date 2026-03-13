@@ -19,7 +19,6 @@ from teamarr.providers.nfhs.config import (
     SPORT_NORMALIZATION,
     STATE_FILTER,
     SUPPORTED_CONTENT_TYPES,
-    SUPPORTED_LEVELS,
     SUPPORTED_SPORTS,
     SUPPORTED_STATUSES,
 )
@@ -261,36 +260,19 @@ class NFHSProvider(SportsProvider):
             return cls._shared_schools_by_state_cache[state_code]
 
     def _get_school_teams_cached(self, school_key: str) -> list[dict]:
-        """Return cached varsity team rows for a school, shared across provider instances."""
+        """Return cached SEARCH API team rows for a school, shared across provider instances."""
         cls = type(self)
         with cls._shared_school_teams_lock:
             if school_key not in cls._shared_school_teams_cache:
-                cls._shared_school_teams_cache[school_key] = self.client.get_school_teams(school_key,
-                                                                                          level="varsity") or []
+                cls._shared_school_teams_cache[school_key] = self.client.get_school_teams(school_key) or []
             return cls._shared_school_teams_cache[school_key]
 
-    def _get_school_details_cached(self, school_key: str) -> dict:
-        """Return cached school detail payload for a school, shared across provider instances."""
-        cache = type(self)._shared_school_details_cache
-        if school_key not in cache:
-            cache[school_key] = self.client.get_school_details(school_key) or {}
-        return cache[school_key]
+    # _get_school_details_cached method removed: raw team discovery now uses SEARCH v3 only.
 
     def _get_raw_team_rows(self) -> list[dict]:
         """Return raw NFHS team rows for the configured scope."""
 
         raw_team_rows: list[dict] = []
-
-        def _normalize_level_flag(flag_name: str) -> str:
-            return {
-                "varsity": "Varsity",
-                "junior_varsity": "Junior Varsity",
-                "sophomore": "Sophomore",
-                "freshman": "Freshman",
-                "middle_school": "Middle School",
-            }[flag_name]
-
-        allowed_levels = set(SUPPORTED_LEVELS)
 
         if STATE_FILTER:
             for state_code in sorted(STATE_FILTER):
@@ -301,16 +283,15 @@ class NFHSProvider(SportsProvider):
                     if not school_key:
                         continue
 
-                    school_detail = self._get_school_details_cached(school_key)
-                    detail_sports = school_detail.get("sports") or school_detail.get("activities") or []
-
-                    # Build latest /v2/teams row per school/sport/gender/level for enrichment
-                    latest_team_by_identity: dict[tuple[str, str | None, str | None, str | None], dict] = {}
+                    latest_team_by_identity: dict[
+                        tuple[str, str | None, str | None, str | None], dict
+                    ] = {}
 
                     for team_row in self._get_school_teams_cached(school_key):
                         sport = SPORT_NORMALIZATION.get(team_row.get("sport"), team_row.get("sport"))
                         gender = GENDER_NORMALIZATION.get(team_row.get("gender"), team_row.get("gender"))
                         level = LEVEL_NORMALIZATION.get(team_row.get("level"), team_row.get("level"))
+
                         dedupe_key = (school_key, sport, gender, level)
                         updated_at = team_row.get("updated_at") or ""
 
@@ -320,84 +301,27 @@ class NFHSProvider(SportsProvider):
                             if updated_at <= existing_updated_at:
                                 continue
 
-                        latest_team_by_identity[dedupe_key] = team_row
+                        resolved_row = dict(team_row)
+                        resolved_row["_resolved_school_key"] = school_key
+                        resolved_row["_resolved_school_name"] = (
+                            school.get("name")
+                            or school.get("short_name")
+                            or school.get("slug")
+                        )
+                        resolved_row["_resolved_school_short_name"] = (
+                            school.get("short_name")
+                            or school.get("name")
+                            or school.get("slug")
+                        )
+                        resolved_row["_resolved_school_logo"] = school.get("logo")
+                        resolved_row["_resolved_school_acronym"] = school.get("acronym")
+                        resolved_row["sport"] = sport
+                        resolved_row["gender"] = gender
+                        resolved_row["level"] = level
 
-                    if detail_sports:
-                        for sport_row in detail_sports:
-                            sport = SPORT_NORMALIZATION.get(sport_row.get("sport"), sport_row.get("sport"))
-                            raw_gender = sport_row.get("gender")
-                            gender = GENDER_NORMALIZATION.get(raw_gender, raw_gender)
+                        latest_team_by_identity[dedupe_key] = resolved_row
 
-                            for level_flag in (
-                                    "varsity",
-                                    "junior_varsity",
-                                    "junior_varisty",
-                                    "sophomore",
-                                    "freshman",
-                                    "middle_school",
-                            ):
-                                if not sport_row.get(level_flag):
-                                    continue
-
-                                level = _normalize_level_flag(level_flag)
-                                if level not in allowed_levels:
-                                    continue
-
-                                candidate_genders = [gender]
-                                if gender is None:
-                                    inferred_genders = sorted(
-                                        {
-                                            GENDER_NORMALIZATION.get(team_row.get("gender"), team_row.get("gender"))
-                                            for (row_school_key, row_sport, row_gender, row_level), team_row in
-                                            latest_team_by_identity.items()
-                                            if
-                                            row_school_key == school_key and row_sport == sport and row_level == level
-                                        }
-                                    )
-                                    candidate_genders = inferred_genders or [None]
-
-                                for candidate_gender in candidate_genders:
-                                    dedupe_key = (school_key, sport, candidate_gender, level)
-                                    latest_team_row = latest_team_by_identity.get(dedupe_key, {})
-                                    resolved_row = dict(latest_team_row)
-                                    resolved_row["_resolved_school_key"] = school_key
-                                    resolved_row["_resolved_school_name"] = (
-                                            school.get("name")
-                                            or school.get("short_name")
-                                            or school.get("slug")
-                                    )
-                                    resolved_row["_resolved_school_short_name"] = (
-                                            school.get("short_name")
-                                            or school.get("name")
-                                            or school.get("slug")
-                                    )
-                                    resolved_row["_resolved_school_logo"] = school.get("logo")
-                                    resolved_row["_resolved_school_acronym"] = school.get("acronym")
-
-                                    # Canonical sport inventory comes from /v2/schools/{school_key}
-                                    resolved_row["sport"] = sport
-                                    resolved_row["gender"] = candidate_gender
-                                    resolved_row["level"] = level
-
-                                    raw_team_rows.append(resolved_row)
-                    else:
-                        # Fallback: if school detail has no sports array, use latest /v2/teams rows only
-                        for team_row in latest_team_by_identity.values():
-                            resolved_row = dict(team_row)
-                            resolved_row["_resolved_school_key"] = school_key
-                            resolved_row["_resolved_school_name"] = (
-                                    school.get("name")
-                                    or school.get("short_name")
-                                    or school.get("slug")
-                            )
-                            resolved_row["_resolved_school_short_name"] = (
-                                    school.get("short_name")
-                                    or school.get("name")
-                                    or school.get("slug")
-                            )
-                            resolved_row["_resolved_school_logo"] = school.get("logo")
-                            resolved_row["_resolved_school_acronym"] = school.get("acronym")
-                            raw_team_rows.append(resolved_row)
+                    raw_team_rows.extend(latest_team_by_identity.values())
         else:
             raw_team_rows = self.client.get_teams() or []
 
@@ -413,7 +337,10 @@ class NFHSProvider(SportsProvider):
             return cls._shared_raw_team_row_count_cache[scope_key]
 
     def _get_latest_team_rows(self) -> list[dict]:
-        """Return deduplicated NFHS team rows, cached across provider instances by filter scope."""
+        """
+        Return deduplicated NFHS team rows, cached across provider instances by filter scope.
+        Source data now comes from the SEARCH API and may contain multiple rows per sport/gender/level.
+        """
         scope_key = tuple(sorted(STATE_FILTER)) if STATE_FILTER else ("ALL",)
         cls = type(self)
         with cls._shared_latest_team_rows_lock:

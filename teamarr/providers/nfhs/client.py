@@ -15,14 +15,13 @@ from typing import Any
 import httpx
 
 from teamarr.providers.nfhs.config import (
-    CFUNITY_API_BASE,
     EVENT_PAGE_SIZE,
     MAX_CONNECTIONS,
     MAX_PAGES,
     REQUEST_TIMEOUT,
     RETRY_COUNT,
     SEARCH_API_BASE,
-    USER_AGENT,
+    USER_AGENT, CFUNITY_API_BASE,
 )
 
 logger = logging.getLogger(__name__)
@@ -295,42 +294,48 @@ class NFHSClient:
 
         return items
 
-    def get_school_teams(self, school_key: str, level: str = "varsity") -> list[dict[str, Any]]:
-        """Retrieve team records for a specific school and level from CFUnity."""
+    def get_school_teams(self, school_key: str, level: str | None = None) -> list[dict[str, Any]]:
+        """Retrieve team records for a specific school from NFHS SEARCH v3."""
+        # SEARCH v3 does not support server-side level filtering; provider-side
+        # filtering and deduplication happen after fetching all rows for a school.
         data = self._request(
-            CFUNITY_API_BASE,
-            "/teams",
+            SEARCH_API_BASE,
+            "/v3/search/teams",
             params={
                 "school_key": school_key,
-                "level": level,
             },
         )
 
         if isinstance(data, list):
             logger.debug(
-                "[NFHS] Loaded %d team rows for school_key=%s level=%s",
+                "[NFHS] Loaded %d SEARCH team rows for school_key=%s",
                 len(data),
                 school_key,
-                level,
             )
             return data
 
+        if isinstance(data, dict):
+            for key in ("results", "items", "data"):
+                rows = data.get(key)
+                if isinstance(rows, list):
+                    logger.debug(
+                        "[NFHS] Loaded %d SEARCH team rows for school_key=%s via %s",
+                        len(rows),
+                        school_key,
+                        key,
+                    )
+                    return rows
+
         logger.warning(
-            "[NFHS] Unexpected team payload for school_key=%s level=%s",
+            "[NFHS] Unexpected v3 search teams payload for school_key=%s",
             school_key,
-            level,
         )
         return []
 
     def get_school_details(self, school_key: str) -> dict[str, Any]:
-        """Retrieve school detail payload for a specific school from CFUnity."""
-        data = self._request(CFUNITY_API_BASE, f"/schools/{school_key}")
-
-        if isinstance(data, dict):
-            logger.debug("[NFHS] Loaded school detail for school_key=%s", school_key)
-            return data
-
-        logger.warning("[NFHS] Unexpected school detail payload for school_key=%s", school_key)
+        """Compatibility stub: sport inventory now comes from SEARCH v3 team rows."""
+        # Kept for compatibility with older callers; provider discovery now uses
+        # SEARCH v3 team rows instead of CFUNITY school detail payloads.
         return {}
 
     def get_upcoming_events(self, size: int = EVENT_PAGE_SIZE, max_pages: int = MAX_PAGES) -> list[dict[str, Any]]:

@@ -21,6 +21,7 @@ SUPPORTED_SPORTS = {
     "Volleyball",
     "Lacrosse",
     "Field Hockey",
+    "Swimming"
 }
 
 # Levels we will ingest from NFHS (Phase 1: varsity only)
@@ -53,6 +54,8 @@ LEAGUE_MAP = {
     ("Lacrosse", "boys"): "hs-lacrosse-boys",
     ("Lacrosse", "girls"): "hs-lacrosse-girls",
     ("Field Hockey", "girls"): "hs-field-hockey",
+    ("Swimming", "boys"): "hs-swimming-boys",
+    ("Swimming", "girls"): "hs-swimming-girls"
 }
 
 # Some NFHS events report capitalization inconsistently
@@ -82,6 +85,7 @@ SPORT_NORMALIZATION = {
     "Field Hockey": "Field Hockey",
     "Flag Football": "Flag Football",
     "Ice Hockey": "Ice Hockey",
+    "Swimming": "Swimming",
 }
 
 # Default HTTP settings for NFHS client
