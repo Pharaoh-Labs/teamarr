@@ -968,10 +968,7 @@ export function Settings() {
   })
   const [newKeyword, setNewKeyword] = useState({ label: "", match_terms: "", behavior: "consolidate" })
   const [editingKeyword, setEditingKeyword] = useState<{ id: number; label: string; match_terms: string } | null>(null)
-  const [nfhs, setNFHS] = useState<NFHSSettings>({
-    enabled: false,
-    state_codes: [],
-  })
+  const [nfhs, setNFHS] = useState<NFHSSettings | null>(null)
 
   // Local state for channel range inputs (allows free typing)
   const [channelRangeStart, setChannelRangeStart] = useState("")
@@ -1178,6 +1175,7 @@ export function Settings() {
   }
 
   const handleSaveNFHS = async () => {
+    if (!nfhs) return
     try {
       await updateNFHS.mutateAsync(nfhs)
       toast.success("NFHS settings saved")
@@ -1529,8 +1527,9 @@ export function Settings() {
               </p>
             </div>
             <Switch
-              checked={nfhs.enabled}
-              onCheckedChange={(checked) => setNFHS({ ...nfhs, enabled: checked })}
+              checked={nfhs?.enabled ?? false}
+              disabled={!nfhs}
+              onCheckedChange={(checked) => nfhs && setNFHS({ ...nfhs, enabled: checked })}
             />
           </div>
 
@@ -1538,9 +1537,9 @@ export function Settings() {
             <Label htmlFor="nfhs-state-codes">State Codes</Label>
             <Input
               id="nfhs-state-codes"
-              value={nfhs.state_codes.join(", ")}
+              value={nfhs ? nfhs.state_codes.join(", ") : "Loading..."}
               onChange={(e) =>
-                setNFHS({
+                nfhs && setNFHS({
                   ...nfhs,
                   state_codes: e.target.value
                     .split(",")
@@ -1549,7 +1548,7 @@ export function Settings() {
                 })
               }
               placeholder="CA, NY, FL"
-              disabled={!nfhs.enabled}
+              disabled={!nfhs || !nfhs.enabled}
             />
             <p className="text-xs text-muted-foreground">
               Enter one or more two-letter US state codes separated by commas.
@@ -1558,7 +1557,7 @@ export function Settings() {
 
           <Button
             onClick={handleSaveNFHS}
-            disabled={updateNFHS.isPending}
+            disabled={!nfhs || updateNFHS.isPending}
           >
             {updateNFHS.isPending ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />

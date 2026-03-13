@@ -58,7 +58,7 @@ class NFHSProvider(SportsProvider):
         return bool(self._get_runtime_state_filter())
 
     def _get_runtime_state_filter(self) -> set[str]:
-        """Return enabled NFHS state codes from persisted settings, or config fallback on read failure."""
+        """Return enabled NFHS state codes from persisted settings, or an empty set on read failure."""
         try:
             with get_connection() as conn:
                 settings = get_nfhs_settings(conn)
@@ -70,7 +70,7 @@ class NFHSProvider(SportsProvider):
                     if isinstance(code, str) and code.strip()
                 }
         except Exception as exc:
-            logger.warning("[NFHS] Failed to load NFHS settings from database; using config fallback: %s", exc)
+            logger.warning("[NFHS] Failed to load NFHS settings from database; disabling NFHS provider: %s", exc)
             return set()
 
     # ------------------------------------------------------------------
@@ -92,10 +92,10 @@ class NFHSProvider(SportsProvider):
         """
         Return teams belonging to a canonical league.
         """
-        if not self._provider_enabled():
+        state_filter = self._get_runtime_state_filter()
+        if not state_filter:
             logger.info("[NFHS] Provider disabled (no state codes configured); skipping team discovery")
             return []
-        state_filter = self._get_runtime_state_filter()
         teams: List[Team] = []
         latest_team_rows = self._get_latest_team_rows()
         raw_team_row_count = self._get_raw_team_row_count()
@@ -136,13 +136,11 @@ class NFHSProvider(SportsProvider):
     # ------------------------------------------------------------------
 
     def get_events(self) -> List[Event]:
-        """
-        Fetch upcoming + live NFHS events.
-        """
-        if not self._provider_enabled():
+        """Fetch NFHS SEARCH upcoming events per school."""
+        state_filter = self._get_runtime_state_filter()
+        if not state_filter:
             logger.info("[NFHS] Provider disabled (no state codes configured); skipping event discovery")
             return []
-        state_filter = self._get_runtime_state_filter()
         events: List[Event] = []
         seen_events: set[str] = set()
         skipped_missing_id = 0
@@ -167,9 +165,7 @@ class NFHSProvider(SportsProvider):
                         continue
                     upcoming.extend(self._get_school_upcoming_events_cached(school_key))
 
-        live: list[dict] = []
-
-        for event in upcoming + live:
+        for event in upcoming:
             event_id = event.get("id") or event.get("key")
             if not event_id:
                 skipped_missing_id += 1
