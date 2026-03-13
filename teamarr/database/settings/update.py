@@ -505,6 +505,7 @@ def update_nfhs_settings(
     query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
     cursor = conn.execute(query, values)
     if cursor.rowcount > 0:
+        conn.commit()
         logger.info("[UPDATED] NFHS settings: %s", [u.split(" = ")[0] for u in updates])
         return True
     return False
