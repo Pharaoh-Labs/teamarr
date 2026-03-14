@@ -163,7 +163,7 @@ export function EventGroups() {
       let cmp = 0
       switch (sortColumn) {
         case "name":
-          cmp = getDisplayName(a).localeCompare(getDisplayName(b))
+          cmp = String(getDisplayName(a) ?? "").localeCompare(String(getDisplayName(b) ?? ""))
           break
         case "matched":
           cmp = (a.matched_count || 0) - (b.matched_count || 0)

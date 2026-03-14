@@ -293,7 +293,11 @@ export function EventGroupImport() {
           </div>
         ) : (
           <div className="py-1">
-            {[...accountsQuery.data].sort((a, b) => a.name.localeCompare(b.name)).map((account) => {
+            {[...accountsQuery.data].sort((a, b) => {
+              const aName = String(a?.name ?? "")
+              const bName = String(b?.name ?? "")
+              return aName.localeCompare(bName)
+            }).map((account) => {
               const accountSelectionCount = Array.from(selectedGroups.values())
                 .filter((g) => g.m3u_account_id === account.id).length
               return (

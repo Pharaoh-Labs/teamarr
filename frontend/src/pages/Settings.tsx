@@ -989,15 +989,25 @@ export function Settings() {
     const searchLower = leagueSearch.toLowerCase()
     return all
       .filter((l) => {
-        if (showSubscribedOnly && !subscribedLeagueSlugs.has(l.slug)) return false
-        if (searchLower && !l.name.toLowerCase().includes(searchLower)
-            && !l.sport.toLowerCase().includes(searchLower)) return false
+        const leagueSlug = String(l?.slug ?? "")
+        const leagueName = String(l?.name ?? leagueSlug)
+        const leagueSport = String(l?.sport ?? "")
+        if (showSubscribedOnly && !subscribedLeagueSlugs.has(leagueSlug)) return false
+        if (
+          searchLower &&
+          !leagueName.toLowerCase().includes(searchLower) &&
+          !leagueSport.toLowerCase().includes(searchLower)
+        ) return false
         return true
       })
       .sort((a, b) => {
-        const sportCmp = a.sport.localeCompare(b.sport)
+        const aSport = String(a?.sport ?? "")
+        const bSport = String(b?.sport ?? "")
+        const sportCmp = aSport.localeCompare(bSport)
         if (sportCmp !== 0) return sportCmp
-        return a.name.localeCompare(b.name)
+        const aName = String(a?.name ?? a?.slug ?? "")
+        const bName = String(b?.name ?? b?.slug ?? "")
+        return aName.localeCompare(bName)
       })
   }, [leaguesData, leagueSearch, showSubscribedOnly, subscribedLeagueSlugs])
 

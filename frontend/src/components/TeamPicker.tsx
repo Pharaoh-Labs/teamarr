@@ -102,7 +102,9 @@ export function TeamPicker({
     // Sort: by sport display name, within each sport: configured leagues first, then alphabetically
     const result: SportGroup[] = []
     const sortedSports = Array.from(sportMap.entries()).sort((a, b) =>
-      a[1].display_name.localeCompare(b[1].display_name)
+      String(a[1]?.display_name ?? a[0] ?? "").localeCompare(
+        String(b[1]?.display_name ?? b[0] ?? "")
+      )
     )
 
     for (const [sport, sportData] of sortedSports) {
@@ -114,8 +116,10 @@ export function TeamPicker({
         if (a[1].is_configured !== b[1].is_configured) {
           return a[1].is_configured ? -1 : 1
         }
-        // Then alphabetically by name
-        return a[1].name.localeCompare(b[1].name)
+        // Then alphabetically by name (null-safe)
+        const aName = String(a[1]?.name ?? a[0] ?? "")
+        const bName = String(b[1]?.name ?? b[0] ?? "")
+        return aName.localeCompare(bName)
       })
 
       for (const [league, data] of sortedLeagues) {

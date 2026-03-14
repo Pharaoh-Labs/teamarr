@@ -122,7 +122,11 @@ export function TemplateAssignmentModal({
         key: sport,
         label: getSportDisplayName(sport, sportsMap),
         items: grouped[sport]
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => {
+            const aName = String(a?.name ?? a?.slug ?? "")
+            const bName = String(b?.name ?? b?.slug ?? "")
+            return aName.localeCompare(bName)
+          })
           .map((l) => ({ value: l.slug, label: l.name })),
       }))
   }, [subscribedLeagues, allLeagues, sportsMap])

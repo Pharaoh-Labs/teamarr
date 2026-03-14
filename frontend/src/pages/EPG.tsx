@@ -128,13 +128,19 @@ export function EPG() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Sort leagues by sport then name
+  // Sort leagues by sport then name (null-safe)
   const sortedLeagues = useMemo(() => {
     if (!leaguesData?.leagues) return []
     return [...leaguesData.leagues].sort((a, b) => {
-      const sportCompare = a.sport.localeCompare(b.sport)
+      // Sport comparison (null-safe)
+      const aSport = String(a?.sport ?? "")
+      const bSport = String(b?.sport ?? "")
+      const sportCompare = aSport.localeCompare(bSport)
       if (sportCompare !== 0) return sportCompare
-      return a.name.localeCompare(b.name)
+      // Name comparison (fallback to slug if needed)
+      const aName = String(a?.name ?? a?.slug ?? "")
+      const bName = String(b?.name ?? b?.slug ?? "")
+      return aName.localeCompare(bName)
     })
   }, [leaguesData?.leagues])
 

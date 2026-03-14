@@ -77,7 +77,11 @@ export function LeaguePicker({
     }
     // Sort leagues within each sport (guard against null names from bad cache data)
     for (const sport of Object.keys(grouped)) {
-      grouped[sport].sort((a, b) => (a.name || a.slug).localeCompare(b.name || b.slug))
+      grouped[sport].sort((a, b) => {
+        const aName = String(a?.name ?? a?.slug ?? "")
+        const bName = String(b?.name ?? b?.slug ?? "")
+        return aName.localeCompare(bName)
+      })
     }
     return grouped
   }, [cachedLeagues, sportFilter, excludeSport])

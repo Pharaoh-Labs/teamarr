@@ -573,7 +573,11 @@ export function Teams() {
                 <div className="text-xs font-medium text-muted-foreground mb-2">By League</div>
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {Object.entries(teamStats.byLeague)
-                    .sort(([a], [b]) => (leagueLookup.aliases[a] || a).localeCompare(leagueLookup.aliases[b] || b))
+                    .sort(([a], [b]) => {
+                      const aLabel = String(leagueLookup.aliases[a] ?? a ?? "")
+                      const bLabel = String(leagueLookup.aliases[b] ?? b ?? "")
+                      return aLabel.localeCompare(bLabel)
+                    })
                     .map(([league, counts]) => (
                       <div key={league} className="flex justify-between text-sm">
                         <span className="truncate max-w-[100px]">{leagueLookup.aliases[league] || league.toUpperCase()}</span>
@@ -597,7 +601,11 @@ export function Teams() {
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {Object.entries(teamStats.byLeague)
                     .filter(([, counts]) => counts.enabled > 0)
-                    .sort(([a], [b]) => (leagueLookup.aliases[a] || a).localeCompare(leagueLookup.aliases[b] || b))
+                    .sort(([a], [b]) => {
+                      const aLabel = String(leagueLookup.aliases[a] ?? a ?? "")
+                      const bLabel = String(leagueLookup.aliases[b] ?? b ?? "")
+                      return aLabel.localeCompare(bLabel)
+                    })
                     .map(([league, counts]) => (
                       <div key={league} className="flex justify-between text-sm">
                         <span className="truncate max-w-[100px]">{leagueLookup.aliases[league] || league.toUpperCase()}</span>

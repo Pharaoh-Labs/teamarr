@@ -99,7 +99,7 @@ export function getUniqueSports(
 /**
  * Sort leagues: import_enabled first (alphabetically), then rest (alphabetically).
  */
-export function sortLeaguesImportFirst<T extends { name: string; import_enabled?: boolean }>(
+export function sortLeaguesImportFirst<T extends { name: string | null; import_enabled?: boolean }>(
   leagues: T[]
 ): T[] {
   return [...leagues].sort((a, b) => {
@@ -110,7 +110,7 @@ export function sortLeaguesImportFirst<T extends { name: string; import_enabled?
       return bEnabled ? 1 : -1
     }
 
-    return a.name.localeCompare(b.name)
+    return String(a.name ?? "").localeCompare(String(b.name ?? ""))
   })
 }
 
