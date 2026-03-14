@@ -41,10 +41,12 @@ class NFHSProvider(SportsProvider):
     _shared_schools_by_state_cache: dict[str, list[dict]] = {}
     _shared_school_teams_cache: dict[str, list[dict]] = {}
     _shared_school_upcoming_events_cache: dict[str, list[dict]] = {}
+    _shared_upcoming_events_by_scope_cache: dict[tuple[str, ...], list[dict]] = {}
     _shared_latest_team_rows_cache: dict[tuple[str, ...], list[dict]] = {}
     _shared_schools_lock = threading.RLock()
     _shared_school_teams_lock = threading.RLock()
     _shared_school_upcoming_events_lock = threading.RLock()
+    _shared_upcoming_events_by_scope_lock = threading.RLock()
     _shared_latest_team_rows_lock = threading.RLock()
     _shared_raw_team_row_count_cache: dict[tuple[str, ...], int] = {}
 
@@ -52,10 +54,6 @@ class NFHSProvider(SportsProvider):
 
     def __init__(self) -> None:
         self.client = NFHSClient()
-
-    def _provider_enabled(self) -> bool:
-        """Return True if NFHS provider should run (enabled with state codes configured)."""
-        return bool(self._get_runtime_state_filter())
 
     def _get_runtime_state_filter(self) -> set[str]:
         """Return enabled NFHS state codes from persisted settings, or an empty set on read failure."""
@@ -135,12 +133,47 @@ class NFHSProvider(SportsProvider):
     # Event discovery
     # ------------------------------------------------------------------
 
-    def get_events(self) -> List[Event]:
-        """Fetch NFHS SEARCH upcoming events per school."""
+    def _resolve_known_team_for_event_participant(self, participant: dict, league: str, sport: str) -> Team | None:
+        """Resolve an event participant to a known cached NFHS team without creating new opponent teams."""
+        participant_school_key = (
+            participant.get("school_key")
+            or participant.get("_resolved_school_key")
+            or participant.get("key")
+        )
+        if not participant_school_key:
+            return None
+
+        participant_gender = GENDER_NORMALIZATION.get(participant.get("gender"), participant.get("gender"))
+        participant_level = LEVEL_NORMALIZATION.get(participant.get("level"), participant.get("level"))
+
+        for team_row in self._get_latest_team_rows():
+            school_key = team_row.get("_resolved_school_key") or team_row.get("school_key")
+            row_sport = SPORT_NORMALIZATION.get(team_row.get("sport"), team_row.get("sport"))
+            row_gender = GENDER_NORMALIZATION.get(team_row.get("gender"), team_row.get("gender"))
+            row_level = LEVEL_NORMALIZATION.get(team_row.get("level"), team_row.get("level"))
+
+            if (
+                school_key == participant_school_key
+                and row_sport == sport
+                and row_gender == participant_gender
+                and row_level == participant_level
+            ):
+                return self._parse_team(team_row, league, sport)
+
+        return None
+
+    def get_events(self, league: str | None = None, target_date=None) -> List[Event]:
+        """Fetch NFHS SEARCH upcoming events per school for an optional league and date."""
         state_filter = self._get_runtime_state_filter()
         if not state_filter:
             logger.info("[NFHS] Provider disabled (no state codes configured); skipping event discovery")
             return []
+        target_date_str = None
+        if target_date is not None:
+            try:
+                target_date_str = target_date.isoformat()
+            except AttributeError:
+                target_date_str = str(target_date)
         events: List[Event] = []
         seen_events: set[str] = set()
         skipped_missing_id = 0
@@ -153,17 +186,7 @@ class NFHSProvider(SportsProvider):
         skipped_unmapped_league = 0
         skipped_missing_teams = 0
 
-        upcoming: list[dict] = []
-        if not state_filter:
-            logger.warning("[NFHS] NFHS is enabled but no state codes are configured; skipping upcoming event discovery")
-        else:
-            for state_code in sorted(state_filter):
-                schools = self._get_schools_for_state_cached(state_code)
-                for school in schools:
-                    school_key = school.get("key")
-                    if not school_key:
-                        continue
-                    upcoming.extend(self._get_school_upcoming_events_cached(school_key))
+        upcoming = self._get_upcoming_events_for_scope_cached(state_filter)
 
         for event in upcoming:
             event_id = event.get("id") or event.get("key")
@@ -174,7 +197,9 @@ class NFHSProvider(SportsProvider):
             if event_id in seen_events:
                 skipped_duplicate += 1
                 continue
-
+            local_start_time = event.get("local_start_time") or event.get("start_time") or ""
+            if target_date_str and not str(local_start_time).startswith(target_date_str):
+                continue
             seen_events.add(event_id)
 
             sport = SPORT_NORMALIZATION.get(event.get("sport"), event.get("sport"))
@@ -206,10 +231,13 @@ class NFHSProvider(SportsProvider):
                 skipped_sport += 1
                 continue
 
-            league = LEAGUE_MAP.get((sport, gender)) or LEAGUE_MAP.get((sport, None))
+            league_code = LEAGUE_MAP.get((sport, gender)) or LEAGUE_MAP.get((sport, None))
 
-            if not league:
+            if not league_code:
                 skipped_unmapped_league += 1
+                continue
+
+            if league and league_code != league:
                 continue
 
             teams = event.get("participants") or event.get("teams") or []
@@ -221,7 +249,7 @@ class NFHSProvider(SportsProvider):
             parsed_event = self._parse_event(
                 event=event,
                 event_id=event_id,
-                league=league,
+                league=league_code,
                 sport=sport,
                 gender=gender,
                 level=level,
@@ -267,9 +295,7 @@ class NFHSProvider(SportsProvider):
             return None
 
         event_id_str = str(event_id)
-        for event in self.get_events():
-            if event.league != league_code:
-                continue
+        for event in self.get_events(league_code):
             if str(event.id) == event_id_str:
                 return event
         return None
@@ -278,10 +304,7 @@ class NFHSProvider(SportsProvider):
         """Return events for a specific team within a league."""
         schedule: List[Event] = []
 
-        for event in self.get_events():
-            if event.league != league_code:
-                continue
-
+        for event in self.get_events(league_code):
             home_id = str(event.home_team.id) if event.home_team else None
             away_id = str(event.away_team.id) if event.away_team else None
 
@@ -314,6 +337,27 @@ class NFHSProvider(SportsProvider):
                 cls._shared_school_upcoming_events_cache[school_key] = self.client.get_upcoming_events_for_school(
                     school_key) or []
             return cls._shared_school_upcoming_events_cache[school_key]
+
+    def _get_upcoming_events_for_scope_cached(self, state_filter: set[str]) -> list[dict]:
+        """Return cached aggregated upcoming NFHS events for the configured state scope."""
+        scope_key = tuple(sorted(state_filter)) if state_filter else ("ALL",)
+        cls = type(self)
+
+        with cls._shared_upcoming_events_by_scope_lock:
+            if scope_key in cls._shared_upcoming_events_by_scope_cache:
+                return cls._shared_upcoming_events_by_scope_cache[scope_key]
+
+            upcoming: list[dict] = []
+            for state_code in sorted(state_filter):
+                schools = self._get_schools_for_state_cached(state_code)
+                for school in schools:
+                    school_key = school.get("key")
+                    if not school_key:
+                        continue
+                    upcoming.extend(self._get_school_upcoming_events_cached(school_key))
+
+            cls._shared_upcoming_events_by_scope_cache[scope_key] = upcoming
+            return upcoming
 
     def _get_raw_team_rows(self) -> list[dict]:
         """Return raw NFHS SEARCH v3 team rows for the configured scope."""
@@ -548,8 +592,8 @@ class NFHSProvider(SportsProvider):
         if home_team_key and team1_school == home_team_key and team2_school != home_team_key:
             team1, team2 = team2, team1
 
-        away_team = self._parse_team(team1, league, sport)
-        home_team = self._parse_team(team2, league, sport)
+        away_team = self._resolve_known_team_for_event_participant(team1, league, sport)
+        home_team = self._resolve_known_team_for_event_participant(team2, league, sport)
 
         away_name = away_team.short_name if away_team else self._participant_display_name(team1)
         home_name = home_team.short_name if home_team else self._participant_display_name(team2)
