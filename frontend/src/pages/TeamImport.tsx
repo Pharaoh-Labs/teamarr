@@ -216,13 +216,13 @@ export function TeamImport() {
       if (!grouped[sportDisplayName]) grouped[sportDisplayName] = []
       grouped[sportDisplayName].push(league)
     })
-    // Sort leagues within each sport - handle null names
+    // Sort leagues within each sport - handle null names (defensive)
     Object.values(grouped).forEach((leagues) => {
       leagues.sort((a, b) => {
-        const aName = getLeagueName(a) || a.name || a.slug || ""
-        const bName = getLeagueName(b) || b.name || b.slug || ""
+        const aName = String(getLeagueName(a) ?? a.name ?? a.slug ?? "")
+        const bName = String(getLeagueName(b) ?? b.name ?? b.slug ?? "")
         return aName.localeCompare(bName)
-})
+      })
     })
     return grouped
   }, [leaguesQuery.data, sportsMap])
@@ -391,9 +391,11 @@ export function TeamImport() {
             <div className="py-1">
               {Object.entries(leaguesBySport)
                 .sort(([a], [b]) => {
-                  if (a === "High School Sports") return 1
-                  if (b === "High School Sports") return -1
-                  return a.localeCompare(b)
+                  const aKey = String(a ?? "")
+                  const bKey = String(b ?? "")
+                  if (aKey === "High School Sports") return 1
+                  if (bKey === "High School Sports") return -1
+                  return aKey.localeCompare(bKey)
                 })
                 .map(([sport, leagues]) => (
                   <div key={sport} className="border-b last:border-b-0">
