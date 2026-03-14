@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import datetime
 from typing import List
 from teamarr.database.connection import get_connection
 from teamarr.database.settings.read import get_nfhs_settings
@@ -610,12 +611,20 @@ class NFHSProvider(SportsProvider):
         if gender and level:
             name = f"{name} ({level} {gender})"
 
+        start_time_raw = event.get("local_start_time") or event.get("start_time")
+        start_time = None
+        if start_time_raw:
+            try:
+                start_time = datetime.fromisoformat(str(start_time_raw).replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
         return Event(
             id=event_id,
             provider=self.name,
             name=name,
             short_name=short_name,
-            start_time=event.get("start_time"),
+            start_time=start_time,
             home_team=home_team,
             away_team=away_team,
             status=self._parse_status(status),

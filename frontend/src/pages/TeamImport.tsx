@@ -218,7 +218,11 @@ export function TeamImport() {
     })
     // Sort leagues within each sport - handle null names
     Object.values(grouped).forEach((leagues) => {
-      leagues.sort((a, b) => getLeagueName(a).localeCompare(getLeagueName(b)))
+      leagues.sort((a, b) => {
+        const aName = getLeagueName(a) || a.name || a.slug || ""
+        const bName = getLeagueName(b) || b.name || b.slug || ""
+        return aName.localeCompare(bName)
+})
     })
     return grouped
   }, [leaguesQuery.data, sportsMap])
