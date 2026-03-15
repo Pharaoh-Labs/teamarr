@@ -262,6 +262,9 @@ class CacheRefresher:
             """Fetch teams for a single league."""
             try:
                 league_teams = provider.get_league_teams(league_slug)
+                # Prefer provider-authoritative team sport when available
+                if league_teams and league_teams[0].sport:
+                    sport = league_teams[0].sport
 
                 # Check leagues table first (single source of truth)
                 db_metadata = self._get_league_metadata(league_slug)
@@ -388,6 +391,34 @@ class CacheRefresher:
             return "volleyball"
         if "softball" in league_slug:
             return "softball"
+
+        # NFHS high school leagues
+        if league_slug.startswith("hs-bowling"):
+            return "bowling"
+        if league_slug.startswith("hs-cheer"):
+            return "cheer"
+        if league_slug.startswith("hs-cross-country"):
+            return "cross-country"
+        if league_slug.startswith("hs-field-hockey"):
+            return "field-hockey"
+        if league_slug.startswith("hs-flag-football"):
+            return "flag-football"
+        if league_slug.startswith("hs-golf"):
+            return "golf"
+        if league_slug.startswith("hs-gymnastics"):
+            return "gymnastics"
+        if league_slug.startswith("hs-swimming"):
+            return "swimming"
+        if league_slug.startswith("hs-tennis"):
+            return "tennis"
+        if league_slug.startswith("hs-track-field"):
+            return "track-and-field"
+        if league_slug.startswith("hs-water-polo"):
+            return "water-polo"
+        if league_slug.startswith("hs-wrestling"):
+            return "wrestling"
+        if league_slug.startswith("hs-soccer"):
+            return "soccer"
 
         # Default fallback
         return "sports"
