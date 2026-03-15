@@ -248,7 +248,8 @@ export function LeaguePicker({
             sport.toLowerCase().includes(search.toLowerCase()) ||
             leaguesBySport[sport].some(l =>
               l.slug.toLowerCase().includes(search.toLowerCase()) ||
-              (l.name || "").toLowerCase().includes(search.toLowerCase())
+              (l.name || "").toLowerCase().includes(search.toLowerCase()) ||
+              (l.league_alias || "").toLowerCase().includes(search.toLowerCase())
             )
           )
           .map((sport) => {
@@ -256,7 +257,8 @@ export function LeaguePicker({
             const filteredLeagues = search
               ? leagues.filter(l =>
                   l.slug.toLowerCase().includes(search.toLowerCase()) ||
-                  (l.name || "").toLowerCase().includes(search.toLowerCase())
+                  (l.name || "").toLowerCase().includes(search.toLowerCase()) ||
+                  (l.league_alias || "").toLowerCase().includes(search.toLowerCase())
                 )
               : leagues
 
@@ -271,8 +273,9 @@ export function LeaguePicker({
             const allSelected = isSportFullySelected(sport)
 
             // Soccer in multi-select mode: show as single consolidated checkbox (too many leagues)
-            // But NOT when sportFilter="soccer" - in that case user wants to pick individual leagues
-            if (!singleSelect && sport.toLowerCase() === "soccer" && !sportFilter) {
+                        // But NOT when sportFilter="soccer" or when searching - in those cases show individual leagues
+            const hasSearchMatchInSoccer = search && filteredLeagues.length > 0 && sport.toLowerCase() === "soccer"
+            if (!singleSelect && sport.toLowerCase() === "soccer" && !sportFilter && !hasSearchMatchInSoccer) {
               return (
                 <label
                   key={sport}
