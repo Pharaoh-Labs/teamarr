@@ -343,6 +343,46 @@ class NFHSClient:
             },
         )
 
+        def _extract_rows(payload: Any, *, source: str) -> list[dict[str, Any]]:
+            """Extract upcoming event rows from NFHS SEARCH payloads."""
+            if isinstance(payload, list):
+                logger.debug(
+                    "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s via %s[list]",
+                    len(payload),
+                    school_key,
+                    source,
+                )
+                return payload
+
+            if isinstance(payload, dict):
+                for key in ("results", "items", "data"):
+                    rows = payload.get(key)
+                    if isinstance(rows, list):
+                        logger.debug(
+                            "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s via %s[%s]",
+                            len(rows),
+                            school_key,
+                            source,
+                            key,
+                        )
+                        return rows
+
+                logger.warning(
+                    "[NFHS] Unexpected upcoming SEARCH events payload for school_key=%s source=%s keys=%s",
+                    school_key,
+                    source,
+                    list(payload.keys())[:10],
+                )
+                return []
+
+            logger.warning(
+                "[NFHS] Unexpected upcoming SEARCH events payload for school_key=%s source=%s type=%s",
+                school_key,
+                source,
+                type(payload).__name__,
+            )
+            return []
+
         total = 0
         if isinstance(initial, dict):
             raw_total = initial.get("total", 0)
@@ -352,31 +392,7 @@ class NFHSClient:
                 total = 0
 
         if total <= 0:
-            if isinstance(initial, list):
-                logger.debug(
-                    "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s",
-                    len(initial),
-                    school_key,
-                )
-                return initial
-
-            if isinstance(initial, dict):
-                for key in ("results", "items", "data"):
-                    rows = initial.get(key)
-                    if isinstance(rows, list):
-                        logger.debug(
-                            "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s via %s (no total)",
-                            len(rows),
-                            school_key,
-                            key,
-                        )
-                        return rows
-
-            logger.warning(
-                "[NFHS] Unexpected upcoming SEARCH events payload for school_key=%s",
-                school_key,
-            )
-            return []
+            return _extract_rows(initial, source="probe-no-total")
 
         data = self._request(
             SEARCH_API_BASE,
@@ -387,32 +403,7 @@ class NFHSClient:
             },
         )
 
-        if isinstance(data, list):
-            logger.debug(
-                "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s",
-                len(data),
-                school_key,
-            )
-            return data
-
-        if isinstance(data, dict):
-            for key in ("results", "items", "data"):
-                rows = data.get(key)
-                if isinstance(rows, list):
-                    logger.debug(
-                        "[NFHS] Loaded %d upcoming SEARCH events for school_key=%s via %s (total=%s)",
-                        len(rows),
-                        school_key,
-                        key,
-                        total,
-                    )
-                    return rows
-
-        logger.warning(
-            "[NFHS] Unexpected upcoming SEARCH events payload for school_key=%s",
-            school_key,
-        )
-        return []
+        return _extract_rows(data, source=f"full-total-{total}")
 
     def get_school_details(self, school_key: str) -> dict[str, Any]:
         """Compatibility stub: sport inventory now comes from SEARCH v3 team rows."""

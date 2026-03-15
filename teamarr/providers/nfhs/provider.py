@@ -568,6 +568,9 @@ class NFHSProvider(SportsProvider):
 
     def _canonical_sport_code(self, sport: str | None) -> str:
         """Map NFHS sport labels to Teamarr canonical sport codes."""
+        if not sport:
+            return "sports"
+
         mapping = {
             "Baseball": "baseball",
             "Basketball": "basketball",
@@ -589,8 +592,37 @@ class NFHSProvider(SportsProvider):
             "Volleyball": "volleyball",
             "Water Polo": "water-polo",
             "Wrestling": "wrestling",
+            # Lowercase/alternate forms
+            "baseball": "baseball",
+            "basketball": "basketball",
+            "bowling": "bowling",
+            "cheer": "cheer",
+            "cross country": "cross-country",
+            "field hockey": "field-hockey",
+            "flag football": "flag-football",
+            "football": "football",
+            "golf": "golf",
+            "gymnastics": "gymnastics",
+            "ice hockey": "hockey",
+            "hockey": "hockey",
+            "lacrosse": "lacrosse",
+            "soccer": "soccer",
+            "softball": "softball",
+            "swimming": "swimming",
+            "tennis": "tennis",
+            "track & field": "track-and-field",
+            "track and field": "track-and-field",
+            "volleyball": "volleyball",
+            "water polo": "water-polo",
+            "wrestling": "wrestling",
+            # Already-canonical Teamarr sport codes
+            "cross-country": "cross-country",
+            "field-hockey": "field-hockey",
+            "flag-football": "flag-football",
+            "track-and-field": "track-and-field",
+            "water-polo": "water-polo",
         }
-        return mapping.get(sport or "", "sports")
+        return mapping.get(str(sport).strip(), mapping.get(str(sport).strip().lower(), "sports"))
 
     def _parse_event(
         self,
