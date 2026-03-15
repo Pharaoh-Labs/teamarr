@@ -52,6 +52,7 @@ import {
   correctStreamMatch,
 } from "@/api/epg"
 import { getLeagues } from "@/api/teams"
+import { getNFHSSettings } from "@/api/settings"
 import type { FailedMatch, MatchedStream, EventSearchResult, CorrectableStream } from "@/api/epg"
 import type { CachedLeague } from "@/api/teams"
 import { getLeagueDisplayName } from "@/lib/utils"
@@ -128,10 +129,21 @@ export function EPG() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: nfhsSettings } = useQuery({
+    queryKey: ["settings", "nfhs"],
+    queryFn: getNFHSSettings,
+    enabled: eventMatcherOpen,
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Sort leagues by sport then name (null-safe)
   const sortedLeagues = useMemo(() => {
     if (!leaguesData?.leagues) return []
-    return [...leaguesData.leagues].sort((a, b) => {
+    const visibleLeagues = [...leaguesData.leagues].filter((league) => {
+      if (league.provider === "nfhs" && !nfhsSettings?.enabled) return false
+      return true
+    })
+    return visibleLeagues.sort((a, b) => {
       // Sport comparison (null-safe)
       const aSport = String(a?.sport ?? "")
       const bSport = String(b?.sport ?? "")
@@ -142,17 +154,30 @@ export function EPG() {
       const bName = String(b?.name ?? b?.slug ?? "")
       return aName.localeCompare(bName)
     })
-  }, [leaguesData?.leagues])
+  }, [leaguesData?.leagues, nfhsSettings?.enabled])
 
-  // Group leagues by sport
+  // Group leagues by sport, grouping all NFHS as "High School Sports" and sorting by display name
   const leaguesBySport = useMemo(() => {
     const grouped: Record<string, CachedLeague[]> = {}
     for (const league of sortedLeagues) {
-      if (!grouped[league.sport]) grouped[league.sport] = []
-      grouped[league.sport].push(league)
+      const groupKey = league.provider === "nfhs" && nfhsSettings?.enabled
+        ? "High School Sports"
+        : String(league?.sport ?? "Other")
+
+      if (!grouped[groupKey]) grouped[groupKey] = []
+      grouped[groupKey].push(league)
     }
+
+    Object.values(grouped).forEach((leagues) => {
+      leagues.sort((a, b) => {
+        const aName = String(getLeagueDisplayName(a) ?? a?.name ?? a?.slug ?? "")
+        const bName = String(getLeagueDisplayName(b) ?? b?.name ?? b?.slug ?? "")
+        return aName.localeCompare(bName)
+      })
+    })
+
     return grouped
-  }, [sortedLeagues])
+  }, [sortedLeagues, nfhsSettings?.enabled])
 
   const handleCopyUrl = async () => {
     try {
