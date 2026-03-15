@@ -703,13 +703,13 @@ INSERT OR REPLACE INTO sports (sport_code, display_name) VALUES
     -- Additional NFHS Sports
     ('bowling', 'Bowling'),
     ('cheer', 'Cheer'),
-    ('cross_country', 'Cross Country'),
-    ('field_hockey', 'Field Hockey'),
-    ('flag_football', 'Flag Football'),
+    ('cross-country', 'Cross Country'),
+    ('field-hockey', 'Field Hockey'),
+    ('flag-football', 'Flag Football'),
     ('gymnastics', 'Gymnastics'),
     ('swimming', 'Swimming'),
-    ('track_and_field', 'Track & Field'),
-    ('water_polo', 'Water Polo');
+    ('track-and-field', 'Track & Field'),
+    ('water-polo', 'Water Polo');
 
 
 -- =============================================================================
