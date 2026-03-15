@@ -510,6 +510,8 @@ class NFHSProvider(SportsProvider):
             or team_data.get("school", {}).get("logo")
         )
 
+        canonical_sport = self._canonical_sport_code(sport)
+
         return Team(
             id=str(team_id),
             provider=self.name,
@@ -517,7 +519,7 @@ class NFHSProvider(SportsProvider):
             short_name=short_name,
             abbreviation=abbreviation,
             league=league,
-            sport=sport,
+            sport=canonical_sport,
             logo_url=logo_url,
         )
 
@@ -563,6 +565,32 @@ class NFHSProvider(SportsProvider):
             or participant.get("acronym")
             or "TBD"
         )
+
+    def _canonical_sport_code(self, sport: str | None) -> str:
+        """Map NFHS sport labels to Teamarr canonical sport codes."""
+        mapping = {
+            "Baseball": "baseball",
+            "Basketball": "basketball",
+            "Bowling": "bowling",
+            "Cheer": "cheer",
+            "Cross Country": "cross_country",
+            "Field Hockey": "field_hockey",
+            "Flag Football": "flag_football",
+            "Football": "football",
+            "Golf": "golf",
+            "Gymnastics": "gymnastics",
+            "Ice Hockey": "hockey",
+            "Lacrosse": "lacrosse",
+            "Soccer": "soccer",
+            "Softball": "softball",
+            "Swimming": "swimming",
+            "Tennis": "tennis",
+            "Track & Field": "track_and_field",
+            "Volleyball": "volleyball",
+            "Water Polo": "water_polo",
+            "Wrestling": "wrestling",
+        }
+        return mapping.get(sport or "", "sports")
 
     def _parse_event(
         self,
@@ -619,6 +647,8 @@ class NFHSProvider(SportsProvider):
             except ValueError:
                 return None
 
+        canonical_sport = self._canonical_sport_code(sport)
+
         return Event(
             id=event_id,
             provider=self.name,
@@ -629,7 +659,7 @@ class NFHSProvider(SportsProvider):
             away_team=away_team,
             status=self._parse_status(status),
             league=league,
-            sport=sport,
+            sport=canonical_sport,
             venue=self._parse_venue(event),
         )
 

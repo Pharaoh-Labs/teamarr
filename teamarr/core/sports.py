@@ -35,6 +35,7 @@ SPORT_ALIASES: dict[str, str] = {
     "Wrestling": "wrestling",
     # NFHS sports
     "Bowling": "bowling",
+    "bowling": "bowling",
     "Cheer": "cheer",
     "Cheerleading": "cheer",
     "Cheerleading and Dance": "cheer",
@@ -44,6 +45,7 @@ SPORT_ALIASES: dict[str, str] = {
     "Field Hockey": "field_hockey",
     "Flag Football": "flag_football",
     "Gymnastics": "gymnastics",
+    "gymnastics": "gymnastics",
     "Swimming": "swimming",
     "Swimming & Diving": "swimming",
     "Track & Field": "track_and_field",
