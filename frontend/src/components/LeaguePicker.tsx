@@ -273,7 +273,7 @@ export function LeaguePicker({
             const allSelected = isSportFullySelected(sport)
 
             // Soccer in multi-select mode: show as single consolidated checkbox (too many leagues)
-                        // But NOT when sportFilter="soccer" or when searching - in those cases show individual leagues
+            // But NOT when sportFilter="soccer" or when searching - in those cases show individual leagues
             const hasSearchMatchInSoccer = search && filteredLeagues.length > 0 && sport.toLowerCase() === "soccer"
             if (!singleSelect && sport.toLowerCase() === "soccer" && !sportFilter && !hasSearchMatchInSoccer) {
               return (
