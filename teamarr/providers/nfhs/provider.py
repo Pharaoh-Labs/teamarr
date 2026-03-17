@@ -144,8 +144,13 @@ class NFHSProvider(SportsProvider):
         if not participant_school_key:
             return None
 
-        participant_gender = GENDER_NORMALIZATION.get(participant.get("gender"), participant.get("gender"))
-        participant_level = LEVEL_NORMALIZATION.get(participant.get("level"), participant.get("level"))
+        participant_gender_raw = participant.get("gender")
+        participant_level_raw = participant.get("level")
+        participant_sport_raw = participant.get("sport")
+
+        participant_gender = GENDER_NORMALIZATION.get(participant_gender_raw, participant_gender_raw)
+        participant_level = LEVEL_NORMALIZATION.get(participant_level_raw, participant_level_raw)
+        participant_sport = SPORT_NORMALIZATION.get(participant_sport_raw, participant_sport_raw)
 
         for team_row in self._get_latest_team_rows():
             school_key = team_row.get("_resolved_school_key") or team_row.get("school_key")
@@ -153,11 +158,15 @@ class NFHSProvider(SportsProvider):
             row_gender = GENDER_NORMALIZATION.get(team_row.get("gender"), team_row.get("gender"))
             row_level = LEVEL_NORMALIZATION.get(team_row.get("level"), team_row.get("level"))
 
+            sport_matches = row_sport == sport or row_sport == participant_sport
+            gender_matches = participant_gender is None or row_gender == participant_gender
+            level_matches = participant_level is None or row_level == participant_level
+
             if (
                 school_key == participant_school_key
-                and row_sport == sport
-                and row_gender == participant_gender
-                and row_level == participant_level
+                and sport_matches
+                and gender_matches
+                and level_matches
             ):
                 return self._parse_team(team_row, league, sport)
 
@@ -203,9 +212,22 @@ class NFHSProvider(SportsProvider):
                 continue
             seen_events.add(event_id)
 
-            sport = SPORT_NORMALIZATION.get(event.get("sport"), event.get("sport"))
-            gender = GENDER_NORMALIZATION.get(event.get("gender"), event.get("gender"))
-            level = LEVEL_NORMALIZATION.get(event.get("level"), event.get("level"))
+            sport_raw = event.get("sport")
+            gender_raw = event.get("gender")
+            level_raw = event.get("level")
+
+            teams = event.get("participants") or event.get("teams") or []
+            if teams:
+                if not gender_raw:
+                    gender_raw = teams[0].get("gender")
+                if not level_raw:
+                    level_raw = teams[0].get("level")
+                if not sport_raw:
+                    sport_raw = teams[0].get("sport")
+
+            sport = SPORT_NORMALIZATION.get(sport_raw, sport_raw)
+            gender = GENDER_NORMALIZATION.get(gender_raw, gender_raw)
+            level = LEVEL_NORMALIZATION.get(level_raw, level_raw)
             content_type = event.get("content_type")
             status = event.get("status")
             state_code = event.get("state_code") or event.get("state")
@@ -240,8 +262,6 @@ class NFHSProvider(SportsProvider):
 
             if league and league_code != league:
                 continue
-
-            teams = event.get("participants") or event.get("teams") or []
 
             if len(teams) < 2:
                 skipped_missing_teams += 1
@@ -559,11 +579,68 @@ class NFHSProvider(SportsProvider):
 
     def _participant_display_name(self, participant: dict) -> str:
         """Return a safe display name for an event participant without creating a Team."""
+        candidates = [
+            participant.get("name"),
+            participant.get("short_name"),
+            participant.get("acronym"),
+        ]
+
+        for value in candidates:
+            if not value:
+                continue
+            normalized = str(value).strip()
+            if normalized.lower() not in {"away", "home", "tbd"}:
+                return normalized
+
         return (
             participant.get("name")
             or participant.get("short_name")
             or participant.get("acronym")
             or "TBD"
+        )
+
+    def _build_event_only_team(self, participant: dict, league: str, sport: str) -> Team:
+        """Build a lightweight event-only Team for unresolved NFHS opponents."""
+        school_key = (
+            participant.get("school_key")
+            or participant.get("_resolved_school_key")
+            or participant.get("key")
+            or participant.get("slug")
+            or self._participant_display_name(participant)
+        )
+
+        name = (
+            participant.get("name")
+            or participant.get("short_name")
+            or participant.get("acronym")
+            or "Unknown Team"
+        )
+        if str(name).strip().lower() in {"away", "home", "tbd"}:
+            name = self._participant_display_name(participant)
+        short_name = (
+            participant.get("short_name")
+            or participant.get("acronym")
+            or name
+        )
+        if str(short_name).strip().lower() in {"away", "home", "tbd"}:
+            short_name = name
+        abbreviation = (
+            participant.get("acronym")
+            or short_name[:3].upper()
+        )
+        logo_url = participant.get("logo")
+
+        canonical_sport = self._canonical_sport_code(sport)
+
+        return Team(
+            id=f"nfhs-event-only:{school_key}:{league}:{canonical_sport}",
+            provider=self.name,
+            name=name,
+            short_name=short_name,
+            abbreviation=abbreviation,
+            league=league,
+            sport=canonical_sport,
+            logo_url=logo_url,
         )
 
     def _canonical_sport_code(self, sport: str | None) -> str:
@@ -656,15 +733,21 @@ class NFHSProvider(SportsProvider):
         away_team = self._resolve_known_team_for_event_participant(team1, league, sport)
         home_team = self._resolve_known_team_for_event_participant(team2, league, sport)
 
-        away_name = away_team.short_name if away_team else self._participant_display_name(team1)
-        home_name = home_team.short_name if home_team else self._participant_display_name(team2)
-        away_full_name = away_team.name if away_team else self._participant_display_name(team1)
-        home_full_name = home_team.name if home_team else self._participant_display_name(team2)
-
-        # Safer behavior for NFHS: keep events if at least one side resolves to a Team,
-        # but do not auto-create permanent imported teams for unknown opponents.
+        # Keep events only if at least one side resolves to a known NFHS team.
         if not home_team and not away_team:
             return None
+
+        # Build lightweight event-only teams for unresolved opponents so caching
+        # and downstream display logic always have both sides populated.
+        if not away_team:
+            away_team = self._build_event_only_team(team1, league, sport)
+        if not home_team:
+            home_team = self._build_event_only_team(team2, league, sport)
+
+        away_name = away_team.short_name
+        home_name = home_team.short_name
+        away_full_name = away_team.name
+        home_full_name = home_team.name
 
         short_name = event.get("title") or f"{away_name} vs {home_name}"
         name = event.get("subheadline") or f"{away_full_name} vs. {home_full_name}"
