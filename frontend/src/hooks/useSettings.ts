@@ -2,10 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   getSettings,
   getDispatcharrSettings,
+  getHeadendarrSettings,
   updateDispatcharrSettings,
+  updateHeadendarrSettings,
   testDispatcharrConnection,
   getDispatcharrStatus,
   getDispatcharrEPGSources,
+  testHeadendarrConnection,
+  getHeadendarrStatus,
+  getHeadendarrEPGSources,
+  getHeadendarrPlaylists,
+  provisionHeadendarrEPG,
   getLifecycleSettings,
   updateLifecycleSettings,
   getSchedulerSettings,
@@ -43,6 +50,7 @@ import {
 } from "@/api/settings"
 import type {
   DispatcharrSettings,
+  HeadendarrSettings,
   LifecycleSettings,
   SchedulerSettingsUpdate,
   EPGSettings,
@@ -61,6 +69,71 @@ export function useSettings() {
   return useQuery({
     queryKey: ["settings"],
     queryFn: getSettings,
+  })
+}
+
+export function useHeadendarrSettings() {
+  return useQuery({
+    queryKey: ["settings", "headendarr"],
+    queryFn: getHeadendarrSettings,
+  })
+}
+
+export function useUpdateHeadendarrSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: Partial<HeadendarrSettings>) =>
+      updateHeadendarrSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+      queryClient.invalidateQueries({ queryKey: ["headendarr"] })
+    },
+  })
+}
+
+export function useTestHeadendarrConnection() {
+  return useMutation({
+    mutationFn: (data?: { url?: string; username?: string; password?: string }) =>
+      testHeadendarrConnection(data),
+  })
+}
+
+export function useHeadendarrStatus() {
+  return useQuery({
+    queryKey: ["headendarr", "status"],
+    queryFn: getHeadendarrStatus,
+    refetchInterval: 30000,
+  })
+}
+
+export function useHeadendarrEPGSources(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["headendarr", "epg-sources"],
+    queryFn: getHeadendarrEPGSources,
+    enabled,
+    staleTime: 60000,
+  })
+}
+
+export function useHeadendarrPlaylists(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["headendarr", "playlists"],
+    queryFn: getHeadendarrPlaylists,
+    enabled,
+    staleTime: 60000,
+  })
+}
+
+export function useProvisionHeadendarrEPG() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => provisionHeadendarrEPG(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+      queryClient.invalidateQueries({ queryKey: ["headendarr", "epg-sources"] })
+    },
   })
 }
 

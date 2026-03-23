@@ -20,6 +20,14 @@ export interface DispatcharrSettings {
   cleanup_unused_logos: boolean
 }
 
+export interface HeadendarrSettings {
+  enabled: boolean
+  url: string | null
+  username: string | null
+  password: string | null
+  teamarr_host: string | null
+}
+
 export interface LifecycleSettings {
   channel_create_timing: string
   channel_delete_timing: string
@@ -223,6 +231,7 @@ export interface EmbyTestResponse {
 
 export interface AllSettings {
   dispatcharr: DispatcharrSettings
+  headendarr: HeadendarrSettings
   lifecycle: LifecycleSettings
   scheduler: SchedulerSettings
   epg: EPGSettings
@@ -281,6 +290,41 @@ export interface EPGSourcesResponse {
   error?: string
 }
 
+export interface HeadendarrStatus {
+  configured: boolean
+  connected: boolean
+  error?: string
+}
+
+export interface HeadendarrConnectionTestResponse {
+  success: boolean
+  url: string | null
+  username: string | null
+  version: string | null
+  playlist_count: number | null
+  epg_count: number | null
+  error: string | null
+}
+
+export interface HeadendarrPlaylist {
+  id: number
+  name: string
+  enabled: boolean
+  connections: number | null
+}
+
+export interface HeadendarrPlaylistsResponse {
+  success: boolean
+  playlists: HeadendarrPlaylist[]
+  error?: string
+}
+
+export interface ProvisionHeadendarrEPGResponse {
+  success: boolean
+  epg_id?: number
+  error?: string
+}
+
 // API Functions
 export async function getSettings(): Promise<AllSettings> {
   return api.get("/settings")
@@ -310,6 +354,40 @@ export async function getDispatcharrStatus(): Promise<DispatcharrStatus> {
 
 export async function getDispatcharrEPGSources(): Promise<EPGSourcesResponse> {
   return api.get("/dispatcharr/epg-sources")
+}
+
+export async function getHeadendarrSettings(): Promise<HeadendarrSettings> {
+  return api.get("/settings/headendarr")
+}
+
+export async function updateHeadendarrSettings(
+  data: Partial<HeadendarrSettings>
+): Promise<HeadendarrSettings> {
+  return api.put("/settings/headendarr", data)
+}
+
+export async function testHeadendarrConnection(data?: {
+  url?: string
+  username?: string
+  password?: string
+}): Promise<HeadendarrConnectionTestResponse> {
+  return api.post("/headendarr/test", data || {})
+}
+
+export async function getHeadendarrStatus(): Promise<HeadendarrStatus> {
+  return api.get("/headendarr/status")
+}
+
+export async function getHeadendarrEPGSources(): Promise<EPGSourcesResponse> {
+  return api.get("/headendarr/epg-sources")
+}
+
+export async function getHeadendarrPlaylists(): Promise<HeadendarrPlaylistsResponse> {
+  return api.get("/headendarr/playlists")
+}
+
+export async function provisionHeadendarrEPG(): Promise<ProvisionHeadendarrEPGResponse> {
+  return api.post("/headendarr/provision-epg", {})
 }
 
 export async function getLifecycleSettings(): Promise<LifecycleSettings> {

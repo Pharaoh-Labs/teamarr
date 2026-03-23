@@ -44,9 +44,15 @@ import { Badge } from "@/components/ui/badge"
 import {
   useSettings,
   useUpdateDispatcharrSettings,
+  useUpdateHeadendarrSettings,
   useTestDispatcharrConnection,
+  useTestHeadendarrConnection,
   useDispatcharrStatus,
+  useHeadendarrStatus,
   useDispatcharrEPGSources,
+  useHeadendarrEPGSources,
+  useHeadendarrPlaylists,
+  useProvisionHeadendarrEPG,
   useUpdateLifecycleSettings,
   useUpdateSchedulerSettings,
   useSchedulerStatus,
@@ -91,6 +97,7 @@ import { useCacheStatus, useRefreshCache, useGameDataCacheStats, useClearGameDat
 import { useDateFormat } from "@/hooks/useDateFormat"
 import type {
   DispatcharrSettings,
+  HeadendarrSettings,
   LifecycleSettings,
   SchedulerSettings,
   EPGSettings,
@@ -843,7 +850,7 @@ function LeagueConfigRow({
   )
 }
 
-type SettingsTab = "general" | "teams" | "events" | "channels" | "epg" | "dispatcharr" | "emby" | "advanced"
+type SettingsTab = "general" | "teams" | "events" | "channels" | "epg" | "dispatcharr" | "headendarr" | "emby" | "advanced"
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
@@ -852,6 +859,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "epg", label: "EPG" },
   { id: "channels", label: "Channels" },
   { id: "dispatcharr", label: "Dispatcharr" },
+  { id: "headendarr", label: "Headendarr" },
   { id: "emby", label: "Emby" },
   { id: "advanced", label: "System" },
 ]
@@ -860,7 +868,10 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general")
   const { data: settings, isLoading, error, refetch } = useSettings()
   const dispatcharrStatus = useDispatcharrStatus()
+  const headendarrStatus = useHeadendarrStatus()
   const epgSourcesQuery = useDispatcharrEPGSources(dispatcharrStatus.data?.connected ?? false)
+  const headendarrEpgSourcesQuery = useHeadendarrEPGSources(headendarrStatus.data?.connected ?? false)
+  const headendarrPlaylistsQuery = useHeadendarrPlaylists(headendarrStatus.data?.connected ?? false)
 
   // Fetch channel profiles for conversion helpers
   const channelProfilesQuery = useQuery({
@@ -884,7 +895,10 @@ export function Settings() {
   const { startGeneration, isGenerating } = useGenerationProgress()
 
   const updateDispatcharr = useUpdateDispatcharrSettings()
+  const updateHeadendarr = useUpdateHeadendarrSettings()
   const testConnection = useTestDispatcharrConnection()
+  const testHeadendarrConnection = useTestHeadendarrConnection()
+  const provisionHeadendarrEPG = useProvisionHeadendarrEPG()
   const updateLifecycle = useUpdateLifecycleSettings()
   const updateScheduler = useUpdateSchedulerSettings()
   const updateEPG = useUpdateEPGSettings()
@@ -943,6 +957,7 @@ export function Settings() {
 
   // Local form state
   const [dispatcharr, setDispatcharr] = useState<Partial<DispatcharrSettings>>({})
+  const [headendarr, setHeadendarr] = useState<Partial<HeadendarrSettings>>({})
   const [lifecycle, setLifecycle] = useState<LifecycleSettings | null>(null)
   const [scheduler, setScheduler] = useState<SchedulerSettings | null>(null)
   const [epg, setEPG] = useState<EPGSettings | null>(null)
@@ -1043,6 +1058,13 @@ export function Settings() {
         default_channel_group_mode: settings.dispatcharr.default_channel_group_mode,
         cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
       })
+      setHeadendarr({
+        enabled: settings.headendarr.enabled,
+        url: settings.headendarr.url,
+        username: settings.headendarr.username,
+        password: "",
+        teamarr_host: settings.headendarr.teamarr_host,
+      })
       setLifecycle(settings.lifecycle)
       setScheduler(settings.scheduler)
       setEPG(settings.epg)
@@ -1140,6 +1162,24 @@ export function Settings() {
     }
   }
 
+  const handleSaveHeadendarr = async () => {
+    try {
+      const data: Partial<HeadendarrSettings> = {
+        enabled: headendarr.enabled,
+        url: headendarr.url,
+        username: headendarr.username,
+        teamarr_host: headendarr.teamarr_host,
+      }
+      if (headendarr.password) {
+        data.password = headendarr.password
+      }
+      await updateHeadendarr.mutateAsync(data)
+      toast.success("Headendarr settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
   const handleTestConnection = async () => {
     try {
       const result = await testConnection.mutateAsync({
@@ -1154,6 +1194,36 @@ export function Settings() {
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Connection test failed")
+    }
+  }
+
+  const handleTestHeadendarrConnection = async () => {
+    try {
+      const result = await testHeadendarrConnection.mutateAsync({
+        url: headendarr.url || undefined,
+        username: headendarr.username || undefined,
+        password: headendarr.password || undefined,
+      })
+      if (result.success) {
+        toast.success(`Connected! ${result.playlist_count} playlists, ${result.epg_count} EPG sources`)
+      } else {
+        toast.error(result.error || "Connection failed")
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Connection test failed")
+    }
+  }
+
+  const handleProvisionHeadendarrEPG = async () => {
+    try {
+      const result = await provisionHeadendarrEPG.mutateAsync()
+      if (result.success) {
+        toast.success(`Provisioned Headendarr EPG source #${result.epg_id}`)
+      } else {
+        toast.error(result.error || "Provisioning failed")
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Provisioning failed")
     }
   }
 
@@ -3094,6 +3164,218 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      </>
+      )}
+
+      {/* Headendarr Tab */}
+      {activeTab === "headendarr" && (
+      <>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold">Headendarr Integration</h2>
+        <p className="text-sm text-muted-foreground">Configure Headendarr for Teamarr XMLTV provisioning and future ephemeral event channels</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Connection Settings</CardTitle>
+              <CardDescription>Server URL and admin credentials</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleTestHeadendarrConnection} variant="outline" size="sm" disabled={testHeadendarrConnection.isPending}>
+                {testHeadendarrConnection.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <TestTube className="h-4 w-4 mr-1" />
+                )}
+                Test
+              </Button>
+              {headendarrStatus.data?.connected ? (
+                <Badge variant="success" className="gap-1">
+                  <CheckCircle className="h-3 w-3" /> Connected
+                </Badge>
+              ) : headendarrStatus.data?.configured && headendarrStatus.data?.error ? (
+                <Badge variant="destructive" className="gap-1" title={headendarrStatus.data.error}>
+                  <AlertTriangle className="h-3 w-3" /> Error
+                </Badge>
+              ) : headendarrStatus.data?.configured ? (
+                <Badge variant="warning" className="gap-1">
+                  <XCircle className="h-3 w-3" /> Disconnected
+                </Badge>
+              ) : (
+                <Badge variant="secondary">Not Configured</Badge>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {headendarrStatus.data?.configured && headendarrStatus.data?.error && (
+            <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-destructive">Connection Failed</p>
+                <p className="text-muted-foreground">{headendarrStatus.data.error}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={headendarr.enabled ?? false}
+              onCheckedChange={(checked) => setHeadendarr({ ...headendarr, enabled: checked })}
+            />
+            <Label>Enable Headendarr Integration</Label>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="headendarr-url">URL</Label>
+            <Input
+              id="headendarr-url"
+              value={headendarr.url ?? ""}
+              onChange={(e) => setHeadendarr({ ...headendarr, url: e.target.value })}
+              placeholder="http://localhost:9985"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="headendarr-username">Username</Label>
+              <Input
+                id="headendarr-username"
+                value={headendarr.username ?? ""}
+                onChange={(e) => setHeadendarr({ ...headendarr, username: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="headendarr-password">Password</Label>
+              <Input
+                id="headendarr-password"
+                type="password"
+                value={headendarr.password ?? ""}
+                onChange={(e) => setHeadendarr({ ...headendarr, password: e.target.value })}
+                placeholder="Leave blank to keep current"
+              />
+            </div>
+          </div>
+
+          <Button onClick={handleSaveHeadendarr} disabled={updateHeadendarr.isPending}>
+            {updateHeadendarr.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            Save
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>EPG Provisioning</CardTitle>
+          <CardDescription>Provision Teamarr&apos;s XMLTV feed into Headendarr</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="headendarr-teamarr-host">Teamarr Host / Port</Label>
+            <Input
+              id="headendarr-teamarr-host"
+              value={headendarr.teamarr_host ?? ""}
+              onChange={(e) => setHeadendarr({ ...headendarr, teamarr_host: e.target.value })}
+              placeholder="teamarr:9195 or http://teamarr:9195"
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter the Teamarr address as seen from Headendarr. Teamarr will build the XMLTV URL automatically and provision a fixed <code>Teamarr</code> EPG source with an hourly refresh.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Existing Headendarr EPG Sources</Label>
+            <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+              {headendarrEpgSourcesQuery.data?.sources?.length ? (
+                <div className="space-y-2">
+                  {headendarrEpgSourcesQuery.data.sources.map((source) => (
+                    <div key={source.id} className="flex items-center justify-between gap-3">
+                      <span>{source.name}</span>
+                      <span className="text-xs">#{source.id}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <span>No EPG sources returned from Headendarr yet.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={handleSaveHeadendarr} disabled={updateHeadendarr.isPending}>
+              {updateHeadendarr.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-1" />
+              )}
+              Save
+            </Button>
+            <Button
+              onClick={handleProvisionHeadendarrEPG}
+              variant="outline"
+              disabled={!headendarrStatus.data?.connected || provisionHeadendarrEPG.isPending}
+            >
+              {provisionHeadendarrEPG.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1" />
+              )}
+              Provision / Refresh
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Playlists</CardTitle>
+          <CardDescription>Connected Headendarr playlists available for Teamarr stream matching</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!headendarrStatus.data?.connected ? (
+            <p className="text-sm text-muted-foreground">Connect Headendarr to inspect available playlists.</p>
+          ) : headendarrPlaylistsQuery.data?.playlists?.length ? (
+            <div className="space-y-2">
+              {headendarrPlaylistsQuery.data.playlists.map((playlist) => (
+                <div key={playlist.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="font-medium">{playlist.name}</p>
+                    <p className="text-xs text-muted-foreground">Playlist #{playlist.id}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={playlist.enabled ? "success" : "secondary"}>
+                      {playlist.enabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                    {typeof playlist.connections === "number" && (
+                      <Badge variant="outline">{playlist.connections} connections</Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No playlists returned from Headendarr.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Current Scope</CardTitle>
+          <CardDescription>What this integration now handles versus what still needs lifecycle work</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>This first pass provisions Teamarr XMLTV into Headendarr and exposes playlist inventory for local Teamarr matching.</p>
+          <p>Ephemeral event-channel creation and teardown in Headendarr still need to be wired through Teamarr’s lifecycle service.</p>
+          <p>Headendarr supports multi-source channel priority, so the next lifecycle step can create channels with ordered failover sources for CSO.</p>
+        </CardContent>
+      </Card>
       </>
       )}
 
