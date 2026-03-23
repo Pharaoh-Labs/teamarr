@@ -18,6 +18,7 @@ from .display import router as display_router
 from .emby import router as emby_router
 from .epg import router as epg_router
 from .feed_separation import router as feed_separation_router
+from .headendarr import router as headendarr_router
 from .lifecycle import router as lifecycle_router
 from .models import (
     AllSettingsModel,
@@ -28,6 +29,7 @@ from .models import (
     EmbySettingsModel,
     EPGSettingsModel,
     FeedSeparationSettingsModel,
+    HeadendarrSettingsModel,
     LifecycleSettingsModel,
     ReconciliationSettingsModel,
     SchedulerSettingsModel,
@@ -45,6 +47,7 @@ router = APIRouter()
 
 # Include sub-routers
 router.include_router(dispatcharr_router)
+router.include_router(headendarr_router)
 router.include_router(emby_router)
 router.include_router(lifecycle_router)
 router.include_router(epg_router)
@@ -81,6 +84,13 @@ def get_settings():
             default_channel_group_id=settings.dispatcharr.default_channel_group_id,
             default_channel_group_mode=settings.dispatcharr.default_channel_group_mode,
             cleanup_unused_logos=settings.dispatcharr.cleanup_unused_logos,
+        ),
+        headendarr=HeadendarrSettingsModel(
+            enabled=settings.headendarr.enabled,
+            url=settings.headendarr.url,
+            username=settings.headendarr.username,
+            password=settings.headendarr.password,
+            teamarr_host=settings.headendarr.teamarr_host,
         ),
         lifecycle=LifecycleSettingsModel(
             channel_create_timing=settings.lifecycle.channel_create_timing,
@@ -187,6 +197,7 @@ __all__ = [
     "EmbySettingsModel",
     "EPGSettingsModel",
     "FeedSeparationSettingsModel",
+    "HeadendarrSettingsModel",
     "LifecycleSettingsModel",
     "ReconciliationSettingsModel",
     "SchedulerSettingsModel",

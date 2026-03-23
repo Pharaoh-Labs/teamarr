@@ -238,6 +238,13 @@ CREATE TABLE IF NOT EXISTS settings (
     default_channel_group_mode TEXT DEFAULT 'static', -- 'static', 'sport', 'league', or custom pattern
     cleanup_unused_logos BOOLEAN DEFAULT 0,   -- Call Dispatcharr's cleanup API after generation
 
+    -- Headendarr Integration
+    headendarr_enabled BOOLEAN DEFAULT 0,
+    headendarr_url TEXT,
+    headendarr_username TEXT,
+    headendarr_password TEXT,                 -- Note: Consider encrypting in production
+    headendarr_teamarr_host TEXT,             -- Teamarr host:port or base URL as seen from Headendarr
+
     -- Reconciliation Settings
     reconcile_on_epg_generation BOOLEAN DEFAULT 1,
     reconcile_on_startup BOOLEAN DEFAULT 1,
@@ -357,7 +364,7 @@ CREATE TABLE IF NOT EXISTS settings (
     emby_api_key TEXT,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 71
+    schema_version INTEGER DEFAULT 72
 );
 
 -- Insert default settings

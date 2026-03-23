@@ -99,6 +99,45 @@ def update_dispatcharr_settings(
     return False
 
 
+def update_headendarr_settings(
+    conn: Connection,
+    enabled: bool | None = None,
+    url: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
+    teamarr_host: str | None | object = _NOT_PROVIDED,
+) -> bool:
+    """Update Headendarr settings."""
+    updates = []
+    values = []
+
+    if enabled is not None:
+        updates.append("headendarr_enabled = ?")
+        values.append(int(enabled))
+    if url is not None:
+        updates.append("headendarr_url = ?")
+        values.append(url)
+    if username is not None:
+        updates.append("headendarr_username = ?")
+        values.append(username)
+    if password is not None:
+        updates.append("headendarr_password = ?")
+        values.append(password)
+    if teamarr_host is not _NOT_PROVIDED:
+        updates.append("headendarr_teamarr_host = ?")
+        values.append(teamarr_host)
+
+    if not updates:
+        return False
+
+    query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
+    cursor = conn.execute(query, values)
+    if cursor.rowcount > 0:
+        logger.info("[UPDATED] Headendarr settings: %s", [u.split(" = ")[0] for u in updates])
+        return True
+    return False
+
+
 def update_scheduler_settings(
     conn: Connection,
     enabled: bool | None = None,
@@ -822,5 +861,3 @@ def update_backup_settings(
         logger.info("[BACKUP] Updated settings: %s", [u.split(" = ")[0] for u in updates])
         return True
     return False
-
-

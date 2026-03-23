@@ -13,6 +13,7 @@ from .read import (
     get_emby_settings,
     get_epg_settings,
     get_feed_separation_settings,
+    get_headendarr_settings,
     get_lifecycle_settings,
     get_scheduler_settings,
     get_stream_filter_settings,
@@ -31,6 +32,7 @@ from .types import (
     EmbySettings,
     EPGSettings,
     FeedSeparationSettings,
+    HeadendarrSettings,
     LifecycleSettings,
     ReconciliationSettings,
     SchedulerSettings,
@@ -50,6 +52,7 @@ from .update import (
     update_emby_settings,
     update_epg_settings,
     update_feed_separation_settings,
+    update_headendarr_settings,
     update_lifecycle_settings,
     update_reconciliation_settings,
     update_scheduler_settings,
@@ -61,6 +64,7 @@ from .update import (
 __all__ = [
     # Types
     "DispatcharrSettings",
+    "HeadendarrSettings",
     "EmbySettings",
     "LifecycleSettings",
     "ReconciliationSettings",
@@ -81,6 +85,7 @@ __all__ = [
     # Read operations
     "get_all_settings",
     "get_dispatcharr_settings",
+    "get_headendarr_settings",
     "get_emby_settings",
     "get_scheduler_settings",
     "get_lifecycle_settings",
@@ -95,6 +100,7 @@ __all__ = [
     "get_feed_separation_settings",
     # Update operations
     "update_dispatcharr_settings",
+    "update_headendarr_settings",
     "update_emby_settings",
     "update_scheduler_settings",
     "update_lifecycle_settings",

@@ -134,6 +134,7 @@ def _run_startup_tasks():
     from teamarr.database import get_db
     from teamarr.database.settings import get_scheduler_settings
     from teamarr.dispatcharr import get_factory
+    from teamarr.headendarr import get_factory as get_headendarr_factory
     from teamarr.providers import ProviderRegistry
     from teamarr.services import (
         create_cache_service,
@@ -210,6 +211,18 @@ def _run_startup_tasks():
         except Exception as e:
             logger.warning("[STARTUP] Failed to initialize Dispatcharr factory: %s", e)
 
+        # Initialize Headendarr factory (lazy connection)
+        try:
+            headendarr_factory = get_headendarr_factory(get_db)
+            if headendarr_factory.is_configured:
+                logger.info(
+                    "[STARTUP] Headendarr configured, connection will be established on first use"
+                )
+            else:
+                logger.info("[STARTUP] Headendarr not configured")
+        except Exception as e:
+            logger.warning("[STARTUP] Failed to initialize Headendarr factory: %s", e)
+
         # Start background scheduler if enabled
         startup_state.set_phase(StartupPhase.STARTING_SCHEDULER)
         from teamarr.database.settings import get_epg_settings
@@ -262,6 +275,7 @@ async def lifespan(app: FastAPI):
     from teamarr.database import get_db, init_db
     from teamarr.database.connection import is_v1_database_detected
     from teamarr.dispatcharr import close_dispatcharr
+    from teamarr.headendarr import close_headendarr
 
     # Startup - minimal blocking, then background tasks
     setup_logging()
@@ -303,6 +317,7 @@ async def lifespan(app: FastAPI):
 
     # Close Dispatcharr connection
     close_dispatcharr()
+    close_headendarr()
 
     logger.info("[SHUTDOWN] Teamarr stopped")
 

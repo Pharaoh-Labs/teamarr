@@ -102,6 +102,43 @@ class DispatcharrSettingsUpdate(BaseModel):
         return _validate_profile_ids(v)
 
 
+class HeadendarrSettingsModel(BaseModel):
+    """Headendarr integration settings."""
+
+    enabled: bool = False
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    teamarr_host: str | None = None
+
+    @field_serializer("password")
+    @classmethod
+    def _mask_password(cls, v: str | None) -> str | None:
+        return MASKED_SECRET if v else None
+
+
+class HeadendarrSettingsUpdate(BaseModel):
+    """Update model for Headendarr settings."""
+
+    enabled: bool | None = None
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    teamarr_host: str | None = None
+
+
+class HeadendarrConnectionTestResponse(BaseModel):
+    """Response from Headendarr connection test."""
+
+    success: bool
+    url: str | None = None
+    username: str | None = None
+    version: str | None = None
+    playlist_count: int | None = None
+    epg_count: int | None = None
+    error: str | None = None
+
+
 class ConnectionTestRequest(BaseModel):
     """Request to test Dispatcharr connection."""
 
@@ -461,6 +498,7 @@ class AllSettingsModel(BaseModel):
     """Complete application settings."""
 
     dispatcharr: DispatcharrSettingsModel
+    headendarr: HeadendarrSettingsModel
     lifecycle: LifecycleSettingsModel
     reconciliation: ReconciliationSettingsModel
     scheduler: SchedulerSettingsModel

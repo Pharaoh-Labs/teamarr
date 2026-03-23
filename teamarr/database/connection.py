@@ -1336,6 +1336,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         conn.execute("UPDATE settings SET schema_version = 71 WHERE id = 1")
         current_version = 71
 
+    # v72: Headendarr integration settings columns
+    # Includes the simplified Teamarr host field shape.
+    # — handled by schema reconciliation
+    if current_version < 72:
+        conn.execute("UPDATE settings SET schema_version = 72 WHERE id = 1")
+        logger.info("[MIGRATE] Schema upgraded to version 72 (Headendarr integration)")
+        current_version = 72
+
 
 def _dedup_cross_group_channels(conn: sqlite3.Connection) -> None:
     """Merge duplicate channels that exist for the same event across groups.

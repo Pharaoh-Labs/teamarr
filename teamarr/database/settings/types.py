@@ -31,6 +31,17 @@ class DispatcharrSettings:
 
 
 @dataclass
+class HeadendarrSettings:
+    """Headendarr integration settings."""
+
+    enabled: bool = False
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    teamarr_host: str | None = None
+
+
+@dataclass
 class LifecycleSettings:
     """Channel lifecycle settings."""
 
@@ -263,6 +274,7 @@ class AllSettings:
     """Complete application settings."""
 
     dispatcharr: DispatcharrSettings = field(default_factory=DispatcharrSettings)
+    headendarr: HeadendarrSettings = field(default_factory=HeadendarrSettings)
     lifecycle: LifecycleSettings = field(default_factory=LifecycleSettings)
     reconciliation: ReconciliationSettings = field(default_factory=ReconciliationSettings)
     scheduler: SchedulerSettings = field(default_factory=SchedulerSettings)

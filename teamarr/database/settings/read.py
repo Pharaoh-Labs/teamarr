@@ -17,6 +17,7 @@ from .types import (
     EmbySettings,
     EPGSettings,
     FeedSeparationSettings,
+    HeadendarrSettings,
     LifecycleSettings,
     ReconciliationSettings,
     SchedulerSettings,
@@ -88,6 +89,13 @@ def get_all_settings(conn: Connection) -> AllSettings:
             cleanup_unused_logos=bool(row["cleanup_unused_logos"])
             if row["cleanup_unused_logos"] is not None
             else False,
+        ),
+        headendarr=HeadendarrSettings(
+            enabled=bool(row["headendarr_enabled"]),
+            url=row["headendarr_url"],
+            username=row["headendarr_username"],
+            password=row["headendarr_password"],
+            teamarr_host=row["headendarr_teamarr_host"],
         ),
         lifecycle=LifecycleSettings(
             channel_create_timing=row["channel_create_timing"] or "same_day",
@@ -256,6 +264,27 @@ def get_dispatcharr_settings(conn: Connection) -> DispatcharrSettings:
         cleanup_unused_logos=bool(row["cleanup_unused_logos"])
         if row["cleanup_unused_logos"] is not None
         else False,
+    )
+
+
+def get_headendarr_settings(conn: Connection) -> HeadendarrSettings:
+    """Get Headendarr integration settings."""
+    cursor = conn.execute(
+        """SELECT headendarr_enabled, headendarr_url, headendarr_username,
+                  headendarr_password, headendarr_teamarr_host
+           FROM settings WHERE id = 1"""
+    )
+    row = cursor.fetchone()
+
+    if not row:
+        return HeadendarrSettings()
+
+    return HeadendarrSettings(
+        enabled=bool(row["headendarr_enabled"]),
+        url=row["headendarr_url"],
+        username=row["headendarr_username"],
+        password=row["headendarr_password"],
+        teamarr_host=row["headendarr_teamarr_host"],
     )
 
 
