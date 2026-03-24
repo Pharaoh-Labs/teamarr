@@ -153,10 +153,11 @@ def create_lifecycle_service(
         ValueError: If sports_service is not provided
     """
     from teamarr.database.channels import get_dispatcharr_settings
-    from teamarr.database.settings import get_all_settings
+    from teamarr.database.settings import get_all_settings, get_headendarr_settings
 
     with db_factory() as conn:
         settings = get_dispatcharr_settings(conn)
+        headendarr_settings = get_headendarr_settings(conn)
         lifecycle = get_lifecycle_settings(conn)
         all_settings = get_all_settings(conn)
 
@@ -181,6 +182,13 @@ def create_lifecycle_service(
         channel_manager = ChannelManager(raw_client)
         logo_manager = LogoManager(raw_client)
         epg_manager = EPGManager(raw_client)
+    elif headendarr_settings.enabled and headendarr_settings.url and headendarr_settings.username:
+        from teamarr.headendarr import get_headendarr_connection
+
+        headendarr_connection = get_headendarr_connection(db_factory)
+        if headendarr_connection:
+            channel_manager = headendarr_connection.channels
+            epg_manager = headendarr_connection.epg
 
     return ChannelLifecycleService(
         db_factory=db_factory,

@@ -129,6 +129,7 @@ def run_full_generation(
         get_dispatcharr_settings,
         get_display_settings,
         get_epg_settings,
+        get_headendarr_settings,
     )
     from teamarr.database.stats import create_run
     from teamarr.dispatcharr import EPGManager
@@ -224,6 +225,7 @@ def run_full_generation(
         with db_factory() as conn:
             settings = get_epg_settings(conn)
             dispatcharr_settings = get_dispatcharr_settings(conn)
+            headendarr_settings = get_headendarr_settings(conn)
             display_settings = get_display_settings(conn)
 
         # Step 1: Refresh M3U accounts (0-5%)
@@ -362,6 +364,17 @@ def run_full_generation(
             result.file_size = len(merged_xmltv)
             logger.info(
                 "[GENERATION] EPG written to %s (%s bytes)", output_path, f"{result.file_size:,}"
+            )
+
+        if result.file_written and headendarr_settings.enabled and headendarr_settings.teamarr_host:
+            update_progress("headendarr", 96, "Provisioning Headendarr EPG...")
+            result.epg_refresh["headendarr"] = _provision_headendarr_epg_source(
+                db_factory=db_factory,
+                teamarr_host=headendarr_settings.teamarr_host,
+            )
+            update_progress("headendarr", 97, "Syncing Headendarr team channels...")
+            result.epg_association["headendarr_team_channels"] = _sync_headendarr_team_channels(
+                db_factory=db_factory,
             )
 
         # Create lifecycle service once for steps 5-6
@@ -604,6 +617,246 @@ def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any
         )
 
     return result
+
+
+def _provision_headendarr_epg_source(
+    db_factory: Callable[[], Any],
+    teamarr_host: str,
+) -> dict:
+    """Ensure Headendarr has a Teamarr-backed XMLTV source configured."""
+    from teamarr.headendarr import get_headendarr_connection
+    from teamarr.api.routes.settings.headendarr import (
+        HEADENDARR_TEAMARR_EPG_NAME,
+        HEADENDARR_TEAMARR_EPG_SCHEDULE,
+        _build_teamarr_xmltv_url,
+    )
+
+    connection = get_headendarr_connection(db_factory)
+    if not connection:
+        return {"success": False, "message": "Headendarr not configured or not connected"}
+
+    epg_id = connection.epg.ensure_source(
+        name=HEADENDARR_TEAMARR_EPG_NAME,
+        url=_build_teamarr_xmltv_url(teamarr_host),
+        update_schedule=HEADENDARR_TEAMARR_EPG_SCHEDULE,
+    )
+    if epg_id is None:
+        return {"success": False, "message": "Failed to create or update Headendarr EPG source"}
+
+    refresh_started = connection.epg.trigger_update(epg_id)
+    return {
+        "success": True,
+        "epg_id": epg_id,
+        "refresh_started": refresh_started,
+    }
+
+
+def _team_match_terms(team: dict) -> list[str]:
+    """Build search terms for matching persistent team streams."""
+    from teamarr.utilities.fuzzy_match import normalize_text
+
+    terms: list[str] = []
+
+    def add(value: str | None) -> None:
+        if not value:
+            return
+        normalised = normalize_text(value)
+        if normalised and normalised not in terms:
+            terms.append(normalised)
+
+    team_name = team.get("team_name") or ""
+    add(team_name)
+
+    tokens = [token for token in normalize_text(team_name).split() if len(token) >= 4]
+    if tokens:
+        add(tokens[-1])
+
+    team_abbrev = team.get("team_abbrev") or ""
+    if len(team_abbrev.strip()) >= 3:
+        add(team_abbrev)
+
+    return terms
+
+
+def _score_headendarr_team_stream(team: dict, stream_name: str) -> int:
+    """Score a Headendarr stream for a team channel.
+
+    Team channels are persistent, so the best candidate streams are the ones
+    branded for the team rather than a specific matchup. Prefer exact team
+    names, then mascot/abbreviation matches gated by the league token.
+    """
+    from rapidfuzz import fuzz
+
+    from teamarr.utilities.fuzzy_match import normalize_text
+
+    if not stream_name:
+        return 0
+
+    stream_text = normalize_text(stream_name)
+    if not stream_text:
+        return 0
+
+    league_hint = normalize_text(team.get("primary_league") or "")
+    team_name = normalize_text(team.get("team_name") or "")
+    team_abbrev = normalize_text(team.get("team_abbrev") or "")
+    team_terms = _team_match_terms(team)
+
+    score = 0
+
+    if team_name and team_name in stream_text:
+        score = max(score, 100)
+
+    if team_terms:
+        mascot = team_terms[1] if len(team_terms) > 1 else None
+        if mascot and mascot in stream_text:
+            score = max(score, 88 if league_hint and league_hint in stream_text else 78)
+
+    if team_abbrev and f" {team_abbrev} " in f" {stream_text} ":
+        score = max(score, 82 if league_hint and league_hint in stream_text else 70)
+
+    if team_name:
+        fuzzy_score = int(fuzz.partial_ratio(team_name, stream_text))
+        if fuzzy_score >= 92:
+            score = max(score, 76)
+
+    return score
+
+
+def _find_headendarr_team_stream_ids(team: dict, streams: list[Any]) -> list[int]:
+    """Find playlist streams suitable for a persistent team channel."""
+    ranked: list[tuple[int, int]] = []
+    seen: set[int] = set()
+
+    for stream in streams:
+        stream_id = getattr(stream, "id", None)
+        if stream_id is None or stream_id in seen:
+            continue
+        score = _score_headendarr_team_stream(team, getattr(stream, "name", ""))
+        if score <= 0:
+            continue
+        ranked.append((score, int(stream_id)))
+        seen.add(int(stream_id))
+
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return [stream_id for _score, stream_id in ranked[:5]]
+
+
+def _sync_headendarr_team_channels(
+    db_factory: Callable[[], Any],
+) -> dict:
+    """Create or update persistent Headendarr channels for active teams."""
+    from teamarr.database.channel_numbers import get_global_channel_range
+    from teamarr.database.teams import list_teams
+    from teamarr.headendarr import get_headendarr_connection
+
+    connection = get_headendarr_connection(db_factory)
+    if not connection:
+        return {"success": False, "message": "Headendarr not configured or not connected"}
+
+    with db_factory() as conn:
+        teams = [
+            team
+            for team in list_teams(conn, active_only=True)
+            if team.get("template_id") is not None
+        ]
+        range_start, range_end = get_global_channel_range(conn)
+
+    if not teams:
+        return {"success": True, "created": 0, "updated": 0, "skipped": 0}
+
+    streams = connection.playlists.list_streams()
+    existing_channels = connection.channels.get_channels(use_cache=False)
+    by_tvg_id = {channel.tvg_id: channel for channel in existing_channels if channel.tvg_id}
+
+    used_numbers = {
+        int(float(channel.channel_number))
+        for channel in existing_channels
+        if channel.channel_number
+        and str(channel.channel_number).strip()
+        and str(channel.channel_number).strip().isdigit()
+    }
+
+    def next_channel_number() -> int | None:
+        candidate = range_start or 101
+        end = range_end or 999999
+        while candidate in used_numbers and candidate <= end:
+            candidate += 1
+        if candidate > end:
+            return None
+        used_numbers.add(candidate)
+        return candidate
+
+    created = 0
+    updated = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for team in teams:
+        tvg_id = team.get("channel_id")
+        if not tvg_id:
+            skipped += 1
+            continue
+
+        stream_ids = _find_headendarr_team_stream_ids(team, streams)
+        if not stream_ids:
+            logger.info(
+                "[HEADENDARR_TEAM] No matching streams found for team '%s'",
+                team.get("team_name"),
+            )
+            skipped += 1
+            continue
+
+        existing = by_tvg_id.get(tvg_id)
+        channel_number: int | None = None
+
+        if existing and existing.channel_number and str(existing.channel_number).isdigit():
+            channel_number = int(existing.channel_number)
+            used_numbers.add(channel_number)
+        else:
+            channel_number = next_channel_number()
+
+        if channel_number is None:
+            errors.append(f"{team.get('team_name')}: no channel number available")
+            continue
+
+        payload = {
+            "name": team.get("team_name"),
+            "channel_number": channel_number,
+            "tvg_id": tvg_id,
+            "stream_ids": stream_ids,
+            "logo_url": team.get("channel_logo_url") or team.get("team_logo_url"),
+        }
+
+        if existing:
+            update_payload = {
+                "name": payload["name"],
+                "channel_number": payload["channel_number"],
+                "tvg_id": payload["tvg_id"],
+                "streams": stream_ids,
+                "logo_url": payload["logo_url"],
+            }
+            result = connection.channels.update_channel(existing.id, update_payload)
+            if result.success:
+                updated += 1
+            else:
+                errors.append(f"{team.get('team_name')}: {result.error}")
+            continue
+
+        result = connection.channels.create_channel(**payload)
+        if result.success:
+            created += 1
+        else:
+            errors.append(f"{team.get('team_name')}: {result.error}")
+
+    summary: dict[str, Any] = {
+        "success": len(errors) == 0,
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+    }
+    if errors:
+        summary["errors"] = errors
+    return summary
 
 
 def _validate_channel_ranges(
@@ -986,4 +1239,3 @@ def _finalize_stats_run(
 
     with db_factory() as conn:
         save_run(conn, stats_run)
-
