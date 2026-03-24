@@ -492,12 +492,8 @@ class EventGroupProcessor:
 
             result = PreviewResult(group_id=group_id, group_name=group.name)
 
-            # Step 0: Refresh M3U account before fetching streams (skip if recent)
-            if not self._dispatcharr_client:
-                result.errors.append("Dispatcharr not configured")
-                return result
-
-            if group.m3u_account_id:
+            # Step 0: Refresh upstream stream source when Dispatcharr is in use
+            if self._dispatcharr_client and group.m3u_account_id:
                 try:
                     refresh_result = self._dispatcharr_client.m3u.wait_for_refresh(
                         group.m3u_account_id,
@@ -524,22 +520,38 @@ class EventGroupProcessor:
                         "[EVENT_EPG] Preview: M3U refresh error: %s - continuing anyway", e
                     )
 
-            # Step 1: Fetch streams from M3U group
+            # Step 1: Fetch streams from the configured source
             try:
-                raw_streams = self._dispatcharr_client.m3u.list_streams(
-                    group_id=group.m3u_group_id,
-                    account_id=group.m3u_account_id,
-                )
+                if self._dispatcharr_client:
+                    raw_streams = self._dispatcharr_client.m3u.list_streams(
+                        group_id=group.m3u_group_id,
+                        account_id=group.m3u_account_id,
+                    )
+                    streams = [{"id": s.id, "name": s.name} for s in raw_streams]
+                else:
+                    from teamarr.headendarr import get_headendarr_connection
+
+                    headendarr_connection = get_headendarr_connection(self._db_factory)
+                    if not headendarr_connection:
+                        result.errors.append("No Dispatcharr or Headendarr source configured")
+                        return result
+
+                    playlist_streams = headendarr_connection.playlists.list_streams()
+                    if group.m3u_account_id:
+                        playlist_streams = [
+                            stream
+                            for stream in playlist_streams
+                            if stream.playlist_id == group.m3u_account_id
+                        ]
+                    streams = [{"id": stream.id, "name": stream.name} for stream in playlist_streams]
             except Exception as e:
                 result.errors.append(f"Failed to fetch streams: {e}")
                 return result
 
-            if not raw_streams:
+            if not streams:
                 result.errors.append("No streams found in M3U group")
                 return result
 
-            # Convert DispatcharrStream objects to dict format
-            streams = [{"id": s.id, "name": s.name} for s in raw_streams]
             result.total_streams = len(streams)
 
             # Step 2: Apply stream filtering
@@ -1137,40 +1149,75 @@ class EventGroupProcessor:
         return result
 
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
-        """Fetch M3U streams from Dispatcharr for the group.
+        """Fetch candidate streams for the group.
 
-        Uses group's m3u_group_id to filter streams.
+        Uses Dispatcharr when configured, otherwise falls back to Headendarr
+        playlist streams using the existing group M3U account field as the
+        selected playlist identifier.
         """
-        if not self._dispatcharr_client:
-            logger.warning("[EVENT_EPG] Dispatcharr not configured - cannot fetch streams")
-            return []
-
         try:
-            m3u_manager = self._dispatcharr_client.m3u
+            if self._dispatcharr_client:
+                m3u_manager = self._dispatcharr_client.m3u
 
-            # Fetch streams filtered by M3U group if configured
-            if group.m3u_group_id:
-                streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
-            else:
-                # Fetch all streams if no group filter
-                streams = m3u_manager.list_streams()
+                if group.m3u_group_id:
+                    streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
+                else:
+                    streams = m3u_manager.list_streams()
 
-            # Convert to dicts for matcher (sorted by name for consistent order)
+                stream_dicts = [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "tvg_id": s.tvg_id,
+                        "tvg_name": s.tvg_name,
+                        "channel_group": s.channel_group,
+                        "channel_group_id": s.channel_group_id,
+                        "m3u_account_id": s.m3u_account_id,
+                        "m3u_account_name": s.m3u_account_name,
+                        "is_stale": s.is_stale,
+                    }
+                    for s in streams
+                ]
+                stream_dicts.sort(key=lambda stream: stream["id"])
+                return stream_dicts
+
+            from teamarr.headendarr import get_headendarr_connection
+
+            headendarr_connection = get_headendarr_connection(self._db_factory)
+            if not headendarr_connection:
+                logger.warning("[EVENT_EPG] No Dispatcharr or Headendarr stream source configured")
+                return []
+
+            playlist_streams = headendarr_connection.playlists.list_streams()
+            if group.m3u_account_id:
+                playlist_streams = [
+                    stream for stream in playlist_streams if stream.playlist_id == group.m3u_account_id
+                ]
+            if group.m3u_group_name:
+                playlist_streams = [
+                    stream
+                    for stream in playlist_streams
+                    if (stream.group_title or "").strip() == group.m3u_group_name
+                ]
+
             stream_dicts = [
                 {
-                    "id": s.id,
-                    "name": s.name,
-                    "tvg_id": s.tvg_id,
-                    "tvg_name": s.tvg_name,
-                    "channel_group": s.channel_group,
-                    "channel_group_id": s.channel_group_id,
-                    "m3u_account_id": s.m3u_account_id,
-                    "is_stale": s.is_stale,
+                    "id": stream.id,
+                    "name": stream.name,
+                    "tvg_id": None,
+                    "tvg_name": None,
+                    "channel_group": stream.group_title,
+                    "channel_group_id": None,
+                    "m3u_account_id": stream.playlist_id,
+                    "m3u_account_name": stream.playlist_name,
+                    "is_stale": False,
+                    "playlist_id": stream.playlist_id,
+                    "playlist_name": stream.playlist_name,
+                    "stream_url": stream.url,
                 }
-                for s in streams
+                for stream in playlist_streams
             ]
-            # Sort by stream ID ascending for consistent processing order
-            stream_dicts.sort(key=lambda s: s["id"])
+            stream_dicts.sort(key=lambda stream: stream["id"])
             return stream_dicts
 
         except Exception as e:

@@ -23,7 +23,8 @@ import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
 interface M3UAccount {
   id: number
   name: string
-  url?: string
+  source_type?: string
+  enabled?: boolean
 }
 
 interface M3UGroup {
@@ -59,18 +60,20 @@ interface BulkCreateResponse {
 
 // Fetch functions
 async function fetchM3UAccounts(): Promise<M3UAccount[]> {
-  return api.get("/dispatcharr/m3u-accounts")
+  const response = await api.get<{ accounts: M3UAccount[] }>("/groups/source-accounts")
+  return response.accounts
 }
 
 async function fetchM3UGroups(accountId: number): Promise<M3UGroup[]> {
-  return api.get(`/dispatcharr/m3u-accounts/${accountId}/groups`)
+  const response = await api.get<{ groups: M3UGroup[] }>(`/groups/source-accounts/${accountId}/groups`)
+  return response.groups
 }
 
 async function fetchGroupStreams(
   accountId: number,
   groupId: number
 ): Promise<Stream[]> {
-  return api.get(`/dispatcharr/m3u-accounts/${accountId}/groups/${groupId}/streams`)
+  return api.get(`/groups/source-accounts/${accountId}/groups/${groupId}/streams`)
 }
 
 async function fetchEnabledGroups(): Promise<EnabledGroup[]> {
@@ -204,6 +207,7 @@ export function EventGroupImport() {
       m3u_group_name: group.name,
       m3u_account_id: String(selectedAccount!.id),
       m3u_account_name: selectedAccount!.name,
+      source_type: selectedAccount?.source_type || "dispatcharr",
     })
     navigate(`/event-groups/new?${params.toString()}`)
   }
@@ -251,15 +255,15 @@ export function EventGroupImport() {
     setShowBulkModal(true)
   }
 
-  const isDispatcharrConfigured = accountsQuery.data && accountsQuery.data.length > 0
-
+  const isSourceConfigured = accountsQuery.data && accountsQuery.data.length > 0
+  const sourceLabel = selectedAccount?.source_type === "headendarr" ? "playlist" : "source"
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
       {/* Left Sidebar - M3U Accounts */}
       <div className="w-60 border-r bg-muted/30 overflow-y-auto flex-shrink-0">
         <div className="p-3 border-b">
           <h2 className="text-xs font-semibold uppercase text-muted-foreground">
-            M3U Accounts
+            Sources
           </h2>
         </div>
 
@@ -272,7 +276,7 @@ export function EventGroupImport() {
             <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
             <p className="text-sm text-destructive">Connection failed</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Check Dispatcharr settings
+              Check Teamarr source settings
             </p>
             <Button
               variant="outline"
@@ -283,12 +287,12 @@ export function EventGroupImport() {
               Settings
             </Button>
           </div>
-        ) : !isDispatcharrConfigured ? (
+        ) : !isSourceConfigured ? (
           <div className="p-4 text-center">
             <Tv className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">No M3U accounts found</p>
+            <p className="text-sm text-muted-foreground">No sources found</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Add accounts in Dispatcharr
+              Configure Dispatcharr or Headendarr in settings
             </p>
           </div>
         ) : (
@@ -328,9 +332,9 @@ export function EventGroupImport() {
         {!selectedAccount ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <h3 className="text-lg font-medium mb-1">Select an M3U account</h3>
+              <h3 className="text-lg font-medium mb-1">Select a source</h3>
               <p className="text-sm">
-                Choose an account from the sidebar to view and import groups
+                Choose a source from the sidebar to view and import groups
               </p>
             </div>
           </div>
@@ -342,7 +346,7 @@ export function EventGroupImport() {
                 <div>
                   <h1 className="text-xl font-bold">{selectedAccount.name}</h1>
                   <p className="text-sm text-muted-foreground">
-                    {groupsQuery.data?.length ?? 0} groups
+                    {groupsQuery.data?.length ?? 0} groups in this {sourceLabel}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

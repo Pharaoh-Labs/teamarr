@@ -35,6 +35,8 @@ export function EventGroupForm() {
   const m3uGroupName = searchParams.get("m3u_group_name")
   const m3uAccountId = searchParams.get("m3u_account_id")
   const m3uAccountName = searchParams.get("m3u_account_name")
+  const sourceType = searchParams.get("source_type")
+  const sourceLabel = sourceType === "headendarr" ? "Playlist" : "Source"
 
   // Form state
   const [formData, setFormData] = useState<EventGroupCreate>({
@@ -294,7 +296,7 @@ export function EventGroupForm() {
                     readOnly
                     className="bg-muted"
                   />
-                  <p className="text-xs text-muted-foreground">Name from M3U group</p>
+                  <p className="text-xs text-muted-foreground">Name from imported group</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="display_name_new">Display Name (Optional)</Label>
@@ -305,7 +307,7 @@ export function EventGroupForm() {
                     placeholder="Override name for display in UI"
                   />
                   <p className="text-xs text-muted-foreground">
-                    If set, this name will be shown instead of the M3U group name
+                    If set, this name will be shown instead of the imported group name
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -344,7 +346,7 @@ export function EventGroupForm() {
                     readOnly
                     className="bg-muted"
                   />
-                  <p className="text-xs text-muted-foreground">Name from M3U group</p>
+                  <p className="text-xs text-muted-foreground">Name from imported group</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="display_name">Display Name (Optional)</Label>
@@ -355,16 +357,16 @@ export function EventGroupForm() {
                     placeholder="Override name for display in UI"
                   />
                   <p className="text-xs text-muted-foreground">
-                    If set, shown instead of M3U group name
+                    If set, shown instead of the imported group name
                   </p>
                 </div>
               </div>
 
-              {/* M3U Source Info - watermark style */}
+              {/* Source info - watermark style */}
               {formData.m3u_group_name && (
                 <div className="text-xs text-muted-foreground/70 pt-3">
                   {formData.m3u_account_name && (
-                    <div>M3U: {formData.m3u_account_name} (#{formData.m3u_account_id})</div>
+                    <div>{sourceLabel}: {formData.m3u_account_name} (#{formData.m3u_account_id})</div>
                   )}
                   <div>Group: {formData.m3u_group_name} (#{formData.m3u_group_id})</div>
                 </div>

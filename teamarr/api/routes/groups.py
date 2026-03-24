@@ -3,10 +3,11 @@
 Provides REST API for:
 - CRUD operations on event EPG groups
 - Group statistics and channel counts
-- M3U group discovery from Dispatcharr
+- Source group discovery from Dispatcharr or Headendarr
 """
 
 import logging
+import zlib
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
@@ -292,6 +293,22 @@ class M3UGroupListResponse(BaseModel):
     total: int
 
 
+class SourceAccountResponse(BaseModel):
+    """Import source account or playlist."""
+
+    id: int
+    name: str
+    source_type: str
+    enabled: bool = True
+
+
+class SourceAccountListResponse(BaseModel):
+    """List of import source accounts or playlists."""
+
+    accounts: list[SourceAccountResponse]
+    total: int
+
+
 class BulkGroupItem(BaseModel):
     """Single group to create in bulk import."""
 
@@ -456,6 +473,74 @@ VALID_CHANNEL_SORT_ORDER = {"time", "sport_time", "league_time"}
 VALID_OVERLAP_HANDLING = {"add_stream", "add_only", "create_all", "skip"}
 
 
+def _stable_group_id(name: str) -> int:
+    """Generate a stable integer ID for source groups without native IDs."""
+    return zlib.crc32(name.encode("utf-8")) & 0x7FFFFFFF
+
+
+def _list_headendarr_playlists() -> list[SourceAccountResponse]:
+    from teamarr.headendarr import get_headendarr_connection
+
+    conn = get_headendarr_connection(get_db)
+    if not conn:
+        return []
+    return [
+        SourceAccountResponse(
+            id=playlist.id,
+            name=playlist.name,
+            source_type="headendarr",
+            enabled=playlist.enabled,
+        )
+        for playlist in conn.playlists.list_playlists()
+    ]
+
+
+def _list_headendarr_groups(playlist_id: int) -> list[M3UGroupResponse]:
+    from teamarr.headendarr import get_headendarr_connection
+
+    conn = get_headendarr_connection(get_db)
+    if not conn:
+        return []
+
+    streams = [stream for stream in conn.playlists.list_streams() if stream.playlist_id == playlist_id]
+    groups: dict[str, int] = {}
+    for stream in streams:
+        group_name = (stream.group_title or "").strip()
+        if not group_name:
+            continue
+        groups[group_name] = groups.get(group_name, 0) + 1
+
+    return [
+        M3UGroupResponse(
+            id=_stable_group_id(group_name),
+            name=group_name,
+            stream_count=stream_count,
+        )
+        for group_name, stream_count in sorted(groups.items(), key=lambda item: item[0].lower())
+    ]
+
+
+def _get_headendarr_group_streams(playlist_id: int, group_name: str | None) -> list[dict]:
+    from teamarr.headendarr import get_headendarr_connection
+
+    conn = get_headendarr_connection(get_db)
+    if not conn:
+        return []
+
+    streams = [stream for stream in conn.playlists.list_streams() if stream.playlist_id == playlist_id]
+    if group_name:
+        streams = [stream for stream in streams if (stream.group_title or "").strip() == group_name]
+
+    return [
+        {
+            "id": stream.id,
+            "name": stream.name,
+            "group_title": stream.group_title,
+        }
+        for stream in streams
+    ]
+
+
 def validate_group_fields(
     duplicate_event_handling: str | None = None,
     channel_assignment_mode: str | None = None,
@@ -506,7 +591,7 @@ def list_groups(
         if include_stats:
             stats = get_all_group_stats(conn)
 
-    # Fetch fresh M3U account names from Dispatcharr
+    # Fetch fresh source names where possible
     m3u_account_names: dict[int, str] = {}
     account_ids = {g.m3u_account_id for g in groups if g.m3u_account_id}
     if account_ids:
@@ -515,6 +600,9 @@ def list_groups(
             if dispatcharr:
                 accounts = dispatcharr.m3u.list_accounts()
                 m3u_account_names = {a.id: a.name for a in accounts}
+            else:
+                for playlist in _list_headendarr_playlists():
+                    m3u_account_names[playlist.id] = playlist.name
         except Exception:
             pass  # Fall back to stored names if Dispatcharr unavailable
 
@@ -604,6 +692,70 @@ def list_groups(
         ],
         total=len(groups),
     )
+
+
+@router.get("/source-accounts", response_model=SourceAccountListResponse)
+def list_source_accounts():
+    """List available import sources from Dispatcharr or Headendarr."""
+    from teamarr.dispatcharr import get_dispatcharr_connection
+
+    try:
+        dispatcharr = get_dispatcharr_connection(get_db)
+        if dispatcharr:
+            accounts = [
+                SourceAccountResponse(
+                    id=account.id,
+                    name=account.name,
+                    source_type="dispatcharr",
+                    enabled=True,
+                )
+                for account in dispatcharr.m3u.list_accounts()
+            ]
+            return SourceAccountListResponse(accounts=accounts, total=len(accounts))
+    except Exception:
+        logger.exception("Failed to fetch Dispatcharr source accounts")
+
+    accounts = _list_headendarr_playlists()
+    return SourceAccountListResponse(accounts=accounts, total=len(accounts))
+
+
+@router.get("/source-accounts/{account_id}/groups", response_model=M3UGroupListResponse)
+def list_source_groups(account_id: int):
+    """List available source groups for the selected account or playlist."""
+    from teamarr.dispatcharr import get_dispatcharr_connection
+
+    try:
+        dispatcharr = get_dispatcharr_connection(get_db)
+        if dispatcharr:
+            groups = [
+                M3UGroupResponse(id=group.id, name=group.name, stream_count=group.stream_count)
+                for group in dispatcharr.m3u.list_groups(account_id=account_id)
+            ]
+            return M3UGroupListResponse(groups=groups, total=len(groups))
+    except Exception:
+        logger.exception("Failed to fetch Dispatcharr source groups")
+
+    groups = _list_headendarr_groups(account_id)
+    return M3UGroupListResponse(groups=groups, total=len(groups))
+
+
+@router.get("/source-accounts/{account_id}/groups/{group_id}/streams")
+def list_source_group_streams(account_id: int, group_id: int) -> list[dict]:
+    """List streams for a source group."""
+    from teamarr.dispatcharr import get_dispatcharr_connection
+
+    try:
+        dispatcharr = get_dispatcharr_connection(get_db)
+        if dispatcharr:
+            streams = dispatcharr.m3u.list_streams(group_id=group_id, account_id=account_id)
+            return [{"id": stream.id, "name": stream.name} for stream in streams]
+    except Exception:
+        logger.exception("Failed to fetch Dispatcharr source streams")
+
+    for group in _list_headendarr_groups(account_id):
+        if group.id == group_id:
+            return _get_headendarr_group_streams(account_id, group.name)
+    return []
 
 
 @router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
@@ -1612,13 +1764,14 @@ class PreviewGroupResponse(BaseModel):
 def preview_group(group_id: int):
     """Preview stream matching for a group without creating channels.
 
-    Fetches streams from Dispatcharr, filters them, matches them to events,
+    Fetches streams from the configured source, filters them, matches them to events,
     but does NOT create channels or generate EPG.
     """
     from datetime import date
 
     from teamarr.database.groups import get_group
     from teamarr.dispatcharr import get_factory
+    from teamarr.headendarr import get_headendarr_connection
     from teamarr.services import create_group_service
 
     with get_db() as conn:
@@ -1631,7 +1784,7 @@ def preview_group(group_id: int):
 
     # Get Dispatcharr connection (has m3u manager)
     factory = get_factory(get_db)
-    conn = factory.get_connection() if factory else None
+    conn = factory.get_connection() if factory else get_headendarr_connection(get_db)
 
     # Preview the group
     group_service = create_group_service(get_db, conn)
@@ -1693,10 +1846,11 @@ def get_raw_streams(group_id: int):
     """Get raw stream names for a group without filtering or matching.
 
     Returns minimal stream data (id + name) for regex testing in the UI.
-    Fetches directly from Dispatcharr without running the matching pipeline.
+    Fetches directly from the configured source without running the matching pipeline.
     """
     from teamarr.database.groups import get_group
     from teamarr.dispatcharr import get_factory
+    from teamarr.headendarr import get_headendarr_connection
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1707,27 +1861,40 @@ def get_raw_streams(group_id: int):
             )
 
     factory = get_factory(get_db)
-    if not factory:
-        return RawStreamsResponse(
-            group_id=group_id,
-            group_name=group.name,
-            total=0,
-            streams=[],
-        )
+    conn = factory.get_connection() if factory else None
 
-    conn = factory.get_connection()
-    if not conn or not conn.m3u:
-        return RawStreamsResponse(
-            group_id=group_id,
-            group_name=group.name,
-            total=0,
-            streams=[],
+    raw: list[RawStreamModel]
+    if conn and getattr(conn, "m3u", None):
+        raw_streams = conn.m3u.list_streams(
+            group_id=group.m3u_group_id,
+            account_id=group.m3u_account_id,
         )
-
-    raw = conn.m3u.list_streams(
-        group_id=group.m3u_group_id,
-        account_id=group.m3u_account_id,
-    )
+        raw = [
+            RawStreamModel(
+                stream_id=s.id,
+                stream_name=s.name,
+                builtin_filtered=None,
+            )
+            for s in raw_streams
+        ]
+    else:
+        headendarr = get_headendarr_connection(get_db)
+        if not headendarr or not group.m3u_account_id:
+            return RawStreamsResponse(
+                group_id=group_id,
+                group_name=group.name,
+                total=0,
+                streams=[],
+            )
+        raw_streams = _get_headendarr_group_streams(group.m3u_account_id, group.m3u_group_name)
+        raw = [
+            RawStreamModel(
+                stream_id=int(stream["id"]),
+                stream_name=str(stream["name"]),
+                builtin_filtered=None,
+            )
+            for stream in raw_streams
+        ]
 
     from teamarr.api.routes import natural_sort_key
     from teamarr.services.stream_filter import (
@@ -1754,9 +1921,9 @@ def get_raw_streams(group_id: int):
     streams = sorted(
         (
             RawStreamModel(
-                stream_id=s.id,
-                stream_name=s.name,
-                builtin_filtered=get_builtin_filter_reason(s.name),
+                stream_id=s.stream_id,
+                stream_name=s.stream_name,
+                builtin_filtered=get_builtin_filter_reason(s.stream_name),
             )
             for s in raw
         ),
