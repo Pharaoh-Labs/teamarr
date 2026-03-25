@@ -15,5 +15,6 @@ Configure Teamarr's behavior through the Settings page. Settings are organized i
 - **[Event Groups](event-groups)** - Event matching and filtering defaults
 - **[EPG](epg)** - Output settings, scheduling, scheduled reset, and durations
 - **[Channels](channels)** - Lifecycle, numbering, and stream ordering
+- **[Headendarr](headendarr)** - Headendarr connection, Teamarr host, XMLTV provisioning, and playlist discovery
 - **[Dispatcharr](dispatcharr)** - Dispatcharr connection, EPG source, profiles, and logo cleanup
 - **[System](advanced)** - Updates, backup/restore, local caching, TheSportsDB API, XMLTV metadata

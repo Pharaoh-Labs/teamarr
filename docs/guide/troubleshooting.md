@@ -30,10 +30,10 @@ Click the **Failed** count in the run history to see details for each unmatched 
 
 ## Channels
 
-### Channels not appearing in Dispatcharr
+### Channels not appearing in Headendarr or Dispatcharr
 
-1. Verify Dispatcharr integration is connected (Settings > Dispatcharr shows "Connected")
-2. Verify an EPG source is selected
+1. Verify your integration is connected (Settings > Headendarr or Settings > Dispatcharr shows "Connected")
+2. Verify the target platform has Teamarr's XMLTV source configured or provisioned
 3. Run EPG generation and check if streams matched successfully
 4. Check [channel lifecycle timing](settings/channels#channel-lifecycle) — channels may not be created yet based on your create timing settings
 
@@ -45,24 +45,25 @@ Click the **Failed** count in the run history to see details for each unmatched 
 
 ### Channel numbers colliding with existing channels
 
-Set the **Channel Range Start** in Settings > Channels to a range that doesn't overlap with your existing Dispatcharr channels. For example, if you have channels 1-500, set the start to 1000.
+Set the **Channel Range Start** in Settings > Channels to a range that doesn't overlap with your existing Headendarr or Dispatcharr channels. For example, if you have channels 1-500, set the start to 1000.
 
 ### Stale logos in media server
 
 Some media servers (particularly Jellyfin) cache channel logos aggressively. Enable **Scheduled Channel Reset** in Settings > EPG to periodically purge and recreate channels before your media server's guide refresh.
 
-## Dispatcharr Connection
+## Headendarr or Dispatcharr Connection
 
 ### "Connection error" when testing
 
 - Verify the URL includes the protocol (`http://` or `https://`)
-- Check that Dispatcharr is running and accessible at the specified port
+- Check that Headendarr or Dispatcharr is running and accessible at the specified port
 - If using Docker, ensure both containers are on the same network or use the correct IP/hostname
 - Check for firewalls blocking the port
 
 ### EPG source dropdown is empty
 
-You need to add Teamarr's XMLTV URL as an EPG source in Dispatcharr first. Copy the URL from the EPG page in Teamarr and add it in Dispatcharr's EPG sources.
+- In Dispatcharr, add Teamarr's XMLTV URL as an EPG source first. Copy the URL from the EPG page in Teamarr and add it in Dispatcharr's EPG sources.
+- In Headendarr, make sure the Teamarr host is configured in Settings > Headendarr, then use the provisioning action so Teamarr can create or refresh the `Teamarr` XMLTV source automatically.
 
 ## Generation
 
@@ -87,7 +88,7 @@ tail -n 200 data/logs/teamarr.log
 
 Common causes:
 - Network timeout reaching ESPN or TSDB APIs
-- Dispatcharr API returning errors (check Dispatcharr logs too)
+- Headendarr or Dispatcharr API returning errors (check the target platform logs too)
 - Database locked (shouldn't happen in normal operation — restart if it does)
 
 ## Database & Upgrades
@@ -123,4 +124,4 @@ docker exec teamarr cat data/logs/teamarr.log | tail -100  # Log file
 ## Getting Help
 
 - **GitHub Issues**: [github.com/Pharaoh-Labs/teamarr/issues](https://github.com/Pharaoh-Labs/teamarr/issues)
-- **Discord**: Join the Dispatcharr Discord server — there's a Teamarr channel
+- **Discord**: Join the Teamarr or platform community Discord that you use for deployment support

@@ -18,7 +18,7 @@ The top bar contains the primary EPG controls:
 | **Generate** | Manually triggers EPG generation. Disabled while a run is already in progress. A progress toast appears showing the current phase (Teams, Event Groups, Finalizing) and percentage |
 | **Cancel** | Appears while a run is in progress. Cancels the current generation |
 | **Download** | Downloads the latest XMLTV file to your browser |
-| **XMLTV URL** | Copyable URL (e.g., `http://host:9195/api/v1/epg/xmltv`) for pointing media players or Dispatcharr at the live EPG output |
+| **XMLTV URL** | Copyable URL (e.g., `http://host:9195/api/v1/epg/xmltv`) for pointing media players, Headendarr, or Dispatcharr at the live EPG output |
 
 ## Statistics Cards
 

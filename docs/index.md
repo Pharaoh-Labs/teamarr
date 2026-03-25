@@ -8,14 +8,14 @@ docs_version: "2.3.0"
 <div style="text-align: center; margin-bottom: 2rem;">
   <h1 style="margin-bottom: 0.5rem;">Teamarr</h1>
   <img src="assets/images/logo.svg" alt="Teamarr" width="100" height="100" style="margin: 1rem 0;">
-  <p style="font-size: 1.25rem; color: #666;">Sports EPG Generator for Dispatcharr</p>
+  <p style="font-size: 1.25rem; color: #666;">Sports EPG Generator for Headendarr and Dispatcharr</p>
 </div>
 
 ## What is Teamarr?
 
-Teamarr is an add-on for [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) that generates enriched EPG for sports channels. While EPG generation can technically work standalone, Teamarr is designed for use alongside Dispatcharr.
+Teamarr is a sports EPG generator designed to work alongside either [Headendarr](https://github.com/Pharaoh-Labs/headendarr) or [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr). While XMLTV generation can technically work standalone, Teamarr is built to integrate with one of those IPTV managers for stream discovery and channel lifecycle management.
 
-Teamarr pulls rich sports data from providers (ESPN, TSDB, HockeyTech, etc.) - schedules, venues, records, scores, standings, broadcasts, and more - and uses it to manage your IPTV sports channels in Dispatcharr.
+Teamarr pulls rich sports data from providers (ESPN, TSDB, HockeyTech, etc.) - schedules, venues, records, scores, standings, broadcasts, and more - and uses it to manage your IPTV sports channels in Headendarr or Dispatcharr.
 
 **Two workflows:**
 
@@ -52,7 +52,8 @@ EPG:     Kansas City Chiefs @ Philadelphia Eagles
 - **330+ leagues across 13 sports** - Football, basketball, hockey, baseball, soccer (240+ leagues via ESPN discovery), cricket, lacrosse, MMA, boxing, rugby, volleyball, Australian football, and softball. 97 pre-configured leagues plus dynamically discovered soccer leagues.
 - **192 template variables** - Customize channel names and EPG with team records, scores, venues, broadcasts, standings, playoff status, and more
 - **Flexible matching** - Aliases, fuzzy matching, and configurable stream ordering to handle inconsistent IPTV naming
-- **Channel groups & profiles** - Use existing Dispatcharr groups/profiles or create them dynamically using variables and wildcards
+- **Headendarr and Dispatcharr support** - Use Headendarr playlists and auto-provisioned XMLTV, or Dispatcharr M3U accounts plus profiles/groups
+- **Channel groups & profiles** - Use existing Dispatcharr groups/profiles or create them dynamically using variables and wildcards where supported
 - **Smart sorting** - Configurable stream and channel sorting modes based on priority rules
 - **Scheduled automation** - Cron-based EPG generation and channel lifecycle management
 

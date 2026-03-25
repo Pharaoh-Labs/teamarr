@@ -2,7 +2,7 @@
 title: Dispatcharr Integration
 parent: Settings
 grand_parent: User Guide
-nav_order: 6
+nav_order: 7
 docs_version: "2.3.1"
 ---
 

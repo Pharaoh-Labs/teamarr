@@ -57,4 +57,4 @@ See [Game Thumbs](../game-thumbs) for setup instructions and hosted options.
 
 ## Contributing Templates
 
-Have a template you'd like to share? Join the Dispatcharr Discord and share it in the Teamarr channel.
+Have a template you'd like to share? Open a GitHub issue or post it in the Teamarr community channels.

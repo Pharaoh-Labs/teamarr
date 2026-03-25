@@ -15,7 +15,7 @@ Event-based EPG creates dynamic channels from M3U streams. Unlike team channels 
 1. Your IPTV provider delivers streams organized into groups (e.g., "NFL", "ESPN+", "DAZN")
 2. You import these stream groups into Teamarr as **event groups**
 3. Teamarr parses each stream name, matches it to a real sporting event, and creates a channel with rich EPG data
-4. Channels are created in Dispatcharr with proper names, logos, EPG data, and group/profile assignments
+4. Channels are created in Headendarr or Dispatcharr with the matched streams and Teamarr-generated EPG metadata
 
 ## Global Defaults vs Per-Group Settings
 
@@ -45,7 +45,7 @@ Click **Matched** numbers to see which streams matched to which events. Click th
 
 ## Importing Groups
 
-Click **Import** to pull stream groups from your Dispatcharr M3U accounts. Teamarr shows available groups with stream counts. Select the groups you want and they'll be created with default settings.
+Click **Import** to pull stream groups from your configured source platform. Teamarr can import playlist groups from Headendarr or M3U groups from Dispatcharr. Select the groups you want and they'll be created with default settings.
 
 ## Stream Matching Pipeline
 
@@ -54,7 +54,7 @@ When EPG generation runs, each stream goes through:
 1. **Filtering** — include/exclude regex, built-in filters for non-sport content
 2. **Classification** — parse stream name to extract teams, league, date, time
 3. **Matching** — find the corresponding real-world event from provider data
-4. **Channel creation** — create/update the Dispatcharr channel with EPG data
+4. **Channel creation** — create/update the Headendarr or Dispatcharr channel with EPG data
 
 Streams that can't be matched appear in the **Failed** count. Click it to see details and use the **Fix** button to manually link a stream to an event.
 

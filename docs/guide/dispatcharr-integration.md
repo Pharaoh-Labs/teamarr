@@ -9,6 +9,8 @@ docs_version: "2.3.1"
 
 Teamarr creates and manages channels in Dispatcharr automatically. This guide covers initial setup and how the integration works day-to-day.
 
+If you are using Headendarr instead, see [Headendarr Integration](headendarr-integration). Teamarr supports both platforms, but the platform-specific setup differs.
+
 ## Initial Setup
 
 ### 1. Connect to Dispatcharr

@@ -8,7 +8,7 @@ docs_version: "2.3.0"
 
 # Creating Event Groups
 
-Event groups connect M3U stream sources to Teamarr's sports data. Each group pulls streams from a Dispatcharr M3U account and matches them to real sporting events.
+Event groups connect IPTV stream sources to Teamarr's sports data. Each group pulls streams from a Headendarr playlist or a Dispatcharr M3U account and matches them to real sporting events.
 
 ## The Subscription Model
 
@@ -30,13 +30,13 @@ When creating or editing a group:
 
 A descriptive name for the group (e.g., "ESPN+ Sports", "NHL Backup").
 
-### M3U Account
+### Source Account
 
-Select which Dispatcharr M3U account to pull streams from.
+Select which source account to pull streams from. In Dispatcharr this is an M3U account. In Headendarr this is a playlist.
 
 ### Stream Group
 
-Select which stream group within the M3U account to use, or "All Groups" to include all streams from that account.
+Select which stream group within the source account to use, or "All Groups" to include all streams from that account.
 
 ## Channel Configuration
 
@@ -49,15 +49,15 @@ Select which stream group within the M3U account to use, or "All Groups" to incl
 
 ### Channel Group
 
-How channels are assigned to Dispatcharr channel groups:
+How channels are assigned in the target platform:
 
-- **Use Default** — inherit from Settings > Channels
-- **Static** — assign all channels to a specific group
-- **Dynamic** — use patterns like `{sport}` or `{league}` to auto-create groups
+- **Use Default** — inherit from the platform defaults in Settings
+- **Static** — assign all channels to a specific group where supported
+- **Dynamic** — use patterns like `{sport}` or `{league}` to auto-create groups where supported
 
 ### Channel Profiles
 
-Override the global default channel profiles for this group:
+Override the global default channel profiles for this group when using Dispatcharr:
 
 - **Use Default** — inherit from Settings > Dispatcharr
 - **Custom** — choose specific profiles for this group

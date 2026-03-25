@@ -68,7 +68,7 @@ Event templates are for **dynamic channels created per-game**.
 
 - IPTV providers with game-specific streams ("NFL: Bills vs Dolphins")
 - Sports packages where streams appear/disappear based on live games
-- Event groups from Dispatcharr M3U accounts
+- Event groups sourced from Headendarr playlists or Dispatcharr M3U accounts
 
 ### Variable Context
 

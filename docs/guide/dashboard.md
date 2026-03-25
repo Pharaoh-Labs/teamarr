@@ -17,7 +17,7 @@ Located in the top-right corner, these buttons provide shortcuts to common tasks
 |--------|-------------|
 | **Create Template** | Jump to the template creation form |
 | **Import Teams** | Import teams from the league cache |
-| **Import Event Group** | Import a stream group from Dispatcharr |
+| **Import Event Group** | Import a stream group from Headendarr or Dispatcharr |
 | **Generate EPG** | Manually trigger EPG generation |
 
 ## Statistics Quadrants
@@ -31,7 +31,7 @@ The dashboard displays four quadrants with detailed statistics. Some stats have 
 | **Total** | Number of teams configured | None |
 | **Leagues** | Number of unique leagues | League breakdown with logos |
 | **Active** | Teams with upcoming or recent games | None |
-| **Assigned** | Teams assigned to a Dispatcharr channel | None |
+| **Assigned** | Teams assigned to an integration-managed channel | None |
 
 ### Event Groups
 
@@ -55,7 +55,7 @@ The dashboard displays four quadrants with detailed statistics. Some stats have 
 
 | Stat | Description | Tooltip |
 |------|-------------|---------|
-| **Active** | Channels currently active in Dispatcharr | None |
+| **Active** | Channels currently active in Headendarr or Dispatcharr | None |
 | **Logos** | Channels with logo URLs | None |
 | **Groups** | Channel groups in use | Group breakdown |
 | **Deleted 24h** | Channels deleted in the last 24 hours (event cleanup) | None |
@@ -83,9 +83,9 @@ Click the **Matched** or **Failed** numbers to open a drill-down modal showing i
 
 When no teams or templates are configured, the dashboard displays a getting started guide with four steps:
 
-1. **Configure Settings** - Connect to Dispatcharr, set EPG output path and timezone
+1. **Configure Settings** - Connect to Headendarr or Dispatcharr, set EPG output path and timezone
 2. **Create Templates** - Define title/description formats using variables
 3. **Add Teams** - Import teams for team-based EPG (one channel per team)
-4. **Create Event Groups** - Import stream groups from Dispatcharr for event-based EPG (dynamic channels)
+4. **Create Event Groups** - Import stream groups from Headendarr or Dispatcharr for event-based EPG (dynamic channels)
 
 Each step links directly to the relevant page. Once you have at least one template and either teams or event groups configured, the getting started guide is replaced by the statistics quadrants and generation history.

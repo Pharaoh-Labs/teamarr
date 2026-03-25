@@ -23,7 +23,7 @@ row_factory = sqlite3.Row   (dict-like access)
 
 ## Schema Version
 
-**Current version: 69** (stored in `settings.schema_version`)
+**Current version: 72** (stored in `settings.schema_version`)
 
 Schema changes use the [checkpoint + incremental migration](migrations) system. The schema source of truth is `teamarr/database/schema.sql`.
 
@@ -36,7 +36,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `teams` | Team channel configuration (provider, leagues, logo, template) |
 | `event_epg_groups` | Event group config (leagues, filters, M3U account, template) |
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
-| `managed_channels` | Channels created in Dispatcharr (tvg_id, delete_at, profiles) |
+| `managed_channels` | Channels created in Headendarr or Dispatcharr (tvg_id, delete_at, profiles) |
 | `detection_keywords` | User-defined stream classification patterns |
 | `aliases` | Team name aliases for matching |
 | `team_cache` | Cached team data from providers |
@@ -90,7 +90,7 @@ The settings table is a single row with 67 columns, organized into these groups:
 | `duration_golf` | 6.0 |
 | `duration_default` | 3.0 |
 
-### Dispatcharr Integration
+### Integration Settings
 
 | Column | Default | Description |
 |--------|---------|-------------|
@@ -103,6 +103,11 @@ The settings table is a single row with 67 columns, organized into these groups:
 | `default_channel_group_mode` | `static` | `static`, `sport`, `league`, or custom |
 | `default_channel_profile_ids` | JSON | Default channel profiles |
 | `default_stream_profile_id` | null | Default stream profile |
+| `headendarr_enabled` | 0 | Enable Headendarr sync |
+| `headendarr_url` | null | Headendarr URL |
+| `headendarr_username` | null | Auth username |
+| `headendarr_password` | null | Auth password |
+| `headendarr_teamarr_host` | null | Teamarr host as seen from Headendarr |
 
 ## Database Modules
 
@@ -143,7 +148,7 @@ The settings table is a single row with 67 columns, organized into these groups:
 The allocator respects:
 - Global range (`channel_range_start` to `channel_range_end`)
 - Per-league starting numbers (manual mode)
-- External occupied numbers (non-Teamarr channels in Dispatcharr)
+- External occupied numbers (non-Teamarr channels in Headendarr or Dispatcharr)
 - Sort scope (`per_group` or `global`)
 
 ## File Locations

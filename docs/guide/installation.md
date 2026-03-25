@@ -12,7 +12,7 @@ Docker Compose is the recommended method for installation.
 ## Prerequisites
 
 - Docker
-- [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) (highly recommended - Teamarr is designed for tight integration with Dispatcharr)
+- [Headendarr](https://github.com/Pharaoh-Labs/headendarr) or [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) (recommended - Teamarr is designed to integrate with either platform)
 - [Game-Thumbs](game-thumbs.md) (optional - sports matchup thumbnail and logo generation)
 
 ## Docker
@@ -80,7 +80,7 @@ On first startup, Teamarr will:
 2. Refresh the league and team cache from providers (~2-3 minutes)
 3. Start the web UI on port 9195
 
-The dashboard will show a **Getting Started** guide walking you through initial setup: connect to Dispatcharr, create templates, add teams or event groups.
+The dashboard will show a **Getting Started** guide walking you through initial setup: connect to Headendarr or Dispatcharr, create templates, add teams or event groups.
 
 ## Updating
 

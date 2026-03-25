@@ -12,7 +12,7 @@ Configure channel lifecycle, numbering, consolidation, per-league configuration,
 
 ## Channel Lifecycle
 
-Controls when event channels are created and deleted in Dispatcharr.
+Controls when event channels are created and deleted in Headendarr or Dispatcharr.
 
 ### Create Timing
 
@@ -82,14 +82,14 @@ Override channel profiles, channel groups, and group modes on a per-league basis
 
 | Setting | Options | Description |
 |---------|---------|-------------|
-| **Channel Profiles** | Default, None, or specific profiles | Which Dispatcharr profiles this league's channels appear in |
-| **Channel Group** | Default or specific group | Which Dispatcharr channel group to assign channels to |
+| **Channel Profiles** | Default, None, or specific profiles | Which Dispatcharr profiles this league's channels appear in when using Dispatcharr |
+| **Channel Group** | Default or specific group | Which Headendarr or Dispatcharr channel group to assign channels to where supported |
 | **Group Mode** | Default, Static, Dynamic by Sport, Dynamic by League, Custom | How the channel group is determined |
 
 When Group Mode is set to **Custom**, a pattern field appears where you can enter a template like `{sport} - {league}` that dynamically creates groups.
 
 {: .note }
-Per-league overrides take precedence over the defaults in [Settings > Dispatcharr](dispatcharr). Use the **X** button to clear an override and revert to the default.
+Per-league overrides take precedence over the defaults in the active integration settings. Use the **X** button to clear an override and revert to the default.
 
 ### Filtering
 

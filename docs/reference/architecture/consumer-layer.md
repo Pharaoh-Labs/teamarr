@@ -8,7 +8,7 @@ docs_version: "2.3.1"
 
 # Consumer Layer
 
-The consumer layer orchestrates EPG generation, stream matching, channel lifecycle, and Dispatcharr synchronization. It sits between the API routes and the service/provider layers.
+The consumer layer orchestrates EPG generation, stream matching, channel lifecycle, and integration-target synchronization. It sits between the API routes and the service/provider layers.
 
 ## Generation Workflow
 
@@ -18,13 +18,13 @@ A global lock prevents concurrent runs. The workflow progresses through 8 phases
 
 | Phase | % Range | Description |
 |-------|---------|-------------|
-| M3U Refresh | 0-5% | Refresh Dispatcharr M3U accounts |
+| Source Refresh | 0-5% | Refresh the active integration's source inventory |
 | Teams | 5-50% | Process all active team EPGs |
 | Event Groups | 50-95% | Match streams, create channels, generate EPG |
 | Channel Reassignment | 93-95% | Global channel number rebalancing |
 | Stream Ordering | 93-95% | Apply priority rules to channels |
 | Merge XMLTV | 95-96% | Combine team + group XMLTV output |
-| Dispatcharr Ops | 96-98% | EPG refresh, channel association, cleanup |
+| Integration Ops | 96-98% | EPG refresh, channel association, cleanup |
 | Reconciliation | 99-100% | Detect/fix channel drift |
 
 **Shared state across phases:**
@@ -42,7 +42,7 @@ A global lock prevents concurrent runs. The workflow progresses through 8 phases
 
 ```
 1. Load group config (leagues, team filters, M3U account)
-2. Fetch streams from Dispatcharr
+2. Fetch streams from Headendarr playlists or Dispatcharr
 3. Filter streams (stale, placeholder, regex include/exclude)
 4. Fetch events from providers (parallel, cached)
 5. Match streams to events (StreamMatcher)
@@ -50,7 +50,7 @@ A global lock prevents concurrent runs. The workflow progresses through 8 phases
 7. Subscription league filtering (per-group overrides)
 8. Create/update channels (ChannelLifecycleService)
 9. Generate XMLTV (template resolution)
-10. Push to Dispatcharr
+10. Push to the active integration target
 11. Track stats
 ```
 
@@ -113,10 +113,10 @@ Output includes: extracted team names, detected league/sport hints, card segment
 
 ### Service (`lifecycle/service.py`)
 
-`ChannelLifecycleService` manages channel creation, sync, and deletion in Dispatcharr.
+`ChannelLifecycleService` manages channel creation, sync, and deletion in Headendarr or Dispatcharr.
 
 **Safe update pattern** — `_safe_update_channel()`:
-- Calls Dispatcharr API
+- Calls the selected integration API
 - Checks `OperationResult.success` before writing to local DB
 - On failure: DB stays unchanged, drift re-detected on next run (self-healing)
 - No retry queue needed
@@ -136,19 +136,19 @@ All three resolve: name, tvg_id, logo, channel group, profiles, stream profile, 
 Resolves `{sport}` and `{league}` wildcards in channel group and profile names:
 
 - Looks up display names from the database
-- Auto-creates groups/profiles in Dispatcharr if they don't exist
+- Auto-creates groups and profiles in Dispatcharr when those features are enabled there
 - Caches resolved IDs for fast repeated lookups
 
 ### Reconciliation (`lifecycle/reconciliation.py`)
 
-`ChannelReconciler` detects and fixes inconsistencies between the local DB and Dispatcharr:
+`ChannelReconciler` detects and fixes inconsistencies between the local DB and the active integration target:
 
 | Issue Type | Description | Action |
 |------------|-------------|--------|
-| `orphan_teamarr` | DB record but no Dispatcharr channel | Delete DB record |
-| `orphan_dispatcharr` | Dispatcharr channel but no DB record | Link or ignore |
+| `orphan_teamarr` | DB record but no platform channel | Delete DB record |
+| `orphan_dispatcharr` | Platform channel but no DB record | Link or ignore |
 | `duplicate` | Multiple channels for same event | Merge or keep first |
-| `drift` | Settings mismatch (name, streams, profiles) | Update Dispatcharr |
+| `drift` | Settings mismatch (name, streams, profiles) | Update the target platform |
 
 Runs automatically at the end of each generation. Issues have severity levels (critical/warning/info) and `auto_fixable` flags.
 

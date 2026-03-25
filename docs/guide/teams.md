@@ -41,7 +41,7 @@ The Teams table shows all imported teams with:
 | **Team** | Team name with logo |
 | **League** | League the team belongs to |
 | **Template** | Assigned template (click to change) |
-| **Channel** | Dispatcharr channel ID if synced |
+| **Channel** | Headendarr or Dispatcharr channel ID if synced |
 | **Status** | Active (has upcoming games) or inactive |
 
 ### Assigning Templates
@@ -54,13 +54,13 @@ Team templates are different from event templates — they support `.next` and `
 
 Configure how many days of schedule to fetch per team in **Settings > Teams**. More days means more programmes in the EPG but longer generation times.
 
-## Team Channels in Dispatcharr
+## Team Channels in Headendarr or Dispatcharr
 
-When Dispatcharr integration is configured, Teamarr creates and manages channels for each team:
+When an integration target is configured, Teamarr creates and manages channels for each team:
 
 - Channel names use the team template's channel name format
 - Channel logos are set from the team's logo URL
-- Channels are assigned to the configured channel group and profiles
+- Channels are assigned to the configured channel group and, where supported, profiles
 - Channel numbers follow the configured numbering mode (auto or manual)
 
 Channels persist even when no game is scheduled — they show idle filler content instead.

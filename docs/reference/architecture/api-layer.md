@@ -12,7 +12,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 
 ## Route Modules
 
-18 route modules with ~134 total endpoints, registered in `app.py`:
+Route modules are registered in `app.py` and cover configuration, EPG generation, and platform integrations:
 
 | Module | Endpoints | Description |
 |--------|-----------|-------------|
@@ -24,6 +24,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 | `epg.py` | 19 | Team/event EPG generation, status tracking, preview, stats, cancellation |
 | `channels.py` | 11 | Channel management, numbering, search, reconciliation |
 | `dispatcharr.py` | 8 | Dispatcharr settings, connection test, sync status |
+| `headendarr.py` | 6 | Headendarr settings, connection test, XMLTV provisioning, playlist discovery |
 | `cache.py` | 10 | Cache refresh, stats, clearing, game data cache |
 | `stats.py` | 8 | Generation run stats, processing history, cleanup |
 | `sort_priorities.py` | 7 | Stream ordering rules (m3u, group, regex-based priority) |
@@ -42,7 +43,7 @@ The lifespan handler in `app.py` orchestrates startup in phases:
 1. **INITIALIZING** — Database init, migration detection
 2. **REFRESHING_CACHE** — Team/league cache refresh from providers (skippable via `SKIP_CACHE_REFRESH`)
 3. **LOADING_SETTINGS** — Display settings, timezone from DB
-4. **CONNECTING_DISPATCHARR** — Lazy factory initialization
+4. **CONNECTING_INTEGRATIONS** — Lazy Headendarr and Dispatcharr factory initialization
 5. **STARTING_SCHEDULER** — Background EPG cron scheduler
 6. **READY** — Fully operational
 
