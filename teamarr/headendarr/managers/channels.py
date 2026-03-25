@@ -207,9 +207,9 @@ class ChannelManager:
         if response is None:
             return OperationResult(success=False, error=self._client.parse_api_error(response))
         if response.status_code == 200:
-            with self._lock:
-                refreshed = self.get_channel(channel_id, use_cache=False)
-                if refreshed:
+            refreshed = self.get_channel(channel_id, use_cache=False)
+            if refreshed:
+                with self._lock:
                     self._cache.update(refreshed)
             return OperationResult(success=True)
         return OperationResult(success=False, error=self._client.parse_api_error(response))
