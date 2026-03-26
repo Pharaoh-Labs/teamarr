@@ -51,6 +51,7 @@ export interface XmltvFlags {
   new: boolean
   live: boolean
   date: boolean
+  episode_num: boolean
 }
 
 // XMLTV video element

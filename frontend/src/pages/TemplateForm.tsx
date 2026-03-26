@@ -78,7 +78,7 @@ const DEFAULT_FORM: TemplateCreate = {
   program_art_url: null,
   game_duration_mode: "sport",
   game_duration_override: null,
-  xmltv_flags: { new: true, live: false, date: false },
+  xmltv_flags: { new: true, live: false, date: false, episode_num: false },
   xmltv_video: { enabled: false, quality: "HDTV" },
   xmltv_categories: ["Sports"],
   categories_apply_to: "events",
@@ -189,7 +189,7 @@ export function TemplateForm() {
         program_art_url: template.program_art_url,
         game_duration_mode: template.game_duration_mode || "sport",
         game_duration_override: template.game_duration_override,
-        xmltv_flags: template.xmltv_flags || { new: true, live: false, date: false },
+        xmltv_flags: template.xmltv_flags || { new: true, live: false, date: false, episode_num: false },
         xmltv_video: template.xmltv_video || { enabled: false, quality: "HDTV" },
         xmltv_categories: template.xmltv_categories || ["Sports"],
         categories_apply_to: template.categories_apply_to || "events",
@@ -2241,7 +2241,7 @@ function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastF
 }
 
 function XmltvTab({ formData, setFormData }: TabProps) {
-  const flags = formData.xmltv_flags || { new: true, live: false, date: false }
+  const flags = formData.xmltv_flags || { new: true, live: false, date: false, episode_num: false }
   const categories = formData.xmltv_categories || ["Sports"]
 
   const hasSports = categories.includes("Sports")
@@ -2266,7 +2266,7 @@ function XmltvTab({ formData, setFormData }: TabProps) {
 
   const updateFlags = (field: keyof XmltvFlags, value: boolean) => {
     setFormData((prev) => {
-      const current = prev.xmltv_flags || { new: true, live: false, date: false }
+      const current = prev.xmltv_flags || { new: true, live: false, date: false, episode_num: false }
       return { ...prev, xmltv_flags: { ...current, [field]: value } }
     })
   }
@@ -2374,6 +2374,13 @@ function XmltvTab({ formData, setFormData }: TabProps) {
             <div>
               <span>Include Date Tag</span>
               <p className="text-xs text-muted-foreground">Adds &lt;date&gt; tag with air date (YYYYMMDD) to events</p>
+            </div>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox checked={flags.episode_num} onCheckedChange={() => updateFlags("episode_num", !flags.episode_num)} />
+            <div>
+              <span>Include Episode Number Tag</span>
+              <p className="text-xs text-muted-foreground">Adds &lt;episode-num system="xmltv_ns"&gt; tag using the airing date/time. Some DVRs use this to group sports events like TV episodes.</p>
             </div>
           </label>
         </CardContent>

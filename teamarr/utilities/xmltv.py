@@ -4,6 +4,7 @@ Converts Programme dataclasses to XMLTV format.
 All times are output in the user's configured timezone.
 """
 
+from collections import defaultdict
 from xml.dom import minidom
 from xml.etree.ElementTree import Element, SubElement, tostring
 
@@ -41,8 +42,9 @@ def programmes_to_xmltv(
 
     # Sort programmes by channel ID, then by start time (XMLTV standard convention)
     sorted_programmes = sorted(programmes, key=lambda p: (p.channel_id, p.start))
+    episode_numbers = _build_episode_numbers(sorted_programmes)
     for programme in sorted_programmes:
-        _add_programme(root, programme)
+        _add_programme(root, programme, episode_numbers.get(id(programme)))
 
     xml_str = tostring(root, encoding="unicode")
     return _prettify(xml_str)
@@ -61,7 +63,41 @@ def _add_channel(root: Element, channel: dict) -> None:
         icon_elem.set("src", channel["icon"])
 
 
-def _add_programme(root: Element, programme: Programme) -> None:
+def _build_episode_numbers(programmes: list[Programme]) -> dict[int, str]:
+    """Build xmltv_ns episode numbers for programmes that request them."""
+    grouped: dict[tuple[str, str], list[Programme]] = defaultdict(list)
+
+    for programme in programmes:
+        flags = programme.xmltv_flags or {}
+        if not flags.get("episode_num") or programme.filler_type:
+            continue
+
+        local_start = to_user_tz(programme.start)
+        grouped[(programme.title, local_start.strftime("%Y%m%d"))].append(programme)
+
+    episode_numbers: dict[int, str] = {}
+    for grouped_programmes in grouped.values():
+        ordered = sorted(
+            grouped_programmes,
+            key=lambda programme: (
+                programme.start,
+                programme.subtitle or "",
+                programme.channel_id,
+            ),
+        )
+        for ordinal, programme in enumerate(ordered, start=1):
+            local_start = to_user_tz(programme.start)
+            season = local_start.year - 1
+            # Use day-of-year plus same-day game ordinal as the episode number,
+            # and keep part fixed at 0 so DVRs don't treat same-day games as
+            # multipart episodes of a single airing.
+            episode = f"{local_start.timetuple().tm_yday}{ordinal}"
+            episode_numbers[id(programme)] = f"{season}.{episode}.0"
+
+    return episode_numbers
+
+
+def _add_programme(root: Element, programme: Programme, episode_num: str | None = None) -> None:
     """Add a programme element to the TV root."""
     from xml.etree.ElementTree import Comment
 
@@ -94,6 +130,11 @@ def _add_programme(root: Element, programme: Programme) -> None:
         date_elem = SubElement(prog_elem, "date")
         local_start = to_user_tz(programme.start)
         date_elem.text = local_start.strftime("%Y%m%d")
+
+    if episode_num:
+        episode_elem = SubElement(prog_elem, "episode-num")
+        episode_elem.set("system", "xmltv_ns")
+        episode_elem.text = episode_num
 
     # Add categories
     for cat in programme.categories:

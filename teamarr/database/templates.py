@@ -52,7 +52,14 @@ class Template:
     game_duration_override: float | None = None
 
     # XMLTV metadata
-    xmltv_flags: dict = field(default_factory=lambda: {"new": True, "live": False, "date": False})
+    xmltv_flags: dict = field(
+        default_factory=lambda: {
+            "new": True,
+            "live": False,
+            "date": False,
+            "episode_num": False,
+        }
+    )
     xmltv_video: dict = field(default_factory=lambda: {"enabled": False, "quality": "HDTV"})
     xmltv_categories: list[str] = field(default_factory=lambda: ["Sports"])
     categories_apply_to: str = "events"  # 'all' or 'events'
@@ -115,7 +122,14 @@ class EventTemplateConfig:
     event_channel_logo_url: str | None = None
 
     # XMLTV metadata
-    xmltv_flags: dict = field(default_factory=lambda: {"new": True, "live": False, "date": False})
+    xmltv_flags: dict = field(
+        default_factory=lambda: {
+            "new": True,
+            "live": False,
+            "date": False,
+            "episode_num": False,
+        }
+    )
     xmltv_video: dict = field(default_factory=lambda: {"enabled": False, "quality": "HDTV"})
     xmltv_categories: list[str] = field(default_factory=lambda: ["Sports"])
 
@@ -152,7 +166,10 @@ def _row_to_template(row: Row) -> Template:
         program_art_url=row["program_art_url"],
         game_duration_mode=row["game_duration_mode"] or "sport",
         game_duration_override=row["game_duration_override"],
-        xmltv_flags=_parse_json(row["xmltv_flags"], {"new": True, "live": False, "date": False}),
+        xmltv_flags=_parse_json(
+            row["xmltv_flags"],
+            {"new": True, "live": False, "date": False, "episode_num": False},
+        ),
         xmltv_video=_parse_json(row["xmltv_video"], {"enabled": False, "quality": "HDTV"}),
         xmltv_categories=_parse_json(row["xmltv_categories"], ["Sports"]),
         categories_apply_to=row["categories_apply_to"] or "events",

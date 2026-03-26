@@ -159,7 +159,7 @@ class Programme:
     filler_type: str | None = None
     # Categories for XMLTV output (e.g., ["Sports", "Football", "NFL"])
     categories: list[str] = field(default_factory=list)
-    # XMLTV flags: new, live, date
+    # XMLTV flags: new, live, date, episode_num
     xmltv_flags: dict = field(default_factory=dict)
     # XMLTV video: enabled, quality (HDTV/SDTV), aspect (16:9/4:3)
     xmltv_video: dict = field(default_factory=dict)
