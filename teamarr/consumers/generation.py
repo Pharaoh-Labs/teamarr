@@ -678,67 +678,139 @@ def _team_match_terms(team: dict) -> list[str]:
     return terms
 
 
-def _score_headendarr_team_stream(team: dict, stream_name: str) -> int:
+def _score_headendarr_team_stream(team: dict, stream: Any) -> int:
     """Score a Headendarr stream for a team channel.
 
-    Team channels are persistent, so the best candidate streams are the ones
-    branded for the team rather than a specific matchup. Prefer exact team
-    names, then mascot/abbreviation matches gated by the league token.
+    Team channels should strongly prefer streams branded for the exact team.
+    Mascot-only matches are too loose for names like "Warriors", so they are
+    only accepted when the stream also carries the team's league hint.
     """
     from rapidfuzz import fuzz
 
     from teamarr.utilities.fuzzy_match import normalize_text
 
+    stream_name = getattr(stream, "name", "") or ""
+    group_title = getattr(stream, "group_title", "") or ""
+
     if not stream_name:
         return 0
 
     stream_text = normalize_text(stream_name)
-    if not stream_text:
+    combined_text = normalize_text(f"{stream_name} {group_title}")
+    if not combined_text:
         return 0
 
     league_hint = normalize_text(team.get("primary_league") or "")
+    sport_hint = normalize_text(team.get("sport") or "")
     team_name = normalize_text(team.get("team_name") or "")
     team_abbrev = normalize_text(team.get("team_abbrev") or "")
     team_terms = _team_match_terms(team)
 
     score = 0
+    has_league_context = bool(
+        (league_hint and league_hint in combined_text)
+        or (sport_hint and sport_hint in combined_text)
+    )
 
     if team_name and team_name in stream_text:
-        score = max(score, 100)
+        score = max(score, 300)
+    elif team_name and team_name in combined_text:
+        score = max(score, 280)
+
+    if team_abbrev and f" {team_abbrev} " in f" {combined_text} " and has_league_context:
+        score = max(score, 220)
 
     if team_terms:
         mascot = team_terms[1] if len(team_terms) > 1 else None
-        if mascot and mascot in stream_text:
-            score = max(score, 88 if league_hint and league_hint in stream_text else 78)
+        if mascot and mascot in combined_text and has_league_context:
+            score = max(score, 200)
 
     if team_abbrev and f" {team_abbrev} " in f" {stream_text} ":
-        score = max(score, 82 if league_hint and league_hint in stream_text else 70)
+        score = max(score, 240 if has_league_context else score)
 
     if team_name:
         fuzzy_score = int(fuzz.partial_ratio(team_name, stream_text))
-        if fuzzy_score >= 92:
-            score = max(score, 76)
+        if fuzzy_score >= 92 and has_league_context:
+            score = max(score, 180)
 
     return score
 
 
 def _find_headendarr_team_stream_ids(team: dict, streams: list[Any]) -> list[int]:
     """Find playlist streams suitable for a persistent team channel."""
-    ranked: list[tuple[int, int]] = []
+    ranked: list[tuple[int, Any]] = []
     seen: set[int] = set()
 
     for stream in streams:
         stream_id = getattr(stream, "id", None)
         if stream_id is None or stream_id in seen:
             continue
-        score = _score_headendarr_team_stream(team, getattr(stream, "name", ""))
+        score = _score_headendarr_team_stream(team, stream)
         if score <= 0:
             continue
-        ranked.append((score, int(stream_id)))
+        ranked.append((score, stream))
         seen.add(int(stream_id))
 
-    ranked.sort(key=lambda item: (-item[0], item[1]))
-    return [stream_id for _score, stream_id in ranked[:5]]
+    ranked.sort(key=lambda item: (-item[0], int(getattr(item[1], "id", 0) or 0)))
+    if not ranked:
+        return []
+
+    best_score = ranked[0][0]
+    if best_score >= 280:
+        minimum_score = 280
+    elif best_score >= 200:
+        minimum_score = 200
+    else:
+        minimum_score = best_score
+
+    return [stream for score, stream in ranked if score >= minimum_score][:5]
+
+
+def _order_headendarr_team_stream_ids(conn: Any, streams: list[Any]) -> list[int]:
+    """Order matched Headendarr team streams using Teamarr's stream ordering rules."""
+    from teamarr.database.channels.types import ManagedChannelStream
+    from teamarr.services.stream_ordering import get_stream_ordering_service
+
+    if not streams:
+        return []
+
+    ordering_service = get_stream_ordering_service(conn)
+    if not ordering_service.rules:
+        return [int(stream.id) for stream in streams if getattr(stream, "id", None) is not None]
+
+    temp_streams: list[ManagedChannelStream] = []
+    stream_lookup: dict[int, Any] = {}
+    source_group_names: dict[int, str] = {}
+
+    for index, stream in enumerate(streams, start=1):
+        stream_id = getattr(stream, "id", None)
+        if stream_id is None:
+            continue
+
+        temp_streams.append(
+            ManagedChannelStream(
+                id=int(stream_id),
+                managed_channel_id=0,
+                dispatcharr_stream_id=int(stream_id),
+                stream_name=getattr(stream, "name", None),
+                source_group_id=int(stream_id),
+                m3u_account_name=getattr(stream, "playlist_name", None),
+                priority=index,
+            )
+        )
+        stream_lookup[int(stream_id)] = stream
+        group_title = getattr(stream, "group_title", None)
+        if group_title:
+            source_group_names[int(stream_id)] = group_title
+
+    ordered_streams = ordering_service.sort_streams(
+        temp_streams, source_group_names=source_group_names
+    )
+    return [
+        stream.dispatcharr_stream_id
+        for stream in ordered_streams
+        if stream.dispatcharr_stream_id in stream_lookup
+    ]
 
 
 def _sync_headendarr_team_channels(
@@ -761,92 +833,93 @@ def _sync_headendarr_team_channels(
         ]
         range_start, range_end = get_global_channel_range(conn)
 
-    if not teams:
-        return {"success": True, "created": 0, "updated": 0, "skipped": 0}
+        if not teams:
+            return {"success": True, "created": 0, "updated": 0, "skipped": 0}
 
-    streams = connection.playlists.list_streams()
-    existing_channels = connection.channels.get_channels(use_cache=False)
-    by_tvg_id = {channel.tvg_id: channel for channel in existing_channels if channel.tvg_id}
+        streams = connection.playlists.list_streams()
+        existing_channels = connection.channels.get_channels(use_cache=False)
+        by_tvg_id = {channel.tvg_id: channel for channel in existing_channels if channel.tvg_id}
 
-    used_numbers = {
-        int(float(channel.channel_number))
-        for channel in existing_channels
-        if channel.channel_number
-        and str(channel.channel_number).strip()
-        and str(channel.channel_number).strip().isdigit()
-    }
-
-    def next_channel_number() -> int | None:
-        candidate = range_start or 101
-        end = range_end or 999999
-        while candidate in used_numbers and candidate <= end:
-            candidate += 1
-        if candidate > end:
-            return None
-        used_numbers.add(candidate)
-        return candidate
-
-    created = 0
-    updated = 0
-    skipped = 0
-    errors: list[str] = []
-
-    for team in teams:
-        tvg_id = team.get("channel_id")
-        if not tvg_id:
-            skipped += 1
-            continue
-
-        stream_ids = _find_headendarr_team_stream_ids(team, streams)
-        if not stream_ids:
-            logger.info(
-                "[HEADENDARR_TEAM] No matching streams found for team '%s'",
-                team.get("team_name"),
-            )
-            skipped += 1
-            continue
-
-        existing = by_tvg_id.get(tvg_id)
-        channel_number: int | None = None
-
-        if existing and existing.channel_number and str(existing.channel_number).isdigit():
-            channel_number = int(existing.channel_number)
-            used_numbers.add(channel_number)
-        else:
-            channel_number = next_channel_number()
-
-        if channel_number is None:
-            errors.append(f"{team.get('team_name')}: no channel number available")
-            continue
-
-        payload = {
-            "name": team.get("team_name"),
-            "channel_number": channel_number,
-            "tvg_id": tvg_id,
-            "stream_ids": stream_ids,
-            "logo_url": team.get("channel_logo_url") or team.get("team_logo_url"),
+        used_numbers = {
+            int(float(channel.channel_number))
+            for channel in existing_channels
+            if channel.channel_number
+            and str(channel.channel_number).strip()
+            and str(channel.channel_number).strip().isdigit()
         }
 
-        if existing:
-            update_payload = {
-                "name": payload["name"],
-                "channel_number": payload["channel_number"],
-                "tvg_id": payload["tvg_id"],
-                "streams": stream_ids,
-                "logo_url": payload["logo_url"],
+        def next_channel_number() -> int | None:
+            candidate = range_start or 101
+            end = range_end or 999999
+            while candidate in used_numbers and candidate <= end:
+                candidate += 1
+            if candidate > end:
+                return None
+            used_numbers.add(candidate)
+            return candidate
+
+        created = 0
+        updated = 0
+        skipped = 0
+        errors: list[str] = []
+
+        for team in teams:
+            tvg_id = team.get("channel_id")
+            if not tvg_id:
+                skipped += 1
+                continue
+
+            matched_streams = _find_headendarr_team_stream_ids(team, streams)
+            stream_ids = _order_headendarr_team_stream_ids(conn, matched_streams)
+            if not stream_ids:
+                logger.info(
+                    "[HEADENDARR_TEAM] No matching streams found for team '%s'",
+                    team.get("team_name"),
+                )
+                skipped += 1
+                continue
+
+            existing = by_tvg_id.get(tvg_id)
+            channel_number: int | None = None
+
+            if existing and existing.channel_number and str(existing.channel_number).isdigit():
+                channel_number = int(existing.channel_number)
+                used_numbers.add(channel_number)
+            else:
+                channel_number = next_channel_number()
+
+            if channel_number is None:
+                errors.append(f"{team.get('team_name')}: no channel number available")
+                continue
+
+            payload = {
+                "name": team.get("team_name"),
+                "channel_number": channel_number,
+                "tvg_id": tvg_id,
+                "stream_ids": stream_ids,
+                "logo_url": team.get("channel_logo_url") or team.get("team_logo_url"),
             }
-            result = connection.channels.update_channel(existing.id, update_payload)
+
+            if existing:
+                update_payload = {
+                    "name": payload["name"],
+                    "channel_number": payload["channel_number"],
+                    "tvg_id": payload["tvg_id"],
+                    "streams": stream_ids,
+                    "logo_url": payload["logo_url"],
+                }
+                result = connection.channels.update_channel(existing.id, update_payload)
+                if result.success:
+                    updated += 1
+                else:
+                    errors.append(f"{team.get('team_name')}: {result.error}")
+                continue
+
+            result = connection.channels.create_channel(**payload)
             if result.success:
-                updated += 1
+                created += 1
             else:
                 errors.append(f"{team.get('team_name')}: {result.error}")
-            continue
-
-        result = connection.channels.create_channel(**payload)
-        if result.success:
-            created += 1
-        else:
-            errors.append(f"{team.get('team_name')}: {result.error}")
 
     summary: dict[str, Any] = {
         "success": len(errors) == 0,
