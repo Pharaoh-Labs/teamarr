@@ -376,6 +376,11 @@ def run_full_generation(
             result.epg_association["headendarr_team_channels"] = _sync_headendarr_team_channels(
                 db_factory=db_factory,
             )
+            update_progress("headendarr", 98, "Refreshing Headendarr EPG...")
+            result.epg_refresh["headendarr_post_sync"] = _trigger_headendarr_epg_refresh(
+                db_factory=db_factory,
+                teamarr_host=headendarr_settings.teamarr_host,
+            )
 
         # Create lifecycle service once for steps 5-6
         # Reuse shared_service to maintain cache warmth
@@ -647,6 +652,41 @@ def _provision_headendarr_epg_source(
     return {
         "success": True,
         "epg_id": epg_id,
+        "refresh_started": refresh_started,
+    }
+
+
+def _trigger_headendarr_epg_refresh(
+    db_factory: Callable[[], Any],
+    teamarr_host: str,
+) -> dict:
+    """Trigger a refresh of Teamarr's provisioned Headendarr XMLTV source."""
+    from teamarr.headendarr import get_headendarr_connection
+    from teamarr.api.routes.settings.headendarr import (
+        HEADENDARR_TEAMARR_EPG_NAME,
+        _build_teamarr_xmltv_url,
+    )
+
+    connection = get_headendarr_connection(db_factory)
+    if not connection:
+        return {"success": False, "message": "Headendarr not configured or not connected"}
+
+    sources = connection.epg.list_sources()
+    source = next(
+        (
+            item
+            for item in sources
+            if item.name == HEADENDARR_TEAMARR_EPG_NAME and item.url == _build_teamarr_xmltv_url(teamarr_host)
+        ),
+        None,
+    )
+    if not source:
+        return {"success": False, "message": "Teamarr Headendarr EPG source not found"}
+
+    refresh_started = connection.epg.trigger_update(source.id)
+    return {
+        "success": refresh_started,
+        "epg_id": source.id,
         "refresh_started": refresh_started,
     }
 
