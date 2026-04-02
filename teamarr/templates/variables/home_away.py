@@ -1,6 +1,7 @@
-"""Home/Away variables: location context, team positions.
+"""Home/Away variables: location context, team positions, feed separation.
 
-These variables provide home/away context and positional team references.
+These variables provide home/away context, positional team references,
+and feed team data for streams broken out into home/away channels.
 """
 
 from teamarr.templates.context import GameContext, TemplateContext
@@ -245,3 +246,116 @@ def extract_away_team_logo(ctx: TemplateContext, game_ctx: GameContext | None) -
     if not game_ctx or not game_ctx.event:
         return ""
     return game_ctx.event.away_team.logo_url or ""
+
+
+# --- Feed team variables (stream-level home/away feed separation) ---
+# These resolve to the team whose broadcast feed this channel carries.
+# Empty string when no feed separation is active (graceful disappear).
+
+
+@register_variable(
+    name="feed_team",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Feed team full name (e.g., 'Baltimore Orioles')",
+)
+def extract_feed_team(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return ctx.feed_team.name
+
+
+@register_variable(
+    name="feed_team_short",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Feed team short name (e.g., 'Orioles')",
+)
+def extract_feed_team_short(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return ctx.feed_team.short_name or ctx.feed_team.name
+
+
+@register_variable(
+    name="feed_team_abbrev",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Feed team abbreviation uppercase (e.g., 'BAL')",
+)
+def extract_feed_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return ctx.feed_team.abbreviation.upper()
+
+
+@register_variable(
+    name="feed_team_abbrev_lower",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Feed team abbreviation lowercase (e.g., 'bal')",
+)
+def extract_feed_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return ctx.feed_team.abbreviation.lower()
+
+
+@register_variable(
+    name="feed_team_logo",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Feed team logo URL",
+)
+def extract_feed_team_logo(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return ctx.feed_team.logo_url or ""
+
+
+@register_variable(
+    name="is_home_feed",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="'true' if this is the home team's feed, 'false' if away, '' if no feed",
+)
+def extract_is_home_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team or not game_ctx or not game_ctx.event:
+        return ""
+    is_home = (
+        game_ctx.event.home_team
+        and game_ctx.event.home_team.id == ctx.feed_team.id
+    )
+    return "true" if is_home else "false"
+
+
+@register_variable(
+    name="is_away_feed",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="'true' if this is the away team's feed, 'false' if home, '' if no feed",
+)
+def extract_is_away_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team or not game_ctx or not game_ctx.event:
+        return ""
+    is_away = (
+        game_ctx.event.away_team
+        and game_ctx.event.away_team.id == ctx.feed_team.id
+    )
+    return "true" if is_away else "false"
+
+
+@register_variable(
+    name="feed_home_away",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="'Home' if home feed, 'Away' if away feed, '' if no feed",
+)
+def extract_feed_home_away(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team or not game_ctx or not game_ctx.event:
+        return ""
+    is_home = (
+        game_ctx.event.home_team
+        and game_ctx.event.home_team.id == ctx.feed_team.id
+    )
+    return "Home" if is_home else "Away"

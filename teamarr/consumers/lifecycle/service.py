@@ -1069,7 +1069,9 @@ class ChannelLifecycleService:
         delete_time = self._timing_manager.calculate_delete_time(event)
 
         # Resolve logo URL from template (supports template variables including {exception_keyword})
-        logo_url = self._resolve_logo_url(event, template, matched_keyword, segment)
+        logo_url = self._resolve_logo_url(
+            event, template, matched_keyword, segment, feed_team=feed_team,
+        )
 
         # Create in Dispatcharr
         dispatcharr_channel_id = None
@@ -1274,7 +1276,10 @@ class ChannelLifecycleService:
 
         # Resolve using full template engine with extra variables
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
-        base_name = self._resolve_template(name_format, event, extra_vars, card_segment=segment)
+        base_name = self._resolve_template(
+            name_format, event, extra_vars,
+            card_segment=segment, feed_team=feed_team,
+        )
 
         # Clean up empty wrappers when {exception_keyword} resolves to ""
         # e.g., "Team A @ Team B ()" → "Team A @ Team B"
@@ -1365,6 +1370,7 @@ class ChannelLifecycleService:
         template,
         exception_keyword: str | None = None,
         segment: str | None = None,
+        feed_team=None,
     ) -> str | None:
         """Resolve logo URL from template.
 
@@ -1376,6 +1382,7 @@ class ChannelLifecycleService:
             template: Can be dict, EventTemplateConfig dataclass, or None
             exception_keyword: Optional keyword for {exception_keyword} variable
             segment: UFC card segment code (e.g., "prelims", "main_card")
+            feed_team: Team object for feed separation (if detected)
         """
         logo_url = None
         if template:
@@ -1395,7 +1402,8 @@ class ChannelLifecycleService:
                     "exception_keyword": exception_keyword if exception_keyword else "",
                 }
                 return self._resolve_template(
-                    logo_url, event, extra_vars, card_segment=segment
+                    logo_url, event, extra_vars, card_segment=segment,
+                    feed_team=feed_team,
                 )
             return logo_url
 
@@ -1407,6 +1415,7 @@ class ChannelLifecycleService:
         event: Event,
         extra_variables: dict[str, str] | None = None,
         card_segment: str | None = None,
+        feed_team=None,
     ) -> str:
         """Resolve template string using full template engine.
 
@@ -1418,6 +1427,7 @@ class ChannelLifecycleService:
             extra_variables: Optional dict of additional variables to resolve
                 (e.g., {"exception_keyword": "Spanish"})
             card_segment: UFC card segment code (e.g., "prelims", "main_card")
+            feed_team: Team object for feed separation (if detected)
 
         Returns:
             Resolved string with variables replaced
@@ -1433,6 +1443,7 @@ class ChannelLifecycleService:
             league=event.league,
             card_segment=card_segment,
         )
+        context.feed_team = feed_team
         return self._resolver.resolve(template_str, context)
 
     def _get_next_channel_number(
@@ -1663,7 +1674,8 @@ class ChannelLifecycleService:
 
             # 8. Sync logo
             self._sync_channel_logo(
-                conn, existing, event, template, matched_keyword, segment, changes_made
+                conn, existing, event, template, matched_keyword, segment, changes_made,
+                feed_team=sync_feed_team,
             )
 
             # 9. Sync stream_profile_id
@@ -1824,11 +1836,14 @@ class ChannelLifecycleService:
         matched_keyword: str | None,
         segment: str | None,
         changes_made: list[str],
+        feed_team=None,
     ) -> None:
         """Sync logo — handles both updates and removals."""
         from teamarr.database.channels import update_managed_channel
 
-        logo_url = self._resolve_logo_url(event, template, matched_keyword, segment)
+        logo_url = self._resolve_logo_url(
+            event, template, matched_keyword, segment, feed_team=feed_team,
+        )
         current_logo_id = getattr(existing, "dispatcharr_logo_id", None)
         stored_logo_url = getattr(existing, "logo_url", None)
 

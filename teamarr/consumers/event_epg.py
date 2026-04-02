@@ -414,6 +414,7 @@ class EventEPGGenerator:
                 league=event.league,
                 card_segment=segment,
             )
+            context.feed_team = match.get("feed_team")
             context.extra_vars = {"exception_keyword": keyword_value}
 
             # Generate channel name from template

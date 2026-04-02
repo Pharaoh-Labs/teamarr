@@ -87,6 +87,10 @@ class TemplateContext:
     next_game: GameContext | None = None  # For .next suffix
     last_game: GameContext | None = None  # For .last suffix
 
+    # Feed separation: the team whose broadcast feed this channel carries
+    # Set when a stream is identified as a home/away feed (e.g., "Orioles Feed")
+    feed_team: Team | None = None
+
     # Extra variables injected at resolution time (override registered extractors)
     # Used for values that aren't derived from event data (e.g., exception_keyword)
     extra_vars: dict[str, str] = field(default_factory=dict)
