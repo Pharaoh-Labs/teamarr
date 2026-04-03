@@ -148,6 +148,10 @@ export function EventGroupForm() {
         custom_regex_teams_enabled: group.custom_regex_teams_enabled,
         custom_regex_date: group.custom_regex_date,
         custom_regex_date_enabled: group.custom_regex_date_enabled,
+        custom_regex_month: group.custom_regex_month,
+        custom_regex_month_enabled: group.custom_regex_month_enabled,
+        custom_regex_day: group.custom_regex_day,
+        custom_regex_day_enabled: group.custom_regex_day_enabled,
         custom_regex_time: group.custom_regex_time,
         custom_regex_time_enabled: group.custom_regex_time_enabled,
         custom_regex_league: group.custom_regex_league,
@@ -279,97 +283,35 @@ export function EventGroupForm() {
 
       {/* Settings Section */}
       <div className="space-y-6">
-          {/* Basic Settings (name and enabled only, for new groups without full edit context) */}
-          {!isEdit && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Group Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    readOnly
-                    className="bg-muted"
-                  />
-                  <p className="text-xs text-muted-foreground">Name from M3U group</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="display_name_new">Display Name (Optional)</Label>
-                  <Input
-                    id="display_name_new"
-                    value={formData.display_name || ""}
-                    onChange={(e) => setFormData({ ...formData, display_name: e.target.value || null })}
-                    placeholder="Override name for display in UI"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    If set, this name will be shown instead of the M3U group name
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={formData.enabled}
-                    onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
-                  />
-                  <Label className="font-normal">Enabled</Label>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Basic Info (edit mode) */}
-          {isEdit && <Card>
-            <CardHeader
-              className="cursor-pointer hover:bg-muted/50 rounded-t-lg"
-              onClick={() => setBasicSettingsExpanded(!basicSettingsExpanded)}
-            >
-              <div className="flex items-center gap-2">
-                {basicSettingsExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                )}
-                <CardTitle>Basic Settings</CardTitle>
-              </div>
+        {/* Basic Settings (name and enabled only, for new groups without full edit context) */}
+        {!isEdit && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Basic Settings</CardTitle>
             </CardHeader>
-            {basicSettingsExpanded && <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Group Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    readOnly
-                    className="bg-muted"
-                  />
-                  <p className="text-xs text-muted-foreground">Name from M3U group</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="display_name">Display Name (Optional)</Label>
-                  <Input
-                    id="display_name"
-                    value={formData.display_name || ""}
-                    onChange={(e) => setFormData({ ...formData, display_name: e.target.value || null })}
-                    placeholder="Override name for display in UI"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    If set, shown instead of M3U group name
-                  </p>
-                </div>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Group Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  readOnly
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">Name from M3U group</p>
               </div>
-
-              {/* M3U Source Info - watermark style */}
-              {formData.m3u_group_name && (
-                <div className="text-xs text-muted-foreground/70 pt-3">
-                  {formData.m3u_account_name && (
-                    <div>M3U: {formData.m3u_account_name} (#{formData.m3u_account_id})</div>
-                  )}
-                  <div>Group: {formData.m3u_group_name} (#{formData.m3u_group_id})</div>
-                </div>
-              )}
-
+              <div className="space-y-2">
+                <Label htmlFor="display_name_new">Display Name (Optional)</Label>
+                <Input
+                  id="display_name_new"
+                  value={formData.display_name || ""}
+                  onChange={(e) => setFormData({ ...formData, display_name: e.target.value || null })}
+                  placeholder="Override name for display in UI"
+                />
+                <p className="text-xs text-muted-foreground">
+                  If set, this name will be shown instead of the M3U group name
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.enabled}
@@ -377,757 +319,819 @@ export function EventGroupForm() {
                 />
                 <Label className="font-normal">Enabled</Label>
               </div>
-            </CardContent>}
-          </Card>}
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Custom Regex */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between py-3 rounded-t-lg">
-              <button
-                type="button"
-                onClick={() => setRegexExpanded(!regexExpanded)}
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80"
-              >
-                {regexExpanded ? (
+        {/* Basic Info (edit mode) */}
+        {isEdit && <Card>
+          <CardHeader
+            className="cursor-pointer hover:bg-muted/50 rounded-t-lg"
+            onClick={() => setBasicSettingsExpanded(!basicSettingsExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              {basicSettingsExpanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+              <CardTitle>Basic Settings</CardTitle>
+            </div>
+          </CardHeader>
+          {basicSettingsExpanded && <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Group Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  readOnly
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">Name from M3U group</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="display_name">Display Name (Optional)</Label>
+                <Input
+                  id="display_name"
+                  value={formData.display_name || ""}
+                  onChange={(e) => setFormData({ ...formData, display_name: e.target.value || null })}
+                  placeholder="Override name for display in UI"
+                />
+                <p className="text-xs text-muted-foreground">
+                  If set, shown instead of M3U group name
+                </p>
+              </div>
+            </div>
+
+            {/* M3U Source Info - watermark style */}
+            {formData.m3u_group_name && (
+              <div className="text-xs text-muted-foreground/70 pt-3">
+                {formData.m3u_account_name && (
+                  <div>M3U: {formData.m3u_account_name} (#{formData.m3u_account_id})</div>
+                )}
+                <div>Group: {formData.m3u_group_name} (#{formData.m3u_group_id})</div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={formData.enabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
+              />
+              <Label className="font-normal">Enabled</Label>
+            </div>
+          </CardContent>}
+        </Card>}
+
+        {/* Custom Regex */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between py-3 rounded-t-lg">
+            <button
+              type="button"
+              onClick={() => setRegexExpanded(!regexExpanded)}
+              className="flex items-center gap-2 cursor-pointer hover:opacity-80"
+            >
+              {regexExpanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+              <CardTitle>Custom Regex</CardTitle>
+            </button>
+          </CardHeader>
+
+          {regexExpanded && (
+            <CardContent className="space-y-6 pt-0">
+              {/* Pattern Tester - only in edit mode */}
+              {isEdit && (
+                <div className="pb-4 border-b">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setTestPatternsOpen(true)}
+                    className="gap-2"
+                  >
+                    <FlaskConical className="h-4 w-4" />
+                    Open Pattern Tester
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Test your regex patterns against actual stream names from this group
+                  </p>
+                </div>
+              )}
+
+              {/* Stream Filtering Subsection */}
+              <div className="space-y-4">
+                {/* Skip Builtin Filter */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={formData.skip_builtin_filter || false}
+                    onCheckedChange={() =>
+                      setFormData({ ...formData, skip_builtin_filter: !formData.skip_builtin_filter })
+                    }
+                  />
+                  <div>
+                    <span className="text-sm font-normal">
+                      Skip built-in stream filtering
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      Bypass placeholder detection, unsupported sport filtering, and event pattern requirements.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Inclusion Pattern */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={formData.stream_include_regex_enabled || false}
+                      onCheckedChange={() =>
+                        setFormData({ ...formData, stream_include_regex_enabled: !formData.stream_include_regex_enabled })
+                      }
+                    />
+                    <span className="text-sm font-normal">Inclusion Pattern</span>
+                  </label>
+                  <Input
+                    value={formData.stream_include_regex || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, stream_include_regex: e.target.value || null })
+                    }
+                    placeholder="e.g., Gonzaga|Washington State|Eastern Washington"
+                    disabled={!formData.stream_include_regex_enabled}
+                    className={cn("font-mono text-sm", !formData.stream_include_regex_enabled && "opacity-50")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only streams matching this pattern will be processed.
+                  </p>
+                </div>
+
+                {/* Exclusion Pattern */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={formData.stream_exclude_regex_enabled || false}
+                      onCheckedChange={() =>
+                        setFormData({ ...formData, stream_exclude_regex_enabled: !formData.stream_exclude_regex_enabled })
+                      }
+                    />
+                    <span className="text-sm font-normal">Exclusion Pattern</span>
+                  </label>
+                  <Input
+                    value={formData.stream_exclude_regex || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, stream_exclude_regex: e.target.value || null })
+                    }
+                    placeholder="e.g., \(ES\)|\(ALT\)|All.?Star"
+                    disabled={!formData.stream_exclude_regex_enabled}
+                    className={cn("font-mono text-sm", !formData.stream_exclude_regex_enabled && "opacity-50")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Streams matching this pattern will be excluded.
+                  </p>
+                </div>
+              </div>
+
+              {/* Extraction Patterns by Event Type */}
+              <div className="space-y-4">
+                <div className="border-b pb-2">
+                  <h4 className="font-medium text-sm">Extraction Patterns</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Configure custom extraction patterns by event type. Each type has its own pipeline.
+                  </p>
+                </div>
+
+                {/* Event Type Tabs */}
+                <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setRegexEventType("team_vs_team")}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 text-sm rounded-md transition-colors",
+                      regexEventType === "team_vs_team"
+                        ? "bg-background shadow text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Team vs Team
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegexEventType("event_card")}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 text-sm rounded-md transition-colors",
+                      regexEventType === "event_card"
+                        ? "bg-background shadow text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Combat / Event Card
+                  </button>
+                </div>
+
+                {/* Team vs Team Patterns */}
+                {regexEventType === "team_vs_team" && (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground border-l-2 border-muted pl-3">
+                      Patterns for team sports (NFL, NBA, NHL, Soccer, etc.) with "Team A vs Team B" format.
+                    </p>
+
+                    {/* Teams Pattern */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_teams_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_teams_enabled: !formData.custom_regex_teams_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Teams Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_teams || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_teams: e.target.value || null })
+                        }
+                        placeholder="(?P<team1>[A-Z]{2,3})\s*[@vs]+\s*(?P<team2>[A-Z]{2,3})"
+                        disabled={!formData.custom_regex_teams_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_teams_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named groups: (?P&lt;team1&gt;...) and (?P&lt;team2&gt;...)
+                      </p>
+                    </div>
+
+                    {/* Date Pattern */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_date_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_date_enabled: !formData.custom_regex_date_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Date Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_date || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_date: e.target.value || null })
+                        }
+                        placeholder="(?P<date>\d{1,2}/\d{1,2})"
+                        disabled={!formData.custom_regex_date_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named group: (?P&lt;date&gt;...)
+                      </p>
+
+                      {/* Month/Day sub-options */}
+                      <div className="ml-6 pl-3 border-l border-border/50 space-y-2">
+                        <p className="text-xs text-muted-foreground">Or extract month and day separately:</p>
+                        <div className="space-y-1">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <Checkbox
+                              checked={formData.custom_regex_month_enabled || false}
+                              onCheckedChange={() =>
+                                setFormData({ ...formData, custom_regex_month_enabled: !formData.custom_regex_month_enabled })
+                              }
+                            />
+                            <span className="text-sm font-normal">Month</span>
+                          </label>
+                          <Input
+                            value={formData.custom_regex_month || ""}
+                            onChange={(e) =>
+                              setFormData({ ...formData, custom_regex_month: e.target.value || null })
+                            }
+                            placeholder="(?P<month>\w+)"
+                            disabled={!formData.custom_regex_month_enabled}
+                            className={cn("font-mono text-sm", !formData.custom_regex_month_enabled && "opacity-50")}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <Checkbox
+                              checked={formData.custom_regex_day_enabled || false}
+                              onCheckedChange={() =>
+                                setFormData({ ...formData, custom_regex_day_enabled: !formData.custom_regex_day_enabled })
+                              }
+                            />
+                            <span className="text-sm font-normal">Day</span>
+                          </label>
+                          <Input
+                            value={formData.custom_regex_day || ""}
+                            onChange={(e) =>
+                              setFormData({ ...formData, custom_regex_day: e.target.value || null })
+                            }
+                            placeholder="(?P<day>\d{1,2})"
+                            disabled={!formData.custom_regex_day_enabled}
+                            className={cn("font-mono text-sm", !formData.custom_regex_day_enabled && "opacity-50")}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Time Pattern */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_time_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_time_enabled: !formData.custom_regex_time_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Time Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_time || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_time: e.target.value || null })
+                        }
+                        placeholder="(?P<time>\d{1,2}:\d{2}\s*(?:AM|PM)?)"
+                        disabled={!formData.custom_regex_time_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_time_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named group: (?P&lt;time&gt;...)
+                      </p>
+                    </div>
+
+                    {/* League Pattern */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_league_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_league_enabled: !formData.custom_regex_league_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">League Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_league || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_league: e.target.value || null })
+                        }
+                        placeholder="(?P<league>NHL|NBA|NFL|MLB)"
+                        disabled={!formData.custom_regex_league_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_league_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named group: (?P&lt;league&gt;...)
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Event Card Patterns (UFC, Boxing, MMA) */}
+                {regexEventType === "event_card" && (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground border-l-2 border-muted pl-3">
+                      Patterns for combat sports (UFC, Boxing, MMA) with event card format.
+                    </p>
+
+                    {/* Fighters Pattern */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_fighters_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_fighters_enabled: !formData.custom_regex_fighters_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Fighters Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_fighters || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_fighters: e.target.value || null })
+                        }
+                        placeholder="(?P<fighter1>\w+)\s+vs\.?\s+(?P<fighter2>\w+)"
+                        disabled={!formData.custom_regex_fighters_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_fighters_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named groups: (?P&lt;fighter1&gt;...) and (?P&lt;fighter2&gt;...)
+                      </p>
+                    </div>
+
+                    {/* Event Name Pattern */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_event_name_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_event_name_enabled: !formData.custom_regex_event_name_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Event Name Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_event_name || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_event_name: e.target.value || null })
+                        }
+                        placeholder="(?P<event_name>UFC\s*\d+|Bellator\s*\d+)"
+                        disabled={!formData.custom_regex_event_name_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_event_name_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named group: (?P&lt;event_name&gt;...)
+                      </p>
+                    </div>
+
+                    {/* Date Pattern (shared) */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_date_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_date_enabled: !formData.custom_regex_date_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Date Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_date || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_date: e.target.value || null })
+                        }
+                        placeholder="(?P<date>\d{1,2}/\d{1,2})"
+                        disabled={!formData.custom_regex_date_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named group: (?P&lt;date&gt;...)
+                      </p>
+
+                      {/* Month/Day sub-options */}
+                      <div className="ml-6 pl-3 border-l border-border/50 space-y-2">
+                        <p className="text-xs text-muted-foreground">Or extract month and day separately:</p>
+                        <div className="space-y-1">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <Checkbox
+                              checked={formData.custom_regex_month_enabled || false}
+                              onCheckedChange={() =>
+                                setFormData({ ...formData, custom_regex_month_enabled: !formData.custom_regex_month_enabled })
+                              }
+                            />
+                            <span className="text-sm font-normal">Month</span>
+                          </label>
+                          <Input
+                            value={formData.custom_regex_month || ""}
+                            onChange={(e) =>
+                              setFormData({ ...formData, custom_regex_month: e.target.value || null })
+                            }
+                            placeholder="(?P<month>\w+)"
+                            disabled={!formData.custom_regex_month_enabled}
+                            className={cn("font-mono text-sm", !formData.custom_regex_month_enabled && "opacity-50")}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <Checkbox
+                              checked={formData.custom_regex_day_enabled || false}
+                              onCheckedChange={() =>
+                                setFormData({ ...formData, custom_regex_day_enabled: !formData.custom_regex_day_enabled })
+                              }
+                            />
+                            <span className="text-sm font-normal">Day</span>
+                          </label>
+                          <Input
+                            value={formData.custom_regex_day || ""}
+                            onChange={(e) =>
+                              setFormData({ ...formData, custom_regex_day: e.target.value || null })
+                            }
+                            placeholder="(?P<day>\d{1,2})"
+                            disabled={!formData.custom_regex_day_enabled}
+                            className={cn("font-mono text-sm", !formData.custom_regex_day_enabled && "opacity-50")}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Time Pattern (shared) */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <Checkbox
+                          checked={formData.custom_regex_time_enabled || false}
+                          onCheckedChange={() =>
+                            setFormData({ ...formData, custom_regex_time_enabled: !formData.custom_regex_time_enabled })
+                          }
+                        />
+                        <span className="text-sm font-normal">Time Pattern</span>
+                      </label>
+                      <Input
+                        value={formData.custom_regex_time || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, custom_regex_time: e.target.value || null })
+                        }
+                        placeholder="(?P<time>\d{1,2}:\d{2}\s*(?:AM|PM)?)"
+                        disabled={!formData.custom_regex_time_enabled}
+                        className={cn("font-mono text-sm", !formData.custom_regex_time_enabled && "opacity-50")}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use named group: (?P&lt;time&gt;...)
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Subscription Override */}
+        <Card>
+          <button
+            type="button"
+            onClick={() => setSubscriptionOverrideExpanded(!subscriptionOverrideExpanded)}
+            className="w-full"
+          >
+            <CardHeader className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/50 rounded-t-lg">
+              <div className="flex items-center gap-2">
+                {subscriptionOverrideExpanded ? (
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 )}
-                <CardTitle>Custom Regex</CardTitle>
-              </button>
-            </CardHeader>
-
-            {regexExpanded && (
-              <CardContent className="space-y-6 pt-0">
-                {/* Pattern Tester - only in edit mode */}
-                {isEdit && (
-                  <div className="pb-4 border-b">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setTestPatternsOpen(true)}
-                      className="gap-2"
-                    >
-                      <FlaskConical className="h-4 w-4" />
-                      Open Pattern Tester
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Test your regex patterns against actual stream names from this group
-                    </p>
-                  </div>
+                <CardTitle>Subscription Override</CardTitle>
+                {!subscriptionOverrideExpanded && !useGlobalSubscription && (
+                  <span className="text-xs text-amber-500 font-medium ml-2">Custom</span>
                 )}
+              </div>
+            </CardHeader>
+          </button>
 
-                {/* Stream Filtering Subsection */}
-                <div className="space-y-4">
-                  {/* Skip Builtin Filter */}
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <Checkbox
-                      checked={formData.skip_builtin_filter || false}
-                      onCheckedChange={() =>
-                        setFormData({ ...formData, skip_builtin_filter: !formData.skip_builtin_filter })
-                      }
-                    />
-                    <div>
-                      <span className="text-sm font-normal">
-                        Skip built-in stream filtering
-                      </span>
-                      <p className="text-xs text-muted-foreground">
-                        Bypass placeholder detection, unsupported sport filtering, and event pattern requirements.
-                      </p>
-                    </div>
-                  </label>
+          {subscriptionOverrideExpanded && (
+            <CardContent className="space-y-4 pt-0">
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <Checkbox
+                  checked={useGlobalSubscription}
+                  onCheckedChange={() => {
+                    const newValue = !useGlobalSubscription
+                    setUseGlobalSubscription(newValue)
+                    if (newValue) {
+                      // Revert to global — clear local override state
+                      setOverrideNonSoccerLeagues([])
+                      setOverrideSoccerLeagues([])
+                      setOverrideSoccerMode(null)
+                      setOverrideFollowedTeams([])
+                    }
+                  }}
+                />
+                <span className="text-sm font-normal">
+                  Use global subscription (set on Event Groups page)
+                </span>
+              </label>
 
-                  {/* Inclusion Pattern */}
+              {!useGlobalSubscription && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Override which leagues this group matches against instead of using the global subscription.
+                  </p>
+
+                  {/* Non-Soccer Sports */}
                   <div className="space-y-2">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <Checkbox
-                        checked={formData.stream_include_regex_enabled || false}
-                        onCheckedChange={() =>
-                          setFormData({ ...formData, stream_include_regex_enabled: !formData.stream_include_regex_enabled })
-                        }
-                      />
-                      <span className="text-sm font-normal">Inclusion Pattern</span>
-                    </label>
-                    <Input
-                      value={formData.stream_include_regex || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, stream_include_regex: e.target.value || null })
-                      }
-                      placeholder="e.g., Gonzaga|Washington State|Eastern Washington"
-                      disabled={!formData.stream_include_regex_enabled}
-                      className={cn("font-mono text-sm", !formData.stream_include_regex_enabled && "opacity-50")}
+                    <Label className="text-sm font-medium">Non-Soccer Sports</Label>
+                    <LeaguePicker
+                      selectedLeagues={overrideNonSoccerLeagues}
+                      onSelectionChange={setOverrideNonSoccerLeagues}
+                      excludeSport="soccer"
+                      maxHeight="max-h-48"
+                      showSearch={true}
+                      showSelectedBadges={true}
+                      maxBadges={8}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Only streams matching this pattern will be processed.
-                    </p>
                   </div>
 
-                  {/* Exclusion Pattern */}
+                  <div className="border-t" />
+
+                  {/* Soccer */}
                   <div className="space-y-2">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <Checkbox
-                        checked={formData.stream_exclude_regex_enabled || false}
-                        onCheckedChange={() =>
-                          setFormData({ ...formData, stream_exclude_regex_enabled: !formData.stream_exclude_regex_enabled })
-                        }
-                      />
-                      <span className="text-sm font-normal">Exclusion Pattern</span>
-                    </label>
-                    <Input
-                      value={formData.stream_exclude_regex || ""}
-                      onChange={(e) =>
-                        setFormData({ ...formData, stream_exclude_regex: e.target.value || null })
-                      }
-                      placeholder="e.g., \(ES\)|\(ALT\)|All.?Star"
-                      disabled={!formData.stream_exclude_regex_enabled}
-                      className={cn("font-mono text-sm", !formData.stream_exclude_regex_enabled && "opacity-50")}
+                    <Label className="text-sm font-medium">Soccer Leagues</Label>
+                    <SoccerModeSelector
+                      mode={overrideSoccerMode}
+                      onModeChange={setOverrideSoccerMode}
+                      selectedLeagues={overrideSoccerLeagues}
+                      onLeaguesChange={setOverrideSoccerLeagues}
+                      followedTeams={overrideFollowedTeams}
+                      onFollowedTeamsChange={setOverrideFollowedTeams}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Streams matching this pattern will be excluded.
-                    </p>
                   </div>
-                </div>
+                </>
+              )}
+            </CardContent>
+          )}
+        </Card>
 
-                {/* Extraction Patterns by Event Type */}
-                <div className="space-y-4">
-                  <div className="border-b pb-2">
-                    <h4 className="font-medium text-sm">Extraction Patterns</h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Configure custom extraction patterns by event type. Each type has its own pipeline.
-                    </p>
+        {/* Team Filtering */}
+        <Card>
+          <button
+            type="button"
+            onClick={() => setTeamFilterExpanded(!teamFilterExpanded)}
+            className="w-full"
+          >
+            <CardHeader className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/50 rounded-t-lg">
+              <div className="flex items-center gap-2">
+                {teamFilterExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <CardTitle>Team Filtering</CardTitle>
+              </div>
+            </CardHeader>
+          </button>
+
+          {teamFilterExpanded && (
+            <CardContent className="space-y-4 pt-0">
+              {/* Use default toggle */}
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <Checkbox
+                  checked={useDefaultTeamFilter}
+                  onCheckedChange={() => {
+                    const newValue = !useDefaultTeamFilter
+                    setUseDefaultTeamFilter(newValue)
+                    if (newValue) {
+                      setFormData({
+                        ...formData,
+                        include_teams: null,
+                        exclude_teams: null,
+                      })
+                    } else {
+                      setFormData({
+                        ...formData,
+                        include_teams: [],
+                        exclude_teams: [],
+                      })
+                    }
+                  }}
+                />
+                <span className="text-sm font-normal">
+                  Use default team filter (set in Global Defaults above)
+                </span>
+              </label>
+
+              {!useDefaultTeamFilter && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Configure a custom team filter for this group.
+                  </p>
+
+                  {/* Mode selector */}
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="team_filter_mode"
+                        value="include"
+                        checked={formData.team_filter_mode === "include"}
+                        onChange={() => {
+                          // Move teams to include list when switching modes
+                          const teams = formData.exclude_teams || []
+                          setFormData({
+                            ...formData,
+                            team_filter_mode: "include",
+                            include_teams: teams.length > 0 ? teams : formData.include_teams,
+                            exclude_teams: [],
+                          })
+                        }}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm">Include only selected teams</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="team_filter_mode"
+                        value="exclude"
+                        checked={formData.team_filter_mode === "exclude"}
+                        onChange={() => {
+                          // Move teams to exclude list when switching modes
+                          const teams = formData.include_teams || []
+                          setFormData({
+                            ...formData,
+                            team_filter_mode: "exclude",
+                            exclude_teams: teams.length > 0 ? teams : formData.exclude_teams,
+                            include_teams: [],
+                          })
+                        }}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm">Exclude selected teams</span>
+                    </label>
                   </div>
 
-                  {/* Event Type Tabs */}
-                  <div className="flex gap-1 p-1 bg-muted rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => setRegexEventType("team_vs_team")}
-                      className={cn(
-                        "flex-1 px-3 py-1.5 text-sm rounded-md transition-colors",
-                        regexEventType === "team_vs_team"
-                          ? "bg-background shadow text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Team vs Team
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRegexEventType("event_card")}
-                      className={cn(
-                        "flex-1 px-3 py-1.5 text-sm rounded-md transition-colors",
-                        regexEventType === "event_card"
-                          ? "bg-background shadow text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      Combat / Event Card
-                    </button>
-                  </div>
-
-                  {/* Team vs Team Patterns */}
-                  {regexEventType === "team_vs_team" && (
-                    <div className="space-y-4">
-                      <p className="text-xs text-muted-foreground border-l-2 border-muted pl-3">
-                        Patterns for team sports (NFL, NBA, NHL, Soccer, etc.) with "Team A vs Team B" format.
-                      </p>
-
-                      {/* Teams Pattern */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_teams_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_teams_enabled: !formData.custom_regex_teams_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Teams Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_teams || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_teams: e.target.value || null })
-                          }
-                          placeholder="(?P<team1>[A-Z]{2,3})\s*[@vs]+\s*(?P<team2>[A-Z]{2,3})"
-                          disabled={!formData.custom_regex_teams_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_teams_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named groups: (?P&lt;team1&gt;...) and (?P&lt;team2&gt;...)
-                        </p>
-                      </div>
-
-                      {/* Date Pattern */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_date_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_date_enabled: !formData.custom_regex_date_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Date Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_date || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_date: e.target.value || null })
-                          }
-                          placeholder="(?P<date>\d{1,2}/\d{1,2})"
-                          disabled={!formData.custom_regex_date_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named group: (?P&lt;date&gt;...)
-                        </p>
-
-                        {/* Month/Day sub-options */}
-                        <div className="ml-6 pl-3 border-l border-border/50 space-y-2">
-                          <p className="text-xs text-muted-foreground">Or extract month and day separately:</p>
-                          <div className="space-y-1">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <Checkbox
-                                checked={formData.custom_regex_month_enabled || false}
-                                onCheckedChange={() =>
-                                  setFormData({ ...formData, custom_regex_month_enabled: !formData.custom_regex_month_enabled })
-                                }
-                              />
-                              <span className="text-sm font-normal">Month</span>
-                            </label>
-                            <Input
-                              value={formData.custom_regex_month || ""}
-                              onChange={(e) =>
-                                setFormData({ ...formData, custom_regex_month: e.target.value || null })
-                              }
-                              placeholder="(?P<month>\w+)"
-                              disabled={!formData.custom_regex_month_enabled}
-                              className={cn("font-mono text-sm", !formData.custom_regex_month_enabled && "opacity-50")}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <Checkbox
-                                checked={formData.custom_regex_day_enabled || false}
-                                onCheckedChange={() =>
-                                  setFormData({ ...formData, custom_regex_day_enabled: !formData.custom_regex_day_enabled })
-                                }
-                              />
-                              <span className="text-sm font-normal">Day</span>
-                            </label>
-                            <Input
-                              value={formData.custom_regex_day || ""}
-                              onChange={(e) =>
-                                setFormData({ ...formData, custom_regex_day: e.target.value || null })
-                              }
-                              placeholder="(?P<day>\d{1,2})"
-                              disabled={!formData.custom_regex_day_enabled}
-                              className={cn("font-mono text-sm", !formData.custom_regex_day_enabled && "opacity-50")}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Time Pattern */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_time_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_time_enabled: !formData.custom_regex_time_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Time Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_time || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_time: e.target.value || null })
-                          }
-                          placeholder="(?P<time>\d{1,2}:\d{2}\s*(?:AM|PM)?)"
-                          disabled={!formData.custom_regex_time_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_time_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named group: (?P&lt;time&gt;...)
-                        </p>
-                      </div>
-
-                      {/* League Pattern */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_league_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_league_enabled: !formData.custom_regex_league_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">League Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_league || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_league: e.target.value || null })
-                          }
-                          placeholder="(?P<league>NHL|NBA|NFL|MLB)"
-                          disabled={!formData.custom_regex_league_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_league_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named group: (?P&lt;league&gt;...)
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Event Card Patterns (UFC, Boxing, MMA) */}
-                  {regexEventType === "event_card" && (
-                    <div className="space-y-4">
-                      <p className="text-xs text-muted-foreground border-l-2 border-muted pl-3">
-                        Patterns for combat sports (UFC, Boxing, MMA) with event card format.
-                      </p>
-
-                      {/* Fighters Pattern */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_fighters_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_fighters_enabled: !formData.custom_regex_fighters_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Fighters Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_fighters || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_fighters: e.target.value || null })
-                          }
-                          placeholder="(?P<fighter1>\w+)\s+vs\.?\s+(?P<fighter2>\w+)"
-                          disabled={!formData.custom_regex_fighters_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_fighters_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named groups: (?P&lt;fighter1&gt;...) and (?P&lt;fighter2&gt;...)
-                        </p>
-                      </div>
-
-                      {/* Event Name Pattern */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_event_name_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_event_name_enabled: !formData.custom_regex_event_name_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Event Name Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_event_name || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_event_name: e.target.value || null })
-                          }
-                          placeholder="(?P<event_name>UFC\s*\d+|Bellator\s*\d+)"
-                          disabled={!formData.custom_regex_event_name_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_event_name_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named group: (?P&lt;event_name&gt;...)
-                        </p>
-                      </div>
-
-                      {/* Date Pattern (shared) */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_date_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_date_enabled: !formData.custom_regex_date_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Date Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_date || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_date: e.target.value || null })
-                          }
-                          placeholder="(?P<date>\d{1,2}/\d{1,2})"
-                          disabled={!formData.custom_regex_date_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named group: (?P&lt;date&gt;...)
-                        </p>
-
-                        {/* Month/Day sub-options */}
-                        <div className="ml-6 pl-3 border-l border-border/50 space-y-2">
-                          <p className="text-xs text-muted-foreground">Or extract month and day separately:</p>
-                          <div className="space-y-1">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <Checkbox
-                                checked={formData.custom_regex_month_enabled || false}
-                                onCheckedChange={() =>
-                                  setFormData({ ...formData, custom_regex_month_enabled: !formData.custom_regex_month_enabled })
-                                }
-                              />
-                              <span className="text-sm font-normal">Month</span>
-                            </label>
-                            <Input
-                              value={formData.custom_regex_month || ""}
-                              onChange={(e) =>
-                                setFormData({ ...formData, custom_regex_month: e.target.value || null })
-                              }
-                              placeholder="(?P<month>\w+)"
-                              disabled={!formData.custom_regex_month_enabled}
-                              className={cn("font-mono text-sm", !formData.custom_regex_month_enabled && "opacity-50")}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                              <Checkbox
-                                checked={formData.custom_regex_day_enabled || false}
-                                onCheckedChange={() =>
-                                  setFormData({ ...formData, custom_regex_day_enabled: !formData.custom_regex_day_enabled })
-                                }
-                              />
-                              <span className="text-sm font-normal">Day</span>
-                            </label>
-                            <Input
-                              value={formData.custom_regex_day || ""}
-                              onChange={(e) =>
-                                setFormData({ ...formData, custom_regex_day: e.target.value || null })
-                              }
-                              placeholder="(?P<day>\d{1,2})"
-                              disabled={!formData.custom_regex_day_enabled}
-                              className={cn("font-mono text-sm", !formData.custom_regex_day_enabled && "opacity-50")}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Time Pattern (shared) */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <Checkbox
-                            checked={formData.custom_regex_time_enabled || false}
-                            onCheckedChange={() =>
-                              setFormData({ ...formData, custom_regex_time_enabled: !formData.custom_regex_time_enabled })
-                            }
-                          />
-                          <span className="text-sm font-normal">Time Pattern</span>
-                        </label>
-                        <Input
-                          value={formData.custom_regex_time || ""}
-                          onChange={(e) =>
-                            setFormData({ ...formData, custom_regex_time: e.target.value || null })
-                          }
-                          placeholder="(?P<time>\d{1,2}:\d{2}\s*(?:AM|PM)?)"
-                          disabled={!formData.custom_regex_time_enabled}
-                          className={cn("font-mono text-sm", !formData.custom_regex_time_enabled && "opacity-50")}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Use named group: (?P&lt;time&gt;...)
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            )}
-          </Card>
-
-          {/* Subscription Override */}
-          <Card>
-            <button
-              type="button"
-              onClick={() => setSubscriptionOverrideExpanded(!subscriptionOverrideExpanded)}
-              className="w-full"
-            >
-              <CardHeader className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/50 rounded-t-lg">
-                <div className="flex items-center gap-2">
-                  {subscriptionOverrideExpanded ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <CardTitle>Subscription Override</CardTitle>
-                  {!subscriptionOverrideExpanded && !useGlobalSubscription && (
-                    <span className="text-xs text-amber-500 font-medium ml-2">Custom</span>
-                  )}
-                </div>
-              </CardHeader>
-            </button>
-
-            {subscriptionOverrideExpanded && (
-              <CardContent className="space-y-4 pt-0">
-                <label className="flex items-center gap-2 mb-2 cursor-pointer">
-                  <Checkbox
-                    checked={useGlobalSubscription}
-                    onCheckedChange={() => {
-                      const newValue = !useGlobalSubscription
-                      setUseGlobalSubscription(newValue)
-                      if (newValue) {
-                        // Revert to global — clear local override state
-                        setOverrideNonSoccerLeagues([])
-                        setOverrideSoccerLeagues([])
-                        setOverrideSoccerMode(null)
-                        setOverrideFollowedTeams([])
+                  {/* Team picker */}
+                  <TeamPicker
+                    leagues={formData.leagues}
+                    selectedTeams={
+                      formData.team_filter_mode === "include"
+                        ? (formData.include_teams || [])
+                        : (formData.exclude_teams || [])
+                    }
+                    onSelectionChange={(teams) => {
+                      if (formData.team_filter_mode === "include") {
+                        setFormData({
+                          ...formData,
+                          include_teams: teams,
+                          exclude_teams: [],
+                        })
+                      } else {
+                        setFormData({
+                          ...formData,
+                          exclude_teams: teams,
+                          include_teams: [],
+                        })
                       }
                     }}
                   />
-                  <span className="text-sm font-normal">
-                    Use global subscription (set on Event Groups page)
-                  </span>
-                </label>
 
-                {!useGlobalSubscription && (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Override which leagues this group matches against instead of using the global subscription.
-                    </p>
-
-                    {/* Non-Soccer Sports */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Non-Soccer Sports</Label>
-                      <LeaguePicker
-                        selectedLeagues={overrideNonSoccerLeagues}
-                        onSelectionChange={setOverrideNonSoccerLeagues}
-                        excludeSport="soccer"
-                        maxHeight="max-h-48"
-                        showSearch={true}
-                        showSelectedBadges={true}
-                        maxBadges={8}
-                      />
-                    </div>
-
-                    <div className="border-t" />
-
-                    {/* Soccer */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Soccer Leagues</Label>
-                      <SoccerModeSelector
-                        mode={overrideSoccerMode}
-                        onModeChange={setOverrideSoccerMode}
-                        selectedLeagues={overrideSoccerLeagues}
-                        onLeaguesChange={setOverrideSoccerLeagues}
-                        followedTeams={overrideFollowedTeams}
-                        onFollowedTeamsChange={setOverrideFollowedTeams}
-                      />
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            )}
-          </Card>
-
-          {/* Team Filtering */}
-          <Card>
-              <button
-                type="button"
-                onClick={() => setTeamFilterExpanded(!teamFilterExpanded)}
-                className="w-full"
-              >
-                <CardHeader className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/50 rounded-t-lg">
-                  <div className="flex items-center gap-2">
-                    {teamFilterExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <CardTitle>Team Filtering</CardTitle>
-                  </div>
-                </CardHeader>
-              </button>
-
-              {teamFilterExpanded && (
-                <CardContent className="space-y-4 pt-0">
-                  {/* Use default toggle */}
-                  <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                  {/* Playoff bypass option */}
+                  <label className="flex items-center gap-2 cursor-pointer py-2">
                     <Checkbox
-                      checked={useDefaultTeamFilter}
-                      onCheckedChange={() => {
-                        const newValue = !useDefaultTeamFilter
-                        setUseDefaultTeamFilter(newValue)
-                        if (newValue) {
-                          setFormData({
-                            ...formData,
-                            include_teams: null,
-                            exclude_teams: null,
-                          })
-                        } else {
-                          setFormData({
-                            ...formData,
-                            include_teams: [],
-                            exclude_teams: [],
-                          })
-                        }
-                      }}
+                      checked={formData.bypass_filter_for_playoffs ?? false}
+                      onCheckedChange={(checked) =>
+                        setFormData({
+                          ...formData,
+                          bypass_filter_for_playoffs: checked ? true : null,
+                        })
+                      }
                     />
-                    <span className="text-sm font-normal">
-                      Use default team filter (set in Global Defaults above)
+                    <span className="text-sm">
+                      Include all playoff games (bypass team filter for postseason)
                     </span>
                   </label>
+                  <p className="text-xs text-muted-foreground -mt-1 ml-6">
+                    Unchecked uses the global default from Settings
+                  </p>
 
-                  {!useDefaultTeamFilter && (
-                    <>
-                      <p className="text-sm text-muted-foreground">
-                        Configure a custom team filter for this group.
+                  <div className="space-y-1 mt-2">
+                    <p className="text-xs text-muted-foreground">
+                      {!(formData.include_teams?.length || formData.exclude_teams?.length)
+                        ? "No teams selected. All events will be matched."
+                        : formData.team_filter_mode === "include"
+                          ? `Only events involving ${formData.include_teams?.length} selected team(s) will be matched.`
+                          : `Events involving ${formData.exclude_teams?.length} selected team(s) will be excluded.`}
+                    </p>
+                    {(formData.include_teams?.length || formData.exclude_teams?.length) ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        Filter only applies to leagues where you've made selections.
                       </p>
-
-                      {/* Mode selector */}
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="team_filter_mode"
-                            value="include"
-                            checked={formData.team_filter_mode === "include"}
-                            onChange={() => {
-                              // Move teams to include list when switching modes
-                              const teams = formData.exclude_teams || []
-                              setFormData({
-                                ...formData,
-                                team_filter_mode: "include",
-                                include_teams: teams.length > 0 ? teams : formData.include_teams,
-                                exclude_teams: [],
-                              })
-                            }}
-                            className="accent-primary"
-                          />
-                          <span className="text-sm">Include only selected teams</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="team_filter_mode"
-                            value="exclude"
-                            checked={formData.team_filter_mode === "exclude"}
-                            onChange={() => {
-                              // Move teams to exclude list when switching modes
-                              const teams = formData.include_teams || []
-                              setFormData({
-                                ...formData,
-                                team_filter_mode: "exclude",
-                                exclude_teams: teams.length > 0 ? teams : formData.exclude_teams,
-                                include_teams: [],
-                              })
-                            }}
-                            className="accent-primary"
-                          />
-                          <span className="text-sm">Exclude selected teams</span>
-                        </label>
-                      </div>
-
-                      {/* Team picker */}
-                      <TeamPicker
-                        leagues={formData.leagues}
-                        selectedTeams={
-                          formData.team_filter_mode === "include"
-                            ? (formData.include_teams || [])
-                            : (formData.exclude_teams || [])
-                        }
-                        onSelectionChange={(teams) => {
-                          if (formData.team_filter_mode === "include") {
-                            setFormData({
-                              ...formData,
-                              include_teams: teams,
-                              exclude_teams: [],
-                            })
-                          } else {
-                            setFormData({
-                              ...formData,
-                              exclude_teams: teams,
-                              include_teams: [],
-                            })
-                          }
-                        }}
-                      />
-
-                      {/* Playoff bypass option */}
-                      <label className="flex items-center gap-2 cursor-pointer py-2">
-                        <Checkbox
-                          checked={formData.bypass_filter_for_playoffs ?? false}
-                          onCheckedChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              bypass_filter_for_playoffs: checked ? true : null,
-                            })
-                          }
-                        />
-                        <span className="text-sm">
-                          Include all playoff games (bypass team filter for postseason)
-                        </span>
-                      </label>
-                      <p className="text-xs text-muted-foreground -mt-1 ml-6">
-                        Unchecked uses the global default from Settings
-                      </p>
-
-                      <div className="space-y-1 mt-2">
-                        <p className="text-xs text-muted-foreground">
-                          {!(formData.include_teams?.length || formData.exclude_teams?.length)
-                            ? "No teams selected. All events will be matched."
-                            : formData.team_filter_mode === "include"
-                              ? `Only events involving ${formData.include_teams?.length} selected team(s) will be matched.`
-                              : `Events involving ${formData.exclude_teams?.length} selected team(s) will be excluded.`}
-                        </p>
-                        {(formData.include_teams?.length || formData.exclude_teams?.length) ? (
-                          <p className="text-xs text-muted-foreground italic">
-                            Filter only applies to leagues where you've made selections.
-                          </p>
-                        ) : null}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
+                    ) : null}
+                  </div>
+                </>
               )}
-          </Card>
+            </CardContent>
+          )}
+        </Card>
 
-          {/* Stream Timezone */}
-          <Card>
-            <CardHeader
-              className="cursor-pointer hover:bg-muted/50 rounded-t-lg"
-              onClick={() => setStreamTimezoneExpanded(!streamTimezoneExpanded)}
-            >
-              <div className="flex items-center gap-2">
-                {streamTimezoneExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        {/* Stream Timezone */}
+        <Card>
+          <CardHeader
+            className="cursor-pointer hover:bg-muted/50 rounded-t-lg"
+            onClick={() => setStreamTimezoneExpanded(!streamTimezoneExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              {streamTimezoneExpanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+              <div>
+                <CardTitle>Stream Timezone</CardTitle>
+                {streamTimezoneExpanded && (
+                  <CardDescription>
+                    Timezone used in stream names for date matching
+                  </CardDescription>
                 )}
-                <div>
-                  <CardTitle>Stream Timezone</CardTitle>
-                  {streamTimezoneExpanded && (
-                    <CardDescription>
-                      Timezone used in stream names for date matching
-                    </CardDescription>
-                  )}
-                </div>
               </div>
-            </CardHeader>
-            {streamTimezoneExpanded && <CardContent>
-              <StreamTimezoneSelector
-                value={formData.stream_timezone ?? null}
-                onChange={(tz) => setFormData({ ...formData, stream_timezone: tz })}
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                Optional. Timezone markers (e.g., "ET", "PT") are auto-detected. Set this only if your provider omits them and uses a different timezone than yours.
-              </p>
-            </CardContent>}
-          </Card>
+            </div>
+          </CardHeader>
+          {streamTimezoneExpanded && <CardContent>
+            <StreamTimezoneSelector
+              value={formData.stream_timezone ?? null}
+              onChange={(tz) => setFormData({ ...formData, stream_timezone: tz })}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Optional. Timezone markers (e.g., "ET", "PT") are auto-detected. Set this only if your provider omits them and uses a different timezone than yours.
+            </p>
+          </CardContent>}
+        </Card>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => navigate("/event-groups")}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit} disabled={isPending}>
-              {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              <Save className="h-4 w-4 mr-2" />
-              {isEdit ? "Update Group" : "Create Group"}
-            </Button>
-          </div>
+        {/* Actions */}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => navigate("/event-groups")}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isPending}>
+            {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Save className="h-4 w-4 mr-2" />
+            {isEdit ? "Update Group" : "Create Group"}
+          </Button>
         </div>
+      </div>
 
       {/* Test Patterns Modal — bidirectional sync with form regex fields */}
       <TestPatternsModal
