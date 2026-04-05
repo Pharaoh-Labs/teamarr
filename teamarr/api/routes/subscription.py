@@ -343,3 +343,63 @@ def delete_league_config_endpoint(league_code: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No config found for league '{league_code}'",
         )
+
+
+# =============================================================================
+# TEAM EPG COMPETITION FILTER
+# =============================================================================
+
+
+class CompetitionFilterUpdate(BaseModel):
+    """Set the EPG competition filter for a league.
+
+    competition_filter: list of league codes to allow in team channel EPG,
+    or null/empty to include all competitions (clear the filter).
+    """
+
+    competition_filter: list[str] | None = None
+
+
+class CompetitionFilterResponse(BaseModel):
+    league_code: str
+    competition_filter: list[str] | None
+
+
+@router.get(
+    "/leagues/{league_code}/competition-filter",
+    response_model=CompetitionFilterResponse,
+)
+def get_competition_filter(league_code: str):
+    """Get the EPG competition filter for a league's team channels."""
+    from teamarr.database.leagues import get_league_competition_filter
+
+    with get_db() as conn:
+        f = get_league_competition_filter(conn, league_code)
+
+    return CompetitionFilterResponse(league_code=league_code, competition_filter=f)
+
+
+@router.put(
+    "/leagues/{league_code}/competition-filter",
+    response_model=CompetitionFilterResponse,
+)
+def set_competition_filter(league_code: str, request: CompetitionFilterUpdate):
+    """Set (or clear) the EPG competition filter for a league's team channels.
+
+    Pass competition_filter as a list of league codes to restrict team EPG to
+    only those competitions. Pass null or an empty list to remove the filter
+    and restore default behaviour (all competitions included).
+
+    Example — restrict EPL team channels to EPL fixtures only:
+        PUT /api/v1/leagues/eng.1/competition-filter
+        {"competition_filter": ["eng.1"]}
+    """
+    from teamarr.database.leagues import set_league_competition_filter
+
+    # Treat empty list the same as null (clear the filter)
+    codes = request.competition_filter if request.competition_filter else None
+
+    with get_db() as conn:
+        set_league_competition_filter(conn, league_code, codes)
+
+    return CompetitionFilterResponse(league_code=league_code, competition_filter=codes)

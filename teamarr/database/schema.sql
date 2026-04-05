@@ -788,6 +788,13 @@ CREATE TABLE IF NOT EXISTS leagues (
     event_type TEXT DEFAULT 'team_vs_team'
         CHECK(event_type IN ('team_vs_team', 'event', 'event_card')),
 
+    -- Team EPG Competition Filter
+    -- JSON array of league_codes to include in team channel EPG.
+    -- NULL = include all competitions (default, backwards-compatible).
+    -- Example: '["eng.1"]' restricts EPL team channels to EPL fixtures only,
+    -- excluding FA Cup, Carabao Cup, Champions League etc.
+    epg_competition_filter TEXT DEFAULT NULL,
+
     -- Cache Metadata (updated by cache refresh)
     cached_team_count INTEGER DEFAULT 0,
     last_cache_refresh TIMESTAMP

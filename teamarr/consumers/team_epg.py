@@ -64,6 +64,12 @@ class TeamEPGOptions:
     # for events with status.state == "postponed"
     prepend_postponed_label: bool = True
 
+    # Competition filter: restrict team EPG to specific league codes.
+    # None = include all competitions (default).
+    # Example: ["eng.1"] restricts an EPL team channel to EPL fixtures only,
+    # suppressing FA Cup, Carabao Cup, Champions League, etc.
+    competition_filter: list[str] | None = None
+
     # Backwards compatibility
     @property
     def days_ahead(self) -> int:
@@ -135,6 +141,12 @@ class TeamEPGGenerator:
 
             # Remove primary league from additional (will be added back in generate)
             additional_leagues = [lg for lg in additional_leagues if lg != primary_league]
+
+            # Drop leagues excluded by the competition filter early to avoid
+            # unnecessary API fetches (primary_league is always kept).
+            if options and options.competition_filter:
+                allowed = set(options.competition_filter)
+                additional_leagues = [lg for lg in additional_leagues if lg in allowed]
 
         return self.generate(
             team_id=team_id,
@@ -243,6 +255,21 @@ class TeamEPGGenerator:
                         if event.id not in seen_event_ids:
                             seen_event_ids.add(event.id)
                             all_events.append(event)
+
+        # Apply competition filter: drop events from unwanted leagues.
+        # Primary league is always included even if not explicitly listed,
+        # since the primary league is what the team channel represents.
+        if options.competition_filter:
+            allowed = set(options.competition_filter) | {league}
+            before = len(all_events)
+            all_events = [e for e in all_events if e.league in allowed]
+            dropped = before - len(all_events)
+            if dropped:
+                logger.debug(
+                    "[COMPETITION_FILTER] %s: dropped %d events from excluded competitions",
+                    team_id,
+                    dropped,
+                )
 
         # Fetch team stats once for all events
         team_stats = self._service.get_team_stats(team_id, league)

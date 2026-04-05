@@ -449,6 +449,7 @@ class TeamProcessor:
         in the EPG generator, which is critical for thread-safety during
         parallel processing.
         """
+        from teamarr.database.leagues import get_league_competition_filter
         from teamarr.database.settings import get_all_settings
         from teamarr.database.templates import (
             get_template,
@@ -480,6 +481,10 @@ class TeamProcessor:
         else:
             logger.warning("[TEMPLATE] None assigned: %s", team.team_name)
 
+        # Look up competition filter for this team's primary league.
+        # Pre-loaded here (not in the generator) for thread-safety.
+        competition_filter = get_league_competition_filter(conn, team.primary_league)
+
         return TeamEPGOptions(
             schedule_days_ahead=all_settings.epg.team_schedule_days_ahead,
             output_days_ahead=all_settings.epg.epg_output_days_ahead,
@@ -493,6 +498,7 @@ class TeamProcessor:
             filler_config=filler_config,  # Pre-loaded filler config
             filler_enabled=True,
             include_final_events=all_settings.epg.include_final_events,
+            competition_filter=competition_filter,
         )
 
     def _get_team(self, conn: Connection, team_id: int) -> TeamConfig | None:

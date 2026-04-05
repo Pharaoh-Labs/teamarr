@@ -196,6 +196,53 @@ def get_leagues_for_provider(conn: sqlite3.Connection, provider: str) -> list[Le
     ]
 
 
+def get_league_competition_filter(
+    conn: sqlite3.Connection, league_code: str
+) -> list[str] | None:
+    """Get the EPG competition filter for a league.
+
+    Args:
+        conn: Database connection
+        league_code: League code (e.g., 'eng.1')
+
+    Returns:
+        List of allowed league codes, or None if no filter is set (include all).
+    """
+    import json
+
+    cursor = conn.execute(
+        "SELECT epg_competition_filter FROM leagues WHERE league_code = ?",
+        (league_code,),
+    )
+    row = cursor.fetchone()
+    if not row or row["epg_competition_filter"] is None:
+        return None
+    try:
+        return json.loads(row["epg_competition_filter"])
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def set_league_competition_filter(
+    conn: sqlite3.Connection, league_code: str, filter_codes: list[str] | None
+) -> None:
+    """Set the EPG competition filter for a league.
+
+    Args:
+        conn: Database connection
+        league_code: League code (e.g., 'eng.1')
+        filter_codes: List of allowed league codes, or None to clear the filter.
+    """
+    import json
+
+    value = json.dumps(filter_codes) if filter_codes is not None else None
+    conn.execute(
+        "UPDATE leagues SET epg_competition_filter = ? WHERE league_code = ?",
+        (value, league_code),
+    )
+    conn.commit()
+
+
 def get_all_leagues(conn: sqlite3.Connection) -> list[dict]:
     """Get all enabled leagues.
 
