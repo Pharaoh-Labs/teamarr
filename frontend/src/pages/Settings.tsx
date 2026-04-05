@@ -832,9 +832,8 @@ function LeagueConfigRow({
                     <span className="text-sm font-medium">League fixtures only</span>
                   </label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    When enabled, team channel EPG only shows {leagueName} fixtures — cup
-                    games (FA Cup, Carabao Cup, etc.) are excluded since those streams
-                    don't carry them.
+                    When enabled, team channel EPG only includes {leagueName} fixtures.
+                    Other competitions (cups, continental, etc.) are excluded.
                   </p>
                 </div>
               )}
