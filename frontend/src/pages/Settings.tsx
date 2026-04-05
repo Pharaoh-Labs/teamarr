@@ -585,7 +585,6 @@ function LeagueConfigRow({
   hasOverride,
   channelProfiles,
   channelGroups,
-  soccerLeagues,
   dispatcharrConnected,
   onToggleExpand,
   onSave,
@@ -600,7 +599,6 @@ function LeagueConfigRow({
   hasOverride: boolean
   channelProfiles: { id: number; name: string }[]
   channelGroups: { id: number; name: string }[]
-  soccerLeagues: { slug: string; name: string }[]
   dispatcharrConnected: boolean
   onToggleExpand: () => void
   onSave: (data: {
@@ -824,57 +822,20 @@ function LeagueConfigRow({
               {/* Competition Filter (soccer only) */}
               {isSoccer && (
                 <div>
-                  <Label className="text-sm font-medium">Team EPG Competition Filter</Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Restrict team channel EPG to specific competitions. When set, only fixtures from
-                    selected competitions appear — preventing cup games (FA Cup, Carabao Cup, etc.)
-                    from showing on channels whose streams only carry league matches.
-                    Leave unchecked to include all competitions.
-                  </p>
-                  <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
-                    {soccerLeagues.map((lg) => {
-                      const isChecked = localCompetitionFilter?.includes(lg.slug) ?? false
-                      const isFilterActive = localCompetitionFilter !== null && localCompetitionFilter.length > 0
-                      return (
-                        <label
-                          key={lg.slug}
-                          className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                // Add to filter (create filter array if null)
-                                const current = localCompetitionFilter ?? []
-                                setLocalCompetitionFilter([...current, lg.slug])
-                              } else {
-                                // Remove from filter
-                                const updated = (localCompetitionFilter ?? []).filter((s) => s !== lg.slug)
-                                // If nothing left, clear the filter entirely
-                                setLocalCompetitionFilter(updated.length > 0 ? updated : null)
-                              }
-                            }}
-                            className="rounded"
-                          />
-                          <span className={!isFilterActive || isChecked ? "" : "text-muted-foreground"}>
-                            {lg.name}
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                  {localCompetitionFilter && localCompetitionFilter.length > 0 && (
-                    <button
-                      className="text-xs text-muted-foreground hover:text-foreground mt-1 underline"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setLocalCompetitionFilter(null)
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Switch
+                      checked={localCompetitionFilter !== null && localCompetitionFilter.length > 0}
+                      onCheckedChange={(checked) => {
+                        setLocalCompetitionFilter(checked ? [leagueSlug] : null)
                       }}
-                    >
-                      Clear filter (include all competitions)
-                    </button>
-                  )}
+                    />
+                    <span className="text-sm font-medium">League fixtures only</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When enabled, team channel EPG only shows {leagueName} fixtures — cup
+                    games (FA Cup, Carabao Cup, etc.) are excluded since those streams
+                    don't carry them.
+                  </p>
                 </div>
               )}
 
@@ -2471,11 +2432,6 @@ export function Settings() {
                         hasOverride={hasOverride}
                         channelProfiles={channelProfilesQuery.data ?? []}
                         channelGroups={channelGroupsQuery.data ?? []}
-                        soccerLeagues={
-                          (leaguesData?.leagues ?? [])
-                            .filter((l) => l.sport === "soccer")
-                            .map((l) => ({ slug: l.slug, name: l.name }))
-                        }
                         dispatcharrConnected={dispatcharrStatus.data?.connected ?? false}
                         onToggleExpand={() =>
                           setExpandedLeagueConfig(isExpanded ? null : league.slug)
