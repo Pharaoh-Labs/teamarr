@@ -64,3 +64,7 @@ When Dispatcharr integration is configured, Teamarr creates and manages channels
 - Channel numbers follow the configured numbering mode (auto or manual)
 
 Channels persist even when no game is scheduled — they show idle filler content instead.
+
+### Competition Filtering
+
+By default, soccer team channels include fixtures from all competitions the team plays in (domestic league, cups, continental tournaments). If your team channels are backed by league-specific streams, you can enable the **League fixtures only** toggle in [Settings > Channels > Per-League Channel Config](settings/channels#league-fixtures-only-soccer) to restrict EPG to the team's primary league only.

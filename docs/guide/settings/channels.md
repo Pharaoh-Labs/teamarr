@@ -91,6 +91,20 @@ When Group Mode is set to **Custom**, a pattern field appears where you can ente
 {: .note }
 Per-league overrides take precedence over the defaults in [Settings > Dispatcharr](dispatcharr). Use the **X** button to clear an override and revert to the default.
 
+### League Fixtures Only (Soccer)
+
+Soccer leagues have an additional **League fixtures only** toggle. When enabled, team channel EPG is restricted to that league's own fixtures — other competitions (cups, continental tournaments, etc.) are excluded.
+
+This is useful when team channels are backed by league-specific streams that only carry domestic league matches. Without the filter, Teamarr's multi-league discovery includes all competitions a team plays in (FA Cup, Carabao Cup, Champions League, etc.), which can result in EPG entries for events the stream doesn't carry.
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| **Off** | Yes | Team EPG includes all competitions the team plays in |
+| **On** | — | Team EPG only includes fixtures from the team's primary league |
+
+{: .note }
+This setting only appears for soccer leagues. Other sports (NFL, NBA, NHL, etc.) don't use multi-league discovery, so there's nothing to filter.
+
 ### Filtering
 
 Use the search field to find specific leagues, and toggle "Subscribed only" to hide leagues you haven't enabled.
