@@ -37,6 +37,8 @@ import {
   getLeagueConfigs,
   upsertLeagueConfig,
   deleteLeagueConfig,
+  getCompetitionFilter,
+  setCompetitionFilter,
   getEmbySettings,
   updateEmbySettings,
   testEmbyConnection,
@@ -415,6 +417,34 @@ export function useDeleteLeagueConfig() {
     mutationFn: (leagueCode: string) => deleteLeagueConfig(leagueCode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["league-configs"] })
+    },
+  })
+}
+
+// Competition Filter Hooks
+export function useCompetitionFilter(leagueCode: string | null) {
+  return useQuery({
+    queryKey: ["competition-filter", leagueCode],
+    queryFn: () => getCompetitionFilter(leagueCode!),
+    enabled: !!leagueCode,
+  })
+}
+
+export function useSetCompetitionFilter() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      leagueCode,
+      competitionFilter,
+    }: {
+      leagueCode: string
+      competitionFilter: string[] | null
+    }) => setCompetitionFilter(leagueCode, competitionFilter),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["competition-filter", variables.leagueCode],
+      })
     },
   })
 }

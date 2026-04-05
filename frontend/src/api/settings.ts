@@ -499,6 +499,25 @@ export async function deleteLeagueConfig(leagueCode: string): Promise<void> {
   return api.delete(`/league-configs/${encodeURIComponent(leagueCode)}`)
 }
 
+// Competition Filter API
+export interface CompetitionFilterResponse {
+  league_code: string
+  competition_filter: string[] | null
+}
+
+export async function getCompetitionFilter(leagueCode: string): Promise<CompetitionFilterResponse> {
+  return api.get(`/leagues/${encodeURIComponent(leagueCode)}/competition-filter`)
+}
+
+export async function setCompetitionFilter(
+  leagueCode: string,
+  competitionFilter: string[] | null
+): Promise<CompetitionFilterResponse> {
+  return api.put(`/leagues/${encodeURIComponent(leagueCode)}/competition-filter`, {
+    competition_filter: competitionFilter,
+  })
+}
+
 // Emby Settings API
 export async function getEmbySettings(): Promise<EmbySettings> {
   return api.get("/settings/emby")

@@ -67,6 +67,8 @@ import {
   useLeagueConfigs,
   useUpsertLeagueConfig,
   useDeleteLeagueConfig,
+  useCompetitionFilter,
+  useSetCompetitionFilter,
   useEmbySettings,
   useUpdateEmbySettings,
   useTestEmbyConnection,
@@ -575,24 +577,30 @@ function BackupRestoreCard() {
 // Per-League Config Row Component
 function LeagueConfigRow({
   leagueName,
+  leagueSlug,
   sportName,
+  sport,
   config,
   isExpanded,
   hasOverride,
   channelProfiles,
   channelGroups,
+  soccerLeagues,
   dispatcharrConnected,
   onToggleExpand,
   onSave,
   onClear,
 }: {
   leagueName: string
+  leagueSlug: string
   sportName: string
+  sport: string
   config: SubscriptionLeagueConfig | null
   isExpanded: boolean
   hasOverride: boolean
   channelProfiles: { id: number; name: string }[]
   channelGroups: { id: number; name: string }[]
+  soccerLeagues: { slug: string; name: string }[]
   dispatcharrConnected: boolean
   onToggleExpand: () => void
   onSave: (data: {
@@ -605,7 +613,12 @@ function LeagueConfigRow({
   const [localProfileIds, setLocalProfileIds] = useState<(number | string)[]>([])
   const [localGroupId, setLocalGroupId] = useState<number | null>(null)
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
+  const [localCompetitionFilter, setLocalCompetitionFilter] = useState<string[] | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const isSoccer = sport === "soccer"
+  const { data: competitionFilterData } = useCompetitionFilter(isSoccer && isExpanded ? leagueSlug : null)
+  const setCompetitionFilterMutation = useSetCompetitionFilter()
 
   // Sync local state when config changes or row expands
   useEffect(() => {
@@ -623,6 +636,13 @@ function LeagueConfigRow({
       setLocalGroupMode(null)
     }
   }, [isExpanded, config])
+
+  // Sync competition filter when data loads
+  useEffect(() => {
+    if (isExpanded && competitionFilterData) {
+      setLocalCompetitionFilter(competitionFilterData.competition_filter)
+    }
+  }, [isExpanded, competitionFilterData])
 
   const profileSummary = (() => {
     if (!config?.channel_profile_ids) return "Default"
@@ -658,6 +678,13 @@ function LeagueConfigRow({
         channel_group_id: localGroupId,
         channel_group_mode: localGroupMode,
       })
+      // Save competition filter separately (different API/table)
+      if (isSoccer) {
+        await setCompetitionFilterMutation.mutateAsync({
+          leagueCode: leagueSlug,
+          competitionFilter: localCompetitionFilter,
+        })
+      }
     } finally {
       setSaving(false)
     }
@@ -793,6 +820,63 @@ function LeagueConfigRow({
                   />
                 )}
               </div>
+
+              {/* Competition Filter (soccer only) */}
+              {isSoccer && (
+                <div>
+                  <Label className="text-sm font-medium">Team EPG Competition Filter</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Restrict team channel EPG to specific competitions. When set, only fixtures from
+                    selected competitions appear — preventing cup games (FA Cup, Carabao Cup, etc.)
+                    from showing on channels whose streams only carry league matches.
+                    Leave unchecked to include all competitions.
+                  </p>
+                  <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+                    {soccerLeagues.map((lg) => {
+                      const isChecked = localCompetitionFilter?.includes(lg.slug) ?? false
+                      const isFilterActive = localCompetitionFilter !== null && localCompetitionFilter.length > 0
+                      return (
+                        <label
+                          key={lg.slug}
+                          className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-muted/50 cursor-pointer text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                // Add to filter (create filter array if null)
+                                const current = localCompetitionFilter ?? []
+                                setLocalCompetitionFilter([...current, lg.slug])
+                              } else {
+                                // Remove from filter
+                                const updated = (localCompetitionFilter ?? []).filter((s) => s !== lg.slug)
+                                // If nothing left, clear the filter entirely
+                                setLocalCompetitionFilter(updated.length > 0 ? updated : null)
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <span className={!isFilterActive || isChecked ? "" : "text-muted-foreground"}>
+                            {lg.name}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  {localCompetitionFilter && localCompetitionFilter.length > 0 && (
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground mt-1 underline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setLocalCompetitionFilter(null)
+                      }}
+                    >
+                      Clear filter (include all competitions)
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-2 pt-1">
@@ -2379,12 +2463,19 @@ export function Settings() {
                       <LeagueConfigRow
                         key={league.slug}
                         leagueName={league.name}
+                        leagueSlug={league.slug}
                         sportName={getSportDisplayName(league.sport, sportsMap)}
+                        sport={league.sport}
                         config={config ?? null}
                         isExpanded={isExpanded}
                         hasOverride={hasOverride}
                         channelProfiles={channelProfilesQuery.data ?? []}
                         channelGroups={channelGroupsQuery.data ?? []}
+                        soccerLeagues={
+                          (leaguesData?.leagues ?? [])
+                            .filter((l) => l.sport === "soccer")
+                            .map((l) => ({ slug: l.slug, name: l.name }))
+                        }
                         dispatcharrConnected={dispatcharrStatus.data?.connected ?? false}
                         onToggleExpand={() =>
                           setExpandedLeagueConfig(isExpanded ? null : league.slug)
