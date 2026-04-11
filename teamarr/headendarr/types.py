@@ -102,32 +102,6 @@ class HeadendarrChannelSource:
 
 
 @dataclass(frozen=True)
-class HeadendarrChannel:
-    """A channel in Headendarr."""
-
-    id: int
-    name: str
-    number: int | None = None
-    guide_id: int | None = None
-    guide_channel_id: str | None = None
-    logo_url: str | None = None
-    tags: tuple[str, ...] = field(default_factory=tuple)
-
-    @classmethod
-    def from_api(cls, data: dict) -> "HeadendarrChannel":
-        tags = tuple(data.get("tags", []))
-        return cls(
-            id=int(data["id"]),
-            name=data.get("name", ""),
-            number=data.get("number"),
-            guide_id=data.get("guide_id"),
-            guide_channel_id=data.get("guide_channel_id"),
-            logo_url=data.get("logo_url"),
-            tags=tags,
-        )
-
-
-@dataclass(frozen=True)
 class HeadendarrLifecycleChannel:
     """Dispatcharr-shaped channel state for lifecycle compatibility."""
 

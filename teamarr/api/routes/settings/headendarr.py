@@ -3,6 +3,11 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.headendarr.constants import (
+    HEADENDARR_TEAMARR_EPG_NAME,
+    HEADENDARR_TEAMARR_EPG_SCHEDULE,
+    build_teamarr_xmltv_url,
+)
 
 from .models import (
     ConnectionTestRequest,
@@ -13,15 +18,6 @@ from .models import (
 )
 
 router = APIRouter()
-HEADENDARR_TEAMARR_EPG_NAME = "Teamarr"
-HEADENDARR_TEAMARR_EPG_SCHEDULE = "0 * * * *"
-
-
-def _build_teamarr_xmltv_url(teamarr_host: str) -> str:
-    base = teamarr_host.strip().rstrip("/")
-    if not base.startswith(("http://", "https://")):
-        base = f"http://{base}"
-    return f"{base}/api/v1/epg/xmltv"
 
 
 @router.get("/settings/headendarr", response_model=HeadendarrSettingsModel)
@@ -210,7 +206,7 @@ def provision_headendarr_epg() -> dict:
 
     epg_id = conn.epg.ensure_source(
         name=HEADENDARR_TEAMARR_EPG_NAME,
-        url=_build_teamarr_xmltv_url(settings.teamarr_host),
+        url=build_teamarr_xmltv_url(settings.teamarr_host),
         update_schedule=HEADENDARR_TEAMARR_EPG_SCHEDULE,
     )
     if epg_id is None:

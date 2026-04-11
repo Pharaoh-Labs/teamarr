@@ -868,7 +868,7 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general")
   const { data: settings, isLoading, error, refetch } = useSettings()
   const dispatcharrStatus = useDispatcharrStatus()
-  const headendarrStatus = useHeadendarrStatus()
+  const headendarrStatus = useHeadendarrStatus(activeTab === "headendarr")
   const epgSourcesQuery = useDispatcharrEPGSources(dispatcharrStatus.data?.connected ?? false)
   const headendarrEpgSourcesQuery = useHeadendarrEPGSources(headendarrStatus.data?.connected ?? false)
   const headendarrPlaylistsQuery = useHeadendarrPlaylists(headendarrStatus.data?.connected ?? false)
@@ -3259,14 +3259,6 @@ export function Settings() {
             </div>
           </div>
 
-          <Button onClick={handleSaveHeadendarr} disabled={updateHeadendarr.isPending}>
-            {updateHeadendarr.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-1" />
-            )}
-            Save
-          </Button>
         </CardContent>
       </Card>
 
@@ -3314,7 +3306,7 @@ export function Settings() {
               ) : (
                 <Save className="h-4 w-4 mr-1" />
               )}
-              Save
+              Save Settings
             </Button>
             <Button
               onClick={handleProvisionHeadendarrEPG}
@@ -3365,17 +3357,6 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Current Scope</CardTitle>
-          <CardDescription>What this integration now handles versus what still needs lifecycle work</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>This first pass provisions Teamarr XMLTV into Headendarr and exposes playlist inventory for local Teamarr matching.</p>
-          <p>Ephemeral event-channel creation and teardown in Headendarr still need to be wired through Teamarr’s lifecycle service.</p>
-          <p>Headendarr supports multi-source channel priority, so the next lifecycle step can create channels with ordered failover sources for CSO.</p>
-        </CardContent>
-      </Card>
       </>
       )}
 

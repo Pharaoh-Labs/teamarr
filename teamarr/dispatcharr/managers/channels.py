@@ -217,6 +217,7 @@ class ChannelManager:
         tvg_id: str | None = None,
         channel_group_id: int | None = None,
         logo_id: int | None = None,
+        logo_url: str | None = None,
         channel_profile_ids: list[int] | None = None,
         stream_profile_id: int | None = None,
     ) -> OperationResult:
@@ -234,6 +235,7 @@ class ChannelManager:
             tvg_id: TVG ID for XMLTV EPG matching
             channel_group_id: Optional group to assign channel to
             logo_id: Optional logo ID
+            logo_url: Optional source logo URL, accepted for shared lifecycle compatibility
             channel_profile_ids: List of profile IDs. Use [0] for all profiles,
                 [] for no profiles, or specific IDs like [1, 2].
             stream_profile_id: Optional stream profile ID for transcoding/proxy
@@ -253,6 +255,7 @@ class ChannelManager:
             payload["channel_group_id"] = channel_group_id
         if logo_id:
             payload["logo_id"] = logo_id
+        del logo_url
         if channel_profile_ids is not None:
             payload["channel_profile_ids"] = channel_profile_ids
         if stream_profile_id is not None:

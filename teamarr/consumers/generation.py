@@ -10,7 +10,10 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from teamarr.headendarr.types import HeadendarrStream
 
 logger = logging.getLogger(__name__)
 
@@ -629,12 +632,12 @@ def _provision_headendarr_epg_source(
     teamarr_host: str,
 ) -> dict:
     """Ensure Headendarr has a Teamarr-backed XMLTV source configured."""
-    from teamarr.headendarr import get_headendarr_connection
-    from teamarr.api.routes.settings.headendarr import (
+    from teamarr.headendarr.constants import (
         HEADENDARR_TEAMARR_EPG_NAME,
         HEADENDARR_TEAMARR_EPG_SCHEDULE,
-        _build_teamarr_xmltv_url,
+        build_teamarr_xmltv_url,
     )
+    from teamarr.headendarr import get_headendarr_connection
 
     connection = get_headendarr_connection(db_factory)
     if not connection:
@@ -642,7 +645,7 @@ def _provision_headendarr_epg_source(
 
     epg_id = connection.epg.ensure_source(
         name=HEADENDARR_TEAMARR_EPG_NAME,
-        url=_build_teamarr_xmltv_url(teamarr_host),
+        url=build_teamarr_xmltv_url(teamarr_host),
         update_schedule=HEADENDARR_TEAMARR_EPG_SCHEDULE,
     )
     if epg_id is None:
@@ -661,11 +664,11 @@ def _trigger_headendarr_epg_refresh(
     teamarr_host: str,
 ) -> dict:
     """Trigger a refresh of Teamarr's provisioned Headendarr XMLTV source."""
-    from teamarr.headendarr import get_headendarr_connection
-    from teamarr.api.routes.settings.headendarr import (
+    from teamarr.headendarr.constants import (
         HEADENDARR_TEAMARR_EPG_NAME,
-        _build_teamarr_xmltv_url,
+        build_teamarr_xmltv_url,
     )
+    from teamarr.headendarr import get_headendarr_connection
 
     connection = get_headendarr_connection(db_factory)
     if not connection:
@@ -676,7 +679,7 @@ def _trigger_headendarr_epg_refresh(
         (
             item
             for item in sources
-            if item.name == HEADENDARR_TEAMARR_EPG_NAME and item.url == _build_teamarr_xmltv_url(teamarr_host)
+            if item.name == HEADENDARR_TEAMARR_EPG_NAME and item.url == build_teamarr_xmltv_url(teamarr_host)
         ),
         None,
     )
@@ -776,7 +779,7 @@ def _score_headendarr_team_stream(team: dict, stream: Any) -> int:
     return score
 
 
-def _find_headendarr_team_stream_ids(team: dict, streams: list[Any]) -> list[int]:
+def _find_headendarr_team_stream_ids(team: dict, streams: list["HeadendarrStream"]) -> list["HeadendarrStream"]:
     """Find playlist streams suitable for a persistent team channel."""
     ranked: list[tuple[int, Any]] = []
     seen: set[int] = set()
@@ -806,7 +809,7 @@ def _find_headendarr_team_stream_ids(team: dict, streams: list[Any]) -> list[int
     return [stream for score, stream in ranked if score >= minimum_score][:5]
 
 
-def _order_headendarr_team_stream_ids(conn: Any, streams: list[Any]) -> list[int]:
+def _order_headendarr_team_stream_ids(conn: Any, streams: list["HeadendarrStream"]) -> list[int]:
     """Order matched Headendarr team streams using Teamarr's stream ordering rules."""
     from teamarr.database.channels.types import ManagedChannelStream
     from teamarr.services.stream_ordering import get_stream_ordering_service

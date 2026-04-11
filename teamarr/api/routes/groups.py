@@ -474,7 +474,11 @@ VALID_OVERLAP_HANDLING = {"add_stream", "add_only", "create_all", "skip"}
 
 
 def _stable_group_id(name: str) -> int:
-    """Generate a stable integer ID for source groups without native IDs."""
+    """Generate a stable integer ID for source groups without native IDs.
+
+    Headendarr playlist group titles do not expose native IDs, so this keeps
+    selections stable across page loads while staying within signed int bounds.
+    """
     return zlib.crc32(name.encode("utf-8")) & 0x7FFFFFFF
 
 
@@ -1784,7 +1788,11 @@ def preview_group(group_id: int):
 
     # Get Dispatcharr connection (has m3u manager)
     factory = get_factory(get_db)
-    conn = factory.get_connection() if factory else get_headendarr_connection(get_db)
+    conn = (
+        factory.get_connection()
+        if factory and factory.is_configured
+        else get_headendarr_connection(get_db)
+    )
 
     # Preview the group
     group_service = create_group_service(get_db, conn)
@@ -1861,7 +1869,7 @@ def get_raw_streams(group_id: int):
             )
 
     factory = get_factory(get_db)
-    conn = factory.get_connection() if factory else None
+    conn = factory.get_connection() if factory and factory.is_configured else None
 
     raw: list[RawStreamModel]
     if conn and getattr(conn, "m3u", None):

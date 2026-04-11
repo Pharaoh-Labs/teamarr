@@ -99,11 +99,12 @@ export function useTestHeadendarrConnection() {
   })
 }
 
-export function useHeadendarrStatus() {
+export function useHeadendarrStatus(enabled: boolean = true) {
   return useQuery({
     queryKey: ["headendarr", "status"],
     queryFn: getHeadendarrStatus,
-    refetchInterval: 30000,
+    enabled,
+    refetchInterval: enabled ? 30000 : false,
   })
 }
 

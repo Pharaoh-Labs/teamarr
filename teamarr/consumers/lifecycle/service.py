@@ -1116,6 +1116,7 @@ class ChannelLifecycleService:
                     tvg_id=tvg_id,
                     channel_group_id=channel_group_id,
                     logo_id=dispatcharr_logo_id,
+                    logo_url=logo_url,
                     channel_profile_ids=effective_profile_ids,
                     stream_profile_id=stream_profile_id,
                 )
@@ -1864,12 +1865,44 @@ class ChannelLifecycleService:
                             )
                             changes_made.append("logo updated")
 
+        elif logo_url:
+            needs_logo_update = logo_url != stored_logo_url
+            if needs_logo_update:
+                with self._dispatcharr_lock:
+                    api_ok = self._safe_update_channel(
+                        existing.dispatcharr_channel_id,
+                        {"logo_url": logo_url},
+                        "logo URL assignment",
+                    )
+                if api_ok:
+                    update_managed_channel(
+                        conn,
+                        existing.id,
+                        {"logo_url": logo_url, "dispatcharr_logo_id": None},
+                    )
+                    changes_made.append("logo updated")
+
         elif stored_logo_url and self._logo_manager:
             with self._dispatcharr_lock:
                 api_ok = self._safe_update_channel(
                     existing.dispatcharr_channel_id,
                     {"logo_id": None},
                     "logo removal",
+                )
+            if api_ok:
+                update_managed_channel(
+                    conn,
+                    existing.id,
+                    {"logo_url": None, "dispatcharr_logo_id": None},
+                )
+                changes_made.append("logo removed")
+
+        elif stored_logo_url:
+            with self._dispatcharr_lock:
+                api_ok = self._safe_update_channel(
+                    existing.dispatcharr_channel_id,
+                    {"logo_url": None},
+                    "logo URL removal",
                 )
             if api_ok:
                 update_managed_channel(

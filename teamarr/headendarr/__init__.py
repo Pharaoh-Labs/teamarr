@@ -12,7 +12,6 @@ from teamarr.headendarr.factory import (
 )
 from teamarr.headendarr.managers import ChannelManager, EPGManager, PlaylistManager
 from teamarr.headendarr.types import (
-    HeadendarrChannel,
     HeadendarrChannelSource,
     HeadendarrEPGSource,
     HeadendarrPlaylist,
@@ -23,7 +22,6 @@ __all__ = [
     "ChannelManager",
     "ConnectionTestResult",
     "EPGManager",
-    "HeadendarrChannel",
     "HeadendarrChannelSource",
     "HeadendarrClient",
     "HeadendarrConnection",

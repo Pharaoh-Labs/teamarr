@@ -9,6 +9,7 @@ import threading
 
 from teamarr.dispatcharr.types import OperationResult
 from teamarr.headendarr.client import HeadendarrClient
+from teamarr.headendarr.constants import HEADENDARR_TEAMARR_EPG_NAME
 from teamarr.headendarr.managers.epg import EPGManager
 from teamarr.headendarr.managers.playlists import PlaylistManager
 from teamarr.headendarr.types import (
@@ -18,8 +19,6 @@ from teamarr.headendarr.types import (
 )
 
 logger = logging.getLogger(__name__)
-
-HEADENDARR_TEAMARR_EPG_NAME = "Teamarr"
 
 
 class ChannelCache:
@@ -99,6 +98,7 @@ class ChannelManager:
         self._lock = threading.Lock()
         self._stream_cache: dict[int, HeadendarrStream] | None = None
         self._epg_channel_ids: dict[str, int] = {}
+        self._teamarr_epg_id: int | None = None
 
         if self._url not in self._caches:
             self._caches[self._url] = ChannelCache()
@@ -112,6 +112,7 @@ class ChannelManager:
             self._cache.clear()
             self._stream_cache = None
             self._epg_channel_ids = {}
+            self._teamarr_epg_id = None
 
     def _ensure_stream_cache(self) -> dict[int, HeadendarrStream]:
         if self._stream_cache is None:
@@ -120,11 +121,15 @@ class ChannelManager:
         return self._stream_cache
 
     def _get_teamarr_epg_id(self) -> int | None:
+        if self._teamarr_epg_id is not None:
+            return self._teamarr_epg_id
+
         source = next(
             (item for item in self._epg.list_sources() if item.name == HEADENDARR_TEAMARR_EPG_NAME),
             None,
         )
-        return source.id if source else None
+        self._teamarr_epg_id = source.id if source else None
+        return self._teamarr_epg_id
 
     def _resolve_sources_from_stream_ids(self, stream_ids: list[int] | None) -> list[HeadendarrChannelSource]:
         if not stream_ids:
@@ -276,6 +281,9 @@ class ChannelManager:
             return OperationResult(success=False, error=self._client.parse_api_error(response))
         if response.status_code == 200:
             created = self.find_by_tvg_id(tvg_id) if tvg_id else self.find_channel_by_name(name)
+            if not created:
+                self.get_channels(use_cache=False)
+                created = self.find_by_tvg_id(tvg_id) if tvg_id else self.find_channel_by_name(name)
             if created:
                 with self._lock:
                     self._cache.update(created)
@@ -284,7 +292,7 @@ class ChannelManager:
                     channel={"id": created.id, "uuid": created.uuid, "name": created.name},
                     data={"id": created.id, "uuid": created.uuid, "name": created.name},
                 )
-            return OperationResult(success=True)
+            return OperationResult(success=False, error="Channel created but could not be resolved from Headendarr")
         return OperationResult(success=False, error=self._client.parse_api_error(response))
 
     def update_channel(

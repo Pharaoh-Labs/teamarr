@@ -203,16 +203,18 @@ class HeadendarrFactory:
 
 
 _factory: HeadendarrFactory | None = None
+_factory_lock = threading.Lock()
 
 
 def get_factory(db_factory: Any | None = None) -> HeadendarrFactory:
     """Get or create the singleton Headendarr factory."""
     global _factory
-    if _factory is None:
-        if db_factory is None:
-            raise RuntimeError("Headendarr factory not initialized and no db_factory provided")
-        _factory = HeadendarrFactory(db_factory)
-    return _factory
+    with _factory_lock:
+        if _factory is None:
+            if db_factory is None:
+                raise RuntimeError("Headendarr factory not initialized and no db_factory provided")
+            _factory = HeadendarrFactory(db_factory)
+        return _factory
 
 
 def get_headendarr_connection(db_factory: Any | None = None) -> HeadendarrConnection | None:
@@ -221,5 +223,7 @@ def get_headendarr_connection(db_factory: Any | None = None) -> HeadendarrConnec
 
 def close_headendarr() -> None:
     global _factory
-    if _factory is not None:
-        _factory._close_connection()
+    with _factory_lock:
+        if _factory is not None:
+            _factory._close_connection()
+            _factory = None
