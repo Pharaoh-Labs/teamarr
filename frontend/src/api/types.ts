@@ -30,6 +30,7 @@ export interface EventGroup {
   m3u_group_name: string | null
   m3u_account_id: number | null
   m3u_account_name: string | null
+  source_type: 'dispatcharr' | 'headendarr'
   // Stream filtering
   stream_include_regex: string | null
   stream_include_regex_enabled: boolean
@@ -99,6 +100,7 @@ export interface EventGroupCreate {
   m3u_group_name?: string | null
   m3u_account_id?: number | null
   m3u_account_name?: string | null
+  source_type?: 'dispatcharr' | 'headendarr'
   // Stream filtering
   stream_include_regex?: string | null
   stream_include_regex_enabled?: boolean

@@ -138,6 +138,7 @@ def create_lifecycle_service(
     db_factory: Any,
     sports_service: Any,
     dispatcharr_client: Any = None,
+    source_type: str = "dispatcharr",
 ) -> ChannelLifecycleService:
     """Create a ChannelLifecycleService with optional Dispatcharr integration.
 
@@ -145,6 +146,7 @@ def create_lifecycle_service(
         db_factory: Factory function returning database connection
         sports_service: SportsDataService for template resolution (required)
         dispatcharr_client: Optional DispatcharrClient instance
+        source_type: Integration source to target for channel lifecycle operations
 
     Returns:
         Configured ChannelLifecycleService
@@ -168,7 +170,7 @@ def create_lifecycle_service(
     logo_manager = None
     epg_manager = None
 
-    if dispatcharr_client and settings.get("enabled"):
+    if source_type == "dispatcharr" and dispatcharr_client and settings.get("enabled"):
         from teamarr.dispatcharr import ChannelManager, EPGManager, LogoManager
         from teamarr.dispatcharr.factory import DispatcharrConnection
 
@@ -182,7 +184,12 @@ def create_lifecycle_service(
         channel_manager = ChannelManager(raw_client)
         logo_manager = LogoManager(raw_client)
         epg_manager = EPGManager(raw_client)
-    elif headendarr_settings.enabled and headendarr_settings.url and headendarr_settings.username:
+    elif (
+        source_type == "headendarr"
+        and headendarr_settings.enabled
+        and headendarr_settings.url
+        and headendarr_settings.username
+    ):
         from teamarr.headendarr import get_headendarr_connection
 
         headendarr_connection = get_headendarr_connection(db_factory)
@@ -203,6 +210,7 @@ def create_lifecycle_service(
         default_duration_hours=all_settings.durations.default,
         sport_durations=sport_durations,
         include_final_events=all_settings.epg.include_final_events,
+        source_type=source_type,
     )
 
 

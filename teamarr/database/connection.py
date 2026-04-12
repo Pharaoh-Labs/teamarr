@@ -1344,6 +1344,25 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         logger.info("[MIGRATE] Schema upgraded to version 72 (Headendarr integration)")
         current_version = 72
 
+    # v73: Persist event group stream source type so Dispatcharr and Headendarr
+    # groups can coexist even when account/playlist IDs overlap.
+    if current_version < 73:
+        conn.execute("DROP INDEX IF EXISTS idx_event_epg_groups_name_account")
+        conn.execute("""
+            UPDATE event_epg_groups
+            SET source_type = 'headendarr'
+            WHERE source_type = 'dispatcharr'
+              AND COALESCE((SELECT dispatcharr_enabled FROM settings WHERE id = 1), 0) = 0
+              AND COALESCE((SELECT headendarr_enabled FROM settings WHERE id = 1), 0) = 1
+        """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
+            ON event_epg_groups(name, source_type, m3u_account_id)
+        """)
+        conn.execute("UPDATE settings SET schema_version = 73 WHERE id = 1")
+        logger.info("[MIGRATE] Schema upgraded to version 73 (event group source types)")
+        current_version = 73
+
 
 def _dedup_cross_group_channels(conn: sqlite3.Connection) -> None:
     """Merge duplicate channels that exist for the same event across groups.

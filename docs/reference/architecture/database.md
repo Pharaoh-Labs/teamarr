@@ -23,7 +23,7 @@ row_factory = sqlite3.Row   (dict-like access)
 
 ## Schema Version
 
-**Current version: 72** (stored in `settings.schema_version`)
+**Current version: 73** (stored in `settings.schema_version`)
 
 Schema changes use the [checkpoint + incremental migration](migrations) system. The schema source of truth is `teamarr/database/schema.sql`.
 
@@ -34,7 +34,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `settings` | Single-row global configuration (67 columns) |
 | `templates` | EPG title/description/filler templates |
 | `teams` | Team channel configuration (provider, leagues, logo, template) |
-| `event_epg_groups` | Event group config (leagues, filters, M3U account, template) |
+| `event_epg_groups` | Event group config (leagues, filters, source account, template) |
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
 | `managed_channels` | Channels created in Headendarr or Dispatcharr (tvg_id, delete_at, profiles) |
 | `detection_keywords` | User-defined stream classification patterns |
@@ -117,7 +117,7 @@ The settings table is a single row with 67 columns, organized into these groups:
 |--------|---------|
 | `connection.py` | Connection management, schema init, migrations |
 | `teams.py` | Team CRUD with parsed leagues |
-| `groups.py` | Event group CRUD (28-field `EventEPGGroup` dataclass) |
+| `groups.py` | Event group CRUD (`EventEPGGroup` dataclass) |
 | `templates.py` | Template CRUD |
 | `leagues.py` | League queries, sport lookup, league ID resolution |
 | `settings.py` | Settings CRUD (`AllSettings` dataclass with 14 sub-groups) |

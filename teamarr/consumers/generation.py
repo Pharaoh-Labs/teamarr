@@ -471,18 +471,40 @@ def run_full_generation(
         check_cancelled()
         update_progress("lifecycle", 98, "Processing scheduled deletions...")
         channels_deleted_count = 0
-        try:
-            deletion_result = lifecycle_service.process_scheduled_deletions()
-            channels_deleted_count = len(deletion_result.deleted)
-            result.deletions = {
-                "deleted_count": channels_deleted_count,
-                "error_count": len(deletion_result.errors),
-            }
-            if deletion_result.deleted:
-                logger.info("[GENERATION] Deleted %d expired channel(s)", channels_deleted_count)
-        except Exception as e:
-            logger.warning("[GENERATION] Scheduled deletions failed: %s", e)
-            result.deletions = {"error": str(e)}
+        result.deletions = {"deleted_count": 0, "error_count": 0}
+
+        # Sequential deletion processing for active platforms
+        platforms = [("dispatcharr", dispatcharr_client)]
+        if headendarr_settings.enabled and headendarr_settings.url:
+            from teamarr.headendarr import get_headendarr_connection
+            headendarr_conn = get_headendarr_connection(db_factory)
+            if headendarr_conn:
+                platforms.append(("headendarr", headendarr_conn))
+
+        for source_type, client in platforms:
+            try:
+                # Create a platform-specific lifecycle service for deletion
+                platform_lifecycle = create_lifecycle_service(
+                    db_factory,
+                    shared_service,
+                    dispatcharr_client=client,
+                    source_type=source_type,
+                )
+                deletion_result = platform_lifecycle.process_scheduled_deletions()
+                
+                count = len(deletion_result.deleted)
+                channels_deleted_count += count
+                result.deletions["deleted_count"] += count
+                result.deletions["error_count"] += len(deletion_result.errors)
+                
+                if deletion_result.deleted:
+                    logger.info(
+                        "[GENERATION] [%s] Deleted %d expired channel(s)", 
+                        source_type, count
+                    )
+            except Exception as e:
+                logger.warning("[GENERATION] [%s] Scheduled deletions failed: %s", source_type, e)
+                result.deletions[f"{source_type}_error"] = str(e)
 
         # Step 7: Run reconciliation + cleanup (99-100%)
         check_cancelled()
@@ -1109,69 +1131,87 @@ def _apply_stream_ordering(
                 "[ORDERING] Applying %d ordering rule(s)", len(ordering_settings.rules)
             )
 
-            # Setup Dispatcharr channel manager once if available
-            channel_mgr = None
+            # Determine active source platforms and their channel managers
+            platforms = []
             if dispatcharr_client:
                 from teamarr.dispatcharr.factory import DispatcharrConnection
-                from teamarr.dispatcharr.managers import ChannelManager
+                from teamarr.dispatcharr.managers import ChannelManager as DispatcharrChannelManager
 
                 raw_client = (
                     dispatcharr_client.client
                     if isinstance(dispatcharr_client, DispatcharrConnection)
                     else dispatcharr_client
                 )
-                channel_mgr = ChannelManager(raw_client)
+                platforms.append(("dispatcharr", DispatcharrChannelManager(raw_client)))
 
-            all_channels = get_all_managed_channels(conn, include_deleted=False)
-            total_channels = len(all_channels)
+            from teamarr.database.settings import get_headendarr_settings
+            headendarr_settings = get_headendarr_settings(conn)
+            if headendarr_settings.enabled and headendarr_settings.url:
+                from teamarr.headendarr import get_headendarr_connection
+                headendarr_conn = get_headendarr_connection(db_factory)
+                if headendarr_conn:
+                    platforms.append(("headendarr", headendarr_conn.channels))
 
-            for idx, channel in enumerate(all_channels):
-                streams = get_channel_streams(conn, channel.id)
-                if not streams:
-                    continue
+            # Apply ordering sequentially for each source
+            for source_type, channel_mgr in platforms:
+                logger.debug("[ORDERING] Applying rules for source_type=%s", source_type)
 
-                reordered_count = 0
-                for stream in streams:
-                    new_priority = ordering_service.compute_priority(stream)
-                    if stream.priority != new_priority:
-                        update_stream_priority(conn, stream.id, new_priority)
-                        reordered_count += 1
+                # Fetch all non-deleted channels for this source
+                all_channels = get_all_managed_channels(
+                    conn, include_deleted=False, source_type=source_type
+                )
+                total_channels = len(all_channels)
 
-                if reordered_count > 0:
-                    reorder_result["channels_reordered"] += 1
-                    reorder_result["streams_reordered"] += reordered_count
+                for idx, channel in enumerate(all_channels):
+                    streams = get_channel_streams(conn, channel.id)
+                    if not streams:
+                        continue
 
-                    if channel_mgr and channel.dispatcharr_channel_id:
-                        ordered_ids = get_ordered_stream_ids(conn, channel.id)
-                        if ordered_ids:
-                            logger.info(
-                                "[STREAM_AUDIT] ordering: ch='%s' (d_id=%s) "
-                                "setting streams=%s count=%d",
-                                channel.channel_name,
-                                channel.dispatcharr_channel_id,
-                                ordered_ids,
-                                len(ordered_ids),
-                            )
-                            sync_result = channel_mgr.update_channel(
-                                channel.dispatcharr_channel_id, {"streams": ordered_ids}
-                            )
-                            if not sync_result.success:
-                                logger.warning(
-                                    "[ORDERING] Failed to sync channel %s to Dispatcharr: %s",
+                    reordered_count = 0
+                    for stream in streams:
+                        new_priority = ordering_service.compute_priority(stream)
+                        if stream.priority != new_priority:
+                            update_stream_priority(conn, stream.id, new_priority)
+                            reordered_count += 1
+
+                    if reordered_count > 0:
+                        reorder_result["channels_reordered"] += 1
+                        reorder_result["streams_reordered"] += reordered_count
+
+                        # Sync to platform when connected
+                        if channel_mgr and channel.dispatcharr_channel_id:
+                            ordered_ids = get_ordered_stream_ids(conn, channel.id)
+                            if ordered_ids:
+                                logger.info(
+                                    "[ORDERING] [%s] ch='%s' (id=%s) "
+                                    "setting streams=%s count=%d",
+                                    source_type,
                                     channel.channel_name,
-                                    sync_result.error,
+                                    channel.dispatcharr_channel_id,
+                                    ordered_ids,
+                                    len(ordered_ids),
                                 )
+                                sync_result = channel_mgr.update_channel(
+                                    channel.dispatcharr_channel_id, {"streams": ordered_ids}
+                                )
+                                if not sync_result.success:
+                                    logger.warning(
+                                        "[ORDERING] [%s] Failed to sync channel %s: %s",
+                                        source_type,
+                                        channel.channel_name,
+                                        sync_result.error,
+                                    )
 
-                if (idx + 1) % 10 == 0 or idx == total_channels - 1:
-                    pct = 93 + int(((idx + 1) / total_channels) * 2)
-                    update_progress(
-                        "ordering",
-                        pct,
-                        f"Ordering streams ({idx + 1}/{total_channels})",
-                        idx + 1,
-                        total_channels,
-                        channel.channel_name,
-                    )
+                    if (idx + 1) % 10 == 0 or idx == total_channels - 1:
+                        pct = 93 + int(((idx + 1) / total_channels) * 2)
+                        update_progress(
+                            "ordering",
+                            pct,
+                            f"Ordering {source_type} streams ({idx + 1}/{total_channels})",
+                            idx + 1,
+                            total_channels,
+                            channel.channel_name,
+                        )
 
             if reorder_result["channels_reordered"] > 0:
                 logger.info(

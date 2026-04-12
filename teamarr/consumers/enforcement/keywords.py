@@ -63,15 +63,18 @@ class KeywordEnforcer:
         self,
         db_factory: Any,
         channel_manager: Any = None,
+        source_type: str = "dispatcharr",
     ):
         """Initialize the enforcer.
 
         Args:
             db_factory: Factory returning database connection
             channel_manager: Optional ChannelManager for Dispatcharr sync
+            source_type: Source type whose channels should be enforced
         """
         self._db_factory = db_factory
         self._channel_manager = channel_manager
+        self._source_type = source_type
         self._dispatcharr_lock = threading.Lock()
 
     def enforce(self) -> KeywordEnforcementResult:
@@ -104,10 +107,14 @@ class KeywordEnforcer:
                     logger.debug("[KEYWORD] No exception keywords configured, skipping")
                     return result
 
-                # Get all active channels
-                channels = get_all_managed_channels(conn, include_deleted=False)
+                # Get active channels for the configured source.
+                channels = get_all_managed_channels(
+                    conn, include_deleted=False, source_type=self._source_type
+                )
 
-                # Build lookup: (group_id, event_id, provider) → channels by keyword
+                if not channels:
+                    return result
+
                 channel_lookup: dict[tuple, dict[str | None, Any]] = {}
                 for ch in channels:
                     key = (ch.event_epg_group_id, ch.event_id, ch.event_provider)

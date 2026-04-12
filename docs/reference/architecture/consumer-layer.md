@@ -41,7 +41,7 @@ A global lock prevents concurrent runs. The workflow progresses through 8 phases
 ### Processing Pipeline
 
 ```
-1. Load group config (leagues, team filters, M3U account)
+1. Load group config (leagues, team filters, stream source account)
 2. Fetch streams from Headendarr playlists or Dispatcharr
 3. Filter streams (stale, placeholder, regex include/exclude)
 4. Fetch events from providers (parallel, cached)
@@ -50,7 +50,7 @@ A global lock prevents concurrent runs. The workflow progresses through 8 phases
 7. Subscription league filtering (per-group overrides)
 8. Create/update channels (ChannelLifecycleService)
 9. Generate XMLTV (template resolution)
-10. Push to the active integration target
+10. Push to the group's configured integration target
 11. Track stats
 ```
 

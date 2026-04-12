@@ -36,7 +36,7 @@ export function EventGroupForm() {
   const m3uAccountId = searchParams.get("m3u_account_id")
   const m3uAccountName = searchParams.get("m3u_account_name")
   const sourceType = searchParams.get("source_type")
-  const sourceLabel = sourceType === "headendarr" ? "Playlist" : "Source"
+  const initialSourceType = sourceType === "headendarr" ? "headendarr" : "dispatcharr"
 
   // Form state
   const [formData, setFormData] = useState<EventGroupCreate>({
@@ -49,6 +49,7 @@ export function EventGroupForm() {
     m3u_group_name: m3uGroupName || null,
     m3u_account_id: m3uAccountId ? Number(m3uAccountId) : null,
     m3u_account_name: m3uAccountName || null,
+    source_type: initialSourceType,
     enabled: true,
     // Team filtering
     include_teams: null,
@@ -141,6 +142,7 @@ export function EventGroupForm() {
         m3u_group_name: group.m3u_group_name,
         m3u_account_id: group.m3u_account_id,
         m3u_account_name: group.m3u_account_name,
+        source_type: group.source_type,
         // Stream filtering
         stream_include_regex: group.stream_include_regex,
         stream_include_regex_enabled: group.stream_include_regex_enabled,
@@ -195,6 +197,8 @@ export function EventGroupForm() {
       }
     }
   }, [group, allLeagues])
+
+  const sourceLabel = formData.source_type === "headendarr" ? "Playlist" : "Source"
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {

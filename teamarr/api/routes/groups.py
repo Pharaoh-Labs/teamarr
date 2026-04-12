@@ -68,6 +68,7 @@ class GroupCreate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    source_type: str = "dispatcharr"
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -122,6 +123,7 @@ class GroupUpdate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    source_type: str | None = None
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool | None = None
@@ -204,6 +206,7 @@ class GroupResponse(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    source_type: str = "dispatcharr"
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -316,6 +319,7 @@ class BulkGroupItem(BaseModel):
     m3u_group_name: str
     m3u_account_id: int
     m3u_account_name: str
+    source_type: str = "dispatcharr"
 
 
 class BulkGroupSettings(BaseModel):
@@ -471,6 +475,17 @@ VALID_DUPLICATE_HANDLING = {"consolidate", "separate", "ignore"}
 VALID_ASSIGNMENT_MODE = {"auto", "manual"}
 VALID_CHANNEL_SORT_ORDER = {"time", "sport_time", "league_time"}
 VALID_OVERLAP_HANDLING = {"add_stream", "add_only", "create_all", "skip"}
+VALID_SOURCE_TYPES = {"dispatcharr", "headendarr"}
+
+
+def _validate_source_type(source_type: str | None) -> str:
+    value = source_type or "dispatcharr"
+    if value not in VALID_SOURCE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid source_type. Valid: {VALID_SOURCE_TYPES}",
+        )
+    return value
 
 
 def _stable_group_id(name: str) -> int:
@@ -506,7 +521,9 @@ def _list_headendarr_groups(playlist_id: int) -> list[M3UGroupResponse]:
     if not conn:
         return []
 
-    streams = [stream for stream in conn.playlists.list_streams() if stream.playlist_id == playlist_id]
+    streams = [
+        stream for stream in conn.playlists.list_streams() if stream.playlist_id == playlist_id
+    ]
     groups: dict[str, int] = {}
     for stream in streams:
         group_name = (stream.group_title or "").strip()
@@ -531,9 +548,13 @@ def _get_headendarr_group_streams(playlist_id: int, group_name: str | None) -> l
     if not conn:
         return []
 
-    streams = [stream for stream in conn.playlists.list_streams() if stream.playlist_id == playlist_id]
+    streams = [
+        stream for stream in conn.playlists.list_streams() if stream.playlist_id == playlist_id
+    ]
     if group_name:
-        streams = [stream for stream in streams if (stream.group_title or "").strip() == group_name]
+        streams = [
+            stream for stream in streams if (stream.group_title or "").strip() == group_name
+        ]
 
     return [
         {
@@ -596,24 +617,25 @@ def list_groups(
             stats = get_all_group_stats(conn)
 
     # Fetch fresh source names where possible
-    m3u_account_names: dict[int, str] = {}
+    source_account_names: dict[tuple[str, int], str] = {}
     account_ids = {g.m3u_account_id for g in groups if g.m3u_account_id}
     if account_ids:
         try:
             dispatcharr = get_dispatcharr_connection(get_db)
             if dispatcharr:
                 accounts = dispatcharr.m3u.list_accounts()
-                m3u_account_names = {a.id: a.name for a in accounts}
-            else:
-                for playlist in _list_headendarr_playlists():
-                    m3u_account_names[playlist.id] = playlist.name
+                source_account_names.update({("dispatcharr", a.id): a.name for a in accounts})
+            for playlist in _list_headendarr_playlists():
+                source_account_names[("headendarr", playlist.id)] = playlist.name
         except Exception:
             pass  # Fall back to stored names if Dispatcharr unavailable
 
     def get_account_name(g):
-        """Get fresh M3U account name, falling back to stored name."""
-        if g.m3u_account_id and g.m3u_account_id in m3u_account_names:
-            return m3u_account_names[g.m3u_account_id]
+        """Get fresh source account name, falling back to stored name."""
+        if g.m3u_account_id:
+            key = (g.source_type, g.m3u_account_id)
+            if key in source_account_names:
+                return source_account_names[key]
         return g.m3u_account_name
 
     return GroupListResponse(
@@ -622,6 +644,7 @@ def list_groups(
                 id=g.id,
                 name=g.name,
                 display_name=g.display_name,
+                source_type=g.source_type,
                 leagues=g.leagues,
                 soccer_mode=g.soccer_mode,
                 soccer_followed_teams=[SoccerFollowedTeam(**t) for t in g.soccer_followed_teams]
@@ -703,30 +726,41 @@ def list_source_accounts():
     """List available import sources from Dispatcharr or Headendarr."""
     from teamarr.dispatcharr import get_dispatcharr_connection
 
+    accounts: list[SourceAccountResponse] = []
     try:
         dispatcharr = get_dispatcharr_connection(get_db)
         if dispatcharr:
-            accounts = [
-                SourceAccountResponse(
-                    id=account.id,
-                    name=account.name,
-                    source_type="dispatcharr",
-                    enabled=True,
-                )
-                for account in dispatcharr.m3u.list_accounts()
-            ]
-            return SourceAccountListResponse(accounts=accounts, total=len(accounts))
+            accounts.extend(
+                [
+                    SourceAccountResponse(
+                        id=account.id,
+                        name=account.name,
+                        source_type="dispatcharr",
+                        enabled=True,
+                    )
+                    for account in dispatcharr.m3u.list_accounts()
+                ]
+            )
     except Exception:
         logger.exception("Failed to fetch Dispatcharr source accounts")
 
-    accounts = _list_headendarr_playlists()
+    try:
+        accounts.extend(_list_headendarr_playlists())
+    except Exception:
+        logger.exception("Failed to fetch Headendarr source accounts")
+
     return SourceAccountListResponse(accounts=accounts, total=len(accounts))
 
 
 @router.get("/source-accounts/{account_id}/groups", response_model=M3UGroupListResponse)
-def list_source_groups(account_id: int):
+def list_source_groups(account_id: int, source_type: str | None = Query(None)):
     """List available source groups for the selected account or playlist."""
     from teamarr.dispatcharr import get_dispatcharr_connection
+
+    selected_source_type = _validate_source_type(source_type)
+    if selected_source_type == "headendarr":
+        groups = _list_headendarr_groups(account_id)
+        return M3UGroupListResponse(groups=groups, total=len(groups))
 
     try:
         dispatcharr = get_dispatcharr_connection(get_db)
@@ -744,9 +778,20 @@ def list_source_groups(account_id: int):
 
 
 @router.get("/source-accounts/{account_id}/groups/{group_id}/streams")
-def list_source_group_streams(account_id: int, group_id: int) -> list[dict]:
+def list_source_group_streams(
+    account_id: int,
+    group_id: int,
+    source_type: str | None = Query(None),
+) -> list[dict]:
     """List streams for a source group."""
     from teamarr.dispatcharr import get_dispatcharr_connection
+
+    selected_source_type = _validate_source_type(source_type)
+    if selected_source_type == "headendarr":
+        for group in _list_headendarr_groups(account_id):
+            if group.id == group_id:
+                return _get_headendarr_group_streams(account_id, group.name)
+        return []
 
     try:
         dispatcharr = get_dispatcharr_connection(get_db)
@@ -775,12 +820,18 @@ def create_group(request: GroupCreate):
     # validate_group_fields skipped for deprecated fields
 
     with get_db() as conn:
-        # Check for duplicate name within same M3U account
-        existing = get_group_by_name(conn, request.name, request.m3u_account_id)
+        source_type = _validate_source_type(request.source_type)
+        # Check for duplicate name within same source account
+        existing = get_group_by_name(
+            conn,
+            request.name,
+            request.m3u_account_id,
+            source_type,
+        )
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Group with name '{request.name}' already exists for this M3U account",
+                detail=f"Group with name '{request.name}' already exists for this source account",
             )
 
         group_id = create_group(
@@ -802,6 +853,7 @@ def create_group(request: GroupCreate):
             m3u_group_name=request.m3u_group_name,
             m3u_account_id=request.m3u_account_id,
             m3u_account_name=request.m3u_account_name,
+            source_type=source_type,
             stream_include_regex=request.stream_include_regex,
             stream_include_regex_enabled=request.stream_include_regex_enabled,
             stream_exclude_regex=request.stream_exclude_regex,
@@ -850,6 +902,7 @@ def create_group(request: GroupCreate):
         id=group.id,
         name=group.name,
         display_name=group.display_name,
+        source_type=group.source_type,
         leagues=group.leagues,
         soccer_mode=group.soccer_mode,
         soccer_followed_teams=[SoccerFollowedTeam(**t) for t in group.soccer_followed_teams]
@@ -945,8 +998,14 @@ def create_groups_bulk(request: BulkGroupCreateRequest):
     with get_db() as conn:
         for item in request.groups:
             try:
-                # Check for duplicate name within same M3U account
-                existing = get_group_by_name(conn, item.m3u_group_name, item.m3u_account_id)
+                source_type = _validate_source_type(item.source_type)
+                # Check for duplicate name within same source account
+                existing = get_group_by_name(
+                    conn,
+                    item.m3u_group_name,
+                    item.m3u_account_id,
+                    source_type,
+                )
                 if existing:
                     results.append(
                         BulkGroupCreateResult(
@@ -954,7 +1013,7 @@ def create_groups_bulk(request: BulkGroupCreateRequest):
                             m3u_account_id=item.m3u_account_id,
                             name=item.m3u_group_name,
                             success=False,
-                            error="Group already exists for this M3U account",
+                            error="Group already exists for this source account",
                         )
                     )
                     total_failed += 1
@@ -978,6 +1037,7 @@ def create_groups_bulk(request: BulkGroupCreateRequest):
                     m3u_group_name=item.m3u_group_name,
                     m3u_account_id=item.m3u_account_id,
                     m3u_account_name=item.m3u_account_name,
+                    source_type=source_type,
                     enabled=request.settings.enabled,
                 )
 
@@ -1083,13 +1143,15 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                     subscription_leagues=request.subscription_leagues,
                     subscription_soccer_mode=request.subscription_soccer_mode,
                     subscription_soccer_followed_teams=(
-                [t.model_dump() for t in request.subscription_soccer_followed_teams]
-            )
+                        [t.model_dump() for t in request.subscription_soccer_followed_teams]
+                    )
                     if request.subscription_soccer_followed_teams
                     else None,
                     clear_subscription_leagues=request.clear_subscription_leagues,
                     clear_subscription_soccer_mode=request.clear_subscription_soccer_mode,
-                    clear_subscription_soccer_followed_teams=request.clear_subscription_soccer_followed_teams,
+                    clear_subscription_soccer_followed_teams=(
+                        request.clear_subscription_soccer_followed_teams
+                    ),
                 )
 
                 results.append(
@@ -1176,12 +1238,19 @@ def get_group_by_id(group_id: int):
 
         channel_count = get_group_channel_count(conn, group_id)
 
-    # Fetch fresh M3U account name from Dispatcharr
+    # Fetch fresh source account name where possible.
     m3u_account_name = group.m3u_account_name
     if group.m3u_account_id:
         try:
-            dispatcharr = get_dispatcharr_connection(get_db)
-            if dispatcharr:
+            if group.source_type == "headendarr":
+                for playlist in _list_headendarr_playlists():
+                    if playlist.id == group.m3u_account_id:
+                        m3u_account_name = playlist.name
+                        break
+            else:
+                dispatcharr = get_dispatcharr_connection(get_db)
+                if not dispatcharr:
+                    raise RuntimeError("Dispatcharr is not connected")
                 accounts = dispatcharr.m3u.list_accounts()
                 for a in accounts:
                     if a.id == group.m3u_account_id:
@@ -1194,6 +1263,7 @@ def get_group_by_id(group_id: int):
         id=group.id,
         name=group.name,
         display_name=group.display_name,
+        source_type=group.source_type,
         leagues=group.leagues,
         soccer_mode=group.soccer_mode,
         soccer_followed_teams=[SoccerFollowedTeam(**t) for t in group.soccer_followed_teams]
@@ -1287,8 +1357,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 detail=f"Group {group_id} not found",
             )
 
-        # Check for duplicate name if changing (within same M3U account)
-        # Determine the target account_id (could be changing)
+        # Check for duplicate name if changing (within same source account)
+        # Determine the target account_id and source_type (could be changing)
         target_account_id = (
             None
             if request.clear_m3u_account_id
@@ -1296,13 +1366,24 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             if request.m3u_account_id is not None
             else group.m3u_account_id
         )
+        target_source_type = (
+            _validate_source_type(request.source_type)
+            if request.source_type is not None
+            else group.source_type
+        )
         target_name = request.name if request.name else group.name
-        if target_name != group.name or target_account_id != group.m3u_account_id:
-            existing = get_group_by_name(conn, target_name, target_account_id)
+        if (
+            target_name != group.name
+            or target_account_id != group.m3u_account_id
+            or target_source_type != group.source_type
+        ):
+            existing = get_group_by_name(conn, target_name, target_account_id, target_source_type)
             if existing and existing.id != group_id:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Group with name '{target_name}' already exists for this M3U account",
+                    detail=(
+                        f"Group with name '{target_name}' already exists for this source account"
+                    ),
                 )
 
         try:
@@ -1326,6 +1407,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 m3u_group_name=request.m3u_group_name,
                 m3u_account_id=request.m3u_account_id,
                 m3u_account_name=request.m3u_account_name,
+                source_type=target_source_type if request.source_type is not None else None,
                 stream_include_regex=request.stream_include_regex,
                 stream_include_regex_enabled=request.stream_include_regex_enabled,
                 stream_exclude_regex=request.stream_exclude_regex,
@@ -1381,13 +1463,15 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 subscription_leagues=request.subscription_leagues,
                 subscription_soccer_mode=request.subscription_soccer_mode,
                 subscription_soccer_followed_teams=(
-                [t.model_dump() for t in request.subscription_soccer_followed_teams]
-            )
+                    [t.model_dump() for t in request.subscription_soccer_followed_teams]
+                )
                 if request.subscription_soccer_followed_teams
                 else None,
                 clear_subscription_leagues=request.clear_subscription_leagues,
                 clear_subscription_soccer_mode=request.clear_subscription_soccer_mode,
-                clear_subscription_soccer_followed_teams=request.clear_subscription_soccer_followed_teams,
+                clear_subscription_soccer_followed_teams=(
+                    request.clear_subscription_soccer_followed_teams
+                ),
             )
         except ValueError as e:
             raise HTTPException(
@@ -1410,6 +1494,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         id=group.id,
         name=group.name,
         display_name=group.display_name,
+        source_type=group.source_type,
         leagues=group.leagues,
         soccer_mode=group.soccer_mode,
         soccer_followed_teams=[SoccerFollowedTeam(**t) for t in group.soccer_followed_teams]
@@ -1786,13 +1871,11 @@ def preview_group(group_id: int):
                 detail=f"Group {group_id} not found",
             )
 
-    # Get Dispatcharr connection (has m3u manager)
-    factory = get_factory(get_db)
-    conn = (
-        factory.get_connection()
-        if factory and factory.is_configured
-        else get_headendarr_connection(get_db)
-    )
+    if group.source_type == "headendarr":
+        conn = get_headendarr_connection(get_db)
+    else:
+        factory = get_factory(get_db)
+        conn = factory.get_connection() if factory and factory.is_configured else None
 
     # Preview the group
     group_service = create_group_service(get_db, conn)
@@ -1868,11 +1951,17 @@ def get_raw_streams(group_id: int):
                 detail=f"Group {group_id} not found",
             )
 
-    factory = get_factory(get_db)
-    conn = factory.get_connection() if factory and factory.is_configured else None
-
     raw: list[RawStreamModel]
-    if conn and getattr(conn, "m3u", None):
+    if group.source_type == "dispatcharr":
+        factory = get_factory(get_db)
+        conn = factory.get_connection() if factory and factory.is_configured else None
+        if not conn or not getattr(conn, "m3u", None):
+            return RawStreamsResponse(
+                group_id=group_id,
+                group_name=group.name,
+                total=0,
+                streams=[],
+            )
         raw_streams = conn.m3u.list_streams(
             group_id=group.m3u_group_id,
             account_id=group.m3u_account_id,

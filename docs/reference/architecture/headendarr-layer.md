@@ -33,6 +33,7 @@ HeadendarrConnection
 ## Key Differences from Dispatcharr
 
 - Headendarr uses playlists as the source inventory for event groups
+- Headendarr playlists can coexist with Dispatcharr M3U accounts; event groups persist their source type so both integrations can be configured at the same time
 - Teamarr provisions a fixed `Teamarr` XMLTV source automatically
 - The user only configures the Headendarr URL, credentials, and the Teamarr host value
 - Dispatcharr-only concepts such as channel profiles, stream profiles, and logo cleanup do not apply here

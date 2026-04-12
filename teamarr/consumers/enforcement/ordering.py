@@ -56,15 +56,18 @@ class KeywordOrderingEnforcer:
         self,
         db_factory: Any,
         channel_manager: Any = None,
+        source_type: str = "dispatcharr",
     ):
         """Initialize the enforcer.
 
         Args:
             db_factory: Factory returning database connection
             channel_manager: Optional ChannelManager for Dispatcharr sync
+            source_type: Source type whose channels should be enforced
         """
         self._db_factory = db_factory
         self._channel_manager = channel_manager
+        self._source_type = source_type
         self._dispatcharr_lock = threading.Lock()
 
     def enforce(self) -> OrderingResult:
@@ -86,7 +89,7 @@ class KeywordOrderingEnforcer:
         try:
             with self._db_factory() as conn:
                 # Find channel pairs needing reorder
-                pairs = self._get_channels_needing_reorder(conn)
+                pairs = self._get_channels_needing_reorder(conn, self._source_type)
 
                 for pair in pairs:
                     main_channel = pair["main_channel"]
@@ -183,7 +186,7 @@ class KeywordOrderingEnforcer:
 
         return result
 
-    def _get_channels_needing_reorder(self, conn) -> list[dict]:
+    def _get_channels_needing_reorder(self, conn, source_type: str) -> list[dict]:
         """Find events where keyword channel has lower number than main.
 
         Returns list of dicts with 'main_channel' and 'keyword_channel'.
@@ -205,13 +208,16 @@ class KeywordOrderingEnforcer:
             FROM managed_channels m
             JOIN managed_channels k ON m.event_id = k.event_id
                                    AND m.event_epg_group_id = k.event_epg_group_id
+            JOIN event_epg_groups g ON g.id = m.event_epg_group_id
             WHERE m.deleted_at IS NULL
               AND k.deleted_at IS NULL
+              AND COALESCE(g.source_type, 'dispatcharr') = ?
               AND (m.exception_keyword IS NULL OR m.exception_keyword = '')
               AND k.exception_keyword IS NOT NULL
               AND k.exception_keyword != ''
               AND CAST(k.channel_number AS INTEGER) < CAST(m.channel_number AS INTEGER)
-            """
+            """,
+            (source_type,),
         )
 
         results = []

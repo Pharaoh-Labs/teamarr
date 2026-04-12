@@ -19,6 +19,7 @@ class EventEPGGroup:
     id: int
     name: str
     display_name: str | None = None  # Optional display name override for UI
+    source_type: str = "dispatcharr"
     leagues: list[str] = field(default_factory=list)
     soccer_mode: str | None = None  # NULL (non-soccer), 'all', 'teams', 'manual'
     soccer_followed_teams: list[dict] | None = None  # [{provider, team_id, name}] for teams mode
@@ -121,6 +122,7 @@ def _row_to_group(row) -> EventEPGGroup:
         id=row["id"],
         name=row["name"],
         display_name=row["display_name"] if "display_name" in row.keys() else None,
+        source_type=row["source_type"] if "source_type" in row.keys() else "dispatcharr",
         leagues=leagues,
         soccer_mode=row["soccer_mode"] if "soccer_mode" in row.keys() else None,
         soccer_followed_teams=json.loads(row["soccer_followed_teams"])
@@ -291,7 +293,10 @@ def get_group(conn: Connection, group_id: int) -> EventEPGGroup | None:
 
 
 def get_group_by_name(
-    conn: Connection, name: str, m3u_account_id: int | None = None
+    conn: Connection,
+    name: str,
+    m3u_account_id: int | None = None,
+    source_type: str | None = None,
 ) -> EventEPGGroup | None:
     """Get a single event EPG group by name (optionally scoped to account).
 
@@ -299,14 +304,26 @@ def get_group_by_name(
         conn: Database connection
         name: Group name
         m3u_account_id: If provided, checks for name within this account only
+        source_type: If provided, checks for name within this source type only
 
     Returns:
         EventEPGGroup or None if not found
     """
-    if m3u_account_id is not None:
+    if m3u_account_id is not None and source_type is not None:
+        cursor = conn.execute(
+            """SELECT * FROM event_epg_groups
+               WHERE name = ? AND m3u_account_id = ? AND source_type = ?""",
+            (name, m3u_account_id, source_type),
+        )
+    elif m3u_account_id is not None:
         cursor = conn.execute(
             "SELECT * FROM event_epg_groups WHERE name = ? AND m3u_account_id = ?",
             (name, m3u_account_id),
+        )
+    elif source_type is not None:
+        cursor = conn.execute(
+            "SELECT * FROM event_epg_groups WHERE name = ? AND source_type = ?",
+            (name, source_type),
         )
     else:
         cursor = conn.execute("SELECT * FROM event_epg_groups WHERE name = ?", (name,))
@@ -376,6 +393,7 @@ def create_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
+    source_type: str = "dispatcharr",
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool = False,
@@ -443,7 +461,7 @@ def create_group(
 
     cursor = conn.execute(
         """INSERT INTO event_epg_groups (
-            name, display_name, leagues, soccer_mode, soccer_followed_teams,
+            name, display_name, source_type, leagues, soccer_mode, soccer_followed_teams,
             group_mode, channel_start_number,
             stream_timezone, duplicate_event_handling,
             channel_assignment_mode, sort_order, total_stream_count,
@@ -462,10 +480,11 @@ def create_group(
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
+            source_type,
             json.dumps(leagues),
             soccer_mode,
             json.dumps(soccer_followed_teams) if soccer_followed_teams else None,
@@ -541,6 +560,7 @@ def update_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
+    source_type: str | None = None,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool | None = None,
@@ -698,6 +718,10 @@ def update_group(
         values.append(m3u_account_name)
     elif clear_m3u_account_name:
         updates.append("m3u_account_name = NULL")
+
+    if source_type is not None:
+        updates.append("source_type = ?")
+        values.append(source_type)
 
     # Stream filtering fields
     if stream_include_regex is not None:
@@ -1292,5 +1316,3 @@ def delete_group_xmltv(conn: Connection, group_id: int) -> bool:
         logger.debug("[DELETED] XMLTV for group id=%d", group_id)
         return True
     return False
-
-

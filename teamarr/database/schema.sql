@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS settings (
     emby_api_key TEXT,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 72
+    schema_version INTEGER DEFAULT 73
 );
 
 -- Insert default settings
@@ -388,10 +388,12 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     -- Identity
-    name TEXT NOT NULL,                      -- Unique per m3u_account_id (see index below)
+    name TEXT NOT NULL,                      -- Unique per source_type + m3u_account_id (see index below)
     display_name TEXT,                       -- Optional display name override for UI
     group_mode TEXT DEFAULT 'single'         -- 'single' or 'multi' - preserves original mode
         CHECK(group_mode IN ('single', 'multi')),
+    source_type TEXT DEFAULT 'dispatcharr'   -- 'dispatcharr' or 'headendarr'
+        CHECK(source_type IN ('dispatcharr', 'headendarr')),
 
     -- What to scan
     leagues JSON NOT NULL,                   -- ["nfl", "nba"] - leagues to scan for events
@@ -513,9 +515,9 @@ END;
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_enabled ON event_epg_groups(enabled);
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_sort_order ON event_epg_groups(sort_order);
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_name ON event_epg_groups(name);
--- Allow same group name from different M3U accounts (e.g., "US - NFL" from Provider A and B)
+-- Allow same group name from different source accounts (e.g., Provider A and B)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
-    ON event_epg_groups(name, m3u_account_id);
+    ON event_epg_groups(name, source_type, m3u_account_id);
 
 
 -- =============================================================================

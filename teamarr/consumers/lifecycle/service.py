@@ -121,6 +121,7 @@ class ChannelLifecycleService:
         sport_durations: dict[str, float] | None = None,
         timezone: str = "America/New_York",
         include_final_events: bool = False,
+        source_type: str = "dispatcharr",
     ):
         """Initialize the lifecycle service.
 
@@ -138,6 +139,7 @@ class ChannelLifecycleService:
             sport_durations: Per-sport duration mapping (basketball, football, etc.)
             timezone: User timezone for timing calculations
             include_final_events: Whether to include completed/final events in EPG
+            source_type: Integration source for platform channel operations
 
         Raises:
             ValueError: If sports_service is not provided
@@ -151,6 +153,7 @@ class ChannelLifecycleService:
         self._logo_manager = logo_manager
         self._epg_manager = epg_manager
         self._timezone = timezone
+        self._source_type = source_type
 
         # Timing manager for create/delete decisions
         self._timing_manager = ChannelLifecycleManager(
@@ -2042,9 +2045,10 @@ class ChannelLifecycleService:
         Returns:
             StreamProcessResult with deleted channels
         """
-        from teamarr.database.channels import (
-            get_channels_pending_deletion,
-        )
+        from dateutil import parser
+
+        from teamarr.database.channels.types import ManagedChannel
+        from teamarr.utilities.tz import now_user
 
         result = StreamProcessResult()
 
@@ -2055,7 +2059,25 @@ class ChannelLifecycleService:
                 self._recalculate_deletion_times(conn)
 
                 # Step 2: Get channels that are now past their delete time
-                channels = get_channels_pending_deletion(conn)
+                rows = conn.execute(
+                    """SELECT mc.* FROM managed_channels mc
+                       LEFT JOIN event_epg_groups g ON g.id = mc.event_epg_group_id
+                       WHERE mc.scheduled_delete_at IS NOT NULL
+                         AND mc.deleted_at IS NULL
+                         AND COALESCE(g.source_type, 'dispatcharr') = ?""",
+                    (self._source_type,),
+                ).fetchall()
+                now = now_user()
+                channels = []
+                for row in rows:
+                    try:
+                        channel = ManagedChannel.from_row(dict(row))
+                        if channel.scheduled_delete_at and now >= parser.parse(
+                            str(channel.scheduled_delete_at)
+                        ):
+                            channels.append(channel)
+                    except (ValueError, TypeError):
+                        pass
 
                 for channel in channels:
                     success = self.delete_managed_channel(
@@ -2106,12 +2128,21 @@ class ChannelLifecycleService:
 
         from dateutil import parser
 
-        from teamarr.database.channels import get_all_managed_channels, update_managed_channel
+        from teamarr.database.channels import update_managed_channel
+        from teamarr.database.channels.types import ManagedChannel
         from teamarr.utilities.sports import get_sport_duration
         from teamarr.utilities.time_blocks import crosses_midnight
         from teamarr.utilities.tz import to_user_tz
 
-        channels = get_all_managed_channels(conn, include_deleted=False)
+        rows = conn.execute(
+            """SELECT mc.* FROM managed_channels mc
+               LEFT JOIN event_epg_groups g ON g.id = mc.event_epg_group_id
+               WHERE mc.deleted_at IS NULL
+                 AND COALESCE(g.source_type, 'dispatcharr') = ?
+               ORDER BY mc.sport, mc.league, mc.channel_number""",
+            (self._source_type,),
+        ).fetchall()
+        channels = [ManagedChannel.from_row(dict(row)) for row in rows]
         updated_count = 0
 
         # Get timing settings
@@ -2571,8 +2602,10 @@ class ChannelLifecycleService:
                 if not teamarr_channels:
                     return result
 
-                # Get active DB channels (by dispatcharr_channel_id and UUID)
-                db_channels = get_all_managed_channels(conn, include_deleted=False)
+                # Get active DB channels for this source platform
+                db_channels = get_all_managed_channels(
+                    conn, include_deleted=False, source_type=self._source_type
+                )
                 active_ids = {
                     c.dispatcharr_channel_id for c in db_channels if c.dispatcharr_channel_id
                 }
@@ -2656,7 +2689,9 @@ class ChannelLifecycleService:
                 all_groups = get_all_groups(conn, include_disabled=True)
 
                 # Filter to disabled groups only
-                disabled_groups = [g for g in all_groups if not g.enabled]
+                disabled_groups = [
+                    g for g in all_groups if not g.enabled and g.source_type == self._source_type
+                ]
 
                 if not disabled_groups:
                     return result

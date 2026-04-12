@@ -493,7 +493,11 @@ class EventGroupProcessor:
             result = PreviewResult(group_id=group_id, group_name=group.name)
 
             # Step 0: Refresh upstream stream source when Dispatcharr is in use
-            if self._dispatcharr_client and group.m3u_account_id:
+            if (
+                group.source_type == "dispatcharr"
+                and self._dispatcharr_client
+                and group.m3u_account_id
+            ):
                 try:
                     refresh_result = self._dispatcharr_client.m3u.wait_for_refresh(
                         group.m3u_account_id,
@@ -522,7 +526,10 @@ class EventGroupProcessor:
 
             # Step 1: Fetch streams from the configured source
             try:
-                if self._dispatcharr_client:
+                if group.source_type == "dispatcharr":
+                    if not self._dispatcharr_client:
+                        result.errors.append("Dispatcharr source is configured but not connected")
+                        return result
                     raw_streams = self._dispatcharr_client.m3u.list_streams(
                         group_id=group.m3u_group_id,
                         account_id=group.m3u_account_id,
@@ -543,7 +550,9 @@ class EventGroupProcessor:
                             for stream in playlist_streams
                             if stream.playlist_id == group.m3u_account_id
                         ]
-                    streams = [{"id": stream.id, "name": stream.name} for stream in playlist_streams]
+                    streams = [
+                        {"id": stream.id, "name": stream.name} for stream in playlist_streams
+                    ]
             except Exception as e:
                 result.errors.append(f"Failed to fetch streams: {e}")
                 return result
@@ -763,7 +772,7 @@ class EventGroupProcessor:
         self,
         conn: Connection,
         multi_league_ids: list[int],
-        lifecycle_service=None,
+        lifecycle_service: Any | None = None,
     ) -> None:
         """Run post-processing enforcement.
 
@@ -771,72 +780,113 @@ class EventGroupProcessor:
         1. Keyword enforcement: ensure streams are on correct keyword channels
         2. Cross-group consolidation: merge multi-league into single-league
         3. Keyword ordering: ensure main channel < keyword channels in numbering
-        4. Orphan cleanup: delete Dispatcharr channels not tracked in DB
+        4. Orphan cleanup: delete source channels not tracked in DB
         5. Disabled group cleanup: delete channels from disabled groups
 
         Args:
             conn: Database connection
             multi_league_ids: IDs of multi-league groups for cross-group check
-            lifecycle_service: Optional lifecycle service for orphan/disabled cleanup
+            lifecycle_service: Optional lifecycle service for orphan/disabled cleanup (deprecated in favor of source-aware services)
         """
-        channel_manager = self._dispatcharr_client.channels if self._dispatcharr_client else None
+        # Determine which sources are active and need enforcement
+        active_sources = []
+        if self._dispatcharr_client:
+            active_sources.append(("dispatcharr", self._dispatcharr_client.channels))
 
-        # 1. Keyword enforcement: move streams to correct keyword channels
-        try:
-            keyword_enforcer = KeywordEnforcer(self._db_factory, channel_manager)
-            keyword_result = keyword_enforcer.enforce()
-            if keyword_result.moved_count > 0:
-                logger.info(
-                    "[EVENT_EPG] Keyword enforcement moved %d streams", keyword_result.moved_count
-                )
-        except Exception as e:
-            logger.warning("[EVENT_EPG] Keyword enforcement failed: %s", e)
+        from teamarr.database.settings import get_headendarr_settings
 
-        # 2. Cross-group consolidation (only if multi-league groups exist)
-        if multi_league_ids:
+        headendarr_settings = get_headendarr_settings(conn)
+        if headendarr_settings.enabled and headendarr_settings.url:
+            from teamarr.headendarr import get_headendarr_connection
+
+            headendarr_connection = get_headendarr_connection(self._db_factory)
+            if headendarr_connection:
+                active_sources.append(("headendarr", headendarr_connection.channels))
+
+        # Run enforcement for each active source sequentially
+        for source_type, channel_manager in active_sources:
+            logger.debug("[EVENT_EPG] Running enforcement for source_type=%s", source_type)
+
+            # 1. Keyword enforcement: move streams to correct keyword channels
             try:
-                cross_group_enforcer = CrossGroupEnforcer(self._db_factory, channel_manager)
-                cross_result = cross_group_enforcer.enforce(multi_league_ids)
-                if cross_result.deleted_count > 0:
+                keyword_enforcer = KeywordEnforcer(
+                    self._db_factory, channel_manager, source_type=source_type
+                )
+                keyword_result = keyword_enforcer.enforce()
+                if keyword_result.moved_count > 0:
                     logger.info(
-                        f"Cross-group consolidation: {cross_result.deleted_count} channels merged"
+                        "[EVENT_EPG] [%s] Keyword enforcement moved %d streams",
+                        source_type,
+                        keyword_result.moved_count,
                     )
             except Exception as e:
-                logger.warning("[EVENT_EPG] Cross-group consolidation failed: %s", e)
+                logger.warning("[EVENT_EPG] [%s] Keyword enforcement failed: %s", source_type, e)
 
-        # 3. Keyword ordering: ensure main channel has lower number than keyword channels
-        try:
-            ordering_enforcer = KeywordOrderingEnforcer(self._db_factory, channel_manager)
-            ordering_result = ordering_enforcer.enforce()
-            if ordering_result.reordered_count > 0:
-                logger.info(
-                    f"Keyword ordering: reordered {ordering_result.reordered_count} channel pair(s)"
-                )
-        except Exception as e:
-            logger.warning("[EVENT_EPG] Keyword ordering failed: %s", e)
+            # 2. Cross-group consolidation (only if multi-league groups exist)
+            if multi_league_ids:
+                try:
+                    cross_group_enforcer = CrossGroupEnforcer(
+                        self._db_factory, channel_manager, source_type=source_type
+                    )
+                    cross_result = cross_group_enforcer.enforce(multi_league_ids)
+                    if cross_result.deleted_count > 0:
+                        logger.info(
+                            "[EVENT_EPG] [%s] Cross-group consolidation: %d channels merged",
+                            source_type,
+                            cross_result.deleted_count,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "[EVENT_EPG] [%s] Cross-group consolidation failed: %s", source_type, e
+                    )
 
-        # 4. Orphan cleanup: delete Dispatcharr channels not tracked in DB
-        if lifecycle_service:
+            # 3. Keyword ordering: ensure main channel has lower number than keyword channels
             try:
-                orphan_result = lifecycle_service.cleanup_orphan_dispatcharr_channels()
+                ordering_enforcer = KeywordOrderingEnforcer(
+                    self._db_factory, channel_manager, source_type=source_type
+                )
+                ordering_result = ordering_enforcer.enforce()
+                if ordering_result.reordered_count > 0:
+                    logger.info(
+                        "[EVENT_EPG] [%s] Keyword ordering: reordered %d channel pair(s)",
+                        source_type,
+                        ordering_result.reordered_count,
+                    )
+            except Exception as e:
+                logger.warning("[EVENT_EPG] [%s] Keyword ordering failed: %s", source_type, e)
+
+            # 4. Source-aware cleanup (orphans and disabled groups)
+            # Create a source-aware lifecycle service for this enforcement pass
+            source_lifecycle = create_lifecycle_service(
+                self._db_factory,
+                self._service,
+                self._dispatcharr_client,
+                source_type=source_type,
+            )
+
+            # Orphan cleanup: delete platform channels not tracked in DB
+            try:
+                orphan_result = source_lifecycle.cleanup_orphan_dispatcharr_channels()
                 if orphan_result.get("deleted", 0) > 0:
                     logger.info(
-                        f"Orphan cleanup: deleted {orphan_result['deleted']} Dispatcharr channels"
+                        "[EVENT_EPG] [%s] Orphan cleanup: deleted %d platform channels",
+                        source_type,
+                        orphan_result["deleted"],
                     )
             except Exception as e:
-                logger.warning("[EVENT_EPG] Orphan cleanup failed: %s", e)
+                logger.warning("[EVENT_EPG] [%s] Orphan cleanup failed: %s", source_type, e)
 
-        # 5. Disabled group cleanup: delete channels from disabled groups
-        if lifecycle_service:
+            # 5. Disabled group cleanup: delete channels from disabled groups
             try:
-                disabled_result = lifecycle_service.cleanup_disabled_groups()
-                if disabled_result.get("deleted"):
+                disabled_result = source_lifecycle.cleanup_disabled_group_channels()
+                if disabled_result.deleted_count > 0:
                     logger.info(
-                        f"Disabled group cleanup: deleted "
-                        f"{len(disabled_result['deleted'])} channels"
+                        "[EVENT_EPG] [%s] Disabled group cleanup: deleted %d channels",
+                        source_type,
+                        disabled_result.deleted_count,
                     )
             except Exception as e:
-                logger.warning("[EVENT_EPG] Disabled group cleanup failed: %s", e)
+                logger.warning("[EVENT_EPG] [%s] Disabled group cleanup failed: %s", source_type, e)
 
     def _process_group_internal(
         self,
@@ -1151,12 +1201,14 @@ class EventGroupProcessor:
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
         """Fetch candidate streams for the group.
 
-        Uses Dispatcharr when configured, otherwise falls back to Headendarr
-        playlist streams using the existing group M3U account field as the
-        selected playlist identifier.
+        Uses the group's persisted source_type so Dispatcharr and Headendarr
+        groups can coexist when both integrations are configured.
         """
         try:
-            if self._dispatcharr_client:
+            if group.source_type == "dispatcharr":
+                if not self._dispatcharr_client:
+                    logger.warning("[EVENT_EPG] Dispatcharr source is configured but not connected")
+                    return []
                 m3u_manager = self._dispatcharr_client.m3u
 
                 if group.m3u_group_id:
@@ -1191,7 +1243,9 @@ class EventGroupProcessor:
             playlist_streams = headendarr_connection.playlists.list_streams()
             if group.m3u_account_id:
                 playlist_streams = [
-                    stream for stream in playlist_streams if stream.playlist_id == group.m3u_account_id
+                    stream
+                    for stream in playlist_streams
+                    if stream.playlist_id == group.m3u_account_id
                 ]
             if group.m3u_group_name:
                 playlist_streams = [
@@ -1883,7 +1937,12 @@ class EventGroupProcessor:
                 continue
 
             # Event was matched but didn't pass filter - delete the channel
-            success = self._delete_channel_for_team_filter(conn, channel, reason="team_filter")
+            success = self._delete_channel_for_team_filter(
+                conn,
+                channel,
+                reason="team_filter",
+                source_type=group.source_type,
+            )
             if success:
                 deleted_count += 1
                 logger.info(
@@ -1899,6 +1958,7 @@ class EventGroupProcessor:
         conn: Connection,
         channel,
         reason: str,
+        source_type: str,
     ) -> bool:
         """Delete a managed channel due to team filter.
 
@@ -1906,6 +1966,7 @@ class EventGroupProcessor:
             conn: Database connection
             channel: ManagedChannel to delete
             reason: Deletion reason
+            source_type: Integration source that owns the channel
 
         Returns:
             True if deleted successfully
@@ -1928,13 +1989,14 @@ class EventGroupProcessor:
                 notes=f"Channel deleted: {reason}",
             )
 
-            # Delete from Dispatcharr if connected
-            if self._dispatcharr_client and channel.dispatcharr_channel_id:
+            # Delete from the configured platform when connected.
+            if channel.dispatcharr_channel_id:
                 try:
                     lifecycle_service = create_lifecycle_service(
                         self._db_factory,
                         self._service,
                         self._dispatcharr_client,
+                        source_type=source_type,
                     )
                     if lifecycle_service._channel_manager:
                         lifecycle_service._channel_manager.delete_channel(
@@ -2175,6 +2237,7 @@ class EventGroupProcessor:
             self._db_factory,
             self._service,  # Required for template resolution
             self._dispatcharr_client,
+            source_type=group.source_type,
         )
 
         # Compute external channel numbers to avoid collisions (#146)
@@ -2187,6 +2250,7 @@ class EventGroupProcessor:
             "id": group.id,
             "m3u_account_id": group.m3u_account_id,
             "m3u_account_name": group.m3u_account_name,
+            "source_type": group.source_type,
         }
 
         # Load template from database if configured

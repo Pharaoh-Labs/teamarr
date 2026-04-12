@@ -23,7 +23,7 @@ import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
 interface M3UAccount {
   id: number
   name: string
-  source_type?: string
+  source_type: "dispatcharr" | "headendarr"
   enabled?: boolean
 }
 
@@ -42,6 +42,7 @@ interface EnabledGroup {
   id: number
   m3u_group_id: number | null
   m3u_account_id: number | null
+  source_type: "dispatcharr" | "headendarr"
 }
 
 interface SelectedGroup {
@@ -49,6 +50,7 @@ interface SelectedGroup {
   m3u_account_name: string
   m3u_group_id: number
   m3u_group_name: string
+  source_type: "dispatcharr" | "headendarr"
   stream_count?: number
 }
 
@@ -64,16 +66,21 @@ async function fetchM3UAccounts(): Promise<M3UAccount[]> {
   return response.accounts
 }
 
-async function fetchM3UGroups(accountId: number): Promise<M3UGroup[]> {
-  const response = await api.get<{ groups: M3UGroup[] }>(`/groups/source-accounts/${accountId}/groups`)
+async function fetchM3UGroups(account: M3UAccount): Promise<M3UGroup[]> {
+  const response = await api.get<{ groups: M3UGroup[] }>(
+    `/groups/source-accounts/${account.id}/groups?source_type=${account.source_type}`
+  )
   return response.groups
 }
 
 async function fetchGroupStreams(
   accountId: number,
-  groupId: number
+  groupId: number,
+  sourceType: M3UAccount["source_type"]
 ): Promise<Stream[]> {
-  return api.get(`/groups/source-accounts/${accountId}/groups/${groupId}/streams`)
+  return api.get(
+    `/groups/source-accounts/${accountId}/groups/${groupId}/streams?source_type=${sourceType}`
+  )
 }
 
 async function fetchEnabledGroups(): Promise<EnabledGroup[]> {
@@ -104,8 +111,8 @@ export function EventGroupImport() {
   })
 
   const groupsQuery = useQuery({
-    queryKey: ["dispatcharr-m3u-groups", selectedAccount?.id],
-    queryFn: () => fetchM3UGroups(selectedAccount!.id),
+    queryKey: ["source-groups", selectedAccount?.source_type, selectedAccount?.id],
+    queryFn: () => fetchM3UGroups(selectedAccount!),
     enabled: !!selectedAccount,
   })
 
@@ -115,8 +122,14 @@ export function EventGroupImport() {
   })
 
   const streamsQuery = useQuery({
-    queryKey: ["dispatcharr-group-streams", selectedAccount?.id, previewGroup?.id],
-    queryFn: () => fetchGroupStreams(selectedAccount!.id, previewGroup!.id),
+    queryKey: [
+      "source-group-streams",
+      selectedAccount?.source_type,
+      selectedAccount?.id,
+      previewGroup?.id,
+    ],
+    queryFn: () =>
+      fetchGroupStreams(selectedAccount!.id, previewGroup!.id, selectedAccount!.source_type),
     enabled: !!selectedAccount && !!previewGroup,
   })
 
@@ -124,7 +137,7 @@ export function EventGroupImport() {
   const enabledGroupKeys = new Set(
     (enabledQuery.data ?? [])
       .filter((g) => g.m3u_group_id !== null && g.m3u_account_id !== null)
-      .map((g) => `${g.m3u_account_id}:${g.m3u_group_id}`)
+      .map((g) => `${g.source_type}:${g.m3u_account_id}:${g.m3u_group_id}`)
   )
 
   // Filter groups by search (preserving original order from Dispatcharr)
@@ -134,17 +147,20 @@ export function EventGroupImport() {
 
   // Get selectable groups (not already enabled)
   const selectableGroups = filteredGroups.filter(
-    (g) => !enabledGroupKeys.has(`${selectedAccount?.id}:${g.id}`)
+    (g) =>
+      !enabledGroupKeys.has(`${selectedAccount?.source_type}:${selectedAccount?.id}:${g.id}`)
   )
 
   // Check if all visible selectable groups are selected
   const allVisibleSelected = selectedAccount && selectableGroups.length > 0 &&
-    selectableGroups.every((g) => selectedGroups.has(`${selectedAccount.id}:${g.id}`))
+    selectableGroups.every((g) =>
+      selectedGroups.has(`${selectedAccount.source_type}:${selectedAccount.id}:${g.id}`)
+    )
 
   // Selection helpers
   const toggleGroupSelection = (group: M3UGroup) => {
     if (!selectedAccount) return
-    const key = `${selectedAccount.id}:${group.id}`
+    const key = `${selectedAccount.source_type}:${selectedAccount.id}:${group.id}`
     const newSelected = new Map(selectedGroups)
     if (newSelected.has(key)) {
       newSelected.delete(key)
@@ -154,6 +170,7 @@ export function EventGroupImport() {
         m3u_account_name: selectedAccount.name,
         m3u_group_id: group.id,
         m3u_group_name: group.name,
+        source_type: selectedAccount.source_type,
         stream_count: group.stream_count,
       })
     }
@@ -164,13 +181,14 @@ export function EventGroupImport() {
     if (!selectedAccount) return
     const newSelected = new Map(selectedGroups)
     for (const group of selectableGroups) {
-      const key = `${selectedAccount.id}:${group.id}`
+      const key = `${selectedAccount.source_type}:${selectedAccount.id}:${group.id}`
       if (!newSelected.has(key)) {
         newSelected.set(key, {
           m3u_account_id: selectedAccount.id,
           m3u_account_name: selectedAccount.name,
           m3u_group_id: group.id,
           m3u_group_name: group.name,
+          source_type: selectedAccount.source_type,
           stream_count: group.stream_count,
         })
       }
@@ -182,7 +200,7 @@ export function EventGroupImport() {
     if (!selectedAccount) return
     const newSelected = new Map(selectedGroups)
     for (const group of selectableGroups) {
-      newSelected.delete(`${selectedAccount.id}:${group.id}`)
+      newSelected.delete(`${selectedAccount.source_type}:${selectedAccount.id}:${group.id}`)
     }
     setSelectedGroups(newSelected)
   }
@@ -202,12 +220,13 @@ export function EventGroupImport() {
 
   // Handle single import (existing behavior)
   const handleImport = (group: M3UGroup) => {
+    if (!selectedAccount) return
     const params = new URLSearchParams({
       m3u_group_id: String(group.id),
       m3u_group_name: group.name,
-      m3u_account_id: String(selectedAccount!.id),
-      m3u_account_name: selectedAccount!.name,
-      source_type: selectedAccount?.source_type || "dispatcharr",
+      m3u_account_id: String(selectedAccount.id),
+      m3u_account_name: selectedAccount.name,
+      source_type: selectedAccount.source_type,
     })
     navigate(`/event-groups/new?${params.toString()}`)
   }
@@ -222,6 +241,7 @@ export function EventGroupImport() {
           m3u_group_name: g.m3u_group_name,
           m3u_account_id: g.m3u_account_id,
           m3u_account_name: g.m3u_account_name,
+          source_type: g.source_type,
         })),
         settings: {
           stream_timezone: bulkStreamTimezone,
@@ -299,17 +319,20 @@ export function EventGroupImport() {
           <div className="py-1">
             {[...accountsQuery.data].sort((a, b) => a.name.localeCompare(b.name)).map((account) => {
               const accountSelectionCount = Array.from(selectedGroups.values())
-                .filter((g) => g.m3u_account_id === account.id).length
+                .filter(
+                  (g) => g.source_type === account.source_type && g.m3u_account_id === account.id
+                ).length
               return (
                 <button
-                  key={account.id}
+                  key={`${account.source_type}:${account.id}`}
                   onClick={() => {
                     setSelectedAccount(account)
                     setSearchTerm("")
                   }}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 border-l-2 border-transparent",
-                    selectedAccount?.id === account.id &&
+                    selectedAccount?.source_type === account.source_type &&
+                      selectedAccount?.id === account.id &&
                       "bg-muted border-l-primary"
                   )}
                 >
@@ -398,13 +421,13 @@ export function EventGroupImport() {
               ) : (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2">
                   {filteredGroups.map((group) => {
-                    const key = `${selectedAccount.id}:${group.id}`
+                    const key = `${selectedAccount.source_type}:${selectedAccount.id}:${group.id}`
                     const isEnabled = enabledGroupKeys.has(key)
                     const isSelected = selectedGroups.has(key)
 
                     return (
                       <div
-                        key={group.id}
+                        key={key}
                         className={cn(
                           "p-3 rounded-md border transition-colors relative",
                           isEnabled
@@ -602,7 +625,10 @@ export function EventGroupImport() {
               <Label className="text-sm font-medium">Groups to import</Label>
               <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
                 {Array.from(selectedGroups.values()).map((group) => (
-                  <div key={`${group.m3u_account_id}:${group.m3u_group_id}`} className="flex items-center justify-between text-sm">
+                  <div
+                    key={`${group.source_type}:${group.m3u_account_id}:${group.m3u_group_id}`}
+                    className="flex items-center justify-between text-sm"
+                  >
                     <span className="truncate">{group.m3u_group_name}</span>
                     <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
                       {group.stream_count ?? "?"} streams

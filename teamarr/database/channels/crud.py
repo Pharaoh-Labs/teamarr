@@ -303,14 +303,16 @@ def get_all_managed_channels(
     include_deleted: bool = False,
     sport: str | None = None,
     league: str | None = None,
+    source_type: str | None = None,
 ) -> list[ManagedChannel]:
-    """Get all managed channels, optionally filtered by sport/league.
+    """Get all managed channels, optionally filtered by sport/league/source_type.
 
     Args:
         conn: Database connection
         include_deleted: Whether to include deleted channels
         sport: Optional sport filter
         league: Optional league filter
+        source_type: Optional source type filter (dispatcharr or headendarr)
 
     Returns:
         List of ManagedChannel objects
@@ -319,16 +321,27 @@ def get_all_managed_channels(
     params: list = []
 
     if not include_deleted:
-        conditions.append("deleted_at IS NULL")
+        conditions.append("mc.deleted_at IS NULL")
     if sport:
-        conditions.append("sport = ?")
+        conditions.append("mc.sport = ?")
         params.append(sport)
     if league:
-        conditions.append("league = ?")
+        conditions.append("mc.league = ?")
         params.append(league)
 
+    if source_type:
+        # Filter by source platform type
+        # Uses COALESCE to default orphaned channels (no group_id) to dispatcharr
+        conditions.append("COALESCE(g.source_type, 'dispatcharr') = ?")
+        params.append(source_type)
+
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-    sql = f"SELECT * FROM managed_channels{where} ORDER BY sport, league, channel_number"
+    sql = f"""
+        SELECT mc.* FROM managed_channels mc
+        LEFT JOIN event_epg_groups g ON g.id = mc.event_epg_group_id
+        {where}
+        ORDER BY mc.sport, mc.league, mc.channel_number
+    """
     cursor = conn.execute(sql, params)
     return [ManagedChannel.from_row(dict(row)) for row in cursor.fetchall()]
 
