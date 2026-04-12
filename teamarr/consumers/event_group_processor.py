@@ -543,12 +543,22 @@ class EventGroupProcessor:
                         result.errors.append("No Dispatcharr or Headendarr source configured")
                         return result
 
+                    # Get enabled playlist IDs
+                    playlists = headendarr_connection.playlists.list_playlists()
+                    enabled_playlist_ids = {p.id for p in playlists if p.enabled}
+                    # Get all streams and filter by enabled playlists + group selection
                     playlist_streams = headendarr_connection.playlists.list_streams()
+                    # Apply enabled playlist filter first
+                    playlist_streams = [
+                        s for s in playlist_streams 
+                        if s.playlist_id is not None and int(s.playlist_id) in enabled_playlist_ids
+                    ]
+
                     if group.m3u_account_id:
                         playlist_streams = [
                             stream
                             for stream in playlist_streams
-                            if stream.playlist_id == group.m3u_account_id
+                            if stream.playlist_id is not None and int(stream.playlist_id) == group.m3u_account_id
                         ]
                     streams = [
                         {"id": stream.id, "name": stream.name} for stream in playlist_streams
@@ -1240,12 +1250,22 @@ class EventGroupProcessor:
                 logger.warning("[EVENT_EPG] No Dispatcharr or Headendarr stream source configured")
                 return []
 
+            # Get enabled playlist IDs
+            playlists = headendarr_connection.playlists.list_playlists()
+            enabled_playlist_ids = {p.id for p in playlists if p.enabled}
+            # Get all streams and filter by enabled playlists + group selection
             playlist_streams = headendarr_connection.playlists.list_streams()
+            # Apply enabled playlist filter first
+            playlist_streams = [
+                s for s in playlist_streams 
+                if s.playlist_id is not None and int(s.playlist_id) in enabled_playlist_ids
+            ]
+
             if group.m3u_account_id:
                 playlist_streams = [
                     stream
                     for stream in playlist_streams
-                    if stream.playlist_id == group.m3u_account_id
+                    if stream.playlist_id is not None and int(stream.playlist_id) == group.m3u_account_id
                 ]
             if group.m3u_group_name:
                 playlist_streams = [

@@ -901,7 +901,16 @@ def _sync_headendarr_team_channels(
         if not teams:
             return {"success": True, "created": 0, "updated": 0, "skipped": 0}
 
-        streams = connection.playlists.list_streams()
+        # Fetch enabled playlists to filter streams
+        all_playlists = connection.playlists.list_playlists()
+        enabled_playlist_ids = {p.id for p in all_playlists if p.enabled}
+        # Filter streams to only those from enabled playlists
+        all_streams = connection.playlists.list_streams()
+        streams = [
+            s for s in all_streams 
+            if s.playlist_id is not None and int(s.playlist_id) in enabled_playlist_ids
+        ]
+
         existing_channels = connection.channels.get_channels(use_cache=False)
         by_tvg_id = {channel.tvg_id: channel for channel in existing_channels if channel.tvg_id}
 
