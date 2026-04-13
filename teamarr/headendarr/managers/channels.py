@@ -138,9 +138,11 @@ class ChannelManager:
         sources: list[HeadendarrChannelSource] = []
         stream_lookup = self._ensure_stream_cache()
         for priority, stream_id in enumerate(stream_ids, start=1):
-            stream = stream_lookup.get(stream_id)
+            # Ensure stream_id is treated as an integer for cache lookup
+            lookup_id = int(stream_id)
+            stream = stream_lookup.get(lookup_id)
             if not stream or stream.playlist_id is None:
-                logger.warning("[HEADENDARR] Stream %s missing from playlist cache", stream_id)
+                logger.warning("[HEADENDARR] Stream %s (int=%d) missing from playlist cache", stream_id, lookup_id)
                 continue
             sources.append(
                 HeadendarrChannelSource(

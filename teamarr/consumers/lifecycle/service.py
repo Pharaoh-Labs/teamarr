@@ -1602,7 +1602,7 @@ class ChannelLifecycleService:
                     # Stream drift — Dispatcharr is missing a stream the DB expects
                     new_streams = current_stream_ids + [stream_id]
                     update_data["streams"] = new_streams
-                    db_updates["dispatcharr_stream_id"] = stream_id
+                    db_updates["primary_stream_id"] = stream_id
                     changes_made.append(f"streams: added {stream_id}")
                     self._stream_drift_fix_count += 1
                     logger.info(

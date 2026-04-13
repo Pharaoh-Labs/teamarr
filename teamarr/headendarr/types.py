@@ -58,11 +58,12 @@ class HeadendarrStream:
 
     @classmethod
     def from_api(cls, data: dict) -> "HeadendarrStream":
+        p_id = data.get("playlist_id")
         return cls(
             id=int(data["id"]),
             name=data.get("name", ""),
             url=data.get("url"),
-            playlist_id=data.get("playlist_id"),
+            playlist_id=int(p_id) if p_id is not None else None,
             playlist_name=data.get("playlist_name"),
             group_title=data.get("group_title"),
             logo_url=data.get("logo") or data.get("tvg_logo"),
