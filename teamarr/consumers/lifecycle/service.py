@@ -1437,9 +1437,13 @@ class ChannelLifecycleService:
             for var_name, value in extra_variables.items():
                 template_str = template_str.replace(f"{{{var_name}}}", value)
 
+        # When feed separation is active, build context from the feed team's
+        # perspective so {team}, {opponent}, {is_home}, etc. resolve correctly.
+        team_id = (feed_team.id if feed_team
+                   else event.home_team.id if event.home_team else "")
         context = self._context_builder.build_for_event(
             event=event,
-            team_id=event.home_team.id if event.home_team else "",
+            team_id=team_id,
             league=event.league,
             card_segment=card_segment,
         )

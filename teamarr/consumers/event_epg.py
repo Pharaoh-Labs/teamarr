@@ -405,16 +405,20 @@ class EventEPGGenerator:
             tvg_id = generate_event_tvg_id(event.id, event.provider, segment, exception_keyword)
             stream_name = stream.get("name", "")
 
-            # Build context using home team perspective
             # Inject exception_keyword into extra_vars so it resolves in all template fields
             keyword_value = exception_keyword if exception_keyword else ""
+            # When feed separation is active, build context from the feed team's
+            # perspective so {team}, {opponent}, {is_home}, etc. resolve correctly.
+            feed_team = match.get("feed_team")
+            team_id = (feed_team.id if feed_team
+                       else event.home_team.id if event.home_team else "")
             context = self._context_builder.build_for_event(
                 event=event,
-                team_id=event.home_team.id,
+                team_id=team_id,
                 league=event.league,
                 card_segment=segment,
             )
-            context.feed_team = match.get("feed_team")
+            context.feed_team = feed_team
             context.extra_vars = {"exception_keyword": keyword_value}
 
             # Generate channel name from template

@@ -89,28 +89,28 @@ def _context_with_feed(
 
 
 # =============================================================================
-# No feed team = all empty
+# No feed team = "National" for name/abbrev, empty for directional
 # =============================================================================
 
 
 class TestNoFeedTeam:
-    """All feed variables return empty string when feed_team is None."""
+    """Name/abbrev variables return 'National'; directional variables stay empty."""
 
     def test_feed_team(self):
         ctx, gc = _context_with_feed(None, _make_event())
-        assert extract_feed_team(ctx, gc) == ""
+        assert extract_feed_team(ctx, gc) == "National"
 
     def test_feed_team_short(self):
         ctx, gc = _context_with_feed(None, _make_event())
-        assert extract_feed_team_short(ctx, gc) == ""
+        assert extract_feed_team_short(ctx, gc) == "National"
 
     def test_feed_team_abbrev(self):
         ctx, gc = _context_with_feed(None, _make_event())
-        assert extract_feed_team_abbrev(ctx, gc) == ""
+        assert extract_feed_team_abbrev(ctx, gc) == "NATL"
 
     def test_feed_team_abbrev_lower(self):
         ctx, gc = _context_with_feed(None, _make_event())
-        assert extract_feed_team_abbrev_lower(ctx, gc) == ""
+        assert extract_feed_team_abbrev_lower(ctx, gc) == "natl"
 
     def test_feed_team_logo(self):
         ctx, gc = _context_with_feed(None, _make_event())
@@ -226,6 +226,13 @@ class TestFeedTeamEdgeCases:
         assert extract_feed_team_short(ctx, None) == "Orioles"
         assert extract_feed_team_abbrev(ctx, None) == "BAL"
         assert extract_feed_team_logo(ctx, None) == "https://example.com/bal.png"
+
+    def test_no_feed_team_no_game_context_returns_national(self):
+        """Without feed_team or game_ctx, name vars return 'National'."""
+        ctx, _ = _context_with_feed(None)
+        assert extract_feed_team(ctx, None) == "National"
+        assert extract_feed_team_short(ctx, None) == "National"
+        assert extract_feed_team_abbrev(ctx, None) == "NATL"
 
     def test_no_game_context_home_away_empty(self):
         """is_home/is_away/home_away need game_ctx to determine direction."""

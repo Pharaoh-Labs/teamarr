@@ -250,18 +250,19 @@ def extract_away_team_logo(ctx: TemplateContext, game_ctx: GameContext | None) -
 
 # --- Feed team variables (stream-level home/away feed separation) ---
 # These resolve to the team whose broadcast feed this channel carries.
-# Empty string when no feed separation is active (graceful disappear).
+# Name/abbrev variables return "National" when no feed team is set (national broadcast).
+# Directional variables (is_home_feed, is_away_feed, feed_home_away) stay empty.
 
 
 @register_variable(
     name="feed_team",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="Feed team full name (e.g., 'Baltimore Orioles')",
+    description="Feed team full name, or 'National' for national broadcasts",
 )
 def extract_feed_team(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team:
-        return ""
+        return "National"
     return ctx.feed_team.name
 
 
@@ -269,11 +270,11 @@ def extract_feed_team(ctx: TemplateContext, game_ctx: GameContext | None) -> str
     name="feed_team_short",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="Feed team short name (e.g., 'Orioles')",
+    description="Feed team short name, or 'National' for national broadcasts",
 )
 def extract_feed_team_short(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team:
-        return ""
+        return "National"
     return ctx.feed_team.short_name or ctx.feed_team.name
 
 
@@ -281,11 +282,11 @@ def extract_feed_team_short(ctx: TemplateContext, game_ctx: GameContext | None) 
     name="feed_team_abbrev",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="Feed team abbreviation uppercase (e.g., 'BAL')",
+    description="Feed team abbreviation uppercase, or 'NATL' for national broadcasts",
 )
 def extract_feed_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team:
-        return ""
+        return "NATL"
     return ctx.feed_team.abbreviation.upper()
 
 
@@ -293,11 +294,11 @@ def extract_feed_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None)
     name="feed_team_abbrev_lower",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="Feed team abbreviation lowercase (e.g., 'bal')",
+    description="Feed team abbreviation lowercase, or 'natl' for national broadcasts",
 )
 def extract_feed_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team:
-        return ""
+        return "natl"
     return ctx.feed_team.abbreviation.lower()
 
 
@@ -305,7 +306,7 @@ def extract_feed_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext |
     name="feed_team_logo",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="Feed team logo URL",
+    description="Feed team logo URL (empty for national broadcasts)",
 )
 def extract_feed_team_logo(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team:
