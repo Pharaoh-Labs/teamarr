@@ -1442,13 +1442,14 @@ class EventGroupProcessor:
             match_result: Result from matcher
             stream_timezone: Group-configured timezone for stream time interpretation
         """
-        # Build name -> stream lookup
-        stream_lookup = {s["name"]: s for s in streams}
+        # Key by Dispatcharr stream id so identical titles on different M3U accounts
+        # stay distinct (name-only lookup collapsed duplicates — see lifecycle consolidate).
+        stream_by_id = {s["id"]: s for s in streams if s.get("id") is not None}
 
         matched = []
         for result in match_result.results:
             if result.matched and result.included and result.event:
-                stream = stream_lookup.get(result.stream_name)
+                stream = stream_by_id.get(result.stream_id)
                 if stream:
                     matched.append(
                         {
@@ -1969,15 +1970,14 @@ class EventGroupProcessor:
 
         Stores both matched streams and failed/unmatched streams for analysis.
         """
-        # Build name -> stream lookup for stream IDs
-        stream_lookup = {s["name"]: s for s in streams}
+        stream_by_id = {s["id"]: s for s in streams if s.get("id") is not None}
 
         matched_list: list[MatchedStream] = []
         failed_list: list[FailedMatch] = []
 
         for result in match_result.results:
-            stream = stream_lookup.get(result.stream_name, {})
-            stream_id = stream.get("id")
+            stream = stream_by_id.get(result.stream_id)
+            stream_id = (stream or {}).get("id", result.stream_id)
 
             if result.matched and result.included and result.event:
                 # Successfully matched and included
