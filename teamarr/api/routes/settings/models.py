@@ -453,6 +453,61 @@ class EmbyConnectionTestResponse(BaseModel):
 
 
 # =============================================================================
+# JELLYFIN SETTINGS
+# =============================================================================
+
+
+class JellyfinSettingsModel(BaseModel):
+    """Jellyfin integration settings."""
+
+    enabled: bool = False
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    api_key: str | None = None
+
+    @field_serializer("password")
+    @classmethod
+    def _mask_password(cls, v: str | None) -> str | None:
+        return MASKED_SECRET if v else None
+
+    @field_serializer("api_key")
+    @classmethod
+    def _mask_api_key(cls, v: str | None) -> str | None:
+        return MASKED_SECRET if v else None
+
+
+class JellyfinSettingsUpdate(BaseModel):
+    """Update model for Jellyfin settings (all fields optional)."""
+
+    enabled: bool | None = None
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    api_key: str | None = None
+
+
+class JellyfinConnectionTestRequest(BaseModel):
+    """Request to test Jellyfin connection."""
+
+    url: str | None = Field(
+        None, description="Override URL (uses saved if not provided)"
+    )
+    username: str | None = Field(None, description="Override username")
+    password: str | None = Field(None, description="Override password")
+    api_key: str | None = Field(None, description="Override API key")
+
+
+class JellyfinConnectionTestResponse(BaseModel):
+    """Response from Jellyfin connection test."""
+
+    success: bool
+    server_name: str | None = None
+    server_version: str | None = None
+    error: str | None = None
+
+
+# =============================================================================
 # ALL SETTINGS
 # =============================================================================
 
@@ -473,6 +528,7 @@ class AllSettingsModel(BaseModel):
     update_check: UpdateCheckSettingsModel | None = None
     feed_separation: FeedSeparationSettingsModel | None = None
     emby: EmbySettingsModel = EmbySettingsModel()
+    jellyfin: JellyfinSettingsModel = JellyfinSettingsModel()
     epg_generation_counter: int = 0
     schema_version: int = 44
 

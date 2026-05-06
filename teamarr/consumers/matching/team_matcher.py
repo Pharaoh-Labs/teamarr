@@ -1403,6 +1403,20 @@ class TeamMatcher:
             if isinstance(main_card_start, str):
                 main_card_start = datetime.fromisoformat(main_card_start)
 
+            # Self-heal stale cache rows: every modern provider populates
+            # short_name (falling back to the full name when no shorter form
+            # exists), so a row with name set but short_name empty is data
+            # written before the field flowed end-to-end. Treat as cache miss
+            # so the matcher re-fetches and re-caches with proper data.
+            for team in (home_team, away_team):
+                if team.name and not team.short_name:
+                    logger.debug(
+                        "[MATCH_CACHE] Stale: team %r has name but no short_name; "
+                        "invalidating",
+                        team.name,
+                    )
+                    return None
+
             return Event(
                 id=cached_data.get("id", ""),
                 provider=cached_data.get("provider", ""),

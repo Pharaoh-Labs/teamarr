@@ -81,6 +81,8 @@ function getPhaseLabel(status: GenerationStatus | null): string {
       return "Syncing with Dispatcharr"
     case "emby":
       return "Refreshing Emby Guide"
+    case "jellyfin":
+      return "Refreshing Jellyfin Guide"
     case "lifecycle":
       return "Processing Channels"
     case "reconciliation":

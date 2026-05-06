@@ -259,6 +259,17 @@ class EmbySettings:
 
 
 @dataclass
+class JellyfinSettings:
+    """Jellyfin integration settings for Live TV guide refresh."""
+
+    enabled: bool = False
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    api_key: str | None = None
+
+
+@dataclass
 class AllSettings:
     """Complete application settings."""
 
@@ -278,5 +289,6 @@ class AllSettings:
     backup: BackupSettings = field(default_factory=BackupSettings)
     feed_separation: FeedSeparationSettings = field(default_factory=FeedSeparationSettings)
     emby: EmbySettings = field(default_factory=EmbySettings)
+    jellyfin: JellyfinSettings = field(default_factory=JellyfinSettings)
     epg_generation_counter: int = 0
     schema_version: int = 52

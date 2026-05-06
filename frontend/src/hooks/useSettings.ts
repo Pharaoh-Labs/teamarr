@@ -40,6 +40,9 @@ import {
   getEmbySettings,
   updateEmbySettings,
   testEmbyConnection,
+  getJellyfinSettings,
+  updateJellyfinSettings,
+  testJellyfinConnection,
 } from "@/api/settings"
 import type {
   DispatcharrSettings,
@@ -55,6 +58,7 @@ import type {
   UpdateCheckSettingsUpdate,
   FeedSeparationSettingsUpdate,
   EmbySettings,
+  JellyfinSettings,
 } from "@/api/settings"
 
 export function useSettings() {
@@ -443,5 +447,32 @@ export function useTestEmbyConnection() {
   return useMutation({
     mutationFn: (data?: { url?: string; username?: string; password?: string; api_key?: string }) =>
       testEmbyConnection(data),
+  })
+}
+
+// Jellyfin Settings Hooks
+export function useJellyfinSettings() {
+  return useQuery({
+    queryKey: ["settings", "jellyfin"],
+    queryFn: getJellyfinSettings,
+  })
+}
+
+export function useUpdateJellyfinSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: Partial<JellyfinSettings>) =>
+      updateJellyfinSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+  })
+}
+
+export function useTestJellyfinConnection() {
+  return useMutation({
+    mutationFn: (data?: { url?: string; username?: string; password?: string; api_key?: string }) =>
+      testJellyfinConnection(data),
   })
 }

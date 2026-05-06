@@ -18,6 +18,7 @@ from .display import router as display_router
 from .emby import router as emby_router
 from .epg import router as epg_router
 from .feed_separation import router as feed_separation_router
+from .jellyfin import router as jellyfin_router
 from .lifecycle import router as lifecycle_router
 from .models import (
     AllSettingsModel,
@@ -28,6 +29,7 @@ from .models import (
     EmbySettingsModel,
     EPGSettingsModel,
     FeedSeparationSettingsModel,
+    JellyfinSettingsModel,
     LifecycleSettingsModel,
     ReconciliationSettingsModel,
     SchedulerSettingsModel,
@@ -46,6 +48,7 @@ router = APIRouter()
 # Include sub-routers
 router.include_router(dispatcharr_router)
 router.include_router(emby_router)
+router.include_router(jellyfin_router)
 router.include_router(lifecycle_router)
 router.include_router(epg_router)
 router.include_router(display_router)
@@ -168,6 +171,13 @@ def get_settings():
             password=settings.emby.password,
             api_key=settings.emby.api_key,
         ),
+        jellyfin=JellyfinSettingsModel(
+            enabled=settings.jellyfin.enabled,
+            url=settings.jellyfin.url,
+            username=settings.jellyfin.username,
+            password=settings.jellyfin.password,
+            api_key=settings.jellyfin.api_key,
+        ),
         epg_generation_counter=settings.epg_generation_counter,
         schema_version=settings.schema_version,
         # UI timezone info (read-only)
@@ -187,6 +197,7 @@ __all__ = [
     "EmbySettingsModel",
     "EPGSettingsModel",
     "FeedSeparationSettingsModel",
+    "JellyfinSettingsModel",
     "LifecycleSettingsModel",
     "ReconciliationSettingsModel",
     "SchedulerSettingsModel",

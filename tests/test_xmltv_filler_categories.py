@@ -106,14 +106,17 @@ class TestV72Migration:
         assert "categories_apply_to" not in cols
         assert "xmltv_filler_categories" in cols
 
-    def test_schema_version_is_72_after_migration(self, tmp_path):
+    def test_schema_version_advanced_past_v72(self, tmp_path):
         conn = _make_v71_templates_db(tmp_path)
         _run_migrations(conn)
 
         row = conn.execute(
             "SELECT schema_version FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 72
+        # v72 ran (other tests cover its data transform). Migrations after v72
+        # also run from a v71 starting point — assert we're at the latest
+        # version, not pinned to 72.
+        assert row["schema_version"] >= 72
 
 
 # ===========================================================================
@@ -255,8 +258,8 @@ class TestFreshInstall:
         assert "xmltv_filler_categories" in cols
         assert "categories_apply_to" not in cols
 
-        # Schema version should be 72
+        # Fresh install should land on the current schema version (>= 72).
         row = conn.execute(
             "SELECT schema_version FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 72
+        assert row["schema_version"] >= 72

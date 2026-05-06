@@ -17,6 +17,7 @@ from .types import (
     EmbySettings,
     EPGSettings,
     FeedSeparationSettings,
+    JellyfinSettings,
     LifecycleSettings,
     ReconciliationSettings,
     SchedulerSettings,
@@ -193,6 +194,7 @@ def get_all_settings(conn: Connection) -> AllSettings:
         backup=_build_backup_settings(row),
         feed_separation=_build_feed_separation_settings(row),
         emby=_build_emby_settings(row),
+        jellyfin=_build_jellyfin_settings(row),
         epg_generation_counter=row["epg_generation_counter"] or 0,
         schema_version=row["schema_version"] or 2,
     )
@@ -740,3 +742,51 @@ def get_emby_settings(conn: Connection) -> EmbySettings:
         return EmbySettings()
 
     return _build_emby_settings(row)
+
+
+_JELLYFIN_DEFAULTS = JellyfinSettings()
+
+
+def _build_jellyfin_settings(row) -> JellyfinSettings:
+    """Build JellyfinSettings from DB row, using dataclass defaults for NULL."""
+    d = _JELLYFIN_DEFAULTS
+    return JellyfinSettings(
+        enabled=bool(row["jellyfin_enabled"])
+        if "jellyfin_enabled" in row.keys()
+        and row["jellyfin_enabled"] is not None
+        else d.enabled,
+        url=row["jellyfin_url"]
+        if "jellyfin_url" in row.keys()
+        else d.url,
+        username=row["jellyfin_username"]
+        if "jellyfin_username" in row.keys()
+        else d.username,
+        password=row["jellyfin_password"]
+        if "jellyfin_password" in row.keys()
+        else d.password,
+        api_key=row["jellyfin_api_key"]
+        if "jellyfin_api_key" in row.keys()
+        else d.api_key,
+    )
+
+
+def get_jellyfin_settings(conn: Connection) -> JellyfinSettings:
+    """Get Jellyfin integration settings.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        JellyfinSettings object with Jellyfin configuration
+    """
+    cursor = conn.execute(
+        """SELECT jellyfin_enabled, jellyfin_url, jellyfin_username,
+                  jellyfin_password, jellyfin_api_key
+           FROM settings WHERE id = 1"""
+    )
+    row = cursor.fetchone()
+
+    if not row:
+        return JellyfinSettings()
+
+    return _build_jellyfin_settings(row)

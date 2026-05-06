@@ -59,6 +59,7 @@ class GenerationResult:
     logo_cleanup: dict = field(default_factory=dict)
     channel_conflicts: dict = field(default_factory=dict)
     emby_refresh: dict = field(default_factory=dict)
+    jellyfin_refresh: dict = field(default_factory=dict)
 
     # For stats run tracking
     run_id: int | None = None
@@ -445,6 +446,50 @@ def run_full_generation(
         except Exception as e:
             logger.warning("[EMBY] Guide refresh failed (non-blocking): %s", e)
             result.emby_refresh = {"success": False, "error": str(e)}
+
+        # Step 5c: Jellyfin Live TV guide refresh
+        check_cancelled()
+        try:
+            from teamarr.database.settings import get_jellyfin_settings
+
+            with db_factory() as conn:
+                jellyfin_settings = get_jellyfin_settings(conn)
+
+            if jellyfin_settings.enabled and jellyfin_settings.url:
+                update_progress("jellyfin", 97, "Refreshing Jellyfin guide...")
+                from teamarr.jellyfin.client import JellyfinClient
+
+                client = JellyfinClient(
+                    base_url=jellyfin_settings.url,
+                    username=jellyfin_settings.username or "",
+                    password=jellyfin_settings.password or "",
+                    api_key=jellyfin_settings.api_key,
+                )
+
+                def on_jellyfin_progress(pct):
+                    update_progress(
+                        "jellyfin", 97, f"Refreshing Jellyfin guide... {pct:.0f}%"
+                    )
+
+                jellyfin_result = client.trigger_guide_refresh(
+                    timeout=300,
+                    on_progress=on_jellyfin_progress,
+                    cancellation_check=is_cancellation_requested,
+                )
+                result.jellyfin_refresh = jellyfin_result
+                if jellyfin_result.get("success"):
+                    logger.info(
+                        "[JELLYFIN] Guide refresh completed in %.1fs",
+                        jellyfin_result.get("duration", 0),
+                    )
+                else:
+                    logger.warning(
+                        "[JELLYFIN] Guide refresh failed: %s",
+                        jellyfin_result.get("message"),
+                    )
+        except Exception as e:
+            logger.warning("[JELLYFIN] Guide refresh failed (non-blocking): %s", e)
+            result.jellyfin_refresh = {"success": False, "error": str(e)}
 
         # Step 6: Process scheduled deletions (98-99%)
         check_cancelled()

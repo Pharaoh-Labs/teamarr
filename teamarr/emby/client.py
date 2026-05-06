@@ -2,6 +2,10 @@
 
 Lightweight HTTP client using httpx to authenticate with Emby
 and trigger a Live TV guide refresh after EPG generation.
+
+Jellyfin (which forked from Emby) is API-compatible. JellyfinClient
+subclasses this and only overrides the URL path prefix — Emby uses
+``/emby/...`` while Jellyfin omits the prefix.
 """
 
 import logging
@@ -22,6 +26,14 @@ _EMBY_AUTH_HEADER = (
 class EmbyClient:
     """Client for Emby server API interactions."""
 
+    # Path prefix in front of every Emby API URL. Subclasses (e.g.
+    # JellyfinClient) can set this to "" to target servers that don't
+    # mount the API under /emby/.
+    PATH_PREFIX: str = "/emby"
+
+    # Display name used in log messages — overridable by subclasses.
+    SERVER_LABEL: str = "EMBY"
+
     def __init__(
         self,
         base_url: str,
@@ -37,6 +49,10 @@ class EmbyClient:
         self.api_key = api_key
         self._access_token: str | None = api_key  # Pre-set if API key provided
         self._user_id: str | None = None
+
+    def _url(self, path: str) -> str:
+        """Build a full URL for an API path (e.g. '/ScheduledTasks')."""
+        return f"{self.base_url}{self.PATH_PREFIX}{path}"
 
     def _auth_headers(self) -> dict[str, str]:
         """Build headers for unauthenticated requests."""
@@ -65,20 +81,22 @@ class EmbyClient:
             self._access_token = self.api_key
             try:
                 resp = httpx.get(
-                    f"{self.base_url}/emby/ScheduledTasks",
+                    self._url("/ScheduledTasks"),
                     headers=self._token_headers(),
                     timeout=self.timeout,
                 )
                 resp.raise_for_status()
-                logger.debug("[EMBY] Authenticated via API key")
+                logger.debug("[%s] Authenticated via API key", self.SERVER_LABEL)
                 return True
             except httpx.HTTPError as e:
-                logger.warning("[EMBY] API key authentication failed: %s", e)
+                logger.warning(
+                    "[%s] API key authentication failed: %s", self.SERVER_LABEL, e
+                )
                 self._access_token = None
                 return False
 
         # Username/password auth
-        url = f"{self.base_url}/emby/Users/AuthenticateByName"
+        url = self._url("/Users/AuthenticateByName")
         payload = {"Username": self.username, "Pw": self.password}
 
         try:
@@ -94,18 +112,20 @@ class EmbyClient:
             user = data.get("User", {})
             self._user_id = user.get("Id")
             if self._access_token:
-                logger.debug("[EMBY] Authenticated as %s", self.username)
+                logger.debug(
+                    "[%s] Authenticated as %s", self.SERVER_LABEL, self.username
+                )
                 return True
-            logger.warning("[EMBY] Auth response missing AccessToken")
+            logger.warning("[%s] Auth response missing AccessToken", self.SERVER_LABEL)
             return False
         except httpx.HTTPError as e:
-            logger.warning("[EMBY] Authentication failed: %s", e)
+            logger.warning("[%s] Authentication failed: %s", self.SERVER_LABEL, e)
             self._access_token = None
             self._user_id = None
             return False
 
     def test_connection(self) -> dict:
-        """Test connection to Emby server.
+        """Test connection to the media server.
 
         Returns:
             dict with success, server_name, server_version, error
@@ -113,7 +133,7 @@ class EmbyClient:
         # First try to get server info (public endpoint)
         try:
             resp = httpx.get(
-                f"{self.base_url}/emby/System/Info/Public",
+                self._url("/System/Info/Public"),
                 timeout=self.timeout,
             )
             resp.raise_for_status()
@@ -156,7 +176,7 @@ class EmbyClient:
         on_progress: Callable[[float], None] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
     ) -> dict:
-        """Trigger Emby Live TV guide refresh and wait for completion.
+        """Trigger the Live TV guide refresh and wait for completion.
 
         Args:
             timeout: Maximum seconds to wait for refresh
@@ -180,7 +200,7 @@ class EmbyClient:
         # Find the RefreshGuide task
         try:
             resp = httpx.get(
-                f"{self.base_url}/emby/ScheduledTasks",
+                self._url("/ScheduledTasks"),
                 headers=headers,
                 timeout=self.timeout,
             )
@@ -202,7 +222,9 @@ class EmbyClient:
         if not guide_task:
             return {
                 "success": False,
-                "message": "RefreshGuide task not found on Emby server",
+                "message": (
+                    f"RefreshGuide task not found on {self.SERVER_LABEL.title()} server"
+                ),
                 "duration": 0,
             }
 
@@ -211,12 +233,14 @@ class EmbyClient:
         # Trigger the task
         try:
             resp = httpx.post(
-                f"{self.base_url}/emby/ScheduledTasks/Running/{task_id}",
+                self._url(f"/ScheduledTasks/Running/{task_id}"),
                 headers=headers,
                 timeout=self.timeout,
             )
             resp.raise_for_status()
-            logger.info("[EMBY] Triggered guide refresh (task %s)", task_id)
+            logger.info(
+                "[%s] Triggered guide refresh (task %s)", self.SERVER_LABEL, task_id
+            )
         except httpx.HTTPError as e:
             return {
                 "success": False,
@@ -245,14 +269,14 @@ class EmbyClient:
 
             try:
                 resp = httpx.get(
-                    f"{self.base_url}/emby/ScheduledTasks/{task_id}",
+                    self._url(f"/ScheduledTasks/{task_id}"),
                     headers=headers,
                     timeout=self.timeout,
                 )
                 resp.raise_for_status()
                 task_info = resp.json()
             except httpx.HTTPError as e:
-                logger.warning("[EMBY] Poll failed: %s", e)
+                logger.warning("[%s] Poll failed: %s", self.SERVER_LABEL, e)
                 continue
 
             state = task_info.get("State", "")

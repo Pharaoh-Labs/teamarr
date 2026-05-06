@@ -70,6 +70,9 @@ import {
   useEmbySettings,
   useUpdateEmbySettings,
   useTestEmbyConnection,
+  useJellyfinSettings,
+  useUpdateJellyfinSettings,
+  useTestJellyfinConnection,
 } from "@/hooks/useSettings"
 import { SortPriorityManager } from "@/components/SortPriorityManager"
 import { StreamOrderingManager } from "@/components/StreamOrderingManager"
@@ -100,6 +103,7 @@ import type {
   UpdateCheckSettings,
   FeedSeparationSettings,
   EmbySettings,
+  JellyfinSettings,
   SubscriptionLeagueConfig,
   TSDBKeyValidationResult,
 } from "@/api/settings"
@@ -843,7 +847,7 @@ function LeagueConfigRow({
   )
 }
 
-type SettingsTab = "general" | "teams" | "events" | "channels" | "epg" | "dispatcharr" | "emby" | "advanced"
+type SettingsTab = "general" | "teams" | "events" | "channels" | "epg" | "dispatcharr" | "media-servers" | "advanced"
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
@@ -852,7 +856,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "epg", label: "EPG" },
   { id: "channels", label: "Channels" },
   { id: "dispatcharr", label: "Dispatcharr" },
-  { id: "emby", label: "Emby" },
+  { id: "media-servers", label: "Media Servers" },
   { id: "advanced", label: "System" },
 ]
 
@@ -915,6 +919,11 @@ export function Settings() {
   const { data: embyData } = useEmbySettings()
   const updateEmby = useUpdateEmbySettings()
   const testEmby = useTestEmbyConnection()
+
+  // Jellyfin settings
+  const { data: jellyfinData } = useJellyfinSettings()
+  const updateJellyfin = useUpdateJellyfinSettings()
+  const testJellyfin = useTestJellyfinConnection()
 
   // Per-league subscription config
   const { data: leagueConfigsData } = useLeagueConfigs()
@@ -979,6 +988,14 @@ export function Settings() {
     api_key: null,
   })
   const [embyTestResult, setEmbyTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [jellyfin, setJellyfin] = useState<Partial<JellyfinSettings>>({
+    enabled: false,
+    url: null,
+    username: null,
+    password: null,
+    api_key: null,
+  })
+  const [jellyfinTestResult, setJellyfinTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [newKeyword, setNewKeyword] = useState({ label: "", match_terms: "", behavior: "consolidate" })
   const [editingKeyword, setEditingKeyword] = useState<{ id: number; label: string; match_terms: string } | null>(null)
 
@@ -1094,6 +1111,19 @@ export function Settings() {
     }
   }, [embyData])
 
+  // Sync jellyfin state when data loads
+  useEffect(() => {
+    if (jellyfinData) {
+      setJellyfin({
+        enabled: jellyfinData.enabled,
+        url: jellyfinData.url,
+        username: jellyfinData.username,
+        password: "", // Don't show masked password
+        api_key: "", // Don't show masked API key
+      })
+    }
+  }, [jellyfinData])
+
   // Sync channel range inputs from lifecycle on initial load only
   const channelRangeInitializedRef = useRef(false)
   useEffect(() => {
@@ -1206,6 +1236,54 @@ export function Settings() {
       }
     } catch (err) {
       setEmbyTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Connection test failed",
+      })
+    }
+  }
+
+  const handleSaveJellyfin = async () => {
+    try {
+      const data: Partial<JellyfinSettings> = {
+        enabled: jellyfin.enabled,
+        url: jellyfin.url,
+        username: jellyfin.username,
+      }
+      if (jellyfin.password) {
+        data.password = jellyfin.password
+      }
+      if (jellyfin.api_key) {
+        data.api_key = jellyfin.api_key
+      }
+      await updateJellyfin.mutateAsync(data)
+      toast.success("Jellyfin settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  const handleTestJellyfin = async () => {
+    try {
+      setJellyfinTestResult(null)
+      const result = await testJellyfin.mutateAsync({
+        url: jellyfin.url || undefined,
+        username: jellyfin.username || undefined,
+        password: jellyfin.password || undefined,
+        api_key: jellyfin.api_key || undefined,
+      })
+      if (result.success) {
+        setJellyfinTestResult({
+          success: true,
+          message: `Connected to ${result.server_name || "Jellyfin"} (v${result.server_version || "unknown"})`,
+        })
+      } else {
+        setJellyfinTestResult({
+          success: false,
+          message: result.error || "Connection failed",
+        })
+      }
+    } catch (err) {
+      setJellyfinTestResult({
         success: false,
         message: err instanceof Error ? err.message : "Connection test failed",
       })
@@ -3120,8 +3198,15 @@ export function Settings() {
       )}
 
       {/* Emby Tab */}
-      {activeTab === "emby" && (
+      {activeTab === "media-servers" && (
       <>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold">Media Servers</h2>
+        <p className="text-sm text-muted-foreground">
+          Auto-refresh Live TV guides after EPG generation. Both can be enabled at once.
+        </p>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -3215,6 +3300,108 @@ export function Settings() {
           {/* Save button */}
           <Button onClick={handleSaveEmby} disabled={updateEmby.isPending}>
             {updateEmby.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            Save
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Jellyfin</CardTitle>
+              <CardDescription>Auto-refresh Live TV guide after EPG generation</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleTestJellyfin} variant="outline" size="sm" disabled={testJellyfin.isPending}>
+                {testJellyfin.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <TestTube className="h-4 w-4 mr-1" />
+                )}
+                Test
+              </Button>
+              {jellyfinTestResult && (
+                jellyfinTestResult.success ? (
+                  <Badge variant="success" className="gap-1">
+                    <CheckCircle className="h-3 w-3" /> {jellyfinTestResult.message}
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="gap-1">
+                    <XCircle className="h-3 w-3" /> {jellyfinTestResult.message}
+                  </Badge>
+                )
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Enable */}
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={jellyfin.enabled ?? false}
+              onCheckedChange={(checked) => setJellyfin({ ...jellyfin, enabled: checked })}
+            />
+            <Label>Enable Jellyfin Integration</Label>
+          </div>
+
+          {/* URL */}
+          <div className="space-y-2">
+            <Label htmlFor="jellyfin-url">URL</Label>
+            <Input
+              id="jellyfin-url"
+              value={jellyfin.url ?? ""}
+              onChange={(e) => setJellyfin({ ...jellyfin, url: e.target.value })}
+              placeholder="http://jellyfin:8096"
+            />
+          </div>
+
+          {/* API Key (preferred) */}
+          <div className="space-y-2">
+            <Label htmlFor="jellyfin-api-key">API Key</Label>
+            <Input
+              id="jellyfin-api-key"
+              type="password"
+              value={jellyfin.api_key ?? ""}
+              onChange={(e) => setJellyfin({ ...jellyfin, api_key: e.target.value })}
+              placeholder="Leave blank to keep current"
+            />
+            <p className="text-xs text-muted-foreground">
+              Recommended. Generate in Jellyfin Dashboard &rarr; API Keys. If set, username/password are ignored.
+            </p>
+          </div>
+
+          {/* Username/Password (fallback) */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="jellyfin-username">Username</Label>
+              <Input
+                id="jellyfin-username"
+                value={jellyfin.username ?? ""}
+                onChange={(e) => setJellyfin({ ...jellyfin, username: e.target.value })}
+                disabled={!!jellyfin.api_key}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="jellyfin-password">Password</Label>
+              <Input
+                id="jellyfin-password"
+                type="password"
+                value={jellyfin.password ?? ""}
+                onChange={(e) => setJellyfin({ ...jellyfin, password: e.target.value })}
+                placeholder="Leave blank to keep current"
+                disabled={!!jellyfin.api_key}
+              />
+            </div>
+          </div>
+
+          {/* Save button */}
+          <Button onClick={handleSaveJellyfin} disabled={updateJellyfin.isPending}>
+            {updateJellyfin.isPending ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <Save className="h-4 w-4 mr-1" />

@@ -517,6 +517,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 72
 
+    if current_version < 73:
+        _apply_migration(
+            conn, 73, "dedupe MiLB league codes after rename",
+            _migrate_v73_dedupe_milb_renamed_codes,
+        )
+        current_version = 73
+
 
 # =============================================================================
 # Migration helpers
@@ -1297,6 +1304,178 @@ def _migrate_v72_split_xmltv_categories(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError as e:
         logger.warning(
             "[MIGRATE v72] DROP COLUMN templates.categories_apply_to skipped: %s", e
+        )
+
+
+# Renames applied by commit db53687 (Apr 2026): old league_code → new league_code.
+# schema.sql uses INSERT OR REPLACE keyed on league_code, so the new rows were
+# inserted but the old rows were never deleted, leaving duplicate MiLB entries
+# in the league selector and orphan teams in team_cache.
+_MILB_RENAMED_LEAGUES: dict[str, str] = {
+    "a": "milb-a",
+    "aa": "milb-aa",
+    "aaa": "milb-aaa",
+    "higha": "milb-high-a",
+}
+
+
+def _migrate_v73_dedupe_milb_renamed_codes(conn: sqlite3.Connection) -> None:
+    """v73: clean up duplicate MiLB league rows orphaned by the v2.2 rename.
+
+    Remaps user-data references (managed_channels, team_aliases, JSON-encoded
+    league lists) from the old codes to the new codes, then deletes the
+    orphaned rows from `leagues` and `team_cache`. Log/cache tables get the
+    same remap for consistency.
+    """
+    rename = _MILB_RENAMED_LEAGUES
+    old_codes = tuple(rename.keys())
+    placeholders = ",".join("?" for _ in old_codes)
+
+    scalar_targets = (
+        ("managed_channels", "league"),
+        ("team_aliases", "league"),
+        ("channel_sort_priorities", "league_code"),
+        # Logs and detection caches (best-effort consistency).
+        ("epg_matched_streams", "detected_league"),
+        ("epg_failed_matches", "detected_league"),
+        ("stream_match_cache", "league"),
+        ("match_corrections", "incorrect_league"),
+        ("match_corrections", "correct_league"),
+    )
+
+    # 1. Scalar league columns. Skip silently if the table or column is missing
+    # — partial schemas (e.g. unit-test fixtures, mid-migration restarts) would
+    # otherwise log a noisy warning per old code per missing target.
+    for table, column in scalar_targets:
+        if not _column_exists(conn, table, column):
+            continue
+        for old, new in rename.items():
+            conn.execute(
+                f"UPDATE {table} SET {column} = ? WHERE {column} = ?",
+                (new, old),
+            )
+
+    # 2. JSON-encoded league arrays
+    _v73_remap_json_array(conn, "sports_subscription", "leagues", rename)
+    _v73_remap_json_array(conn, "subscription_templates", "leagues", rename)
+    _v73_remap_json_array(conn, "event_epg_groups", "leagues", rename)
+    _v73_remap_json_array(conn, "event_epg_groups", "subscription_leagues", rename)
+
+    # 4. Drop orphan team_cache rows. The new codes are repopulated by cache
+    # refresh; old-coded duplicates are stale and would not match anything.
+    if _table_exists(conn, "team_cache"):
+        try:
+            cur = conn.execute(
+                f"DELETE FROM team_cache WHERE league IN ({placeholders})",
+                old_codes,
+            )
+            if cur.rowcount:
+                logger.info(
+                    "[MIGRATE v73] Deleted %d orphan team_cache rows under "
+                    "old MiLB codes %s", cur.rowcount, old_codes,
+                )
+        except sqlite3.OperationalError as e:
+            logger.warning("[MIGRATE v73] team_cache cleanup skipped: %s", e)
+
+    # 5. Drop the orphan league rows themselves — the actual selector fix.
+    if _table_exists(conn, "leagues"):
+        try:
+            cur = conn.execute(
+                f"DELETE FROM leagues WHERE league_code IN ({placeholders})",
+                old_codes,
+            )
+            if cur.rowcount:
+                logger.info(
+                    "[MIGRATE v73] Deleted %d duplicate MiLB league rows %s",
+                    cur.rowcount, old_codes,
+                )
+        except sqlite3.OperationalError as e:
+            logger.warning("[MIGRATE v73] leagues cleanup skipped: %s", e)
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    if not _table_exists(conn, table):
+        return False
+    return any(
+        row["name"] == column for row in conn.execute(f"PRAGMA table_info({table})")
+    )
+
+
+def _v73_remap_json_array(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    rename: dict[str, str],
+) -> None:
+    """Rewrite a JSON-array column in `table.column`, remapping codes via `rename`.
+
+    Each row's array is parsed, each element substituted using `rename` (when
+    present), and duplicates collapsed while preserving order. Rows whose value
+    isn't a JSON array are left alone.
+    """
+    if not _table_exists(conn, table):
+        return
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in cols:
+        return
+    if "id" in cols:
+        pk = "id"
+    elif "rowid" in cols:
+        pk = "rowid"
+    else:
+        pk = "rowid"
+
+    try:
+        rows = conn.execute(f"SELECT {pk} AS pk, {column} AS val FROM {table}").fetchall()
+    except sqlite3.OperationalError as e:
+        logger.warning("[MIGRATE v73] read %s.%s skipped: %s", table, column, e)
+        return
+
+    updated = 0
+    for row in rows:
+        raw = row["val"]
+        if not raw:
+            continue
+        try:
+            arr = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(arr, list):
+            continue
+        new_arr: list = []
+        seen: set = set()
+        changed = False
+        for item in arr:
+            mapped = rename.get(item, item) if isinstance(item, str) else item
+            if mapped != item:
+                changed = True
+            if isinstance(mapped, str | int | float | bool | None):
+                key = mapped
+            else:
+                key = json.dumps(mapped)
+            if key in seen:
+                changed = True
+                continue
+            seen.add(key)
+            new_arr.append(mapped)
+        if changed:
+            conn.execute(
+                f"UPDATE {table} SET {column} = ? WHERE {pk} = ?",
+                (json.dumps(new_arr), row["pk"]),
+            )
+            updated += 1
+    if updated:
+        logger.info(
+            "[MIGRATE v73] Remapped MiLB codes in %d row(s) of %s.%s",
+            updated, table, column,
         )
 
 

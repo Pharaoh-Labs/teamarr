@@ -767,6 +767,62 @@ def update_emby_settings(
     return False
 
 
+def update_jellyfin_settings(
+    conn: Connection,
+    enabled: bool | None = None,
+    url: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
+    api_key: str | None = None,
+) -> bool:
+    """Update Jellyfin integration settings.
+
+    Only updates fields that are explicitly provided.
+
+    Args:
+        conn: Database connection
+        enabled: Enable/disable Jellyfin integration
+        url: Jellyfin server URL
+        username: Jellyfin username
+        password: Jellyfin password
+        api_key: Jellyfin API key (alternative to username/password)
+
+    Returns:
+        True if updated
+    """
+    updates = []
+    values = []
+
+    if enabled is not None:
+        updates.append("jellyfin_enabled = ?")
+        values.append(int(enabled))
+    if url is not None:
+        updates.append("jellyfin_url = ?")
+        values.append(url.rstrip("/") if url else url)
+    if username is not None:
+        updates.append("jellyfin_username = ?")
+        values.append(username)
+    if password is not None:
+        updates.append("jellyfin_password = ?")
+        values.append(password)
+    if api_key is not None:
+        updates.append("jellyfin_api_key = ?")
+        values.append(api_key)
+
+    if not updates:
+        return False
+
+    query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
+    cursor = conn.execute(query, values)
+    if cursor.rowcount > 0:
+        logger.info(
+            "[UPDATED] Jellyfin settings: %s",
+            [u.split(" = ")[0] for u in updates],
+        )
+        return True
+    return False
+
+
 def update_backup_settings(
     conn: Connection,
     enabled: bool | None = None,

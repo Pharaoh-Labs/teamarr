@@ -37,6 +37,26 @@ from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
 
+
+def _team_dict_is_stale(team_dict: dict | None) -> bool:
+    """A team dict is stale if it has a populated name but no short_name.
+
+    Every modern provider populates short_name (falling back to the full name
+    when no shorter form exists). A row with name set but short_name empty
+    was written before the field flowed end-to-end and should be re-fetched.
+    """
+    if not isinstance(team_dict, dict):
+        return False
+    return bool(team_dict.get("name")) and not team_dict.get("short_name")
+
+
+def _event_dict_is_stale(event_dict: dict) -> bool:
+    """Detect cached events written before short_name flowed end-to-end."""
+    return _team_dict_is_stale(event_dict.get("home_team")) or _team_dict_is_stale(
+        event_dict.get("away_team")
+    )
+
+
 # Singleton cache instance - shared across all SportsDataService instances
 # This ensures one in-memory cache with background persistence
 _shared_cache: PersistentTTLCache | None = None
@@ -138,11 +158,20 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
-            logger.debug("[CACHE_HIT] %s", cache_key)
-            try:
-                return [dict_to_event(e) for e in cached]
-            except (KeyError, TypeError) as e:
-                logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+            if isinstance(cached, list) and any(
+                _event_dict_is_stale(e) for e in cached if isinstance(e, dict)
+            ):
+                logger.debug(
+                    "[CACHE_STALE] %s — team data missing short_name, re-fetching",
+                    cache_key,
+                )
+                self._cache.delete(cache_key)
+            else:
+                logger.debug("[CACHE_HIT] %s", cache_key)
+                try:
+                    return [dict_to_event(e) for e in cached]
+                except (KeyError, TypeError) as e:
+                    logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
         # If cache_only, don't fetch from API
         if cache_only:
@@ -174,11 +203,20 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
-            logger.debug("[CACHE_HIT] %s", cache_key)
-            try:
-                return [dict_to_event(e) for e in cached]
-            except (KeyError, TypeError) as e:
-                logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+            if isinstance(cached, list) and any(
+                _event_dict_is_stale(e) for e in cached if isinstance(e, dict)
+            ):
+                logger.debug(
+                    "[CACHE_STALE] %s — team data missing short_name, re-fetching",
+                    cache_key,
+                )
+                self._cache.delete(cache_key)
+            else:
+                logger.debug("[CACHE_HIT] %s", cache_key)
+                try:
+                    return [dict_to_event(e) for e in cached]
+                except (KeyError, TypeError) as e:
+                    logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
         # Fetch from provider
         for provider in self._providers:
@@ -198,11 +236,18 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
-            logger.debug("[CACHE_HIT] %s", cache_key)
-            try:
-                return dict_to_team(cached)
-            except (KeyError, TypeError) as e:
-                logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+            if _team_dict_is_stale(cached):
+                logger.debug(
+                    "[CACHE_STALE] %s — team data missing short_name, re-fetching",
+                    cache_key,
+                )
+                self._cache.delete(cache_key)
+            else:
+                logger.debug("[CACHE_HIT] %s", cache_key)
+                try:
+                    return dict_to_team(cached)
+                except (KeyError, TypeError) as e:
+                    logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
         # Fetch from provider
         for provider in self._providers:
@@ -231,11 +276,18 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
-            logger.debug("[CACHE_HIT] %s", cache_key)
-            try:
-                return dict_to_event(cached)
-            except (KeyError, TypeError) as e:
-                logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+            if isinstance(cached, dict) and _event_dict_is_stale(cached):
+                logger.debug(
+                    "[CACHE_STALE] %s — team data missing short_name, re-fetching",
+                    cache_key,
+                )
+                self._cache.delete(cache_key)
+            else:
+                logger.debug("[CACHE_HIT] %s", cache_key)
+                try:
+                    return dict_to_event(cached)
+                except (KeyError, TypeError) as e:
+                    logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
         for provider in self._providers:
             if provider.supports_league(league):

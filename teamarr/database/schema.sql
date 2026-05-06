@@ -360,8 +360,15 @@ CREATE TABLE IF NOT EXISTS settings (
     emby_password TEXT,
     emby_api_key TEXT,
 
+    -- Jellyfin Integration (Live TV Guide Refresh)
+    jellyfin_enabled BOOLEAN DEFAULT 0,
+    jellyfin_url TEXT,
+    jellyfin_username TEXT,
+    jellyfin_password TEXT,
+    jellyfin_api_key TEXT,
+
     -- Schema Version
-    schema_version INTEGER DEFAULT 72
+    schema_version INTEGER DEFAULT 73
 );
 
 -- Insert default settings
