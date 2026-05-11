@@ -19,6 +19,7 @@ from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
+from teamarr.providers.supabase import SupabaseLeagueClient, SupabaseProvider
 from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 
 # =============================================================================
@@ -87,6 +88,13 @@ def _create_hockeytech_provider() -> HockeyTechProvider:
     )
 
 
+def _create_supabase_provider() -> SupabaseProvider:
+    """Factory for Supabase provider with injected dependencies."""
+    return SupabaseProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 def _create_mlbstats_provider() -> MLBStatsProvider:
     """Factory for MLB Stats provider with injected dependencies."""
     return MLBStatsProvider(
@@ -113,6 +121,14 @@ ProviderRegistry.register(
     provider_class=HockeyTechProvider,
     factory=_create_hockeytech_provider,
     priority=50,  # CHL leagues (OHL, WHL, QMJHL) + AHL, PWHL, USHL
+    enabled=True,
+)
+
+ProviderRegistry.register(
+    name="supabase",
+    provider_class=SupabaseProvider,
+    factory=_create_supabase_provider,
+    priority=55,  # Supabase-backed leagues (CBL, etc.)
     enabled=True,
 )
 
@@ -150,6 +166,9 @@ __all__ = [
     # MLB Stats
     "MLBStatsClient",
     "MLBStatsProvider",
+    # Supabase
+    "SupabaseLeagueClient",
+    "SupabaseProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

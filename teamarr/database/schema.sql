@@ -899,6 +899,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('college-baseball', 'espn', 'baseball/college-baseball', NULL, 'NCAA Baseball', 'baseball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/baseball.png', NULL, 1, NULL, 'ncaabb', 'team_vs_team', 'College Baseball', NULL, NULL, NULL),
     ('college-softball', 'espn', 'baseball/college-softball', NULL, 'NCAA Softball', 'softball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/softball.png', NULL, 1, NULL, 'ncaasbw', 'team_vs_team', 'College Softball', NULL, NULL, NULL),
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://a.espncdn.com/i/teamlogos/leagues/500/3454.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL, NULL),
+    ('cbl', 'supabase', 'https://cbl.ca', NULL, 'Canadian Baseball League', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Canadian_Baseball_League.svg/1280px-Canadian_Baseball_League.svg.png', NULL, 1, 'CBL', 'cbl', 'team_vs_team', NULL, NULL, NULL, NULL),
 
     -- Soccer (ESPN)
     ('usa.1', 'espn', 'soccer/usa.1', NULL, 'Major League Soccer', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/19.png', NULL, 1, 'MLS', 'mls', 'team_vs_team', 'MLS Soccer', NULL, NULL, NULL),
