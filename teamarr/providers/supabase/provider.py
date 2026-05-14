@@ -119,15 +119,48 @@ class SupabaseProvider(SportsProvider):
     # ------------------------------------------------------------------
 
     def _build_teams_by_city(self, league: str) -> dict[str, Team]:
-        """Build {city_lower: Team} map for resolving schedule entries."""
+        """Build {city_lower: Team} map for resolving schedule entries.
+
+        Two fallback layers handle common CBL data quirks:
+        - Hyphenated cities: "Chatham-Kent" also indexed as "chatham" so the
+          schedule's "Chatham" override resolves correctly.
+        - Missing city: teams with city=None are indexed by the first word of
+          their team name (e.g., "Hamilton Cardinals" → "hamilton").
+
+        Exact city matches take precedence; fallbacks only fill gaps.
+        """
         teams_data = self._client.get_teams(league)
         logo_map = self._client.get_logo_map(league)
         sport = self._client.get_sport(league)
-        result: dict[str, Team] = {}
+
+        primary: dict[str, Team] = {}   # exact city matches
+        fallback: dict[str, Team] = {}  # first-component / first-word
+
         for t in teams_data:
             team = self._parse_team(t, logo_map, league, sport)
-            if team and t.get("city"):
-                result[t["city"].lower()] = team
+            if not team:
+                continue
+
+            city = t.get("city")
+            team_name = t.get("team_name", "")
+
+            if city:
+                city_lower = city.lower()
+                primary[city_lower] = team
+                # Hyphenated cities (e.g., "Chatham-Kent") — also index by
+                # the part before the first hyphen so schedule abbreviations
+                # like "Chatham" still resolve.
+                first = city.split("-")[0].lower()
+                if first != city_lower and first not in fallback:
+                    fallback[first] = team
+            elif team_name:
+                # No city on record — use first word of team name.
+                first = team_name.split()[0].lower()
+                if first and first not in fallback:
+                    fallback[first] = team
+
+        result = fallback.copy()
+        result.update(primary)  # exact matches win
         return result
 
     def _parse_team(
