@@ -235,7 +235,7 @@ TZ_ABBREVIATION_MAP = {
     "NDT": "America/St_Johns",
     # === UTC/GMT ===
     "UTC": "UTC",
-    "GMT": "Europe/London",
+    "GMT": "UTC",
     "Z": "UTC",
     # === Europe ===
     # UK/Ireland
