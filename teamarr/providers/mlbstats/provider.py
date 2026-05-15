@@ -41,6 +41,10 @@ class MLBStatsProvider(SportsProvider):
     ):
         self._client = client or MLBStatsClient()
         self._league_mapping_source = league_mapping_source
+        # Populated by get_league_teams; used to fill in abbreviation when
+        # schedule hydration returns sparse team objects (id/name/link only).
+        self._team_abbrev_cache: dict[str, str] = {}
+        self._team_short_name_cache: dict[str, str] = {}
 
     @property
     def name(self) -> str:
@@ -150,6 +154,10 @@ class MLBStatsProvider(SportsProvider):
             team = self._parse_team(team_data, league)
             if team:
                 teams.append(team)
+                if team.abbreviation:
+                    self._team_abbrev_cache[team.id] = team.abbreviation
+                if team.short_name and team.short_name != team.name:
+                    self._team_short_name_cache[team.id] = team.short_name
 
         logger.info("[MLBSTATS] Loaded %d teams for league=%s", len(teams), league)
         return teams
@@ -169,13 +177,23 @@ class MLBStatsProvider(SportsProvider):
         location = team_data.get("locationName", "") or ""
         team_name = team_data.get("teamName", "") or ""
         full_name = team_data.get("name") or f"{location} {team_name}".strip()
-        abbrev = team_data.get("abbreviation", "") or team_name[:3].upper()
+
+        abbrev = (
+            team_data.get("abbreviation", "")
+            or self._team_abbrev_cache.get(team_id, "")
+            or team_name[:3].upper()
+        )
+        short_name = (
+            team_name
+            or self._team_short_name_cache.get(team_id, "")
+            or full_name
+        )
 
         return Team(
             id=team_id,
             provider=self.name,
             name=full_name,
-            short_name=team_name or full_name,
+            short_name=short_name,
             abbreviation=abbrev,
             league=league,
             sport="baseball",
