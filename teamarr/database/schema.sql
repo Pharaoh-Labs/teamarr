@@ -974,9 +974,26 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, 'premium'),
     ('sa20', 'tsdb', '5532', 'SA20', 'South Africa Twenty20', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/aakvuk1734183412.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, 'premium'),
 
-    -- Rugby (TSDB)
-    ('nrl', 'tsdb', '4416', 'Australian National Rugby League', 'National Rugby League', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gsztcj1552071996.png', NULL, 1, 'NRL', 'nrl', 'team_vs_team', NULL, NULL, NULL, 'premium'),
-    ('super-rugby', 'tsdb', '4551', 'Super Rugby', 'Super Rugby Pacific', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/alpxhe1675871443.png', NULL, 1, 'Super Rugby', 'super-rugby', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    -- Rugby (ESPN)
+    ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('wrwc',  'espn', 'rugby/289237',    NULL, 'Women''s Rugby World Cup',        'rugby', 'https://upload.wikimedia.org/wikipedia/commons/6/66/Rugby_World_Cup_footer_logo_%28post-2023%29.svg', NULL, 1, 'WRWC',  'wrwc',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('6n',    'espn', 'rugby/180659',    NULL, 'Six Nations',                     'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/72/Guinness_Six_Nations_logo.png', NULL, 1, '6N',    '6n',    'team_vs_team', NULL, NULL, NULL, NULL),
+    ('trc',   'espn', 'rugby/244293',    NULL, 'The Rugby Championship',          'rugby', 'https://upload.wikimedia.org/wikipedia/commons/6/69/The_Rugby_Championship_logo_%28white_background%29.png', NULL, 1, 'TRC',   'trc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('super-rugby', 'espn', 'rugby/242041', NULL, 'Super Rugby Pacific',          'rugby', 'https://upload.wikimedia.org/wikipedia/en/2/25/Super_Rugby_Pacific_logo.png', NULL, 1, 'SRP',   'srp',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('urc',   'espn', 'rugby/270557',    NULL, 'United Rugby Championship',       'rugby', 'https://upload.wikimedia.org/wikipedia/commons/d/d5/United_Rugby_Championship_logo.png', NULL, 1, 'URC',   'urc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('prem',  'espn', 'rugby/267979',    NULL, 'Gallagher Premiership',           'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/76/PREM_Rugby_logo_2025.png', NULL, 1, 'PREM',  'prem',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('top14', 'espn', 'rugby/270559',    NULL, 'French Top 14',                   'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/7d/Top_14_Logo.svg', NULL, 1, 'TOP14', 'top14', 'team_vs_team', NULL, NULL, NULL, NULL),
+    ('ercc',  'espn', 'rugby/271937',    NULL, 'European Rugby Champions Cup',    'rugby', 'https://upload.wikimedia.org/wikipedia/en/6/65/InvestecChampionsCupLogo.svg', NULL, 1, 'ERCC',  'ercc',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('epcr',  'espn', 'rugby/272073',    NULL, 'European Rugby Challenge Cup',    'rugby', 'https://upload.wikimedia.org/wikipedia/commons/1/17/EPCR_Logo.png', NULL, 1, 'EPCR',  'epcr',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('mlr',   'espn', 'rugby/289262',    NULL, 'Major League Rugby',              'rugby', 'https://upload.wikimedia.org/wikipedia/commons/b/b8/MLR_logo.png', NULL, 1, 'MLR',   'mlr',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('cc',    'espn', 'rugby/270555',    NULL, 'Currie Cup',                      'rugby', 'https://upload.wikimedia.org/wikipedia/en/b/bd/Currie_Cup_logo.svg', NULL, 1, 'CC',    'cc',    'team_vs_team', NULL, NULL, NULL, NULL),
+    ('npc',   'espn', 'rugby/270563',    NULL, 'National Provincial Championship', 'rugby', 'https://upload.wikimedia.org/wikipedia/en/8/8e/NPC-Logo_50_Years.png', NULL, 1, 'NPC',   'npc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('urba',  'espn', 'rugby/2009',      NULL, 'URBA Primera A',                  'rugby', 'https://upload.wikimedia.org/wikipedia/en/1/1f/Urba_logo.png', NULL, 1, 'URBA',  'urba',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('itm',   'espn', 'rugby/289234',    NULL, 'International Test Match',        'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/97/World_Rugby_logo.svg', NULL, 1, 'ITM',   'itm',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('lions', 'espn', 'rugby/268565',    NULL, 'British and Irish Lions Tour',    'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/93/British_%26_Irish_Lions_logo_%282023%29.svg', NULL, 1, 'Lions', 'lions', 'team_vs_team', NULL, NULL, NULL, NULL),
+    ('om7s',  'espn', 'rugby/282',       NULL, 'Olympic Men''s Rugby Sevens',     'rugby', 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Rugby_sevens_pictogram.svg', NULL, 1, 'OM7S',  'om7s',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('ow7s',  'espn', 'rugby/283',       NULL, 'Olympic Women''s Rugby Sevens',   'rugby', 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Rugby_sevens_pictogram.svg', NULL, 1, 'OW7S',  'ow7s',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('nrl',   'espn', 'rugby-league/3',  NULL, 'National Rugby League',           'rugby', 'https://upload.wikimedia.org/wikipedia/en/5/50/National_Rugby_League.svg', NULL, 1, 'NRL',   'nrl',   'team_vs_team', NULL, NULL, NULL, NULL),
 
     -- Boxing (TSDB) - Combat sport with event cards
     ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free');

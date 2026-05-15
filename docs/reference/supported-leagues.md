@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **98 pre-configured leagues** across 13 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **115 pre-configured leagues** across 13 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -259,11 +259,25 @@ Cricket leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is
 
 | League | ID | Provider |
 |--------|-----|----------|
-| National Rugby League (Australia) | `nrl` | TSDB **P** |
-| Super Rugby Pacific | `super-rugby` | TSDB **P** |
-
-{: .note }
-Rugby leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is required for full event coverage.
+| Rugby World Cup | `rwc` | ESPN |
+| Women's Rugby World Cup | `wrwc` | ESPN |
+| Six Nations | `6n` | ESPN |
+| The Rugby Championship | `trc` | ESPN |
+| Super Rugby Pacific | `super-rugby` | ESPN |
+| United Rugby Championship | `urc` | ESPN |
+| Gallagher Premiership | `prem` | ESPN |
+| French Top 14 | `top14` | ESPN |
+| European Rugby Champions Cup | `ercc` | ESPN |
+| European Rugby Challenge Cup | `epcr` | ESPN |
+| Major League Rugby | `mlr` | ESPN |
+| Currie Cup | `cc` | ESPN |
+| National Provincial Championship | `npc` | ESPN |
+| URBA Primera A | `urba` | ESPN |
+| International Test Match | `itm` | ESPN |
+| British and Irish Lions Tour | `lions` | ESPN |
+| Olympic Men's Rugby Sevens | `om7s` | ESPN |
+| Olympic Women's Rugby Sevens | `ow7s` | ESPN |
+| National Rugby League (Australia) | `nrl` | ESPN |
 
 ---
 
