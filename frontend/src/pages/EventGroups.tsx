@@ -78,6 +78,7 @@ export function EventGroups() {
 
   // Drag-and-drop state
   const [draggedGroupId, setDraggedGroupId] = useState<number | null>(null)
+  const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null)
 
   // Preview modal state
   const [previewData, setPreviewData] = useState<PreviewGroupResponse | null>(null)
@@ -318,14 +319,16 @@ export function EventGroups() {
     e.dataTransfer.setData("text/plain", String(groupId))
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, targetGroupId: number) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
+    setDragOverGroupId(targetGroupId)
   }
 
   const handleDrop = async (e: React.DragEvent, targetGroupId: number) => {
     e.preventDefault()
     setDraggedGroupId(null)
+    setDragOverGroupId(null)
 
     if (draggedGroupId === null || draggedGroupId === targetGroupId) return
 
@@ -354,6 +357,7 @@ export function EventGroups() {
 
   const handleDragEnd = () => {
     setDraggedGroupId(null)
+    setDragOverGroupId(null)
   }
 
   // Selection handlers
@@ -829,12 +833,16 @@ export function EventGroups() {
                   return (
                     <React.Fragment key={group.id}>
                       <TableRow
-                        className={`border-l-3 border-l-transparent hover:border-l-emerald-500 group/row ${
-                          draggedGroupId === group.id ? "opacity-50" : ""
+                        className={`border-l-3 group/row ${
+                          draggedGroupId === group.id
+                            ? "opacity-50 border-l-transparent"
+                            : dragOverGroupId === group.id
+                              ? "border-l-transparent border-t-2 border-t-emerald-500"
+                              : "border-l-transparent hover:border-l-emerald-500"
                         }`}
                         draggable={isDndActive}
                         onDragStart={(e) => isDndActive && handleDragStart(e, group.id)}
-                        onDragOver={(e) => isDndActive && handleDragOver(e)}
+                        onDragOver={(e) => isDndActive && handleDragOver(e, group.id)}
                         onDrop={(e) => isDndActive && handleDrop(e, group.id)}
                         onDragEnd={handleDragEnd}
                       >
@@ -903,16 +911,9 @@ export function EventGroups() {
                     {/* Matched Column with Progress Bar */}
                     <TableCell className="text-center">
                       {group.team_streams_enabled ? (
-                        // Team stream groups fan-out one stream to many events —
-                        // a match rate % is meaningless, show assignments instead
-                        <div className="flex flex-col items-center gap-0.5" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
-                          <span className="text-[0.65rem] text-muted-foreground">
-                            {group.stream_count ?? 0} streams
-                          </span>
-                          <span className="text-[0.65rem]">
-                            {group.matched_count ?? 0} assignments
-                          </span>
-                        </div>
+                        <span className="text-[0.65rem] text-muted-foreground" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
+                          {group.stream_count ?? 0} streams
+                        </span>
                       ) : group.stream_count && group.stream_count > 0 ? (
                         <div className="flex flex-col items-center gap-0.5" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
                           <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">

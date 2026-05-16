@@ -61,7 +61,7 @@ export function EventGroupForm() {
   )
 
   // Collapsible section states
-  const [basicSettingsExpanded, setBasicSettingsExpanded] = useState(false)
+  const [basicSettingsExpanded, setBasicSettingsExpanded] = useState(true)
   const [subscriptionOverrideExpanded, setSubscriptionOverrideExpanded] = useState(false)
   const [streamTimezoneExpanded, setStreamTimezoneExpanded] = useState(false)
   const [regexExpanded, setRegexExpanded] = useState(false)
