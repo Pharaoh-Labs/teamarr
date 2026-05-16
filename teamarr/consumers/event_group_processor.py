@@ -1218,6 +1218,7 @@ class EventGroupProcessor:
             custom_teams_regex=group.custom_regex_teams,
             custom_teams_enabled=group.custom_regex_teams_enabled,
             skip_builtin=group.skip_builtin_filter,
+            team_streams_enabled=group.team_streams_enabled,
         )
 
         stream_filter = StreamFilter(config)
@@ -1405,6 +1406,7 @@ class EventGroupProcessor:
             stream_timezone=group.stream_timezone,  # TZ for interpreting stream dates
             feed_home_terms=feed_home_terms,
             feed_away_terms=feed_away_terms,
+            team_streams_enabled=group.team_streams_enabled,
         )
 
         result = matcher.match_all(

@@ -90,6 +90,7 @@ class GroupCreate(BaseModel):
     custom_regex_event_name: str | None = None
     custom_regex_event_name_enabled: bool = False
     skip_builtin_filter: bool = False
+    team_streams_enabled: bool = False
     # Team filtering (canonical team selection)
     include_teams: list[TeamFilterEntry] | None = None
     exclude_teams: list[TeamFilterEntry] | None = None
@@ -144,6 +145,7 @@ class GroupUpdate(BaseModel):
     custom_regex_event_name: str | None = None
     custom_regex_event_name_enabled: bool | None = None
     skip_builtin_filter: bool | None = None
+    team_streams_enabled: bool | None = None
     # Team filtering (canonical team selection)
     include_teams: list[TeamFilterEntry] | None = None
     exclude_teams: list[TeamFilterEntry] | None = None
@@ -226,6 +228,7 @@ class GroupResponse(BaseModel):
     custom_regex_event_name: str | None = None
     custom_regex_event_name_enabled: bool = False
     skip_builtin_filter: bool = False
+    team_streams_enabled: bool = False
     # Team filtering (canonical team selection, inherited by children)
     include_teams: list[TeamFilterEntry] | None = None
     exclude_teams: list[TeamFilterEntry] | None = None
@@ -667,6 +670,7 @@ def create_group(request: GroupCreate):
             custom_regex_event_name=request.custom_regex_event_name,
             custom_regex_event_name_enabled=request.custom_regex_event_name_enabled,
             skip_builtin_filter=request.skip_builtin_filter,
+            team_streams_enabled=request.team_streams_enabled,
             include_teams=[t.model_dump() for t in request.include_teams]
             if request.include_teams is not None
             else None,
@@ -730,6 +734,7 @@ def create_group(request: GroupCreate):
         custom_regex_event_name=group.custom_regex_event_name,
         custom_regex_event_name_enabled=group.custom_regex_event_name_enabled,
         skip_builtin_filter=group.skip_builtin_filter,
+        team_streams_enabled=group.team_streams_enabled,
         include_teams=[TeamFilterEntry(**t) for t in group.include_teams]
         if group.include_teams
         else None,
@@ -1074,6 +1079,7 @@ def get_group_by_id(group_id: int):
         custom_regex_event_name=group.custom_regex_event_name,
         custom_regex_event_name_enabled=group.custom_regex_event_name_enabled,
         skip_builtin_filter=group.skip_builtin_filter,
+        team_streams_enabled=group.team_streams_enabled,
         include_teams=[TeamFilterEntry(**t) for t in group.include_teams]
         if group.include_teams
         else None,
@@ -1191,6 +1197,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 custom_regex_event_name=request.custom_regex_event_name,
                 custom_regex_event_name_enabled=request.custom_regex_event_name_enabled,
                 skip_builtin_filter=request.skip_builtin_filter,
+                team_streams_enabled=request.team_streams_enabled,
                 include_teams=[t.model_dump() for t in request.include_teams]
                 if request.include_teams is not None
                 else None,
@@ -1290,6 +1297,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         custom_regex_event_name=group.custom_regex_event_name,
         custom_regex_event_name_enabled=group.custom_regex_event_name_enabled,
         skip_builtin_filter=group.skip_builtin_filter,
+        team_streams_enabled=group.team_streams_enabled,
         include_teams=[TeamFilterEntry(**t) for t in group.include_teams]
         if group.include_teams
         else None,

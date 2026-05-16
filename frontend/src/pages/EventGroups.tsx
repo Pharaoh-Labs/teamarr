@@ -880,6 +880,16 @@ export function EventGroups() {
                                 Regex
                               </Badge>
                             )}
+                            {/* Team Streams badge */}
+                            {group.team_streams_enabled && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs"
+                                title="Team stream source: team-branded streams match events where that team plays"
+                              >
+                                Team Streams
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                     {/* Matched Column with Progress Bar */}

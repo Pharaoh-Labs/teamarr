@@ -116,6 +116,7 @@ class EventEPGGroup:
     exclude_teams: list[dict] | None = None
     team_filter_mode: str = "include"
     bypass_filter_for_playoffs: bool | None = None  # NULL=use default, True/False=override
+    team_streams_enabled: bool = False
     # Per-group subscription overrides (NULL = inherit global)
     subscription_leagues: list[str] | None = None
     subscription_soccer_mode: str | None = None
@@ -245,6 +246,9 @@ def _row_to_group(row) -> EventEPGGroup:
             if "bypass_filter_for_playoffs" in row.keys()
             and row["bypass_filter_for_playoffs"] is not None
             else None
+        ),
+        team_streams_enabled=(
+            bool(row["team_streams_enabled"]) if "team_streams_enabled" in row.keys() else False
         ),
         # Per-group subscription overrides
         subscription_leagues=(
@@ -448,6 +452,7 @@ def create_group(
     custom_regex_event_name: str | None = None,
     custom_regex_event_name_enabled: bool = False,
     skip_builtin_filter: bool = False,
+    team_streams_enabled: bool = False,
     # Team filtering
     include_teams: list[dict] | None = None,
     exclude_teams: list[dict] | None = None,
@@ -507,11 +512,11 @@ def create_group(
             custom_regex_league, custom_regex_league_enabled,
             custom_regex_fighters, custom_regex_fighters_enabled,
             custom_regex_event_name, custom_regex_event_name_enabled,
-            skip_builtin_filter,
+            skip_builtin_filter, team_streams_enabled,
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -550,6 +555,7 @@ def create_group(
             custom_regex_event_name,
             int(custom_regex_event_name_enabled),
             int(skip_builtin_filter),
+            int(team_streams_enabled),
             json.dumps(include_teams) if include_teams else None,
             json.dumps(exclude_teams) if exclude_teams else None,
             team_filter_mode,
@@ -613,6 +619,7 @@ def update_group(
     custom_regex_event_name: str | None = None,
     custom_regex_event_name_enabled: bool | None = None,
     skip_builtin_filter: bool | None = None,
+    team_streams_enabled: bool | None = None,
     # Team filtering
     include_teams: list[dict] | None = None,
     exclude_teams: list[dict] | None = None,
@@ -717,6 +724,7 @@ def update_group(
     )
     builder.set_("custom_regex_event_name_enabled", custom_regex_event_name_enabled, encoder=int)
     builder.set_("skip_builtin_filter", skip_builtin_filter, encoder=int)
+    builder.set_("team_streams_enabled", team_streams_enabled, encoder=int)
 
     # Team filtering — empty list semantics: empty list also means "clear".
     builder.set_list_or_clear("include_teams", include_teams, clear=clear_include_teams)

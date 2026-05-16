@@ -483,6 +483,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     team_filter_mode TEXT DEFAULT 'include'      -- 'include' (whitelist) or 'exclude' (blacklist)
         CHECK(team_filter_mode IN ('include', 'exclude')),
     bypass_filter_for_playoffs BOOLEAN,          -- NULL=use default, 0=disabled, 1=enabled (include all playoff games)
+    team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
 
     -- Processing Stats (updated by EPG generation)
     -- Three categories: FILTERED (pre-match), FAILED (match attempted), EXCLUDED (matched but excluded)

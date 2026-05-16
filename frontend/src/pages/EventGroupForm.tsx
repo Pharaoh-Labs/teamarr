@@ -162,6 +162,7 @@ export function EventGroupForm() {
         custom_regex_event_name: group.custom_regex_event_name,
         custom_regex_event_name_enabled: group.custom_regex_event_name_enabled,
         skip_builtin_filter: group.skip_builtin_filter,
+        team_streams_enabled: group.team_streams_enabled,
         // Team filtering
         include_teams: group.include_teams,
         exclude_teams: group.exclude_teams,
@@ -380,6 +381,19 @@ export function EventGroupForm() {
                   onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked })}
                 />
                 <Label className="font-normal">Enabled</Label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formData.team_streams_enabled || false}
+                  onCheckedChange={(checked) => setFormData({ ...formData, team_streams_enabled: checked })}
+                />
+                <div>
+                  <Label className="font-normal">Team stream source</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays.
+                  </p>
+                </div>
               </div>
             </CardContent>}
           </Card>}

@@ -19,6 +19,16 @@ from teamarr.services.detection_keywords import DetectionKeywordService
 
 logger = logging.getLogger(__name__)
 
+
+def _has_league_hint(stream_name: str) -> bool:
+    """Return True if the stream name contains a recognisable league hint.
+
+    Used to identify potential TEAM_ONLY candidates (e.g. "NHL | Toronto Maple
+    Leafs") before the full classifier runs, so they can pass the not_event
+    filter when team_streams_enabled is active.
+    """
+    return DetectionKeywordService.detect_league(stream_name) is not None
+
 # Try to import 'regex' module which supports advanced features
 try:
     import regex
@@ -178,6 +188,9 @@ class StreamFilterConfig:
     # Inclusion filter: only process streams that look like events (vs, @, date/time)
     # Disabled by default - rely on matching to filter non-events
     require_event_pattern: bool = False
+    # Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to pass the
+    # not_event filter so the classifier can identify them as TEAM_ONLY.
+    team_streams_enabled: bool = False
 
 
 @dataclass
@@ -341,10 +354,15 @@ class StreamFilter:
                     continue
 
                 # 2c. Event pattern filter: stream must look like an event (vs, @, date/time)
+                # Exception: when team_streams_enabled, streams with a league hint are
+                # passed through so the classifier can identify them as TEAM_ONLY.
                 if self._event_pattern:
                     if not self._event_pattern.search(name):
-                        result.filtered_not_event += 1
-                        continue
+                        if self.config.team_streams_enabled and _has_league_hint(name):
+                            pass  # Potential TEAM_ONLY candidate — let classifier decide
+                        else:
+                            result.filtered_not_event += 1
+                            continue
 
             # 3. Include filter: stream must match (user-defined, always applies if enabled)
             if self._include_pattern:

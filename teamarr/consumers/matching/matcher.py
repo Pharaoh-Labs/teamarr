@@ -192,6 +192,7 @@ class StreamMatcher:
         stream_timezone: str | None = None,
         feed_home_terms: list[str] | None = None,
         feed_away_terms: list[str] | None = None,
+        team_streams_enabled: bool = False,
     ):
         """Initialize the matcher.
 
@@ -281,6 +282,7 @@ class StreamMatcher:
         # Feed separation terms
         self._feed_home_terms = feed_home_terms
         self._feed_away_terms = feed_away_terms
+        self._team_streams_enabled = team_streams_enabled
 
         # Initialize cache
         self._cache = StreamMatchCache(db_factory)
@@ -355,23 +357,26 @@ class StreamMatcher:
             stream_id = stream.get("id", 0)
             stream_name = stream.get("name", "")
 
-            match_result = self._match_single(
+            match_results = self._match_single(
                 stream_id=stream_id,
                 stream_name=stream_name,
                 target_date=target_date,
             )
 
-            # Track cache stats
-            if match_result.from_cache:
-                result.cache_hits += 1
-            else:
-                result.cache_misses += 1
+            # Track cache stats and accumulate (TEAM_ONLY may return multiple results)
+            any_matched = False
+            for match_result in match_results:
+                if match_result.from_cache:
+                    result.cache_hits += 1
+                else:
+                    result.cache_misses += 1
+                result.results.append(match_result)
+                if match_result.matched:
+                    any_matched = True
 
-            result.results.append(match_result)
-
-            # Report per-stream progress
+            # Report per-stream progress (report once per source stream)
             if progress_callback:
-                progress_callback(idx, total_streams, stream_name, match_result.matched)
+                progress_callback(idx, total_streams, stream_name, any_matched)
 
         logger.info(
             "[COMPLETED] Stream matching: %d/%d matched (%d included), cache_hit_rate=%.1f%%",
@@ -496,8 +501,9 @@ class StreamMatcher:
         stream_id: int,
         stream_name: str,
         target_date: date,
-    ) -> MatchedStreamResult:
-        """Match a single stream."""
+    ) -> list[MatchedStreamResult]:
+        """Match a single stream. Returns a list — usually one element, but TEAM_ONLY
+        streams can fan out to multiple results (one per matched event)."""
         # Step 1: Classify the stream
         # Determine event type from configured leagues
         league_event_type = self._get_dominant_event_type()
@@ -513,14 +519,14 @@ class StreamMatcher:
         # This handles streams that passed filtering but still can't be classified
         # (e.g., no separator found, no custom regex match).
         if classified.category == StreamCategory.PLACEHOLDER:
-            return MatchedStreamResult(
+            return [MatchedStreamResult(
                 stream_name=stream_name,
                 stream_id=stream_id,
                 matched=False,
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="unclassifiable",
-            )
+            )]
 
         # Step 3: Route to appropriate matcher based on category
         if classified.category == StreamCategory.EVENT_CARD:
@@ -529,20 +535,51 @@ class StreamMatcher:
                 stream_id=stream_id,
                 target_date=target_date,
             )
-        else:  # TEAM_VS_TEAM
-            outcome = self._match_team_vs_team(
+            return [self._outcome_to_result(
+                outcome=outcome,
+                stream_id=stream_id,
+                stream_name=stream_name,
+                classified=classified,
+            )]
+
+        if classified.category == StreamCategory.TEAM_ONLY and not self._team_streams_enabled:
+            return [MatchedStreamResult(
+                stream_name=stream_name,
+                stream_id=stream_id,
+                matched=False,
+                included=False,
+                category=StreamCategory.PLACEHOLDER,
+                exclusion_reason="team_streams_disabled",
+            )]
+
+        if classified.category == StreamCategory.TEAM_ONLY:
+            outcomes = self._match_team_only(
                 classified=classified,
                 stream_id=stream_id,
                 target_date=target_date,
             )
+            return [
+                self._outcome_to_result(
+                    outcome=o,
+                    stream_id=stream_id,
+                    stream_name=stream_name,
+                    classified=classified,
+                )
+                for o in outcomes
+            ]
 
-        # Step 4: Convert outcome to result
-        return self._outcome_to_result(
+        # TEAM_VS_TEAM
+        outcome = self._match_team_vs_team(
+            classified=classified,
+            stream_id=stream_id,
+            target_date=target_date,
+        )
+        return [self._outcome_to_result(
             outcome=outcome,
             stream_id=stream_id,
             stream_name=stream_name,
             classified=classified,
-        )
+        )]
 
     def _match_team_vs_team(
         self,
@@ -587,6 +624,33 @@ class StreamMatcher:
                 prefetched_events=self._prefetched_events,
                 stream_tz=stream_tz,
             )
+
+    def _match_team_only(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        target_date: date,
+    ) -> list[MatchOutcome]:
+        """Match a single-team branded stream, returning one outcome per matched event."""
+        stream_tz = self._stream_tz
+        if classified.normalized.extracted_tz:
+            try:
+                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
+            except (KeyError, ValueError):
+                pass
+
+        return self._team_matcher.match_team_only(
+            classified=classified,
+            enabled_leagues=list(self._include_leagues),
+            target_date=target_date,
+            group_id=self._group_id,
+            stream_id=stream_id,
+            generation=self._generation,
+            user_tz=self._user_tz,
+            sport_durations=self._sport_durations,
+            prefetched_events=self._prefetched_events,
+            stream_tz=stream_tz,
+        )
 
     def _match_event_card(
         self,

@@ -369,6 +369,149 @@ class TeamMatcher:
 
         return result
 
+    def match_team_only(
+        self,
+        classified: ClassifiedStream,
+        enabled_leagues: list[str],
+        target_date: date,
+        group_id: int,
+        stream_id: int,
+        generation: int,
+        user_tz: ZoneInfo,
+        sport_durations: dict[str, float] | None = None,
+        prefetched_events: dict[str, list[Event]] | None = None,
+        stream_tz: ZoneInfo | None = None,
+    ) -> list[MatchOutcome]:
+        """Match a single-team branded stream (TEAM_ONLY) to all its events in the window.
+
+        Unlike TEAM_VS_TEAM, the stream carries one team's brand (e.g.
+        "NHL | Toronto Maple Leafs") and should be added to every event where
+        that team plays within the date window. Returns one MatchOutcome per
+        matched event so the caller can fan out to multiple channels.
+
+        Args:
+            classified: Pre-classified stream (category must be TEAM_ONLY)
+            enabled_leagues: League codes subscribed for this group
+            target_date: Date to anchor the search window
+            group_id: Event group ID (for caching)
+            stream_id: Stream ID (for caching)
+            generation: Cache generation counter
+            user_tz: User timezone for date validation
+            sport_durations: Sport duration settings
+            prefetched_events: Optional pre-fetched events by league
+            stream_tz: Timezone for interpreting stream dates
+
+        Returns:
+            List of MatchOutcome — one per matched event, or a single
+            filtered/failed outcome if nothing matched.
+        """
+        if classified.category != StreamCategory.TEAM_ONLY:
+            return [MatchOutcome.filtered(
+                FilteredReason.NOT_EVENT,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+            )]
+
+        stream_name = classified.normalized.original
+
+        # Narrow search by league hint (same logic as match_multi_league)
+        league_hint = classified.league_hint
+        if league_hint:
+            hint_leagues = [league_hint] if isinstance(league_hint, str) else league_hint
+            valid_leagues = [lg for lg in hint_leagues if lg in enabled_leagues]
+            if not valid_leagues:
+                hint_display = (
+                    league_hint if isinstance(league_hint, str) else ", ".join(league_hint)
+                )
+                return [MatchOutcome.filtered(
+                    FilteredReason.LEAGUE_NOT_INCLUDED,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=f"League '{hint_display}' not in enabled leagues",
+                )]
+            leagues_to_search = valid_leagues
+        else:
+            leagues_to_search = enabled_leagues
+
+        # Narrow date window to ±2 days to minimise false positives.
+        window_days = 2
+        all_events: list[tuple[str, Event]] = []
+        if prefetched_events:
+            for league in leagues_to_search:
+                for event in prefetched_events.get(league, []):
+                    event_date = event.start_time.astimezone(user_tz).date()
+                    if abs((event_date - target_date).days) <= window_days:
+                        all_events.append((league, event))
+        else:
+            is_tsdb_map = {
+                lg: self._service.get_provider_name(lg) == "tsdb"
+                for lg in leagues_to_search
+            }
+            for league in leagues_to_search:
+                for offset in range(-window_days, window_days + 1):
+                    fetch_date = target_date + timedelta(days=offset)
+                    cache_only = is_tsdb_map[league] or offset < 0
+                    events = self._service.get_events(league, fetch_date, cache_only=cache_only)
+                    for event in events:
+                        all_events.append((league, event))
+
+        if not all_events:
+            return [MatchOutcome.failed(
+                FailedReason.NO_EVENT_FOUND,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail=f"No events in window ±{window_days}d for {target_date}",
+                parsed_team1=classified.team1,
+            )]
+
+        team_norm = normalize_for_matching(classified.team1) if classified.team1 else None
+        if not team_norm:
+            return [MatchOutcome.failed(
+                FailedReason.TEAMS_NOT_PARSED,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail="No team candidate extracted",
+            )]
+
+        matched_outcomes: list[MatchOutcome] = []
+        seen_event_ids: set[str] = set()
+
+        for league, event in all_events:
+            if event.id in seen_event_ids:
+                continue
+            score, _side = self._score_single_team_against_event(team_norm, event)
+            if score is None:
+                continue
+            seen_event_ids.add(event.id)
+            logger.debug(
+                "[TEAM_ONLY] Matched: stream_id=%d team='%s' event=%s league=%s conf=%.0f%%",
+                stream_id,
+                classified.team1,
+                event.id,
+                league,
+                score,
+            )
+            matched_outcomes.append(MatchOutcome.matched(
+                MatchMethod.FUZZY,
+                event,
+                detected_league=league,
+                confidence=score / 100.0,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                parsed_team1=classified.team1,
+            ))
+
+        if matched_outcomes:
+            return matched_outcomes
+
+        return [MatchOutcome.failed(
+            FailedReason.NO_EVENT_FOUND,
+            stream_name=stream_name,
+            stream_id=stream_id,
+            detail=f"No event found for team '{classified.team1}'",
+            parsed_team1=classified.team1,
+        )]
+
     # =========================================================================
     # PRIVATE METHODS
     # =========================================================================
@@ -983,6 +1126,42 @@ class TeamMatcher:
             return None
 
         return None
+
+    def _score_single_team_against_event(
+        self,
+        team_norm: str,
+        event: "Event",
+    ) -> tuple[float, str] | tuple[None, None]:
+        """Score a single team name against an event's home and away teams.
+
+        For TEAM_ONLY streams. Returns the best score and which side matched,
+        but only when the team clearly matches ONE side and not the other.
+        This guards against the (practically impossible) case where the same
+        team name scores high on both sides of an event.
+
+        Args:
+            team_norm: Normalized candidate team name from the stream
+            event: Event to match against
+
+        Returns:
+            (score, side) where side is "home" or "away", or (None, None)
+        """
+        home_norm = normalize_text(event.home_team.name)
+        away_norm = normalize_text(event.away_team.name)
+
+        home_score = fuzz.token_set_ratio(team_norm, home_norm)
+        away_score = fuzz.token_set_ratio(team_norm, away_norm)
+
+        home_matches = home_score >= HIGH_CONFIDENCE_THRESHOLD
+        away_matches = away_score >= HIGH_CONFIDENCE_THRESHOLD
+
+        # Require exactly one side to match (not both)
+        if home_matches and not away_matches:
+            return home_score, "home"
+        if away_matches and not home_matches:
+            return away_score, "away"
+
+        return None, None
 
     def _resolve_alias(self, team_name: str, league: str | None) -> str | None:
         """Resolve a team name to its canonical form via alias lookup.
