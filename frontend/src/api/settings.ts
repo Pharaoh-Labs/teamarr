@@ -130,7 +130,7 @@ export interface ChannelNumberingSettingsUpdate {
 }
 
 export interface StreamOrderingRule {
-  type: "m3u" | "group" | "regex"
+  type: "m3u" | "group" | "regex" | "stream_type"
   value: string
   priority: number  // 1-99, lower = higher priority
 }

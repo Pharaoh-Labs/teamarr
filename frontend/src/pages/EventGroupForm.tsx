@@ -391,7 +391,7 @@ export function EventGroupForm() {
                 <div>
                   <Label className="font-normal">Team stream source</Label>
                   <p className="text-xs text-muted-foreground">
-                    Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays.
+                    Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
                   </p>
                 </div>
               </div>

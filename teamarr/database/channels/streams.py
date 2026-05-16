@@ -45,6 +45,7 @@ def add_stream_to_channel(
         "m3u_account_id",
         "m3u_account_name",
         "exception_keyword",
+        "match_type",
     ]
 
     for field_name in allowed_fields:

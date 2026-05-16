@@ -117,6 +117,7 @@ class ManagedChannelStream:
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
     exception_keyword: str | None = None
+    match_type: str = "event"
     added_at: datetime | None = None
     removed_at: datetime | None = None
 
@@ -134,6 +135,7 @@ class ManagedChannelStream:
             m3u_account_id=row.get("m3u_account_id"),
             m3u_account_name=row.get("m3u_account_name"),
             exception_keyword=row.get("exception_keyword"),
+            match_type=row.get("match_type", "event"),
             added_at=row.get("added_at"),
             removed_at=row.get("removed_at"),
         )

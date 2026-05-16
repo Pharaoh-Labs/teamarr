@@ -21,14 +21,20 @@ const RULE_TYPES = [
   { value: "m3u", label: "M3U Account", description: "Match streams by M3U account name" },
   { value: "group", label: "Event Group", description: "Match streams by event group name" },
   { value: "regex", label: "Regex Pattern", description: "Match streams by regex against stream name" },
+  { value: "stream_type", label: "Stream Type", description: "Match by stream type: event stream or team stream" },
 ] as const
+
+const STREAM_TYPE_OPTIONS = [
+  { value: "event", label: "Event stream" },
+  { value: "team", label: "Team stream" },
+]
 
 interface RuleFormData {
   // Stable client-side id so rows keep their identity across re-sorts.
   // Without this, keying by array index causes focus to follow DOM position
   // instead of the rule, breaking double-digit priority entry (#198).
   _id: number
-  type: "m3u" | "group" | "regex"
+  type: "m3u" | "group" | "regex" | "stream_type"
   value: string
   priority: number
 }
@@ -130,6 +136,16 @@ function RuleRow({
               <option value="">Select event group...</option>
               {groupNames.map(name => (
                 <option key={name} value={name}>{name}</option>
+              ))}
+            </Select>
+          ) : rule.type === "stream_type" ? (
+            <Select
+              value={rule.value}
+              onChange={(e) => onUpdate(index, { ...rule, value: e.target.value })}
+            >
+              <option value="">Select stream type...</option>
+              {STREAM_TYPE_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </Select>
           ) : (

@@ -568,6 +568,9 @@ class ChannelLifecycleService:
                         feed_team = matched.get("feed_team")
                         feed_team_id = feed_team.id if feed_team else None
 
+                        # Stream type tag ('event' or 'team') for ordering rules
+                        match_type = matched.get("match_type", "event")
+
                         # Check if event should be excluded based on timing
                         logger.debug(
                             "[LIFECYCLE] Checking stream '%s' for event %s (status=%s)",
@@ -648,6 +651,7 @@ class ChannelLifecycleService:
                                 group_config=group_config,
                                 template=event_template,
                                 segment=segment,
+                                match_type=match_type,
                             )
                             # None means Dispatcharr channel missing - fall through to create new
                             if channel_result is not None:
@@ -724,6 +728,7 @@ class ChannelLifecycleService:
                             feed_team_id=feed_team_id,
                             feed_team=feed_team,
                             feed_label_style=feed_label_style,
+                            match_type=match_type,
                         )
 
                         if channel_result.success:
@@ -827,6 +832,7 @@ class ChannelLifecycleService:
         group_config: dict,
         template: dict | None,
         segment: str | None = None,
+        match_type: str = "event",
     ) -> StreamProcessResult | None:
         """Handle an existing channel based on duplicate mode.
 
@@ -925,6 +931,7 @@ class ChannelLifecycleService:
                     m3u_account_id=stream.get("m3u_account_id"),
                     m3u_account_name=m3u_account_name,
                     source_group_id=source_group_id,
+                    match_type=match_type,
                 )
 
                 # Sync with Dispatcharr - use ordered stream list to respect rules
@@ -1037,6 +1044,7 @@ class ChannelLifecycleService:
         feed_team_id: str | None = None,
         feed_team=None,
         feed_label_style: str | None = None,
+        match_type: str = "event",
     ) -> ChannelCreationResult:
         """Create a new channel in DB and Dispatcharr.
 
@@ -1198,6 +1206,7 @@ class ChannelLifecycleService:
                 m3u_account_id=stream.get("m3u_account_id"),
                 m3u_account_name=group_config.get("m3u_account_name"),
                 source_group_id=group_id,
+                match_type=match_type,
             )
 
             # Commit immediately so next channel number query sees this channel

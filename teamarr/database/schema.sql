@@ -1245,6 +1245,8 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     source_group_id INTEGER,                 -- Which M3U group provided this stream
     source_group_type TEXT DEFAULT 'parent'  -- 'parent', 'child', 'cross_group'
         CHECK(source_group_type IN ('parent', 'child', 'cross_group')),
+    match_type TEXT DEFAULT 'event'          -- 'event' (TEAM_VS_TEAM) or 'team' (TEAM_ONLY)
+        CHECK(match_type IN ('event', 'team')),
 
     -- Priority (0 = primary, higher = failover)
     priority INTEGER DEFAULT 0,

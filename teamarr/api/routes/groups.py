@@ -568,6 +568,7 @@ def list_groups(
                 custom_regex_event_name=g.custom_regex_event_name,
                 custom_regex_event_name_enabled=g.custom_regex_event_name_enabled,
                 skip_builtin_filter=g.skip_builtin_filter,
+                team_streams_enabled=g.team_streams_enabled,
                 include_teams=[TeamFilterEntry(**t) for t in g.include_teams]
                 if g.include_teams
                 else None,

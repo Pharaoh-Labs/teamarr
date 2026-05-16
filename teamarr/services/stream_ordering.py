@@ -147,6 +147,8 @@ class StreamOrderingService:
             return self._match_group(stream, rule.value, source_group_name)
         elif rule.type == "regex":
             return self._match_regex(stream, rule.value)
+        elif rule.type == "stream_type":
+            return stream.match_type == rule.value
         return False
 
     def _match_m3u(self, stream: ManagedChannelStream, account_name: str) -> bool:
