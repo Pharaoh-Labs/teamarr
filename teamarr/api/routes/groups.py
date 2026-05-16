@@ -316,6 +316,7 @@ class BulkGroupSettings(BaseModel):
     channel_sort_order: str = "time"
     overlap_handling: str = "add_stream"
     enabled: bool = True
+    team_streams_enabled: bool = False
 
 
 class BulkGroupCreateRequest(BaseModel):
@@ -363,6 +364,7 @@ class BulkGroupUpdateRequest(BaseModel):
     channel_sort_order: str | None = None
     overlap_handling: str | None = None
     enabled: bool | None = None
+    team_streams_enabled: bool | None = None
 
     # Team filtering
     include_teams: list[TeamFilterEntry] | None = None
@@ -829,6 +831,7 @@ def create_groups_bulk(request: BulkGroupCreateRequest):
                     m3u_account_id=item.m3u_account_id,
                     m3u_account_name=item.m3u_account_name,
                     enabled=request.settings.enabled,
+                    team_streams_enabled=request.settings.team_streams_enabled,
                 )
 
                 results.append(
@@ -914,6 +917,7 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                     channel_sort_order=request.channel_sort_order,
                     overlap_handling=request.overlap_handling,
                     enabled=request.enabled,
+                    team_streams_enabled=request.team_streams_enabled,
                     clear_stream_timezone=request.clear_stream_timezone,
                     clear_soccer_mode=request.clear_soccer_mode,
                     clear_soccer_followed_teams=request.clear_soccer_followed_teams,

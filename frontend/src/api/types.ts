@@ -172,6 +172,7 @@ export interface BulkGroupUpdateRequest {
   leagues?: string[]
   stream_timezone?: string | null  // IANA timezone for interpreting stream dates
   clear_stream_timezone?: boolean
+  team_streams_enabled?: boolean | null
   // Team filtering
   include_teams?: TeamFilterEntry[] | null
   exclude_teams?: TeamFilterEntry[] | null

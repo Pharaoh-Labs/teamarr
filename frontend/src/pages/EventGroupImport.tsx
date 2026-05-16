@@ -92,6 +92,7 @@ export function EventGroupImport() {
   const [showBulkModal, setShowBulkModal] = useState(false)
   const [bulkStreamTimezone, setBulkStreamTimezone] = useState<string | null>(null)
   const [bulkEnabled, setBulkEnabled] = useState(true)
+  const [bulkTeamStreams, setBulkTeamStreams] = useState(false)
   const [bulkImporting, setBulkImporting] = useState(false)
 
   // Queries
@@ -222,6 +223,7 @@ export function EventGroupImport() {
         settings: {
           stream_timezone: bulkStreamTimezone,
           enabled: bulkEnabled,
+          team_streams_enabled: bulkTeamStreams,
         },
       })
 
@@ -588,6 +590,18 @@ export function EventGroupImport() {
                       onCheckedChange={setBulkEnabled}
                     />
                     <span className="text-sm">{bulkEnabled ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Team stream source</Label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Switch
+                      checked={bulkTeamStreams}
+                      onCheckedChange={setBulkTeamStreams}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {bulkTeamStreams ? "Enabled" : "Disabled"}
+                    </span>
                   </div>
                 </div>
               </div>

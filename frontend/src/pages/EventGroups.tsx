@@ -107,6 +107,8 @@ export function EventGroups() {
   const [bulkEditTeamFilterMode, setBulkEditTeamFilterMode] = useState<"include" | "exclude">("include")
   const [bulkEditTeamFilterTeams, setBulkEditTeamFilterTeams] = useState<TeamFilterEntry[]>([])
   const [bulkEditBypassPlayoffs, setBulkEditBypassPlayoffs] = useState(false)
+  const [bulkEditTeamStreamsEnabled, setBulkEditTeamStreamsEnabled] = useState(false)
+  const [bulkEditTeamStreams, setBulkEditTeamStreams] = useState(false)
   // Column sorting state
   type SortColumn = "name" | "matched" | "status" | null
   type SortDirection = "asc" | "desc"
@@ -416,6 +418,8 @@ export function EventGroups() {
     setBulkEditTeamFilterMode("include")
     setBulkEditTeamFilterTeams([])
     setBulkEditBypassPlayoffs(false)
+    setBulkEditTeamStreamsEnabled(false)
+    setBulkEditTeamStreams(false)
   }
 
   const handleBulkEdit = async () => {
@@ -430,6 +434,10 @@ export function EventGroups() {
       } else if (bulkEditStreamTimezone) {
         request.stream_timezone = bulkEditStreamTimezone
       }
+    }
+
+    if (bulkEditTeamStreamsEnabled) {
+      request.team_streams_enabled = bulkEditTeamStreams
     }
 
     if (bulkEditTeamFilterEnabled) {
@@ -894,7 +902,18 @@ export function EventGroups() {
                         </TableCell>
                     {/* Matched Column with Progress Bar */}
                     <TableCell className="text-center">
-                      {group.stream_count && group.stream_count > 0 ? (
+                      {group.team_streams_enabled ? (
+                        // Team stream groups fan-out one stream to many events —
+                        // a match rate % is meaningless, show assignments instead
+                        <div className="flex flex-col items-center gap-0.5" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
+                          <span className="text-[0.65rem] text-muted-foreground">
+                            {group.stream_count ?? 0} streams
+                          </span>
+                          <span className="text-[0.65rem]">
+                            {group.matched_count ?? 0} assignments
+                          </span>
+                        </div>
+                      ) : group.stream_count && group.stream_count > 0 ? (
                         <div className="flex flex-col items-center gap-0.5" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
                           <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
                             <div
@@ -1211,6 +1230,28 @@ export function EventGroups() {
               )}
             </div>
 
+            {/* Team Stream Source */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={bulkEditTeamStreamsEnabled}
+                  onCheckedChange={(checked) => setBulkEditTeamStreamsEnabled(!!checked)}
+                />
+                <span className="text-sm font-medium">Team stream source</span>
+              </label>
+              {bulkEditTeamStreamsEnabled && (
+                <div className="flex items-center gap-3 pl-6">
+                  <Switch
+                    checked={bulkEditTeamStreams}
+                    onCheckedChange={setBulkEditTeamStreams}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {bulkEditTeamStreams ? "Enabled — team-branded streams will match events where that team plays" : "Disabled"}
+                  </span>
+                </div>
+              )}
+            </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowBulkEdit(false)}>
@@ -1218,7 +1259,7 @@ export function EventGroups() {
             </Button>
             <Button
               onClick={handleBulkEdit}
-              disabled={bulkUpdateMutation.isPending || !(bulkEditStreamTimezoneEnabled || bulkEditTeamFilterEnabled)}
+              disabled={bulkUpdateMutation.isPending || !(bulkEditStreamTimezoneEnabled || bulkEditTeamFilterEnabled || bulkEditTeamStreamsEnabled)}
             >
               {bulkUpdateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Apply to {selectedIds.size} groups
