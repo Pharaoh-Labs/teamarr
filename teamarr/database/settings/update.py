@@ -534,7 +534,7 @@ def update_stream_ordering_rules(
     from .types import StreamOrderingRule as RuleType
 
     # Validate rules structure
-    valid_types = {"m3u", "group", "regex"}
+    valid_types = {"m3u", "group", "regex", "stream_type"}
     validated_rules = []
 
     for rule in rules:
