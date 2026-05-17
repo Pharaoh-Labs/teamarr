@@ -1607,6 +1607,7 @@ class TeamMatcher:
                 status=status,
                 league=cached_data.get("league", ""),
                 sport=cached_data.get("sport", ""),
+                season_type=cached_data.get("season_type"),
                 venue=venue,
                 broadcasts=broadcasts,
                 segment_times=segment_times,
