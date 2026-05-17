@@ -18,6 +18,7 @@ from teamarr.api.routes import (
     detection_keywords,
     dispatcharr,
     epg,
+    epg_sources,
     groups,
     health,
     keywords,
@@ -268,6 +269,13 @@ async def lifespan(app: FastAPI):
     # Initialize database (fast)
     init_db()
 
+    # Initialize EPG sources database (separate DB for upstream compatibility)
+    try:
+        from teamarr.database.epg_sources import init_epg_sources_db
+        init_epg_sources_db()
+    except Exception as e:
+        logger.warning("[STARTUP] EPG sources DB init failed: %s", e)
+
     # Cleanup any stuck processing runs from previous crashes
     from teamarr.database.stats import cleanup_stuck_runs
 
@@ -330,6 +338,9 @@ def create_app() -> FastAPI:
     app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
     app.include_router(subscription.router, prefix="/api/v1", tags=["Subscription"])
     app.include_router(detection_keywords.router, tags=["Detection Keywords"])
+    app.include_router(
+        epg_sources.router, prefix="/api/v1/epg-sources", tags=["EPG Sources"]
+    )
 
     # Serve React UI static files
     frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"

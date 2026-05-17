@@ -62,6 +62,7 @@ class GenerationResult:
     jellyfin_refresh: dict = field(default_factory=dict)
     channelsdvr_refresh: dict = field(default_factory=dict)
     channelsdvr_epg_refresh: dict = field(default_factory=dict)
+    epg_sources: dict = field(default_factory=dict)
 
     # For stats run tracking
     run_id: int | None = None
@@ -324,6 +325,12 @@ def run_full_generation(
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes
         result.programmes_total = result.teams_programmes + result.groups_programmes
+
+        # Step 3a: Process external EPG sources (if configured)
+        check_cancelled()
+        result.epg_sources = _process_epg_sources(
+            db_factory, dispatcharr_client, shared_service, update_progress
+        )
 
         # Step 3b: Global channel reassignment (if enabled)
         check_cancelled()
@@ -658,6 +665,48 @@ def run_full_generation(
         _generation_lock.release()
 
     return result
+
+
+def _process_epg_sources(
+    db_factory: Callable[[], Any],
+    dispatcharr_client: Any,
+    service: Any,
+    update_progress: Callable,
+) -> dict:
+    """Process external EPG sources if configured."""
+    from teamarr.database.epg_sources.connection import DEFAULT_DB_PATH
+
+    if not DEFAULT_DB_PATH.exists():
+        return {}
+
+    try:
+        update_progress("epg_sources", 92, "Processing external EPG sources...")
+        from teamarr.consumers.epg_source_processor import EPGSourceProcessor
+
+        processor = EPGSourceProcessor(db_factory, service, dispatcharr_client)
+        result = processor.process_all()
+
+        summary = {
+            "sources_processed": result.sources_processed,
+            "mappings_processed": result.mappings_processed,
+            "programmes_scanned": result.programmes_scanned,
+            "programmes_matched": result.programmes_matched,
+            "channels_created": result.channels_created,
+            "errors": result.errors,
+        }
+
+        if result.sources_processed > 0:
+            logger.info(
+                "[GENERATION] EPG sources: %d sources, %d mappings, %d matches",
+                result.sources_processed,
+                result.mappings_processed,
+                result.programmes_matched,
+            )
+
+        return summary
+    except Exception as e:
+        logger.warning("[GENERATION] EPG source processing failed: %s", e)
+        return {"error": str(e)}
 
 
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:

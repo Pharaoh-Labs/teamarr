@@ -14,6 +14,7 @@ import {
   EventGroupForm,
   EventGroupImport,
   EPG,
+  EPGSources,
   Channels,
   Settings,
 } from "@/pages"
@@ -46,6 +47,7 @@ function AppContent() {
             <Route path="event-groups/import" element={<EventGroupImport />} />
             <Route path="detection-library" element={<DetectionLibrary />} />
             <Route path="epg" element={<EPG />} />
+            <Route path="epg-sources" element={<EPGSources />} />
             <Route path="channels" element={<Channels />} />
             <Route path="settings" element={<Settings />} />
           </Route>

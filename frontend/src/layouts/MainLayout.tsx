@@ -7,6 +7,7 @@ import {
   Users,
   Layers,
   CalendarDays,
+  Satellite,
   Tv,
   Settings,
 } from "lucide-react"
@@ -22,6 +23,7 @@ const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/teams", label: "Teams", icon: Users },
   { to: "/event-groups", label: "Event Groups", icon: Layers },
   { to: "/epg", label: "EPG", icon: CalendarDays },
+  { to: "/epg-sources", label: "EPG Sources", icon: Satellite },
   { to: "/channels", label: "Channels", icon: Tv },
   { to: "/settings", label: "Settings", icon: Settings },
 ]
