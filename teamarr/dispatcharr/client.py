@@ -363,11 +363,15 @@ class DispatcharrClient:
             }
 
     def close(self) -> None:
-        """Close HTTP client and clear auth."""
+        """Close HTTP client.
+
+        Auth tokens are shared across DispatcharrClient instances by TokenManager.
+        Closing a short-lived client must not clear the shared token because
+        concurrent API requests may be using it.
+        """
         if self._client:
             self._client.close()
             self._client = None
-        self._auth.clear()
 
     def __enter__(self) -> "DispatcharrClient":
         """Context manager entry."""
