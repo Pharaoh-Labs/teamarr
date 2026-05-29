@@ -50,6 +50,29 @@ class StreamOrderingService:
         self.conn = conn
         self._compiled_regex: dict[str, re.Pattern] = {}
         self._group_name_cache: dict[int, str] = {}
+        # Keyed by rule.value string so different team selections cache separately
+        self._team_feed_patterns: dict[str, re.Pattern | None] = {}
+        # Keyed by sorted comma-joined keys for simple team-presence patterns
+        self._team_presence_patterns: dict[str, re.Pattern | None] = {}
+
+    def _find_matching_rule(
+        self,
+        stream: ManagedChannelStream,
+        source_group_name: str | None,
+    ) -> tuple[StreamOrderingRule | None, int]:
+        """Return (matched_rule_or_None, catch_all_priority).
+
+        Iterates rules in priority order, skipping catch_all (which sets the
+        fallback rather than acting as a matcher).
+        """
+        catch_all_priority = NO_MATCH_PRIORITY
+        for rule in self.rules:
+            if rule.type == "catch_all":
+                catch_all_priority = rule.priority
+                continue
+            if self._matches(stream, rule, source_group_name):
+                return rule, catch_all_priority
+        return None, catch_all_priority
 
     def compute_priority(
         self,
@@ -65,10 +88,8 @@ class StreamOrderingService:
         Returns:
             Priority number (lower = higher priority)
         """
-        for rule in self.rules:
-            if self._matches(stream, rule, source_group_name):
-                return rule.priority
-        return NO_MATCH_PRIORITY
+        matched_rule, catch_all_priority = self._find_matching_rule(stream, source_group_name)
+        return matched_rule.priority if matched_rule else catch_all_priority
 
     def compute_priority_with_details(
         self,
@@ -84,17 +105,17 @@ class StreamOrderingService:
         Returns:
             StreamWithPriority with computed priority and match info
         """
-        for rule in self.rules:
-            if self._matches(stream, rule, source_group_name):
-                return StreamWithPriority(
-                    stream=stream,
-                    computed_priority=rule.priority,
-                    matched_rule_type=rule.type,
-                )
+        matched_rule, catch_all_priority = self._find_matching_rule(stream, source_group_name)
+        if matched_rule:
+            return StreamWithPriority(
+                stream=stream,
+                computed_priority=matched_rule.priority,
+                matched_rule_type=matched_rule.type,
+            )
         return StreamWithPriority(
             stream=stream,
-            computed_priority=NO_MATCH_PRIORITY,
-            matched_rule_type=None,
+            computed_priority=catch_all_priority,
+            matched_rule_type="catch_all" if catch_all_priority != NO_MATCH_PRIORITY else None,
         )
 
     def sort_streams(
@@ -148,7 +169,11 @@ class StreamOrderingService:
         elif rule.type == "regex":
             return self._match_regex(stream, rule.value)
         elif rule.type == "stream_type":
-            return stream.match_type == rule.value
+            return self._match_stream_type(stream, rule.value)
+        elif rule.type == "team_feed":
+            return self._match_team_feed(stream, rule.value)
+        elif rule.type == "not_team_feed":
+            return self._match_not_team_feed(stream, rule.value)
         return False
 
     def _match_m3u(self, stream: ManagedChannelStream, account_name: str) -> bool:
@@ -187,6 +212,223 @@ class StreamOrderingService:
             return False
 
         return bool(compiled.search(stream.stream_name))
+
+    # Detects streams that explicitly name a feed perspective (home/away/cam/feed keyword).
+    # Used by not_team_feed to avoid matching generic streams with no feed markers.
+    _FEED_INDICATOR_RE = re.compile(
+        r"(?i)\b(?:home|away)\b|\bcam\s*0?[12]\b|\bfeed\b"
+    )
+
+    def _match_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match stream name against the dynamic team-feed pattern."""
+        if not stream.stream_name:
+            return False
+        pattern = self._get_team_feed_pattern(rule_value)
+        if pattern is None:
+            return False
+        return bool(pattern.search(stream.stream_name))
+
+    def _match_not_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match streams that have feed indicators but are NOT this team's feed."""
+        if not stream.stream_name:
+            return False
+        if not self._FEED_INDICATOR_RE.search(stream.stream_name):
+            return False
+        pattern = self._get_team_feed_pattern(rule_value)
+        if pattern is None:
+            return False
+        return not bool(pattern.search(stream.stream_name))
+
+    def _match_stream_type(self, stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match stream by type, with optional team filter (value may be 'team|key1,key2')."""
+        if "|" not in rule_value:
+            return stream.match_type == rule_value
+        stream_type, team_keys_str = rule_value.split("|", 1)
+        if stream.match_type != stream_type:
+            return False
+        if not team_keys_str:
+            return True
+        keys = [k.strip() for k in team_keys_str.split(",") if k.strip()]
+        if not keys:
+            return True
+        pattern = self._get_team_presence_pattern(keys)
+        if pattern is None:
+            return False
+        return bool(pattern.search(stream.stream_name or ""))
+
+    def _build_team_terms(self, rows: list) -> set[str]:
+        """Extract word/city/abbrev terms from team_cache rows for regex building."""
+        terms: set[str] = set()
+        for row in rows:
+            name = row["team_name"] or ""
+            abbrev = row["team_abbrev"] or ""
+            words = name.split()
+            for word in words:
+                if len(word) >= 3:
+                    terms.add(re.escape(word))
+            city = " ".join(words[:-1]) if len(words) > 1 else ""
+            if city:
+                terms.add(re.escape(city))
+            if len(abbrev) >= 2:
+                terms.add(re.escape(abbrev))
+        return terms
+
+    def _get_team_presence_pattern(self, keys: list[str]) -> re.Pattern | None:
+        """Build and cache a simple word-boundary presence pattern from team keys.
+
+        Unlike _get_team_feed_pattern, this has no home/away/feed directionality —
+        it just checks whether the stream name contains any of the team's terms.
+        """
+        cache_key = ",".join(sorted(keys))
+        if cache_key in self._team_presence_patterns:
+            return self._team_presence_patterns[cache_key]
+
+        if not self.conn:
+            self._team_presence_patterns[cache_key] = None
+            return None
+
+        try:
+            rows = self._query_team_cache_by_keys(keys)
+        except Exception as e:
+            logger.warning(
+                "[STREAM_ORDER] Failed to query teams for stream_type presence pattern: %s", e
+            )
+            self._team_presence_patterns[cache_key] = None
+            return None
+
+        terms = self._build_team_terms(rows)
+        if not terms:
+            logger.warning(
+                "[STREAM_ORDER] stream_type team filter: no matching teams for keys %r, "
+                "filter will block all",
+                keys,
+            )
+            self._team_presence_patterns[cache_key] = None
+            return None
+
+        team_alt = "|".join(sorted(terms, key=len, reverse=True))
+        pattern: re.Pattern | None = None
+        try:
+            pattern = re.compile(r"(?i)\b(?:" + team_alt + r")\b")
+        except re.error as e:
+            logger.warning("[STREAM_ORDER] Failed to compile stream_type presence pattern: %s", e)
+
+        self._team_presence_patterns[cache_key] = pattern
+        return pattern
+
+    def _query_team_cache_by_keys(self, keys: list[str]) -> list:
+        """Query team_cache for provider-keyed team entries.
+
+        Accepts both formats (mixed lists are fine):
+          - 2-part legacy: "provider:provider_team_id"
+          - 3-part new:    "provider:league:provider_team_id"
+        """
+        two_part = [k for k in keys if k.count(":") == 1]
+        three_part = [k for k in keys if k.count(":") == 2]
+        rows: list = []
+
+        if two_part:
+            placeholders = ",".join("?" * len(two_part))
+            rows += self.conn.execute(  # type: ignore[union-attr]
+                f"SELECT DISTINCT team_name, team_abbrev FROM team_cache"
+                f" WHERE provider || ':' || provider_team_id IN ({placeholders})",
+                two_part,
+            ).fetchall()
+
+        if three_part:
+            parts = [k.split(":") for k in three_part]
+            conditions = " OR ".join(
+                "(provider = ? AND league = ? AND provider_team_id = ?)" for _ in parts
+            )
+            params = [p for part in parts for p in part]
+            rows += self.conn.execute(  # type: ignore[union-attr]
+                f"SELECT DISTINCT team_name, team_abbrev FROM team_cache WHERE {conditions}",
+                params,
+            ).fetchall()
+
+        return rows
+
+    def _get_team_feed_pattern(self, rule_value: str) -> re.Pattern | None:
+        """Build and cache the team-feed regex.
+
+        rule_value formats:
+          - ""                           → no-op; rule matches nothing
+          - "1,5,12"                     → legacy: integer team IDs (teams table)
+          - "espn:28,mlbstats:xyz"       → legacy 2-part: provider:provider_team_id (team_cache)
+          - "espn:mlb:28,espn:nfl:5"     → new 3-part: provider:league:provider_team_id (team_cache)
+        Results are cached per rule_value string.
+        """
+        if rule_value in self._team_feed_patterns:
+            return self._team_feed_patterns[rule_value]
+
+        if not rule_value:
+            self._team_feed_patterns[rule_value] = None
+            return None
+
+        if not self.conn:
+            logger.warning("[STREAM_ORDER] team_feed rule requires a DB connection")
+            self._team_feed_patterns[rule_value] = None
+            return None
+
+        try:
+            if ":" in rule_value:
+                # New format: "provider:provider_team_id" pairs → query team_cache
+                keys = [k.strip() for k in rule_value.split(",") if ":" in k.strip()]
+                if not keys:
+                    self._team_feed_patterns[rule_value] = None
+                    return None
+                rows = self._query_team_cache_by_keys(keys)
+            else:
+                # Legacy format: integer team IDs → query teams table
+                ids = [int(x) for x in rule_value.split(",") if x.strip().isdigit()]
+                if not ids:
+                    self._team_feed_patterns[rule_value] = None
+                    return None
+                placeholders = ",".join("?" * len(ids))
+                rows = self.conn.execute(
+                    f"SELECT team_name, team_abbrev FROM teams"
+                    f" WHERE id IN ({placeholders}) AND active = 1",
+                    ids,
+                ).fetchall()
+        except Exception as e:
+            logger.warning("[STREAM_ORDER] Failed to query teams for team_feed rule: %s", e)
+            self._team_feed_patterns[rule_value] = None
+            return None
+
+        terms = self._build_team_terms(rows)
+
+        if not terms:
+            logger.warning(
+                "[STREAM_ORDER] team_feed rule (value=%r): no matching teams, rule will not match",
+                rule_value,
+            )
+            self._team_feed_patterns[rule_value] = None
+            return None
+
+        # Longest terms first so the engine prefers more-specific matches
+        team_alt = "|".join(sorted(terms, key=len, reverse=True))
+        pattern_str = (
+            r"(?i)(?=.*\b(?P<team>" + team_alt + r")\b)"
+            r"(?:.*(?:vs|at|@).*(?P=team).*(?:home|\(home\)|cam\s*0?1)"
+            r"|.*(?P=team).*(?:vs|at|@).*(?:away|cam\s*0?2)"
+            r"|.*\((?P=team)\s+feed\b.*"
+            r"|.*home\s*feed.*:\s*\S+\s+(?:vs|at|@)\s+(?P=team)\b"
+            r"|.*away\s*feed.*:\s*(?P=team)\s+(?:vs|at|@)\s+\S+)"
+        )
+        pattern: re.Pattern | None = None
+        try:
+            pattern = re.compile(pattern_str)
+            logger.debug(
+                "[STREAM_ORDER] Built team_feed pattern (value=%r) from %d teams (%d terms)",
+                rule_value,
+                len(rows),
+                len(terms),
+            )
+        except re.error as e:
+            logger.warning("[STREAM_ORDER] Failed to compile team_feed pattern: %s", e)
+
+        self._team_feed_patterns[rule_value] = pattern
+        return pattern
 
     def _get_compiled_regex(self, pattern: str) -> re.Pattern | None:
         """Get or compile a regex pattern (with caching)."""

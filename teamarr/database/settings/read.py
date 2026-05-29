@@ -7,6 +7,7 @@ import json
 from sqlite3 import Connection
 
 from .types import (
+    NO_VALUE_RULE_TYPES,
     AllSettings,
     APISettings,
     BackupSettings,
@@ -517,7 +518,9 @@ def _parse_stream_ordering_rules(rules_json: str | None) -> list[StreamOrderingR
                 priority=rule.get("priority", 99),
             )
             for rule in rules_data
-            if isinstance(rule, dict) and rule.get("type") and rule.get("value")
+            if isinstance(rule, dict)
+            and rule.get("type")
+            and (rule.get("type") in NO_VALUE_RULE_TYPES or rule.get("value"))
         ]
     except json.JSONDecodeError:
         return []

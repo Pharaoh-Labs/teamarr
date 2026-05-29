@@ -531,10 +531,9 @@ def update_stream_ordering_rules(
     Returns:
         True if updated
     """
+    from .types import NO_VALUE_RULE_TYPES, VALID_RULE_TYPES
     from .types import StreamOrderingRule as RuleType
 
-    # Validate rules structure
-    valid_types = {"m3u", "group", "regex", "stream_type"}
     validated_rules = []
 
     for rule in rules:
@@ -548,15 +547,17 @@ def update_stream_ordering_rules(
             rule_value = rule.get("value")
             rule_priority = rule.get("priority")
 
-        if rule_type not in valid_types:
+        if rule_type not in VALID_RULE_TYPES:
             logger.warning(
                 "[STREAM_ORDER] Invalid rule type '%s', must be one of %s",
                 rule_type,
-                valid_types,
+                VALID_RULE_TYPES,
             )
             continue
 
-        if not rule_value or not isinstance(rule_value, str):
+        if rule_type not in NO_VALUE_RULE_TYPES and (
+            not rule_value or not isinstance(rule_value, str)
+        ):
             logger.warning("[STREAM_ORDER] Rule missing value, skipping")
             continue
 

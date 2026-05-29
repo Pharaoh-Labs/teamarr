@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from teamarr.database import get_db
+from teamarr.database.settings.types import NO_VALUE_RULE_TYPES, VALID_RULE_TYPES
 
 from .models import (
     StreamOrderingRuleModel,
@@ -11,9 +12,6 @@ from .models import (
 )
 
 router = APIRouter()
-
-# Valid rule types
-VALID_RULE_TYPES = {"m3u", "group", "regex", "stream_type"}
 
 
 @router.get("/settings/stream-ordering", response_model=StreamOrderingSettingsModel)
@@ -65,16 +63,18 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid rule type '{rule.type}'. Valid: {VALID_RULE_TYPES}",
             )
-        if not rule.value or not rule.value.strip():
+        if rule.type not in NO_VALUE_RULE_TYPES and (not rule.value or not rule.value.strip()):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Rule value cannot be empty",
             )
-        if rule.type == "stream_type" and rule.value.strip() not in {"event", "team"}:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="stream_type value must be 'event' or 'team'",
-            )
+        if rule.type == "stream_type":
+            base = rule.value.split("|")[0].strip()
+            if base not in {"event", "team"}:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="stream_type value must be 'event' or 'team'",
+                )
 
     # Convert to dict format for database function
     rules_data = [

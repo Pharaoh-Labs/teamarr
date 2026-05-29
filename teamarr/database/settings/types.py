@@ -160,9 +160,16 @@ class StreamOrderingRule:
     First matching rule determines the stream's sort position within a channel.
     """
 
-    type: str  # "m3u", "group", "regex"
-    value: str  # Account name, group name, or regex pattern
+    type: str  # "m3u", "group", "regex", "stream_type", "team_feed", "not_team_feed", "catch_all"
+    value: str  # Account name, group name, regex pattern, or team key(s)
     priority: int  # 1-99, lower = higher priority
+
+
+VALID_RULE_TYPES: frozenset[str] = frozenset({
+    "m3u", "group", "regex", "stream_type",
+    "team_feed", "not_team_feed", "catch_all",
+})
+NO_VALUE_RULE_TYPES: frozenset[str] = frozenset({"team_feed", "not_team_feed", "catch_all"})
 
 
 @dataclass
