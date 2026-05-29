@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 # Default priority for streams that don't match any rule
 NO_MATCH_PRIORITY = 999
 
+# Generic words that never disambiguate a team. Dropping them from the
+# team-feed/presence term set avoids over-broad matches (e.g. a club literally
+# named "The Strongest" must not turn into a rule that matches any stream
+# containing the word "the"). Deliberately conservative — words like "city",
+# "united", "real" are kept because they distinguish real clubs.
+_TEAM_TERM_STOPWORDS = frozenset({"the", "and", "for", "with"})
+
 
 @dataclass
 class StreamWithPriority:
@@ -257,17 +264,23 @@ class StreamOrderingService:
         return bool(pattern.search(stream.stream_name or ""))
 
     def _build_team_terms(self, rows: list) -> set[str]:
-        """Extract word/city/abbrev terms from team_cache rows for regex building."""
+        """Extract word/city/abbrev terms from team_cache rows for regex building.
+
+        Terms shorter than 3 chars (2 for abbreviations) and generic stopwords
+        are dropped so the resulting pattern stays specific to the team — a club
+        named "FC Bayern" yields {Bayern, FC-abbrev} but never the bare "FC", and
+        "The Strongest" never contributes the word "the".
+        """
         terms: set[str] = set()
         for row in rows:
             name = row["team_name"] or ""
             abbrev = row["team_abbrev"] or ""
             words = name.split()
             for word in words:
-                if len(word) >= 3:
+                if len(word) >= 3 and word.lower() not in _TEAM_TERM_STOPWORDS:
                     terms.add(re.escape(word))
             city = " ".join(words[:-1]) if len(words) > 1 else ""
-            if city:
+            if len(city) >= 3 and city.lower() not in _TEAM_TERM_STOPWORDS:
                 terms.add(re.escape(city))
             if len(abbrev) >= 2:
                 terms.add(re.escape(abbrev))

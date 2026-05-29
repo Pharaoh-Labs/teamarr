@@ -145,5 +145,16 @@ Configure priority rules for ordering streams within consolidated channels. When
 | **M3U Account** | Prioritize streams from a specific M3U account | "Premium IPTV" = priority 1 |
 | **Event Group** | Prioritize streams from a specific event group | "ESPN+ Group" = priority 2 |
 | **Regex Pattern** | Prioritize streams matching a regex | `(?i)1080p` = priority 1 |
+| **Stream Type** | Match by how the stream was matched: **event stream** or **team stream**. Optionally narrow a team-stream rule to specific teams. | "Team stream" → priority 3 |
+| **Home/Away Feed** | Match streams that look like a team's own broadcast (its home or away feed), detected from the stream name. Pick one or more teams. **Invert** flips it to match feeds that are *not* your selected teams (useful for pushing other teams' feeds to the back). | Selected teams → priority 1 |
+| **Everything Else** | Catch-all fallback applied to any stream not matched by the rules above. Always present and cannot be removed; set its priority to control where unmatched streams land. | Everything else → priority 99 |
 
 Lower priority numbers = higher priority. Rules are evaluated in order — the first matching rule determines the stream's priority.
+
+#### Team filters
+
+Both **Stream Type** (team streams) and **Home/Away Feed** rules let you pick specific teams. Leaving the team selection empty makes the rule a no-op — a Stream Type rule with no teams matches *all* team streams, while a Home/Away Feed rule with no teams matches nothing. Use the **Default** button to load your configured team-filter include list, or **Clear** to start fresh.
+
+#### How Home/Away Feed detection works
+
+Teamarr builds a name-matching pattern from your selected teams' names and abbreviations, then looks for feed indicators in the stream name — a matchup (`vs`, `at`, `@`), a side (`home`/`away`), a camera label (`cam 01`/`cam 02`), or a `(Team feed)` marker. A stream like `Cubs vs Pirates (Home)` is recognized as the Pirates' home feed. Generic streams with no feed markers (for example a plain `Pirates vs Cubs` with no side) are left for other rules to handle. Because detection relies on the stream name, results depend on your provider's naming conventions.
