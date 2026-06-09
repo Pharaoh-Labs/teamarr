@@ -65,6 +65,58 @@ class TeamResponse(BaseModel):
     updated_at: datetime
 
 
+class TeamChannelStatusTeam(BaseModel):
+    """Team fields included in the channel status response."""
+
+    id: int
+    provider: str
+    provider_team_id: str
+    primary_league: str
+    leagues: list[str]
+    sport: str
+    team_name: str
+    team_abbrev: str | None = None
+    channel_id: str
+    active: bool
+
+
+class TeamChannelStatusDispatcharrChannel(BaseModel):
+    """Dispatcharr channel mapping for a Teamarr team channel."""
+
+    found: bool
+    id: int | None = None
+    uuid: str | None = None
+    name: str | None = None
+    channel_number: str | None = None
+    tvg_id: str | None = None
+    stream_count: int = 0
+    streams: list[int] = Field(default_factory=list)
+    error: str | None = None
+
+
+class TeamChannelStatusProgramme(BaseModel):
+    """Next live programme window for a Teamarr team channel."""
+
+    found: bool
+    start: datetime | None = None
+    stop: datetime | None = None
+    title: str | None = None
+    sub_title: str | None = None
+    is_live: bool = False
+    source: str = "team_epg_xmltv"
+
+
+class TeamChannelStatusResponse(BaseModel):
+    """Combined status for a static Teamarr team channel."""
+
+    team: TeamChannelStatusTeam
+    dispatcharr_channel: TeamChannelStatusDispatcharrChannel
+    next_live_window: TeamChannelStatusProgramme
+    status: str
+    missing: list[str] = Field(default_factory=list)
+    xmltv_updated_at: datetime | None = None
+
+
 # =============================================================================
 # Templates
 # =============================================================================
