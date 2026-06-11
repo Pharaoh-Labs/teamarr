@@ -27,6 +27,27 @@ SESSION_ORDER = [
     "race",
 ]
 
+# Fixed session durations (hours), independent of when the next session
+# starts. Practice/qualifying/sprint sessions run ~1 hour; the race itself
+# uses the configurable "racing" sport duration (default 3 hours).
+SESSION_DURATION_HOURS = {
+    "fp1": 1.0,
+    "fp2": 1.0,
+    "fp3": 1.0,
+    "sprint_qualifying": 1.0,
+    "sprint": 1.0,
+    "qualifying": 1.0,
+}
+
+
+def _session_duration_hours(
+    session_code: str, sport_durations: dict[str, float] | None
+) -> float:
+    """Get the fixed duration (hours) for a session code."""
+    if session_code == "race":
+        return (sport_durations or {}).get("racing", 3.0)
+    return SESSION_DURATION_HOURS.get(session_code, 1.0)
+
 
 def is_racing_event(event: Event | None) -> bool:
     """Check if event is a racing event with session data to expand."""
@@ -42,32 +63,28 @@ def get_session_times(
 ) -> tuple[datetime, datetime]:
     """Get start/end times for a session from ESPN session data.
 
-    End time is the next session's start time, or an estimated duration
-    (sport_durations["racing"], default 3 hours) for the last session.
+    Each session runs for a fixed duration based on its type (practice/
+    qualifying/sprint sessions: 1 hour; race: sport_durations["racing"],
+    default 3 hours), regardless of when the next session starts.
 
     Args:
         event: Racing Event with sessions from ESPN
         session_code: Session code (e.g., "fp1", "qualifying", "race")
-        sport_durations: Optional duration settings (for last-session fallback)
+        sport_durations: Optional duration settings (for race duration)
 
     Returns:
         Tuple of (start_time, end_time)
     """
-    racing_duration = (sport_durations or {}).get("racing", 3.0)
-    sessions = sorted(event.sessions, key=lambda s: s.start_time)
-
-    for idx, session in enumerate(sessions):
+    for session in event.sessions:
         if session.code != session_code:
             continue
         start_time = session.start_time
-        if idx + 1 < len(sessions):
-            end_time = sessions[idx + 1].start_time
-        else:
-            end_time = start_time + timedelta(hours=racing_duration)
-        return start_time, end_time
+        duration = _session_duration_hours(session.code, sport_durations)
+        return start_time, start_time + timedelta(hours=duration)
 
     # Session not found - fall back to event start/duration
-    return event.start_time, event.start_time + timedelta(hours=racing_duration)
+    duration = _session_duration_hours(session_code, sport_durations)
+    return event.start_time, event.start_time + timedelta(hours=duration)
 
 
 def expand_racing_segments(
@@ -89,7 +106,6 @@ def expand_racing_segments(
         Expanded list with racing streams split by session
     """
     result = []
-    racing_duration = (sport_durations or {}).get("racing", 3.0)
     expanded_streams = 0
     session_entries = 0
 
@@ -103,12 +119,10 @@ def expand_racing_segments(
         expanded_streams += 1
         sessions = sorted(event.sessions, key=lambda s: s.start_time)
 
-        for idx, session in enumerate(sessions):
+        for session in sessions:
             start_time = session.start_time
-            if idx + 1 < len(sessions):
-                end_time = sessions[idx + 1].start_time
-            else:
-                end_time = start_time + timedelta(hours=racing_duration)
+            duration = _session_duration_hours(session.code, sport_durations)
+            end_time = start_time + timedelta(hours=duration)
 
             result.append(
                 {
