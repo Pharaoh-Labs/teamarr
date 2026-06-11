@@ -1837,6 +1837,10 @@ class EventGroupProcessor:
         # This splits UFC streams into separate segment channels
         matched = self._expand_ufc_segments(matched, stream_timezone)
 
+        # Apply racing session expansion
+        # This splits racing streams into separate per-session channels
+        matched = self._expand_racing_segments(matched)
+
         return matched
 
     def _resolve_feed_teams(
@@ -1965,6 +1969,24 @@ class EventGroupProcessor:
 
         sport_durations = self._load_sport_durations_cached()
         return expand_ufc_segments(matched_streams, sport_durations, stream_timezone)
+
+    def _expand_racing_segments(self, matched_streams: list[dict]) -> list[dict]:
+        """Expand racing streams into session-based channels.
+
+        Splits each matched racing stream into one entry per race-weekend
+        session (Practice 1, Qualifying, Race, ...) using ESPN session data.
+        Non-racing streams pass through.
+
+        Args:
+            matched_streams: List of {'stream': ..., 'event': ...} dicts
+
+        Returns:
+            Expanded list with racing streams split by session
+        """
+        from teamarr.consumers.racing_segments import expand_racing_segments
+
+        sport_durations = self._load_sport_durations_cached()
+        return expand_racing_segments(matched_streams, sport_durations)
 
     def _enrich_matched_events(self, matched_streams: list[dict]) -> list[dict]:
         """Enrich all matched events with fresh status from provider.

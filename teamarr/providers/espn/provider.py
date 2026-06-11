@@ -168,7 +168,7 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
         # Check if this is a tournament sport
         sport = self._get_sport(league)
         if sport in TOURNAMENT_SPORTS:
-            return self._get_tournament_events(league, target_date, sport)
+            return self._get_tournament_events(league, target_date, sport, sport_league)
 
         date_str = target_date.strftime("%Y%m%d")
         data = self._client.get_scoreboard(league, date_str, sport_league)

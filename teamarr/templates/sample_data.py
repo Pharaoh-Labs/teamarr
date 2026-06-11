@@ -7,7 +7,7 @@ Organization: Variables grouped by category, with base/.next/.last variants toge
 """
 
 # Available sports for the dropdown
-AVAILABLE_SPORTS = ["NBA", "NFL", "MLB", "NHL", "NCAAM", "NCAAF", "Soccer", "UFC"]
+AVAILABLE_SPORTS = ["NBA", "NFL", "MLB", "NHL", "NCAAM", "NCAAF", "Soccer", "UFC", "F1"]
 
 # Sample data organized by variable name and sport
 # Each variable can have different sample values per sport
@@ -263,6 +263,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "NCAAM",
         "NCAAF": "NCAAF",
         "Soccer": "Premier League",
+        "F1": "F1",
     },
     "league_name": {
         "NBA": "National Basketball Association",
@@ -272,6 +273,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "NCAA Men's Basketball",
         "NCAAF": "NCAA Football",
         "Soccer": "English Premier League",
+        "F1": "Formula 1",
     },
     "league_id": {
         "NBA": "nba",
@@ -281,6 +283,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "ncaam",
         "NCAAF": "ncaaf",
         "Soccer": "epl",
+        "F1": "f1",
     },
     "league_code": {
         "NBA": "nba",
@@ -290,6 +293,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "mens-college-basketball",
         "NCAAF": "college-football",
         "Soccer": "eng.1",
+        "F1": "f1",
     },
     # Sport
     "sport": {
@@ -300,6 +304,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "Basketball",
         "NCAAF": "Football",
         "Soccer": "Soccer",
+        "F1": "Racing",
     },
     "sport_lower": {
         "NBA": "basketball",
@@ -309,6 +314,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "basketball",
         "NCAAF": "football",
         "Soccer": "soccer",
+        "F1": "racing",
     },
     "gracenote_category": {
         "NBA": "NBA Basketball",
@@ -318,6 +324,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "Men's College Basketball",
         "NCAAF": "College Football",
         "Soccer": "Premier League Soccer",
+        "F1": "Formula 1 Racing",
     },
     # Exception keyword - channel-specific variable
     "exception_keyword": {
@@ -3929,6 +3936,62 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAF": "Michigan Wolverines",
         "Soccer": "Liverpool",
     },
+    # ==========================================================================
+    # MOTORSPORTS - F1/NASCAR/IndyCar/MotoGP specific variables (event EPG only)
+    # ==========================================================================
+    "race_name": {
+        "F1": "Monaco Grand Prix",
+    },
+    "circuit_name": {
+        "F1": "Circuit de Monaco",
+    },
+    "session_name": {
+        "F1": "Qualifying",
+    },
+    "session_type": {
+        "F1": "qualifying",
+    },
+    "next_session_name": {
+        "F1": "Race",
+    },
+    "next_session_time": {
+        "F1": "1:00 PM EST",
+    },
+    "pole_position": {
+        "F1": "Charles Leclerc",
+    },
+    "pole_team": {
+        "F1": "Ferrari",
+    },
+    "grid": {
+        "F1": (
+            "1. Charles Leclerc (Ferrari)\n"
+            "2. Max Verstappen (Red Bull Racing)\n"
+            "3. Lando Norris (McLaren)"
+        ),
+    },
+    "race_winner": {
+        "F1": "Max Verstappen",
+    },
+    "podium_2": {
+        "F1": "Charles Leclerc",
+    },
+    "podium_3": {
+        "F1": "Lando Norris",
+    },
+    "podium": {
+        "F1": "1. Max Verstappen, 2. Charles Leclerc, 3. Lando Norris",
+    },
+    "results": {
+        "F1": (
+            "1. Max Verstappen (Red Bull Racing)\n"
+            "2. Charles Leclerc (Ferrari)\n"
+            "3. Lando Norris (McLaren)"
+        ),
+    },
+    "fastest_lap_driver": {
+        "F1": "Max Verstappen",
+    },
 }
 
 
@@ -3984,6 +4047,8 @@ _TIME_VARIABLES = {
     "main_card_time",
     "prelims_time",
     "early_prelims_time",
+    # Motorsports next-session time (base only, no .next/.last for event EPG)
+    "next_session_time",
 }
 
 

@@ -270,11 +270,35 @@ def get_conditions(template_type: str = "team"):
         },
     ]
 
+    # Motorsports conditions (F1, NASCAR, IndyCar, MotoGP, ... events)
+    motorsports_conditions = [
+        {
+            "name": "is_race_session",
+            "description": "This channel's session is the race itself",
+            "requires_value": False,
+            "providers": "espn",
+        },
+        {
+            "name": "is_qualifying_session",
+            "description": "This channel's session is qualifying or sprint qualifying",
+            "requires_value": False,
+            "providers": "espn",
+        },
+        {
+            "name": "has_results",
+            "description": "This channel's session has finished with results",
+            "requires_value": False,
+            "providers": "espn",
+        },
+    ]
+
     if template_type == "event":
-        # Event templates get combat conditions only (for MMA event EPG)
-        conditions = combat_conditions
+        # Event templates get combat/motorsports conditions only (for event EPG)
+        conditions = combat_conditions + motorsports_conditions
     else:
         # Team templates get all conditions
-        conditions = team_only_conditions + common_conditions + combat_conditions
+        conditions = (
+            team_only_conditions + common_conditions + combat_conditions + motorsports_conditions
+        )
 
     return {"conditions": conditions, "template_type": template_type}

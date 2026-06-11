@@ -69,6 +69,37 @@ class Bout:
     order: int  # Position on card (0 = opener, higher = later)
 
 
+@dataclass(frozen=True)
+class RacingResult:
+    """A single driver's result/grid slot for a racing session.
+
+    Used for motorsports (F1, NASCAR, IndyCar, MotoGP, etc.) where each
+    session (practice, qualifying, race) has its own ordered list of
+    competitors.
+    """
+
+    driver_name: str
+    team_name: str | None = None  # Constructor/team name
+    position: int | None = None  # Finishing position (None if not yet run)
+    grid_position: int | None = None  # Starting position for this session
+    points: float | None = None  # Championship points earned
+    fastest_lap: bool = False
+    status: str | None = None  # "Finished", "DNF", "DNS", "+1 Lap", etc.
+
+
+@dataclass(frozen=True)
+class RacingSession:
+    """A single session within a racing event (race weekend).
+
+    Examples: Practice 1/2/3, Qualifying, Sprint, Race.
+    """
+
+    code: str  # "fp1", "fp2", "fp3", "qualifying", "sprint", "race"
+    name: str  # "Practice 1", "Qualifying", "Race"
+    start_time: datetime
+    results: list["RacingResult"] = field(default_factory=list)
+
+
 @dataclass
 class Event:
     """A single sporting event (game/match)."""
@@ -115,6 +146,13 @@ class Event:
     fighter1_scores: list[int] | None = None  # home_team/fighter1 scores
     fighter2_scores: list[int] | None = None  # away_team/fighter2 scores
 
+    # Racing-specific: circuit/track name (e.g., "Circuit de Monaco")
+    circuit_name: str | None = None
+
+    # Racing-specific: all sessions for the race weekend (Practice,
+    # Qualifying, Race, etc.), ordered by start_time
+    sessions: list["RacingSession"] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class TeamStats:
@@ -151,6 +189,12 @@ class TeamStats:
     # Scoring stats
     ppg: float | None = None  # Points per game
     papg: float | None = None  # Points allowed per game
+
+    # Racing-specific: championship standings
+    championship_points: float | None = None
+    championship_position: int | None = None
+    constructor_name: str | None = None
+    constructor_points: float | None = None
 
 
 @dataclass

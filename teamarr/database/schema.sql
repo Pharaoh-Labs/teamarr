@@ -1096,7 +1096,19 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nrl',   'espn', 'rugby-league/3',  NULL, 'National Rugby League',           'rugby', 'https://upload.wikimedia.org/wikipedia/en/5/50/National_Rugby_League.svg', NULL, 1, 'NRL',   'nrl',   'team_vs_team', NULL, NULL, NULL, NULL),
 
     -- Boxing (TSDB) - Combat sport with event cards
-    ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free');
+    ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free'),
+
+    -- Motorsports (ESPN) - Race weekends with multi-driver sessions, no home/away
+    -- 'f1' is the fully-implemented reference league; the others are seeded
+    -- against their ESPN scoreboard slugs but not yet verified end-to-end
+    -- (NASCAR exposes only a single race-session competition; IndyCar/MotoGP
+    -- session structure needs confirmation in a follow-up).
+    ('f1', 'espn', 'racing/f1', NULL, 'Formula 1', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/f1.png', NULL, 0, 'F1', 'f1', 'event', 'Formula 1 Racing', NULL, NULL, NULL),
+    ('nascar-cup', 'espn', 'racing/nascar-premier', NULL, 'NASCAR Cup Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-premier.png', NULL, 0, 'NASCAR Cup', 'nascar-cup', 'event', 'NASCAR Racing', NULL, NULL, NULL),
+    ('nascar-xfinity', 'espn', 'racing/nascar-secondary', NULL, 'NASCAR Xfinity Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-secondary.png', NULL, 0, 'NASCAR Xfinity', 'nascar-xfinity', 'event', 'NASCAR Racing', NULL, NULL, NULL),
+    ('nascar-truck', 'espn', 'racing/nascar-truck', NULL, 'NASCAR Craftsman Truck Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-truck.png', NULL, 0, 'NASCAR Trucks', 'nascar-truck', 'event', 'NASCAR Racing', NULL, NULL, NULL),
+    ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/irl.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL),
+    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL);
 
 -- =============================================================================
 -- STREAM_MATCH_CACHE TABLE

@@ -37,6 +37,7 @@ from teamarr.consumers.matching.constants import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
 from teamarr.consumers.matching.epg_matcher import build_match_input, should_attempt
 from teamarr.consumers.matching.event_matcher import EventCardMatcher
+from teamarr.consumers.matching.racing_matcher import RacingMatcher
 from teamarr.consumers.matching.result import (
     ExcludedReason,
     FailedReason,
@@ -326,6 +327,7 @@ class StreamMatcher:
             service, self._cache, days_ahead=self._days_ahead, db_factory=db_factory
         )
         self._event_matcher = EventCardMatcher(service, self._cache)
+        self._racing_matcher = RacingMatcher(service, self._cache)
 
         # League event types cache
         self._league_event_types: dict[str, str] = {}
@@ -618,6 +620,8 @@ class StreamMatcher:
         """
         if classified.category == StreamCategory.EVENT_CARD:
             return [self._match_event_card(classified, stream_id, target_date)]
+        if classified.category == StreamCategory.RACING_EVENT:
+            return [self._match_racing_event(classified, stream_id, target_date)]
         if classified.category == StreamCategory.TEAM_ONLY:
             return self._match_team_only(classified, stream_id, target_date, anchor_dt=anchor_dt)
         # TEAM_VS_TEAM
@@ -881,6 +885,49 @@ class StreamMatcher:
             detail="No matching event card found",
         )
 
+    def _match_racing_event(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        target_date: date,
+    ) -> MatchOutcome:
+        """Match a racing stream (F1, NASCAR, IndyCar, MotoGP, ...)."""
+        # Find the racing leagues in our search leagues
+        racing_leagues = [
+            lg for lg in self._search_leagues if self._league_event_types.get(lg) == "event"
+        ]
+
+        if not racing_leagues:
+            return MatchOutcome.filtered(
+                FilteredReason.LEAGUE_NOT_INCLUDED,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+                detail="No racing leagues configured",
+            )
+
+        # Try each racing league
+        outcome = None
+        for league in racing_leagues:
+            outcome = self._racing_matcher.match(
+                classified=classified,
+                league=league,
+                target_date=target_date,
+                group_id=self._group_id,
+                stream_id=stream_id,
+                generation=self._generation,
+                user_tz=self._user_tz,
+            )
+            if outcome.is_matched:
+                return outcome
+
+        # No match in any racing league
+        return MatchOutcome.failed(
+            reason=outcome.failed_reason if outcome else None,
+            stream_name=classified.normalized.original,
+            stream_id=stream_id,
+            detail="No matching racing event found",
+        )
+
     def _outcome_to_result(
         self,
         outcome: MatchOutcome,
@@ -944,13 +991,19 @@ class StreamMatcher:
         )
 
     def _get_dominant_event_type(self) -> str | None:
-        """Get the dominant event type from configured leagues."""
+        """Get the dominant event type from the group's configured leagues.
+
+        Uses `_include_leagues` (the group's subscribed leagues) rather than
+        `_search_leagues` (all known leagues, used for broad fuzzy matching).
+        Otherwise the dominant type across ~300 leagues is always
+        "team_vs_team", masking event-type leagues like racing/event_card.
+        """
         if not self._league_event_types:
             return None
 
         # Count event types
         type_counts: dict[str, int] = {}
-        for league in self._search_leagues:
+        for league in self._include_leagues:
             event_type = self._league_event_types.get(league, "team_vs_team")
             type_counts[event_type] = type_counts.get(event_type, 0) + 1
 

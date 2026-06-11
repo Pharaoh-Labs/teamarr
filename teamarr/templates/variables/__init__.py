@@ -10,6 +10,7 @@ from teamarr.templates.variables import (  # noqa: F401 - side effect imports
     conference,
     home_away,
     identity,
+    motorsports,
     odds,
     outcome,
     playoffs,

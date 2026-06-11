@@ -25,6 +25,7 @@ class StreamCategory(Enum):
 
     TEAM_VS_TEAM = "team_vs_team"  # Standard team matchup (vs/@/at)
     EVENT_CARD = "event_card"  # Combat sports (UFC, Boxing)
+    RACING_EVENT = "racing_event"  # Racing race weekends (F1, NASCAR, etc.)
     TEAM_ONLY = "team_only"  # Single-team branded stream (e.g., "NHL | Toronto Maple Leafs")
     PLACEHOLDER = "placeholder"  # No event info, skip
 
@@ -1028,6 +1029,22 @@ def is_event_card(text: str, league_event_type: str | None = None) -> bool:
     return detected == "EVENT_CARD"
 
 
+def is_racing(league_event_type: str | None = None) -> bool:
+    """Check if a stream's league is a racing/motorsports league.
+
+    Unlike combat sports, racing has no reliable text keywords (stream names
+    are typically "F1: Monaco Grand Prix" or "NASCAR Cup - Race"), so this
+    relies entirely on the league's configured `event_type`.
+
+    Args:
+        league_event_type: event_type from leagues table (e.g., "event" for racing)
+
+    Returns:
+        True if the league is configured as an "event" (racing) league
+    """
+    return league_event_type == "event"
+
+
 def extract_event_card_hint(text: str) -> str | None:
     """Extract event card identifier (e.g., "UFC 315").
 
@@ -1418,6 +1435,33 @@ def classify_stream(
                 custom_regex_used=custom_regex_used,
                 feed_hint=feed_hint,
             )
+
+        # Step 2.5: Check for racing events (F1, NASCAR, etc.)
+        # Racing leagues are configured with event_type="event" - there's no
+        # reliable text keyword, so this is purely a league_event_type check.
+        # The full normalized text becomes the event_hint for fuzzy matching
+        # against the race weekend's name/circuit (e.g., "Monaco Grand Prix").
+        #
+        # Racing streams don't follow "Team A vs Team B" naming. If the stream
+        # has a game separator (vs/@/at) with extractable team names (e.g.
+        # "SD at BAL"), it's a team-sport stream that's leaked into a
+        # racing-only league set - let it fall through to Step 4 instead.
+        if result is None and is_racing(league_event_type):
+            sep, sep_position = find_game_separator(text)
+            has_team_pattern = False
+            if sep:
+                sep_team1, sep_team2 = extract_teams_from_separator(text, sep, sep_position)
+                has_team_pattern = bool(sep_team1 or sep_team2)
+
+            if not has_team_pattern:
+                result = ClassifiedStream(
+                    category=StreamCategory.RACING_EVENT,
+                    normalized=normalized,
+                    event_hint=text,
+                    league_hint=league_hint,
+                    sport_hint=sport_hint,
+                    feed_hint=feed_hint,
+                )
 
         # Step 3: Try custom regex for team extraction (if configured)
         # Uses ORIGINAL stream name (not normalized) for intuitive pattern matching

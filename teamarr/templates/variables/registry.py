@@ -37,6 +37,7 @@ class Category(Enum):
     CONFERENCE = auto()  # college_conference, pro_division
     SOCCER = auto()  # soccer_match_league
     COMBAT = auto()  # fighter1, fighter2, card_segment
+    MOTORSPORTS = auto()  # race_name, session_name, grid, podium, results
 
 
 class SuffixRules(Enum):

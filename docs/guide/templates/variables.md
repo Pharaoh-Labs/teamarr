@@ -466,6 +466,50 @@ UFC events are split into segments (Early Prelims, Prelims, Main Card). When usi
 
 ---
 
+## Motorsports
+
+F1, NASCAR, IndyCar, and MotoGP-specific variables for event templates. These are **event-only** (no `.next`/`.last` suffixes) since each race weekend is independent.
+
+### Event & Circuit
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{race_name}` | Race weekend / Grand Prix name | `Monaco Grand Prix` |
+| `{circuit_name}` | Circuit/track name | `Circuit de Monaco` |
+
+### Sessions
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{session_name}` | This channel's session display name | `Practice 1`, `Qualifying`, `Race` |
+| `{session_type}` | This channel's session code | `fp1`, `qualifying`, `race` |
+| `{next_session_name}` | Display name of the next session | `Qualifying` |
+| `{next_session_time}` | Start time of the next session | `9:00 AM` |
+
+### Grid & Qualifying
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{pole_position}` | Driver who took pole position | `Max Verstappen` |
+| `{pole_team}` | Team/constructor of the pole sitter | `Red Bull Racing` |
+| `{grid}` | Full starting grid order (newline-separated) | `1. Max Verstappen (Red Bull Racing)`<br>`2. Charles Leclerc (Ferrari)` |
+
+### Results
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{race_winner}` | Race winner's name | `Max Verstappen` |
+| `{podium_2}` | 2nd place finisher | `Charles Leclerc` |
+| `{podium_3}` | 3rd place finisher | `Lewis Hamilton` |
+| `{podium}` | Top 3 finishers, combined | `1. Max Verstappen, 2. Charles Leclerc, 3. Lewis Hamilton` |
+| `{results}` | Full finishing order (newline-separated) | `1. Max Verstappen (Red Bull Racing)`<br>`2. Charles Leclerc (Ferrari)` |
+| `{fastest_lap_driver}` | Driver awarded fastest lap | `Lando Norris` |
+
+{: .note }
+Race weekends are split into per-session channels (Practice 1/2/3, Qualifying, Sprint, Race). Each channel gets a `{session_type}`/`{session_name}` value indicating which session it covers. Grid and results variables read from the qualifying and race sessions respectively, and are empty until those sessions have data.
+
+---
+
 ## Usage Examples
 
 ### Team Template (Detroit Lions channel)

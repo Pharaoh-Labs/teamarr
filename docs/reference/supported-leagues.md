@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **127 pre-configured leagues** across 13 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **133 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -256,6 +256,27 @@ Combat sports are **Event Only** - no team import available.
 | Boxing | `boxing` | TSDB | Event Card |
 
 Combat sports use "Event Card" matching rather than team vs team matching.
+
+---
+
+## Motorsports
+
+{: .warning }
+Motorsports are **Event Only** - no team import available.
+
+| League | ID | Provider | Type |
+|--------|-----|----------|------|
+| Formula 1 | `f1` | ESPN | Event |
+| NASCAR Cup Series | `nascar-cup` | ESPN | Event |
+| NASCAR Xfinity Series | `nascar-xfinity` | ESPN | Event |
+| NASCAR Craftsman Truck Series | `nascar-truck` | ESPN | Event |
+| IndyCar Series | `indycar` | ESPN | Event |
+| MotoGP | `motogp` | ESPN | Event |
+
+Motorsports events are race weekends made up of multiple sessions (Practice,
+Qualifying, Race). Each session is exposed as its own EPG program block. `f1`
+is the fully verified reference league; the others are configured against
+their ESPN scoreboard endpoints but session coverage may vary by series.
 
 ---
 
