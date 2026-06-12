@@ -272,11 +272,17 @@ Motorsports are **Event Only** - no team import available.
 | NASCAR Craftsman Truck Series | `nascar-truck` | ESPN | Event |
 | IndyCar Series | `indycar` | ESPN | Event |
 | MotoGP | `motogp` | ESPN | Event |
+| IMSA SportsCar Championship | `imsa` | TSDB | Event |
+| FIA World Endurance Championship | `wec` | TSDB **P** | Event |
 
 Motorsports events are race weekends made up of multiple sessions (Practice,
 Qualifying, Race). Each session is exposed as its own EPG program block. `f1`
-is the fully verified reference league; the others are configured against
-their ESPN scoreboard endpoints but session coverage may vary by series.
+is the fully verified ESPN reference league; the other ESPN-backed series are
+configured against their ESPN scoreboard endpoints but session coverage may
+vary by series. `imsa` and `wec` are backed by TSDB, which groups its flat
+per-session events into the same multi-session shape — see the
+[TSDB provider docs](providers/tsdb.md) for details and the free-tier caveat
+for WEC.
 
 ---
 

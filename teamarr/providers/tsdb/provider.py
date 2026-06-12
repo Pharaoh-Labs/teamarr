@@ -19,6 +19,7 @@ from teamarr.core import (
     Venue,
 )
 from teamarr.providers.tsdb.client import TSDBClient
+from teamarr.providers.tsdb.racing import parse_racing_events
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +94,24 @@ class TSDBProvider(SportsProvider):
     def get_events(self, league: str, target_date: date) -> list[Event]:
         """Get events for a league on a specific date.
 
-        Tries multiple endpoints in order:
+        Racing leagues (WEC, IMSA) are session-based: TSDB serves them only
+        via eventsseason.php, never eventsday.php/eventsnextleague.php (both
+        return "Invalid League ID" for these leagues), so they take a fully
+        separate path through `_get_racing_events`.
+
+        Other leagues try multiple endpoints in order:
         1. eventsday.php - Date-specific (works for most leagues)
         2. eventsnextleague.php - Upcoming events filtered by date
         3. eventsseason.php - Full season events filtered by date, gated to
            SEASON_FALLBACK_LEAGUES (sparse leagues like Unrivaled)
         """
+        if self._client.get_sport(league) == "racing":
+            return [
+                event
+                for event in self._get_racing_events(league)
+                if any(s.start_time.date() == target_date for s in event.sessions)
+            ]
+
         date_str = target_date.strftime("%Y-%m-%d")
 
         # Try date-specific endpoint first
@@ -145,6 +158,29 @@ class TSDBProvider(SportsProvider):
             return events
 
         return []
+
+    def _get_racing_events(self, league: str) -> list[Event]:
+        """Get all session-grouped racing events for a league's current season(s).
+
+        Fetches the current year's season, plus next year's if we're in the
+        last quarter (Q4) so January races - e.g. the Rolex 24 - appear ahead
+        of time. Both fetches go through eventsseason.php, which is the only
+        endpoint TSDB serves for these leagues (eventsday.php/
+        eventsnextleague.php return "Invalid League ID").
+        """
+        sport = self._client.get_sport(league)
+        today = date.today()
+        seasons = [str(today.year)]
+        if today.month >= 10:
+            seasons.append(str(today.year + 1))
+
+        raw_events: list[dict] = []
+        for season in seasons:
+            data = self._client.get_events_by_season(league, season=season)
+            if data and data.get("events"):
+                raw_events.extend(data["events"])
+
+        return parse_racing_events(raw_events, league, sport, self.name)
 
     # TSDB rate limit optimization: cap at 14 days regardless of caller request
     # ESPN can handle 30+ days, but TSDB's 25 req/min limit makes that expensive
@@ -336,6 +372,12 @@ class TSDBProvider(SportsProvider):
 
     def get_event(self, event_id: str, league: str) -> Event | None:
         """Get a specific event by ID."""
+        if self._client.get_sport(league) == "racing":
+            for event in self._get_racing_events(league):
+                if event.id == event_id:
+                    return event
+            return None
+
         data = self._client.get_event(event_id)
 
         if not data:

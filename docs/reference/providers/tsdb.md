@@ -8,7 +8,7 @@ docs_version: "2.3.1"
 
 # TheSportsDB Provider
 
-TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including Australian sports, cricket, boxing, CFL, and Scandinavian leagues.
+TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including Australian sports, cricket, boxing, CFL, Scandinavian leagues, and motorsports (IMSA, WEC).
 
 ## API Details
 
@@ -34,6 +34,7 @@ TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a f
 These leagues have low enough event volume to work within free tier limits:
 
 - CFL, Unrivaled, Norwegian Hockey, Boxing
+- IMSA (one event per round, well under the 15-event/season cap)
 
 ### Premium Tier Leagues
 
@@ -42,6 +43,7 @@ These leagues have high event volume or unreliable free-tier data and require a 
 - AFL (Australian football)
 - IPL, BBL, SA20 (cricket)
 - Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
+- WEC (62 events/season across 8 rounds + Prologue — free tier's 15-event/season cap on `eventsseason.php` only returns the first 2-3 rounds)
 
 The `tsdb_tier` column in `schema.sql` classifies each league as `free` or `premium`.
 
@@ -74,6 +76,8 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 | Gambia GFA League | `gam.1` | 5238 | Soccer | Premium |
 | Aruban Division di Honor | `arb.1` | 5230 | Soccer | Premium |
 | Northern Irish Premiership | `nifl.1` | 4659 | Soccer | Premium |
+| IMSA SportsCar Championship | `imsa` | 4488 | Motor Racing | Free |
+| FIA World Endurance Championship | `wec` | 4413 | Motor Racing | Premium |
 
 ## Event Resolution
 
@@ -82,6 +86,25 @@ TSDB uses a three-step fallback chain when fetching events:
 1. **`eventsday.php`** — date-specific lookup (primary, works for most leagues)
 2. **`eventsnextleague.php`** — upcoming events filtered by date (fallback)
 3. **`eventsseason.php`** — full-season events filtered by date (last resort, gated to sparse leagues like Unrivaled where the day endpoints return nothing)
+
+### Racing Leagues (IMSA, WEC)
+
+Motorsport leagues bypass the fallback chain entirely. `eventsday.php` and
+`eventsnextleague.php` both return "Invalid League ID" for `imsa`/`wec`, so
+these leagues fetch the full season via `eventsseason.php` exclusively and
+filter client-side by session date.
+
+TSDB models a race weekend as several flat, per-session events (Free
+Practice 1, Qualifying, Race, ...) that share a season/round. `teamarr/providers/tsdb/racing.py`
+groups these by `(strSeason, intRound)` into the same `Event(sessions=[...],
+circuit_name=...)` shape the racing pipeline expects from ESPN/static
+providers — one EPG program block per session (Practice, Qualifying,
+Hyperpole, Race).
+
+Because `eventsseason.php` is capped at 15 events/season on the free tier,
+WEC (62 events/season) only returns its first 2-3 rounds without a premium
+key. IMSA (12 events/season, one per round) fits comfortably under the cap
+and works fully on free tier.
 
 ## Rate Limiting
 

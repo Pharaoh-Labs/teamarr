@@ -1110,12 +1110,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/irl.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL),
     ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL),
 
-    -- Motorsports (static calendar) - no live API coverage (ESPN/TSDB) for these
-    -- series, so schedules come from a hand-maintained JSON calendar that must
-    -- be kept up to date against the official season schedules
-    -- (teamarr/providers/static/calendars/racing_calendars.json).
-    ('imsa', 'static', 'imsa', NULL, 'IMSA WeatherTech SportsCar Championship', 'racing', NULL, NULL, 0, 'IMSA', 'imsa', 'event', 'Motor Racing', NULL, NULL, NULL),
-    ('wec', 'static', 'wec', NULL, 'FIA World Endurance Championship', 'racing', NULL, NULL, 0, 'WEC', 'wec', 'event', 'Motor Racing', NULL, NULL, NULL);
+    -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
+    -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).
+    ('imsa', 'tsdb', '4488', 'IMSA SportsCar Championship', 'IMSA WeatherTech SportsCar Championship', 'racing', NULL, NULL, 0, 'IMSA', 'imsa', 'event', 'Motor Racing', NULL, NULL, 'free'),
+    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', NULL, NULL, 0, 'WEC', 'wec', 'event', 'Motor Racing', NULL, NULL, 'premium');
 
 -- =============================================================================
 -- STREAM_MATCH_CACHE TABLE
