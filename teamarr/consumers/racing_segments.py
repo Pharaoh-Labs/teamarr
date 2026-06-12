@@ -10,6 +10,7 @@ one segment via the same code path - no special-casing required.
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 
 from teamarr.core.types import Event
@@ -29,7 +30,8 @@ SESSION_ORDER = [
 
 # Fixed session durations (hours), independent of when the next session
 # starts. Practice/qualifying/sprint sessions run ~1 hour; the race itself
-# uses the configurable "racing" sport duration (default 3 hours).
+# is resolved via _session_duration_hours (name parsing, then per-league
+# fallback, then the configurable "racing" sport duration).
 SESSION_DURATION_HOURS = {
     "fp1": 1.0,
     "fp2": 1.0,
@@ -39,12 +41,76 @@ SESSION_DURATION_HOURS = {
     "qualifying": 1.0,
 }
 
+# Per-league fallback race durations (hours), for endurance series whose
+# typical race length differs significantly from the global "racing" sport
+# default. Used when the race name doesn't encode an explicit duration (see
+# _parse_duration_from_name) - e.g. IMSA sprint races and WEC's "Petit
+# Le Mans" / "Prologue" rounds.
+LEAGUE_RACE_DURATION_HOURS = {
+    "wec": 6.0,
+    "imsa": 2.75,
+}
+
+# Word-number forms used in classic endurance race names (e.g. "Mobil 1
+# Twelve Hours of Sebring").
+_WORD_NUMBERS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "twenty-four": 24,
+    "twenty four": 24,
+}
+
+_DURATION_NAME_RE = re.compile(
+    r"\b(\d{1,2}|" + "|".join(_WORD_NUMBERS) + r")\s+hours?\b",
+    re.IGNORECASE,
+)
+
+
+def _parse_duration_from_name(name: str | None) -> float | None:
+    """Extract an explicit race duration (hours) from an event name.
+
+    Handles classics like "24 Hours of Le Mans", "6 Hours of Spa", and
+    "Mobil 1 Twelve Hours of Sebring". Returns None if no duration is found.
+    """
+    if not name:
+        return None
+    match = _DURATION_NAME_RE.search(name)
+    if not match:
+        return None
+    token = match.group(1).lower()
+    if token in _WORD_NUMBERS:
+        return float(_WORD_NUMBERS[token])
+    return float(token)
+
 
 def _session_duration_hours(
-    session_code: str, sport_durations: dict[str, float] | None
+    session_code: str,
+    sport_durations: dict[str, float] | None,
+    league: str | None = None,
+    event_name: str | None = None,
 ) -> float:
-    """Get the fixed duration (hours) for a session code."""
+    """Get the duration (hours) for a session code.
+
+    For the "race" session, resolves in order: an explicit duration parsed
+    from the event name (e.g. "24 Hours of Le Mans"), a per-league fallback
+    (LEAGUE_RACE_DURATION_HOURS, for endurance series like WEC/IMSA), then
+    the configurable "racing" sport duration.
+    """
     if session_code == "race":
+        if (duration := _parse_duration_from_name(event_name)) is not None:
+            return duration
+        if league and league in LEAGUE_RACE_DURATION_HOURS:
+            return LEAGUE_RACE_DURATION_HOURS[league]
         return (sport_durations or {}).get("racing", 3.0)
     return SESSION_DURATION_HOURS.get(session_code, 1.0)
 
@@ -79,11 +145,11 @@ def get_session_times(
         if session.code != session_code:
             continue
         start_time = session.start_time
-        duration = _session_duration_hours(session.code, sport_durations)
+        duration = _session_duration_hours(session.code, sport_durations, event.league, event.name)
         return start_time, start_time + timedelta(hours=duration)
 
     # Session not found - fall back to event start/duration
-    duration = _session_duration_hours(session_code, sport_durations)
+    duration = _session_duration_hours(session_code, sport_durations, event.league, event.name)
     return event.start_time, event.start_time + timedelta(hours=duration)
 
 
@@ -121,7 +187,9 @@ def expand_racing_segments(
 
         for session in sessions:
             start_time = session.start_time
-            duration = _session_duration_hours(session.code, sport_durations)
+            duration = _session_duration_hours(
+                session.code, sport_durations, event.league, event.name
+            )
             end_time = start_time + timedelta(hours=duration)
 
             result.append(

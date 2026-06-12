@@ -291,7 +291,9 @@ class ChannelLifecycleManager:
             from teamarr.consumers.racing_segments import _session_duration_hours
 
             last_session = max(event.sessions, key=lambda s: s.start_time)
-            duration_hours = _session_duration_hours(last_session.code, self.sport_durations)
+            duration_hours = _session_duration_hours(
+                last_session.code, self.sport_durations, event.league, event.name
+            )
             return to_user_tz(last_session.start_time) + timedelta(hours=duration_hours)
 
         duration_hours = get_sport_duration(
