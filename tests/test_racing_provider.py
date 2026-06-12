@@ -105,6 +105,48 @@ F1_PRE_RACE_EVENT = {
 }
 
 
+# Mid-weekend: ESPN's top-level status mirrors the most recently finished
+# session (FP1/FP2 "post"), but the Race is still days away ("pre"). Status
+# should be derived from the Race, not the top-level field.
+F1_MID_WEEKEND_EVENT = {
+    "id": "600057435",
+    "name": "Barcelona-Catalunya Grand Prix",
+    "shortName": "Barcelona GP",
+    "date": "2026-06-14T13:00Z",
+    "status": {"type": {"state": "post", "detail": "Final"}},
+    "circuit": {"fullName": "Circuit de Barcelona-Catalunya"},
+    "competitions": [
+        {
+            "date": "2026-06-12T11:30Z",
+            "type": {"abbreviation": "FP1"},
+            "status": {"type": {"state": "post"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Charles Leclerc"),
+            ],
+        },
+        {
+            "date": "2026-06-12T15:00Z",
+            "type": {"abbreviation": "FP2"},
+            "status": {"type": {"state": "post"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Charles Leclerc"),
+            ],
+        },
+        {
+            "date": "2026-06-14T13:00Z",
+            "type": {"abbreviation": "Race"},
+            "status": {"type": {"state": "pre"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Charles Leclerc"),
+            ],
+        },
+    ],
+}
+
+
 # NASCAR-style: a single competition with no `type` block.
 NASCAR_SCOREBOARD_EVENT = {
     "id": "401700001",
@@ -197,6 +239,21 @@ class TestF1PreRaceWeekend:
         quali = next(s for s in event.sessions if s.code == "qualifying")
         pole = next(r for r in quali.results if r.driver_name == "Lando Norris")
         assert pole.position == 1
+
+
+class TestF1MidWeekendStatus:
+    def test_status_derived_from_race_not_top_level(self):
+        # Top-level status is "post"/Final (mirrors finished FP1/FP2), but
+        # the Race session is still "pre" - the event should not be final.
+        event = provider._parse_racing_event(F1_MID_WEEKEND_EVENT, "f1", "racing")
+
+        assert event.status.state == "scheduled"
+
+    def test_sessions_still_parsed(self):
+        event = provider._parse_racing_event(F1_MID_WEEKEND_EVENT, "f1", "racing")
+
+        codes = [s.code for s in event.sessions]
+        assert codes == ["fp1", "fp2", "race"]
 
 
 class TestNASCARSingleSession:

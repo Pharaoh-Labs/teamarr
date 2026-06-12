@@ -196,7 +196,17 @@ class TournamentParserMixin:
                 color=None,
             )
 
-            status_data = data.get("status", {})
+            # ESPN's top-level event status mirrors the most recently
+            # started/finished session, not the whole weekend - e.g. it
+            # reports "Final" once Friday practice ends even though the
+            # Race is still days away. Derive status from the *last*
+            # session (the Race) so the event isn't considered final
+            # until the weekend is actually over.
+            competitions = data.get("competitions", [])
+            last_competition = (
+                max(competitions, key=lambda c: c.get("date", "")) if competitions else None
+            )
+            status_data = (last_competition or {}).get("status") or data.get("status", {})
             type_data = status_data.get("type", {}) if status_data else {}
             state = type_data.get("state", "pre")
 
@@ -220,7 +230,7 @@ class TournamentParserMixin:
                 )
 
             sessions = []
-            for competition in data.get("competitions", []):
+            for competition in competitions:
                 session = self._parse_racing_session(competition)
                 if session:
                     sessions.append(session)
