@@ -20,6 +20,7 @@ from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.squiggle import SquiggleClient, SquiggleProvider
+from teamarr.providers.static import StaticCalendarProvider
 from teamarr.providers.supabase import SupabaseLeagueClient, SupabaseProvider
 from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 
@@ -110,6 +111,13 @@ def _create_squiggle_provider() -> SquiggleProvider:
     )
 
 
+def _create_static_calendar_provider() -> StaticCalendarProvider:
+    """Factory for static calendar provider with injected dependencies."""
+    return StaticCalendarProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 # =============================================================================
 # PROVIDER REGISTRATION
 # =============================================================================
@@ -164,6 +172,14 @@ ProviderRegistry.register(
     enabled=True,
 )
 
+ProviderRegistry.register(
+    name="static",
+    provider_class=StaticCalendarProvider,
+    factory=_create_static_calendar_provider,
+    priority=110,  # Hand-maintained calendars for leagues with no live API (IMSA, WEC)
+    enabled=True,
+)
+
 
 # =============================================================================
 # EXPORTS
@@ -188,6 +204,8 @@ __all__ = [
     # Squiggle (AFL)
     "SquiggleClient",
     "SquiggleProvider",
+    # Static calendar (IMSA, WEC)
+    "StaticCalendarProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

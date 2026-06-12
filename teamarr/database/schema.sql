@@ -1108,7 +1108,14 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nascar-xfinity', 'espn', 'racing/nascar-secondary', NULL, 'NASCAR Xfinity Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-secondary.png', NULL, 0, 'NASCAR Xfinity', 'nascar-xfinity', 'event', 'NASCAR Racing', NULL, NULL, NULL),
     ('nascar-truck', 'espn', 'racing/nascar-truck', NULL, 'NASCAR Craftsman Truck Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-truck.png', NULL, 0, 'NASCAR Trucks', 'nascar-truck', 'event', 'NASCAR Racing', NULL, NULL, NULL),
     ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/irl.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL),
-    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL);
+    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL),
+
+    -- Motorsports (static calendar) - no live API coverage (ESPN/TSDB) for these
+    -- series, so schedules come from a hand-maintained JSON calendar that must
+    -- be kept up to date against the official season schedules
+    -- (teamarr/providers/static/calendars/racing_calendars.json).
+    ('imsa', 'static', 'imsa', NULL, 'IMSA WeatherTech SportsCar Championship', 'racing', NULL, NULL, 0, 'IMSA', 'imsa', 'event', 'Motor Racing', NULL, NULL, NULL),
+    ('wec', 'static', 'wec', NULL, 'FIA World Endurance Championship', 'racing', NULL, NULL, 0, 'WEC', 'wec', 'event', 'Motor Racing', NULL, NULL, NULL);
 
 -- =============================================================================
 -- STREAM_MATCH_CACHE TABLE
