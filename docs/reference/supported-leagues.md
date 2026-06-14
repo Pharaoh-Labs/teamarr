@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **133 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **132 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -271,7 +271,6 @@ Motorsports are **Event Only** - no team import available.
 | NASCAR Xfinity Series | `nascar-xfinity` | ESPN | Event |
 | NASCAR Craftsman Truck Series | `nascar-truck` | ESPN | Event |
 | IndyCar Series | `indycar` | ESPN | Event |
-| MotoGP | `motogp` | ESPN | Event |
 | IMSA SportsCar Championship | `imsa` | TSDB | Event |
 | FIA World Endurance Championship | `wec` | TSDB **P** | Event |
 
@@ -283,6 +282,11 @@ vary by series. `imsa` and `wec` are backed by TSDB, which groups its flat
 per-session events into the same multi-session shape — see the
 [TSDB provider docs](providers/tsdb.md) for details and the free-tier caveat
 for WEC.
+
+MotoGP (`motogp`) is currently disabled (`leagues.enabled = 0`) because ESPN's
+`racing/motogp` scoreboard endpoint returns no usable schedule or logo data.
+A TSDB-backed migration (idLeague 4407), similar to the IMSA/WEC session
+grouping above, is planned as a future enhancement.
 
 ---
 
