@@ -394,6 +394,16 @@ class TeamMatcher:
             if retry_result and retry_result.is_matched:
                 result = retry_result
 
+        # Try to resolve country language if not already set and we have a match
+        if result.is_matched and result.country_language is None:
+            lang = None
+            if ctx.team1:
+                lang = self._country_resolver.resolve_language(ctx.team1)
+            if not lang and ctx.team2:
+                lang = self._country_resolver.resolve_language(ctx.team2)
+            if lang:
+                result.country_language = lang
+
         # Cache successful matches
         if result.is_matched and result.event:
             self._cache_result(ctx, result)
@@ -541,6 +551,13 @@ class TeamMatcher:
             ))
 
         if matched_outcomes:
+            # Try to resolve country language
+            lang = None
+            if classified.team1:
+                lang = self._country_resolver.resolve_language(classified.team1)
+            if lang:
+                for outcome in matched_outcomes:
+                    outcome.country_language = lang
             return matched_outcomes
 
         return [MatchOutcome.failed(

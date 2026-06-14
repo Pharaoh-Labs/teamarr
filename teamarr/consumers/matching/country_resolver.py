@@ -44,50 +44,50 @@ _LOCALES = [
 # Hardcoded supplement for FIFA members that are NOT sovereign ISO 3166 states,
 # plus ESPN spelling quirks. Keys are unidecode-normalised lowercase.
 # Values are the exact team_name string ESPN uses.
-_FIFA_OVERRIDES: dict[str, str] = {
+_FIFA_OVERRIDES: dict[str, tuple[str, str | None]] = {
     # Home nations (part of GB in ISO 3166, compete separately in FIFA)
-    "scotland": "Scotland",
-    "escocia": "Scotland",
-    "schottland": "Scotland",
-    "ecosse": "Scotland",  # French "Écosse" → unidecoded
-    "scozia": "Scotland",
-    "skocia": "Scotland",
-    "england": "England",
-    "inglaterra": "England",
-    "angleterre": "England",
-    "inghilterra": "England",
-    "engeland": "England",
-    "wales": "Wales",
-    "gales": "Wales",
-    "pays de galles": "Wales",
-    "galles": "Wales",
-    "cymru": "Wales",
-    "kymry": "Wales",
-    "northern ireland": "Northern Ireland",
-    "irlanda del norte": "Northern Ireland",
-    "irlande du nord": "Northern Ireland",
-    "nordirland": "Northern Ireland",
-    "irlanda del nord": "Northern Ireland",
+    "scotland": ("Scotland", "English"),
+    "escocia": ("Scotland", "Spanish"),
+    "schottland": ("Scotland", "German"),
+    "ecosse": ("Scotland", "French"),  # French "Écosse" → unidecoded
+    "scozia": ("Scotland", "Italian"),
+    "skocia": ("Scotland", "Albanian"),
+    "england": ("England", "English"),
+    "inglaterra": ("England", "Spanish"),
+    "angleterre": ("England", "French"),
+    "inghilterra": ("England", "Italian"),
+    "engeland": ("England", "Dutch"),
+    "wales": ("Wales", "English"),
+    "gales": ("Wales", "Spanish"),
+    "pays de galles": ("Wales", "French"),
+    "galles": ("Wales", "Italian"),
+    "cymru": ("Wales", "Welsh"),
+    "kymry": ("Wales", "Welsh"),
+    "northern ireland": ("Northern Ireland", "English"),
+    "irlanda del norte": ("Northern Ireland", "Spanish"),
+    "irlande du nord": ("Northern Ireland", "French"),
+    "nordirland": ("Northern Ireland", "German"),
+    "irlanda del nord": ("Northern Ireland", "Italian"),
     # ESPN uses "Türkiye" (new official English spelling since 2022)
-    "turkey": "Türkiye",
-    "turquie": "Türkiye",
-    "turkei": "Türkiye",  # German "Türkei" → unidecoded
-    "turchia": "Türkiye",
-    "turkije": "Türkiye",
-    "turquia": "Türkiye",  # Spanish "Turquía" → unidecoded
-    "turquía": "Türkiye",  # keep accented form too (resolved via unidecode at lookup)
+    "turkey": ("Türkiye", "English"),
+    "turquie": ("Türkiye", "French"),
+    "turkei": ("Türkiye", "German"),  # German "Türkei" → unidecoded
+    "turchia": ("Türkiye", "Italian"),
+    "turkije": ("Türkiye", "Dutch"),
+    "turquia": ("Türkiye", "Spanish"),  # Spanish "Turquía" → unidecoded
+    "turquía": ("Türkiye", "Spanish"),  # keep accented form too (resolved via unidecode at lookup)
     # Kosovo (FIFA member since 2016, not universally recognised)
-    "kosovo": "Kosovo",
-    "cossovo": "Kosovo",
+    "kosovo": ("Kosovo", None),
+    "cossovo": ("Kosovo", "Portuguese"),
     # Palestine (FIFA member)
-    "palestine": "Palestine",
-    "palestina": "Palestine",
-    "palastina": "Palestine",  # German "Palästina" → unidecoded
-    "palestaine": "Palestine",
+    "palestine": ("Palestine", "English"),
+    "palestina": ("Palestine", "Spanish"),
+    "palastina": ("Palestine", "German"),  # German "Palästina" → unidecoded
+    "palestaine": ("Palestine", "Arabic"),
     # Taiwan (FIFA uses "Chinese Taipei")
-    "taiwan": "Chinese Taipei",
-    "chinese taipei": "Chinese Taipei",
-    "taipei chinos": "Chinese Taipei",
+    "taiwan": ("Chinese Taipei", "English"),
+    "chinese taipei": ("Chinese Taipei", "English"),
+    "taipei chinos": ("Chinese Taipei", "Spanish"),
 }
 
 
@@ -120,6 +120,7 @@ class CountryNameResolver:
 
     def __init__(self) -> None:
         self._map: dict[str, str] = {}
+        self._lang_map: dict[str, str] = {}
         self._build()
         logger.debug(
             "[COUNTRY] Country name resolver built: %d entries across %d locales",
@@ -141,6 +142,17 @@ class CountryNameResolver:
         """
         return self._map.get(_normalize(name))
 
+    def resolve_language(self, name: str) -> str | None:
+        """Resolve a name to the language of its country.
+
+        Args:
+            name: Team name as extracted from stream (any language/case/accents)
+
+        Returns:
+            English name of the language (e.g. "Spanish"), or None if not recognised.
+        """
+        return self._lang_map.get(_normalize(name))
+
     def _build(self) -> None:
         """Build the locale-aware name → canonical mapping."""
         try:
@@ -154,7 +166,11 @@ class CountryNameResolver:
                 "Install pycountry and babel to enable."
             )
             # Still load the FIFA overrides which need no extra deps
-            self._map.update({_normalize(k): _normalize(v) for k, v in _FIFA_OVERRIDES.items()})
+            for k, (v, lang) in _FIFA_OVERRIDES.items():
+                norm_k = _normalize(k)
+                self._map[norm_k] = _normalize(v)
+                if lang:
+                    self._lang_map[norm_k] = lang
             return
 
         # Build locale objects up front (skip bad locale codes silently)
@@ -184,7 +200,14 @@ class CountryNameResolver:
             for locale in locales:
                 localized = locale.territories.get(country.alpha_2)
                 if localized:
-                    self._map[_normalize(localized)] = canonical
+                    norm_loc = _normalize(localized)
+                    self._map[norm_loc] = canonical
+                    # Store the English name of the language (e.g., "Spanish")
+                    self._lang_map[norm_loc] = locale.english_name
 
         # FIFA overrides win over the pycountry defaults (e.g. "turkey" → "turkiye")
-        self._map.update({_normalize(k): _normalize(v) for k, v in _FIFA_OVERRIDES.items()})
+        for k, (v, lang) in _FIFA_OVERRIDES.items():
+            norm_k = _normalize(k)
+            self._map[norm_k] = _normalize(v)
+            if lang and norm_k not in self._lang_map:
+                self._lang_map[norm_k] = lang

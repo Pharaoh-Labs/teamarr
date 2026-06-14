@@ -636,6 +636,11 @@ class ChannelLifecycleService:
                             stream_name, conn
                         )
 
+                        # Fallback to language of country name if no explicit hint was found
+                        if matched_keyword is None and outcome.country_language:
+                            matched_keyword = outcome.country_language
+                            keyword_behavior = "separate"
+
                         # V1 Parity: If behavior is 'ignore', skip stream entirely
                         # This must happen BEFORE any channel lookup/creation
                         if keyword_behavior == "ignore":

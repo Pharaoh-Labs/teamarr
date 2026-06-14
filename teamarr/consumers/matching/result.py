@@ -210,6 +210,9 @@ class MatchOutcome:
     found_league: str | None = None
     found_league_name: str | None = None
 
+    # Extracted country language fallback (if matched via localized country name)
+    country_language: str | None = None
+
     @classmethod
     def filtered(
         cls,
@@ -265,6 +268,7 @@ class MatchOutcome:
         origin_match_method: str | None = None,
         epg_program_start: datetime | None = None,
         epg_program_end: datetime | None = None,
+        country_language: str | None = None,
     ) -> "MatchOutcome":
         """Create a MATCHED result.
 
@@ -294,6 +298,7 @@ class MatchOutcome:
             origin_match_method=origin_match_method,
             epg_program_start=epg_program_start,
             epg_program_end=epg_program_end,
+            country_language=country_language,
         )
 
     @classmethod
@@ -330,6 +335,7 @@ class MatchOutcome:
             origin_match_method=matched_outcome.origin_match_method,
             found_league=found_league,
             found_league_name=found_league_name,
+            country_language=matched_outcome.country_language,
         )
 
     @property
