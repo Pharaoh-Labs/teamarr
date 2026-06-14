@@ -1104,10 +1104,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- (NASCAR exposes only a single race-session competition; IndyCar/MotoGP
     -- session structure needs confirmation in a follow-up).
     ('f1', 'espn', 'racing/f1', NULL, 'Formula 1', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/f1.png', NULL, 0, 'F1', 'f1', 'event', 'Formula 1 Racing', NULL, NULL, NULL),
-    ('nascar-cup', 'espn', 'racing/nascar-premier', NULL, 'NASCAR Cup Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-premier.png', NULL, 0, 'NASCAR Cup', 'nascar-cup', 'event', 'NASCAR Racing', NULL, NULL, NULL),
-    ('nascar-xfinity', 'espn', 'racing/nascar-secondary', NULL, 'NASCAR Xfinity Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-secondary.png', NULL, 0, 'NASCAR Xfinity', 'nascar-xfinity', 'event', 'NASCAR Racing', NULL, NULL, NULL),
-    ('nascar-truck', 'espn', 'racing/nascar-truck', NULL, 'NASCAR Craftsman Truck Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/nascar-truck.png', NULL, 0, 'NASCAR Trucks', 'nascar-truck', 'event', 'NASCAR Racing', NULL, NULL, NULL),
-    ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/irl.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL),
+    ('nascar-cup', 'espn', 'racing/nascar-premier', NULL, 'NASCAR Cup Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Cup', 'nascar-cup', 'event', 'NASCAR Racing', NULL, NULL, NULL),
+    ('nascar-xfinity', 'espn', 'racing/nascar-secondary', NULL, 'NASCAR Xfinity Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Xfinity', 'nascar-xfinity', 'event', 'NASCAR Racing', NULL, NULL, NULL),
+    ('nascar-truck', 'espn', 'racing/nascar-truck', NULL, 'NASCAR Craftsman Truck Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Trucks', 'nascar-truck', 'event', 'NASCAR Racing', NULL, NULL, NULL),
+    ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/i/espn/teamlogos/500/indycar_series.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL),
     ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL),
 
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
