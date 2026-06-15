@@ -185,6 +185,8 @@ class StreamOrderingService:
             return self._match_epg_match(stream)
         elif rule.type == "dispatcharr_group":
             return self._match_dispatcharr_group(stream, rule.value)
+        elif rule.type == "stats_metric":
+            return self._match_stats_metric(stream, rule.value)
         return False
 
     def _match_m3u(self, stream: ManagedChannelStream, account_name: str) -> bool:
@@ -267,6 +269,88 @@ class StreamOrderingService:
         if not stream.dispatcharr_channel_group:
             return False
         return stream.dispatcharr_channel_group.lower() == group_name.lower()
+
+    _STATS_OPERATORS = {
+        ">": lambda a, b: a > b,
+        "<": lambda a, b: a < b,
+        ">=": lambda a, b: a >= b,
+        "<=": lambda a, b: a <= b,
+        "=": lambda a, b: a == b,
+    }
+
+    def _resolve_stat_value(self, stats: dict, metric: str) -> float | None:
+        """Resolve a metric name to a float, including virtual derived fields.
+
+        resolution_width / resolution_height extract from the "1920x1080" string
+        that Dispatcharr stores in the 'resolution' key.
+        """
+        if metric == "resolution_width":
+            res = str(stats.get("resolution") or "")
+            if "x" in res:
+                try:
+                    return float(res.split("x")[0])
+                except (ValueError, IndexError):
+                    return None
+            return None
+        if metric == "resolution_height":
+            res = str(stats.get("resolution") or "")
+            if "x" in res:
+                try:
+                    return float(res.split("x")[1])
+                except (ValueError, IndexError):
+                    return None
+            return None
+        raw = stats.get(metric)
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            return None
+
+    def _match_stats_metric(self, stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match stream by numeric stat comparisons encoded in rule_value.
+
+        Supports multiple AND conditions separated by ";":
+          "ffmpeg_output_bitrate|>=|4000;source_fps|>=|50"
+
+        Each condition is "metric|operator|threshold". Actual field names match
+        Dispatcharr's stream_stats JSON: resolution, source_fps,
+        ffmpeg_output_bitrate, audio_bitrate, sample_rate. Virtual metrics
+        resolution_width / resolution_height are derived from the resolution string.
+        """
+        if not rule_value:
+            return False
+        try:
+            for cond in rule_value.split(";"):
+                parts = cond.split("|", 2)
+                if len(parts) < 2:
+                    return False
+                metric, operator = parts[0], parts[1]
+                threshold_str = parts[2] if len(parts) > 2 else ""
+
+                if operator == "is_unknown":
+                    # Matches when stats are absent entirely OR this metric has no value
+                    has_value = (
+                        stream.stream_stats is not None
+                        and self._resolve_stat_value(stream.stream_stats, metric) is not None
+                    )
+                    if has_value:
+                        return False
+                else:
+                    if not stream.stream_stats:
+                        return False
+                    val = self._resolve_stat_value(stream.stream_stats, metric)
+                    if val is None:
+                        return False
+                    compare = self._STATS_OPERATORS.get(operator)
+                    if compare is None:
+                        return False
+                    if not compare(val, float(threshold_str)):
+                        return False
+            return True
+        except (ValueError, TypeError, AttributeError):
+            return False
 
     def _match_stream_type(self, stream: ManagedChannelStream, rule_value: str) -> bool:
         """Match stream by type, with optional team filter (value may be 'team|key1,key2')."""

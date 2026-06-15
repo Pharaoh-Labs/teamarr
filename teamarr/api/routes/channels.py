@@ -8,7 +8,7 @@ Provides REST API for:
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -142,6 +142,26 @@ class DeleteResponse(BaseModel):
     message: str
 
 
+class ChannelStreamEntry(BaseModel):
+    """A single stream attached to a managed channel, with cached stats."""
+
+    dispatcharr_stream_id: int
+    stream_name: str | None = None
+    source_group: str | None = None
+    m3u_account_name: str | None = None
+    match_method: str | None = None
+    priority: int = 0
+    stream_stats: dict | None = None
+    stream_stats_updated_at: str | None = None
+
+
+class ChannelStreamsResponse(BaseModel):
+    """Streams attached to a managed channel."""
+
+    streams: list[ChannelStreamEntry]
+    stats_refreshed: bool = False
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
@@ -241,6 +261,74 @@ def get_managed_channel(channel_id: int):
         sync_status=channel.sync_status,
         created_at=_safe_isoformat(channel.created_at),
         updated_at=_safe_isoformat(channel.updated_at),
+    )
+
+
+@router.get("/managed/{channel_id}/streams", response_model=ChannelStreamsResponse)
+def get_managed_channel_streams(channel_id: int):
+    """Get active streams for a managed channel with cached stats.
+
+    Triggers a stats refresh when any stream has null stats or stats older than 1 hour.
+    Source group names are resolved from event_epg_groups via a join.
+    """
+    from teamarr.database.channels import get_managed_channel
+    from teamarr.database.channels.streams import get_channel_streams, refresh_stream_stats
+
+    with get_db() as conn:
+        channel = get_managed_channel(conn, channel_id)
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Channel {channel_id} not found",
+            )
+
+        streams = get_channel_streams(conn, channel_id)
+
+        # Resolve source group names in one query
+        group_ids = {s.source_group_id for s in streams if s.source_group_id is not None}
+        group_names: dict[int, str] = {}
+        if group_ids:
+            placeholders = ",".join("?" * len(group_ids))
+            rows = conn.execute(
+                f"SELECT id, name FROM event_epg_groups WHERE id IN ({placeholders})",
+                list(group_ids),
+            ).fetchall()
+            group_names = {row[0]: row[1] for row in rows}
+
+        # Refresh stats when any stream has null stats or stats older than 1 hour
+        needs_refresh = any(
+            s.stream_stats is None or (
+                s.stream_stats_updated_at is not None and (
+                    datetime.now(timezone.utc) - datetime.fromisoformat(  # noqa: UP017
+                        str(s.stream_stats_updated_at).replace("Z", "+00:00")
+                    )
+                ).total_seconds() > 3600
+            )
+            for s in streams
+        )
+
+        stats_refreshed = False
+        if needs_refresh and streams:
+            updated = refresh_stream_stats(conn, channel_id)
+            if updated:
+                streams = get_channel_streams(conn, channel_id)
+                stats_refreshed = True
+
+    return ChannelStreamsResponse(
+        streams=[
+            ChannelStreamEntry(
+                dispatcharr_stream_id=s.dispatcharr_stream_id,
+                stream_name=s.stream_name,
+                source_group=group_names.get(s.source_group_id) if s.source_group_id else None,
+                m3u_account_name=s.m3u_account_name,
+                match_method=s.match_method,
+                priority=s.priority,
+                stream_stats=s.stream_stats,
+                stream_stats_updated_at=_safe_isoformat(s.stream_stats_updated_at),
+            )
+            for s in streams
+        ],
+        stats_refreshed=stats_refreshed,
     )
 
 

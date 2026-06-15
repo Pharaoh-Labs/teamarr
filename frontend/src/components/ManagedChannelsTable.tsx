@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import React, { useState, useMemo } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Alert } from "@/components/ui/alert"
@@ -12,9 +12,11 @@ import {
   Search,
   AlertTriangle,
   X,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -49,8 +51,9 @@ import {
   deleteManagedChannel,
   previewResetChannels,
   executeResetChannels,
+  getChannelStreams,
 } from "@/api/channels"
-import type { ManagedChannel, ResetChannelInfo } from "@/api/channels"
+import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry } from "@/api/channels"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
 
@@ -81,6 +84,53 @@ function formatRelativeTime(dateStr: string | null): string {
   return formatDateTime(dateStr)
 }
 
+function StreamStatsBadges({ stats }: { stats: Record<string, unknown> | null }) {
+  if (!stats) return <span className="text-muted-foreground">—</span>
+
+  const chip = (content: React.ReactNode) => (
+    <span className="inline-flex rounded px-1.5 py-0.5 bg-muted text-[11px] font-mono leading-none text-muted-foreground">
+      {content}
+    </span>
+  )
+
+  const chips: React.ReactNode[] = []
+
+  const resolution = stats.resolution as string | undefined
+  if (resolution && resolution.includes("x")) {
+    chips.push(chip(resolution.replace("x", "×")))
+  }
+
+  const fps = stats.source_fps as number | undefined
+  if (fps != null) chips.push(chip(`${fps}fps`))
+
+  const bitrate = stats.ffmpeg_output_bitrate as number | undefined
+  if (bitrate != null) chips.push(chip(bitrate >= 1000 ? `${(bitrate / 1000).toFixed(1)} Mbps` : `${bitrate} kbps`))
+
+  const audioBitrate = stats.audio_bitrate as number | undefined
+  if (audioBitrate != null) chips.push(chip(`${audioBitrate} kbps audio`))
+
+  const sampleRate = stats.sample_rate as number | undefined
+  if (sampleRate != null) chips.push(chip(`${(sampleRate / 1000).toFixed(0)} kHz`))
+
+  if (chips.length === 0) return <span className="text-muted-foreground">—</span>
+
+  return <div className="flex flex-wrap gap-1 items-center">{chips.map((c, i) => <React.Fragment key={i}>{c}</React.Fragment>)}</div>
+}
+
+function getMatchMethodBadge(method: string | null) {
+  if (!method) return null
+  switch (method) {
+    case "epg":
+      return <Badge variant="info" className="text-xs">EPG</Badge>
+    case "fuzzy":
+      return <Badge variant="secondary" className="text-xs">Fuzzy</Badge>
+    case "exact":
+      return <Badge variant="outline" className="text-xs">Exact</Badge>
+    default:
+      return <Badge variant="outline" className="text-xs">{method}</Badge>
+  }
+}
+
 function getSyncStatusBadge(status: string) {
   switch (status) {
     case "in_sync":
@@ -106,6 +156,11 @@ export function ManagedChannelsTable() {
   const [sportFilter, setSportFilter] = useState<string>("")
   const [leagueFilter, setLeagueFilter] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("")
+
+  // Expand states
+  const [expandedChannels, setExpandedChannels] = useState<Set<number>>(new Set())
+  const [channelStreams, setChannelStreams] = useState<Map<number, ChannelStreamEntry[]>>(new Map())
+  const [loadingStreams, setLoadingStreams] = useState<Set<number>>(new Set())
 
   // UI states
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
@@ -262,6 +317,28 @@ export function ManagedChannelsTable() {
     },
   })
 
+  const handleToggleExpand = async (channelId: number) => {
+    const next = new Set(expandedChannels)
+    if (next.has(channelId)) {
+      next.delete(channelId)
+      setExpandedChannels(next)
+      return
+    }
+    next.add(channelId)
+    setExpandedChannels(next)
+    if (!channelStreams.has(channelId)) {
+      setLoadingStreams((prev) => new Set(prev).add(channelId))
+      try {
+        const data = await getChannelStreams(channelId)
+        setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
+      } catch {
+        setChannelStreams((prev) => new Map(prev).set(channelId, []))
+      } finally {
+        setLoadingStreams((prev) => { const s = new Set(prev); s.delete(channelId); return s })
+      }
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteConfirm) return
     try {
@@ -400,7 +477,11 @@ export function ManagedChannelsTable() {
       <CollapsibleSection
         title="Managed Channels"
         icon={<Tv className="h-5 w-5 text-muted-foreground" />}
-        count={`(${channelsData?.channels.length ?? 0})`}
+        count={
+          filteredChannels.length !== (channelsData?.channels.length ?? 0)
+            ? `(${filteredChannels.length} of ${channelsData?.channels.length ?? 0})`
+            : `(${channelsData?.channels.length ?? 0})`
+        }
         persistKey="channels.active"
       >
 
@@ -478,20 +559,6 @@ export function ManagedChannelsTable() {
       )}
 
       {/* Channels List */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
-            <Tv className="h-5 w-5" />
-            Channels ({filteredChannels.length}
-            {filteredChannels.length !== (channelsData?.channels.length ?? 0) && (
-              <span className="text-muted-foreground font-normal">
-                {" "}of {channelsData?.channels.length ?? 0}
-              </span>
-            )}
-            )
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -501,9 +568,10 @@ export function ManagedChannelsTable() {
               No managed channels found.
             </div>
           ) : (
-            <Table className="table-fixed">
+            <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead className="w-10">
                     <Checkbox
                       checked={isAllSelected}
@@ -520,6 +588,7 @@ export function ManagedChannelsTable() {
                 </TableRow>
                 {/* Filter row */}
                 <TableRow className="border-b-2 border-border">
+                  <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5">
                     <div className="relative">
@@ -581,12 +650,24 @@ export function ManagedChannelsTable() {
               <TableBody>
                 {filteredChannels.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No channels match the current filters.
                     </TableCell>
                   </TableRow>
                 ) : filteredChannels.map((channel) => (
-                  <TableRow key={channel.id}>
+                  <React.Fragment key={channel.id}>
+                  <TableRow className={expandedChannels.has(channel.id) ? "border-b-0" : ""}>
+                    <TableCell className="px-1">
+                      <button
+                        onClick={() => handleToggleExpand(channel.id)}
+                        className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
+                        aria-label={expandedChannels.has(channel.id) ? "Collapse" : "Expand"}
+                      >
+                        {expandedChannels.has(channel.id)
+                          ? <ChevronDown className="h-4 w-4" />
+                          : <ChevronRight className="h-4 w-4" />}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(channel.id)}
@@ -654,12 +735,60 @@ export function ManagedChannelsTable() {
                       </div>
                     </TableCell>
                   </TableRow>
+                  {expandedChannels.has(channel.id) && (
+                    <TableRow className="hover:bg-transparent border-b border-border/40">
+                      <TableCell colSpan={9} className="p-0 pb-2">
+                        <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
+                        {loadingStreams.has(channel.id) ? (
+                          <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Loading streams…
+                          </div>
+                        ) : (channelStreams.get(channel.id) ?? []).length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-1">No active streams.</p>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <colgroup>
+                              <col className="w-[28%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[16%]" />
+                              <col className="w-[10%]" />
+                              <col className="w-[6%]" />
+                              <col className="w-[22%]" />
+                            </colgroup>
+                            <thead>
+                              <tr>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Stream</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Priority</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">Stats</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(channelStreams.get(channel.id) ?? []).map((stream) => (
+                                <tr key={stream.dispatcharr_stream_id} className="border-t border-border/30">
+                                  <td className="py-1 pr-4 font-medium">{stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}</td>
+                                  <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
+                                  <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
+                                  <td className="py-1 pr-4">{getMatchMethodBadge(stream.match_method)}</td>
+                                  <td className="py-1 pr-4 text-muted-foreground">{stream.priority}</td>
+                                  <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
 
       </CollapsibleSection>
 

@@ -1372,6 +1372,10 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     attach_at TIMESTAMP,
     detach_at TIMESTAMP,
 
+    -- Stream stats cached from Dispatcharr (stream_stats JSON on the Stream object)
+    stream_stats JSON DEFAULT NULL,
+    stream_stats_updated_at TIMESTAMP DEFAULT NULL,
+
     -- Sync status
     last_verified_at TIMESTAMP,
     in_dispatcharr BOOLEAN DEFAULT 1,

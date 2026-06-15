@@ -3,6 +3,7 @@
 CRUD operations for managed_channel_streams table.
 """
 
+import json
 import logging
 from sqlite3 import Connection
 
@@ -384,6 +385,63 @@ def reorder_channel_streams(
         )
 
     return updated_count
+
+
+def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
+    """Fetch and cache stream_stats from Dispatcharr for a managed channel's active streams.
+
+    Pulls stats from Dispatcharr's /api/channels/streams/by-ids/ endpoint and
+    updates the stream_stats / stream_stats_updated_at columns in
+    managed_channel_streams. Streams Dispatcharr hasn't probed yet return
+    stream_stats=null and are left unchanged.
+
+    Args:
+        conn: Database connection
+        managed_channel_id: Managed channel whose streams should be refreshed
+
+    Returns:
+        Number of streams whose stats were updated
+    """
+    from teamarr.dispatcharr.factory import get_dispatcharr_client
+
+    cursor = conn.execute(
+        """SELECT dispatcharr_stream_id FROM managed_channel_streams
+           WHERE managed_channel_id = ? AND removed_at IS NULL""",
+        (managed_channel_id,),
+    )
+    stream_ids = [row[0] for row in cursor.fetchall()]
+    if not stream_ids:
+        return 0
+
+    client = get_dispatcharr_client()
+    if client is None:
+        return 0
+
+    stats_list = client.get_stream_stats_by_ids(stream_ids)
+    if not stats_list:
+        return 0
+
+    updated = 0
+    for entry in stats_list:
+        sid = entry.get("id")
+        raw_stats = entry.get("stream_stats")
+        updated_at = entry.get("stream_stats_updated_at")
+        if sid is None or raw_stats is None:
+            continue
+        stats_json = json.dumps(raw_stats) if isinstance(raw_stats, dict) else raw_stats
+        result = conn.execute(
+            """UPDATE managed_channel_streams
+               SET stream_stats = ?, stream_stats_updated_at = ?
+               WHERE managed_channel_id = ? AND dispatcharr_stream_id = ? AND removed_at IS NULL""",
+            (stats_json, updated_at, managed_channel_id, sid),
+        )
+        if result.rowcount > 0:
+            updated += 1
+
+    if updated:
+        logger.debug("[STREAM STATS] Updated stats for %d/%d streams on channel %d",
+                     updated, len(stream_ids), managed_channel_id)
+    return updated
 
 
 def get_ordered_stream_ids(

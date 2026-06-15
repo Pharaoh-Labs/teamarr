@@ -162,3 +162,23 @@ export async function previewResetChannels(): Promise<ResetPreviewResponse> {
 export async function executeResetChannels(): Promise<ResetExecuteResponse> {
   return api.post("/channels/reset", {})
 }
+
+export interface ChannelStreamEntry {
+  dispatcharr_stream_id: number
+  stream_name: string | null
+  source_group: string | null
+  m3u_account_name: string | null
+  match_method: string | null
+  priority: number
+  stream_stats: Record<string, unknown> | null
+  stream_stats_updated_at: string | null
+}
+
+export interface ChannelStreamsResponse {
+  streams: ChannelStreamEntry[]
+  stats_refreshed: boolean
+}
+
+export async function getChannelStreams(channelId: number): Promise<ChannelStreamsResponse> {
+  return api.get(`/channels/managed/${channelId}/streams`)
+}
