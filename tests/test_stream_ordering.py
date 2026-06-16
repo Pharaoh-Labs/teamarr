@@ -389,3 +389,64 @@ class TestStatsMetric:
         # no operator
         assert self._svc("source_fps").compute_priority(stream) == NO_MATCH_PRIORITY
         assert self._svc("source_fps|>=|notanumber").compute_priority(stream) == NO_MATCH_PRIORITY
+
+
+class TestEvaluateRules:
+    """evaluate_rules reports every matching rule plus the 'everything else'
+    baseline, flagging the one that won."""
+
+    def test_multiple_matches_only_lowest_priority_wins(self):
+        rules = [
+            StreamOrderingRule("regex", r"(?i)1080p", 5),
+            StreamOrderingRule("regex", r"(?i)espn", 2),
+        ]
+        svc = StreamOrderingService(rules)
+        evals = svc.evaluate_rules(_stream("ESPN 1080p"))
+
+        # Two regex matches + the implicit baseline (no catch_all configured).
+        assert [e.type for e in evals] == ["regex", "regex", "catch_all"]
+        winners = [e for e in evals if e.is_winner]
+        assert len(winners) == 1
+        # The priority-2 ESPN rule wins (lower number, evaluated first).
+        assert winners[0].priority == 2
+        assert winners[0].type == "regex"
+
+    def test_baseline_shown_with_default_priority_when_no_catch_all(self):
+        svc = StreamOrderingService([StreamOrderingRule("regex", r"(?i)espn", 2)])
+        baseline = svc.evaluate_rules(_stream("ESPN 1080p"))[-1]
+        assert baseline.type == "catch_all"
+        assert baseline.priority == NO_MATCH_PRIORITY
+        assert baseline.is_winner is False  # a specific rule won
+
+    def test_catch_all_wins_when_nothing_else_matches(self):
+        rules = [
+            StreamOrderingRule("regex", r"(?i)1080p", 5),
+            StreamOrderingRule("catch_all", "", 50),
+        ]
+        svc = StreamOrderingService(rules)
+        evals = svc.evaluate_rules(_stream("ESPN 720p"))
+
+        assert len(evals) == 1
+        assert evals[0].type == "catch_all"
+        assert evals[0].priority == 50
+        assert evals[0].is_winner is True
+
+    def test_catch_all_shown_as_baseline_when_a_rule_matches(self):
+        rules = [
+            StreamOrderingRule("regex", r"(?i)1080p", 5),
+            StreamOrderingRule("catch_all", "", 50),
+        ]
+        svc = StreamOrderingService(rules)
+        evals = svc.evaluate_rules(_stream("ESPN 1080p"))
+
+        assert [e.type for e in evals] == ["regex", "catch_all"]
+        assert evals[0].is_winner is True  # the regex rule won
+        assert evals[1].is_winner is False  # baseline shown but did not win
+        assert evals[1].priority == 50
+
+    def test_no_rules_returns_just_the_baseline(self):
+        evals = StreamOrderingService([]).evaluate_rules(_stream("anything"))
+        assert len(evals) == 1
+        assert evals[0].type == "catch_all"
+        assert evals[0].priority == NO_MATCH_PRIORITY
+        assert evals[0].is_winner is True

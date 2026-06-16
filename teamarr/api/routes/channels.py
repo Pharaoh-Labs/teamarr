@@ -142,6 +142,15 @@ class DeleteResponse(BaseModel):
     message: str
 
 
+class StreamRuleMatch(BaseModel):
+    """One ordering rule that matched a stream (priority explainer)."""
+
+    type: str
+    value: str
+    priority: int
+    is_winner: bool
+
+
 class ChannelStreamEntry(BaseModel):
     """A single stream attached to a managed channel, with cached stats."""
 
@@ -153,6 +162,7 @@ class ChannelStreamEntry(BaseModel):
     priority: int = 0
     stream_stats: dict | None = None
     stream_stats_updated_at: str | None = None
+    matched_rules: list[StreamRuleMatch] = []
 
 
 class ChannelStreamsResponse(BaseModel):
@@ -273,6 +283,7 @@ def get_managed_channel_streams(channel_id: int):
     """
     from teamarr.database.channels import get_managed_channel
     from teamarr.database.channels.streams import get_channel_streams, refresh_stream_stats
+    from teamarr.services.stream_ordering import get_stream_ordering_service
 
     with get_db() as conn:
         channel = get_managed_channel(conn, channel_id)
@@ -314,6 +325,20 @@ def get_managed_channel_streams(channel_id: int):
                 streams = get_channel_streams(conn, channel_id)
                 stats_refreshed = True
 
+        # Explain each stream's priority: which ordering rules currently match it.
+        ordering_service = get_stream_ordering_service(conn)
+        matched_by_stream: dict[int, list[StreamRuleMatch]] = {
+            s.dispatcharr_stream_id: [
+                StreamRuleMatch(
+                    type=e.type, value=e.value, priority=e.priority, is_winner=e.is_winner
+                )
+                for e in ordering_service.evaluate_rules(
+                    s, group_names.get(s.source_group_id) if s.source_group_id else None
+                )
+            ]
+            for s in streams
+        }
+
     return ChannelStreamsResponse(
         streams=[
             ChannelStreamEntry(
@@ -325,6 +350,7 @@ def get_managed_channel_streams(channel_id: int):
                 priority=s.priority,
                 stream_stats=s.stream_stats,
                 stream_stats_updated_at=_safe_isoformat(s.stream_stats_updated_at),
+                matched_rules=matched_by_stream.get(s.dispatcharr_stream_id, []),
             )
             for s in streams
         ],

@@ -163,6 +163,13 @@ export async function executeResetChannels(): Promise<ResetExecuteResponse> {
   return api.post("/channels/reset", {})
 }
 
+export interface StreamRuleMatch {
+  type: string
+  value: string
+  priority: number
+  is_winner: boolean
+}
+
 export interface ChannelStreamEntry {
   dispatcharr_stream_id: number
   stream_name: string | null
@@ -172,6 +179,7 @@ export interface ChannelStreamEntry {
   priority: number
   stream_stats: Record<string, unknown> | null
   stream_stats_updated_at: string | null
+  matched_rules: StreamRuleMatch[]
 }
 
 export interface ChannelStreamsResponse {

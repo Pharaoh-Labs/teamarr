@@ -34,6 +34,16 @@ class StreamWithPriority:
     matched_rule_type: str | None = None  # Which rule type matched
 
 
+@dataclass
+class RuleEvaluation:
+    """One ordering rule that matched a stream, for the priority explainer popup."""
+
+    type: str
+    value: str
+    priority: int
+    is_winner: bool  # True for the rule that actually set the priority
+
+
 class StreamOrderingService:
     """Service for computing stream ordering based on rules.
 
@@ -124,6 +134,52 @@ class StreamOrderingService:
             computed_priority=catch_all_priority,
             matched_rule_type="catch_all" if catch_all_priority != NO_MATCH_PRIORITY else None,
         )
+
+    def evaluate_rules(
+        self,
+        stream: ManagedChannelStream,
+        source_group_name: str | None = None,
+    ) -> list[RuleEvaluation]:
+        """Return the rules that matched a stream, marking which one won.
+
+        Mirrors compute_priority's first-match-wins / catch_all-fallback logic,
+        but reports every matching rule (not just the winner) so the UI can
+        explain why a stream got its priority. Rules are already priority-sorted.
+
+        Args:
+            stream: The stream to evaluate
+            source_group_name: Optional pre-fetched group name (for 'group' rules)
+
+        Returns:
+            Matched rules in priority order, always followed by the "everything
+            else" baseline (the configured catch_all rule, or the implicit
+            no-match default). The rule that set the priority — first match, or
+            the baseline when nothing matched — has is_winner=True.
+        """
+        matched: list[RuleEvaluation] = []
+        catch_all: StreamOrderingRule | None = None
+        winner_found = False
+
+        for rule in self.rules:
+            if rule.type == "catch_all":
+                catch_all = rule
+                continue
+            if self._matches(stream, rule, source_group_name):
+                is_winner = not winner_found
+                winner_found = winner_found or is_winner
+                matched.append(
+                    RuleEvaluation(rule.type, rule.value, rule.priority, is_winner)
+                )
+
+        # Always surface the baseline so the popup shows what "everything else"
+        # falls back to, even when a specific rule won.
+        baseline_priority = catch_all.priority if catch_all else NO_MATCH_PRIORITY
+        baseline_value = catch_all.value if catch_all else ""
+        matched.append(
+            RuleEvaluation("catch_all", baseline_value, baseline_priority, not winner_found)
+        )
+
+        return matched
 
     def sort_streams(
         self,

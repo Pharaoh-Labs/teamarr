@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Alert } from "@/components/ui/alert"
@@ -53,7 +53,7 @@ import {
   executeResetChannels,
   getChannelStreams,
 } from "@/api/channels"
-import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry } from "@/api/channels"
+import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
 
@@ -129,6 +129,94 @@ function getMatchMethodBadge(method: string | null) {
     default:
       return <Badge variant="outline" className="text-xs">{method}</Badge>
   }
+}
+
+const RULE_TYPE_LABELS: Record<string, string> = {
+  m3u: "M3U Account",
+  group: "Event Group",
+  regex: "Regex",
+  stream_type: "Stream Type",
+  team_feed: "Home/Away Feed",
+  not_team_feed: "Not Home/Away Feed",
+  epg_match: "EPG Match",
+  dispatcharr_group: "Dispatcharr Group",
+  stats_metric: "Stats Metric",
+  catch_all: "Everything else",
+}
+
+// Clickable priority number → compact popover explaining which ordering rules
+// matched the stream, with the winning rule (the one that set the priority)
+// highlighted. Mirrors the click-popover pattern used by StatsMetricBuilder.
+function PriorityCell({ priority, rules }: { priority: number; rules: StreamRuleMatch[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false) }
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [open])
+
+  if (rules.length === 0) {
+    return <span className="text-muted-foreground">{priority}</span>
+  }
+
+  // Winners first, then by ascending rule priority.
+  const ordered = [...rules].sort(
+    (a, b) => Number(b.is_winner) - Number(a.is_winner) || a.priority - b.priority
+  )
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+        title="Show matched rules"
+      >
+        {priority}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-lg">
+          <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Matched rules
+          </div>
+          <div className="space-y-0.5">
+            {ordered.map((r, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-1.5 rounded px-1 py-0.5 ${
+                  r.is_winner ? "bg-primary/10" : ""
+                }`}
+              >
+                <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                  {r.priority}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-[11px] font-medium">{RULE_TYPE_LABELS[r.type] ?? r.type}</span>
+                  {r.value && (
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
+                      {r.value}
+                    </span>
+                  )}
+                </span>
+                {r.is_winner && (
+                  <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">applied</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function getSyncStatusBadge(status: string) {
@@ -487,7 +575,7 @@ export function ManagedChannelsTable() {
 
       {/* Section actions — live inside the collapsible body so they only show
           when the section is expanded. */}
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 mb-3">
         <Button
           variant="outline"
           size="sm"
@@ -585,6 +673,7 @@ export function ManagedChannelsTable() {
                   <TableHead className="w-20">Status</TableHead>
                   <TableHead className="w-24">Delete At</TableHead>
                   <TableHead className="w-16 text-right">Actions</TableHead>
+                  <TableHead className="w-6"></TableHead>
                 </TableRow>
                 {/* Filter row */}
                 <TableRow className="border-b-2 border-border">
@@ -645,12 +734,13 @@ export function ManagedChannelsTable() {
                   </TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
+                  <TableHead className="py-0.5 pb-1.5"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredChannels.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       No channels match the current filters.
                     </TableCell>
                   </TableRow>
@@ -734,10 +824,11 @@ export function ManagedChannelsTable() {
                         </Button>
                       </div>
                     </TableCell>
+                    <TableCell></TableCell>
                   </TableRow>
                   {expandedChannels.has(channel.id) && (
                     <TableRow className="hover:bg-transparent border-b border-border/40">
-                      <TableCell colSpan={9} className="p-0 pb-2">
+                      <TableCell colSpan={10} className="p-0 pb-2">
                         <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
                         {loadingStreams.has(channel.id) ? (
                           <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
@@ -773,7 +864,7 @@ export function ManagedChannelsTable() {
                                   <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
                                   <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
                                   <td className="py-1 pr-4">{getMatchMethodBadge(stream.match_method)}</td>
-                                  <td className="py-1 pr-4 text-muted-foreground">{stream.priority}</td>
+                                  <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} /></td>
                                   <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
                                 </tr>
                               ))}
