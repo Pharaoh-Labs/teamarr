@@ -1467,6 +1467,7 @@ def clear_group_match_cache(group_id: int):
     algorithm changes or cached matches are incorrect.
     """
     from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.channels.streams import clear_stream_stats_for_group
     from teamarr.database.groups import get_group
 
     with get_db() as conn:
@@ -1477,11 +1478,14 @@ def clear_group_match_cache(group_id: int):
                 detail=f"Group {group_id} not found",
             )
 
+        stats_cleared = clear_stream_stats_for_group(conn, group_id)
+
     cache = StreamMatchCache(get_db)
     entries_cleared = cache.clear_group(group_id)
 
     logger.info(
-        "[CACHE_CLEAR] group_id=%d name=%s entries=%d", group_id, group.name, entries_cleared
+        "[CACHE_CLEAR] group_id=%d name=%s entries=%d stats_cleared=%d",
+        group_id, group.name, entries_cleared, stats_cleared,
     )
 
     return ClearCacheResponse(
@@ -1499,6 +1503,7 @@ def clear_groups_match_cache(request: ClearCacheRequest):
     Forces re-matching on next EPG generation run for all specified groups.
     """
     from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.channels.streams import clear_stream_stats_for_group
     from teamarr.database.groups import get_group
 
     cache = StreamMatchCache(get_db)
@@ -1512,6 +1517,7 @@ def clear_groups_match_cache(request: ClearCacheRequest):
                 continue
 
             cleared = cache.clear_group(group_id)
+            clear_stream_stats_for_group(conn, group_id)
             results.append(ClearCacheGroupResult(group_id=group_id, cleared=cleared))
             total_cleared += cleared
 
@@ -1531,11 +1537,15 @@ def clear_all_match_cache():
     Forces re-matching on next EPG generation run for every group.
     """
     from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.channels.streams import clear_all_stream_stats
 
     cache = StreamMatchCache(get_db)
     cleared = cache.clear_all()
 
-    logger.info("[CACHE_CLEAR_ALL] Cleared %d entries", cleared)
+    with get_db() as conn:
+        stats_cleared = clear_all_stream_stats(conn)
+
+    logger.info("[CACHE_CLEAR_ALL] Cleared %d entries stats_cleared=%d", cleared, stats_cleared)
 
     return ClearCacheResponse(
         success=True,

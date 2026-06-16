@@ -444,6 +444,44 @@ def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     return updated
 
 
+def clear_stream_stats_for_group(conn: Connection, group_id: int) -> int:
+    """Null cached stream stats for all active streams sourced from a group.
+
+    Called when a group's match cache is cleared so stats are freshly pulled
+    from Dispatcharr on the next streams fetch / run, like everything else.
+
+    Args:
+        conn: Database connection
+        group_id: Event group ID (matches managed_channel_streams.source_group_id)
+
+    Returns:
+        Number of stream rows whose stats were cleared
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET stream_stats = NULL, stream_stats_updated_at = NULL
+           WHERE source_group_id = ? AND removed_at IS NULL
+             AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)""",
+        (group_id,),
+    )
+    return cursor.rowcount
+
+
+def clear_all_stream_stats(conn: Connection) -> int:
+    """Null cached stream stats for every active stream (used by clear-all).
+
+    Returns:
+        Number of stream rows whose stats were cleared
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET stream_stats = NULL, stream_stats_updated_at = NULL
+           WHERE removed_at IS NULL
+             AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)""",
+    )
+    return cursor.rowcount
+
+
 def get_ordered_stream_ids(
     conn: Connection,
     managed_channel_id: int,
