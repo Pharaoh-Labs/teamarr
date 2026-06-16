@@ -46,20 +46,19 @@ frontend/src/
 
 All pages are lazy-imported in `App.tsx`:
 
+As of v2.7.0 the IA follows the user flow: Connect → Sources → Subscriptions → EPG → Matching → Channels. Old routes (`/event-groups`, `/teams`, `/templates`, `/detection-library`, `/custom-leagues`) redirect to their new homes.
+
 | Page | Route | Description |
 |------|-------|-------------|
-| Dashboard | `/` | Overview, generation trigger, cache stats |
-| Templates | `/templates` | Template list and management |
-| TemplateForm | `/templates/new`, `/templates/:id` | Create/edit template with variable picker |
-| Teams | `/teams` | Team list and management |
-| TeamImport | `/teams/import` | Bulk import teams from cache |
-| EventGroups | `/event-groups` | Event group list |
-| EventGroupForm | `/event-groups/new`, `/event-groups/:id` | Create/edit event group |
-| EventGroupImport | `/event-groups/import` | Bulk import event groups |
-| EPG | `/epg` | XMLTV preview, download, run history |
-| Channels | `/channels` | Managed channel list with sync status |
-| Settings | `/settings` | All settings tabs |
-| DetectionLibrary | `/detection-library` | Keywords and team aliases |
+| Dashboard | `/` | Status strip, generation trigger, run history |
+| EventGroups (Sources) | `/sources`, `/sources/new`, `/sources/:id`, `/sources/import` | Source list, editor, bulk import (formerly Event Groups) |
+| Subscriptions | `/subscriptions` | League/sport subscription; custom leagues at `/subscriptions/leagues` |
+| DetectionLibrary (Matching) | `/matching` | Keywords, team aliases, separators, EPG-match tuning |
+| Templates | `/epg/templates`, `/epg/templates/new`, `/epg/templates/:id` | Template list and editor with variable picker |
+| Teams | `/epg/teams`, `/epg/teams/import` | Team list, management, bulk import |
+| EpgOutput | `/epg/output` | Output path/window, default durations, XMLTV metadata |
+| Channels | `/channels/lifecycle`, `/consolidation`, `/numbering`, `/stream-priority`, `/output` | Channel lifecycle, consolidation, numbering, stream priority, Dispatcharr output |
+| Settings | `/settings` | System/integration tabs (General, Dispatcharr, Media Servers, Advanced) |
 
 ## API Client Pattern
 

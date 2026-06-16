@@ -1,8 +1,8 @@
 ---
 title: Troubleshooting
 parent: User Guide
-nav_order: 11
-docs_version: "2.3.1"
+nav_order: 10
+docs_version: "2.7.0"
 ---
 
 # Troubleshooting
@@ -16,17 +16,17 @@ Common issues and how to resolve them.
 Failed streams couldn't be matched to a real sporting event. Common causes:
 
 - **Stream name too vague** — Names like "Sports 1" or "NBA 3" don't contain team names. Teamarr needs identifiable team or event information.
-- **League not subscribed** — The stream's league isn't enabled in Event Groups > Global Defaults. Enable it and regenerate.
-- **Team name mismatch** — Your IPTV provider uses a non-standard name. Add a [team alias](detection-library#team-aliases) to map it to the official name.
-- **Date mismatch** — Streams with dates in DD/MM format may be parsed as MM/DD. Use [custom regex extractors](event-groups/creating-groups#custom-regex-extractors) with named groups (`(?P<day>...)/(?P<month>...)`) to fix this.
+- **League not subscribed** — The stream's league isn't in your [Subscription](subscriptions) (or a Source's subscription override). This is the most common cause — add the league under Subscriptions and regenerate. Newly-created custom leagues are auto-subscribed, but check the Subscriptions list for a **Not subscribed** badge.
+- **Team name mismatch** — Your IPTV provider uses a non-standard name. Add a [team alias](matching/#team-aliases) to map it to the official name.
+- **Date mismatch** — Streams with dates in DD/MM format may be parsed as MM/DD. Use [custom regex extractors](sources/creating-groups#custom-regex-extractors) with named groups (`(?P<day>...)/(?P<month>...)`) to fix this.
 
 Click the **Failed** count in the run history to see details for each unmatched stream. Use the **Fix** button to manually match a stream to an event.
 
 ### Streams matching the wrong event
 
-- Check the [Detection Library](detection-library) for conflicting league or sport hints
+- Check the [Matching](matching/) library for conflicting league or sport hints
 - Verify your stream filters (include/exclude regex) aren't too broad
-- Use the preview button on the Event Groups page to see matches without running a full generation
+- Use the preview button on the [Sources](sources/) page to see matches without running a full generation
 
 ## Channels
 
@@ -35,21 +35,25 @@ Click the **Failed** count in the run history to see details for each unmatched 
 1. Verify Dispatcharr integration is connected (Settings > Dispatcharr shows "Connected")
 2. Verify an EPG source is selected
 3. Run EPG generation and check if streams matched successfully
-4. Check [channel lifecycle timing](settings/channels#channel-lifecycle) — channels may not be created yet based on your create timing settings
+4. Check [channel lifecycle timing](channels/lifecycle) — channels may not be created yet based on your create timing settings
 
 ### Channels disappearing unexpectedly
 
-- Check [delete timing](settings/channels#channel-lifecycle) — channels are deleted based on post-event buffer settings
-- Review the [Recently Deleted](channels#recently-deleted) section on the Channels page
+- Check [delete timing](channels/lifecycle) — channels are deleted based on post-event buffer settings
+- Review the **Recently Deleted** section on the [Dashboard](dashboard)
 - If using "Same day" delete timing, channels are removed at midnight
+
+### Channels show red in Dispatcharr
+
+For an **EPG-matched** event channel, **red is usually normal** — it just means no stream is attached *right now*. EPG matching attaches a linear stream (ESPN, FS1…) only within a window around the event, controlled by the **Attach before** / **Detach after** buffers on the [Matching](matching/) page (default 60 min each). Outside that window the stream is intentionally detached and the channel goes red. So whether red is expected depends on (1) whether the channel is EPG-matched, (2) the attach/detach buffers, and (3) when the event actually is. Red *during* an event's window is worth investigating — see [Why some channels show red in Dispatcharr](matching/program-matching#why-some-channels-show-red-in-dispatcharr).
 
 ### Channel numbers colliding with existing channels
 
-Set the **Channel Range Start** in Settings > Channels to a range that doesn't overlap with your existing Dispatcharr channels. For example, if you have channels 1-500, set the start to 1000.
+Set the **Channel Range Start** in [Channels → Numbering](channels/numbering) to a range that doesn't overlap with your existing Dispatcharr channels. For example, if you have channels 1-500, set the start to 1000.
 
 ### Stale logos in media server
 
-Some media servers (particularly Jellyfin) cache channel logos aggressively. Enable **Scheduled Channel Reset** in Settings > EPG to periodically purge and recreate channels before your media server's guide refresh.
+Some media servers (particularly Jellyfin) cache channel logos aggressively. Enable **Scheduled Channel Reset** in [Settings → Advanced](settings/advanced) to periodically purge and recreate channels before your media server's guide refresh.
 
 ## Dispatcharr Connection
 
@@ -62,16 +66,16 @@ Some media servers (particularly Jellyfin) cache channel logos aggressively. Ena
 
 ### EPG source dropdown is empty
 
-You need to add Teamarr's XMLTV URL as an EPG source in Dispatcharr first. Copy the URL from the EPG page in Teamarr and add it in Dispatcharr's EPG sources.
+You need to add Teamarr's XMLTV URL as an EPG source in Dispatcharr first. Copy the URL from [EPG → Output](epg/output) in Teamarr and add it in Dispatcharr's EPG sources.
 
 ## Generation
 
 ### Generation takes too long
 
-- Reduce **Event Lookahead** in Settings > Event Groups (shorter window = fewer events to check)
-- Reduce **Schedule Days Ahead** in Settings > Teams (fewer days = less schedule data)
+- Reduce **Event Lookahead** in your [Source](sources/) settings (shorter window = fewer events to check)
+- Reduce **Schedule Days Ahead** in [EPG → Teams](epg/teams) (fewer days = less schedule data)
 - Use per-group subscription overrides to limit which leagues each group scans
-- Ensure the team/league cache is fresh (Settings > System > Refresh Cache)
+- Ensure the team/league cache is fresh (Settings → General → Refresh Cache)
 
 ### Generation fails or shows errors
 
@@ -101,7 +105,7 @@ If Teamarr fails to start after pulling a new image, check the logs for migratio
 
 ### Restoring a backup
 
-Go to Settings > System > Backup & Restore. Upload a `.db` backup file. A backup of your current database is created automatically before restoring. The application needs to be restarted after restore.
+Go to [Settings → Advanced](settings/advanced) → Backup & Restore. Upload a `.db` backup file. A backup of your current database is created automatically before restoring. The application needs to be restarted after restore.
 
 ## Logs
 

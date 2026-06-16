@@ -1,9 +1,9 @@
 ---
-title: Dispatcharr Integration
+title: Dispatcharr
 parent: Settings
 grand_parent: User Guide
-nav_order: 6
-docs_version: "2.3.1"
+nav_order: 2
+docs_version: "2.7.0"
 ---
 
 # Dispatcharr Integration
@@ -42,7 +42,7 @@ If you haven't created an EPG source in Dispatcharr yet, you'll need to do that 
 
 ## Default Channel Profiles
 
-Select which channel profiles to assign to Teamarr-managed channels by default. Individual [event groups can override](../event-groups/creating-groups#channel-profiles) this setting, and [per-league config](channels#per-league-channel-config) can override per league.
+Select which channel profiles to assign to Teamarr-managed channels by default. Individual sources can override this setting (see [Sources](../sources/)), and per-league config under [Channels](../channels/) can override per league.
 
 - **All profiles selected** — Channels appear in all profiles
 - **None selected** — Channels don't appear in any profile
@@ -88,7 +88,7 @@ Select a specific channel group, or leave as "None" to not assign a group.
 When **Custom** is selected, a pattern field appears. Use `{sport}` and `{league}` variables in your pattern. Groups are created automatically in Dispatcharr if they don't exist.
 
 {: .note }
-Per-league overrides in [Settings > Channels](channels#per-league-channel-config) take precedence over these defaults.
+Per-league overrides under [Channels](../channels/) take precedence over these defaults.
 
 ## Logo Cleanup
 

@@ -1,45 +1,24 @@
 ---
-title: System
+title: Advanced
 parent: Settings
 grand_parent: User Guide
-nav_order: 7
-docs_version: "2.3.1"
+nav_order: 4
+docs_version: "2.7.0"
 ---
 
-# System Settings
+# Advanced
 
-Update notifications, backup/restore, local caching, and API configuration.
-
-## Update Notifications
-
-Teamarr can check for new versions and notify you when updates are available.
-
-### Current Version
-
-Displays your current version and the latest available version. For dev builds, shows commit hashes; for stable builds, shows version numbers.
-
-The release date of the latest version is shown in your configured timezone.
-
-### Settings
-
-| Setting | Description |
-|---------|-------------|
-| **Enable Automatic Update Checks** | Toggle update checking on/off |
-| **Notify about stable releases** | Get notified about new stable versions |
-| **Notify about dev builds** | Get notified about new dev commits (if running dev) |
-
-### Check Now
-
-Manually trigger an update check. Results are cached for 1 hour.
+Backup/restore, scheduled channel reset, and the data caches.
 
 ## Backup & Restore
 
 ### Download Backup
 
 Download a complete backup of your Teamarr database, including:
+
 - All teams and their configurations
 - Templates and presets
-- Event groups
+- Sources and event groups
 - Settings
 
 ### Restore Backup
@@ -47,51 +26,30 @@ Download a complete backup of your Teamarr database, including:
 Upload a `.db` backup file to restore. A backup of your current data is automatically created before restoring.
 
 {: .warning }
-Restoring a backup replaces ALL current data. The application needs to be restarted after restore.
+Restoring a backup replaces ALL current data. Restart the application after a restore.
 
-## Local Caching
+## Scheduled Channel Reset
 
-Teamarr caches team and league data from ESPN and TheSportsDB to improve performance and enable offline matching.
+For users experiencing stale channel logos in their media server (e.g. Jellyfin). Schedule a periodic purge of all Teamarr channels before your media server's guide refresh; the channels are recreated on the next EPG generation. Leave disabled unless you're seeing this problem.
 
-### Cache Status
-
-View the current cache state:
-- **Leagues** - Number of leagues cached
-- **Teams** - Number of teams cached
-- **Last Refresh Duration** - How long the last refresh took
-- **Last Refresh** - When the cache was last updated
-
-A **Stale** badge appears if the cache needs refreshing.
-
-### Refresh Cache
-
-Manually refresh the cache to pull the latest team and league data. This fetches data from ESPN and TheSportsDB APIs.
+| Field | Description |
+|-------|-------------|
+| **Enable Scheduled Channel Reset** | Toggle the periodic reset on/off |
+| **Reset Schedule (Cron Expression)** | Standard cron format; presets like `30 2 * * *` (daily 2:30 AM) are available |
 
 {: .note }
-Cache refresh runs automatically on first startup. Manual refresh is useful after adding new leagues or when team rosters change significantly.
+Set this to run shortly *before* your media server's scheduled guide refresh.
 
-## TheSportsDB API Key
+## Data Caches
 
-Optional premium API key for TheSportsDB. The card header shows your current tier (Free Tier / Premium).
+Teamarr maintains several caches. Each tile shows live counts and a clear/refresh action.
 
-| Tier | Rate Limit | Events per Query | Cost |
-|------|------------|-----------------|------|
-| **Free** | 30 req/min | 5 per day per league | Free |
-| **Premium** | 100 req/min | Full coverage | ~$9/mo |
+| Cache | Contents | Action |
+|-------|----------|--------|
+| **Team & League Directory** | Cached teams and leagues from ESPN and TheSportsDB (enables offline matching) | **Refresh Directory** — pull the latest team/league data. A *Directory Stale* badge appears when a refresh is due. |
+| **Game Data Cache** | Schedules, scores, and odds | **Clear Game Cache** |
+| **Stream Match Cache** | Stream-to-event fingerprint matches | **Clear Match Cache** |
+| **Run History** | Processing-run logs and statistics (auto-cleaned to 30 days after each run) | **Clear Run History** |
 
-Some TSDB leagues (CFL, Unrivaled, boxing, Norwegian hockey) work fine on the free tier. Premium leagues — AFL, cricket (IPL, BBL, SA20), and Svenska Cupen — need a premium key for full event coverage. The league picker shows a crown icon on premium leagues.
-
-Use the **Validate** button to test your key before saving. Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
-
-See [TSDB Provider](../../reference/providers/tsdb.md) for technical details.
-
-## XMLTV Generator Metadata
-
-Customize the generator information included in the XMLTV output file.
-
-| Field | Default |
-|-------|---------|
-| **Generator Name** | Teamarr |
-| **Generator URL** | https://github.com/Pharaoh-Labs/teamarr |
-
-These values appear in the XMLTV file header and are used by some media servers to identify the EPG source.
+{: .note }
+The Team & League Directory refreshes automatically on first startup. Manual refresh is useful after adding new leagues or when team rosters change significantly. Clearing the game-data or match caches forces fresh lookups on the next generation run.

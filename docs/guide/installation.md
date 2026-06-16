@@ -2,7 +2,7 @@
 title: Installation
 parent: User Guide
 nav_order: 1
-docs_version: "2.3.1"
+docs_version: "2.7.0"
 ---
 
 # Installation
@@ -13,7 +13,7 @@ Docker Compose is the recommended method for installation.
 
 - Docker
 - [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) (highly recommended - Teamarr is designed for tight integration with Dispatcharr)
-- [Game-Thumbs](game-thumbs.md) (optional - sports matchup thumbnail and logo generation)
+- [Game-Thumbs](epg/game-thumbs.md) (optional - sports matchup thumbnail and logo generation)
 
 ## Docker
 
@@ -65,7 +65,7 @@ All Teamarr data is stored in the `./data` volume mount:
 
 | Path | Contents |
 |------|----------|
-| `data/teamarr.db` | Database — teams, templates, settings, event groups, run history |
+| `data/teamarr.db` | Database — teams, templates, settings, sources, subscriptions, run history |
 | `data/logs/` | Log files (rotating, auto-managed) |
 | `data/epg/` | Generated XMLTV output |
 
@@ -80,7 +80,7 @@ On first startup, Teamarr will:
 2. Refresh the league and team cache from providers (~2-3 minutes)
 3. Start the web UI on port 9195
 
-The dashboard will show a **Getting Started** guide walking you through initial setup: connect to Dispatcharr, create templates, add teams or event groups.
+The dashboard walks you through the setup flow: connect to Dispatcharr, add Sources, choose Subscriptions, build EPG templates, then generate.
 
 ## Updating
 
