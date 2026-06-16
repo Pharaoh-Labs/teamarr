@@ -10,10 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from teamarr.database.channels.streams import (
-    clear_all_stream_stats,
-    clear_stream_stats_for_group,
-)
+from teamarr.database.channels.streams import clear_stream_stats
 from teamarr.database.connection import get_connection, init_db
 
 
@@ -61,7 +58,7 @@ def test_clear_for_group_nulls_stats_and_returns_count(conn):
     _insert_stream(conn, cid, 101, source_group_id=1)
     conn.commit()
 
-    cleared = clear_stream_stats_for_group(conn, 1)
+    cleared = clear_stream_stats(conn, 1)
 
     assert cleared == 2
     for sid in (100, 101):
@@ -76,7 +73,7 @@ def test_clear_for_group_leaves_other_groups_untouched(conn):
     _insert_stream(conn, cid, 200, source_group_id=2)
     conn.commit()
 
-    cleared = clear_stream_stats_for_group(conn, 1)
+    cleared = clear_stream_stats(conn, 1)
 
     assert cleared == 1
     assert _stats_row(conn, 200)["stream_stats"] is not None
@@ -87,7 +84,7 @@ def test_clear_for_group_skips_removed_streams(conn):
     _insert_stream(conn, cid, 100, source_group_id=1, removed=True)
     conn.commit()
 
-    cleared = clear_stream_stats_for_group(conn, 1)
+    cleared = clear_stream_stats(conn, 1)
 
     assert cleared == 0
     # Removed-row stats are left as-is (it's out of the active set anyway).
@@ -100,7 +97,7 @@ def test_clear_for_group_ignores_already_null_stats(conn):
     conn.commit()
 
     # Only rows that actually had stats count, so the log reflects real work.
-    assert clear_stream_stats_for_group(conn, 1) == 0
+    assert clear_stream_stats(conn, 1) == 0
 
 
 def test_clear_all_nulls_every_active_stream(conn):
@@ -110,7 +107,7 @@ def test_clear_all_nulls_every_active_stream(conn):
     _insert_stream(conn, cid, 300, source_group_id=3, removed=True)
     conn.commit()
 
-    cleared = clear_all_stream_stats(conn)
+    cleared = clear_stream_stats(conn)
 
     assert cleared == 2
     assert _stats_row(conn, 100)["stream_stats"] is None

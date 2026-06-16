@@ -444,40 +444,33 @@ def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     return updated
 
 
-def clear_stream_stats_for_group(conn: Connection, group_id: int) -> int:
-    """Null cached stream stats for all active streams sourced from a group.
+def clear_stream_stats(conn: Connection, group_id: int | None = None) -> int:
+    """Null cached stream stats so they're freshly pulled from Dispatcharr next run.
 
-    Called when a group's match cache is cleared so stats are freshly pulled
-    from Dispatcharr on the next streams fetch / run, like everything else.
+    Called when a group's match cache is cleared. With ``group_id`` set, scopes to
+    streams sourced from that event group (managed_channel_streams.source_group_id);
+    with ``group_id=None``, clears every active stream (the clear-all path). The
+    "already null" guard keeps the returned count to rows that actually changed.
 
     Args:
         conn: Database connection
-        group_id: Event group ID (matches managed_channel_streams.source_group_id)
+        group_id: Event group ID to scope to, or None to clear all active streams
 
     Returns:
         Number of stream rows whose stats were cleared
     """
-    cursor = conn.execute(
-        """UPDATE managed_channel_streams
-           SET stream_stats = NULL, stream_stats_updated_at = NULL
-           WHERE source_group_id = ? AND removed_at IS NULL
-             AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)""",
-        (group_id,),
+    where = (
+        "removed_at IS NULL "
+        "AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)"
     )
-    return cursor.rowcount
-
-
-def clear_all_stream_stats(conn: Connection) -> int:
-    """Null cached stream stats for every active stream (used by clear-all).
-
-    Returns:
-        Number of stream rows whose stats were cleared
-    """
+    params: tuple = ()
+    if group_id is not None:
+        where = "source_group_id = ? AND " + where
+        params = (group_id,)
     cursor = conn.execute(
-        """UPDATE managed_channel_streams
-           SET stream_stats = NULL, stream_stats_updated_at = NULL
-           WHERE removed_at IS NULL
-             AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)""",
+        f"UPDATE managed_channel_streams "
+        f"SET stream_stats = NULL, stream_stats_updated_at = NULL WHERE {where}",
+        params,
     )
     return cursor.rowcount
 

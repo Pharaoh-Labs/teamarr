@@ -599,6 +599,38 @@ class StreamMatchCache:
             return cursor.fetchone()[0]
 
 
+def clear_group_match_data(get_db: Callable, group_id: int) -> tuple[int, int]:
+    """Clear both the stream match cache and cached stream stats for one group.
+
+    These are two halves of one intent ("redo this group from scratch on the next
+    run"), so they live together here: a caller can't clear one and forget the
+    other.
+
+    Returns:
+        (match_cache_entries_cleared, stream_stats_rows_cleared)
+    """
+    from teamarr.database.channels.streams import clear_stream_stats
+
+    entries_cleared = StreamMatchCache(get_db).clear_group(group_id)
+    with get_db() as conn:
+        stats_cleared = clear_stream_stats(conn, group_id)
+    return entries_cleared, stats_cleared
+
+
+def clear_all_match_data(get_db: Callable) -> tuple[int, int]:
+    """Clear the entire stream match cache and all cached stream stats.
+
+    Returns:
+        (match_cache_entries_cleared, stream_stats_rows_cleared)
+    """
+    from teamarr.database.channels.streams import clear_stream_stats
+
+    entries_cleared = StreamMatchCache(get_db).clear_all()
+    with get_db() as conn:
+        stats_cleared = clear_stream_stats(conn)
+    return entries_cleared, stats_cleared
+
+
 def get_generation_counter(get_connection: Callable) -> int:
     """Get current EPG generation counter from settings."""
     try:
