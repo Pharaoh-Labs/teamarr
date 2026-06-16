@@ -1,9 +1,12 @@
 ---
 title: Team vs Event
-parent: Templates
+parent: EPG
 grand_parent: User Guide
-nav_order: 1
-docs_version: "2.3.0"
+nav_order: 2
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/templates/team-vs-event/
+  - /guide/templates/team-vs-event.html
 ---
 
 # Team vs Event Templates

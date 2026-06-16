@@ -2,7 +2,7 @@
 title: Dispatcharr Integration
 parent: User Guide
 nav_order: 3
-docs_version: "2.3.1"
+docs_version: "2.7.0"
 ---
 
 # Dispatcharr Integration
@@ -45,7 +45,7 @@ Once connected, Teamarr manages the full channel lifecycle in Dispatcharr:
 2. Teamarr matches streams to events and resolves templates
 3. **Channels are created** in Dispatcharr with names, logos, EPG data, streams, and profile/group assignments
 4. **Channels are updated** when event data changes (scores, status, streams)
-5. **Channels are deleted** when events end (based on [lifecycle timing](settings/channels#channel-lifecycle))
+5. **Channels are deleted** when events end (based on [lifecycle timing](channels/lifecycle))
 
 ### M3U Account Refresh
 

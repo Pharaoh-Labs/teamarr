@@ -2,90 +2,60 @@
 title: Dashboard
 parent: User Guide
 nav_order: 2
-docs_version: "2.3.0"
+docs_version: "2.7.0"
 ---
 
 # Dashboard
 
-The dashboard provides an at-a-glance overview of your Teamarr setup, statistics, and EPG generation history.
+The dashboard is your landing page — a lean health-and-control panel. It answers "is my system healthy?" at a glance, surfaces recent generation runs, and gives you the managed-channel tables and EPG output without drilling into the feature sections. Composition detail (per-league, per-group, per-channel breakdowns) lives on its home tab, not here.
 
-## Quick Actions
+## Status Strip
 
-Located in the top-right corner, these buttons provide shortcuts to common tasks:
+A read-only strip across the top shows system health at a glance:
 
-| Action | Description |
-|--------|-------------|
-| **Create Template** | Jump to the template creation form |
-| **Import Teams** | Import teams from the league cache |
-| **Import Event Group** | Import a stream group from Dispatcharr |
-| **Generate EPG** | Manually trigger EPG generation |
+| Item | Shows |
+|------|-------|
+| **Dispatcharr** | Connection state — Connected (green), Disconnected (amber), Error (red, hover for the message), or Not configured |
+| **Last generated** | When the last run finished (relative time) and its duration, color-coded by staleness: green under a day, amber 1–3 days, red if over 3 days, failed, or never run. Shows *Generating…* with a spinner during an active run |
+| **Managed channels** | Live count of active Teamarr channels in Dispatcharr |
+| **Matched** | Overall stream match rate, color-coded (only shown when match data exists) |
+| **EPG URL** | The XMLTV URL with a one-click **Copy** button |
 
-## Statistics Quadrants
+{: .note }
+During a generation run, the channel and match-rate values show a spinner until fresh numbers land.
 
-The dashboard displays four quadrants with detailed statistics. Some stats have tooltips with additional breakdowns - hover to view.
+## Generation History
 
-### Teams
-
-| Stat | Description | Tooltip |
-|------|-------------|---------|
-| **Total** | Number of teams configured | None |
-| **Leagues** | Number of unique leagues | League breakdown with logos |
-| **Active** | Teams with upcoming or recent games | None |
-| **Assigned** | Teams assigned to a Dispatcharr channel | None |
-
-### Event Groups
-
-| Stat | Description | Tooltip |
-|------|-------------|---------|
-| **Groups** | Number of event groups configured | Per-group match rates |
-| **Leagues** | Unique leagues across all groups | League breakdown with logos |
-| **Streams** | Total streams across all groups | None |
-| **Matched** | Streams matched to real events | Match rate by group |
-
-### EPG
-
-| Stat | Description | Tooltip |
-|------|-------------|---------|
-| **Channels** | Total channels in EPG | Team vs event breakdown |
-| **Events** | Number of game programmes | Team vs event breakdown |
-| **Filler** | Filler programmes | Pregame/postgame/idle breakdown |
-| **Total** | Total programmes in the EPG | None |
-
-### Channels
-
-| Stat | Description | Tooltip |
-|------|-------------|---------|
-| **Active** | Channels currently active in Dispatcharr | None |
-| **Logos** | Channels with logo URLs | None |
-| **Groups** | Channel groups in use | Group breakdown |
-| **Deleted 24h** | Channels deleted in the last 24 hours (event cleanup) | None |
-
-## EPG Generation History
-
-A table showing recent EPG generation runs with:
+A table of recent full-pipeline runs (matching, channels, and EPG). Showing the five most recent by default — use **Show more** to expand.
 
 | Column | Description |
 |--------|-------------|
-| **Status** | Completed (✓), failed (✗), cancelled (⊘), or running (spinner) |
-| **Time** | Timestamp of the run |
-| **Processed** | Teams / Event Groups processed in this run |
-| **Programmes** | Total programmes generated. Hover for breakdown: Events, Pregame, Postgame, Idle |
-| **Matched** | Streams successfully matched to events. Click for drill-down with search/filter |
-| **Failed** | Streams that could not be matched. Click to see details and use the Fix button to open the event matcher |
-| **Channels** | Active channels after this run |
-| **Duration** | How long the generation took |
-| **Size** | XMLTV file size |
+| **Status** | Completed, failed, cancelled, or running (spinner) |
+| **Time** | When the run started |
+| **Processed** | What was processed in the run |
+| **Programmes** | Total programmes generated. Hover for the Events / Pregame / Postgame / Idle breakdown |
+| **Matched** | Streams matched to events. Click to open a searchable drill-down of individual matched streams, filterable by group |
+| **Channels** | Active channels after the run |
+| **Duration** | How long the run took |
 
 {: .tip }
-Click the **Matched** or **Failed** numbers to open a drill-down modal showing individual stream details, grouped by event group. Use the search bar to filter by group name or stream.
+From a run's failed/unmatched rows, use **Fix** to open the Event Matcher and manually correct a stream-to-event match.
 
-## Getting Started Guide
+## Managed Channels
 
-When no teams or templates are configured, the dashboard displays a getting started guide with four steps:
+A collapsible **Managed Channels** table lists the channels Teamarr currently maintains in Dispatcharr, with the channel name, the event it's tied to, sport, league, status, and scheduled delete time. You can delete individual channels here, and there are reset/cleanup actions for bulk operations.
 
-1. **Configure Settings** - Connect to Dispatcharr, set EPG output path and timezone
-2. **Create Templates** - Define title/description formats using variables
-3. **Add Teams** - Import teams for team-based EPG (one XMLTV channel per team — wire it to one of your existing Dispatcharr channels)
-4. **Create Event Groups** - Import stream groups from Dispatcharr for event-based EPG (Teamarr creates dynamic channels per matched game)
+A separate **Recently Deleted** section lists channels removed by event cleanup (channel, event, sport, league, and when they were deleted).
 
-Each step links directly to the relevant page. Once you have at least one template and either teams or event groups configured, the getting started guide is replaced by the statistics quadrants and generation history.
+## EPG Output (XML Preview)
+
+A collapsible **XML Preview** section contains:
+
+- **EPG analysis** — coverage gaps and unreplaced-variable warnings, or an all-clear if the output is clean
+- A searchable preview of the generated XMLTV file
+
+The EPG URL itself lives in the status strip up top.
+
+## All-Time Totals
+
+A compact, de-emphasized footer shows lifetime totals: generations, programmes, streams matched, channels created, channels deleted, cache hits, and average run time.

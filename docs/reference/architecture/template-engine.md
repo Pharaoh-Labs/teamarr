@@ -166,7 +166,7 @@ Art/icon fields (`program_art_url`, `event_channel_logo_url`, and filler
 `art_url`) can store **relative paths** (e.g. `/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png`).
 A single configured **base URL** (`settings.art_base_url`, set in EPG → Output →
 Game Thumbs) is prefixed onto them at resolution time so the deployment-specific
-host:port lives in one place. See [Game Thumbs](../../guide/game-thumbs) and the
+host:port lives in one place. See [Game Thumbs](../../guide/epg/game-thumbs) and the
 [Gracenote-modeled template design](gracenote-template-design).
 
 The reconstruction is centralized so it reaches **every** consumer identically:

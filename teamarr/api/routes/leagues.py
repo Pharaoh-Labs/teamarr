@@ -16,7 +16,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from teamarr.database import get_db
-from teamarr.database.leagues import list_custom_leagues
 from teamarr.services.custom_leagues import (
     CustomLeagueGateError,
     CustomLeagueNotFoundError,
@@ -25,6 +24,7 @@ from teamarr.services.custom_leagues import (
     create_custom_league_and_refresh,
     custom_leagues_enabled,
     delete_custom_league,
+    list_custom_leagues_with_state,
     run_custom_league_test_fetch,
     supported_custom_league_sports,
     update_custom_league,
@@ -125,13 +125,18 @@ def get_custom_league_capability() -> dict:
 def get_custom_leagues() -> dict:
     """List all user-added (``is_custom=1``) leagues for the management UI.
 
+    Each row carries a ``subscribed`` flag — ``False`` means the league exists
+    but the global subscription won't match its events (the #240 footgun), so the
+    UI can warn. New leagues auto-subscribe; this only trips if a user later
+    unsubscribes one.
+
     Returns:
         ``{custom_leagues: [{league_code, provider, provider_league_id,
         provider_league_name, display_name, sport, event_type, tsdb_tier,
-        enabled}]}``
+        enabled, subscribed}]}``
     """
     with get_db() as conn:
-        return {"custom_leagues": list_custom_leagues(conn)}
+        return {"custom_leagues": list_custom_leagues_with_state(conn)}
 
 
 @router.post("/custom/test-fetch")

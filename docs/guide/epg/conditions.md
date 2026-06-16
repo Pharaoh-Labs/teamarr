@@ -1,9 +1,12 @@
 ---
 title: Conditions
-parent: Templates
+parent: EPG
 grand_parent: User Guide
-nav_order: 3
-docs_version: "2.3.0"
+nav_order: 4
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/templates/conditions/
+  - /guide/templates/conditions.html
 ---
 
 # Template Conditions

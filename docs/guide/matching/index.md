@@ -1,13 +1,20 @@
 ---
-title: Detection Library
+title: Matching
 parent: User Guide
-nav_order: 8
-docs_version: "2.3.1"
+nav_order: 7
+has_children: true
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/detection-library/
+  - /guide/detection-library.html
 ---
 
-# Detection Library
+# Matching
 
-The Detection Library manages how Teamarr classifies and identifies streams. It contains keywords, patterns, and team aliases that help the stream matcher understand what sport, league, and event a stream belongs to.
+**Matching** is how Teamarr turns a raw stream name into a real event. When a stream is called `Niners @ Cowboys` or `DIRECTO España - Inglaterra`, the matcher decides which sport, league, teams, and event it belongs to. This page covers the tunable **library** that drives that classification — team aliases, league and sport hints, event-type keywords, and matchup separators.
+
+{: .note }
+This section was previously called the **Detection Library**. It now lives under **Matching**, alongside [EPG Program Matching](program-matching.md), which matches static linear channels (ESPN, FS1) to events using Dispatcharr's program guide instead of the stream name.
 
 The library has five tabs, each handling a different aspect of stream classification.
 
@@ -125,7 +132,7 @@ Team aliases don't have an enable/disable toggle — they're always active until
 
 ## Import & Export
 
-Both aliases and keywords can be exported and imported as JSON files. This is useful for sharing configurations or backing up your detection rules.
+Both aliases and keywords can be exported and imported as JSON files. This is useful for sharing configurations or backing up your matching rules.
 
 ### Export
 
@@ -136,4 +143,4 @@ Click **Export** to download the current tab's data as a JSON file.
 Click **Import** and select a JSON file. The import results show how many items were created, updated, or skipped.
 
 {: .tip }
-Export your detection library before making major changes. If something goes wrong with matching after editing keywords, you can re-import the backup.
+Export your matching library before making major changes. If something goes wrong with matching after editing keywords, you can re-import the backup.

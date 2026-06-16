@@ -1,9 +1,12 @@
 ---
 title: Variables
-parent: Templates
+parent: EPG
 grand_parent: User Guide
-nav_order: 2
-docs_version: "2.3.0"
+nav_order: 3
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/templates/variables/
+  - /guide/templates/variables.html
 ---
 
 # Template Variables
@@ -53,7 +56,7 @@ Three template fields hold image URLs and accept the same variables as any other
 
 Instead of writing the full image host in every template, set it **once** in
 **EPG → Output → Game Thumbs → Game-Thumbs Base URL** (e.g. your
-[Game Thumbs](../game-thumbs) host). Templates then store only the **relative path**,
+[Game Thumbs](game-thumbs) host). Templates then store only the **relative path**,
 always starting with `/`:
 
 ```

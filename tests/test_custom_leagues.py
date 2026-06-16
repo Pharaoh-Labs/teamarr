@@ -23,6 +23,7 @@ from teamarr.services.custom_leagues import (
     default_event_type,
     delete_custom_league,
     is_supported_sport,
+    list_custom_leagues_with_state,
     require_custom_leagues_enabled,
     run_custom_league_test_fetch,
     supported_custom_league_sports,
@@ -236,6 +237,64 @@ def test_create_persists_custom_row(monkeypatch):
     ).fetchone()
     assert stored["provider_league_name"] == "Swedish Allsvenskan"
     assert stored["is_custom"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Auto-subscribe + subscription-state warning (#240 UX guard)
+# ---------------------------------------------------------------------------
+
+
+def _sub_leagues(conn):
+    from teamarr.database.subscription import get_subscription
+
+    return get_subscription(conn).leagues
+
+
+def test_create_auto_subscribes_league(monkeypatch):
+    """A new custom league lands in the global subscription so its games match.
+
+    Group match/inclusion leagues resolve from sports_subscription; without this,
+    a freshly-created league silently produces no events (GH #240).
+    """
+    conn = _premium_db()
+    _patch_client(monkeypatch)
+    create_custom_league(conn, **_VALID)
+    assert "swe.1" in _sub_leagues(conn)
+
+
+def test_auto_subscribe_preserves_existing_and_no_duplicates(monkeypatch):
+    from teamarr.database.subscription import update_subscription
+
+    conn = _premium_db()
+    update_subscription(conn, leagues=["eng.1"])
+    _patch_client(monkeypatch)
+    create_custom_league(conn, **_VALID)
+    # Existing subscription preserved, new code appended exactly once.
+    assert _sub_leagues(conn) == ["eng.1", "swe.1"]
+
+
+def test_list_with_state_flags_subscribed(monkeypatch):
+    conn = _premium_db()
+    _patch_client(monkeypatch)
+    create_custom_league(conn, **_VALID)
+
+    rows = list_custom_leagues_with_state(conn)
+    assert len(rows) == 1
+    assert rows[0]["league_code"] == "swe.1"
+    assert rows[0]["subscribed"] is True
+
+
+def test_list_with_state_flags_unsubscribed_after_user_unsubscribes(monkeypatch):
+    """If the user later unchecks the league, the warning flag flips to False."""
+    from teamarr.database.subscription import update_subscription
+
+    conn = _premium_db()
+    _patch_client(monkeypatch)
+    create_custom_league(conn, **_VALID)
+    update_subscription(conn, leagues=[])  # user unsubscribes everything
+
+    rows = list_custom_leagues_with_state(conn)
+    assert rows[0]["subscribed"] is False
 
 
 def test_create_defaults_event_card_for_combat_sport(monkeypatch):

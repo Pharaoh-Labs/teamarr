@@ -1,8 +1,12 @@
 ---
 title: EPG Program Matching
-parent: User Guide
-nav_order: 10
-docs_version: "2.6.0"
+parent: Matching
+grand_parent: User Guide
+nav_order: 1
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/epg-matching/
+  - /guide/epg-matching.html
 ---
 
 # EPG Program Matching
@@ -70,9 +74,9 @@ When on, Teamarr adds a second, **additive** source that:
 - Takes the **streams assigned to each channel** as candidates, tagged with that **channel's own EPG** (strategy 1 — the most authoritative mapping).
 - Runs them through the same matching → channel-creation → time-window pipeline.
 
-It runs **alongside** your per-group M3U matching (not instead of it); matches are consolidated onto the same event channels by event identity. Teamarr's **own generated channels are excluded** — they're output, not input. The source is managed for you as a hidden system group ("Dispatcharr Channels") that appears in stats but not in the Event Groups list; created channels use your global/per-league channel-group, profile, and template defaults.
+It runs **alongside** your per-source M3U matching (not instead of it); matches are consolidated onto the same event channels by event identity. Teamarr's **own generated channels are excluded** — they're output, not input. The source is managed for you as a hidden system group ("Dispatcharr Channels") that appears in stats but not in the Sources list; created channels use your global/per-league channel-group, profile, and template defaults.
 
-**Scope it to specific groups.** When you enable the toggle, a **Dispatcharr groups to include** picker appears. Select the channel groups you actually want matched — Teamarr then scans only those, skipping the matching work for everything else (faster generation). Leave it empty to include all groups. Your selection also becomes a **Dispatcharr Group** option in [stream ordering](settings/channels.md#stream-ordering), so you can prioritize a group's streams within consolidated channels.
+**Scope it to specific groups.** When you enable the toggle, a **Dispatcharr groups to include** picker appears. Select the channel groups you actually want matched — Teamarr then scans only those, skipping the matching work for everything else (faster generation). Leave it empty to include all groups. Your selection also becomes a **Dispatcharr Group** option in [stream ordering](../channels/stream-priority), so you can prioritize a group's streams within consolidated channels.
 
 ---
 
@@ -89,15 +93,15 @@ EPG matching is **opt-in and off by default** — enabled per event group. There
 
 ## Enabling it
 
-### 1. Per-group switch — Event Group settings
+### 1. Per-source switch — Source settings
 
-On each Event Group, enable **EPG program matching**. Only groups that opt in are scanned. This is the right switch for groups that contain linear channels (e.g. a "US \| Sports" group of ESPN/FS1/SEC Network feeds). There is **no global switch** — each group opts in on its own.
+On each [Source](../sources/), enable **EPG program matching**. Only sources that opt in are scanned. This is the right switch for sources that contain linear channels (e.g. a "US \| Sports" source of ESPN/FS1/SEC Network feeds). There is **no global switch** — each source opts in on its own.
 
-Enabling it on a group automatically **bypasses built-in stream filtering** for that group, because static linear names (`ESPN`, `NBA1`) have no `vs`/`@` separator and would otherwise be dropped before matching.
+Enabling it on a source automatically **bypasses built-in stream filtering** for that source, because static linear names (`ESPN`, `NBA1`) have no `vs`/`@` separator and would otherwise be dropped before matching.
 
-### 2. Buffers — Settings → Event Groups
+### 2. Buffers
 
-Two global buffer fields tune the attach/detach window for every group that opts in:
+Two global buffer fields, on the **Matching** page (right alongside this feature's tuning), set the attach/detach window for every source that opts in:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -116,7 +120,7 @@ The per-group toggle is also available in **bulk edit** (select multiple groups 
 
 ### The "EPG Matched" badge
 
-Groups with EPG matching enabled show a violet **EPG Matched** badge in the Event Groups list, alongside the existing **Team Streams** / **Regex** badges.
+Sources with EPG matching enabled show a violet **EPG Matched** badge in the Sources list, alongside the existing **Team Streams** / **Regex** badges.
 
 ### Preview
 
@@ -124,10 +128,27 @@ Use **Preview stream matches** on a group to see EPG matches before a real gener
 
 ### Stream ordering — the "EPG matched stream" type
 
-In **Settings → Channels → Stream Ordering**, add a **Stream Type** rule and choose **EPG matched stream** to prioritize streams that were attached via EPG matching. Use it to push time-shared linear streams ahead of — or behind — name-matched (event/team) streams within a consolidated channel. See [Channels settings](settings/channels.md#stream-ordering).
+In **Channels → Stream Priority**, add a **Stream Type** rule and choose **EPG matched stream** to prioritize streams that were attached via EPG matching. Use it to push time-shared linear streams ahead of — or behind — name-matched (event/team) streams within a consolidated channel. See [Channels → Stream Priority](../channels/stream-priority).
 
 {: .note }
 The ordering rule reads a `match_method` tag stored on each attached stream. Streams attached *before* this feature existed carry no tag until they're re-matched on the next generation run, so the rule applies going forward.
+
+---
+
+## Why some channels show red in Dispatcharr
+
+A channel that shows **red** in Dispatcharr means **no streams are currently attached to it** — at this moment, nothing is feeding it. With EPG program matching, that is often **completely normal**, not a sign anything is broken.
+
+EPG matching deliberately **attaches and detaches** a linear stream to each event channel based on a time window around the event, controlled by the **Attach before** / **Detach after** buffers on the **Matching** page (default **60 minutes** before and after; many users run these in the ~90-minute range for extra lead-in/lead-out). This is the whole point of time-sharing: ESPN shouldn't sit attached to one event channel all day when the game is only on for ~3 hours in the evening. Outside the attach window, the stream is **intentionally detached** so it's free to serve the next event's channel.
+
+So a red channel depends on three things:
+
+1. **Is the channel EPG-matched?** Only event channels fed by an EPG-matched group get this time-shared attach/detach behavior.
+2. **What are the attach/detach buffers?** Outside *(event start − attach before)* to *(event end + detach after)*, the stream is detached and the channel goes red.
+3. **When is the event?** If the game is hours away (or already over), the window isn't open, so red is expected.
+
+{: .note }
+**Red ≠ broken.** For an EPG-matched event channel, red simply means you're outside the attach window. The stream re-attaches as the event approaches (within the *Attach before* buffer) and detaches again after the *Detach after* buffer. If a channel stays red **during** its event window, that's worth investigating — start with [Troubleshooting: "nothing matched"](#troubleshooting-nothing-matched).
 
 ---
 
@@ -154,7 +175,7 @@ Work down this list:
 
 ## Related
 
-- [EPG Settings](settings/epg.md) — attach/detach buffers, channel-source, and XC fallback
-- [Channels settings → Stream Ordering](settings/channels.md#stream-ordering) — the EPG matched stream ordering option
-- [Consumer layer architecture](../reference/architecture/consumer-layer.md#epg-title-matching-matchingepg_matcherpy-matchingepg_indexpy) — internals
-- [Dispatcharr layer architecture](../reference/architecture/dispatcharr-layer.md#program-data-search-epg-matching) — the program-search client
+- [EPG → Output](../epg/output) — XMLTV output path, window, durations, and metadata
+- [Channels → Stream Priority](../channels/stream-priority) — the EPG matched stream ordering option
+- [Consumer layer architecture](../../reference/architecture/consumer-layer.md#epg-title-matching-matchingepg_matcherpy-matchingepg_indexpy) — internals
+- [Dispatcharr layer architecture](../../reference/architecture/dispatcharr-layer.md#program-data-search-epg-matching) — the program-search client

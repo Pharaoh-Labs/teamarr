@@ -1,9 +1,12 @@
 ---
 title: Templates
-parent: User Guide
-nav_order: 4
-has_children: true
-docs_version: "2.3.0"
+parent: EPG
+grand_parent: User Guide
+nav_order: 1
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/templates/
+  - /guide/templates.html
 ---
 
 # Templates
@@ -71,7 +74,7 @@ Templates use variables enclosed in curly braces that get replaced with real dat
 **Event templates** don't use suffixes - each channel exists for a single event, so there's no "next" or "last" game to reference.
 
 See [Variables](variables) for the complete list of 207 available variables. Artwork
-fields support a shared [Game Thumbs](../game-thumbs) base URL so templates can store
+fields support a shared [Game Thumbs](game-thumbs) base URL so templates can store
 relative image paths — see [Artwork & Game Thumbs](variables#artwork--game-thumbs).
 
 ## Filler Content

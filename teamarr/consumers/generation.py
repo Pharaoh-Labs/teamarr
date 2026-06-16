@@ -525,17 +525,23 @@ def run_full_generation(
                         "(and optionally a lineup) in Settings."
                     )
                 else:
-                    update_progress(
-                        "channelsdvr", 97, "Refreshing Channels DVR..."
-                    )
-
+                    # Sequence the two refreshes on real evidence: wait for the
+                    # M3U channel-list refresh to actually finish before firing
+                    # the guide PUT, so the guide doesn't index against a stale
+                    # channel list. Both waits poll CDVR /log (see client docs).
                     if client.source_name:
-                        m3u_result = client.trigger_m3u_refresh(timeout=60)
+                        update_progress(
+                            "channelsdvr", 97, "Refreshing Channels DVR channels..."
+                        )
+                        m3u_result = client.trigger_m3u_refresh(
+                            timeout=60, wait_for_completion=bool(client.lineup_id)
+                        )
                         result.channelsdvr_refresh = m3u_result
                         if m3u_result.get("success"):
                             logger.info(
-                                "[CHANNELSDVR] M3U refresh triggered in %.1fs",
+                                "[CHANNELSDVR] M3U refresh triggered in %.1fs (completion: %s)",
                                 m3u_result.get("duration", 0),
+                                m3u_result.get("completed", "not awaited"),
                             )
                         else:
                             logger.warning(
@@ -551,20 +557,33 @@ def run_full_generation(
                                 client.lineup_id,
                                 client.source_name,
                             )
-                        epg_result = client.trigger_epg_refresh(timeout=60)
+                        update_progress(
+                            "channelsdvr", 97, "Refreshing Channels DVR guide..."
+                        )
+                        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
                         result.channelsdvr_epg_refresh = epg_result
-                        if epg_result.get("success"):
-                            logger.info(
-                                "[CHANNELSDVR] EPG refresh triggered for "
-                                "lineup '%s' in %.1fs",
-                                client.lineup_id,
-                                epg_result.get("duration", 0),
-                            )
-                        else:
+                        if not epg_result.get("success"):
                             logger.warning(
                                 "[CHANNELSDVR] EPG refresh failed: %s",
                                 epg_result.get("message"),
                             )
+                        else:
+                            verification = epg_result.get("verification") or {}
+                            status = verification.get("status")
+                            if status == "no_fetch":
+                                logger.warning(
+                                    "[CHANNELSDVR] EPG refresh accepted but guide "
+                                    "'%s' was not re-fetched — guide may be stale",
+                                    client.lineup_id,
+                                )
+                            else:
+                                logger.info(
+                                    "[CHANNELSDVR] EPG refresh for lineup '%s' in "
+                                    "%.1fs (verification: %s)",
+                                    client.lineup_id,
+                                    epg_result.get("duration", 0),
+                                    status or "not verified",
+                                )
                     else:
                         logger.warning(
                             "[CHANNELSDVR] Skipping EPG/guide refresh: no XMLTV "

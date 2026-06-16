@@ -1,8 +1,12 @@
 ---
 title: Game Thumbs
-parent: User Guide
+parent: EPG
+grand_parent: User Guide
 nav_order: 9
-docs_version: "2.3.0"
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/game-thumbs/
+  - /guide/game-thumbs.html
 ---
 
 # Game Thumbs

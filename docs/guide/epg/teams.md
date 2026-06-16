@@ -1,13 +1,20 @@
 ---
 title: Teams
-parent: User Guide
-nav_order: 5
-docs_version: "2.3.0"
+parent: EPG
+grand_parent: User Guide
+nav_order: 7
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/teams/
+  - /guide/teams.html
 ---
 
 # Teams
 
 Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. Teamarr does *not* create a Dispatcharr channel for each team — that's only done for event-based workflows. Instead, you point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association), and Teamarr keeps that XMLTV channel populated with the team's schedule — upcoming games, live events, and recent results.
+
+{: .note }
+In v2.7.0 Teams was demoted from a top-level navigation item to live under the **EPG** section, alongside Templates and Output.
 
 ## How It Works
 
@@ -48,8 +55,32 @@ The Teams table shows all imported teams with:
 
 Each team needs a **team template** assigned. Click the template dropdown in the team's row to select one. You can also bulk-assign templates by selecting multiple teams.
 
-Team templates are different from event templates — they support `.next` and `.last` suffixes for referencing upcoming and previous games, and include idle/pregame/postgame filler content.
+Team templates are different from event templates — they support `.next` and `.last` suffixes for referencing upcoming and previous games, and include idle/pregame/postgame filler content. See [Team vs Event](team-vs-event) for the full comparison.
 
-### Schedule Days
+## Team Settings
 
-Configure how many days of schedule to fetch per team in **Settings > Teams**. More days means more programmes in the EPG but longer generation times.
+Per-team EPG behavior is configured in **Settings > Teams**.
+
+### Schedule Days Ahead
+
+How far ahead to fetch team schedules. This affects the `.next` template variables that show upcoming games. More days means more programmes in the EPG but longer generation times. Default is 30 days. Options: 7, 14, 30, 60, or 90 days.
+
+### Midnight Crossover
+
+Controls what filler content is shown when a game crosses midnight:
+
+- **Show postgame filler** — Display postgame content after midnight
+- **Show idle filler** — Display idle/off-air content after midnight
+
+### Channel ID Format
+
+The format string for generating team channel IDs. Available variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{team_name}` | Team name (spaces preserved) | `New York Yankees` |
+| `{team_name_pascal}` | Team name in PascalCase | `NewYorkYankees` |
+| `{league}` | League slug | `mlb` |
+| `{league_id}` | League ID | `mlb` |
+
+Default: `{team_name_pascal}.{league_id}`

@@ -1,18 +1,21 @@
 ---
-title: Creating Groups
-parent: Event Groups
+title: Adding a Source
+parent: Sources
 grand_parent: User Guide
 nav_order: 1
-docs_version: "2.3.0"
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/event-groups/creating-groups/
+  - /guide/event-groups/creating-groups.html
 ---
 
-# Creating Event Groups
+# Adding a Source
 
-Event groups connect M3U stream sources to Teamarr's sports data. Each group pulls streams from a Dispatcharr M3U account and matches them to real sporting events.
+Sources connect M3U stream groups to Teamarr's sports data. Each source pulls streams from a Dispatcharr M3U account and matches them to real sporting events.
 
 ## The Subscription Model
 
-Event groups use a **global subscription** to determine which sports and leagues to scan. This is configured in **Event Groups > Global Defaults**, not per-group.
+Sources use a **global subscription** to determine which sports and leagues to scan. This is configured in **Sources > Global Defaults**, not per-source.
 
 **Global Defaults** include:
 - **League subscriptions** — which non-soccer leagues to scan (e.g., NFL, NBA, NHL)
@@ -20,15 +23,15 @@ Event groups use a **global subscription** to determine which sports and leagues
 - **Template assignments** — which template to use by sport or league
 - **Team filter** — include/exclude specific teams from matching
 
-All event groups inherit these defaults. Individual groups can override the subscription if needed (see Per-Group Overrides below).
+All sources inherit these defaults. Individual sources can override the subscription if needed (see Per-Source Overrides below).
 
 ## Basic Settings
 
-When creating or editing a group:
+When creating or editing a source:
 
 ### Name
 
-A descriptive name for the group (e.g., "ESPN+ Sports", "NHL Backup").
+A descriptive name for the source (e.g., "ESPN+ Sports", "NHL Backup").
 
 ### M3U Account
 
@@ -45,7 +48,7 @@ Select which stream group within the M3U account to use, or "All Groups" to incl
 | Mode | Description |
 |------|-------------|
 | **Auto** | Teamarr assigns channel numbers sequentially from the configured range |
-| **Manual** | You specify a fixed starting channel number for this group |
+| **Manual** | You specify a fixed starting channel number for this source |
 
 ### Channel Group
 
@@ -57,10 +60,10 @@ How channels are assigned to Dispatcharr channel groups:
 
 ### Channel Profiles
 
-Override the global default channel profiles for this group:
+Override the global default channel profiles for this source:
 
 - **Use Default** — inherit from Settings > Dispatcharr
-- **Custom** — choose specific profiles for this group
+- **Custom** — choose specific profiles for this source
 
 Dynamic wildcards like `{sport}` and `{league}` create profiles automatically in Dispatcharr.
 
@@ -90,28 +93,28 @@ Each extractor has an enable toggle. Leave disabled to use the built-in parser.
 
 ## Team Filter
 
-Override the global default team filter for this group:
+Override the global default team filter for this source:
 
 - **Use Default** — inherit from Global Defaults
-- **Custom Filter** — define include/exclude teams specific to this group
+- **Custom Filter** — define include/exclude teams specific to this source
 - **Bypass for playoffs** — auto-include all playoff games regardless of team filter
 
-## Per-Group Subscription Overrides
+## Per-Source Subscription Overrides
 
-By default, groups inherit the global league subscription. To override:
+By default, sources inherit the global league subscription. To override:
 
-1. Edit the group
+1. Edit the source
 2. Under "Subscription Override", uncheck **Use global subscription**
 3. The picker automatically seeds from your current global subscription
 4. Deselect any leagues or sports you want to exclude, then save
 
 Use **Match Global** at any time to reset the picker back to the current global subscription and start over.
 
-This is useful when a stream source mixes sports and you need to exclude specific leagues from a group — for example, excluding MLB from a multi-sport group where the provider labels all streams with the same channel format regardless of sport.
+This is useful when a stream source mixes sports and you need to exclude specific leagues from a source — for example, excluding MLB from a multi-sport source where the provider labels all streams with the same channel format regardless of sport.
 
 ## Channel Sort Order
 
-Controls how channels within this group are ordered:
+Controls how channels within this source are ordered:
 
 | Mode | Description |
 |------|-------------|
@@ -123,16 +126,16 @@ Controls how channels within this group are ordered:
 
 ### Enabled
 
-Toggle the group on/off without deleting it. Disabled groups are skipped during EPG generation.
+Toggle the source on/off without deleting it. Disabled sources are skipped during EPG generation.
 
 ### Priority
 
-When multiple groups could match the same stream, higher priority groups are checked first. Lower numbers = higher priority.
+When multiple sources could match the same stream, higher priority sources are checked first. Lower numbers = higher priority.
 
 ### Team Stream Source
 
-Allow team-branded streams (e.g. `NHL | Toronto Maple Leafs`) to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
+Allow team-branded streams (e.g. `NHL | Toronto Maple Leafs`) to match events where that team plays. Built-in stream filtering is automatically bypassed for this source.
 
 ### EPG Program Matching
 
-Match static-named linear channels (e.g. `ESPN`, `FS1`, `NBA1`) in this group to events using Dispatcharr's program guide, and time-share one stream across many event channels near game time. Requires the global EPG switch (Settings → EPG). Built-in filtering is bypassed for this group. See [EPG Program Matching](../epg-matching.md) for the full guide.
+Match static-named linear channels (e.g. `ESPN`, `FS1`, `NBA1`) in this source to events using Dispatcharr's program guide, and time-share one stream across many event channels near game time. Built-in filtering is bypassed for this source. See [EPG Program Matching](../matching/program-matching) for the full guide.

@@ -526,7 +526,7 @@ function BackupRestoreCard() {
 
 // Per-League Config Row Component
 
-type SettingsTab = "general" | "teams" | "events" | "channels" | "dispatcharr" | "media-servers" | "advanced"
+type SettingsTab = "general" | "dispatcharr" | "media-servers" | "advanced"
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
@@ -1382,13 +1382,6 @@ export function Settings() {
       </ToggleCard>
       </>
       )}
-
-      {/* Teams Tab */}
-
-      {/* Event Groups Tab */}
-
-      {/* Channel Management Tab */}
-
 
       {/* Dispatcharr Tab */}
       {activeTab === "dispatcharr" && (

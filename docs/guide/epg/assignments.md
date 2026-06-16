@@ -1,9 +1,12 @@
 ---
 title: Template Assignments
-parent: Templates
+parent: EPG
 grand_parent: User Guide
-nav_order: 5
-docs_version: "2.3.0"
+nav_order: 6
+docs_version: "2.7.0"
+redirect_from:
+  - /guide/templates/assignments/
+  - /guide/templates/assignments.html
 ---
 
 # Template Assignments

@@ -6,6 +6,8 @@ source-name encoding, and HTTP error mapping so a refactor can't
 silently break the refresh hook.
 """
 
+import time
+
 import httpx
 import pytest
 
@@ -358,6 +360,209 @@ class TestTriggerEPGRefresh:
 
         assert result["success"] is False
         assert "not found" in result["message"].lower()
+
+
+def _sequenced_get(before: str, after: str):
+    """httpx.get fake: 1st call (the pre-request watermark) sees ``before``,
+    every later call (the poll loop) sees ``after`` — so a line present only
+    in ``after`` is detected as newer than the watermark."""
+    calls = {"n": 0}
+
+    def fake_get(url, **kwargs):
+        calls["n"] += 1
+        body = before if calls["n"] == 1 else after
+        return httpx.Response(200, text=body, request=httpx.Request("GET", url))
+
+    return fake_get
+
+
+def _ok_post(url, **kwargs):
+    return httpx.Response(200, json=True, request=httpx.Request("POST", url))
+
+
+def _ok_put(url, **kwargs):
+    return httpx.Response(200, request=httpx.Request("PUT", url))
+
+
+# Short builders for the CDVR /log lines our pollers match, to keep literals
+# under the line-length limit and document the exact real-world format.
+def _m3u(ts, src="dispatcharr", n=100):
+    return f"{ts} [M3U] Refreshed lineup for {src} with {n} channels\n"
+
+
+def _fetched(ts, lineup="XMLTV-dispatcharr"):
+    return f"{ts} [DVR] Fetched guide data for {lineup} in 2s\n"
+
+
+def _indexed(ts, n, lineup="XMLTV-dispatcharr"):
+    return (
+        f"{ts} [DVR] Indexed {n} airings into {lineup} "
+        "(161 channels over 345h0m0s) + 0 skipped [15s index]\n"
+    )
+
+
+def _prune(ts, lineup="XMLTV-dispatcharr"):
+    return f"{ts} [IDX] Pruned 0 expired groups from {lineup} in 1ms.\n"
+
+
+class TestM3UWaitForCompletion:
+    """trigger_m3u_refresh(wait_for_completion=True) gates on real /log evidence."""
+
+    def setup_method(self):
+        # Tiny ceilings so the timeout branch resolves fast; never sleep for real.
+        self._orig = (
+            ChannelsDVRClient.M3U_COMPLETION_TIMEOUT,
+            ChannelsDVRClient.LOG_POLL_INTERVAL,
+        )
+        ChannelsDVRClient.M3U_COMPLETION_TIMEOUT = 0.2
+        ChannelsDVRClient.LOG_POLL_INTERVAL = 0.0
+
+    def teardown_method(self):
+        (
+            ChannelsDVRClient.M3U_COMPLETION_TIMEOUT,
+            ChannelsDVRClient.LOG_POLL_INTERVAL,
+        ) = self._orig
+
+    def test_completion_confirmed_when_new_refresh_line_appears(self, monkeypatch):
+        before = _m3u("2026/06/15 16:00:00.000000", n=100)
+        after = before + _m3u("2026/06/15 16:06:04.383076", n=164)
+        monkeypatch.setattr(httpx, "get", _sequenced_get(before, after))
+        monkeypatch.setattr(httpx, "post", _ok_post)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_m3u_refresh(wait_for_completion=True)
+
+        assert result["success"] is True
+        assert result["completed"] is True
+
+    def test_completion_unconfirmed_when_no_new_line(self, monkeypatch):
+        # Only a stale line (older than/equal to the watermark) — never newer.
+        log = _m3u("2026/06/15 16:00:00.000000", n=100)
+        monkeypatch.setattr(httpx, "get", _sequenced_get(log, log))
+        monkeypatch.setattr(httpx, "post", _ok_post)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_m3u_refresh(wait_for_completion=True)
+
+        assert result["success"] is True
+        assert result["completed"] is False
+
+    def test_other_source_line_does_not_count(self, monkeypatch):
+        before = ""
+        after = _m3u("2026/06/15 16:06:04.383076", src="othersource", n=9)
+        monkeypatch.setattr(httpx, "get", _sequenced_get(before, after))
+        monkeypatch.setattr(httpx, "post", _ok_post)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_m3u_refresh(wait_for_completion=True)
+
+        assert result["completed"] is False
+
+    def test_log_unreachable_reports_none(self, monkeypatch):
+        def boom(url, **kwargs):
+            raise httpx.ConnectError("no log")
+
+        monkeypatch.setattr(httpx, "get", boom)
+        monkeypatch.setattr(httpx, "post", _ok_post)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_m3u_refresh(wait_for_completion=True)
+
+        assert result["success"] is True
+        assert result["completed"] is None
+
+    def test_not_awaited_by_default(self, monkeypatch):
+        monkeypatch.setattr(httpx, "post", _ok_post)
+        # No httpx.get fake — if it polled /log this would error.
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_m3u_refresh()
+
+        assert result["success"] is True
+        assert "completed" not in result
+
+
+class TestEPGVerify:
+    """trigger_epg_refresh(verify=True) confirms the guide actually re-indexed."""
+
+    def setup_method(self):
+        self._orig = (
+            ChannelsDVRClient.GUIDE_FETCH_TIMEOUT,
+            ChannelsDVRClient.GUIDE_INDEX_TIMEOUT,
+            ChannelsDVRClient.LOG_POLL_INTERVAL,
+        )
+        ChannelsDVRClient.GUIDE_FETCH_TIMEOUT = 0.2
+        ChannelsDVRClient.GUIDE_INDEX_TIMEOUT = 0.2
+        ChannelsDVRClient.LOG_POLL_INTERVAL = 0.0
+
+    def teardown_method(self):
+        (
+            ChannelsDVRClient.GUIDE_FETCH_TIMEOUT,
+            ChannelsDVRClient.GUIDE_INDEX_TIMEOUT,
+            ChannelsDVRClient.LOG_POLL_INTERVAL,
+        ) = self._orig
+
+    def test_indexed_reports_airings(self, monkeypatch):
+        before = _prune("2026/06/15 16:00:00.000000")
+        after = (
+            before
+            + _fetched("2026/06/15 16:06:06.605869")
+            + _indexed("2026/06/15 16:06:22.330813", 34216)
+        )
+        monkeypatch.setattr(httpx, "get", _sequenced_get(before, after))
+        monkeypatch.setattr(httpx, "put", _ok_put)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_epg_refresh(verify=True)
+
+        assert result["verified"] is True
+        assert result["verification"]["status"] == "indexed"
+        assert result["verification"]["airings"] == 34216
+
+    def test_no_fetch_is_failure(self, monkeypatch):
+        log = _prune("2026/06/15 16:00:00.000000")
+        monkeypatch.setattr(httpx, "get", _sequenced_get(log, log))
+        monkeypatch.setattr(httpx, "put", _ok_put)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_epg_refresh(verify=True)
+
+        assert result["success"] is True  # request was accepted
+        assert result["verified"] is False
+        assert result["verification"]["status"] == "no_fetch"
+
+    def test_fetched_without_index(self, monkeypatch):
+        before = _prune("2026/06/15 16:00:00.000000")
+        after = before + _fetched("2026/06/15 16:06:06.605869")
+        monkeypatch.setattr(httpx, "get", _sequenced_get(before, after))
+        monkeypatch.setattr(httpx, "put", _ok_put)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_epg_refresh(verify=True)
+
+        assert result["verified"] is True
+        assert result["verification"]["status"] == "fetched"
+
+    def test_log_unreachable_is_unverifiable(self, monkeypatch):
+        def boom(url, **kwargs):
+            raise httpx.ConnectError("no log")
+
+        monkeypatch.setattr(httpx, "get", boom)
+        monkeypatch.setattr(httpx, "put", _ok_put)
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+        client = ChannelsDVRClient(base_url="http://channels:8089", source_name="dispatcharr")
+        result = client.trigger_epg_refresh(verify=True)
+
+        assert result["success"] is True
+        assert result["verified"] is None
+        assert result["verification"]["status"] == "unverifiable"
 
 
 if __name__ == "__main__":
