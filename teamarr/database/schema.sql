@@ -239,6 +239,7 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Display Preferences
     time_format TEXT DEFAULT '12h' CHECK(time_format IN ('12h', '24h')),
     show_timezone BOOLEAN DEFAULT 1,
+    use_live_sample_data BOOLEAN DEFAULT 0,      -- Template preview uses real provider data
 
     -- Event-Based EPG Options
     include_final_events BOOLEAN DEFAULT 0,      -- Include completed events for today

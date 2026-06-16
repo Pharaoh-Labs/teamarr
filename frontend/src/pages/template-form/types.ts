@@ -3,14 +3,21 @@ import type { VariableCategory } from "@/api/variables"
 
 export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv"
 
+export interface SampleLeagueOption {
+  slug: string
+  name: string
+  sport: string
+}
+
 export interface VariableSidebarProps {
   categories: VariableCategory[]
   onInsert: (varName: string) => void
   lastFocusedField: string | null
   isTeamTemplate: boolean
-  availableSports: string[]
-  previewSport: string
-  onSportChange: (sport: string) => void
+  leagues: SampleLeagueOption[]
+  previewLeague: string
+  onLeagueChange: (league: string) => void
+  isLive: boolean
 }
 
 export interface Variable {

@@ -13,7 +13,8 @@ import {
   type TemplateCreate,
   type FillerContent,
 } from "@/api/templates"
-import { fetchVariables, fetchSamples } from "@/api/variables"
+import { fetchVariables, fetchSamples, fetchSampleLeagues } from "@/api/variables"
+import { useDisplaySettings } from "@/hooks/useSettings"
 import { buildValidVariableSet } from "@/utils/templateValidation"
 import type { Tab } from "./template-form/types"
 import {
@@ -41,7 +42,7 @@ export function TemplateForm() {
   const [activeTab, setActiveTab] = useState<Tab>("basic")
   const [formData, setFormData] = useState<TemplateCreate>(DEFAULT_FORM)
   const [lastFocusedField, setLastFocusedField] = useState<string | null>(null)
-  const [previewSport, setPreviewSport] = useState("NBA")
+  const [previewLeague, setPreviewLeague] = useState("nba")
 
   // Refs for template fields
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
@@ -63,17 +64,29 @@ export function TemplateForm() {
     staleTime: Infinity,
   })
 
-  // Fetch sample data for preview (sport-specific)
+  // Leagues available to preview against, grouped by sport in the sidebar.
+  const { data: sampleLeagues } = useQuery({
+    queryKey: ["sample-leagues"],
+    queryFn: fetchSampleLeagues,
+    staleTime: 60 * 60 * 1000, // 1 hour
+  })
+
+  // Whether to fetch real provider data for the preview (opt-in setting).
+  const { data: displaySettings } = useDisplaySettings()
+  const useLive = displaySettings?.use_live_sample_data ?? false
+
+  // Fetch sample data for preview (league-specific, optionally live)
   const { data: samplesData } = useQuery({
-    queryKey: ["samples", previewSport],
-    queryFn: () => fetchSamples(previewSport),
+    queryKey: ["samples", previewLeague, useLive],
+    queryFn: () => fetchSamples(previewLeague, { byLeague: true, live: useLive }),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   // Create resolver with current sample data
   const sampleData = samplesData?.samples ?? DEFAULT_SAMPLE_DATA
   const resolveTemplate = createResolver(sampleData)
-  const availableSports = samplesData?.available_sports ?? variablesData?.available_sports ?? ["NBA", "NFL", "MLB", "NHL"]
+  const previewLeagues = sampleLeagues ?? []
+  const isLivePreview = samplesData?.live ?? false
 
   // Build validation set from variables data
   const validationData = useMemo(() => {
@@ -355,9 +368,10 @@ export function TemplateForm() {
             onInsert={insertVariable}
             lastFocusedField={lastFocusedField}
             isTeamTemplate={isTeamTemplate}
-            availableSports={availableSports}
-            previewSport={previewSport}
-            onSportChange={setPreviewSport}
+            leagues={previewLeagues}
+            previewLeague={previewLeague}
+            onLeagueChange={setPreviewLeague}
+            isLive={isLivePreview}
           />
         </div>
       </div>

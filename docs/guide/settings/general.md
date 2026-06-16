@@ -32,6 +32,7 @@ The two can differ on purpose — browse in your local time while your media ser
 
 - **Time format** — 12-hour (`3:45 PM`) or 24-hour (`15:45`). Applies to both the UI and EPG output.
 - **Show timezone abbreviation** — toggle whether abbreviations (EST, PST, …) appear alongside times.
+- **Live Template Preview Data** — when enabled, the template editor previews against real data for an upcoming or recent event in the selected league instead of static sample placeholders. Falls back to sample data when no event is available. See [Template Variables](../epg/variables#previewing-templates).
 
 ## Schedule
 

@@ -6,8 +6,31 @@ Used for live preview in the UI.
 Organization: Variables grouped by category, with base/.next/.last variants together.
 """
 
-# Available sports for the dropdown
-AVAILABLE_SPORTS = ["NBA", "NFL", "MLB", "NHL", "NCAAM", "NCAAF", "Soccer", "UFC", "F1"]
+# Available sample "profiles" - each represents a distinct data shape used to
+# preview templates. The original nine are league-flavored sports; the rest are
+# added profiles that inherit a base shape (see _PROFILE_INHERITS) and override
+# identity (see _PROFILE_OVERRIDES). Leagues map onto these via
+# LEAGUE_SAMPLE_PROFILES / _profile_from_sport.
+AVAILABLE_SPORTS = [
+    "NBA",
+    "NFL",
+    "MLB",
+    "NHL",
+    "NCAAM",
+    "NCAAF",
+    "Soccer",
+    "UFC",
+    "F1",
+    "WNBA",
+    "MiLB",
+    "JuniorHockey",
+    "Lacrosse",
+    "AFL",
+    "Cricket",
+    "Rugby",
+    "Boxing",
+    "Motorsports",
+]
 
 # Sample data organized by variable name and sport
 # Each variable can have different sample values per sport
@@ -3995,47 +4018,543 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
 }
 
 
-def get_sample_value(var_name: str, sport: str) -> str:
-    """Get sample value for a variable and sport.
+# --------------------------------------------------------------------------
+# Added profiles: inherit a base shape and override identity. Inheritance lets
+# a profile borrow the base's curated records/scores/odds/etc. while presenting
+# league-accurate teams, so we only hand-author the identity block per profile.
+# --------------------------------------------------------------------------
 
-    Falls back through: exact match -> base var -> default
+_PROFILE_INHERITS: dict[str, str] = {
+    "WNBA": "NBA",
+    "MiLB": "MLB",
+    "JuniorHockey": "NHL",
+    "Lacrosse": "NHL",
+    "Boxing": "UFC",
+    "Motorsports": "F1",
+    "Cricket": "Soccer",
+    "Rugby": "NCAAF",
+    "AFL": "NCAAF",
+}
+
+# Identity/venue overrides per added profile. Everything not listed inherits
+# from the base profile (or, for generic categories, any curated value).
+_PROFILE_OVERRIDES: dict[str, dict[str, str]] = {
+    "WNBA": {
+        "team_name": "Las Vegas Aces",
+        "team_short": "Aces",
+        "team_abbrev": "LV",
+        "team_abbrev_lower": "lv",
+        "team_name_pascal": "LasVegasAces",
+        "opponent": "New York Liberty",
+        "opponent.next": "Seattle Storm",
+        "opponent.last": "Connecticut Sun",
+        "opponent_short": "Liberty",
+        "league": "WNBA",
+        "sport": "Basketball",
+        "venue": "Michelob ULTRA Arena",
+        "venue_city": "Las Vegas",
+    },
+    "MiLB": {
+        "team_name": "Toledo Mud Hens",
+        "team_short": "Mud Hens",
+        "team_abbrev": "TOL",
+        "team_abbrev_lower": "tol",
+        "team_name_pascal": "ToledoMudHens",
+        "opponent": "Columbus Clippers",
+        "opponent.next": "Indianapolis Indians",
+        "opponent.last": "Louisville Bats",
+        "opponent_short": "Clippers",
+        "league": "Triple-A",
+        "sport": "Baseball",
+        "venue": "Fifth Third Field",
+        "venue_city": "Toledo",
+    },
+    "JuniorHockey": {
+        "team_name": "London Knights",
+        "team_short": "Knights",
+        "team_abbrev": "LDN",
+        "team_abbrev_lower": "ldn",
+        "team_name_pascal": "LondonKnights",
+        "opponent": "Oshawa Generals",
+        "opponent.next": "Windsor Spitfires",
+        "opponent.last": "Kitchener Rangers",
+        "opponent_short": "Generals",
+        "league": "OHL",
+        "sport": "Hockey",
+        "venue": "Budweiser Gardens",
+        "venue_city": "London",
+    },
+    "Lacrosse": {
+        "team_name": "Buffalo Bandits",
+        "team_short": "Bandits",
+        "team_abbrev": "BUF",
+        "team_abbrev_lower": "buf",
+        "team_name_pascal": "BuffaloBandits",
+        "opponent": "Toronto Rock",
+        "opponent.next": "Albany FireWolves",
+        "opponent.last": "Colorado Mammoth",
+        "opponent_short": "Rock",
+        "league": "NLL",
+        "sport": "Lacrosse",
+        "venue": "KeyBank Center",
+        "venue_city": "Buffalo",
+    },
+    "AFL": {
+        "team_name": "Collingwood Magpies",
+        "team_short": "Magpies",
+        "team_abbrev": "COLL",
+        "team_abbrev_lower": "coll",
+        "team_name_pascal": "CollingwoodMagpies",
+        "opponent": "Carlton Blues",
+        "opponent.next": "Essendon Bombers",
+        "opponent.last": "Geelong Cats",
+        "opponent_short": "Blues",
+        "league": "AFL",
+        "sport": "Australian Football",
+        "venue": "Melbourne Cricket Ground",
+        "venue_city": "Melbourne",
+    },
+    "Cricket": {
+        "team_name": "Mumbai Indians",
+        "team_short": "Mumbai",
+        "team_abbrev": "MI",
+        "team_abbrev_lower": "mi",
+        "team_name_pascal": "MumbaiIndians",
+        "opponent": "Chennai Super Kings",
+        "opponent.next": "Royal Challengers Bengaluru",
+        "opponent.last": "Kolkata Knight Riders",
+        "opponent_short": "Chennai",
+        "league": "IPL",
+        "sport": "Cricket",
+        "venue": "Wankhede Stadium",
+        "venue_city": "Mumbai",
+    },
+    "Rugby": {
+        "team_name": "Leinster",
+        "team_short": "Leinster",
+        "team_abbrev": "LEI",
+        "team_abbrev_lower": "lei",
+        "team_name_pascal": "Leinster",
+        "opponent": "Munster",
+        "opponent.next": "Toulouse",
+        "opponent.last": "Saracens",
+        "opponent_short": "Munster",
+        "league": "United Rugby Championship",
+        "sport": "Rugby",
+        "venue": "Aviva Stadium",
+        "venue_city": "Dublin",
+    },
+    "Boxing": {
+        "team_name": "Oleksandr Usyk",
+        "team_short": "Usyk",
+        "opponent": "Tyson Fury",
+        "fighter1": "Oleksandr Usyk",
+        "fighter2": "Tyson Fury",
+        "event_title": "Usyk vs Fury II",
+        "league": "Boxing",
+        "sport": "Boxing",
+        "venue": "Kingdom Arena",
+        "venue_city": "Riyadh",
+    },
+    "Motorsports": {
+        "race_name": "Daytona 500",
+        "league": "NASCAR Cup Series",
+        "sport": "Racing",
+        "venue": "Daytona International Speedway",
+        "venue_city": "Daytona Beach",
+    },
+}
+
+# Merge added-profile overrides into SAMPLE_DATA so curated lookups (and the
+# inheritance chain) see them uniformly.
+for _profile, _overrides in _PROFILE_OVERRIDES.items():
+    for _var, _value in _overrides.items():
+        SAMPLE_DATA.setdefault(_var, {})[_profile] = _value
+
+
+# --------------------------------------------------------------------------
+# League -> profile mapping. Most leagues resolve their profile from sport via
+# _profile_from_sport; this map only lists leagues whose sport-derived default
+# would be wrong (college vs pro, junior hockey, cricket/rugby/etc., the TSDB
+# soccer leagues whose country codes aren't recognized as soccer).
+# --------------------------------------------------------------------------
+
+# sport name (from get_sport_from_league) -> default profile
+_SPORT_PROFILE_DEFAULT: dict[str, str] = {
+    "Football": "NFL",
+    "Basketball": "NBA",
+    "Hockey": "NHL",
+    "Baseball": "MLB",
+    "Soccer": "Soccer",
+    "MMA": "UFC",
+    "Racing": "Motorsports",
+}
+
+LEAGUE_SAMPLE_PROFILES: dict[str, str] = {
+    # Football
+    "college-football": "NCAAF",
+    "ufl": "NFL",
+    "cfl": "NFL",
+    # Basketball
+    "nba-development": "NBA",
+    "wnba": "WNBA",
+    "unrivaled": "WNBA",
+    "mens-college-basketball": "NCAAM",
+    "womens-college-basketball": "NCAAM",
+    # Hockey
+    "mens-college-hockey": "NHL",
+    "womens-college-hockey": "NHL",
+    "olympics-mens-ice-hockey": "NHL",
+    "olympics-womens-ice-hockey": "NHL",
+    "chl": "JuniorHockey",
+    "ohl": "JuniorHockey",
+    "whl": "JuniorHockey",
+    "qmjhl": "JuniorHockey",
+    "ahl": "JuniorHockey",
+    "echl": "JuniorHockey",
+    "pwhl": "JuniorHockey",
+    "ushl": "JuniorHockey",
+    "ojhl": "JuniorHockey",
+    "bchl": "JuniorHockey",
+    "sjhl": "JuniorHockey",
+    "ajhl": "JuniorHockey",
+    "mjhl": "JuniorHockey",
+    "mhl": "JuniorHockey",
+    "norwegian-hockey": "JuniorHockey",
+    # Australian football
+    "afl": "AFL",
+    # Baseball
+    "milb-aaa": "MiLB",
+    "milb-aa": "MiLB",
+    "milb-high-a": "MiLB",
+    "milb-a": "MiLB",
+    "rookie": "MiLB",
+    "cbl": "MiLB",
+    "college-baseball": "MLB",
+    "college-softball": "MLB",
+    "world-baseball-classic": "MLB",
+    # Soccer (TSDB / unrecognized country codes)
+    "uru.2": "Soccer",
+    "svenska-cupen": "Soccer",
+    "can.1": "Soccer",
+    "swe.2": "Soccer",
+    "swe.3.n": "Soccer",
+    "swe.3.s": "Soccer",
+    "ven.2": "Soccer",
+    "gam.1": "Soccer",
+    "ice.1": "Soccer",
+    "ice.2": "Soccer",
+    "arb.1": "Soccer",
+    "nifl.1": "Soccer",
+    "ksa.1": "Soccer",
+    "sui.1": "Soccer",
+    "tur.1": "Soccer",
+    "gre.1": "Soccer",
+    "jpn.1": "Soccer",
+    "col.1": "Soccer",
+    # Combat
+    "boxing": "Boxing",
+    # Volleyball (no dedicated profile - reuse an indoor team shape)
+    "mens-college-volleyball": "NCAAM",
+    "womens-college-volleyball": "NCAAM",
+    # Lacrosse
+    "mens-college-lacrosse": "Lacrosse",
+    "womens-college-lacrosse": "Lacrosse",
+    "nll": "Lacrosse",
+    "pll": "Lacrosse",
+    # Cricket
+    "ipl": "Cricket",
+    "bbl": "Cricket",
+    "sa20": "Cricket",
+    # Rugby (ESPN sport='rugby'; not derivable from the league code)
+    "super-rugby": "Rugby",
+    "top14": "Rugby",
+    "lions": "Rugby",
+    "rwc": "Rugby",
+    "wrwc": "Rugby",
+    "6n": "Rugby",
+    "trc": "Rugby",
+    "urc": "Rugby",
+    "prem": "Rugby",
+    "ercc": "Rugby",
+    "epcr": "Rugby",
+    "mlr": "Rugby",
+    "cc": "Rugby",
+    "npc": "Rugby",
+    "urba": "Rugby",
+    "itm": "Rugby",
+    "om7s": "Rugby",
+    "ow7s": "Rugby",
+    "nrl": "Rugby",
+    # Motorsports
+    "f1": "F1",
+    "nascar-cup": "Motorsports",
+    "nascar-xfinity": "Motorsports",
+    "nascar-truck": "Motorsports",
+    "indycar": "Motorsports",
+    "motogp": "Motorsports",
+    "imsa": "Motorsports",
+    "wec": "Motorsports",
+}
+
+# Optional league-accurate identity flourishes layered on top of the profile.
+# Partial - anything omitted inherits the profile's value.
+LEAGUE_SAMPLE_OVERRIDES: dict[str, dict[str, str]] = {
+    "esp.1": {
+        "team_name": "Real Madrid",
+        "team_short": "Madrid",
+        "team_abbrev": "RMA",
+        "team_name_pascal": "RealMadrid",
+        "opponent": "Barcelona",
+        "league": "La Liga",
+    },
+    "ger.1": {
+        "team_name": "Bayern Munich",
+        "team_short": "Bayern",
+        "opponent": "Borussia Dortmund",
+        "league": "Bundesliga",
+    },
+    "ita.1": {
+        "team_name": "Inter Milan",
+        "team_short": "Inter",
+        "opponent": "Juventus",
+        "league": "Serie A",
+    },
+    "fra.1": {
+        "team_name": "Paris Saint-Germain",
+        "team_short": "PSG",
+        "opponent": "Marseille",
+        "league": "Ligue 1",
+    },
+    "uefa.champions": {"league": "UEFA Champions League"},
+    "nascar-cup": {
+        "race_name": "Daytona 500",
+        "league": "NASCAR Cup Series",
+        "venue": "Daytona International Speedway",
+        "venue_city": "Daytona Beach",
+    },
+    "indycar": {
+        "race_name": "Indianapolis 500",
+        "league": "IndyCar Series",
+        "venue": "Indianapolis Motor Speedway",
+        "venue_city": "Indianapolis",
+    },
+    "motogp": {"race_name": "Italian Grand Prix", "league": "MotoGP"},
+    "bbl": {
+        "team_name": "Sydney Sixers",
+        "team_short": "Sixers",
+        "opponent": "Perth Scorchers",
+        "league": "Big Bash League",
+    },
+    "top14": {
+        "team_name": "Toulouse",
+        "team_short": "Toulouse",
+        "opponent": "Racing 92",
+        "league": "Top 14",
+    },
+}
+
+
+# Confederation/competition prefixes that get_sport_from_league can't resolve
+# but are unambiguously soccer (continental cups, world cups).
+_SOCCER_PREFIXES = ("uefa.", "fifa.", "conmebol.", "concacaf.")
+
+
+def _profile_from_sport(league_code: str) -> str:
+    """Resolve a sample profile for a league via its sport (fallback path)."""
+    from teamarr.utilities.sports import get_sport_from_league
+
+    if league_code.startswith(_SOCCER_PREFIXES):
+        return "Soccer"
+
+    sport = get_sport_from_league(league_code)
+    return _SPORT_PROFILE_DEFAULT.get(sport, "NBA")
+
+
+def resolve_profile_for_league(league_code: str) -> str:
+    """Resolve the sample profile a league should preview against."""
+    return LEAGUE_SAMPLE_PROFILES.get(league_code) or _profile_from_sport(league_code)
+
+
+# --------------------------------------------------------------------------
+# Resolution precedence: curated SAMPLE_DATA -> inline registry sample ->
+# category auto-default. Iterating the registry (not just SAMPLE_DATA keys)
+# means a newly-registered variable is auto-adopted into previews with a
+# sensible value even before anyone curates it here.
+# --------------------------------------------------------------------------
+
+# Categories whose curated values are sport-agnostic enough to borrow from
+# another profile when the requested profile has no curated value (e.g. a
+# generic date/broadcast). Identity/venue/score/etc. are NOT here because
+# borrowing them would leak another sport's team or venue into the preview.
+_GENERIC_FALLBACK_CATEGORIES = frozenset({"DATETIME", "BROADCAST", "PLAYOFFS"})
+
+
+def _suffix_variants(suffix_rules_name: str) -> list[str]:
+    """Suffix strings a variable supports, given its SuffixRules enum name."""
+    if suffix_rules_name == "ALL":
+        return ["", ".next", ".last"]
+    if suffix_rules_name == "BASE_NEXT_ONLY":
+        return ["", ".next"]
+    if suffix_rules_name == "LAST_ONLY":
+        return [".last"]
+    return [""]  # BASE_ONLY
+
+
+def _profile_chain(profile: str) -> list[str]:
+    """Profile plus its inheritance ancestry (e.g. WNBA -> NBA)."""
+    chain: list[str] = []
+    current: str | None = profile
+    while current and current not in chain:
+        chain.append(current)
+        current = _PROFILE_INHERITS.get(current)
+    return chain
+
+
+def _curated_value(full_name: str, profile: str, generic_ok: bool) -> str | None:
+    """Curated sample for a variable+profile, or None if not curated.
+
+    Tries exact name then the base name (without .next/.last), walking the
+    profile's inheritance chain so added profiles borrow their base shape's
+    curated values (e.g. WNBA records from NBA). For generic categories, falls
+    back to any profile's curated value so shared values (dates, broadcast
+    networks) stay realistic without per-profile curation.
     """
-    # Try exact match first
-    if var_name in SAMPLE_DATA:
-        sport_data = SAMPLE_DATA[var_name]
-        if sport in sport_data:
-            return sport_data[sport]
-        # Fall back to first available sport
-        return next(iter(sport_data.values()), "")
+    chain = _profile_chain(profile)
+    for name in (full_name, full_name.replace(".next", "").replace(".last", "")):
+        sport_data = SAMPLE_DATA.get(name)
+        if not sport_data:
+            continue
+        for candidate in chain:
+            if candidate in sport_data:
+                return sport_data[candidate]
+        if generic_ok:
+            return next(iter(sport_data.values()), None)
+    return None
 
-    # Try base variable (without .next/.last suffix)
+
+def _category_default(category_name: str, full_name: str) -> str:
+    """Synthesize a deterministic, sport-neutral placeholder.
+
+    Last-resort value so any registered variable always previews as something
+    plausible and never leaks another sport's identity. Name heuristics take
+    priority over the category fallback.
+    """
+    name = full_name.lower()
+
+    # Name heuristics (cut across categories)
+    if name.startswith(("is_", "has_")) or name.endswith(("_flag", "_bool")):
+        return "true"
+    if "time" in name:
+        return "7:00 PM"
+    if "date" in name:
+        return "Saturday, January 18"
+    if "pct" in name or "percentage" in name:
+        return ".625"
+    if name.endswith("_abbrev") or name.endswith("_abbreviation"):
+        return "SAM"
+    if name.endswith("_lower"):
+        return "sample"
+    if "logo" in name or "url" in name or "image" in name or name.endswith("_art"):
+        return ""
+
+    defaults = {
+        "IDENTITY": "Sample Team",
+        "DATETIME": "Saturday, January 18",
+        "VENUE": "Sample Arena",
+        "HOME_AWAY": "vs",
+        "RECORDS": "20-10",
+        "STREAKS": "W3",
+        "SCORES": "3",
+        "OUTCOME": "Win",
+        "STANDINGS": "1",
+        "STATISTICS": "100.0",
+        "PLAYOFFS": "Regular Season",
+        "ODDS": "-3.5",
+        "BROADCAST": "ESPN",
+        "RANKINGS": "10",
+        "CONFERENCE": "Sample Conference",
+        "SOCCER": "Premier League",
+        "COMBAT": "Sample Fighter",
+        "MOTORSPORTS": "Sample Grand Prix",
+    }
+    return defaults.get(category_name, "Sample")
+
+
+def _resolve_one(var_def, full_name: str, profile: str) -> str:
+    """Resolve a single variable for a profile via the precedence chain."""
+    category_name = var_def.category.name
+    generic_ok = category_name in _GENERIC_FALLBACK_CATEGORIES
+
+    curated = _curated_value(full_name, profile, generic_ok)
+    if curated is not None:
+        return curated
+    if var_def.sample is not None:
+        return var_def.sample
+    return _category_default(category_name, full_name)
+
+
+def get_sample_value(var_name: str, sport: str) -> str:
+    """Get the sample value for a single variable and sport/profile.
+
+    Resolves via curated SAMPLE_DATA -> inline registry sample -> category
+    default, so unknown/new variables still return a plausible placeholder.
+    """
+    from teamarr.templates.variables import get_registry
+
+    registry = get_registry()
     base_var = var_name.replace(".next", "").replace(".last", "")
-    if base_var in SAMPLE_DATA:
-        sport_data = SAMPLE_DATA[base_var]
-        if sport in sport_data:
-            return sport_data[sport]
-        return next(iter(sport_data.values()), "")
+    var_def = registry.get(base_var)
+    if var_def is not None:
+        return _resolve_one(var_def, var_name, sport)
 
-    return ""
+    # Not a registered variable - fall back to raw curated lookup.
+    value = _curated_value(var_name, sport, generic_ok=True)
+    return value if value is not None else ""
 
 
 def get_all_sample_data(sport: str) -> dict[str, str]:
-    """Get all sample values for a given sport.
+    """Get all sample values for a given sport/profile.
+
+    Iterates the variable registry (the source of truth for what variables
+    exist) and resolves each via the precedence chain, so a newly-registered
+    variable is auto-adopted with a sensible value. Any extra curated keys not
+    backed by a registered variable are included too, for safety.
 
     Time-related variables are formatted according to user's display settings
     (12h/24h format, show/hide timezone).
     """
-    result = {}
-    for var_name, sport_data in SAMPLE_DATA.items():
-        if sport in sport_data:
-            result[var_name] = sport_data[sport]
-        elif sport_data:
-            # Fall back to first available
-            result[var_name] = next(iter(sport_data.values()))
+    from teamarr.templates.variables import get_registry
+
+    registry = get_registry()
+    result: dict[str, str] = {}
+
+    for var_def in registry.all_variables():
+        for suffix in _suffix_variants(var_def.suffix_rules.name):
+            full_name = f"{var_def.name}{suffix}"
+            result[full_name] = _resolve_one(var_def, full_name, sport)
+
+    # Include any curated keys not backed by a registered variable (defensive).
+    for name, sport_data in SAMPLE_DATA.items():
+        if name not in result and sport_data:
+            result[name] = sport_data.get(sport) or next(iter(sport_data.values()))
 
     # Post-process time-related variables to honor user settings
     result = _format_time_samples(result)
     return result
+
+
+def get_all_sample_data_for_league(league_code: str) -> dict[str, str]:
+    """Get all sample values for a specific league.
+
+    Resolves the league's profile (LEAGUE_SAMPLE_PROFILES or sport-derived),
+    builds the full sample set for that profile, then layers any
+    league-accurate identity overrides on top.
+    """
+    profile = resolve_profile_for_league(league_code)
+    data = get_all_sample_data(profile)
+    data.update(LEAGUE_SAMPLE_OVERRIDES.get(league_code, {}))
+    return data
 
 
 # Variables that contain time values needing format conversion

@@ -360,6 +360,7 @@ def update_display_settings(conn: Connection, **kwargs) -> bool:
     field_mapping = {
         "time_format": "time_format",
         "show_timezone": "show_timezone",
+        "use_live_sample_data": "use_live_sample_data",
         "channel_id_format": "channel_id_format",
         "xmltv_generator_name": "xmltv_generator_name",
         "xmltv_generator_url": "xmltv_generator_url",

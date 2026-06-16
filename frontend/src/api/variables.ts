@@ -20,6 +20,8 @@ export interface VariablesResponse {
 
 export interface SamplesResponse {
   sport: string
+  league?: string | null
+  live?: boolean
   available_sports: string[]
   samples: Record<string, string>
 }
@@ -47,6 +49,34 @@ export async function fetchConditions(templateType: string = "team"): Promise<Co
   return api.get(`/variables/conditions?template_type=${encodeURIComponent(templateType)}`)
 }
 
-export async function fetchSamples(sport: string = "NBA"): Promise<SamplesResponse> {
-  return api.get(`/variables/samples?sport=${encodeURIComponent(sport)}`)
+export interface SampleLeague {
+  slug: string
+  name: string
+  sport: string
+  logo_url: string | null
+}
+
+interface LeaguesListResponse {
+  count: number
+  leagues: SampleLeague[]
+}
+
+// Leagues available to preview templates against, grouped by sport in the UI.
+export async function fetchSampleLeagues(): Promise<SampleLeague[]> {
+  const data = await api.get<LeaguesListResponse>("/leagues")
+  return data.leagues
+}
+
+export async function fetchSamples(
+  sportOrLeague: string = "NBA",
+  opts?: { byLeague?: boolean; live?: boolean },
+): Promise<SamplesResponse> {
+  const params = new URLSearchParams()
+  if (opts?.byLeague) {
+    params.set("league", sportOrLeague)
+  } else {
+    params.set("sport", sportOrLeague)
+  }
+  if (opts?.live) params.set("live", "true")
+  return api.get(`/variables/samples?${params.toString()}`)
 }

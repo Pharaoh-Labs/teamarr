@@ -81,6 +81,14 @@ class VariableDefinition:
     extractor: Extractor
     description: str = ""
     scope: TemplateScope = TemplateScope.ALL
+    sample: str | None = None
+    """Optional inline placeholder for the template preview.
+
+    When set, this value is used for the preview when no curated entry exists
+    in sample_data.SAMPLE_DATA for the variable. This lets a new variable carry
+    its own placeholder at the point of definition, so it is auto-adopted into
+    previews without a separate edit to sample_data.py. When omitted, the
+    preview falls back to a category-based default (see sample_data.py)."""
 
 
 class VariableRegistry:
@@ -107,6 +115,7 @@ class VariableRegistry:
         extractor: Extractor,
         description: str = "",
         scope: TemplateScope = TemplateScope.ALL,
+        sample: str | None = None,
     ) -> None:
         """Register a variable definition."""
         self._variables[name] = VariableDefinition(
@@ -116,6 +125,7 @@ class VariableRegistry:
             extractor=extractor,
             description=description,
             scope=scope,
+            sample=sample,
         )
 
     def get(self, name: str) -> VariableDefinition | None:
@@ -174,6 +184,7 @@ def register_variable(
     suffix_rules: SuffixRules = SuffixRules.ALL,
     description: str = "",
     scope: TemplateScope = TemplateScope.ALL,
+    sample: str | None = None,
 ) -> Callable[[Extractor], Extractor]:
     """Decorator to register a variable extractor.
 
@@ -195,11 +206,17 @@ def register_variable(
     templates). Set TEAM_ONLY for "our team" perspective variables
     (team/opponent/is_home/team_record/etc.) or EVENT_ONLY for variables
     that only make sense on event templates (feed_team family).
+
+    sample is an optional inline placeholder for the template preview. Provide
+    it so a new variable is auto-adopted into previews with a sensible value
+    without editing sample_data.py. When omitted, the preview uses a
+    category-based default. Curated per-sport values in sample_data.SAMPLE_DATA
+    still take precedence over this inline sample.
     """
 
     def decorator(func: Extractor) -> Extractor:
         VariableRegistry().register(
-            name, category, suffix_rules, func, description, scope
+            name, category, suffix_rules, func, description, scope, sample
         )
         return func
 

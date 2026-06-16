@@ -1097,6 +1097,22 @@ export function Settings() {
                 </p>
               </div>
             </div>
+
+            <div className="space-y-2 pt-2 border-t border-border">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={display?.use_live_sample_data ?? false}
+                  onCheckedChange={(checked) =>
+                    display && setDisplay({ ...display, use_live_sample_data: checked })
+                  }
+                />
+                <Label className="font-normal">Live Template Preview Data</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Preview templates against real data for an upcoming or recent event in the
+                selected league. Falls back to static sample data when no event is available.
+              </p>
+            </div>
           </div>
 
           <SaveButton

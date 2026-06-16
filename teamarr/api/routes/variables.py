@@ -1,11 +1,78 @@
 """Variables API endpoint for template variable picker."""
 
+import logging
+import time
+
 from fastapi import APIRouter
 
-from teamarr.templates.sample_data import AVAILABLE_SPORTS, get_all_sample_data
+from teamarr.templates.sample_data import (
+    AVAILABLE_SPORTS,
+    get_all_sample_data,
+    get_all_sample_data_for_league,
+    resolve_profile_for_league,
+)
 from teamarr.templates.variables import Category, SuffixRules, get_registry
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Cache of live sample maps keyed by league, with a short TTL so the preview
+# stays responsive without hammering providers on every keystroke.
+_LIVE_CACHE: dict[str, tuple[float, dict[str, str]]] = {}
+_LIVE_CACHE_TTL = 300  # seconds
+_LIVE_LOOKAHEAD_DAYS = 21
+
+
+def _fetch_live_samples(league: str) -> dict[str, str] | None:
+    """Resolve every variable against a real upcoming/recent event for a league.
+
+    Returns a name -> value map for non-empty live values, or None if no usable
+    event could be found or the provider failed. Cached per league.
+    """
+    now = time.time()
+    cached = _LIVE_CACHE.get(league)
+    if cached and now - cached[0] < _LIVE_CACHE_TTL:
+        return cached[1]
+
+    try:
+        from datetime import date, timedelta
+
+        from teamarr.services.sports_data import create_default_service
+        from teamarr.templates.context_builder import ContextBuilder
+        from teamarr.templates.resolver import TemplateResolver
+
+        service = create_default_service()
+
+        # Find the nearest event with two identifiable teams.
+        event = None
+        today = date.today()
+        for offset in range(_LIVE_LOOKAHEAD_DAYS):
+            for day in {today + timedelta(days=offset), today - timedelta(days=offset)}:
+                events = service.get_events(league, day)
+                for candidate in events:
+                    if candidate.home_team and candidate.away_team:
+                        event = candidate
+                        break
+                if event:
+                    break
+            if event:
+                break
+
+        if not event:
+            return None
+
+        team_id = event.home_team.id
+        ctx = ContextBuilder(service).build_for_event(
+            event=event, team_id=team_id, league=league
+        )
+        variables = TemplateResolver().build_variable_map(ctx)
+        # Keep only non-empty live values; static samples fill the rest.
+        live = {k: v for k, v in variables.items() if v}
+        _LIVE_CACHE[league] = (now, live)
+        return live
+    except Exception as e:  # provider down, unsupported league, etc.
+        logger.info("[SAMPLES] Live sample fetch failed for %s: %s", league, e)
+        return None
 
 
 def _category_display_name(category: Category) -> str:
@@ -99,19 +166,43 @@ def get_variables(template_type: str | None = None):
 
 
 @router.get("/variables/samples")
-def get_sample_data(sport: str = "NBA"):
+def get_sample_data(
+    sport: str = "NBA", league: str | None = None, live: bool = False
+):
     """Get sample data for template variable preview.
 
-    Returns sample values for all variables for a given sport.
-    Used for live preview in the template form.
+    Returns sample values for all variables, used for the live preview in the
+    template form. Prefer ``league`` (any supported league code) for
+    league-accurate placeholders; ``sport`` is kept for back-compat and selects
+    a profile directly.
+
+    When ``live`` is set, real provider data for an upcoming/recent event in the
+    league is layered over the static samples. Any variable the live event can't
+    fill keeps its static placeholder, and any failure falls back silently to
+    static samples.
     """
-    if sport not in AVAILABLE_SPORTS:
-        sport = "NBA"  # Default fallback
+    if league:
+        samples = get_all_sample_data_for_league(league)
+        profile = resolve_profile_for_league(league)
+    else:
+        if sport not in AVAILABLE_SPORTS:
+            sport = "NBA"  # Default fallback
+        samples = get_all_sample_data(sport)
+        profile = sport
+
+    is_live = False
+    if live and league:
+        live_samples = _fetch_live_samples(league)
+        if live_samples:
+            samples = {**samples, **live_samples}
+            is_live = True
 
     return {
-        "sport": sport,
+        "sport": profile,
+        "league": league,
+        "live": is_live,
         "available_sports": AVAILABLE_SPORTS,
-        "samples": get_all_sample_data(sport),
+        "samples": samples,
     }
 
 

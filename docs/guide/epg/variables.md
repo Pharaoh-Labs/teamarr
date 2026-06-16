@@ -23,6 +23,12 @@ Variables are scoped to the template type they make sense in. The template edito
 
 If you hand-type a scope-restricted variable into a template where it doesn't belong (e.g., `{team}` in an event template), it will still resolve (backward compatibility), but the picker won't offer it. Use the picker to stay within the intended scope.
 
+## Previewing Templates
+
+The template editor renders a live preview of every field as you type. The **Preview** selector in the variable sidebar lets you choose which league to preview against — every supported league is listed, grouped by sport and searchable, so the sample teams, dates, and venues match the league you're building for.
+
+By default the preview uses curated **sample** placeholders. Enable **Live Template Preview Data** in [Settings → General](../settings/general) to instead preview against real data for an upcoming or recent event in the selected league; the badge next to the selector reads **Live** when real data is in use and **Sample** otherwise. Live preview falls back to sample data automatically when no event is available or the provider can't be reached.
+
 ## Suffix Support
 
 **Team templates** support suffixes to reference different games:
