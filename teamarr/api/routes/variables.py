@@ -23,6 +23,21 @@ _LIVE_CACHE_TTL = 300  # seconds
 _LIVE_LOOKAHEAD_DAYS = 21
 
 
+def _lookup_league_fields(league_code: str) -> tuple[str | None, str | None]:
+    """Get (sport, provider) for a league from its record, or (None, None)."""
+    try:
+        from teamarr.database import get_db
+        from teamarr.database.leagues import get_league
+
+        with get_db() as conn:
+            rec = get_league(conn, league_code)
+        if rec:
+            return rec.get("sport"), rec.get("provider")
+    except Exception as e:
+        logger.debug("[SAMPLES] League lookup failed for %s: %s", league_code, e)
+    return None, None
+
+
 def _fetch_live_samples(league: str) -> dict[str, str] | None:
     """Resolve every variable against a real upcoming/recent event for a league.
 
@@ -165,6 +180,49 @@ def get_variables(template_type: str | None = None):
     }
 
 
+def _league_info_dict(lg) -> dict:
+    """Serialize a LeagueInfo for the sample-league picker (CachedLeague shape)."""
+    return {
+        "slug": lg.slug,
+        "provider": lg.provider,
+        "name": lg.name,
+        "sport": lg.sport,
+        "team_count": lg.team_count,
+        "logo_url": lg.logo_url,
+        "logo_url_dark": lg.logo_url_dark,
+        "import_enabled": lg.import_enabled,
+        "league_alias": lg.league_alias,
+        "tsdb_tier": lg.tsdb_tier,
+    }
+
+
+@router.get("/variables/sample-leagues")
+def get_sample_leagues():
+    """Leagues to offer in the template preview selector.
+
+    Returns all enabled configured leagues plus the subset the user has
+    subscribed to (event-based sports subscription + the leagues of followed
+    teams). The picker shows the subscribed subset by default but can search the
+    full list.
+    """
+    from teamarr.database import get_db
+    from teamarr.database.subscription import get_subscribed_league_codes
+    from teamarr.services.cache_service import create_cache_service
+
+    with get_db() as conn:
+        codes = get_subscribed_league_codes(conn)
+
+    service = create_cache_service(get_db)
+    enabled = service.get_leagues(configured_only=True)
+    subscribed_slugs = [lg.slug for lg in enabled if lg.slug.lower() in codes]
+
+    return {
+        "count": len(enabled),
+        "leagues": [_league_info_dict(lg) for lg in enabled],
+        "subscribed_slugs": subscribed_slugs,
+    }
+
+
 @router.get("/variables/samples")
 def get_sample_data(
     sport: str = "NBA", league: str | None = None, live: bool = False
@@ -182,8 +240,11 @@ def get_sample_data(
     static samples.
     """
     if league:
-        samples = get_all_sample_data_for_league(league)
-        profile = resolve_profile_for_league(league)
+        # Resolve the profile from the league's own record (sport + provider)
+        # so the mapping is data-driven and custom leagues work too.
+        league_sport, league_provider = _lookup_league_fields(league)
+        samples = get_all_sample_data_for_league(league, league_sport, league_provider)
+        profile = resolve_profile_for_league(league, league_sport, league_provider)
     else:
         if sport not in AVAILABLE_SPORTS:
             sport = "NBA"  # Default fallback

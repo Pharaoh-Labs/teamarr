@@ -7,20 +7,24 @@ a newly-registered variable is auto-adopted into previews without a separate
 edit here. These tests guarantee that property and guard against two
 regressions: an unresolved variable, and a niche profile/league leaking another
 sport's identity (the old "fall back to the first sport" behavior).
+
+League -> profile resolution is data-driven: it reads each league's real
+sport/provider from a freshly initialized database rather than any hardcoded
+list, so these tests also exercise resolve_profile() against the live schema.
 """
 
-import re
-from pathlib import Path
+import sqlite3
 
+import pytest
+
+from teamarr.database.connection import init_db
 from teamarr.templates.sample_data import (
     AVAILABLE_SPORTS,
     get_all_sample_data,
     get_all_sample_data_for_league,
-    resolve_profile_for_league,
+    resolve_profile,
 )
 from teamarr.templates.variables import SuffixRules, get_registry
-
-_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "teamarr/database/schema.sql"
 
 
 def _registered_variable_names() -> list[str]:
@@ -35,14 +39,20 @@ def _registered_variable_names() -> list[str]:
     return names
 
 
-def _schema_league_codes() -> list[str]:
-    """League codes from schema.sql's leagues INSERT block."""
-    text = _SCHEMA_PATH.read_text()
-    block = re.search(
-        r"INSERT OR REPLACE INTO leagues.*?VALUES(.*?);", text, re.S
-    )
-    assert block, "Could not locate leagues INSERT block in schema.sql"
-    return re.findall(r"^\s*\('([a-z0-9._-]+)',", block.group(1), re.M)
+@pytest.fixture(scope="module")
+def league_records(tmp_path_factory) -> list[tuple[str, str, str]]:
+    """(code, provider, sport) for every league in a freshly seeded database."""
+    db_path = tmp_path_factory.mktemp("samples") / "fresh.db"
+    init_db(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT league_code, provider, sport FROM leagues"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [(r["league_code"], r["provider"], r["sport"]) for r in rows]
 
 
 def test_every_variable_resolves_for_every_profile():
@@ -72,38 +82,38 @@ def test_no_identity_leak_across_profiles():
             )
 
 
-def test_every_schema_league_resolves_to_a_known_profile():
-    """Every league in schema.sql maps to a real profile and resolves samples."""
+def test_every_league_resolves_to_a_known_profile(league_records):
+    """Every league resolves (from its sport/provider) to a real profile.
+
+    Driven by the live DB, so a newly-added league can't slip through without a
+    sport mapping, and every variable still resolves for it.
+    """
     names = _registered_variable_names()
-    for code in _schema_league_codes():
-        profile = resolve_profile_for_league(code)
+    for code, provider, sport in league_records:
+        profile = resolve_profile(sport, provider, code)
         assert profile in AVAILABLE_SPORTS, (
-            f"league {code!r} resolved to unknown profile {profile!r}"
+            f"league {code!r} (sport={sport!r}) resolved to unknown profile {profile!r}"
         )
-        samples = get_all_sample_data_for_league(code)
+        samples = get_all_sample_data_for_league(code, sport, provider)
         for name in names:
             assert name in samples, f"{name!r} unresolved for league {code!r}"
 
 
-def test_report_leagues_on_generic_fallback(capsys):
-    """Soft, non-failing report of leagues using the generic NBA fallback.
+def test_report_leagues_on_generic_fallback(league_records, capsys):
+    """Soft, non-failing report of non-basketball leagues hitting the NBA default.
 
-    Surfaces curation gaps (a new league whose sport-derived profile is wrong)
-    without blocking merges. Always passes.
+    Surfaces a new ``leagues.sport`` value not yet in _SPORT_PROFILE without
+    blocking merges. Always passes.
     """
-    from teamarr.templates.sample_data import LEAGUE_SAMPLE_PROFILES
-    from teamarr.utilities.sports import get_sport_from_league
-
     flagged = [
-        code
-        for code in _schema_league_codes()
-        if code not in LEAGUE_SAMPLE_PROFILES
-        and resolve_profile_for_league(code) == "NBA"
-        and get_sport_from_league(code) == "Sports"
+        f"{code} (sport={sport})"
+        for code, provider, sport in league_records
+        if resolve_profile(sport, provider, code) == "NBA"
+        and (sport or "").lower() != "basketball"
     ]
     if flagged:
         with capsys.disabled():
             print(
-                "\n[sample-data] leagues on generic NBA fallback "
-                f"(consider LEAGUE_SAMPLE_PROFILES): {flagged}"
+                "\n[sample-data] leagues hitting the generic NBA fallback "
+                f"(add their sport to _SPORT_PROFILE): {flagged}"
             )

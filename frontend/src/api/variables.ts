@@ -1,4 +1,5 @@
 import { api } from "./client"
+import type { CachedLeague } from "./teams"
 
 export interface Variable {
   name: string
@@ -49,22 +50,17 @@ export async function fetchConditions(templateType: string = "team"): Promise<Co
   return api.get(`/variables/conditions?template_type=${encodeURIComponent(templateType)}`)
 }
 
-export interface SampleLeague {
-  slug: string
-  name: string
-  sport: string
-  logo_url: string | null
-}
-
-interface LeaguesListResponse {
+export interface SampleLeaguesResponse {
   count: number
-  leagues: SampleLeague[]
+  leagues: CachedLeague[]
+  subscribed_slugs: string[]
 }
 
-// Leagues available to preview templates against, grouped by sport in the UI.
-export async function fetchSampleLeagues(): Promise<SampleLeague[]> {
-  const data = await api.get<LeaguesListResponse>("/leagues")
-  return data.leagues
+// Leagues for the template preview selector: all enabled leagues, plus which
+// slugs the user is subscribed to. The picker defaults to the subscribed subset
+// but can search the full list.
+export async function fetchSampleLeagues(): Promise<SampleLeaguesResponse> {
+  return api.get<SampleLeaguesResponse>("/variables/sample-leagues")
 }
 
 export async function fetchSamples(

@@ -84,7 +84,6 @@ export interface ReconciliationSettings {
 export interface DisplaySettings {
   time_format: string
   show_timezone: boolean
-  use_live_sample_data: boolean  // Template preview uses real provider data
   channel_id_format: string
   xmltv_generator_name: string
   xmltv_generator_url: string

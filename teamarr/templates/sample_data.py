@@ -9,8 +9,8 @@ Organization: Variables grouped by category, with base/.next/.last variants toge
 # Available sample "profiles" - each represents a distinct data shape used to
 # preview templates. The original nine are league-flavored sports; the rest are
 # added profiles that inherit a base shape (see _PROFILE_INHERITS) and override
-# identity (see _PROFILE_OVERRIDES). Leagues map onto these via
-# LEAGUE_SAMPLE_PROFILES / _profile_from_sport.
+# identity (see _PROFILE_OVERRIDES). Leagues map onto these via resolve_profile,
+# driven by each league's sport/provider record.
 AVAILABLE_SPORTS = [
     "NBA",
     "NFL",
@@ -4173,129 +4173,63 @@ for _profile, _overrides in _PROFILE_OVERRIDES.items():
 
 
 # --------------------------------------------------------------------------
-# League -> profile mapping. Most leagues resolve their profile from sport via
-# _profile_from_sport; this map only lists leagues whose sport-derived default
-# would be wrong (college vs pro, junior hockey, cricket/rugby/etc., the TSDB
-# soccer leagues whose country codes aren't recognized as soccer).
+# League -> profile resolution, driven by the league's own record (sport +
+# provider + code) rather than a hardcoded list of league codes. Every league
+# in the `leagues` table carries a `sport` and `provider`; the route looks the
+# record up via get_league() and passes those here. This keeps the mapping to
+# a handful of intrinsic concepts (sport -> profile, provider overrides, and a
+# college/WNBA rule) and means runtime-added custom leagues resolve for free.
 # --------------------------------------------------------------------------
 
-# sport name (from get_sport_from_league) -> default profile
-_SPORT_PROFILE_DEFAULT: dict[str, str] = {
-    "Football": "NFL",
-    "Basketball": "NBA",
-    "Hockey": "NHL",
-    "Baseball": "MLB",
-    "Soccer": "Soccer",
-    "MMA": "UFC",
-    "Racing": "Motorsports",
+# leagues.sport value -> sample profile
+_SPORT_PROFILE: dict[str, str] = {
+    "soccer": "Soccer",
+    "hockey": "NHL",
+    "rugby": "Rugby",
+    "baseball": "MLB",
+    "softball": "MLB",
+    "basketball": "NBA",
+    "football": "NFL",
+    "lacrosse": "Lacrosse",
+    "cricket": "Cricket",
+    "racing": "Motorsports",
+    "mma": "UFC",
+    "boxing": "Boxing",
+    "australian-football": "AFL",
+    "volleyball": "NCAAM",  # no dedicated profile - reuse an indoor team shape
 }
 
-LEAGUE_SAMPLE_PROFILES: dict[str, str] = {
-    # Football
-    "college-football": "NCAAF",
-    "ufl": "NFL",
-    "cfl": "NFL",
-    # Basketball
-    "nba-development": "NBA",
-    "wnba": "WNBA",
-    "unrivaled": "WNBA",
-    "mens-college-basketball": "NCAAM",
-    "womens-college-basketball": "NCAAM",
-    # Hockey
-    "mens-college-hockey": "NHL",
-    "womens-college-hockey": "NHL",
-    "olympics-mens-ice-hockey": "NHL",
-    "olympics-womens-ice-hockey": "NHL",
-    "chl": "JuniorHockey",
-    "ohl": "JuniorHockey",
-    "whl": "JuniorHockey",
-    "qmjhl": "JuniorHockey",
-    "ahl": "JuniorHockey",
-    "echl": "JuniorHockey",
-    "pwhl": "JuniorHockey",
-    "ushl": "JuniorHockey",
-    "ojhl": "JuniorHockey",
-    "bchl": "JuniorHockey",
-    "sjhl": "JuniorHockey",
-    "ajhl": "JuniorHockey",
-    "mjhl": "JuniorHockey",
-    "mhl": "JuniorHockey",
-    "norwegian-hockey": "JuniorHockey",
-    # Australian football
-    "afl": "AFL",
-    # Baseball
-    "milb-aaa": "MiLB",
-    "milb-aa": "MiLB",
-    "milb-high-a": "MiLB",
-    "milb-a": "MiLB",
-    "rookie": "MiLB",
-    "cbl": "MiLB",
-    "college-baseball": "MLB",
-    "college-softball": "MLB",
-    "world-baseball-classic": "MLB",
-    # Soccer (TSDB / unrecognized country codes)
-    "uru.2": "Soccer",
-    "svenska-cupen": "Soccer",
-    "can.1": "Soccer",
-    "swe.2": "Soccer",
-    "swe.3.n": "Soccer",
-    "swe.3.s": "Soccer",
-    "ven.2": "Soccer",
-    "gam.1": "Soccer",
-    "ice.1": "Soccer",
-    "ice.2": "Soccer",
-    "arb.1": "Soccer",
-    "nifl.1": "Soccer",
-    "ksa.1": "Soccer",
-    "sui.1": "Soccer",
-    "tur.1": "Soccer",
-    "gre.1": "Soccer",
-    "jpn.1": "Soccer",
-    "col.1": "Soccer",
-    # Combat
-    "boxing": "Boxing",
-    # Volleyball (no dedicated profile - reuse an indoor team shape)
-    "mens-college-volleyball": "NCAAM",
-    "womens-college-volleyball": "NCAAM",
-    # Lacrosse
-    "mens-college-lacrosse": "Lacrosse",
-    "womens-college-lacrosse": "Lacrosse",
-    "nll": "Lacrosse",
-    "pll": "Lacrosse",
-    # Cricket
-    "ipl": "Cricket",
-    "bbl": "Cricket",
-    "sa20": "Cricket",
-    # Rugby (ESPN sport='rugby'; not derivable from the league code)
-    "super-rugby": "Rugby",
-    "top14": "Rugby",
-    "lions": "Rugby",
-    "rwc": "Rugby",
-    "wrwc": "Rugby",
-    "6n": "Rugby",
-    "trc": "Rugby",
-    "urc": "Rugby",
-    "prem": "Rugby",
-    "ercc": "Rugby",
-    "epcr": "Rugby",
-    "mlr": "Rugby",
-    "cc": "Rugby",
-    "npc": "Rugby",
-    "urba": "Rugby",
-    "itm": "Rugby",
-    "om7s": "Rugby",
-    "ow7s": "Rugby",
-    "nrl": "Rugby",
-    # Motorsports
-    "f1": "F1",
-    "nascar-cup": "Motorsports",
-    "nascar-xfinity": "Motorsports",
-    "nascar-truck": "Motorsports",
-    "indycar": "Motorsports",
-    "motogp": "Motorsports",
-    "imsa": "Motorsports",
-    "wec": "Motorsports",
+# leagues.provider that pins a profile regardless of sport (these providers
+# only serve one tier of one sport).
+_PROVIDER_PROFILE: dict[str, str] = {
+    "hockeytech": "JuniorHockey",
+    "mlbstats": "MiLB",
 }
+
+# Sport -> college profile for college/NCAA leagues (others fall to _SPORT_PROFILE).
+_COLLEGE_PROFILE: dict[str, str] = {"football": "NCAAF", "basketball": "NCAAM"}
+
+
+def resolve_profile(
+    sport: str | None, provider: str | None, league_code: str
+) -> str:
+    """Resolve the sample profile for a league from its record fields.
+
+    Precedence: provider override -> WNBA codes -> college rule -> sport map.
+    Falls back to the NBA profile for unknown sports (never leaks identity
+    because the resolution chain still synthesizes per-category defaults).
+    """
+    code = (league_code or "").lower()
+    sport = (sport or "").lower()
+
+    if provider in _PROVIDER_PROFILE:
+        return _PROVIDER_PROFILE[provider]
+    if code in {"wnba", "unrivaled"}:
+        return "WNBA"
+    if "college" in code or "ncaa" in code:
+        return _COLLEGE_PROFILE.get(sport, _SPORT_PROFILE.get(sport, "NBA"))
+    return _SPORT_PROFILE.get(sport, "NBA")
+
 
 # Optional league-accurate identity flourishes layered on top of the profile.
 # Partial - anything omitted inherits the profile's value.
@@ -4355,25 +4289,44 @@ LEAGUE_SAMPLE_OVERRIDES: dict[str, dict[str, str]] = {
 }
 
 
-# Confederation/competition prefixes that get_sport_from_league can't resolve
-# but are unambiguously soccer (continental cups, world cups).
-_SOCCER_PREFIXES = ("uefa.", "fifa.", "conmebol.", "concacaf.")
+# Maps the name-heuristic sport (get_sport_from_league, TitleCase) onto a
+# leagues.sport value so the heuristic fallback can reuse resolve_profile.
+_HEURISTIC_SPORT_TO_LEAGUE_SPORT: dict[str, str] = {
+    "Football": "football",
+    "Basketball": "basketball",
+    "Hockey": "hockey",
+    "Baseball": "baseball",
+    "Soccer": "soccer",
+    "MMA": "mma",
+    "Racing": "racing",
+}
 
 
-def _profile_from_sport(league_code: str) -> str:
-    """Resolve a sample profile for a league via its sport (fallback path)."""
+def _profile_from_code(league_code: str) -> str:
+    """Best-effort profile when no DB record is available (heuristic fallback).
+
+    Used only when a league isn't in the `leagues` table. Prefer
+    resolve_profile() with the league's real sport/provider whenever possible.
+    """
     from teamarr.utilities.sports import get_sport_from_league
 
-    if league_code.startswith(_SOCCER_PREFIXES):
-        return "Soccer"
+    sport = _HEURISTIC_SPORT_TO_LEAGUE_SPORT.get(
+        get_sport_from_league(league_code), ""
+    )
+    return resolve_profile(sport, None, league_code)
 
-    sport = get_sport_from_league(league_code)
-    return _SPORT_PROFILE_DEFAULT.get(sport, "NBA")
 
+def resolve_profile_for_league(
+    league_code: str, sport: str | None = None, provider: str | None = None
+) -> str:
+    """Resolve the sample profile a league should preview against.
 
-def resolve_profile_for_league(league_code: str) -> str:
-    """Resolve the sample profile a league should preview against."""
-    return LEAGUE_SAMPLE_PROFILES.get(league_code) or _profile_from_sport(league_code)
+    When the league's sport/provider are known (from get_league), resolve from
+    those. Otherwise fall back to the name heuristic.
+    """
+    if sport:
+        return resolve_profile(sport, provider, league_code)
+    return _profile_from_code(league_code)
 
 
 # --------------------------------------------------------------------------
@@ -4544,14 +4497,17 @@ def get_all_sample_data(sport: str) -> dict[str, str]:
     return result
 
 
-def get_all_sample_data_for_league(league_code: str) -> dict[str, str]:
+def get_all_sample_data_for_league(
+    league_code: str, sport: str | None = None, provider: str | None = None
+) -> dict[str, str]:
     """Get all sample values for a specific league.
 
-    Resolves the league's profile (LEAGUE_SAMPLE_PROFILES or sport-derived),
-    builds the full sample set for that profile, then layers any
-    league-accurate identity overrides on top.
+    Resolves the league's profile from its sport/provider (passed from the
+    league record) or, when those are absent, a name heuristic; builds the full
+    sample set for that profile, then layers any league-accurate identity
+    overrides on top.
     """
-    profile = resolve_profile_for_league(league_code)
+    profile = resolve_profile_for_league(league_code, sport, provider)
     data = get_all_sample_data(profile)
     data.update(LEAGUE_SAMPLE_OVERRIDES.get(league_code, {}))
     return data

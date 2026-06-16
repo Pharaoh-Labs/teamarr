@@ -139,7 +139,6 @@ def get_display_settings():
     return DisplaySettingsModel(
         time_format=settings.display.time_format,
         show_timezone=settings.display.show_timezone,
-        use_live_sample_data=settings.display.use_live_sample_data,
         channel_id_format=settings.display.channel_id_format,
         xmltv_generator_name=settings.display.xmltv_generator_name,
         xmltv_generator_url=settings.display.xmltv_generator_url,
@@ -165,7 +164,6 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
             conn,
             time_format=update.time_format,
             show_timezone=update.show_timezone,
-            use_live_sample_data=update.use_live_sample_data,
             channel_id_format=update.channel_id_format,
             xmltv_generator_name=update.xmltv_generator_name,
             xmltv_generator_url=update.xmltv_generator_url,
@@ -194,7 +192,6 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
     return DisplaySettingsModel(
         time_format=settings.display.time_format,
         show_timezone=settings.display.show_timezone,
-        use_live_sample_data=settings.display.use_live_sample_data,
         channel_id_format=settings.display.channel_id_format,
         xmltv_generator_name=settings.display.xmltv_generator_name,
         xmltv_generator_url=settings.display.xmltv_generator_url,

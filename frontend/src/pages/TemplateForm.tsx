@@ -14,7 +14,6 @@ import {
   type FillerContent,
 } from "@/api/templates"
 import { fetchVariables, fetchSamples, fetchSampleLeagues } from "@/api/variables"
-import { useDisplaySettings } from "@/hooks/useSettings"
 import { buildValidVariableSet } from "@/utils/templateValidation"
 import type { Tab } from "./template-form/types"
 import {
@@ -43,6 +42,7 @@ export function TemplateForm() {
   const [formData, setFormData] = useState<TemplateCreate>(DEFAULT_FORM)
   const [lastFocusedField, setLastFocusedField] = useState<string | null>(null)
   const [previewLeague, setPreviewLeague] = useState("nba")
+  const [liveRequested, setLiveRequested] = useState(false)
 
   // Refs for template fields
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
@@ -64,28 +64,41 @@ export function TemplateForm() {
     staleTime: Infinity,
   })
 
-  // Leagues available to preview against, grouped by sport in the sidebar.
-  const { data: sampleLeagues } = useQuery({
+  // Leagues to preview against: all enabled leagues, with the subscribed subset
+  // shown by default in the sidebar (search reaches the full list).
+  const { data: sampleLeaguesData } = useQuery({
     queryKey: ["sample-leagues"],
     queryFn: fetchSampleLeagues,
     staleTime: 60 * 60 * 1000, // 1 hour
   })
+  const previewLeagues = sampleLeaguesData?.leagues ?? []
+  const subscribedSlugs = sampleLeaguesData?.subscribed_slugs ?? []
 
-  // Whether to fetch real provider data for the preview (opt-in setting).
-  const { data: displaySettings } = useDisplaySettings()
-  const useLive = displaySettings?.use_live_sample_data ?? false
+  // Keep the preview league valid against the fetched list. Prefer a subscribed
+  // league (nba if subscribed, else the first subscribed), then nba, then the
+  // first available league.
+  useEffect(() => {
+    if (previewLeagues.length === 0) return
+    if (previewLeagues.some((l) => l.slug === previewLeague)) return
+    const subscribed = new Set(subscribedSlugs)
+    const fallback =
+      (subscribed.has("nba") ? previewLeagues.find((l) => l.slug === "nba") : undefined) ??
+      previewLeagues.find((l) => subscribed.has(l.slug)) ??
+      previewLeagues.find((l) => l.slug === "nba") ??
+      previewLeagues[0]
+    setPreviewLeague(fallback.slug)
+  }, [previewLeagues, subscribedSlugs, previewLeague])
 
   // Fetch sample data for preview (league-specific, optionally live)
   const { data: samplesData } = useQuery({
-    queryKey: ["samples", previewLeague, useLive],
-    queryFn: () => fetchSamples(previewLeague, { byLeague: true, live: useLive }),
+    queryKey: ["samples", previewLeague, liveRequested],
+    queryFn: () => fetchSamples(previewLeague, { byLeague: true, live: liveRequested }),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   // Create resolver with current sample data
   const sampleData = samplesData?.samples ?? DEFAULT_SAMPLE_DATA
   const resolveTemplate = createResolver(sampleData)
-  const previewLeagues = sampleLeagues ?? []
   const isLivePreview = samplesData?.live ?? false
 
   // Build validation set from variables data
@@ -369,9 +382,12 @@ export function TemplateForm() {
             lastFocusedField={lastFocusedField}
             isTeamTemplate={isTeamTemplate}
             leagues={previewLeagues}
+            subscribedSlugs={subscribedSlugs}
             previewLeague={previewLeague}
             onLeagueChange={setPreviewLeague}
+            liveRequested={liveRequested}
             isLive={isLivePreview}
+            onToggleLive={() => setLiveRequested((v) => !v)}
           />
         </div>
       </div>

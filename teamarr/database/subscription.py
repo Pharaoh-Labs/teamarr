@@ -136,6 +136,26 @@ def get_subscription(conn: Connection) -> SportsSubscription:
     return _row_to_subscription(row)
 
 
+def get_subscribed_league_codes(conn: Connection) -> set[str]:
+    """League codes the user is subscribed to (lowercased).
+
+    Union of the global sports subscription's event-based leagues and the
+    primary leagues of followed teams, so both subscription styles are covered.
+    """
+    codes: set[str] = set()
+
+    sub = get_subscription(conn)
+    codes.update(code.lower() for code in (sub.leagues or []) if code)
+
+    rows = conn.execute(
+        "SELECT DISTINCT primary_league FROM teams "
+        "WHERE primary_league IS NOT NULL AND primary_league != ''"
+    ).fetchall()
+    codes.update(row[0].lower() for row in rows if row[0])
+
+    return codes
+
+
 def update_subscription(
     conn: Connection,
     leagues: list[str] | None = ...,

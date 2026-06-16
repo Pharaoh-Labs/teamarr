@@ -123,7 +123,6 @@ class DisplaySettings:
 
     time_format: str = "12h"
     show_timezone: bool = True
-    use_live_sample_data: bool = False
     channel_id_format: str = "{team_name_pascal}.{league_id}"
     xmltv_generator_name: str = "Teamarr"
     xmltv_generator_url: str = "https://github.com/Pharaoh-Labs/teamarr"

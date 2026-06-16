@@ -37,16 +37,11 @@ _DISPLAY_DEFAULTS = DisplaySettings()
 def _build_display_settings(row) -> DisplaySettings:
     """Build DisplaySettings from DB row, using dataclass defaults for NULL values."""
     d = _DISPLAY_DEFAULTS
-    # Tolerate rows from older/partial settings tables (e.g. fixtures that
-    # predate a column) by treating a missing key as NULL.
-    keys = set(row.keys())
-    live = row["use_live_sample_data"] if "use_live_sample_data" in keys else None
     return DisplaySettings(
         time_format=row["time_format"] or d.time_format,
         show_timezone=bool(row["show_timezone"])
         if row["show_timezone"] is not None
         else d.show_timezone,
-        use_live_sample_data=bool(live) if live is not None else d.use_live_sample_data,
         channel_id_format=row["channel_id_format"] or d.channel_id_format,
         xmltv_generator_name=row["xmltv_generator_name"] or d.xmltv_generator_name,
         xmltv_generator_url=row["xmltv_generator_url"] or d.xmltv_generator_url,
@@ -424,9 +419,8 @@ def get_display_settings(conn: Connection) -> DisplaySettings:
     """
     cursor = conn.cursor()
     cursor.execute(
-        """SELECT time_format, show_timezone, use_live_sample_data,
-                  channel_id_format, xmltv_generator_name, xmltv_generator_url,
-                  tsdb_api_key
+        """SELECT time_format, show_timezone, channel_id_format,
+                  xmltv_generator_name, xmltv_generator_url, tsdb_api_key
            FROM settings WHERE id = 1"""
     )
     row = cursor.fetchone()
