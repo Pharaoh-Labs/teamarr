@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **98 pre-configured leagues** across 13 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **127 pre-configured leagues** across 13 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -28,7 +28,8 @@ Leagues have different levels of support:
 |----------|-------------|
 | **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~250 soccer leagues dynamically. |
 | **MLB Stats API** | Minor League Baseball (MiLB) — Triple-A, Double-A, High-A, Single-A, Rookie |
-| **TheSportsDB** | Australian sports, rugby, cricket, boxing, CFL, Scandinavian leagues. Free and [premium tiers](providers/tsdb.md). |
+| **Squiggle** | AFL (Australian Football League). Free, no API key required. See [provider docs](providers/squiggle.md). |
+| **TheSportsDB** | Rugby, cricket, boxing, CFL, Scandinavian leagues, and more. Free and [premium tiers](providers/tsdb.md). |
 | **HockeyTech** | Canadian and US junior/minor hockey leagues (CHL, AHL, ECHL, PWHL, USHL, Junior A) |
 
 ### TSDB Tier Legend
@@ -150,6 +151,7 @@ Teamarr automatically discovers **~250 soccer leagues** from ESPN's API during c
 | NCAA Men's Soccer | `ncaas` | ESPN |
 | NCAA Women's Soccer | `ncaaws` | ESPN |
 | Liga MX | `ligamx` | ESPN |
+| Canadian Premier League | `can.1` | TSDB **P** |
 
 ### England
 
@@ -183,6 +185,7 @@ Teamarr automatically discovers **~250 soccer leagues** from ESPN's API during c
 | Turkish Süper Lig | `super-lig` | ESPN |
 | Greek Super League | `greek-super-league` | ESPN |
 | Saudi Pro League | `spl` | ESPN |
+| Northern Irish Premiership | `nifl.1` | TSDB **P** |
 
 ### UEFA Competitions
 
@@ -201,6 +204,7 @@ Teamarr automatically discovers **~250 soccer leagues** from ESPN's API during c
 | Colombian Primera A | `dimayor` | ESPN |
 | Copa Libertadores | `libertadores` | ESPN |
 | Copa Sudamericana | `sudamericana` | ESPN |
+| Venezuelan Segunda División | `ven.2` | TSDB **P** |
 
 ### International
 
@@ -218,6 +222,19 @@ Teamarr automatically discovers **~250 soccer leagues** from ESPN's API during c
 | League | ID | Provider |
 |--------|-----|----------|
 | Svenska Cupen (Sweden) | `svenska-cupen` | TSDB **P** |
+| Swedish Superettan | `swe.2` | TSDB **P** |
+| Swedish Division 1 North | `swe.3.n` | TSDB **P** |
+| Swedish Division 1 South | `swe.3.s` | TSDB **P** |
+| Icelandic Úrvalsdeild karla | `ice.1` | TSDB **P** |
+| Icelandic 1. deild karla | `ice.2` | TSDB **P** |
+| Uruguayan Segunda División | `uru.2` | TSDB **P** |
+
+### Other Regions
+
+| League | ID | Provider |
+|--------|-----|----------|
+| Gambia GFA League | `gam.1` | TSDB **P** |
+| Aruban Division di Honor | `arb.1` | TSDB **P** |
 
 ### Asia/Pacific
 
@@ -259,11 +276,25 @@ Cricket leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is
 
 | League | ID | Provider |
 |--------|-----|----------|
-| National Rugby League (Australia) | `nrl` | TSDB **P** |
-| Super Rugby Pacific | `super-rugby` | TSDB **P** |
-
-{: .note }
-Rugby leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is required for full event coverage.
+| Rugby World Cup | `rwc` | ESPN |
+| Women's Rugby World Cup | `wrwc` | ESPN |
+| Six Nations | `6n` | ESPN |
+| The Rugby Championship | `trc` | ESPN |
+| Super Rugby Pacific | `super-rugby` | ESPN |
+| United Rugby Championship | `urc` | ESPN |
+| Gallagher Premiership | `prem` | ESPN |
+| French Top 14 | `top14` | ESPN |
+| European Rugby Champions Cup | `ercc` | ESPN |
+| European Rugby Challenge Cup | `epcr` | ESPN |
+| Major League Rugby | `mlr` | ESPN |
+| Currie Cup | `cc` | ESPN |
+| National Provincial Championship | `npc` | ESPN |
+| URBA Primera A | `urba` | ESPN |
+| International Test Match | `itm` | ESPN |
+| British and Irish Lions Tour | `lions` | ESPN |
+| Olympic Men's Rugby Sevens | `om7s` | ESPN |
+| Olympic Women's Rugby Sevens | `ow7s` | ESPN |
+| National Rugby League (Australia) | `nrl` | ESPN |
 
 ---
 
@@ -271,10 +302,10 @@ Rugby leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is r
 
 | League | ID | Provider |
 |--------|-----|----------|
-| Australian Football League | `afl` | TSDB **P** |
+| Australian Football League | `afl` | [Squiggle](providers/squiggle.md) |
 
 {: .note }
-AFL is TSDB premium tier. A [premium API key](providers/tsdb.md) is required for full event coverage.
+AFL is served by the Squiggle provider — free, no API key required. Includes team records, ladder ranking, and team logos.
 
 ---
 

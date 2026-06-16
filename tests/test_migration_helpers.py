@@ -227,9 +227,7 @@ class TestV61SubscriptionLeagueConfig:
 
         _migrate_v61_subscription_league_config(db)
         # Insert a row
-        db.execute(
-            "INSERT INTO subscription_league_config (league_code) VALUES ('eng.1')"
-        )
+        db.execute("INSERT INTO subscription_league_config (league_code) VALUES ('eng.1')")
         _migrate_v61_subscription_league_config(db)  # second call should be no-op
         # Row still there
         cursor = db.execute(
@@ -413,15 +411,10 @@ class TestV67RemoveCricbuzz:
         from teamarr.database.connection import _migrate_v67_remove_cricbuzz
 
         self._setup(db)
-        db.execute(
-            "INSERT INTO leagues (league_code, fallback_provider) "
-            "VALUES ('cfl', 'tsdb')"
-        )
+        db.execute("INSERT INTO leagues (league_code, fallback_provider) VALUES ('cfl', 'tsdb')")
         _migrate_v67_remove_cricbuzz(db)
 
-        row = db.execute(
-            "SELECT fallback_provider FROM leagues WHERE league_code='cfl'"
-        ).fetchone()
+        row = db.execute("SELECT fallback_provider FROM leagues WHERE league_code='cfl'").fetchone()
         assert row["fallback_provider"] == "tsdb"
 
     def test_idempotent(self, db):
@@ -434,9 +427,7 @@ class TestV67RemoveCricbuzz:
         _migrate_v67_remove_cricbuzz(db)
         _migrate_v67_remove_cricbuzz(db)
 
-        row = db.execute(
-            "SELECT fallback_provider FROM leagues WHERE league_code='ipl'"
-        ).fetchone()
+        row = db.execute("SELECT fallback_provider FROM leagues WHERE league_code='ipl'").fetchone()
         assert row["fallback_provider"] is None
 
     def test_handles_missing_leagues_table(self, db):
@@ -479,8 +470,7 @@ class TestV69FeedTeamChannels:
         _migrate_v69_feed_team_channels(db)
 
         cursor = db.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='index' AND name='idx_mc_unique_event_v2'"
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_mc_unique_event_v2'"
         )
         assert cursor.fetchone() is not None
 
@@ -591,8 +581,7 @@ class TestV64DedupChannels:
         _migrate_v64_dedup_channels(db)
 
         cursor = db.execute(
-            "SELECT name FROM sqlite_master "
-            "WHERE type='index' AND name='idx_mc_unique_event'"
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_mc_unique_event'"
         )
         assert cursor.fetchone() is not None
 

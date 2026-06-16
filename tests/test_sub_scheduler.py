@@ -4,8 +4,6 @@ import threading
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from teamarr.consumers.scheduler import CronScheduler, SubTaskScheduler
 
 
@@ -144,9 +142,7 @@ class TestCronSchedulerSubTasks:
         mock_ctx.__exit__ = MagicMock(return_value=False)
         sched._db_factory.return_value = mock_ctx
 
-        with patch(
-            "teamarr.database.settings.get_backup_settings", return_value=mock_settings
-        ):
+        with patch("teamarr.database.settings.get_backup_settings", return_value=mock_settings):
             sched.restart_sub_task("backup")
 
         # Old sub-scheduler should have been stopped
@@ -175,9 +171,7 @@ class TestTaskBackupSimplified:
         mock_ctx.__exit__ = MagicMock(return_value=False)
         sched._db_factory.return_value = mock_ctx
 
-        with patch(
-            "teamarr.database.settings.get_backup_settings", return_value=mock_settings
-        ):
+        with patch("teamarr.database.settings.get_backup_settings", return_value=mock_settings):
             result = sched._task_backup()
 
         assert result["skipped"] is True

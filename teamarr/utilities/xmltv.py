@@ -8,7 +8,10 @@ from xml.dom import minidom
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from teamarr.core import Programme
+from teamarr.utilities.art_url import apply_art_base_url
 from teamarr.utilities.tz import format_datetime_xmltv, to_user_tz
+
+__all__ = ["apply_art_base_url", "programmes_to_xmltv"]
 
 
 def programmes_to_xmltv(
@@ -16,6 +19,7 @@ def programmes_to_xmltv(
     channels: list[dict],
     generator_name: str = "Teamarr",
     generator_url: str | None = None,
+    art_base_url: str = "",
 ) -> str:
     """Generate XMLTV XML from programmes.
 
@@ -37,18 +41,18 @@ def programmes_to_xmltv(
 
     # Add all channels first
     for channel in channels:
-        _add_channel(root, channel)
+        _add_channel(root, channel, art_base_url)
 
     # Sort programmes by channel ID, then by start time (XMLTV standard convention)
     sorted_programmes = sorted(programmes, key=lambda p: (p.channel_id, p.start))
     for programme in sorted_programmes:
-        _add_programme(root, programme)
+        _add_programme(root, programme, art_base_url)
 
     xml_str = tostring(root, encoding="unicode")
     return _prettify(xml_str)
 
 
-def _add_channel(root: Element, channel: dict) -> None:
+def _add_channel(root: Element, channel: dict, art_base_url: str = "") -> None:
     """Add a channel element to the TV root."""
     chan_elem = SubElement(root, "channel")
     chan_elem.set("id", channel["id"])
@@ -56,12 +60,13 @@ def _add_channel(root: Element, channel: dict) -> None:
     name_elem = SubElement(chan_elem, "display-name")
     name_elem.text = channel["name"]
 
-    if channel.get("icon"):
+    icon = apply_art_base_url(channel.get("icon"), art_base_url)
+    if icon:
         icon_elem = SubElement(chan_elem, "icon")
-        icon_elem.set("src", channel["icon"])
+        icon_elem.set("src", icon)
 
 
-def _add_programme(root: Element, programme: Programme) -> None:
+def _add_programme(root: Element, programme: Programme, art_base_url: str = "") -> None:
     """Add a programme element to the TV root."""
     from xml.etree.ElementTree import Comment
 
@@ -101,9 +106,10 @@ def _add_programme(root: Element, programme: Programme) -> None:
         cat_elem.set("lang", "en")
         cat_elem.text = cat
 
-    if programme.icon:
+    icon = apply_art_base_url(programme.icon, art_base_url)
+    if icon:
         icon_elem = SubElement(prog_elem, "icon")
-        icon_elem.set("src", programme.icon)
+        icon_elem.set("src", icon)
 
     # Add video element if enabled (only for non-filler programmes)
     # Note: Teamarr does not detect actual stream resolution - this is user-configured

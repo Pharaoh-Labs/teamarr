@@ -165,6 +165,45 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Buffer minutes for after_event delete timing and same_day midnight crossover (default 60)
     channel_post_buffer_minutes INTEGER DEFAULT 60,
 
+    -- EPG program-data matching master switch (epic teamarrv2-183.6). Default
+    -- OFF (opt-in); also feature-gated on the connected Dispatcharr exposing
+    -- /api/epg/programs/search/. Per-group epg_match_enabled has no effect unless
+    -- this global switch is on.
+    epg_match_enabled BOOLEAN DEFAULT 0,
+
+    -- XC (Xtream) provider EPG fallback (epic teamarrv2-crs). Default OFF
+    -- (opt-in). EPG matching normally requires a valid stream-to-EPG mapping in
+    -- Dispatcharr (curated channel link or imported-guide name match). As a
+    -- backup, when a stream's M3U account is an Xtream panel, Teamarr can fetch
+    -- the provider's own xmltv.php independently and match against it. Costs a
+    -- (cached) provider-EPG download per XC account per run.
+    epg_xtream_fallback_enabled BOOLEAN DEFAULT 0,
+    -- How long a downloaded XC provider EPG is reused before re-fetching (hours).
+    -- The provider's xmltv.php is cached on disk per M3U account; a re-download
+    -- happens only when the cache is older than this. Default 24h.
+    epg_xtream_cache_hours INTEGER DEFAULT 24,
+
+    -- EPG channel-source mode (epic teamarrv2-183.9). When enabled, an additional
+    -- system-managed source ("Dispatcharr Channels") feeds EPG matching from the
+    -- streams already assigned to curated Dispatcharr channels (using each
+    -- channel's own EPG), alongside the per-group M3U-group EPG matching. Teamarr's
+    -- own output channels are excluded (they are OUTPUT, not INPUT).
+    epg_channel_source_enabled BOOLEAN DEFAULT 0,
+    -- Which Dispatcharr channel groups to include as channel-source candidates
+    -- (JSON array of channel_group ids). Empty array = include all groups
+    -- (back-compatible). Scoping to selected groups skips EPG-matching work for
+    -- undesired groups (faster generation) and drives the "Dispatcharr Group"
+    -- stream-ordering rule. (epic teamarrv2-ybt.2)
+    epg_channel_source_groups TEXT DEFAULT '[]',
+
+    -- EPG stream time-windowing buffers (epic teamarrv2-183.5).
+    -- SEPARATE from the channel create/delete buffers above: these apply to the
+    -- attach/detach window of time-shared linear streams (EPG matching), so one
+    -- linear stream attaches to an event channel only near game time. Global
+    -- pre-attach / post-detach minutes applied to the EPG program slot.
+    epg_stream_pre_buffer_minutes INTEGER DEFAULT 60,
+    epg_stream_post_buffer_minutes INTEGER DEFAULT 60,
+
     -- Filler Settings
     midnight_crossover_mode TEXT DEFAULT 'postgame' CHECK(midnight_crossover_mode IN ('postgame', 'idle')),
 
@@ -191,6 +230,11 @@ CREATE TABLE IF NOT EXISTS settings (
     -- XMLTV
     xmltv_generator_name TEXT DEFAULT 'Teamarr',
     xmltv_generator_url TEXT DEFAULT 'https://github.com/Pharaoh-Labs/teamarr',
+
+    -- Art base URL: optional prefix for relative art/gamethumb paths in templates.
+    -- When set, template art values that are not already absolute (http(s)://)
+    -- are joined onto this base at render time. Empty = no prefixing (legacy).
+    art_base_url TEXT DEFAULT '',
 
     -- Display Preferences
     time_format TEXT DEFAULT '12h' CHECK(time_format IN ('12h', '24h')),
@@ -367,8 +411,17 @@ CREATE TABLE IF NOT EXISTS settings (
     jellyfin_password TEXT,
     jellyfin_api_key TEXT,
 
+    -- Channels DVR Integration (M3U Source + XMLTV Lineup Refresh)
+    -- Local API is unauthenticated by Channels DVR design; no credentials stored.
+    -- channelsdvr_lineup_id refreshes the XMLTV guide; without it CDVR
+    -- updates channels but leaves the EPG stale.
+    channelsdvr_enabled BOOLEAN DEFAULT 0,
+    channelsdvr_url TEXT,
+    channelsdvr_source_name TEXT,
+    channelsdvr_lineup_id TEXT,
+
     -- Schema Version
-    schema_version INTEGER DEFAULT 73
+    schema_version INTEGER DEFAULT 76
 );
 
 -- Insert default settings
@@ -433,10 +486,19 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     m3u_account_id INTEGER,                  -- Dispatcharr M3U account ID
     m3u_account_name TEXT,                   -- M3U account name for display
 
+    -- Stale-source detection (lylt): a group is "stale" when its M3U source
+    -- channel-group no longer exists in Dispatcharr (deleted/renamed). Distinct
+    -- from off-season (group exists, zero current streams). Updated during the
+    -- post-generation reconcile pass; source_last_seen powers the UI's "last
+    -- seen" hint, source_missing=1 marks it stale.
+    source_last_seen TIMESTAMP,              -- Last time the M3U source group was found in Dispatcharr
+    source_missing INTEGER DEFAULT 0,        -- 1 = source channel-group no longer exists (stale)
+
     -- Processing Stats (updated by EPG generation)
     last_refresh TIMESTAMP,                  -- Last successful EPG refresh
     stream_count INTEGER DEFAULT 0,          -- Streams after filtering
-    matched_count INTEGER DEFAULT 0,         -- Successfully matched to events
+    matched_count INTEGER DEFAULT 0,         -- Distinct streams matched to ≥1 event (coverage)
+    match_result_count INTEGER DEFAULT 0,    -- Total matched results produced (volume; EPG fans out)
 
     -- Stream Filtering (Phase 2)
     stream_include_regex TEXT,               -- Only include streams matching this pattern
@@ -474,6 +536,9 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     team_filter_mode TEXT DEFAULT 'include'      -- 'include' (whitelist) or 'exclude' (blacklist)
         CHECK(team_filter_mode IN ('include', 'exclude')),
     bypass_filter_for_playoffs BOOLEAN,          -- NULL=use default, 0=disabled, 1=enabled (include all playoff games)
+    team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
+    epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires global epg_match_enabled + a Dispatcharr build with /api/epg/programs/search/.
+    is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
 
     -- Processing Stats (updated by EPG generation)
     -- Three categories: FILTERED (pre-match), FAILED (match attempted), EXCLUDED (matched but excluded)
@@ -753,6 +818,30 @@ END;
 
 
 -- =============================================================================
+-- CHANNEL PRIORITY TEAMS
+-- A team-level sort tier that floats a followed team's channels to the very top
+-- of the global channel list, ahead of all sport/league/time ordering. Purely an
+-- ordering preference — unrelated to the Teams page or EPG generation.
+-- Matched against managed_channels.home_team/away_team by (sport, team_name).
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS channel_priority_teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Team identity (from team_cache)
+    provider TEXT NOT NULL,                  -- 'espn' or 'tsdb'
+    provider_team_id TEXT NOT NULL,          -- Provider's team ID
+    team_name TEXT NOT NULL,                 -- Display + match key (e.g., 'Liverpool')
+    league TEXT,                             -- League slug the team was picked from
+    sport TEXT NOT NULL,                     -- Sport code (scopes name matching)
+
+    -- One entry per team-in-league
+    UNIQUE(provider, provider_team_id, league)
+);
+
+
+-- =============================================================================
 -- LEAGUES TABLE
 -- Single source of truth for configured leagues
 -- Combines API config + display config in one table
@@ -801,7 +890,14 @@ CREATE TABLE IF NOT EXISTS leagues (
 
     -- Cache Metadata (updated by cache refresh)
     cached_team_count INTEGER DEFAULT 0,
-    last_cache_refresh TIMESTAMP
+    last_cache_refresh TIMESTAMP,
+
+    -- Custom League Flag
+    -- 1: user-added via the UI (TSDB-only, premium-gated; see epic teamarrv2-eqz).
+    --    Lives only in the DB, not schema.sql. The CRUD API only ever mutates or
+    --    deletes rows with is_custom=1, so built-in leagues can't be touched.
+    -- 0: built-in league seeded from schema.sql.
+    is_custom INTEGER DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_leagues_provider ON leagues(provider);
@@ -878,7 +974,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('norwegian-hockey', 'tsdb', '4926', 'Norwegian Fjordkraft-ligaen', 'Norwegian Fjordkraft-ligaen', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/lpfdvc1697194460.png', NULL, 1, NULL, 'norwegian-hockey', 'team_vs_team', NULL, NULL, NULL, 'free'),
 
     -- Australian Football (TSDB)
-    ('afl', 'tsdb', '4456', 'Australian AFL', 'Australian Football League', 'australian-football', 'https://r2.thesportsdb.com/images/media/league/badge/wvx4721525519372.png', NULL, 1, 'AFL', 'afl', 'team_vs_team', 'AFL', NULL, NULL, 'premium'),
+    ('afl', 'squiggle', 'afl', NULL, 'Australian Football League', 'australian-football', 'https://r2.thesportsdb.com/images/media/league/badge/wvx4721525519372.png', NULL, 1, 'AFL', 'afl', 'team_vs_team', 'AFL', NULL, NULL, NULL),
 
     -- Baseball (ESPN)
     ('mlb', 'espn', 'baseball/mlb', NULL, 'Major League Baseball', 'baseball', 'https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png', NULL, 1, 'MLB', 'mlb', 'team_vs_team', 'MLB Baseball', NULL, NULL, NULL),
@@ -890,6 +986,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('college-baseball', 'espn', 'baseball/college-baseball', NULL, 'NCAA Baseball', 'baseball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/baseball.png', NULL, 1, NULL, 'ncaabb', 'team_vs_team', 'College Baseball', NULL, NULL, NULL),
     ('college-softball', 'espn', 'baseball/college-softball', NULL, 'NCAA Softball', 'softball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/softball.png', NULL, 1, NULL, 'ncaasbw', 'team_vs_team', 'College Softball', NULL, NULL, NULL),
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://a.espncdn.com/i/teamlogos/leagues/500/3454.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL, NULL),
+    ('cbl', 'supabase', 'https://cbl.ca', NULL, 'Canadian Baseball League', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Canadian_Baseball_League.svg/1280px-Canadian_Baseball_League.svg.png', NULL, 1, 'CBL', 'cbl', 'team_vs_team', NULL, NULL, NULL, NULL),
 
     -- Soccer (ESPN)
     ('usa.1', 'espn', 'soccer/usa.1', NULL, 'Major League Soccer', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/19.png', NULL, 1, 'MLS', 'mls', 'team_vs_team', 'MLS Soccer', NULL, NULL, NULL),
@@ -942,7 +1039,20 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('aus.1', 'espn', 'soccer/aus.1', NULL, 'A-League Men', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/114.png', NULL, 1, 'A-League', 'aleague', 'team_vs_team', 'A-League Men Soccer', NULL, NULL, NULL),
 
     -- Soccer (TSDB Premium) - Leagues requiring premium key for full event coverage
+    -- uru.2: ESPN data is severely stale (2011 roster, 2010 scoreboard) — TSDB only
+    ('uru.2', 'tsdb', '5072', 'Uruguayan Segunda División', 'AUF Segunda', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/htc3kb1740672581.png', NULL, 1, NULL, 'uru.2', 'team_vs_team', NULL, NULL, NULL, 'premium'),
     ('svenska-cupen', 'tsdb', '4756', 'Svenska Cupen', 'Svenska Cupen', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/p37u1n1694211430.png', NULL, 1, NULL, 'svenska-cupen', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    -- Community league requests (#220-229) — provider_league_name validated against TSDB lookupleague.php (strLeague exact)
+    ('can.1', 'tsdb', '4820', 'Canadian Premier League', 'Canadian Premier League', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/7jqvqs1589104556.png', NULL, 1, NULL, 'can.1', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('swe.2', 'tsdb', '4403', 'Swedish Superettan', 'Swedish Superettan', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/uvzmu21707459258.png', NULL, 1, NULL, 'swe.2', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('swe.3.n', 'tsdb', '4674', 'Swedish Division 1 North', 'Swedish Division 1 North', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/w8f05c1579901188.png', NULL, 1, NULL, 'swe.3.n', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('swe.3.s', 'tsdb', '4845', 'Swedish Division 1 South', 'Swedish Division 1 South', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/w8f05c1579901188.png', NULL, 1, NULL, 'swe.3.s', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('ven.2', 'tsdb', '5659', 'Venezuelan Segunda Division', 'Venezuelan Segunda División', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/9tgsja1754302332.png', NULL, 1, NULL, 'ven.2', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('gam.1', 'tsdb', '5238', 'Gambia GFA League', 'Gambia GFA League', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/tqdf9k1645215996.png', NULL, 1, NULL, 'gam.1', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('ice.1', 'tsdb', '4642', 'Icelandic Úrvalsdeild karla', 'Icelandic Úrvalsdeild karla', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/7z7rcg1686156462.png', NULL, 1, NULL, 'ice.1', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('ice.2', 'tsdb', '4906', 'Icelandic 1 deild karla', 'Icelandic 1 deild karla', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/ent23s1614355568.png', NULL, 1, NULL, 'ice.2', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('arb.1', 'tsdb', '5230', 'Aruban Division di Honor', 'Aruban Division di Honor', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/1uwxfa1645196203.png', NULL, 1, NULL, 'arb.1', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    ('nifl.1', 'tsdb', '4659', 'Northern Irish Premiership', 'Northern Irish Premiership', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/at2i0n1625851036.png', NULL, 1, NULL, 'nifl.1', 'team_vs_team', NULL, NULL, NULL, 'premium'),
 
     -- MMA (ESPN) - Combat sport with event cards
     ('ufc', 'espn', 'mma/ufc', NULL, 'Ultimate Fighting Championship', 'mma', 'https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png', NULL, 0, 'UFC', 'ufc', 'event_card', NULL, NULL, NULL, NULL),
@@ -964,9 +1074,26 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, 'premium'),
     ('sa20', 'tsdb', '5532', 'SA20', 'South Africa Twenty20', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/aakvuk1734183412.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, 'premium'),
 
-    -- Rugby (TSDB)
-    ('nrl', 'tsdb', '4416', 'Australian National Rugby League', 'National Rugby League', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gsztcj1552071996.png', NULL, 1, 'NRL', 'nrl', 'team_vs_team', NULL, NULL, NULL, 'premium'),
-    ('super-rugby', 'tsdb', '4551', 'Super Rugby', 'Super Rugby Pacific', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/alpxhe1675871443.png', NULL, 1, 'Super Rugby', 'super-rugby', 'team_vs_team', NULL, NULL, NULL, 'premium'),
+    -- Rugby (ESPN)
+    ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('wrwc',  'espn', 'rugby/289237',    NULL, 'Women''s Rugby World Cup',        'rugby', 'https://upload.wikimedia.org/wikipedia/commons/6/66/Rugby_World_Cup_footer_logo_%28post-2023%29.svg', NULL, 1, 'WRWC',  'wrwc',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('6n',    'espn', 'rugby/180659',    NULL, 'Six Nations',                     'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/72/Guinness_Six_Nations_logo.png', NULL, 1, '6N',    '6n',    'team_vs_team', NULL, NULL, NULL, NULL),
+    ('trc',   'espn', 'rugby/244293',    NULL, 'The Rugby Championship',          'rugby', 'https://upload.wikimedia.org/wikipedia/commons/6/69/The_Rugby_Championship_logo_%28white_background%29.png', NULL, 1, 'TRC',   'trc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('super-rugby', 'espn', 'rugby/242041', NULL, 'Super Rugby Pacific',          'rugby', 'https://upload.wikimedia.org/wikipedia/en/2/25/Super_Rugby_Pacific_logo.png', NULL, 1, 'SRP',   'srp',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('urc',   'espn', 'rugby/270557',    NULL, 'United Rugby Championship',       'rugby', 'https://upload.wikimedia.org/wikipedia/commons/d/d5/United_Rugby_Championship_logo.png', NULL, 1, 'URC',   'urc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('prem',  'espn', 'rugby/267979',    NULL, 'Gallagher Premiership',           'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/76/PREM_Rugby_logo_2025.png', NULL, 1, 'PREM',  'prem',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('top14', 'espn', 'rugby/270559',    NULL, 'French Top 14',                   'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/7d/Top_14_Logo.svg', NULL, 1, 'TOP14', 'top14', 'team_vs_team', NULL, NULL, NULL, NULL),
+    ('ercc',  'espn', 'rugby/271937',    NULL, 'European Rugby Champions Cup',    'rugby', 'https://upload.wikimedia.org/wikipedia/en/6/65/InvestecChampionsCupLogo.svg', NULL, 1, 'ERCC',  'ercc',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('epcr',  'espn', 'rugby/272073',    NULL, 'European Rugby Challenge Cup',    'rugby', 'https://upload.wikimedia.org/wikipedia/commons/1/17/EPCR_Logo.png', NULL, 1, 'EPCR',  'epcr',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('mlr',   'espn', 'rugby/289262',    NULL, 'Major League Rugby',              'rugby', 'https://upload.wikimedia.org/wikipedia/commons/b/b8/MLR_logo.png', NULL, 1, 'MLR',   'mlr',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('cc',    'espn', 'rugby/270555',    NULL, 'Currie Cup',                      'rugby', 'https://upload.wikimedia.org/wikipedia/en/b/bd/Currie_Cup_logo.svg', NULL, 1, 'CC',    'cc',    'team_vs_team', NULL, NULL, NULL, NULL),
+    ('npc',   'espn', 'rugby/270563',    NULL, 'National Provincial Championship', 'rugby', 'https://upload.wikimedia.org/wikipedia/en/8/8e/NPC-Logo_50_Years.png', NULL, 1, 'NPC',   'npc',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('urba',  'espn', 'rugby/2009',      NULL, 'URBA Primera A',                  'rugby', 'https://upload.wikimedia.org/wikipedia/en/1/1f/Urba_logo.png', NULL, 1, 'URBA',  'urba',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('itm',   'espn', 'rugby/289234',    NULL, 'International Test Match',        'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/97/World_Rugby_logo.svg', NULL, 1, 'ITM',   'itm',   'team_vs_team', NULL, NULL, NULL, NULL),
+    ('lions', 'espn', 'rugby/268565',    NULL, 'British and Irish Lions Tour',    'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/93/British_%26_Irish_Lions_logo_%282023%29.svg', NULL, 1, 'Lions', 'lions', 'team_vs_team', NULL, NULL, NULL, NULL),
+    ('om7s',  'espn', 'rugby/282',       NULL, 'Olympic Men''s Rugby Sevens',     'rugby', 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Rugby_sevens_pictogram.svg', NULL, 1, 'OM7S',  'om7s',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('ow7s',  'espn', 'rugby/283',       NULL, 'Olympic Women''s Rugby Sevens',   'rugby', 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Rugby_sevens_pictogram.svg', NULL, 1, 'OW7S',  'ow7s',  'team_vs_team', NULL, NULL, NULL, NULL),
+    ('nrl',   'espn', 'rugby-league/3',  NULL, 'National Rugby League',           'rugby', 'https://upload.wikimedia.org/wikipedia/en/5/50/National_Rugby_League.svg', NULL, 1, 'NRL',   'nrl',   'team_vs_team', NULL, NULL, NULL, NULL),
 
     -- Boxing (TSDB) - Combat sport with event cards
     ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free');
@@ -1217,6 +1344,10 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     source_group_id INTEGER,                 -- Which M3U group provided this stream
     source_group_type TEXT DEFAULT 'parent'  -- 'parent', 'child', 'cross_group'
         CHECK(source_group_type IN ('parent', 'child', 'cross_group')),
+    match_type TEXT DEFAULT 'event'          -- 'event' (TEAM_VS_TEAM) or 'team' (TEAM_ONLY)
+        CHECK(match_type IN ('event', 'team')),
+    match_method TEXT,                        -- how the stream was matched: 'epg', 'fuzzy', 'cache', etc. (drives the epg_match stream-ordering rule)
+    dispatcharr_channel_group TEXT,           -- (ybt.3) the DP channel's own group name, for channel-source streams; drives the 'dispatcharr_group' stream-ordering rule. NULL for non-channel-source streams.
 
     -- Priority (0 = primary, higher = failover)
     priority INTEGER DEFAULT 0,
@@ -1232,6 +1363,14 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     removed_at TIMESTAMP,
     remove_reason TEXT,
+
+    -- Time-windowed membership (epic teamarrv2-183.5).
+    -- NULL = full-life membership (default; dedicated/name-matched streams stay
+    -- attached for the channel's whole life). Non-NULL = time-shared linear
+    -- stream that is only active in Dispatcharr while attach_at <= now < detach_at
+    -- (derived from the matched EPG program slot +/- the global stream buffers).
+    attach_at TIMESTAMP,
+    detach_at TIMESTAMP,
 
     -- Sync status
     last_verified_at TIMESTAMP,

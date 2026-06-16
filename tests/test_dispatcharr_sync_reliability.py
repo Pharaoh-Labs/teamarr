@@ -4,7 +4,6 @@ Verifies that ChannelLifecycleService checks update_channel results before
 persisting local DB state, enabling self-healing via the scheduler retry loop.
 """
 
-import json
 import sqlite3
 from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
@@ -14,7 +13,6 @@ import pytest
 from teamarr.consumers.lifecycle.types import StreamProcessResult
 from teamarr.consumers.reconciliation import ChannelReconciler
 from teamarr.dispatcharr.types import DispatcharrChannel, OperationResult
-
 
 # =============================================================================
 # FIXTURES
@@ -81,9 +79,7 @@ def _make_dispatcharr_channel(
         logo_url=None,
         streams=tuple(streams) if streams else (),
         stream_profile_id=None,
-        channel_profile_ids=tuple(channel_profile_ids)
-        if channel_profile_ids is not None
-        else None,
+        channel_profile_ids=tuple(channel_profile_ids) if channel_profile_ids is not None else None,
     )
     defaults.update(kwargs)
     return DispatcharrChannel(**defaults)
@@ -123,9 +119,7 @@ class TestSafeUpdateChannel:
 
     def test_returns_false_on_api_failure(self):
         cm = MagicMock()
-        cm.update_channel.return_value = OperationResult(
-            success=False, error="Server error"
-        )
+        cm.update_channel.return_value = OperationResult(success=False, error="Server error")
         service = _make_service(channel_manager=cm)
 
         assert service._safe_update_channel(100, {"name": "New"}, "test") is False
@@ -143,9 +137,7 @@ class TestSafeUpdateChannel:
 
     def test_increments_failure_counter_on_failure(self):
         cm = MagicMock()
-        cm.update_channel.return_value = OperationResult(
-            success=False, error="503"
-        )
+        cm.update_channel.return_value = OperationResult(success=False, error="503")
         service = _make_service(channel_manager=cm)
 
         service._safe_update_channel(100, {"name": "A"}, "test1")
@@ -172,32 +164,24 @@ class TestBulkSettingsSyncFailure:
 
     def test_db_unchanged_on_api_failure(self):
         cm = MagicMock()
-        cm.update_channel.return_value = OperationResult(
-            success=False, error="500"
-        )
+        cm.update_channel.return_value = OperationResult(success=False, error="500")
         cm.get_channel.return_value = _make_dispatcharr_channel(name="Old Name")
         service = _make_service(channel_manager=cm)
 
         existing = FakeManagedChannel()
         event = FakeEvent()
 
-        with patch.object(
-            service, "_generate_channel_name", return_value="New Name"
-        ), patch.object(
-            service, "_sync_channel_profiles"
-        ), patch.object(
-            service, "_sync_channel_logo"
-        ), patch.object(
-            service, "_sync_stream_profile"
-        ), patch.object(
-            service, "_dynamic_resolver"
-        ) as mock_resolver:
+        with (
+            patch.object(service, "_generate_channel_name", return_value="New Name"),
+            patch.object(service, "_sync_channel_profiles"),
+            patch.object(service, "_sync_channel_logo"),
+            patch.object(service, "_sync_stream_profile"),
+            patch.object(service, "_dynamic_resolver") as mock_resolver,
+        ):
             mock_resolver.resolve_channel_group.return_value = 10
 
             # Patch at the source package — the from-import resolves here
-            with patch(
-                "teamarr.database.channels.update_managed_channel"
-            ) as mock_update_db:
+            with patch("teamarr.database.channels.update_managed_channel") as mock_update_db:
                 service._sync_channel_settings(
                     conn=MagicMock(),
                     existing=existing,
@@ -219,9 +203,7 @@ class TestProfileSentinelUpdateFailure:
 
     def test_profile_update_skipped_on_api_failure(self):
         cm = MagicMock()
-        cm.update_channel.return_value = OperationResult(
-            success=False, error="timeout"
-        )
+        cm.update_channel.return_value = OperationResult(success=False, error="timeout")
         service = _make_service(channel_manager=cm)
 
         existing = FakeManagedChannel(channel_profile_ids="[1]")
@@ -233,11 +215,12 @@ class TestProfileSentinelUpdateFailure:
         mock_settings = MagicMock()
         mock_settings.default_channel_profile_ids = None
 
-        with patch(
-            "teamarr.database.channels.update_managed_channel"
-        ) as mock_update_db, patch(
-            "teamarr.database.settings.get_dispatcharr_settings",
-            return_value=mock_settings,
+        with (
+            patch("teamarr.database.channels.update_managed_channel") as mock_update_db,
+            patch(
+                "teamarr.database.settings.get_dispatcharr_settings",
+                return_value=mock_settings,
+            ),
         ):
             service._sync_channel_profiles(
                 conn=MagicMock(),
@@ -257,22 +240,17 @@ class TestLogoAssignmentFailure:
 
     def test_logo_db_unchanged_on_api_failure(self):
         cm = MagicMock()
-        cm.update_channel.return_value = OperationResult(
-            success=False, error="502"
-        )
+        cm.update_channel.return_value = OperationResult(success=False, error="502")
         service = _make_service(channel_manager=cm)
-        service._logo_manager.upload.return_value = MagicMock(
-            success=True, logo={"id": 42}
-        )
+        service._logo_manager.upload.return_value = MagicMock(success=True, logo={"id": 42})
 
         existing = FakeManagedChannel(logo_url=None, dispatcharr_logo_id=None)
         changes_made = []
 
-        with patch.object(
-            service, "_resolve_logo_url", return_value="http://example.com/logo.png"
-        ), patch(
-            "teamarr.database.channels.update_managed_channel"
-        ) as mock_update_db:
+        with (
+            patch.object(service, "_resolve_logo_url", return_value="http://example.com/logo.png"),
+            patch("teamarr.database.channels.update_managed_channel") as mock_update_db,
+        ):
             service._sync_channel_logo(
                 conn=MagicMock(),
                 existing=existing,
@@ -293,9 +271,7 @@ class TestStreamRemovalFailure:
     def test_returns_false_on_api_failure(self):
         cm = MagicMock()
         cm.get_channel.return_value = _make_dispatcharr_channel(streams=(456, 789))
-        cm.update_channel.return_value = OperationResult(
-            success=False, error="timeout"
-        )
+        cm.update_channel.return_value = OperationResult(success=False, error="timeout")
         service = _make_service(channel_manager=cm)
 
         assert service._remove_stream_from_dispatcharr_channel(100, 456) is False
@@ -336,9 +312,12 @@ class TestProfileSelfHealing:
         mock_settings = MagicMock()
         mock_settings.default_channel_profile_ids = None
 
-        with patch("teamarr.database.channels.update_managed_channel"), patch(
-            "teamarr.database.settings.get_dispatcharr_settings",
-            return_value=mock_settings,
+        with (
+            patch("teamarr.database.channels.update_managed_channel"),
+            patch(
+                "teamarr.database.settings.get_dispatcharr_settings",
+                return_value=mock_settings,
+            ),
         ):
             service._sync_channel_profiles(
                 conn=MagicMock(),
@@ -375,11 +354,12 @@ class TestProfileSelfHealing:
         mock_settings = MagicMock()
         mock_settings.default_channel_profile_ids = [1]
 
-        with patch(
-            "teamarr.database.channels.update_managed_channel"
-        ) as mock_update_db, patch(
-            "teamarr.database.settings.get_dispatcharr_settings",
-            return_value=mock_settings,
+        with (
+            patch("teamarr.database.channels.update_managed_channel") as mock_update_db,
+            patch(
+                "teamarr.database.settings.get_dispatcharr_settings",
+                return_value=mock_settings,
+            ),
         ):
             service._sync_channel_profiles(
                 conn=MagicMock(),
@@ -488,7 +468,9 @@ _MANAGED_CHANNEL_STREAMS_DDL = """
         m3u_account_name TEXT,
         exception_keyword TEXT,
         added_at TEXT,
-        removed_at TEXT
+        removed_at TEXT,
+        attach_at TEXT,
+        detach_at TEXT
     )
 """
 
@@ -542,7 +524,8 @@ class TestReconciliationStreamDrift:
 
         cm = MagicMock()
         cm.get_channel.return_value = _make_dispatcharr_channel(
-            streams=(456,), channel_profile_ids=None,
+            streams=(456,),
+            channel_profile_ids=None,
         )
 
         reconciler = ChannelReconciler(
@@ -579,7 +562,8 @@ class TestReconciliationStreamDrift:
 
         cm = MagicMock()
         cm.get_channel.return_value = _make_dispatcharr_channel(
-            streams=(456,), channel_profile_ids=None,
+            streams=(456,),
+            channel_profile_ids=None,
         )
 
         reconciler = ChannelReconciler(
@@ -608,7 +592,8 @@ class TestReconciliationProfileDrift:
 
         cm = MagicMock()
         cm.get_channel.return_value = _make_dispatcharr_channel(
-            streams=(), channel_profile_ids=[],
+            streams=(),
+            channel_profile_ids=[],
         )
 
         reconciler = ChannelReconciler(
@@ -653,7 +638,8 @@ class TestReconciliationDriftAutoFix:
 
         cm = MagicMock()
         cm.get_channel.return_value = _make_dispatcharr_channel(
-            streams=(456,), channel_profile_ids=None,
+            streams=(456,),
+            channel_profile_ids=None,
         )
         cm.update_channel.return_value = OperationResult(success=True)
         cm.get_channels.return_value = []
@@ -708,8 +694,11 @@ class TestDispatcharrChannelProfileIds:
     def test_parses_profile_ids_from_api(self):
         ch = DispatcharrChannel.from_api(
             {
-                "id": 1, "uuid": "u1", "name": "CH1",
-                "channel_number": "100", "streams": [456],
+                "id": 1,
+                "uuid": "u1",
+                "name": "CH1",
+                "channel_number": "100",
+                "streams": [456],
                 "channel_profile_ids": [0],
             }
         )
@@ -724,8 +713,11 @@ class TestDispatcharrChannelProfileIds:
     def test_empty_list_profile_ids(self):
         ch = DispatcharrChannel.from_api(
             {
-                "id": 1, "uuid": "u1", "name": "CH1",
-                "channel_number": "100", "streams": [],
+                "id": 1,
+                "uuid": "u1",
+                "name": "CH1",
+                "channel_number": "100",
+                "streams": [],
                 "channel_profile_ids": [],
             }
         )

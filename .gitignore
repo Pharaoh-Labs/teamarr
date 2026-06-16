@@ -57,3 +57,8 @@ dev.sh
 
 # Plans and status (local only)
 plans/
+
+# Playwright / browser debug artifacts (root only — frontend/public PNGs are tracked)
+/*.png
+.playwright-mcp/
+fix-flow-snapshot.yml

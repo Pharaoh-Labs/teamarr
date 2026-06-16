@@ -194,7 +194,9 @@ def create_lifecycle_service(
         post_buffer_minutes=lifecycle["post_buffer_minutes"],
         default_duration_hours=all_settings.durations.default,
         sport_durations=sport_durations,
-        include_final_events=all_settings.epg.include_final_events,
+        # Final/complete events are always included (no longer a user setting —
+        # the toggle was removed in the v2.7.0 EPG overhaul).
+        include_final_events=True,
     )
 
 

@@ -110,7 +110,7 @@ export function sortLeaguesImportFirst<T extends { name: string; import_enabled?
       return bEnabled ? 1 : -1
     }
 
-    return a.name.localeCompare(b.name)
+    return (a.name ?? "").localeCompare(b.name ?? "")
   })
 }
 

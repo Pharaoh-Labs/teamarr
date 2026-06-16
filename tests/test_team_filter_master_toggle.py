@@ -30,9 +30,7 @@ class FakeGroup:
 def processor():
     from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-    with patch(
-        "teamarr.consumers.event_group_processor.create_default_service"
-    ):
+    with patch("teamarr.consumers.event_group_processor.create_default_service"):
         return EventGroupProcessor(db_factory=MagicMock())
 
 
@@ -87,9 +85,7 @@ class TestMasterToggleOff:
             include_teams=[{"provider": "espn", "team_id": "1", "league": "nhl"}],
             bypass_filter_for_playoffs=True,
         )
-        global_settings = TeamFilterSettings(
-            enabled=False, bypass_filter_for_playoffs=True
-        )
+        global_settings = TeamFilterSettings(enabled=False, bypass_filter_for_playoffs=True)
         with _patch_settings(global_settings):
             _, _, _, bypass = processor._get_effective_team_filter(group, mock_conn)
         assert bypass is False
@@ -105,9 +101,7 @@ class TestMasterToggleOn:
             result = processor._get_effective_team_filter(group, mock_conn)
         assert result == (teams, None, "include", False)
 
-    def test_toggle_on_falls_back_to_global_when_group_empty(
-        self, processor, mock_conn
-    ):
+    def test_toggle_on_falls_back_to_global_when_group_empty(self, processor, mock_conn):
         global_teams = [{"provider": "espn", "team_id": "9", "league": "nhl"}]
         global_settings = TeamFilterSettings(
             enabled=True,

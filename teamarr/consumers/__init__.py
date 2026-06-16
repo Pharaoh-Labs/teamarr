@@ -64,6 +64,7 @@ from teamarr.consumers.reconciliation import (
     ReconciliationIssue,
     ReconciliationResult,
     create_reconciler,
+    detect_stale_groups,
 )
 from teamarr.consumers.scheduler import (
     LifecycleScheduler,
@@ -150,6 +151,7 @@ __all__ = [
     "process_event_group",
     # Reconciliation
     "ChannelReconciler",
+    "detect_stale_groups",
     "ReconciliationIssue",
     "ReconciliationResult",
     "create_reconciler",

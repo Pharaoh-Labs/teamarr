@@ -83,6 +83,7 @@ All response types are **frozen dataclasses** with `from_api(dict)` factory meth
 | Type | Key Fields |
 |------|-----------|
 | `DispatcharrEPGSource` | id, name, source_type, url, status, last_message, updated_at |
+| `DispatcharrProgram` | id, tvg_id, title, start_time, end_time, sub_title, description, epg_source, epg_name, epg_icon_url, stream_ids, channel_ids (+ `start_dt`/`end_dt`/`is_teamarr` helpers) |
 | `DispatcharrM3UAccount` | id, name, status, url, updated_at |
 | `DispatcharrChannelGroup` | id, name, m3u_accounts |
 | `DispatcharrChannelProfile` | id, name, channel_ids |
@@ -134,6 +135,19 @@ Async EPG refresh with polling for completion.
 3. Special case: "no channels" message → instant success
 
 **Cancellation support:** `wait_for_refresh()` accepts a `cancellation_check` callback, called before each poll iteration.
+
+### Program-data search (EPG matching)
+
+Supports matching streams to events by EPG program data (epic `teamarrv2-183`):
+
+| Method | Description |
+|--------|-------------|
+| `supports_program_search(force=False)` | Feature-detection. Probes `GET /api/epg/programs/search/?page_size=1` once and caches: `200` → supported, `404` → unsupported (older Dispatcharr). Transient errors (no response / 5xx) are **not** cached so a later call retries. |
+| `search_programs(tvg_id, start_before, end_after, title, channel_id, epg_source, page_size, fields)` | Returns `list[DispatcharrProgram]` across all pages via `paginated_get`. Short-circuits to `[]` when the endpoint is unsupported. Scope a day window with `start_before=<window end>`, `end_after=<window start>`. |
+
+> **Version dependency.** The program-search endpoint (`/api/epg/programs/search/`) only exists on newer Dispatcharr builds — **confirmed working on Dispatcharr `0.24.0`**. Teamarr never hard-requires it: callers gate on `supports_program_search()` and degrade gracefully on older builds (EPG-based matching simply stays off). The settings toggle is feature-gated on this detection.
+
+**Per-run index (`consumers/matching/epg_index.py`).** `EPGProgramIndex.build(...)` fetches programs **only** for the distinct `tvg_id`s of candidate streams in imported event groups (never the whole instance — one search call per `tvg_id`, since the endpoint takes a single `tvg_id` per call), excludes our own `_Teamarr` programs, and builds a `tvg_id → [programs]` index. `lookup(tvg_id, event_start, event_end)` returns programs whose time window overlaps the event (half-open). The matcher (`teamarrv2-183.4`) consumes this; the index itself holds no matching logic.
 
 ## M3U Manager (`managers/m3u.py`)
 

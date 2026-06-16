@@ -57,9 +57,9 @@ class FillerGenerator:
         )
     """
 
-    def __init__(self, service: SportsDataService):
+    def __init__(self, service: SportsDataService, art_base_url: str = ""):
         self._service = service
-        self._resolver = TemplateResolver()
+        self._resolver = TemplateResolver(art_base_url)
         self._context_builder = ContextBuilder(service)
         self._options: FillerOptions | None = None  # Set during generate()
 
@@ -495,7 +495,11 @@ class FillerGenerator:
 
             # Resolve art URL if present
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
-            icon = self._resolver.resolve(template.art_url, context) if template.art_url else None
+            icon = (
+                self._resolver.resolve_art(template.art_url, context)
+                if template.art_url
+                else None
+            )
 
             # Filler categories come from the template's xmltv_filler_categories
             # (independent from event categories). Empty list = no <category> tags.

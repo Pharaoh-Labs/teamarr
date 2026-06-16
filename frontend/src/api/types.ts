@@ -53,6 +53,8 @@ export interface EventGroup {
   custom_regex_event_name: string | null
   custom_regex_event_name_enabled: boolean
   skip_builtin_filter: boolean
+  team_streams_enabled: boolean
+  epg_match_enabled: boolean
   // Team filtering (canonical team selection, inherited by children)
   include_teams: TeamFilterEntry[] | null
   exclude_teams: TeamFilterEntry[] | null
@@ -61,7 +63,8 @@ export interface EventGroup {
   // Processing stats
   last_refresh: string | null
   stream_count: number
-  matched_count: number
+  matched_count: number  // Distinct streams matched (coverage)
+  match_result_count: number  // Total matched results produced (volume; EPG fans out)
   // Filtering stats (pre-match)
   filtered_include_regex: number
   filtered_exclude_regex: number
@@ -122,6 +125,8 @@ export interface EventGroupCreate {
   custom_regex_event_name?: string | null
   custom_regex_event_name_enabled?: boolean
   skip_builtin_filter?: boolean
+  team_streams_enabled?: boolean
+  epg_match_enabled?: boolean
   // Team filtering (canonical team selection, inherited by children)
   include_teams?: TeamFilterEntry[] | null
   exclude_teams?: TeamFilterEntry[] | null
@@ -170,6 +175,8 @@ export interface BulkGroupUpdateRequest {
   leagues?: string[]
   stream_timezone?: string | null  // IANA timezone for interpreting stream dates
   clear_stream_timezone?: boolean
+  team_streams_enabled?: boolean | null
+  epg_match_enabled?: boolean | null
   // Team filtering
   include_teams?: TeamFilterEntry[] | null
   exclude_teams?: TeamFilterEntry[] | null

@@ -318,7 +318,10 @@ class HockeyTechClient:
         team_games = []
         for game in schedule:
             # Check if team is home or away
-            if game.get("home_team") == team_id or game.get("visiting_team") == team_id:
+            team_id_str = str(team_id)
+            home = str(game.get("home_team", ""))
+            visitor = str(game.get("visiting_team", ""))
+            if home == team_id_str or visitor == team_id_str:
                 # Check date is within range (includes past games)
                 game_date_str = game.get("date_played")
                 if game_date_str:

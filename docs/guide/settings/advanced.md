@@ -79,7 +79,7 @@ Optional premium API key for TheSportsDB. The card header shows your current tie
 | **Free** | 30 req/min | 5 per day per league | Free |
 | **Premium** | 100 req/min | Full coverage | ~$9/mo |
 
-Some TSDB leagues (CFL, Unrivaled, boxing, Norwegian hockey) work fine on the free tier. Premium leagues — AFL, NRL, Super Rugby, cricket (IPL, BBL, SA20), and Svenska Cupen — need a premium key for full event coverage. The league picker shows a crown icon on premium leagues.
+Some TSDB leagues (CFL, Unrivaled, boxing, Norwegian hockey) work fine on the free tier. Premium leagues — AFL, cricket (IPL, BBL, SA20), and Svenska Cupen — need a premium key for full event coverage. The league picker shows a crown icon on premium leagues.
 
 Use the **Validate** button to test your key before saving. Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 

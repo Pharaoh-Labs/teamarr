@@ -4,7 +4,6 @@ Tests the subscription.py database module and API endpoints for
 the global sports subscription system.
 """
 
-import json
 import sqlite3
 
 import pytest

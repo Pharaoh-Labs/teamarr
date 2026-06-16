@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -21,6 +22,7 @@ from teamarr.api.routes import (
     groups,
     health,
     keywords,
+    leagues,
     presets,
     settings,
     sort_priorities,
@@ -311,6 +313,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Add gzip compression for large responses
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
+
     # Include API routers
     app.include_router(health.router, tags=["Health"])
     app.include_router(teams.router, prefix="/api/v1", tags=["Teams"])
@@ -321,6 +326,7 @@ def create_app() -> FastAPI:
     app.include_router(epg.router, prefix="/api/v1", tags=["EPG"])
     app.include_router(keywords.router, prefix="/api/v1/keywords", tags=["Exception Keywords"])
     app.include_router(cache.router, prefix="/api/v1", tags=["Cache"])
+    app.include_router(leagues.router, prefix="/api/v1", tags=["Custom Leagues"])
     app.include_router(channels.router, prefix="/api/v1/channels", tags=["Channels"])
     app.include_router(settings.router, prefix="/api/v1", tags=["Settings"])
     app.include_router(sort_priorities.router, prefix="/api/v1", tags=["Sort Priorities"])

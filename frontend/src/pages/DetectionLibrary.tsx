@@ -11,18 +11,12 @@ import {
   ToggleRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { EpgMatchingSettings, EventLookaheadSetting } from "@/components/EventMatchingSettings"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { ResponsiveTable, type ResponsiveColumn } from "@/components/ui/responsive-table"
 import {
   Dialog,
   DialogContent,
@@ -52,32 +46,35 @@ import {
 } from "@/api/aliases"
 import { TeamPicker } from "@/components/TeamPicker"
 import { LeaguePicker } from "@/components/LeaguePicker"
+import { SubNav } from "@/components/ui/sub-nav"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import type { TeamFilterEntry } from "@/api/types"
 
 // Tab types - detection keyword categories plus team_aliases
 type TabType = CategoryType | "team_aliases"
 
-// Detection Library tabs: Classification concerns only
-// Extraction patterns (placeholders, card_segments, exclusions, separators)
-// moved to Custom Regex section in Event Group form
-const TAB_ORDER: TabType[] = [
-  "team_aliases",
-  "event_type_keywords",
-  "league_hints",
-  "sport_hints",
-]
+// Detection Library sections: classification concerns plus matchup separators.
+// Surfaced sections (in render order): team_aliases, event_type_keywords,
+// league_hints, sport_hints, separators.
+// Separators are global (detection_keywords category 'separators') and let users
+// teach the classifier locale-specific matchup delimiters — e.g. " - " for
+// "España - Inglaterra" — without us shipping risky defaults (a bare hyphen
+// over-splits English titles). The remaining extraction categories
+// (placeholders, card_segments, exclusions) aren't exposed as sections yet; they
+// are managed via import/export or the API.
 
-// Full mapping for type safety (includes categories shown in Custom Regex UI)
+// Full mapping for type safety. Categories not surfaced as sections are not
+// shown in the UI yet (import/export or API only).
 const TAB_NAMES: Record<TabType, string> = {
   team_aliases: "Team Aliases",
   event_type_keywords: "Event Type Detection",
   league_hints: "League Hints",
   sport_hints: "Sport Hints",
-  // Extraction categories (shown in Custom Regex, not Detection Library)
+  separators: "Separators",
+  // Not yet exposed as tabs (managed via import/export or API)
   placeholders: "Placeholders",
   card_segments: "Card Segments",
   exclusions: "Combat Exclusions",
-  separators: "Separators",
 }
 
 /** Parse a sport hint target_value, which may be a JSON array or plain string. */
@@ -101,7 +98,20 @@ function serializeSportTarget(sports: string[]): string {
   return JSON.stringify(sports)
 }
 
+/**
+ * Prepare a keyword for storage. Separators carry semantically meaningful
+ * leading/trailing spaces (" - ", " vs ") that keep substring matching from
+ * splitting mid-word, so they are preserved verbatim. Every other category is
+ * trimmed to drop accidental whitespace.
+ */
+function prepareKeyword(category: TabType, raw: string): string {
+  return category === "separators" ? raw : raw.trim()
+}
+
 export function DetectionLibrary() {
+  const [activeView, setActiveView] = useState<
+    "custom_rules" | "epg_matching" | "event_lookahead"
+  >("epg_matching")
   const [activeTab, setActiveTab] = useState<TabType>("team_aliases")
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [editingKeyword, setEditingKeyword] = useState<DetectionKeyword | null>(null)
@@ -110,10 +120,9 @@ export function DetectionLibrary() {
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Detection keywords queries (only fetch when on a keyword tab)
-  const isKeywordTab = activeTab !== "team_aliases"
+  // Detection keywords queries. Per-category keyword fetching now lives in each
+  // KeywordSection (a section can't share one query — hooks can't loop).
   const categoriesQuery = useDetectionCategories()
-  const keywordsQuery = useDetectionKeywords(isKeywordTab ? (activeTab as CategoryType) : undefined)
   const createMutation = useCreateDetectionKeyword()
   const updateMutation = useUpdateDetectionKeyword()
   const deleteMutation = useDeleteDetectionKeyword()
@@ -126,8 +135,8 @@ export function DetectionLibrary() {
   const importAliasesMutation = useImportAliases()
 
   const categories = categoriesQuery.data?.categories || []
-  const keywords = keywordsQuery.data?.keywords || []
   const aliases = aliasesQuery.data?.aliases || []
+  // activeInfo drives the Add/Edit dialog copy for the currently-acted category.
   const activeInfo = categories.find((c) => c.id === activeTab)
 
   // Keyword form state
@@ -193,8 +202,10 @@ export function DetectionLibrary() {
     }
   }
 
-  const openAddDialog = () => {
-    if (activeTab === "team_aliases") {
+  // `category` overrides the stale `activeTab` closure value when called from a
+  // section (setActiveTab hasn't flushed in the same tick). Defaults to activeTab.
+  const openAddDialog = (category: TabType = activeTab) => {
+    if (category === "team_aliases") {
       resetAliasForm()
       setShowAliasDialog(true)
     } else {
@@ -203,10 +214,10 @@ export function DetectionLibrary() {
     }
   }
 
-  const openEditDialog = (keyword: DetectionKeyword) => {
+  const openEditDialog = (keyword: DetectionKeyword, category: TabType = activeTab) => {
     let displayTarget = keyword.target_value || ""
     // Deserialize JSON arrays to comma-separated for sport_hints editing
-    if (activeTab === "sport_hints" && displayTarget.startsWith("[")) {
+    if (category === "sport_hints" && displayTarget.startsWith("[")) {
       const sports = parseSportTarget(displayTarget)
       displayTarget = sports.join(", ")
     }
@@ -230,7 +241,7 @@ export function DetectionLibrary() {
       }
       const data: DetectionKeywordCreate = {
         category: activeTab as CategoryType,
-        keyword: formData.keyword.trim(),
+        keyword: prepareKeyword(activeTab, formData.keyword),
         is_regex: formData.is_regex,
         target_value: targetValue,
         enabled: formData.enabled,
@@ -273,7 +284,7 @@ export function DetectionLibrary() {
       await updateMutation.mutateAsync({
         id: editingKeyword.id,
         data: {
-          keyword: formData.keyword.trim(),
+          keyword: prepareKeyword(activeTab, formData.keyword),
           is_regex: formData.is_regex,
           target_value: targetValue,
           enabled: formData.enabled,
@@ -325,9 +336,11 @@ export function DetectionLibrary() {
     }
   }
 
-  const handleExport = async () => {
+  // `category` overrides the stale `activeTab` closure value when called from a
+  // section (setActiveTab hasn't flushed in the same tick). Defaults to activeTab.
+  const handleExport = async (category: TabType = activeTab) => {
     try {
-      if (activeTab === "team_aliases") {
+      if (category === "team_aliases") {
         const data = await exportAliases()
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
         const url = URL.createObjectURL(blob)
@@ -340,12 +353,12 @@ export function DetectionLibrary() {
         URL.revokeObjectURL(url)
         toast.success(`Exported ${data.length} aliases`)
       } else {
-        const data = await exportDetectionKeywords(activeTab as CategoryType)
+        const data = await exportDetectionKeywords(category as CategoryType)
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
         const url = URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = `detection-keywords-${activeTab}.json`
+        a.download = `detection-keywords-${category}.json`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -398,10 +411,280 @@ export function DetectionLibrary() {
     }
   }
 
+  // Shared action buttons (Add / Import / Export) for a section header. Each
+  // sets activeTab to the section's category BEFORE invoking the existing
+  // handler so dialogs/import/export target the right category.
+  const SectionActions = ({ category }: { category: TabType }) => (
+    <>
+      <Button
+        size="sm"
+        onClick={() => {
+          setActiveTab(category)
+          openAddDialog(category)
+        }}
+      >
+        <Plus className="h-4 w-4 mr-1" />
+        {category === "team_aliases" ? "Add Alias" : "Add Keyword"}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setActiveTab(category)
+          handleImportClick()
+        }}
+        disabled={isImporting}
+        title="Import"
+      >
+        {isImporting ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Upload className="h-4 w-4" />
+        )}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setActiveTab(category)
+          handleExport(category)
+        }}
+        title="Export"
+      >
+        <Download className="h-4 w-4" />
+      </Button>
+    </>
+  )
+
+  // Team Aliases section — fetches its own data via the shared aliases query.
+  const AliasSection = () => (
+    <CollapsibleSection
+      title={TAB_NAMES.team_aliases}
+      count={aliases.length}
+      actions={<SectionActions category="team_aliases" />}
+      persistKey="detlib-team_aliases"
+    >
+      <p className="text-sm text-muted-foreground mb-2">
+        Map alternate team names to their official names for better stream matching
+      </p>
+      {aliasesQuery.isLoading ? (
+        <div className="flex items-center justify-center rounded-lg border border-border py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <ResponsiveTable
+          className="rounded-lg border border-border overflow-hidden"
+          rows={aliases}
+          keyExtractor={(alias) => alias.id}
+          emptyMessage="No team aliases configured. Add one to get started."
+          columns={[
+            {
+              key: "alias",
+              header: "Alias",
+              headerClassName: "w-[30%]",
+              mobileTitle: true,
+              cell: (alias) => (
+                <code className="text-sm font-mono bg-muted px-1 rounded">{alias.alias}</code>
+              ),
+            },
+            {
+              key: "team_name",
+              header: "Maps To",
+              headerClassName: "w-[30%]",
+              cell: (alias) => alias.team_name,
+            },
+            {
+              key: "league",
+              header: "League",
+              headerClassName: "w-[20%]",
+              cell: (alias) => <Badge variant="secondary">{alias.league}</Badge>,
+            },
+            {
+              key: "actions",
+              header: "Actions",
+              align: "right",
+              headerClassName: "w-[80px]",
+              mobileLabel: "",
+              cell: (alias) => (
+                <div className="flex items-center justify-end">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setActiveTab("team_aliases")
+                      setDeleteAliasConfirm({ id: alias.id, alias: alias.alias })
+                    }}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+        />
+      )}
+    </CollapsibleSection>
+  )
+
+  // Keyword section — fetches its OWN category's keywords via the hook.
+  const KeywordSection = ({ category }: { category: CategoryType }) => {
+    const query = useDetectionKeywords(category)
+    const sectionKeywords = query.data?.keywords || []
+    const info = categories.find((c) => c.id === category)
+    return (
+      <CollapsibleSection
+        title={TAB_NAMES[category]}
+        count={sectionKeywords.length}
+        actions={<SectionActions category={category} />}
+        persistKey={`detlib-${category}`}
+      >
+        {info && (
+          <p className="text-sm text-muted-foreground mb-2">
+            {info.description}
+            {info.has_target && info.target_description && (
+              <span className="ml-2 text-primary">Target: {info.target_description}</span>
+            )}
+          </p>
+        )}
+        {query.isLoading ? (
+          <div className="flex items-center justify-center rounded-lg border border-border py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <ResponsiveTable
+            className="rounded-lg border border-border overflow-hidden"
+            rows={sectionKeywords}
+            keyExtractor={(kw) => kw.id}
+            rowClassName={(kw) => (!kw.enabled ? "opacity-50" : undefined)}
+            emptyMessage="No keywords in this category. Add one to get started."
+            columns={[
+              {
+                key: "keyword",
+                header: "Keyword/Pattern",
+                headerClassName: "w-[40%]",
+                mobileTitle: true,
+                cell: (kw: DetectionKeyword) => (
+                  <div className="flex flex-col">
+                    <code className="text-sm font-mono bg-muted px-1 rounded">{kw.keyword}</code>
+                    {kw.description && (
+                      <span className="text-xs text-muted-foreground mt-0.5">{kw.description}</span>
+                    )}
+                  </div>
+                ),
+              },
+              info?.has_target
+                ? {
+                    key: "target",
+                    header: "Target",
+                    headerClassName: "w-[20%]",
+                    cell: (kw: DetectionKeyword) =>
+                      kw.target_value ? (
+                        category === "sport_hints" && kw.target_value.startsWith("[") ? (
+                          <div className="flex gap-1 flex-wrap">
+                            {parseSportTarget(kw.target_value).map((s) => (
+                              <Badge key={s} variant="secondary" className="text-xs font-mono">
+                                {s}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <code className="text-sm font-mono">{kw.target_value}</code>
+                        )
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      ),
+                  }
+                : null,
+              {
+                key: "type",
+                header: "Type",
+                headerClassName: "w-[80px]",
+                cell: (kw: DetectionKeyword) => (
+                  <Badge variant={kw.is_regex ? "info" : "secondary"}>
+                    {kw.is_regex ? "regex" : "text"}
+                  </Badge>
+                ),
+              },
+              {
+                key: "priority",
+                header: "Priority",
+                headerClassName: "w-[80px]",
+                cell: (kw: DetectionKeyword) => <span className="text-sm">{kw.priority}</span>,
+              },
+              {
+                key: "status",
+                header: "Status",
+                headerClassName: "w-[80px]",
+                cell: (kw: DetectionKeyword) => (
+                  <Badge variant={kw.enabled ? "success" : "secondary"}>
+                    {kw.enabled ? "On" : "Off"}
+                  </Badge>
+                ),
+              },
+              {
+                key: "actions",
+                header: "Actions",
+                align: "right",
+                headerClassName: "w-[120px]",
+                mobileLabel: "",
+                cell: (kw: DetectionKeyword) => (
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setActiveTab(category)
+                        handleToggleEnabled(kw)
+                      }}
+                      title={kw.enabled ? "Disable" : "Enable"}
+                    >
+                      {kw.enabled ? (
+                        <ToggleRight className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <ToggleLeft className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setActiveTab(category)
+                        openEditDialog(kw, category)
+                      }}
+                      title="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setActiveTab(category)
+                        setDeleteConfirm(kw)
+                      }}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ),
+              },
+            ].filter(Boolean) as ResponsiveColumn<(typeof sectionKeywords)[number]>[]}
+          />
+        )}
+      </CollapsibleSection>
+    )
+  }
+
   if (categoriesQuery.error) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Detection Library</h1>
+        <h1 className="text-2xl font-bold">Matching</h1>
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">
@@ -418,30 +701,12 @@ export function DetectionLibrary() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Detection Library</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage detection patterns and team aliases for stream classification
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-1" />
-            Export
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
-            {isImporting ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4 mr-1" />
-            )}
-            Import
-          </Button>
-          <Button size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4 mr-1" />
-            {activeTab === "team_aliases" ? "Add Alias" : "Add Keyword"}
-          </Button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-xl font-bold shrink-0">Matching</h1>
+        {/* Custom Regex signpost — compact one-liner beside the heading */}
+        <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 px-3 py-1.5 text-xs text-blue-800 dark:text-blue-200 sm:whitespace-nowrap">
+          <span className="font-semibold text-blue-900 dark:text-blue-100">Tip:</span>{" "}
+          per-source <strong>Custom Regex</strong> is your strongest matching lever — set it in Sources.
         </div>
         <input
           ref={fileInputRef}
@@ -452,200 +717,32 @@ export function DetectionLibrary() {
         />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border overflow-x-auto">
-        {TAB_ORDER.map((tabId) => (
-          <button
-            key={tabId}
-            onClick={() => setActiveTab(tabId)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-t transition-colors whitespace-nowrap ${
-              activeTab === tabId
-                ? "bg-card text-foreground border border-border border-b-card -mb-px"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-            }`}
-          >
-            {TAB_NAMES[tabId]}
-          </button>
-        ))}
-      </div>
+      {/* Page-level view nav */}
+      <SubNav
+        items={[
+          { key: "epg_matching", label: "EPG Matching" },
+          { key: "event_lookahead", label: "Event Lookahead" },
+          { key: "custom_rules", label: "Custom Rules" },
+        ]}
+        value={activeView}
+        onChange={(k) =>
+          setActiveView(k as "custom_rules" | "epg_matching" | "event_lookahead")
+        }
+      />
 
-      {/* Tab Description */}
-      <div className="text-sm text-muted-foreground bg-secondary/30 px-3 py-2 rounded">
-        {activeTab === "team_aliases" ? (
-          "Map alternate team names to their official names for better stream matching"
-        ) : activeInfo ? (
-          <>
-            {activeInfo.description}
-            {activeInfo.has_target && activeInfo.target_description && (
-              <span className="ml-2 text-primary">
-                Target: {activeInfo.target_description}
-              </span>
-            )}
-          </>
-        ) : null}
-      </div>
+      {activeView === "epg_matching" && <EpgMatchingSettings />}
 
-      {/* Content */}
-      <div className="border border-border rounded-lg overflow-hidden">
-        {activeTab === "team_aliases" ? (
-          // Aliases Table
-          aliasesQuery.isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : aliases.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No team aliases configured. Add one to get started.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[30%]">Alias</TableHead>
-                  <TableHead className="w-[30%]">Maps To</TableHead>
-                  <TableHead className="w-[20%]">League</TableHead>
-                  <TableHead className="w-[80px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {aliases.map((alias) => (
-                  <TableRow key={alias.id}>
-                    <TableCell>
-                      <code className="text-sm font-mono bg-muted px-1 rounded">
-                        {alias.alias}
-                      </code>
-                    </TableCell>
-                    <TableCell>{alias.team_name}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{alias.league}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setDeleteAliasConfirm({ id: alias.id, alias: alias.alias })}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )
-        ) : (
-          // Keywords Table
-          keywordsQuery.isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : keywords.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No keywords in this category. Add one to get started.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[40%]">Keyword/Pattern</TableHead>
-                  {activeInfo?.has_target && <TableHead className="w-[20%]">Target</TableHead>}
-                  <TableHead className="w-[80px]">Type</TableHead>
-                  <TableHead className="w-[80px]">Priority</TableHead>
-                  <TableHead className="w-[80px]">Status</TableHead>
-                  <TableHead className="w-[120px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {keywords.map((kw) => (
-                  <TableRow key={kw.id} className={!kw.enabled ? "opacity-50" : ""}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <code className="text-sm font-mono bg-muted px-1 rounded">
-                          {kw.keyword}
-                        </code>
-                        {kw.description && (
-                          <span className="text-xs text-muted-foreground mt-0.5">
-                            {kw.description}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    {activeInfo?.has_target && (
-                      <TableCell>
-                        {kw.target_value ? (
-                          activeTab === "sport_hints" && kw.target_value.startsWith("[") ? (
-                            <div className="flex gap-1 flex-wrap">
-                              {parseSportTarget(kw.target_value).map((s) => (
-                                <Badge key={s} variant="secondary" className="text-xs font-mono">{s}</Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <code className="text-sm font-mono">{kw.target_value}</code>
-                          )
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <Badge variant={kw.is_regex ? "info" : "secondary"}>
-                        {kw.is_regex ? "regex" : "text"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{kw.priority}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={kw.enabled ? "success" : "secondary"}>
-                        {kw.enabled ? "On" : "Off"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleToggleEnabled(kw)}
-                          title={kw.enabled ? "Disable" : "Enable"}
-                        >
-                          {kw.enabled ? (
-                            <ToggleRight className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <ToggleLeft className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEditDialog(kw)}
-                          title="Edit"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setDeleteConfirm(kw)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )
-        )}
-      </div>
+      {activeView === "event_lookahead" && <EventLookaheadSetting />}
+
+      {activeView === "custom_rules" && (
+        <div className="space-y-4">
+          <AliasSection />
+          <KeywordSection category="event_type_keywords" />
+          <KeywordSection category="league_hints" />
+          <KeywordSection category="sport_hints" />
+          <KeywordSection category="separators" />
+        </div>
+      )}
 
       {/* Add Keyword Dialog */}
       <Dialog

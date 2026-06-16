@@ -19,6 +19,8 @@ from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
+from teamarr.providers.squiggle import SquiggleClient, SquiggleProvider
+from teamarr.providers.supabase import SupabaseLeagueClient, SupabaseProvider
 from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 
 # =============================================================================
@@ -87,9 +89,23 @@ def _create_hockeytech_provider() -> HockeyTechProvider:
     )
 
 
+def _create_supabase_provider() -> SupabaseProvider:
+    """Factory for Supabase provider with injected dependencies."""
+    return SupabaseProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 def _create_mlbstats_provider() -> MLBStatsProvider:
     """Factory for MLB Stats provider with injected dependencies."""
     return MLBStatsProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
+def _create_squiggle_provider() -> SquiggleProvider:
+    """Factory for Squiggle provider with injected dependencies."""
+    return SquiggleProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
     )
 
@@ -117,10 +133,26 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="supabase",
+    provider_class=SupabaseProvider,
+    factory=_create_supabase_provider,
+    priority=55,  # Supabase-backed leagues (CBL, etc.)
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="mlbstats",
     provider_class=MLBStatsProvider,
     factory=_create_mlbstats_provider,
     priority=40,  # MiLB / Triple-A provider
+    enabled=True,
+)
+
+ProviderRegistry.register(
+    name="squiggle",
+    provider_class=SquiggleProvider,
+    factory=_create_squiggle_provider,
+    priority=30,  # AFL primary provider — free, no key required
     enabled=True,
 )
 
@@ -150,6 +182,12 @@ __all__ = [
     # MLB Stats
     "MLBStatsClient",
     "MLBStatsProvider",
+    # Supabase
+    "SupabaseLeagueClient",
+    "SupabaseProvider",
+    # Squiggle (AFL)
+    "SquiggleClient",
+    "SquiggleProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

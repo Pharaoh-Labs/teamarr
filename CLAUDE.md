@@ -222,9 +222,9 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 | What | Where |
 |------|-------|
 | Version | `pyproject.toml` line 7 |
-| Dependencies | `pyproject.toml` |
+| Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v73) |
+| Schema version | `teamarr/database/schema.sql` (v76) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 
@@ -239,9 +239,10 @@ Provider Layer   → teamarr/providers/ (espn, hockeytech, mlbstats, tsdb)
 
 **Providers** (lower priority = tried first):
 - ESPN (0) - Primary, most leagues
+- Squiggle (30) - AFL (Australian Football League); free, no key required
 - MLB Stats (40) - MiLB (Triple-A through Rookie)
 - HockeyTech (50) - CHL, AHL, PWHL, USHL
-- TSDB (100) - Cricket, Australian sports, rugby, boxing, Scandinavian leagues
+- TSDB (100) - Cricket, rugby, boxing, Scandinavian leagues, uru.2
 
 **Dispatcharr Sync Reliability** (`lifecycle/service.py`):
 All `update_channel` calls go through `_safe_update_channel`, which checks `OperationResult.success` before persisting to local DB. On API failure, the DB stays unchanged so drift is re-detected on the next generation run. Profile sync also compares against Dispatcharr's actual state (`current_channel.channel_profile_ids`) for self-healing. Reconciliation (`reconciliation.py`) detects stream and profile drift as additional drift fields.
@@ -257,6 +258,15 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 **Dynamic Groups** (`teamarr/consumers/lifecycle/dynamic_resolver.py`):
 - `{sport}` and `{league}` wildcards
 - Auto-creates in Dispatcharr
+
+**EPG Program Matching** (epic `teamarrv2-183`, `teamarr/consumers/matching/epg_*.py`):
+- Matches static-named linear channels (ESPN, FS1) to events via Dispatcharr's program guide (`GET /api/epg/programs/search/`, feature-detected, Dispatcharr 0.24.0+), then time-shares one stream across many event channels (attach/detach window per program).
+- Opt-in: per-group `epg_match_enabled` only (no global switch as of eqz/3lp1 — EPG matching is always available; each event-group opts in). Global tuning (attach/detach buffers) lives in Settings → EPG. Per-group flag also sets `skip_builtin` so static names survive filtering.
+- Channel-source mode (183.9, `epg_channel_source_enabled`): additive source from streams curated onto Dispatcharr channels (each channel's own EPG), run as a hidden system group (`is_channel_source`, `ensure_channel_source_group`); excludes Teamarr's own channels and dedupes streams already in EPG-match M3U groups. Candidate builder: `_fetch_channel_source_streams`.
+- `epg_resolver.py` bridges the stream `tvg_id` → program `tvg_id` namespace gap via a cascade: direct tvg_id → curated channel `epg_data_id` → strict name match (does NOT require an EPG-linked channel). `_Teamarr` source excluded.
+- `epg_index.py` fetches by resolved tvg_id, keys by stream tvg_id; `epg_matcher.py` routes program title+sub_title (pipe-joined) through `classify_stream → TeamMatcher`.
+- `MatchMethod.EPG` persisted to `managed_channel_streams.match_method` → drives the `epg_match` stream-ordering rule. EPG-matched groups show an "EPG Matched" badge.
+- Docs: `docs/guide/epg-matching.md`.
 
 ## Plans & Roadmap
 

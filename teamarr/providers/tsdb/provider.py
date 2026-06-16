@@ -36,6 +36,13 @@ class TSDBProvider(SportsProvider):
     # Days to scan backwards for .last variable resolution
     DAYS_BACK = 7
 
+    # Leagues whose schedules TSDB only serves via the full-season endpoint
+    # (eventsday.php / eventsnextleague.php return empty). The season fallback
+    # is gated to these so ordinary leagues with empty individual dates don't
+    # fire a per-date fetch — that's what caused the eventsround.php 404 storm
+    # in GH #217. Add a league here only if confirmed sparse on the day endpoints.
+    SEASON_FALLBACK_LEAGUES = frozenset({"unrivaled"})
+
     # TSDB event `intRound` values that indicate postseason across leagues.
     # Per TheSportsDB documentation (and verified on 2026-04-22 against NBA
     # 2024 Playoffs + NHL 2024 Stanley Cup Final + IPL 2024 playoffs):
@@ -89,7 +96,8 @@ class TSDBProvider(SportsProvider):
         Tries multiple endpoints in order:
         1. eventsday.php - Date-specific (works for most leagues)
         2. eventsnextleague.php - Upcoming events filtered by date
-        3. eventsround.php - Full season events filtered by date (Unrivaled, etc.)
+        3. eventsseason.php - Full season events filtered by date, gated to
+           SEASON_FALLBACK_LEAGUES (sparse leagues like Unrivaled)
         """
         date_str = target_date.strftime("%Y-%m-%d")
 
@@ -118,9 +126,12 @@ class TSDBProvider(SportsProvider):
             if events:
                 return events
 
-        # Final fallback: eventsround.php with round=1 (full season for some leagues)
-        # Works for leagues like Unrivaled where other endpoints return empty
-        data = self._client.get_events_by_round(league)
+        # Final fallback: full-season fetch, filtered by date. Gated to sparse
+        # leagues (Unrivaled) so ordinary leagues with empty dates don't fire a
+        # per-date fetch (GH #217).
+        if league not in self.SEASON_FALLBACK_LEAGUES:
+            return []
+        data = self._client.get_events_by_season(league)
         if data and data.get("events"):
             events = []
             for event_data in data["events"]:
@@ -200,7 +211,7 @@ class TSDBProvider(SportsProvider):
     ) -> list[Event]:
         """Get events for a team on a specific date.
 
-        Uses eventsday first, then eventsround as fallback for leagues
+        Uses eventsday first, then the full-season fallback for sparse leagues
         where eventsday doesn't return data (e.g., Unrivaled).
         """
         date_str = target_date.strftime("%Y-%m-%d")
@@ -215,8 +226,10 @@ class TSDBProvider(SportsProvider):
                     team_events.append(event)
             return team_events
 
-        # Fallback: eventsround for leagues like Unrivaled
-        data = self._client.get_events_by_round(league)
+        # Fallback: full-season fetch, gated to sparse leagues (Unrivaled) — GH #217
+        if league not in self.SEASON_FALLBACK_LEAGUES:
+            return []
+        data = self._client.get_events_by_season(league)
         if data and data.get("events"):
             team_events = []
             for event_data in data["events"]:

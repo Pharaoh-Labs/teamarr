@@ -247,6 +247,29 @@ PROVIDER_PREFIXES: list[str] = [
 
 
 # =============================================================================
+# LIVE-BROADCAST STATUS PREFIXES
+# Status words some feeds prepend to the matchup ("DIRECTO España - Inglaterra").
+# They carry no team information and otherwise leak into the first team. Stripped
+# as whole leading tokens (trailing \b in the matcher). Multi-word forms are
+# listed first so "en directo" is preferred over a bare "directo".
+#
+# English "live" is intentionally excluded: it collides with real team names that
+# start with the word (e.g. "Live Oak FC"), and English feeds rarely need this
+# since English program categories already classify. Non-English status words
+# have no such leading-name collisions.
+# =============================================================================
+
+LIVE_STATUS_PREFIXES: list[str] = [
+    "en directo",  # Spanish
+    "en vivo",  # Spanish (Latin America)
+    "ao vivo",  # Portuguese
+    "directo",  # Spanish
+    "diretta",  # Italian
+    "direkt",  # German / Scandinavian
+]
+
+
+# =============================================================================
 # PLACEHOLDER PATTERNS
 # Regex patterns that identify placeholder/filler streams with no event info.
 # These streams should be classified as PLACEHOLDER and skipped.

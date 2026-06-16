@@ -351,7 +351,12 @@ class TSDBClient:
                 return response.json()
 
             except httpx.HTTPStatusError as e:
-                logger.warning("[TSDB] HTTP %d for %s", e.response.status_code, url)
+                status = e.response.status_code
+                logger.warning("[TSDB] HTTP %d for %s", status, url)
+                # 404 is deterministic — retrying wastes requests and can trip
+                # the rate limiter (see GH #217). Fail fast.
+                if status == 404:
+                    return None
                 if attempt < self._retry_count - 1:
                     time.sleep(self._retry_delay * (attempt + 1))
                     continue
@@ -477,17 +482,39 @@ class TSDBClient:
             self._cache.set(cache_key, result, TSDB_CACHE_TTL_NEXT_EVENTS)
         return result
 
-    def get_events_by_round(
-        self, league: str, round_num: int = 1, season: str | None = None
-    ) -> dict | None:
-        """Fetch events for a specific round of a league season.
+    # ------------------------------------------------------------------
+    # Raw lookups (no DB mapping) — used by custom-league validation (eqz.3),
+    # where the league is not yet a saved row so there is no canonical code to
+    # map. These take the provider's own id/name directly. Not cached: the
+    # test-fetch is a one-shot validation, and caching an unsaved league would
+    # be keyed on nothing useful.
+    # ------------------------------------------------------------------
 
-        Uses eventsround.php with league ID. This works for leagues where
-        eventsday.php and eventsnextleague.php don't return data (e.g., Unrivaled).
+    def lookup_league_raw(self, league_id: str) -> dict | None:
+        """Look up a league by TSDB id (lookupleague.php) → league dict or None.
+
+        The returned dict carries ``strLeague`` and ``strSport``, used to verify
+        the id resolves and to cross-check the user-selected sport.
+        """
+        result = self._request("lookupleague.php", {"id": league_id})
+        leagues = (result or {}).get("leagues") or []
+        return leagues[0] if leagues else None
+
+    def get_next_events_raw(self, league_id: str) -> dict | None:
+        """eventsnextleague.php by raw league ID, no DB mapping."""
+        return self._request("eventsnextleague.php", {"id": league_id})
+
+    def get_events_by_season(self, league: str, season: str | None = None) -> dict | None:
+        """Fetch all events for a league season.
+
+        Uses eventsseason.php with league ID. This works for sparse leagues
+        where eventsday.php and eventsnextleague.php don't return data
+        (e.g., Unrivaled). Replaces the former eventsround.php path, which
+        TheSportsDB has removed — it returns 404 for every league, including
+        TSDB's own documented examples (see GH #217).
 
         Args:
             league: Canonical league code
-            round_num: Round number (default 1 for all events in some leagues)
             season: Season year (e.g., "2026"). Auto-detected if not provided.
 
         Returns:
@@ -501,13 +528,13 @@ class TSDBClient:
             # Use current year for calendar-year leagues
             season = str(date.today().year)
 
-        cache_key = make_cache_key("tsdb", "eventsround", league, round_num, season)
+        cache_key = make_cache_key("tsdb", "eventsseason", league, season)
         cached = self._cache.get(cache_key)
         if cached is not None:
             logger.debug("[TSDB] Cache hit: %s", cache_key)
             return cached
 
-        result = self._request("eventsround.php", {"id": league_id, "r": round_num, "s": season})
+        result = self._request("eventsseason.php", {"id": league_id, "s": season})
         if result:
             # Cache for 2 hours (same as eventsday)
             self._cache.set(cache_key, result, 2 * 60 * 60)

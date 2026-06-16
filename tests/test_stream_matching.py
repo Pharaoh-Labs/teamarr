@@ -17,6 +17,7 @@ from teamarr.core.types import Event, EventStatus, Team
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_team(
     name: str,
     abbreviation: str,
@@ -54,12 +55,14 @@ def _make_event(home: Team, away: Team) -> Event:
 # Abbreviation token matching: _check_abbreviation_match
 # ---------------------------------------------------------------------------
 
+
 class TestCheckAbbreviationMatch:
     """Tests for _check_abbreviation_match via a lightweight TeamMatcher."""
 
     @pytest.fixture
     def matcher(self):
         """Create a TeamMatcher with no service/cache (only need the method)."""
+
         # TeamMatcher.__init__ requires service and cache; mock them minimally
         class _Stub:
             def get(self, *a, **kw):
@@ -232,6 +235,7 @@ class TestCheckAbbreviationMatch:
 # ---------------------------------------------------------------------------
 # Integration: _match_teams_to_event calls abbreviation check first
 # ---------------------------------------------------------------------------
+
 
 class TestMatchTeamsToEventAbbreviationIntegration:
     """Verify _match_teams_to_event tries abbreviation match before fuzzy."""

@@ -12,7 +12,6 @@ import sqlite3
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -131,14 +130,16 @@ def _add_column_if_not_exists(conn, table, column, definition):
 def _run_v59_migration(conn):
     """Run the v59 migration logic (mirrors connection.py)."""
     _add_column_if_not_exists(
-        conn, "settings", "global_channel_mode",
+        conn,
+        "settings",
+        "global_channel_mode",
         "TEXT DEFAULT 'auto' CHECK(global_channel_mode IN ('auto', 'manual'))",
     )
+    _add_column_if_not_exists(conn, "settings", "league_channel_starts", "JSON DEFAULT '{}'")
     _add_column_if_not_exists(
-        conn, "settings", "league_channel_starts", "JSON DEFAULT '{}'"
-    )
-    _add_column_if_not_exists(
-        conn, "settings", "global_consolidation_mode",
+        conn,
+        "settings",
+        "global_consolidation_mode",
         "TEXT DEFAULT 'consolidate'",
     )
 
@@ -227,9 +228,7 @@ class TestV59MigrationAutoMode:
 
     def test_no_groups_defaults_to_auto(self, v58_db):
         _run_v59_migration(v58_db)
-        row = v58_db.execute(
-            "SELECT global_channel_mode FROM settings WHERE id = 1"
-        ).fetchone()
+        row = v58_db.execute("SELECT global_channel_mode FROM settings WHERE id = 1").fetchone()
         assert row[0] == "auto"
 
     def test_auto_groups_stay_auto(self, v58_db):
@@ -238,20 +237,17 @@ class TestV59MigrationAutoMode:
             "VALUES ('NHL', '[\"nhl\"]', 'auto', 1)"
         )
         _run_v59_migration(v58_db)
-        row = v58_db.execute(
-            "SELECT global_channel_mode FROM settings WHERE id = 1"
-        ).fetchone()
+        row = v58_db.execute("SELECT global_channel_mode FROM settings WHERE id = 1").fetchone()
         assert row[0] == "auto"
 
     def test_disabled_manual_groups_ignored(self, v58_db):
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('NFL', '[\"nfl\"]', 'manual', 5001, 0)"
         )
         _run_v59_migration(v58_db)
-        row = v58_db.execute(
-            "SELECT global_channel_mode FROM settings WHERE id = 1"
-        ).fetchone()
+        row = v58_db.execute("SELECT global_channel_mode FROM settings WHERE id = 1").fetchone()
         assert row[0] == "auto"
 
 
@@ -260,72 +256,69 @@ class TestV59MigrationManualMode:
 
     def test_manual_group_sets_global_manual(self, v58_db):
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('NFL', '[\"nfl\"]', 'manual', 5001, 1)"
         )
         _run_v59_migration(v58_db)
-        row = v58_db.execute(
-            "SELECT global_channel_mode FROM settings WHERE id = 1"
-        ).fetchone()
+        row = v58_db.execute("SELECT global_channel_mode FROM settings WHERE id = 1").fetchone()
         assert row[0] == "manual"
 
     def test_league_starts_built_from_manual_groups(self, v58_db):
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('NFL', '[\"nfl\"]', 'manual', 5001, 1)"
         )
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('NBA', '[\"nba\"]', 'manual', 6001, 1)"
         )
         _run_v59_migration(v58_db)
-        row = v58_db.execute(
-            "SELECT league_channel_starts FROM settings WHERE id = 1"
-        ).fetchone()
+        row = v58_db.execute("SELECT league_channel_starts FROM settings WHERE id = 1").fetchone()
         starts = json.loads(row[0])
         assert starts == {"nfl": 5001, "nba": 6001}
 
     def test_lowest_start_wins_for_same_league(self, v58_db):
         """If two groups cover the same league, take the lower start number."""
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('Group A', '[\"nfl\"]', 'manual', 5001, 1)"
         )
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('Group B', '[\"nfl\"]', 'manual', 4001, 1)"
         )
         _run_v59_migration(v58_db)
         starts = json.loads(
-            v58_db.execute(
-                "SELECT league_channel_starts FROM settings WHERE id = 1"
-            ).fetchone()[0]
+            v58_db.execute("SELECT league_channel_starts FROM settings WHERE id = 1").fetchone()[0]
         )
         assert starts["nfl"] == 4001
 
     def test_multi_league_group_applies_start_to_all(self, v58_db):
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('Sports', '[\"nfl\", \"nba\", \"mlb\"]', 'manual', 3001, 1)"
         )
         _run_v59_migration(v58_db)
         starts = json.loads(
-            v58_db.execute(
-                "SELECT league_channel_starts FROM settings WHERE id = 1"
-            ).fetchone()[0]
+            v58_db.execute("SELECT league_channel_starts FROM settings WHERE id = 1").fetchone()[0]
         )
         assert starts == {"nfl": 3001, "nba": 3001, "mlb": 3001}
 
     def test_null_start_number_skipped(self, v58_db):
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('NFL', '[\"nfl\"]', 'manual', NULL, 1)"
         )
         _run_v59_migration(v58_db)
         starts = json.loads(
-            v58_db.execute(
-                "SELECT league_channel_starts FROM settings WHERE id = 1"
-            ).fetchone()[0]
+            v58_db.execute("SELECT league_channel_starts FROM settings WHERE id = 1").fetchone()[0]
         )
         assert starts == {}
 
@@ -369,9 +362,7 @@ class TestV59MigrationSchemaVersion:
 
     def test_version_bumped_to_59(self, v58_db):
         _run_v59_migration(v58_db)
-        row = v58_db.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
+        row = v58_db.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
         assert row[0] == 59
 
 
@@ -380,7 +371,8 @@ class TestV59MigrationIdempotent:
 
     def test_double_migration_safe(self, v58_db):
         v58_db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, channel_assignment_mode, channel_start_number, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, channel_assignment_mode, channel_start_number, enabled) "
             "VALUES ('NFL', '[\"nfl\"]', 'manual', 5001, 1)"
         )
         _run_v59_migration(v58_db)
@@ -423,18 +415,14 @@ class TestChannelNumberingSettings:
     def test_read_separate_consolidation(self, v59_db):
         from teamarr.database.settings.read import get_channel_numbering_settings
 
-        v59_db.execute(
-            "UPDATE settings SET global_consolidation_mode = 'separate' WHERE id = 1"
-        )
+        v59_db.execute("UPDATE settings SET global_consolidation_mode = 'separate' WHERE id = 1")
         settings = get_channel_numbering_settings(v59_db)
         assert settings.global_consolidation_mode == "separate"
 
     def test_read_malformed_json_defaults_empty(self, v59_db):
         from teamarr.database.settings.read import get_channel_numbering_settings
 
-        v59_db.execute(
-            "UPDATE settings SET league_channel_starts = 'not-json' WHERE id = 1"
-        )
+        v59_db.execute("UPDATE settings SET league_channel_starts = 'not-json' WHERE id = 1")
         settings = get_channel_numbering_settings(v59_db)
         assert settings.league_channel_starts == {}
 
@@ -455,9 +443,7 @@ class TestGlobalConsolidationMode:
     def test_returns_separate_when_set(self, v59_db):
         from teamarr.database.channel_numbers import get_global_consolidation_mode
 
-        v59_db.execute(
-            "UPDATE settings SET global_consolidation_mode = 'separate' WHERE id = 1"
-        )
+        v59_db.execute("UPDATE settings SET global_consolidation_mode = 'separate' WHERE id = 1")
         assert get_global_consolidation_mode(v59_db) == "separate"
 
 
@@ -477,7 +463,5 @@ class TestGlobalChannelMode:
     def test_returns_manual_when_set(self, v59_db):
         from teamarr.database.channel_numbers import get_global_channel_mode
 
-        v59_db.execute(
-            "UPDATE settings SET global_channel_mode = 'manual' WHERE id = 1"
-        )
+        v59_db.execute("UPDATE settings SET global_channel_mode = 'manual' WHERE id = 1")
         assert get_global_channel_mode(v59_db) == "manual"

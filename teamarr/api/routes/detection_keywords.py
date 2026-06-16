@@ -191,7 +191,12 @@ def list_categories():
             {
                 "id": "separators",
                 "name": "Separators",
-                "description": "Game separators (vs, @, at)",
+                "description": (
+                    "Matchup delimiters used to split a stream into two teams "
+                    "(built-ins: vs, @, at, x, contra). Add locale-specific ones "
+                    "like ' - ' for 'España - Inglaterra'. Pad with spaces and use "
+                    "sparingly — a bare hyphen can over-split normal titles."
+                ),
                 "has_target": False,
             },
         ]

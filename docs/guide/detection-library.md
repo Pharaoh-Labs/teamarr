@@ -9,7 +9,7 @@ docs_version: "2.3.1"
 
 The Detection Library manages how Teamarr classifies and identifies streams. It contains keywords, patterns, and team aliases that help the stream matcher understand what sport, league, and event a stream belongs to.
 
-The library has four tabs, each handling a different aspect of stream classification.
+The library has five tabs, each handling a different aspect of stream classification.
 
 ## Team Aliases
 
@@ -85,16 +85,34 @@ When entering multiple sports, separate them with commas. They display as indivi
 
 Same as Event Type Detection, plus a **Target** column showing sport name(s) as badges.
 
+## Separators
+
+Matchup delimiters that split a stream name into two teams. Teamarr ships with built-in separators (`vs`, `@`, `at`, `x`, `contra`, and others), and this tab lets you add locale-specific ones your provider uses.
+
+The most common reason to add one is the **hyphen** used by Spanish and other European EPGs:
+
+| Stream name | Needs separator | Result |
+|-------------|-----------------|--------|
+| `España - Inglaterra` | ` - ` | Splits into `España` vs `Inglaterra` |
+
+{: .warning }
+Keep the surrounding spaces (`" - "`, not `"-"`) and add hyphen-style separators sparingly. A bare hyphen with no spaces matches inside ordinary words and hyphenated names, causing streams to be split incorrectly. Teamarr preserves the exact spacing you type for separators.
+
+Separators have no **Target Value** — the field is hidden on this tab.
+
+{: .note }
+Live-broadcast prefixes such as `DIRECTO`, `EN DIRECTO`, `EN VIVO`, `AO VIVO`, `DIRETTA`, and `DIREKT` are stripped automatically during matching, so a stream like `DIRECTO España - Inglaterra` is read as `España - Inglaterra`. You don't need to configure these.
+
 ## Keyword Fields
 
-All keyword tabs (Event Type, League Hints, Sport Hints) share the same create/edit form:
+All keyword tabs (Event Type, League Hints, Sport Hints, Separators) share the same create/edit form:
 
 | Field | Description |
 |-------|-------------|
 | **Keyword/Pattern** | The text or regex to match in stream names |
 | **Regular expression** | Toggle between literal text matching and regex |
 | **Enabled** | Whether this keyword is active |
-| **Target Value** | What the keyword maps to (league code or sport name). Not used for Event Type. |
+| **Target Value** | What the keyword maps to (league code or sport name). Not used for Event Type or Separators. |
 | **Priority** | Numeric priority — higher values are checked first |
 | **Description** | Optional notes about the keyword |
 

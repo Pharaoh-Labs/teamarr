@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "teamarr"
-version = "2.4.5"
+version = "2.7.0"
 description = "Provider-agnostic sports data layer for EPG generation"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,8 @@ dependencies = [
     "rapidfuzz>=3.0.0",
     "croniter>=2.0.0",
     "unidecode>=1.3.0",
+    "pycountry>=23.12.11",
+    "babel>=2.14.0",
 ]
 
 [project.optional-dependencies]

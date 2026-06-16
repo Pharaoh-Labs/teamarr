@@ -77,10 +77,11 @@ class TeamEPGGenerator:
     Champions League, cup competitions, etc.).
     """
 
-    def __init__(self, service: SportsDataService):
+    def __init__(self, service: SportsDataService, art_base_url: str = ""):
         self._service = service
+        self._art_base_url = art_base_url
         self._context_builder = ContextBuilder(service)
-        self._resolver = TemplateResolver()
+        self._resolver = TemplateResolver(art_base_url)
         self._filler_generator = None  # Lazy loaded
 
     def generate_auto_discover(
@@ -432,7 +433,7 @@ class TeamEPGGenerator:
         # Icon: template program_art_url > channel logo > home team logo
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
         if options.template.program_art_url:
-            icon = self._resolver.resolve(options.template.program_art_url, context)
+            icon = self._resolver.resolve_art(options.template.program_art_url, context)
         else:
             icon = logo_url or (event.home_team.logo_url if event.home_team else None)
 
@@ -480,7 +481,7 @@ class TeamEPGGenerator:
 
         # Initialize filler generator if not already done
         if self._filler_generator is None:
-            self._filler_generator = FillerGenerator(self._service)
+            self._filler_generator = FillerGenerator(self._service, self._art_base_url)
 
         # Build filler options from EPG options
         filler_options = FillerOptions(

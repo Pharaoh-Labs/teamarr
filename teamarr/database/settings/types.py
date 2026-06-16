@@ -81,6 +81,20 @@ class EPGSettings:
     midnight_crossover_mode: str = "postgame"
     cron_expression: str = "0 * * * *"
     prepend_postponed_label: bool = True
+    # XC provider EPG fallback (epic crs) — opt-in backup when DP has no mapping
+    epg_xtream_fallback_enabled: bool = False
+    # How long a downloaded XC provider EPG is reused before re-fetching (hours)
+    epg_xtream_cache_hours: int = 24
+    # Dispatcharr-channels as EPG source (epic 183.9) — additive source from curated channels
+    epg_channel_source_enabled: bool = False
+    # Which DP channel groups to include as channel-source candidates (group ids).
+    # Empty = include all (ybt.2). Scopes the scan and drives the sorting rule.
+    epg_channel_source_groups: list[int] = field(default_factory=list)
+    epg_stream_pre_buffer_minutes: int = 60
+    epg_stream_post_buffer_minutes: int = 60
+    # Game-thumbs base URL (epic z02s): optional prefix for relative art paths in
+    # templates. Empty = no prefixing. Absolute (http(s)://) art values bypass it.
+    art_base_url: str = ""
 
 
 @dataclass
@@ -160,9 +174,18 @@ class StreamOrderingRule:
     First matching rule determines the stream's sort position within a channel.
     """
 
-    type: str  # "m3u", "group", "regex"
-    value: str  # Account name, group name, or regex pattern
+    type: str  # "m3u", "group", "regex", "stream_type", "team_feed", "not_team_feed", "catch_all"
+    value: str  # Account name, group name, regex pattern, or team key(s)
     priority: int  # 1-99, lower = higher priority
+
+
+VALID_RULE_TYPES: frozenset[str] = frozenset({
+    "m3u", "group", "regex", "stream_type",
+    "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "catch_all",
+})
+NO_VALUE_RULE_TYPES: frozenset[str] = frozenset(
+    {"team_feed", "not_team_feed", "epg_match", "catch_all"}
+)
 
 
 @dataclass
@@ -270,6 +293,16 @@ class JellyfinSettings:
 
 
 @dataclass
+class ChannelsDVRSettings:
+    """Channels DVR integration settings for M3U + XMLTV refresh."""
+
+    enabled: bool = False
+    url: str | None = None
+    source_name: str | None = None
+    lineup_id: str | None = None
+
+
+@dataclass
 class AllSettings:
     """Complete application settings."""
 
@@ -290,5 +323,6 @@ class AllSettings:
     feed_separation: FeedSeparationSettings = field(default_factory=FeedSeparationSettings)
     emby: EmbySettings = field(default_factory=EmbySettings)
     jellyfin: JellyfinSettings = field(default_factory=JellyfinSettings)
+    channelsdvr: ChannelsDVRSettings = field(default_factory=ChannelsDVRSettings)
     epg_generation_counter: int = 0
     schema_version: int = 52

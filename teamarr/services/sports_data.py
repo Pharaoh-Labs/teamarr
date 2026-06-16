@@ -12,6 +12,7 @@ Uses PersistentTTLCache for all caching:
 
 import logging
 import threading
+from dataclasses import replace
 from datetime import date
 
 from teamarr.core import Event, SportsProvider, Team, TeamStats
@@ -23,6 +24,7 @@ from teamarr.database.provider_cache import (
     stats_to_dict,
     team_to_dict,
 )
+from teamarr.database.team_cache import get_team_identity
 from teamarr.providers import ProviderRegistry
 from teamarr.utilities.cache import (
     CACHE_TTL_SCHEDULE,
@@ -36,6 +38,51 @@ from teamarr.utilities.cache import (
 from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
+
+
+def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
+    """Patch a Team's short_name/abbreviation/name from team_cache when missing.
+
+    Some provider endpoints return degraded team data (e.g. ESPN's summary
+    endpoint omits `shortDisplayName`). team_cache is seeded from each
+    provider's `/teams` endpoint where these fields are reliably populated,
+    so it's the canonical source — fall back to it whenever a field is empty.
+    """
+    if team is None or not team.id:
+        return team
+    if team.short_name and team.abbreviation and team.name:
+        return team
+
+    from teamarr.database import get_db
+
+    try:
+        with get_db() as conn:
+            cached = get_team_identity(conn, team.provider, team.id, league)
+    except Exception as e:
+        logger.debug("[TEAM_BACKFILL] lookup failed for %s/%s: %s", team.provider, team.id, e)
+        return team
+
+    if not cached:
+        return team
+
+    return replace(
+        team,
+        short_name=team.short_name or cached.get("short_name") or "",
+        abbreviation=team.abbreviation or cached.get("abbreviation") or "",
+        name=team.name or cached.get("name") or "",
+        logo_url=team.logo_url or cached.get("logo_url"),
+    )
+
+
+def _enrich_event_teams(event: Event | None) -> Event | None:
+    """Backfill home_team and away_team from team_cache where fields are empty."""
+    if event is None:
+        return event
+    home = _backfill_team_from_cache(event.home_team, event.league)
+    away = _backfill_team_from_cache(event.away_team, event.league)
+    if home is event.home_team and away is event.away_team:
+        return event
+    return replace(event, home_team=home, away_team=away)
 
 
 def _team_dict_is_stale(team_dict: dict | None) -> bool:
@@ -169,7 +216,7 @@ class SportsDataService:
             else:
                 logger.debug("[CACHE_HIT] %s", cache_key)
                 try:
-                    return [dict_to_event(e) for e in cached]
+                    return [_enrich_event_teams(dict_to_event(e)) for e in cached]
                 except (KeyError, TypeError) as e:
                     logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
@@ -188,7 +235,7 @@ class SportsDataService:
                 # Cache ALL results including empty lists to avoid repeated API calls
                 # for leagues with no events on a given day
                 self._cache.set(cache_key, [event_to_dict(e) for e in events], ttl)
-                return events
+                return [_enrich_event_teams(e) for e in events]
         return []
 
     def get_team_schedule(
@@ -214,7 +261,7 @@ class SportsDataService:
             else:
                 logger.debug("[CACHE_HIT] %s", cache_key)
                 try:
-                    return [dict_to_event(e) for e in cached]
+                    return [_enrich_event_teams(dict_to_event(e)) for e in cached]
                 except (KeyError, TypeError) as e:
                     logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
@@ -226,7 +273,7 @@ class SportsDataService:
                     # Serialize to dict before caching
                     serialized = [event_to_dict(e) for e in events]
                     self._cache.set(cache_key, serialized, CACHE_TTL_SCHEDULE)
-                    return events
+                    return [_enrich_event_teams(e) for e in events]
         return []
 
     def get_team(self, team_id: str, league: str) -> Team | None:
@@ -285,7 +332,7 @@ class SportsDataService:
             else:
                 logger.debug("[CACHE_HIT] %s", cache_key)
                 try:
-                    return dict_to_event(cached)
+                    return _enrich_event_teams(dict_to_event(cached))
                 except (KeyError, TypeError) as e:
                     logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
@@ -295,20 +342,40 @@ class SportsDataService:
                 if event:
                     # Serialize to dict before caching
                     self._cache.set(cache_key, event_to_dict(event), CACHE_TTL_SINGLE_EVENT)
-                    return event
+                    return _enrich_event_teams(event)
         return None
 
-    def refresh_event_status(self, event: Event) -> Event:
-        """Refresh event with fresh status from provider.
+    # Fields refreshed onto the original event by refresh_event_status. Anything
+    # not listed here is preserved from the original — teams, start_time, league,
+    # sport, season_type, etc. don't change between fetches and the summary
+    # endpoint may return degraded versions of them (e.g. ESPN omits
+    # shortDisplayName), so overwriting would be destructive, not additive.
+    _REFRESH_FIELDS = (
+        "status",
+        "home_score",
+        "away_score",
+        "broadcasts",
+        "odds_data",
+        "fight_result_method",
+        "finish_round",
+        "finish_time",
+    )
 
-        Invalidates cache first, then fetches fresh data from summary endpoint.
-        Used by filler generation for conditional descriptions (final vs not final).
+    def refresh_event_status(self, event: Event) -> Event:
+        """Overlay fresh status (and other game-state fields) onto event.
+
+        The summary endpoint can return a strict subset of what scoreboard
+        returned — most notably ESPN's summary omits shortDisplayName, so
+        replacing the event wholesale wipes team short_names. This function
+        instead fetches fresh data and overlays only the fields that
+        legitimately change during a game (status, scores, broadcasts,
+        odds, fight result), preserving everything else from the original.
 
         Args:
             event: Event with potentially stale status from schedule/scoreboard cache
 
         Returns:
-            Event with refreshed status (or original if refresh fails)
+            Event with refreshed game-state fields, original team/identity data
         """
         if not event:
             return event
@@ -317,32 +384,36 @@ class SportsDataService:
         cache_key = make_cache_key("event", event.league, event.id)
         self._cache.delete(cache_key)
 
-        # Fetch fresh event data from provider
         fresh_event = self.get_event(event.id, event.league)
-        if fresh_event:
+        if not fresh_event:
             logger.debug(
-                "[REFRESH] event=%s status: %s → %s",
-                event.id,
-                event.status.state if event.status else "N/A",
-                fresh_event.status.state if fresh_event.status else "N/A",
+                "[SPORTS_DATA] Could not refresh event %s, using cached status", event.id
             )
-            # Preserve segment_times from original (summary endpoint doesn't have them)
-            if event.segment_times and not fresh_event.segment_times:
-                fresh_event.segment_times = event.segment_times
-            if event.main_card_start and not fresh_event.main_card_start:
-                fresh_event.main_card_start = event.main_card_start
-            # Preserve season_type when the refresh couldn't resolve it.
-            # ESPN's summary endpoint often omits the 'slug' field on
-            # header.season, so soccer knockouts (semifinals/final/etc.) and
-            # any opaque-type-number league would otherwise lose their
-            # season_type on refresh — silently breaking playoff bypass.
-            if event.season_type and not fresh_event.season_type:
-                fresh_event.season_type = event.season_type
-            return fresh_event
+            return event
 
-        # Return original if refresh fails
-        logger.debug("[SPORTS_DATA] Could not refresh event %s, using cached status", event.id)
-        return event
+        logger.debug(
+            "[REFRESH] event=%s status: %s → %s",
+            event.id,
+            event.status.state if event.status else "N/A",
+            fresh_event.status.state if fresh_event.status else "N/A",
+        )
+
+        # Build the overlay: take each refresh field from the fresh event when
+        # it has a meaningful value, otherwise fall back to the original. This
+        # is what makes the merge additive — an empty/None value in the fresh
+        # response never clobbers data we already had.
+        overlay: dict = {}
+        for field_name in self._REFRESH_FIELDS:
+            fresh_val = getattr(fresh_event, field_name, None)
+            orig_val = getattr(event, field_name, None)
+            if field_name == "status":
+                # Status is the whole point of the refresh — always take fresh
+                # when present, even if state is unchanged (other status fields
+                # like clock/period may have updated).
+                overlay[field_name] = fresh_val if fresh_val is not None else orig_val
+            else:
+                overlay[field_name] = fresh_val if fresh_val else orig_val
+        return replace(event, **overlay)
 
     def get_team_stats(self, team_id: str, league: str) -> TeamStats | None:
         """Get detailed team statistics."""

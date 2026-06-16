@@ -16,6 +16,7 @@ Refactored Jan 2026 for clean separation:
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -131,6 +132,9 @@ class MatchMethod(Enum):
     # Direct assignment (single-league groups)
     DIRECT = "direct"  # Group has single assigned league
 
+    # EPG program-data matching (linear/static-named channels)
+    EPG = "epg"  # Matched via Dispatcharr EPG program title/sub_title
+
 
 # =============================================================================
 # EXCLUDED REASONS - Matched but excluded by lifecycle timing
@@ -186,6 +190,12 @@ class MatchOutcome:
     detected_league: str | None = None
     confidence: float = 0.0  # 0.0 to 1.0, relevant for fuzzy matches
     origin_match_method: str | None = None  # For CACHE hits: original method (e.g., "fuzzy")
+
+    # For EPG matches: the broadcast slot from the EPG program that produced the
+    # match. The lifecycle layer (183.5) uses these as the precise attach/detach
+    # window for time-shared linear streams. None for non-EPG matches.
+    epg_program_start: "datetime | None" = None
+    epg_program_end: "datetime | None" = None
 
     # Common fields
     stream_name: str | None = None
@@ -253,6 +263,8 @@ class MatchOutcome:
         parsed_team1: str | None = None,
         parsed_team2: str | None = None,
         origin_match_method: str | None = None,
+        epg_program_start: datetime | None = None,
+        epg_program_end: datetime | None = None,
     ) -> "MatchOutcome":
         """Create a MATCHED result.
 
@@ -266,6 +278,8 @@ class MatchOutcome:
             parsed_team1: First parsed team name
             parsed_team2: Second parsed team name
             origin_match_method: For CACHE hits, the original method used (e.g., "fuzzy")
+            epg_program_start: For EPG matches, the program's broadcast start
+            epg_program_end: For EPG matches, the program's broadcast end
         """
         return cls(
             category=ResultCategory.MATCHED,
@@ -278,6 +292,8 @@ class MatchOutcome:
             parsed_team1=parsed_team1,
             parsed_team2=parsed_team2,
             origin_match_method=origin_match_method,
+            epg_program_start=epg_program_start,
+            epg_program_end=epg_program_end,
         )
 
     @classmethod

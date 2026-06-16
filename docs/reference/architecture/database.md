@@ -33,7 +33,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 |-------|---------|
 | `settings` | Single-row global configuration (67 columns) |
 | `templates` | EPG title/description/filler templates |
-| `teams` | Team channel configuration (provider, leagues, logo, template) |
+| `teams` | Per-team EPG configuration (provider, leagues, logo, template, XMLTV channel id) |
 | `event_epg_groups` | Event group config (leagues, filters, M3U account, template) |
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
 | `managed_channels` | Channels created in Dispatcharr (tvg_id, delete_at, profiles) |

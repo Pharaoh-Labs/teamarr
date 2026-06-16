@@ -7,7 +7,7 @@ Fix: Pass next_future_event from the caller and use as fallback
 when no same-day game follows the last game.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -18,11 +18,9 @@ from teamarr.consumers.filler.types import (
     FillerConfig,
     FillerOptions,
     FillerTemplate,
-    FillerType,
 )
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.templates.context import TeamChannelContext
-
 
 ET = ZoneInfo("America/New_York")
 
@@ -111,9 +109,7 @@ class TestPostgameNextFallback:
         gen = _make_generator()
 
         # Game today at 1pm ET
-        today_game = _make_event(
-            "401", datetime(2026, 2, 15, 13, 0, tzinfo=ET)
-        )
+        today_game = _make_event("401", datetime(2026, 2, 15, 13, 0, tzinfo=ET))
         # Next game is 3 days later
         future_game = _make_event(
             "402",
@@ -231,9 +227,7 @@ class TestPostgameNextFallback:
         """Postgame filler works even when there's no future event at all."""
         gen = _make_generator()
 
-        today_game = _make_event(
-            "401", datetime(2026, 2, 15, 13, 0, tzinfo=ET)
-        )
+        today_game = _make_event("401", datetime(2026, 2, 15, 13, 0, tzinfo=ET))
 
         config = FillerConfig(
             postgame_enabled=True,
@@ -269,9 +263,7 @@ class TestGenerateDayFillers:
         gen = _make_generator()
 
         # One game today, one game in 3 days
-        today_game = _make_event(
-            "401", datetime(2026, 2, 15, 13, 0, tzinfo=ET)
-        )
+        today_game = _make_event("401", datetime(2026, 2, 15, 13, 0, tzinfo=ET))
         future_game = _make_event(
             "402",
             datetime(2026, 2, 18, 20, 0, tzinfo=ET),

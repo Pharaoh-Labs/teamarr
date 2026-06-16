@@ -8,6 +8,7 @@ from .read import (
     get_all_settings,
     get_backup_settings,
     get_channel_numbering_settings,
+    get_channelsdvr_settings,
     get_dispatcharr_settings,
     get_display_settings,
     get_emby_settings,
@@ -26,6 +27,7 @@ from .types import (
     APISettings,
     BackupSettings,
     ChannelNumberingSettings,
+    ChannelsDVRSettings,
     DispatcharrSettings,
     DisplaySettings,
     DurationSettings,
@@ -46,6 +48,7 @@ from .update import (
     increment_epg_generation_counter,
     update_backup_settings,
     update_channel_numbering_settings,
+    update_channelsdvr_settings,
     update_dispatcharr_settings,
     update_display_settings,
     update_duration_settings,
@@ -64,6 +67,7 @@ from .update import (
 __all__ = [
     # Types
     "DispatcharrSettings",
+    "ChannelsDVRSettings",
     "EmbySettings",
     "JellyfinSettings",
     "LifecycleSettings",
@@ -85,6 +89,7 @@ __all__ = [
     # Read operations
     "get_all_settings",
     "get_dispatcharr_settings",
+    "get_channelsdvr_settings",
     "get_emby_settings",
     "get_jellyfin_settings",
     "get_scheduler_settings",
@@ -100,6 +105,7 @@ __all__ = [
     "get_feed_separation_settings",
     # Update operations
     "update_dispatcharr_settings",
+    "update_channelsdvr_settings",
     "update_emby_settings",
     "update_jellyfin_settings",
     "update_scheduler_settings",

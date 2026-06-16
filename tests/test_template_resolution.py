@@ -97,7 +97,8 @@ class TestTemplateResolution:
 
         add_subscription_template(test_db, template_id=1)  # Default
         add_subscription_template(
-            test_db, template_id=2,
+            test_db,
+            template_id=2,
             leagues=["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"],
         )
 
@@ -137,8 +138,10 @@ class TestTemplateResolution:
 
         add_subscription_template(test_db, template_id=1)  # Default
         add_subscription_template(
-            test_db, template_id=2,
-            sports=["mma"], leagues=["ufc"],
+            test_db,
+            template_id=2,
+            sports=["mma"],
+            leagues=["ufc"],
         )
 
         # UFC should match (league takes priority in resolution)

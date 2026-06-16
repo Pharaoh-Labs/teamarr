@@ -23,6 +23,22 @@ export async function getGroup(groupId: number): Promise<EventGroup> {
   return api.get(`/groups/${groupId}`)
 }
 
+/** A group whose Dispatcharr M3U source channel-group no longer exists (lylt). */
+export interface StaleGroup {
+  id: number
+  name: string
+  display_name: string | null
+  m3u_group_id: number | null
+  m3u_group_name: string | null
+  m3u_account_name: string | null
+  source_last_seen: string | null
+  total_stream_count: number
+}
+
+export async function getStaleGroups(): Promise<StaleGroup[]> {
+  return api.get("/groups/stale")
+}
+
 export async function createGroup(data: EventGroupCreate): Promise<EventGroup> {
   return api.post("/groups", data)
 }

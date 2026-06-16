@@ -4,11 +4,8 @@ Validates that sport hints can map to multiple sports for ambiguous terms
 like 'football' (Soccer + American Football) and 'main card' (MMA + Boxing).
 """
 
-import pytest
-
 from teamarr.consumers.matching.team_matcher import _sport_hint_matches
 from teamarr.services.detection_keywords import _parse_sport_target
-
 
 # ---------------------------------------------------------------------------
 # _parse_sport_target
@@ -155,7 +152,7 @@ class TestStreamFilterMultiSport:
 
     def test_football_not_filtered_as_unsupported(self):
         """'football' matches Soccer + Football, both supported — not filtered."""
-        from teamarr.services.stream_filter import detect_sport_hint, UNSUPPORTED_SPORTS
+        from teamarr.services.stream_filter import UNSUPPORTED_SPORTS, detect_sport_hint
 
         sport = detect_sport_hint("English Football League: Arsenal vs Chelsea")
         # Multi-sport hint — should NOT be filtered since Soccer and Football are supported

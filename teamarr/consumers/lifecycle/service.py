@@ -16,7 +16,7 @@ from teamarr.core import Event
 from teamarr.templates import ContextBuilder, TemplateResolver
 
 from .dynamic_resolver import DynamicResolver
-from .timing import ChannelLifecycleManager
+from .timing import ChannelLifecycleManager, compute_stream_window, is_stream_in_window
 from .types import (
     ChannelCreationResult,
     CreateTiming,
@@ -188,9 +188,12 @@ class ChannelLifecycleService:
         # Structure: {profile_id: {"add": set(channel_ids), "remove": set(channel_ids)}}
         self._pending_profile_changes: dict[int, dict[str, set[int]]] = {}
 
-        # Template engine
+        # Template engine — art_base_url injected so channel-logo reconstruction
+        # matches the EPG icon (epic z02s).
+        from teamarr.utilities.art_url import read_art_base_url
+
         self._context_builder = ContextBuilder(sports_service)
-        self._resolver = TemplateResolver()
+        self._resolver = TemplateResolver(read_art_base_url(db_factory))
 
         # External channel numbers from Dispatcharr (non-Teamarr channels)
         # Computed lazily via compute_external_occupied() and cached for the run
@@ -514,6 +517,15 @@ class ChannelLifecycleService:
 
                 dispatcharr_settings = get_dispatcharr_settings(conn)
 
+                # EPG stream time-windowing buffers (183.5) — global pre-attach /
+                # post-detach minutes applied to a matched EPG program slot.
+                _buf_row = conn.execute(
+                    "SELECT epg_stream_pre_buffer_minutes, epg_stream_post_buffer_minutes "
+                    "FROM settings WHERE id = 1"
+                ).fetchone()
+                epg_pre_buffer = _buf_row["epg_stream_pre_buffer_minutes"] if _buf_row else 60
+                epg_post_buffer = _buf_row["epg_stream_post_buffer_minutes"] if _buf_row else 60
+
                 # Feed separation settings for channel naming
                 feed_settings = get_feed_separation_settings(conn)
                 feed_label_style = (
@@ -567,6 +579,35 @@ class ChannelLifecycleService:
                         # Feed team separation: extract resolved feed team
                         feed_team = matched.get("feed_team")
                         feed_team_id = feed_team.id if feed_team else None
+
+                        # Stream type tag ('event' or 'team') for ordering rules
+                        match_type = matched.get("match_type", "event")
+                        # How the stream matched ('epg', 'fuzzy', …) for the
+                        # epg_match ordering rule.
+                        match_method = matched.get("match_method")
+
+                        # Time-windowed membership (183.5): for EPG-matched linear
+                        # streams, derive attach/detach from the program slot +/-
+                        # buffers. None for name matches → full-life membership.
+                        attach_at, detach_at = compute_stream_window(
+                            matched.get("epg_program_start"),
+                            matched.get("epg_program_end"),
+                            epg_pre_buffer,
+                            epg_post_buffer,
+                        )
+                        if attach_at is not None:
+                            # Diagnostic for time-shared EPG streams: the window
+                            # that gates whether this stream is live right now.
+                            logger.debug(
+                                "[EPG_WINDOW] stream='%s' event=%s window=[%s .. %s] "
+                                "(pre=%dm post=%dm)",
+                                stream_name[:32],
+                                event_id,
+                                attach_at,
+                                detach_at,
+                                epg_pre_buffer,
+                                epg_post_buffer,
+                            )
 
                         # Check if event should be excluded based on timing
                         logger.debug(
@@ -648,6 +689,10 @@ class ChannelLifecycleService:
                                 group_config=group_config,
                                 template=event_template,
                                 segment=segment,
+                                match_type=match_type,
+                                match_method=match_method,
+                                attach_at=attach_at,
+                                detach_at=detach_at,
                             )
                             # None means Dispatcharr channel missing - fall through to create new
                             if channel_result is not None:
@@ -724,6 +769,10 @@ class ChannelLifecycleService:
                             feed_team_id=feed_team_id,
                             feed_team=feed_team,
                             feed_label_style=feed_label_style,
+                            match_type=match_type,
+                            match_method=match_method,
+                            attach_at=attach_at,
+                            detach_at=detach_at,
                         )
 
                         if channel_result.success:
@@ -827,6 +876,10 @@ class ChannelLifecycleService:
         group_config: dict,
         template: dict | None,
         segment: str | None = None,
+        match_type: str = "event",
+        match_method: str | None = None,
+        attach_at: str | None = None,
+        detach_at: str | None = None,
     ) -> StreamProcessResult | None:
         """Handle an existing channel based on duplicate mode.
 
@@ -843,6 +896,7 @@ class ChannelLifecycleService:
             mark_channel_deleted,
             remove_stream_from_channel,
             stream_exists_on_channel,
+            update_stream_window,
         )
 
         result = StreamProcessResult()
@@ -925,6 +979,11 @@ class ChannelLifecycleService:
                     m3u_account_id=stream.get("m3u_account_id"),
                     m3u_account_name=m3u_account_name,
                     source_group_id=source_group_id,
+                    match_type=match_type,
+                    match_method=match_method,
+                    dispatcharr_channel_group=stream.get("dp_channel_group"),
+                    attach_at=attach_at,
+                    detach_at=detach_at,
                 )
 
                 # Sync with Dispatcharr - use ordered stream list to respect rules
@@ -986,6 +1045,17 @@ class ChannelLifecycleService:
                         "channel_name": existing.channel_name,
                     }
                 )
+            elif attach_at is not None and detach_at is not None:
+                # Stream already attached: recompute its EPG time-window from the
+                # fresh program slot + current buffers (183.5 / bead 095) so a
+                # buffer-setting change takes effect on the next run, not only at
+                # first attach. Guarded on a non-None window: don't clobber a
+                # full-life/name-matched stream (None,None) or wipe a window on a
+                # transient EPG miss. Reconciliation re-pushes if membership
+                # changed — no manual Dispatcharr update needed here.
+                update_stream_window(
+                    conn, existing.id, stream_id, attach_at, detach_at
+                )
 
             result.existing.append(
                 {
@@ -1037,6 +1107,10 @@ class ChannelLifecycleService:
         feed_team_id: str | None = None,
         feed_team=None,
         feed_label_style: str | None = None,
+        match_type: str = "event",
+        match_method: str | None = None,
+        attach_at: str | None = None,
+        detach_at: str | None = None,
     ) -> ChannelCreationResult:
         """Create a new channel in DB and Dispatcharr.
 
@@ -1130,10 +1204,32 @@ class ChannelLifecycleService:
                     channel_name,
                     stream_profile_id,
                 )
+                # Window-gate the INITIAL stream membership (bead teamarrv2-uye).
+                # An EPG-matched linear stream carries an attach_at/detach_at slot;
+                # channel creation is event-anchored (create_threshold) and usually
+                # fires hours before the attach window opens. Pushing the stream
+                # live now would ignore the "Attach before" buffer — most visibly
+                # when this is the channel's ONLY source. Create with no streams
+                # when out-of-window; the per-run window sync attaches it once the
+                # window opens. Full-life (name-matched) streams have attach_at=None
+                # and are always included.
+                initial_stream_ids = (
+                    [stream_id] if is_stream_in_window(attach_at, detach_at) else []
+                )
+                if not initial_stream_ids:
+                    logger.info(
+                        "[EPG_WINDOW] ch='%s' event=%s: sole stream %s out of window "
+                        "[%s .. %s] at create — deferring attach until window opens",
+                        channel_name,
+                        event_id,
+                        stream_id,
+                        attach_at,
+                        detach_at,
+                    )
                 create_result = self._channel_manager.create_channel(
                     name=channel_name,
                     channel_number=channel_number,
-                    stream_ids=[stream_id],
+                    stream_ids=initial_stream_ids,
                     tvg_id=tvg_id,
                     channel_group_id=channel_group_id,
                     logo_id=dispatcharr_logo_id,
@@ -1198,6 +1294,11 @@ class ChannelLifecycleService:
                 m3u_account_id=stream.get("m3u_account_id"),
                 m3u_account_name=group_config.get("m3u_account_name"),
                 source_group_id=group_id,
+                match_type=match_type,
+                match_method=match_method,
+                dispatcharr_channel_group=stream.get("dp_channel_group"),
+                attach_at=attach_at,
+                detach_at=detach_at,
             )
 
             # Commit immediately so next channel number query sees this channel
@@ -1436,11 +1537,18 @@ class ChannelLifecycleService:
                 extra_vars = {
                     "exception_keyword": exception_keyword if exception_keyword else "",
                 }
-                return self._resolve_template(
+                resolved = self._resolve_template(
                     logo_url, event, extra_vars, card_segment=segment,
                     feed_team=feed_team,
                 )
-            return logo_url
+            else:
+                resolved = logo_url
+            # Apply the game-thumbs base URL (epic z02s) so the Dispatcharr channel
+            # logo gets the SAME reconstructed URL as the EPG <icon>. Single base
+            # source = the resolver. Idempotent: absolute URLs pass through.
+            from teamarr.utilities.art_url import apply_art_base_url
+
+            return apply_art_base_url(resolved, self._resolver.art_base_url)
 
         return None
 
@@ -1641,10 +1749,16 @@ class ChannelLifecycleService:
                 ch_streams = current_channel.streams
                 current_stream_ids = list(ch_streams) if ch_streams else []
                 if stream_id not in current_stream_ids:
-                    # Stream drift — Dispatcharr is missing a stream the DB expects
+                    # Stream drift — Dispatcharr is missing a stream the DB expects.
+                    # The fix is Dispatcharr-side (push the stream back via update_data);
+                    # DB stream membership lives in managed_channel_streams (written by
+                    # add_stream_to_channel during matching), NOT a column on
+                    # managed_channels. A V1-parity leftover used to write
+                    # db_updates["dispatcharr_stream_id"] here, but that column only
+                    # exists on managed_channel_streams — it raised "no such column" on
+                    # every drift fix and aborted the sync (bead 91l).
                     new_streams = current_stream_ids + [stream_id]
                     update_data["streams"] = new_streams
-                    db_updates["dispatcharr_stream_id"] = stream_id
                     changes_made.append(f"streams: added {stream_id}")
                     self._stream_drift_fix_count += 1
                     logger.info(

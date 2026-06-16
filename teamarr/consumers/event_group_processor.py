@@ -38,7 +38,7 @@ from teamarr.consumers.filler.event_filler import (
     EventFillerResult,
     template_to_event_filler_config,
 )
-from teamarr.consumers.matching import BatchMatchResult, StreamMatcher
+from teamarr.consumers.matching import BatchMatchResult, StreamCategory, StreamMatcher
 from teamarr.core import SEASON_POSTSEASON, Event
 from teamarr.database.groups import (
     EventEPGGroup,
@@ -91,8 +91,9 @@ class ProcessingResult:
     filtered_team: int = 0  # Team not in include/exclude filter
 
     # Stream matching
-    streams_matched: int = 0
-    streams_unmatched: int = 0
+    streams_matched: int = 0  # Distinct streams that matched ≥1 event (coverage)
+    streams_unmatched: int = 0  # Distinct streams with no match (coverage)
+    match_result_count: int = 0  # Total matched results produced (volume; EPG fans out)
     streams_excluded: int = 0  # Matched but excluded by timing (past/final/early)
 
     # Excluded breakdown by reason
@@ -134,6 +135,7 @@ class ProcessingResult:
                 "filtered_exclude": self.filtered_exclude_regex,
                 "matched": self.streams_matched,
                 "unmatched": self.streams_unmatched,
+                "match_results": self.match_result_count,
             },
             "channels": {
                 "created": self.channels_created,
@@ -344,8 +346,12 @@ class EventGroupProcessor:
         self._dispatcharr_client = dispatcharr_client
         self._service = service or create_default_service()
 
-        # EPG generator for XMLTV output
-        self._epg_generator = EventEPGGenerator(self._service)
+        # EPG generator for XMLTV output (art_base_url injected so the resolver
+        # reconstructs game-thumbs URLs — epic z02s).
+        from teamarr.utilities.art_url import read_art_base_url
+
+        self._art_base_url = read_art_base_url(db_factory)
+        self._epg_generator = EventEPGGenerator(self._service, art_base_url=self._art_base_url)
 
         # Shared events cache for cross-group reuse in a single generation run
         # Keys are "league:date" strings, values are (events, was_cache_only) tuples
@@ -538,8 +544,13 @@ class EventGroupProcessor:
                 result.errors.append("No streams found in M3U group")
                 return result
 
-            # Convert DispatcharrStream objects to dict format
-            streams = [{"id": s.id, "name": s.name} for s in raw_streams]
+            # Convert DispatcharrStream objects to dict format. Carry tvg_id so
+            # EPG program matching (which resolves stream -> channel -> programs)
+            # is exercised in preview exactly as in a real generation run.
+            streams = [
+                {"id": s.id, "name": s.name, "tvg_id": s.tvg_id}
+                for s in raw_streams
+            ]
             result.total_streams = len(streams)
 
             # Step 2: Apply stream filtering
@@ -561,8 +572,10 @@ class EventGroupProcessor:
 
             # Step 3: Match streams to events
             match_result = self._match_streams(streams, group, target_date)
-            result.matched_count = match_result.matched_count
-            result.unmatched_count = match_result.unmatched_count
+            # Coverage (distinct streams) so matched + unmatched relates to total streams,
+            # rather than result count which fans out under EPG/TEAM_ONLY matching.
+            result.matched_count = match_result.matched_stream_count
+            result.unmatched_count = match_result.unmatched_stream_count
             result.cache_hits = match_result.cache_hits
             result.cache_misses = match_result.cache_misses
 
@@ -633,6 +646,24 @@ class EventGroupProcessor:
             del self._subscription_leagues_cache
 
         with self._db_factory() as conn:
+            # Sync the system-managed "Dispatcharr Channels" source group (183.9) to
+            # the global setting before loading groups. When enabled it joins the
+            # normal processing loop; when disabled it stays out and its channels are
+            # reaped by the disabled-group cleanup. (EPG matching is always available;
+            # only the channel-source toggle gates this system group.)
+            try:
+                from teamarr.database.groups import ensure_channel_source_group
+
+                _cs_row = conn.execute(
+                    "SELECT epg_channel_source_enabled FROM settings WHERE id = 1"
+                ).fetchone()
+                _channel_source_on = bool(
+                    _cs_row and _cs_row["epg_channel_source_enabled"]
+                )
+                ensure_channel_source_group(conn, _channel_source_on)
+            except Exception as e:
+                logger.warning("[CHANNEL_SOURCE] Failed to sync source group: %s", e)
+
             groups = get_all_groups(conn, include_disabled=False)
             total_groups = len(groups)
             processed_count = 0
@@ -955,10 +986,15 @@ class EventGroupProcessor:
                 status_callback=status_callback,
                 resolved_leagues=effective_leagues,
             )
-            result.streams_matched = match_result.matched_count
-            result.streams_unmatched = match_result.unmatched_count
-            stats_run.streams_matched = match_result.matched_count
-            stats_run.streams_unmatched = match_result.unmatched_count
+            # Coverage = distinct streams; volume = total matched results (EPG/TEAM_ONLY
+            # fan one stream out to many results, which is why the old result-count
+            # numerator pushed match rate over 100%).
+            result.streams_matched = match_result.matched_stream_count
+            result.streams_unmatched = match_result.unmatched_stream_count
+            result.match_result_count = match_result.matched_count
+            stats_run.streams_matched = match_result.matched_stream_count
+            stats_run.streams_unmatched = match_result.unmatched_stream_count
+            stats_run.extra_metrics["match_results"] = match_result.matched_count
             stats_run.streams_cached = match_result.cache_hits
 
             # Count matcher-level exclusions (matched but excluded by league/event_final)
@@ -1115,6 +1151,7 @@ class EventGroupProcessor:
                 group.id,
                 stream_count=result.streams_after_filter,
                 matched_count=result.streams_matched,
+                match_result_count=result.match_result_count,
                 filtered_stale=result.filtered_stale,
                 filtered_include_regex=result.filtered_include_regex,
                 filtered_exclude_regex=result.filtered_exclude_regex,
@@ -1143,11 +1180,16 @@ class EventGroupProcessor:
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
         """Fetch M3U streams from Dispatcharr for the group.
 
-        Uses group's m3u_group_id to filter streams.
+        Uses group's m3u_group_id to filter streams. The system-managed
+        channel-source group (183.9) instead draws its candidates from the
+        streams curated onto Dispatcharr channels.
         """
         if not self._dispatcharr_client:
             logger.warning("[EVENT_EPG] Dispatcharr not configured - cannot fetch streams")
             return []
+
+        if getattr(group, "is_channel_source", False):
+            return self._fetch_channel_source_streams()
 
         try:
             m3u_manager = self._dispatcharr_client.m3u
@@ -1180,6 +1222,135 @@ class EventGroupProcessor:
         except Exception as e:
             logger.error("[EVENT_EPG] Failed to fetch streams: %s", e)
             return []
+
+    def _fetch_channel_source_streams(self) -> list[dict]:
+        """Build EPG-match candidates from streams curated onto Dispatcharr channels.
+
+        Epic 183.9. For each Dispatcharr channel that (a) carries an active,
+        non-``_Teamarr`` EPG link and (b) is NOT one of Teamarr's own managed
+        output channels, emit a candidate per assigned stream tagged with the
+        CHANNEL's own EPG ``tvg_id`` — so the existing resolver/index path matches
+        that channel's programs to events and attaches its streams. Teamarr's
+        channels are OUTPUT, not INPUT, so they are excluded.
+        """
+        client = self._dispatcharr_client
+        try:
+            stream_channel_map = client.channels.get_stream_channel_map()
+            epg_data_list = client.channels.get_epg_data_list()
+        except Exception as e:
+            logger.warning("[CHANNEL_SOURCE] Failed to load channel/EPG data: %s", e)
+            return []
+
+        active_source_ids = self._active_epg_source_ids()
+        epg_by_id = {e["id"]: e for e in epg_data_list if e.get("id") is not None}
+
+        # Teamarr's own managed channels are OUTPUT — never treat them as a source.
+        # Also collect the M3U group ids already covered by an EPG-match-enabled
+        # group: streams in those groups are matched by the per-group path (whose
+        # tier-1 resolution uses the same channel EPG), so including them here would
+        # double-process the identical match. Consolidation would dedupe the result
+        # anyway, but skipping avoids wasted work and inflated source-group stats.
+        managed_ids: set[int] = set()
+        epg_group_m3u_ids: set[int] = set()
+        # User-selected DP channel groups to scope the scan (ybt.2). Empty = all.
+        # Scoping skips the expensive EPG-resolution/matching for channels in
+        # groups the user didn't pick — a generation-time saving.
+        selected_groups: set[int] = set()
+        try:
+            from teamarr.database.channels import get_all_managed_channels
+            from teamarr.database.groups import get_all_groups
+            from teamarr.database.settings import get_epg_settings
+
+            with self._db_factory() as conn:
+                managed_ids = {
+                    mc.dispatcharr_channel_id
+                    for mc in get_all_managed_channels(conn, include_deleted=False)
+                    if mc.dispatcharr_channel_id
+                }
+                epg_group_m3u_ids = {
+                    g.m3u_group_id
+                    for g in get_all_groups(conn, include_disabled=False)
+                    if g.epg_match_enabled and not g.is_channel_source and g.m3u_group_id
+                }
+                selected_groups = {
+                    int(gid) for gid in get_epg_settings(conn).epg_channel_source_groups
+                }
+        except Exception as e:
+            logger.warning("[CHANNEL_SOURCE] Failed to load managed/group ids: %s", e)
+
+        # Stream detail (name, account) keyed by id — listed once.
+        try:
+            detail_by_id = {s.id: s for s in client.m3u.list_streams()}
+        except Exception as e:
+            logger.warning("[CHANNEL_SOURCE] Failed to list streams: %s", e)
+            detail_by_id = {}
+
+        candidates: list[dict] = []
+        seen: set[int] = set()
+        skipped_teamarr = 0
+        skipped_overlap = 0
+        skipped_group = 0
+        for stream_id, ch in stream_channel_map.items():
+            if ch.get("id") in managed_ids:
+                skipped_teamarr += 1
+                continue
+            # Scope to user-selected DP channel groups (ybt.2). Checked early so we
+            # skip the EPG lookups/matching for undesired groups entirely.
+            dp_group_id = ch.get("channel_group_id")
+            if selected_groups and dp_group_id not in selected_groups:
+                skipped_group += 1
+                continue
+            eid = ch.get("effective_epg_data_id") or ch.get("epg_data_id")
+            ed = epg_by_id.get(eid)
+            if not ed or not ed.get("tvg_id"):
+                continue
+            if active_source_ids is not None and ed.get("epg_source") not in active_source_ids:
+                continue
+            if stream_id in seen:
+                continue
+            detail = detail_by_id.get(stream_id)
+            # Dedupe: an EPG-match-enabled M3U group already handles this stream.
+            if (
+                epg_group_m3u_ids
+                and detail is not None
+                and getattr(detail, "channel_group_id", None) in epg_group_m3u_ids
+            ):
+                skipped_overlap += 1
+                continue
+            seen.add(stream_id)
+            candidates.append(
+                {
+                    "id": stream_id,
+                    "name": (getattr(detail, "name", None) if detail else None)
+                    or ch.get("name")
+                    or "",
+                    # Tag with the channel's own EPG tvg_id so resolve/index use its guide.
+                    "tvg_id": ed["tvg_id"],
+                    "tvg_name": getattr(detail, "tvg_name", None) if detail else None,
+                    "channel_group": getattr(detail, "channel_group", None) if detail else None,
+                    "channel_group_id": getattr(detail, "channel_group_id", None)
+                    if detail
+                    else None,
+                    # The DP CHANNEL's own group (channel organization), distinct from
+                    # the M3U stream group above — drives scoping + the sorting rule.
+                    "dp_channel_group_id": dp_group_id,
+                    "dp_channel_group": ch.get("channel_group_name"),
+                    "m3u_account_id": getattr(detail, "m3u_account_id", None) if detail else None,
+                    "is_stale": getattr(detail, "is_stale", False) if detail else False,
+                }
+            )
+
+        candidates.sort(key=lambda s: s["id"])
+        logger.info(
+            "[CHANNEL_SOURCE] built %d candidate stream(s) from curated DP channels "
+            "(excluded %d Teamarr-managed, %d already in EPG-match groups, "
+            "%d outside selected groups)",
+            len(candidates),
+            skipped_teamarr,
+            skipped_overlap,
+            skipped_group,
+        )
+        return candidates
 
     def _filter_streams(
         self,
@@ -1217,7 +1388,19 @@ class EventGroupProcessor:
             # Group-specific team extraction
             custom_teams_regex=group.custom_regex_teams,
             custom_teams_enabled=group.custom_regex_teams_enabled,
-            skip_builtin=group.skip_builtin_filter,
+            # team_streams_enabled and epg_match_enabled both implicitly skip builtin
+            # filtering — team-branded streams ("NHL | Maple Leafs") and static-named
+            # linear channels ("ESPN", "NBA1") have no vs/@ separator and would
+            # otherwise be rejected by the placeholder/event-pattern filter before the
+            # matcher ever sees them. EPG matching needs those linear streams to survive
+            # so it can match them via program data. The classifier/matcher gate what
+            # actually matches, so passing extra streams through is harmless.
+            skip_builtin=(
+                group.skip_builtin_filter
+                or group.team_streams_enabled
+                or group.epg_match_enabled
+            ),
+            team_streams_enabled=group.team_streams_enabled,
         )
 
         stream_filter = StreamFilter(config)
@@ -1356,11 +1539,18 @@ class EventGroupProcessor:
         # Load settings for event filtering
         with self._db_factory() as conn:
             row = conn.execute(
-                "SELECT include_final_events FROM settings WHERE id = 1"
+                "SELECT include_final_events, "
+                "epg_xtream_fallback_enabled, epg_xtream_cache_hours, "
+                "event_match_days_back, event_match_days_ahead "
+                "FROM settings WHERE id = 1"
             ).fetchone()
             include_final_events = (
                 bool(row["include_final_events"]) if row else False
             )
+            xtream_fallback = bool(row["epg_xtream_fallback_enabled"]) if row else False
+            xtream_cache_hours = (row["epg_xtream_cache_hours"] if row else 24) or 24
+            match_days_back = (row["event_match_days_back"] if row else 7) or 7
+            match_days_ahead = (row["event_match_days_ahead"] if row else 3) or 3
 
             # Load feed separation settings
             feed_settings = get_feed_separation_settings(conn)
@@ -1368,6 +1558,15 @@ class EventGroupProcessor:
             feed_away_terms = feed_settings.away_terms if feed_settings.enabled else None
 
         sport_durations = self._load_sport_durations_cached()
+
+        # EPG program-data matching (epic 183.6): build a scoped program index
+        # ONLY when this group opted in (group.epg_match_enabled). Default off →
+        # epg_index is None → matcher behaves exactly as before.
+        epg_index = self._build_epg_index(
+            group, streams, target_date,
+            match_days_back, match_days_ahead, xtream_fallback,
+            xtream_cache_hours,
+        )
 
         # Search all known leagues (broad match), include only subscribed.
         # This preserves legacy multi-league behavior: streams are matched
@@ -1405,6 +1604,8 @@ class EventGroupProcessor:
             stream_timezone=group.stream_timezone,  # TZ for interpreting stream dates
             feed_home_terms=feed_home_terms,
             feed_away_terms=feed_away_terms,
+            team_streams_enabled=group.team_streams_enabled,
+            epg_index=epg_index,
         )
 
         result = matcher.match_all(
@@ -1418,6 +1619,167 @@ class EventGroupProcessor:
         matcher.purge_stale()
 
         return result
+
+    def _build_epg_index(
+        self,
+        group,
+        streams: list[dict],
+        target_date: date,
+        match_days_back: int,
+        match_days_ahead: int,
+        xtream_fallback: bool = False,
+        xtream_cache_hours: int = 24,
+    ):
+        """Build a scoped EPGProgramIndex for EPG matching, or None if disabled.
+
+        Gated on: per-group opt-in + a connected Dispatcharr.
+
+        A raw M3U stream's tvg_id is usually a different namespace from EPG
+        program tvg_ids, so we resolve each candidate stream to its EPG-source
+        tvg_id via a cascade (direct tvg_id -> curated channel epg_data_id ->
+        strict name match; see epg_resolver). This does NOT require the stream to
+        be pre-built into an EPG-linked Dispatcharr channel. Programs are fetched
+        by the resolved tvg_id but indexed by the stream tvg_id for matcher
+        lookup.
+        """
+        if not group.epg_match_enabled:
+            return None
+        if not self._dispatcharr_client:
+            return None
+
+        if not any(s.get("tvg_id") for s in streams):
+            return None
+
+        from datetime import datetime, time
+
+        from teamarr.consumers.matching.epg_index import EPGProgramIndex
+        from teamarr.consumers.matching.epg_resolver import resolve_program_tvg_ids
+        from teamarr.utilities.tz import get_user_timezone, to_utc
+
+        # Resolve stream tvg_ids -> EPG-source tvg_ids. Needs the EPGData catalog
+        # (for direct + name matching) and the stream->channel map (for the
+        # curated channel fallback). Both are single scoped fetches.
+        try:
+            epg_data_list = self._dispatcharr_client.channels.get_epg_data_list()
+            stream_channels = self._dispatcharr_client.channels.get_stream_channel_map()
+        except Exception as e:
+            logger.warning("[EPG-MATCH] Failed to load EPG resolution data: %s", e)
+            return None
+
+        # Direct/name matching must only use the ACTIVE imported EPG (curated
+        # channel links are trusted regardless). _Teamarr (our own output) is
+        # excluded so we never resolve a stream to our generated guide.
+        active_source_ids = self._active_epg_source_ids()
+        resolution, _stats = resolve_program_tvg_ids(
+            streams, epg_data_list, stream_channels, active_source_ids=active_source_ids
+        )
+
+        # Window mirrors the event match window so programs overlapping any
+        # candidate event are indexed. Localize to the user's timezone before
+        # converting to UTC (to_utc rejects naive datetimes).
+        day_start = datetime.combine(target_date, time.min, tzinfo=get_user_timezone())
+        window_start = to_utc(day_start - timedelta(days=match_days_back))
+        window_end = to_utc(day_start + timedelta(days=match_days_ahead + 1))
+
+        try:
+            index = (
+                EPGProgramIndex.build(
+                    self._dispatcharr_client.epg, resolution, window_start, window_end
+                )
+                if resolution
+                else EPGProgramIndex({})
+            )
+        except Exception as e:
+            logger.warning("[EPG-MATCH] Failed to build EPG index for group %s: %s", group.id, e)
+            index = EPGProgramIndex({})
+
+        # Cascade layer 4 (epic crs): for streams the curated DP guide produced
+        # NO programs for (unresolved, or resolved to an empty mirror channel),
+        # fall back to the provider's OWN xmltv when the group's M3U account is
+        # Xtream. Source-matched, so the stream tvg_id IS the guide channel id.
+        # Opt-in via the global epg_xtream_fallback_enabled setting.
+        if xtream_fallback:
+            self._add_xtream_epg_fallback(
+                index, group, streams, window_start, window_end, xtream_cache_hours
+            )
+
+        if not index:
+            logger.info("[EPG-MATCH] group=%s no programs indexed (DP guide + xtream)", group.id)
+            return None
+        logger.info(
+            "[EPG-MATCH] group=%s indexed %d programs across %d tvg_ids",
+            group.id, index.program_count(), len(index.tvg_ids()),
+        )
+        return index
+
+    def _active_epg_source_ids(self) -> set[int] | None:
+        """Enabled EPG-source ids for name/direct matching (excludes _Teamarr).
+
+        Returns None on failure so the resolver falls back to the full catalog
+        rather than matching nothing.
+        """
+        try:
+            sources = self._dispatcharr_client.client.paginated_get(
+                "/api/epg/sources/", error_context="epg sources"
+            )
+        except Exception as e:
+            logger.debug("[EPG-MATCH] active-source lookup failed: %s", e)
+            return None
+        active = {
+            s["id"]
+            for s in sources
+            if s.get("id") is not None and s.get("is_active") and s.get("name") != "_Teamarr"
+        }
+        return active or None
+
+    def _add_xtream_epg_fallback(
+        self, index, group, streams, window_start, window_end, cache_hours: int = 24
+    ) -> None:
+        """Fill EPG-index gaps from the group's Xtream provider's own xmltv (crs).
+
+        No-op unless the group's M3U account is an Xtream panel. Fetches the
+        provider's xmltv.php (cached) only for stream tvg_ids the DP guide left
+        without programs, and merges them in (the curated guide keeps priority).
+        Best-effort: any failure leaves the DP-built index untouched.
+        """
+        from teamarr.consumers.matching.epg_xtream import (
+            fetch_xtream_programs,
+            is_xtream_account,
+            xmltv_url,
+        )
+
+        account_id = getattr(group, "m3u_account_id", None)
+        if not account_id:
+            return
+        try:
+            resp = self._dispatcharr_client.client.get(f"/api/m3u/accounts/{account_id}/")
+            account = resp.json() if resp is not None and resp.status_code == 200 else None
+        except Exception as e:
+            logger.debug("[XTREAM-EPG] group=%s account fetch failed: %s", group.id, e)
+            return
+        if not is_xtream_account(account):
+            return
+
+        already = set(index.tvg_ids())
+        wanted = {s.get("tvg_id") for s in streams if s.get("tvg_id")} - already
+        if not wanted:
+            return
+
+        programs = fetch_xtream_programs(
+            xmltv_url(account),
+            cache_key=f"acct{account_id}",
+            wanted_tvg_ids=wanted,
+            window_start=window_start,
+            window_end=window_end,
+            ttl_seconds=max(1, cache_hours) * 3600,
+        )
+        if programs:
+            added = index.merge(programs)
+            logger.info(
+                "[XTREAM-EPG] group=%s account=%s filled %d tvg_ids (%d programs) "
+                "from provider xmltv for %d DP-unmatched streams",
+                group.id, account_id, len(programs), added, len(wanted),
+            )
 
     def _load_sport_durations_cached(self) -> dict[str, float]:
         """Load sport durations (cached for reuse within a run)."""
@@ -1457,6 +1819,18 @@ class EventGroupProcessor:
                             "event": result.event,
                             "card_segment": result.card_segment,  # UFC segment from classifier
                             "feed_hint": result.feed_hint,  # "home", "away", or None
+                            "match_type": (
+                                "team" if result.category == StreamCategory.TEAM_ONLY else "event"
+                            ),
+                            # How the stream matched ('epg', 'fuzzy', …) for the
+                            # epg_match stream-ordering rule.
+                            "match_method": (
+                                result.match_method.value if result.match_method else None
+                            ),
+                            # EPG time-windowing (183.5): program broadcast slot for
+                            # MatchMethod.EPG matches; None for name matches (full-life).
+                            "epg_program_start": result.epg_program_start,
+                            "epg_program_end": result.epg_program_end,
                         }
                     )
 
@@ -1528,28 +1902,48 @@ class EventGroupProcessor:
         """
         import re
 
-        for team in (home_team, away_team):
-            candidates = [team.name]
-            if team.short_name and team.short_name != team.name:
-                candidates.append(team.short_name)
-            if team.abbreviation and len(team.abbreviation) >= 3:
-                candidates.append(team.abbreviation)
+        def _get_candidates(t) -> list[str]:
+            c = [t.name.lower()]
+            if t.short_name and t.short_name.lower() != t.name.lower():
+                c.append(t.short_name.lower())
+            if t.abbreviation and len(t.abbreviation) >= 3:
+                c.append(t.abbreviation.lower())
+            return c
 
+        home_candidates = _get_candidates(home_team)
+        away_candidates = _get_candidates(away_team)
+
+        for team, candidates, other_candidates in [
+            (home_team, home_candidates, away_candidates),
+            (away_team, away_candidates, home_candidates),
+        ]:
             for candidate in candidates:
-                esc = re.escape(candidate.lower())
+                esc = re.escape(candidate)
                 # Team in parentheses: "(Penguins)" or "(Penguins Feed)"
                 if re.search(rf"\(\s*{esc}(?:\s+feed)?\s*\)", stream_name_lower):
                     return team
-                # Feed/broadcast keyword: "Penguins Feed", "Feed: Penguins"
-                if re.search(rf"\b{esc}\s+(?:feed|broadcast)\b", stream_name_lower):
-                    return team
-                if re.search(rf"\b(?:feed|broadcast)[:\s]+{esc}\b", stream_name_lower):
-                    return team
-                # Home/away adjacent: "Penguins Home", "Home Penguins"
-                if re.search(rf"\b{esc}\s+(?:home|away)\b", stream_name_lower):
-                    return team
-                if re.search(rf"\b(?:home|away)\s+{esc}\b", stream_name_lower):
-                    return team
+
+                patterns = [
+                    rf"\b{esc}\s+(?:feed|broadcast)\b",
+                    rf"\b(?:feed|broadcast)[:\s]+{esc}\b",
+                    rf"\b{esc}\s+(?:home|away)\b",
+                    rf"\b(?:home|away)\s+{esc}\b",
+                ]
+
+                for pattern in patterns:
+                    for match in re.finditer(pattern, stream_name_lower):
+                        remainder = stream_name_lower[match.end():]
+
+                        # Skip when the opposing team is named *after* the feed
+                        # keyword — that's a shared matchup feed ("4K FEED A B"),
+                        # not a team-specific feed.
+                        other_team_after = any(
+                            re.search(rf"\b{re.escape(other)}\b", remainder)
+                            for other in other_candidates
+                        )
+
+                        if not other_team_after:
+                            return team
 
         return None
 
@@ -2412,8 +2806,13 @@ class EventGroupProcessor:
                 )
 
         # Convert to XMLTV
+        from teamarr.database.settings import get_epg_settings
+
+        art_base_url = get_epg_settings(conn).art_base_url
         channel_dicts = [{"id": ch.channel_id, "name": ch.name, "icon": ch.icon} for ch in channels]
-        xmltv_content = programmes_to_xmltv(programmes, channel_dicts)
+        xmltv_content = programmes_to_xmltv(
+            programmes, channel_dicts, art_base_url=art_base_url
+        )
 
         filler_total = pregame_count + postgame_count
         logger.info(
@@ -2463,7 +2862,7 @@ class EventGroupProcessor:
         """
         from teamarr.config import get_user_timezone
 
-        filler_generator = EventFillerGenerator(self._service)
+        filler_generator = EventFillerGenerator(self._service, art_base_url=self._art_base_url)
         result = EventFillerResult()
 
         # Get configured timezone

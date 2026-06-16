@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Alert } from "@/components/ui/alert"
 import { cn, getSportDisplayName, getLeagueDisplayName } from "@/lib/utils"
 import { SelectedBadges, type BadgeItem } from "@/components/ui/selected-badges"
 import type { CachedLeague } from "@/api/teams"
@@ -230,10 +231,13 @@ export function LeaguePicker({
 
       {/* Premium key warning */}
       {selectedPremiumWithoutKey && (
-        <div className="text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded px-3 py-2">
-          <Crown className="h-3 w-3 inline mr-1" />
+        <Alert
+          variant="warning"
+          className="text-xs"
+          icon={<Crown className="h-3 w-3" />}
+        >
           Premium leagues need a TSDB API key for full event coverage. Add one in Settings &gt; System.
-        </div>
+        </Alert>
       )}
 
       {/* League picker by sport */}

@@ -23,6 +23,13 @@ export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+// Latin letters including common accents (Western + Central European) so
+// accented team names — Atlético, Bayern München, Plzeň, São Paulo — are
+// captured, not just ASCII. Ranges: ASCII, Latin-1 letters (À-ÿ minus the ×/÷
+// math symbols), and Latin Extended-A (Ā-ž) for Czech/Polish/etc.
+const TEAM_CHARS = "A-Za-zÀ-ÖØ-öø-ÿĀ-ž"
+const TEAM_BODY = `[${TEAM_CHARS}][${TEAM_CHARS} .'-]+[${TEAM_CHARS}.]`
+
 /**
  * Attempt to generalize a literal selection into a broader pattern.
  *
@@ -40,8 +47,9 @@ function generalizeForField(
   switch (field) {
     case "team1":
     case "team2":
-      // Team names: letters, spaces, dots, hyphens, apostrophes (no digits — avoids grabbing dates)
-      return "([A-Za-z][A-Za-z .'-]+[A-Za-z.])"
+      // Team names: letters (accent-inclusive), spaces, dots, hyphens,
+      // apostrophes (no digits — avoids grabbing dates)
+      return `(${TEAM_BODY})`
 
     case "date":
       // Date: digits, slashes, dashes, spaces, month names
@@ -104,7 +112,8 @@ function generalizeForField(
  *
  * @param selection - What the user selected and labeled
  * @param streamName - The full stream name the selection came from
- * @returns A Python-syntax regex string with named group, or null if generation fails
+ * @returns A regex string with a JS-syntax named group ((?<name>...)), or null
+ *   if generation fails. The form converts it to Python on save (PR #236).
  */
 export function generatePattern(
   selection: TextSelection,
@@ -119,7 +128,7 @@ export function generatePattern(
 
   // Build an anchor from the immediate surrounding context
   const captureGroup = generalizeForField(field, text, streamName, before, after)
-  const namedGroup = `(?P<${field}>${captureGroup.slice(1, -1)})`
+  const namedGroup = `(?<${field}>${captureGroup.slice(1, -1)})`
 
   // Find a stable anchor before the selection
   // Look for the nearest separator or keyword before the text
@@ -176,7 +185,7 @@ export function generatePattern(
 
 /**
  * Build a combined teams regex from two separate selections.
- * Produces: (?P<team1>...) separator (?P<team2>...)
+ * Produces: (?<team1>...) separator (?<team2>...)
  */
 export function generateTeamsPattern(
   team1Text: string,
@@ -208,8 +217,8 @@ export function generateTeamsPattern(
     separator = "\\s+(?:vs\\.?|v\\.?|@|at)\\s+"
   }
 
-  const team1Group = "(?P<team1>[A-Za-z][A-Za-z .'-]+[A-Za-z.])"
-  const team2Group = "(?P<team2>[A-Za-z][A-Za-z .'-]+[A-Za-z.])"
+  const team1Group = `(?<team1>${TEAM_BODY})`
+  const team2Group = `(?<team2>${TEAM_BODY})`
 
   return team1Group + separator + team2Group
 }

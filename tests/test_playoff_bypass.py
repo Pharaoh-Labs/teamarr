@@ -44,6 +44,7 @@ from teamarr.templates.variables.playoffs import (
 
 # --- Helpers ---
 
+
 def _team(provider: str = "espn", league: str = "nhl", sport: str = "hockey") -> Team:
     return Team(
         id="1",
@@ -93,6 +94,7 @@ def _ctx_for(event: Event) -> tuple[TemplateContext, GameContext]:
 
 
 # --- ESPN: _parse_season_type ---
+
 
 class TestESPNParseSeasonType:
     def setup_method(self) -> None:
@@ -144,6 +146,7 @@ class TestESPNParseSeasonType:
 
 
 # --- ESPN: get_event summary-path regression for #197 ---
+
 
 class TestESPNSummaryEndpointSeasonPassthrough:
     """Regression test for the root cause of #197.
@@ -210,6 +213,7 @@ class TestESPNSummaryEndpointSeasonPassthrough:
 
 # --- MLBStats: _GAMETYPE_CANONICAL ---
 
+
 class TestMLBStatsGameTypeCanonical:
     @pytest.mark.parametrize(
         "code,expected",
@@ -235,6 +239,7 @@ class TestMLBStatsGameTypeCanonical:
 
 
 # --- HockeyTech: _parse_season_type ---
+
 
 class TestHockeyTechParseSeasonType:
     def setup_method(self) -> None:
@@ -312,9 +317,7 @@ class TestTSDBParseSeasonType:
     """
 
     def setup_method(self) -> None:
-        self.provider = TSDBProvider(
-            league_mapping_source=MagicMock(), client=MagicMock()
-        )
+        self.provider = TSDBProvider(league_mapping_source=MagicMock(), client=MagicMock())
 
     @pytest.mark.parametrize(
         "round_code",
@@ -350,6 +353,7 @@ class TestTSDBParseSeasonType:
 
 
 # --- Template variables: strict canonical comparison ---
+
 
 class TestPlayoffTemplateVariables:
     @pytest.mark.parametrize(
@@ -387,6 +391,7 @@ class TestPlayoffTemplateVariables:
 
 
 # --- Consumer: filter bypass uses canonical constant ---
+
 
 class TestFilterBypassUsesCanonicalConstant:
     """Verify the event_group_processor filter bypass uses SEASON_POSTSEASON.

@@ -5,6 +5,24 @@ All types are frozen dataclasses for immutability and hashability.
 """
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    """Parse a Dispatcharr ISO8601 timestamp to an aware UTC datetime.
+
+    Handles the trailing "Z" form (e.g. "2026-06-01T00:00:00Z"). Returns
+    None for missing or unparseable values. Naive results are assumed UTC.
+    """
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
 
 
 @dataclass(frozen=True)
@@ -133,6 +151,80 @@ class DispatcharrEPGData:
             icon_url=data.get("icon_url"),
             epg_source_id=data.get("epg_source"),
         )
+
+
+@dataclass(frozen=True)
+class DispatcharrProgram:
+    """An EPG program returned by /api/epg/programs/search/.
+
+    Represents a single guide entry on a tvg_id's timeline. The endpoint
+    embeds the channels and streams that carry this program; we keep their
+    ids so the matcher (epic teamarrv2-183) can link a program back to the
+    Dispatcharr stream that airs it.
+
+    Requires a Dispatcharr build that exposes the program-search endpoint;
+    callers must feature-detect via EPGManager.supports_program_search()
+    before relying on these results.
+    """
+
+    id: int
+    tvg_id: str
+    title: str
+    start_time: str | None = None  # ISO8601 (e.g. "2026-06-01T00:00:00Z")
+    end_time: str | None = None
+    sub_title: str | None = None
+    description: str | None = None
+    epg_source: str | None = None  # source name; "_Teamarr" = our own generated EPG
+    epg_name: str | None = None
+    epg_icon_url: str | None = None
+    # custom_properties.categories — e.g. ("Sports", "Sports event", "Baseball").
+    # Used by the matcher to distinguish real games ("Sports event") from
+    # studio/talk ("Sports non-event") and replays ("Classic Sport Event").
+    # Often absent/empty in sloppy EPG, so it is a precision signal, not a gate.
+    categories: tuple[str, ...] = field(default_factory=tuple)
+    stream_ids: tuple[int, ...] = field(default_factory=tuple)
+    channel_ids: tuple[int, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_api(cls, data: dict) -> "DispatcharrProgram":
+        """Create from API response dict."""
+        streams = data.get("streams") or []
+        channels = data.get("channels") or []
+        stream_ids = tuple(s["id"] for s in streams if isinstance(s, dict) and "id" in s)
+        channel_ids = tuple(c["id"] for c in channels if isinstance(c, dict) and "id" in c)
+        props = data.get("custom_properties") or {}
+        raw_cats = props.get("categories") if isinstance(props, dict) else None
+        categories = tuple(str(c) for c in raw_cats) if isinstance(raw_cats, list) else ()
+        return cls(
+            id=data["id"],
+            tvg_id=data.get("tvg_id", ""),
+            title=data.get("title", ""),
+            start_time=data.get("start_time"),
+            end_time=data.get("end_time"),
+            sub_title=data.get("sub_title"),
+            description=data.get("description"),
+            epg_source=data.get("epg_source"),
+            epg_name=data.get("epg_name"),
+            epg_icon_url=data.get("epg_icon_url"),
+            categories=categories,
+            stream_ids=stream_ids,
+            channel_ids=channel_ids,
+        )
+
+    @property
+    def start_dt(self) -> "datetime | None":
+        """Parse start_time to an aware datetime, or None if unparseable."""
+        return _parse_iso(self.start_time)
+
+    @property
+    def end_dt(self) -> "datetime | None":
+        """Parse end_time to an aware datetime, or None if unparseable."""
+        return _parse_iso(self.end_time)
+
+    @property
+    def is_teamarr(self) -> bool:
+        """True if this program came from Teamarr's own generated EPG source."""
+        return self.epg_source == "_Teamarr"
 
 
 @dataclass(frozen=True)

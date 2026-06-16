@@ -160,6 +160,32 @@ Template resolution happens in three places that **must stay in sync**:
 
 When adding new template variables, all three paths must be updated.
 
+## Art URL Reconstruction (game-thumbs base URL)
+
+Art/icon fields (`program_art_url`, `event_channel_logo_url`, and filler
+`art_url`) can store **relative paths** (e.g. `/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png`).
+A single configured **base URL** (`settings.art_base_url`, set in EPG → Output →
+Game Thumbs) is prefixed onto them at resolution time so the deployment-specific
+host:port lives in one place. See [Game Thumbs](../../guide/game-thumbs) and the
+[Gracenote-modeled template design](gracenote-template-design).
+
+The reconstruction is centralized so it reaches **every** consumer identically:
+
+| Piece | Role |
+|-------|------|
+| `utilities/art_url.py` → `apply_art_base_url(value, base)` | the single join helper — prefixes the base onto relative values; absolute URLs (`scheme://…`) pass through unchanged; **idempotent** |
+| `TemplateResolver.resolve_art(template, ctx)` | the one art entry point — `resolve()` then `apply_art_base_url()`; `art_base_url` injected via the resolver constructor |
+| `utilities/art_url.py` → `read_art_base_url(db_factory)` | reads the setting once; processors inject it into each resolver |
+
+Every art sink calls `resolve_art` (or the shared helper): EPG programme `<icon>`
+and channel `<icon>` (event/team EPG + `xmltv.py` as an idempotent safety net),
+Dispatcharr channel logos (`lifecycle/service._resolve_logo_url`), and fillers.
+This guarantees the EPG icon and the Dispatcharr channel logo never diverge.
+
+**Migrations:** v75 deduces the most-frequent art origin from existing templates
+and relativizes them; v76 normalizes relative paths to a leading slash;
+`create_template`/`update_template` keep new art relative on write.
+
 ## File Locations
 
 | File | Purpose |
@@ -171,3 +197,5 @@ When adding new template variables, all three paths must be updated.
 | `templates/variables/` | 17 category modules with 207 variable definitions |
 | `templates/variables/registry.py` | VariableRegistry singleton |
 | `templates/sample_data.py` | Test fixtures for UI preview |
+| `utilities/art_url.py` | Game-thumbs base URL join helper + reader (`apply_art_base_url`, `read_art_base_url`) |
+| `utilities/xmltv.py` | XMLTV serialization (applies art base as an idempotent safety net) |

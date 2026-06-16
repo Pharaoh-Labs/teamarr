@@ -85,7 +85,7 @@ When no teams or templates are configured, the dashboard displays a getting star
 
 1. **Configure Settings** - Connect to Dispatcharr, set EPG output path and timezone
 2. **Create Templates** - Define title/description formats using variables
-3. **Add Teams** - Import teams for team-based EPG (one channel per team)
-4. **Create Event Groups** - Import stream groups from Dispatcharr for event-based EPG (dynamic channels)
+3. **Add Teams** - Import teams for team-based EPG (one XMLTV channel per team — wire it to one of your existing Dispatcharr channels)
+4. **Create Event Groups** - Import stream groups from Dispatcharr for event-based EPG (Teamarr creates dynamic channels per matched game)
 
 Each step links directly to the relevant page. Once you have at least one template and either teams or event groups configured, the getting started guide is replaced by the statistics quadrants and generation history.

@@ -15,19 +15,13 @@ from teamarr.services.sports_data import _event_dict_is_stale, _team_dict_is_sta
 
 class TestTeamDictStaleness:
     def test_populated_team_is_fresh(self):
-        assert not _team_dict_is_stale(
-            {"name": "Philadelphia Phillies", "short_name": "Phillies"}
-        )
+        assert not _team_dict_is_stale({"name": "Philadelphia Phillies", "short_name": "Phillies"})
 
     def test_team_with_name_but_no_short_name_is_stale(self):
-        assert _team_dict_is_stale(
-            {"name": "Philadelphia Phillies", "short_name": ""}
-        )
+        assert _team_dict_is_stale({"name": "Philadelphia Phillies", "short_name": ""})
 
     def test_team_with_name_but_null_short_name_is_stale(self):
-        assert _team_dict_is_stale(
-            {"name": "Philadelphia Phillies", "short_name": None}
-        )
+        assert _team_dict_is_stale({"name": "Philadelphia Phillies", "short_name": None})
 
     def test_team_with_name_but_missing_short_name_key_is_stale(self):
         assert _team_dict_is_stale({"name": "Philadelphia Phillies"})

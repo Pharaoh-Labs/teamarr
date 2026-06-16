@@ -22,6 +22,7 @@ from teamarr.consumers.matching.constants import (
     HIGH_CONFIDENCE_THRESHOLD,
     MATCH_WINDOW_DAYS,
 )
+from teamarr.consumers.matching.epg_index import EPGProgramIndex
 from teamarr.consumers.matching.event_matcher import (
     EventCardMatcher,
     EventMatchContext,
@@ -81,4 +82,6 @@ __all__ = [
     # EventCardMatcher
     "EventCardMatcher",
     "EventMatchContext",
+    # EPG program index
+    "EPGProgramIndex",
 ]

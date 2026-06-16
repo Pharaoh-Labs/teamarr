@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react"
 import { toast } from "sonner"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
+import { Alert } from "@/components/ui/alert"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Trash2,
@@ -9,8 +11,6 @@ import {
   Tv,
   Search,
   AlertTriangle,
-  ChevronDown,
-  ChevronRight,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -100,13 +100,12 @@ function getSyncStatusBadge(status: string) {
   }
 }
 
-export function Channels() {
+export function ManagedChannelsTable() {
   // Filter states
   const [nameFilter, setNameFilter] = useState<string>("")
   const [sportFilter, setSportFilter] = useState<string>("")
   const [leagueFilter, setLeagueFilter] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("")
-  const [includeDeleted, setIncludeDeleted] = useState(false)
 
   // UI states
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
@@ -119,7 +118,6 @@ export function Channels() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetExecuting, setResetExecuting] = useState(false)
   const [resetChannels, setResetChannels] = useState<ResetChannelInfo[]>([])
-  const [deletedCollapsed, setDeletedCollapsed] = useState(true)
 
   const queryClient = useQueryClient()
 
@@ -136,7 +134,7 @@ export function Channels() {
     isLoading,
     error,
     refetch,
-  } = useManagedChannels(undefined, includeDeleted)
+  } = useManagedChannels(undefined, false)
   const { data: pendingData } = usePendingDeletions()
 
   // Fetch all channels including deleted for the Recently Deleted section
@@ -399,34 +397,35 @@ export function Channels() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Managed Channels</h1>
-          <p className="text-sm text-muted-foreground">
-            Event-based channels managed by Teamarr
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              refetchReconciliation()
-              setOrphansModalOpen(true)
-            }}
-          >
-            <Search className="h-4 w-4 mr-1" />
-            Find Orphans
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleOpenResetModal}
-          >
-            <AlertTriangle className="h-4 w-4 mr-1" />
-            Reset All
-          </Button>
-        </div>
+      <CollapsibleSection
+        title="Managed Channels"
+        icon={<Tv className="h-5 w-5 text-muted-foreground" />}
+        count={`(${channelsData?.channels.length ?? 0})`}
+        persistKey="channels.active"
+      >
+
+      {/* Section actions — live inside the collapsible body so they only show
+          when the section is expanded. */}
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            refetchReconciliation()
+            setOrphansModalOpen(true)
+          }}
+        >
+          <Search className="h-4 w-4 mr-1" />
+          Find Orphans
+        </Button>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={handleOpenResetModal}
+        >
+          <AlertTriangle className="h-4 w-4 mr-1" />
+          Reset All
+        </Button>
       </div>
 
       {/* Fixed Batch Operations Bar */}
@@ -481,25 +480,16 @@ export function Channels() {
       {/* Channels List */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Tv className="h-5 w-5" />
-              Channels ({filteredChannels.length}
-              {filteredChannels.length !== (channelsData?.channels.length ?? 0) && (
-                <span className="text-muted-foreground font-normal">
-                  {" "}of {channelsData?.channels.length ?? 0}
-                </span>
-              )}
-              )
-            </CardTitle>
-            <label className="flex items-center gap-2 text-sm font-normal cursor-pointer">
-              <Checkbox
-                checked={includeDeleted}
-                onCheckedChange={(checked) => setIncludeDeleted(!!checked)}
-              />
-              <span>Show deleted</span>
-            </label>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Tv className="h-5 w-5" />
+            Channels ({filteredChannels.length}
+            {filteredChannels.length !== (channelsData?.channels.length ?? 0) && (
+              <span className="text-muted-foreground font-normal">
+                {" "}of {channelsData?.channels.length ?? 0}
+              </span>
+            )}
+            )
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -671,24 +661,16 @@ export function Channels() {
         </CardContent>
       </Card>
 
+      </CollapsibleSection>
+
       {/* Recently Deleted */}
       {deletedChannels.length > 0 && (
-        <Card>
-          <CardHeader
-            className="pb-2 cursor-pointer select-none hover:bg-muted/50 transition-colors"
-            onClick={() => setDeletedCollapsed(!deletedCollapsed)}
-          >
-            <CardTitle className="text-base flex items-center gap-2">
-              {deletedCollapsed ? (
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              Recently Deleted ({deletedChannels.length})
-            </CardTitle>
-          </CardHeader>
-          {!deletedCollapsed && <CardContent>
+        <CollapsibleSection
+          title="Recently Deleted"
+          icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+          count={`(${deletedChannels.length})`}
+          persistKey="channels.deleted"
+        >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -744,8 +726,7 @@ export function Channels() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>}
-        </Card>
+        </CollapsibleSection>
       )}
 
       {/* Delete Confirmation */}
@@ -938,17 +919,14 @@ export function Channels() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                  <p className="text-sm font-medium text-destructive">
-                    ⚠️ Warning: Destructive Action
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                <Alert variant="destructive" title="⚠️ Warning: Destructive Action">
+                  <p className="text-sm text-muted-foreground">
                     This will permanently delete {resetChannels.length} channel
                     {resetChannels.length > 1 ? "s" : ""} from Dispatcharr that have{" "}
                     <code className="text-xs bg-muted px-1 py-0.5 rounded">teamarr-event-*</code>{" "}
                     tvg_id.
                   </p>
-                </div>
+                </Alert>
                 <div className="max-h-[40vh] overflow-y-auto">
                   <Table>
                     <TableHeader>

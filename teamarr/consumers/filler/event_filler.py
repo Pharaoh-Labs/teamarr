@@ -106,9 +106,9 @@ class EventFillerGenerator:
         )
     """
 
-    def __init__(self, service: SportsDataService | None = None):
+    def __init__(self, service: SportsDataService | None = None, art_base_url: str = ""):
         self._service = service
-        self._resolver = TemplateResolver()
+        self._resolver = TemplateResolver(art_base_url)
         # Cache for team stats to avoid redundant API calls within a generation run
         self._stats_cache: dict[tuple[str, str], TeamStats | None] = {}
 
@@ -322,7 +322,11 @@ class EventFillerGenerator:
 
             # Resolve art URL if present
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
-            icon = self._resolver.resolve(template.art_url, context) if template.art_url else None
+            icon = (
+                self._resolver.resolve_art(template.art_url, context)
+                if template.art_url
+                else None
+            )
 
             # Filler categories come from the template's xmltv_filler_categories
             # (independent from event categories). Empty list = no <category> tags.

@@ -283,3 +283,19 @@ input[type="number"] {
   font-size: 0.6875rem;
   margin-left: 0.25rem;
 }
+
+/* Animations */
+.animate-slide-down {
+  animation: slide-down 0.2s ease-out forwards;
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

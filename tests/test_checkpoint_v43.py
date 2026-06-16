@@ -11,15 +11,10 @@ from pathlib import Path
 import pytest
 
 from teamarr.database.checkpoint_v43 import (
-    SETTINGS_COLUMNS_V43,
-    EVENT_EPG_GROUPS_COLUMNS_V43,
-    INDEXES_V43,
-    apply_checkpoint_v43,
     _get_table_columns,
     _table_exists,
-    _index_exists,
+    apply_checkpoint_v43,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -486,30 +481,26 @@ class TestDataTransformations:
 
         # Insert old rugby sports
         conn.execute(
-            "INSERT OR REPLACE INTO sports (sport_code, display_name) VALUES ('rugby_league', 'Rugby League')"
+            "INSERT OR REPLACE INTO sports (sport_code, display_name) "
+            "VALUES ('rugby_league', 'Rugby League')"
         )
         conn.execute(
-            "INSERT OR REPLACE INTO sports (sport_code, display_name) VALUES ('rugby_union', 'Rugby Union')"
+            "INSERT OR REPLACE INTO sports (sport_code, display_name) "
+            "VALUES ('rugby_union', 'Rugby Union')"
         )
         conn.commit()
 
         apply_checkpoint_v43(conn, 42)
 
         # Old entries should be gone
-        row = conn.execute(
-            "SELECT * FROM sports WHERE sport_code = 'rugby_league'"
-        ).fetchone()
+        row = conn.execute("SELECT * FROM sports WHERE sport_code = 'rugby_league'").fetchone()
         assert row is None
 
-        row = conn.execute(
-            "SELECT * FROM sports WHERE sport_code = 'rugby_union'"
-        ).fetchone()
+        row = conn.execute("SELECT * FROM sports WHERE sport_code = 'rugby_union'").fetchone()
         assert row is None
 
         # New unified entry should exist
-        row = conn.execute(
-            "SELECT display_name FROM sports WHERE sport_code = 'rugby'"
-        ).fetchone()
+        row = conn.execute("SELECT display_name FROM sports WHERE sport_code = 'rugby'").fetchone()
         assert row is not None
         assert row["display_name"] == "Rugby"
 
@@ -633,9 +624,9 @@ class TestFullMigrationPath:
 
         _run_migrations(conn)
 
-        # Should now be at latest schema version (v43 checkpoint + v44-v73 migrations)
+        # Should now be at latest schema version (v43 checkpoint + v44-v74 migrations)
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 73
+        assert row["schema_version"] == 76
 
 
 if __name__ == "__main__":

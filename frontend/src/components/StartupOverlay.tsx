@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { Loader2 } from "lucide-react"
+import { Alert } from "@/components/ui/alert"
 
 interface StartupStatus {
   phase: string
@@ -99,9 +100,9 @@ export function StartupOverlay() {
 
         {/* Error State */}
         {status?.error && (
-          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md max-w-sm">
-            <p className="text-sm text-destructive">{status.error}</p>
-          </div>
+          <Alert variant="destructive" className="mt-4 max-w-sm">
+            {status.error}
+          </Alert>
         )}
       </div>
     </div>

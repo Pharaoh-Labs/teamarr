@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Loader2, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,16 +9,110 @@ import {
   type HierarchicalItem,
   type GroupedItem,
 } from "@/components/ui/hierarchical-sortable"
+import { TeamPicker } from "@/components/TeamPicker"
 import {
   useSortPriorities,
   useReorderSortPriorities,
   useAutoPopulateSortPriorities,
+  usePriorityTeams,
+  useAddPriorityTeam,
+  useDeletePriorityTeam,
 } from "@/hooks/useSortPriorities"
 import type { SortPriorityReorderItem } from "@/api/sortPriorities"
+import type { TeamFilterEntry } from "@/api/types"
+import { getTeamPickerLeagues } from "@/api/teams"
 
 interface SortPriorityManagerProps {
   showWhenSortBy?: string
   currentSortBy: string
+}
+
+/** Stable identity for a team across PriorityTeam ↔ TeamFilterEntry. */
+function teamKey(provider: string, teamId: string, league: string | null | undefined): string {
+  return `${provider}:${teamId}:${league ?? ""}`
+}
+
+/**
+ * Priority Teams — a team-level tier that floats a followed team's channels to
+ * the top of the global channel list, ahead of sport/league/time ordering.
+ * Reuses TeamPicker: the saved list IS the picker's selection; add/remove diff
+ * against the server list and fire the matching mutation.
+ */
+function PriorityTeamsCard() {
+  const { data: priorityTeams, isLoading } = usePriorityTeams()
+  const addMutation = useAddPriorityTeam()
+  const deleteMutation = useDeletePriorityTeam()
+
+  // Offer teams from every league that has cached teams.
+  const { data: leagueData } = useQuery({
+    queryKey: ["teamPickerLeagues"],
+    queryFn: getTeamPickerLeagues,
+    staleTime: 5 * 60 * 1000,
+  })
+  const leagues = useMemo(
+    () => (leagueData?.leagues ?? []).filter((l) => l.team_count > 0).map((l) => l.slug),
+    [leagueData],
+  )
+
+  const selectedTeams: TeamFilterEntry[] = useMemo(
+    () =>
+      (priorityTeams ?? []).map((t) => ({
+        provider: t.provider,
+        team_id: t.provider_team_id,
+        league: t.league ?? "",
+        name: t.team_name,
+      })),
+    [priorityTeams],
+  )
+
+  const handleChange = async (next: TeamFilterEntry[]) => {
+    const current = priorityTeams ?? []
+    const nextKeys = new Set(next.map((t) => teamKey(t.provider, t.team_id, t.league)))
+    const currentKeys = new Set(
+      current.map((t) => teamKey(t.provider, t.provider_team_id, t.league)),
+    )
+
+    const added = next.filter((t) => !currentKeys.has(teamKey(t.provider, t.team_id, t.league)))
+    const removed = current.filter(
+      (t) => !nextKeys.has(teamKey(t.provider, t.provider_team_id, t.league)),
+    )
+
+    try {
+      await Promise.all([
+        ...added.map((t) => addMutation.mutateAsync(t)),
+        ...removed.map((t) => deleteMutation.mutateAsync(t.id)),
+      ])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update priority teams")
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Priority Teams</CardTitle>
+        <CardDescription>
+          Channels for these teams float to the top of the channel list, before any
+          sport/league/time ordering. A team floats up wherever it plays. Ordering only —
+          unrelated to the Teams page or EPG.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <TeamPicker
+            leagues={leagues}
+            selectedTeams={selectedTeams}
+            onSelectionChange={handleChange}
+            placeholder="Add a priority team…"
+          />
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 export function SortPriorityManager({ showWhenSortBy = "sport_league_time", currentSortBy }: SortPriorityManagerProps) {
@@ -130,39 +225,42 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-base">Sort Priority Order</CardTitle>
-            <CardDescription>
-              Drag sports to reorder. Expand to reorder leagues within each sport.
-            </CardDescription>
+    <div className="space-y-4">
+      <PriorityTeamsCard />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Sort Priority Order</CardTitle>
+              <CardDescription>
+                Drag sports to reorder. Expand to reorder leagues within each sport.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAutoPopulate}
+              disabled={autoPopulateMutation.isPending}
+            >
+              {autoPopulateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Wand2 className="h-4 w-4 mr-1" />
+              )}
+              Auto-populate
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAutoPopulate}
-            disabled={autoPopulateMutation.isPending}
-          >
-            {autoPopulateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Wand2 className="h-4 w-4 mr-1" />
-            )}
-            Auto-populate
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <HierarchicalSortable
-          items={items}
-          onReorder={handleReorder}
-          renderGroupExtra={renderGroupExtra}
-          renderChildExtra={renderChildExtra}
-          emptyMessage="No sort priorities configured. Click 'Auto-populate' to add all active sports/leagues."
-        />
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent>
+          <HierarchicalSortable
+            items={items}
+            onReorder={handleReorder}
+            renderGroupExtra={renderGroupExtra}
+            renderChildExtra={renderChildExtra}
+            emptyMessage="No sort priorities configured. Click 'Auto-populate' to add all active sports/leagues."
+          />
+        </CardContent>
+      </Card>
+    </div>
   )
 }

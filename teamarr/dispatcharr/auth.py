@@ -5,7 +5,9 @@ and session management for Dispatcharr API integration.
 """
 
 import logging
+import re
 import threading
+import time
 from datetime import datetime, timedelta
 
 import httpx
@@ -32,6 +34,8 @@ class TokenManager:
     # Class-level session storage for multi-instance support
     # Key: "{url}_{username}" -> session dict
     _sessions: dict[str, dict] = {}
+    _session_locks: dict[str, threading.Lock] = {}
+    _registry_lock = threading.Lock()
 
     # Token refresh buffer (refresh this many minutes before expiry)
     TOKEN_REFRESH_BUFFER_MINUTES = 1
@@ -59,15 +63,20 @@ class TokenManager:
         self._password = password
         self._timeout = timeout
         self._session_key = f"{self._base_url}_{self._username}"
-        self._lock = threading.Lock()
-
-        # Initialize session if not exists
-        if self._session_key not in self._sessions:
-            self._sessions[self._session_key] = {
-                "access_token": None,
-                "refresh_token": None,
-                "token_expiry": None,
-            }
+        # Initialize shared session state and lock if they do not exist.
+        # Multiple DispatcharrClient instances can be created during concurrent
+        # API requests, so auth locking must be shared per URL/user pair.
+        with self._registry_lock:
+            if self._session_key not in self._sessions:
+                self._sessions[self._session_key] = {
+                    "access_token": None,
+                    "refresh_token": None,
+                    "token_expiry": None,
+                    "auth_retry_after": None,
+                }
+            if self._session_key not in self._session_locks:
+                self._session_locks[self._session_key] = threading.Lock()
+            self._lock = self._session_locks[self._session_key]
 
     @property
     def _session(self) -> dict:
@@ -87,6 +96,15 @@ class TokenManager:
             if self._is_valid():
                 return self._session["access_token"]
 
+            retry_after = self._session.get("auth_retry_after")
+            if retry_after and datetime.now() < retry_after:
+                wait_seconds = (retry_after - datetime.now()).total_seconds()
+                logger.warning("[AUTH] Waiting %.1fs for authentication throttle", wait_seconds)
+                time.sleep(max(0.0, wait_seconds))
+
+                if self._is_valid():
+                    return self._session["access_token"]
+
             # Try to refresh token
             if self._session["refresh_token"] and self._refresh():
                 return self._session["access_token"]
@@ -103,6 +121,7 @@ class TokenManager:
             self._session["access_token"] = None
             self._session["refresh_token"] = None
             self._session["token_expiry"] = None
+            self._session["auth_retry_after"] = None
 
     def _is_valid(self) -> bool:
         """Check if current access token is still valid."""
@@ -131,6 +150,7 @@ class TokenManager:
             if response.status_code == 200:
                 data = response.json()
                 self._session["access_token"] = data.get("access")
+                self._session["auth_retry_after"] = None
                 self._session["token_expiry"] = datetime.now() + timedelta(
                     minutes=self.TOKEN_VALIDITY_MINUTES - self.TOKEN_REFRESH_BUFFER_MINUTES
                 )
@@ -166,6 +186,7 @@ class TokenManager:
                 data = response.json()
                 self._session["access_token"] = data.get("access")
                 self._session["refresh_token"] = data.get("refresh")
+                self._session["auth_retry_after"] = None
                 self._session["token_expiry"] = datetime.now() + timedelta(
                     minutes=self.TOKEN_VALIDITY_MINUTES - self.TOKEN_REFRESH_BUFFER_MINUTES
                 )
@@ -180,6 +201,14 @@ class TokenManager:
                 logger.error("[AUTH] Forbidden: %s", response.text)
                 return False
 
+            if response.status_code == 429:
+                wait_seconds = self._parse_retry_delay(response)
+                self._session["auth_retry_after"] = datetime.now() + timedelta(
+                    seconds=wait_seconds
+                )
+                logger.error("[AUTH] Throttled; retry after %.1fs", wait_seconds)
+                return False
+
             logger.error("[AUTH] Failed: %d - %s", response.status_code, response.text)
             return False
 
@@ -187,7 +216,28 @@ class TokenManager:
             logger.error("[AUTH] Request failed: %s", e)
             return False
 
+    def _parse_retry_delay(self, response: httpx.Response) -> float:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(1.0, float(retry_after))
+            except ValueError:
+                pass
+
+        try:
+            detail = response.json().get("detail", "")
+        except Exception:
+            detail = response.text
+
+        match = re.search(r"available in (\d+(?:\.\d+)?) seconds", detail)
+        if match:
+            return max(1.0, float(match.group(1)))
+
+        return 30.0
+
     @classmethod
     def clear_all_sessions(cls) -> None:
         """Clear all cached sessions (useful for testing)."""
-        cls._sessions.clear()
+        with cls._registry_lock:
+            cls._sessions.clear()
+            cls._session_locks.clear()

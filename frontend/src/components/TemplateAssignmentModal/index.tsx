@@ -1,26 +1,29 @@
 /**
- * TemplateAssignmentModal — manage global subscription template assignments.
+ * TemplateAssignmentManager — manage global subscription template assignments.
  *
  * Allows assigning different templates based on sport/league filters:
  * - leagues match (most specific) → sports match → default (fallback)
+ *
+ * Rendered as a static page section (EPG → Template Assignments). Was formerly a
+ * Dialog (TemplateAssignmentModal); promoted to a page in the v2.7.0 IA overhaul.
  */
 
-import { useState, useCallback, useEffect, useMemo } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { CheckboxListPicker } from "@/components/ui/checkbox-list-picker"
 import type { CheckboxListGroup } from "@/components/ui/checkbox-list-picker"
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table"
 import {
   useSubscriptionTemplates,
   useCreateSubscriptionTemplate,
@@ -32,15 +35,13 @@ import { useTemplates } from "@/hooks/useTemplates"
 import { useSports } from "@/hooks/useSports"
 import { getLeagues } from "@/api/teams"
 import { getSportDisplayName } from "@/lib/utils"
-import { Loader2, Plus, Pencil, Trash2, Layers } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface TemplateAssignmentModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+interface TemplateAssignmentManagerProps {
   /** Subscribed leagues for filtering sport/league pickers */
   subscribedLeagues: string[]
 }
@@ -56,11 +57,9 @@ interface EditingAssignment {
 // Component
 // ---------------------------------------------------------------------------
 
-export function TemplateAssignmentModal({
-  open,
-  onOpenChange,
+export function TemplateAssignmentManager({
   subscribedLeagues,
-}: TemplateAssignmentModalProps) {
+}: TemplateAssignmentManagerProps) {
   // Form state for add/edit
   const [editing, setEditing] = useState<EditingAssignment | null>(null)
 
@@ -84,7 +83,6 @@ export function TemplateAssignmentModal({
   const { data: leaguesData } = useQuery({
     queryKey: ["leagues"],
     queryFn: () => getLeagues(),
-    enabled: open,
   })
   const allLeagues = leaguesData?.leagues || []
 
@@ -131,13 +129,6 @@ export function TemplateAssignmentModal({
   const createMutation = useCreateSubscriptionTemplate()
   const updateMutation = useUpdateSubscriptionTemplate()
   const deleteMutation = useDeleteSubscriptionTemplate()
-
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!open) {
-      setEditing(null)
-    }
-  }, [open])
 
   const handleAdd = useCallback(() => {
     setEditing({
@@ -213,202 +204,191 @@ export function TemplateAssignmentModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Layers className="h-4 w-4" />
-            Template Assignments
-          </DialogTitle>
-          <DialogDescription>
-            Assign templates by sport or league. More specific matches take priority.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Current assignments */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          )}
-
-          {error && (
-            <div className="text-sm text-destructive py-4">
-              Failed to load template assignments.
-            </div>
-          )}
-
-          {!isLoading && !error && (
-            <>
-              {/* Assignments table */}
-              {assignments.length > 0 ? (
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-medium">Template</th>
-                        <th className="text-left px-3 py-2 font-medium">Filter</th>
-                        <th className="text-left px-3 py-2 font-medium">Specificity</th>
-                        <th className="text-right px-3 py-2 font-medium w-24">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignments.map((a: SubscriptionTemplate) => (
-                        <tr key={a.id} className="border-t">
-                          <td className="px-3 py-2">{a.template_name || `Template ${a.template_id}`}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-wrap gap-1">
-                              {a.leagues?.map((l: string) => (
-                                <Badge key={l} variant="secondary" className="text-xs">
-                                  {allLeagues.find((lg) => lg.slug === l)?.name || l}
-                                </Badge>
-                              ))}
-                              {a.sports?.map((s: string) => (
-                                <Badge key={s} variant="outline" className="text-xs">
-                                  {sportsMap[s] || s}
-                                </Badge>
-                              ))}
-                              {!a.leagues?.length && !a.sports?.length && (
-                                <span className="text-muted-foreground text-xs">All events</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">
-                            <Badge
-                              variant={
-                                getSpecificityLabel(a) === "League"
-                                  ? "default"
-                                  : getSpecificityLabel(a) === "Sport"
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                              className="text-xs"
-                            >
-                              {getSpecificityLabel(a)}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={() => handleEdit(a)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                onClick={() => handleDelete(a.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  No template assignments yet. Add one to get started.
-                </div>
-              )}
-
-              {/* Add/Edit form */}
-              {editing && (
-                <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
-                  <h4 className="font-medium text-sm">
-                    {editing.id ? "Edit Assignment" : "New Assignment"}
-                  </h4>
-
-                  {/* Template select */}
-                  <div className="space-y-2">
-                    <Label>Template</Label>
-                    <Select
-                      value={editing.template_id?.toString() || ""}
-                      onChange={(e) =>
-                        setEditing({
-                          ...editing,
-                          template_id: e.target.value ? Number(e.target.value) : null,
-                        })
-                      }
-                    >
-                      <option value="">Select template...</option>
-                      {eventTemplates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-
-                  {/* Sports filter */}
-                  {subscribedSports.length > 1 && (
-                    <div className="space-y-2">
-                      <Label>Sports (optional — leave empty for all)</Label>
-                      <CheckboxListPicker
-                        selected={editing.sports}
-                        onChange={handleSportsChange}
-                        items={sportItems}
-                        searchPlaceholder="Search sports..."
-                        maxHeight="max-h-36"
-                      />
-                    </div>
-                  )}
-
-                  {/* Leagues filter */}
-                  <div className="space-y-2">
-                    <Label>Leagues (optional — leave empty for all)</Label>
-                    <CheckboxListPicker
-                      selected={editing.leagues}
-                      onChange={handleLeaguesChange}
-                      groups={leagueGroups}
-                      searchPlaceholder="Search leagues..."
-                      maxHeight="max-h-48"
-                    />
-                  </div>
-
-                  {/* Form actions */}
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" size="sm" onClick={handleCancel}>
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSave}
-                      disabled={!editing.template_id || createMutation.isPending || updateMutation.isPending}
-                    >
-                      {createMutation.isPending || updateMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                      ) : null}
-                      {editing.id ? "Update" : "Add"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Add button */}
-              {!editing && (
-                <Button variant="outline" size="sm" onClick={handleAdd} className="w-full">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Template Assignment
-                </Button>
-              )}
-            </>
-          )}
+    <div className="space-y-4">
+      {/* Section header + add action — mirrors the Templates page header (title
+          left, standard add button right) */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Template Assignments</h2>
+          <p className="text-sm text-muted-foreground">
+            Assign event templates by sport or league. More specific matches win: league &gt; sport &gt; default.
+          </p>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Done
+        {!editing && (
+          <Button size="sm" onClick={handleAdd} className="shrink-0">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Template Assignment
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        )}
+      </div>
+
+      {/* Current assignments */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {error && (
+        <div className="text-sm text-destructive py-4">
+          Failed to load template assignments.
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <>
+          {/* Assignments table */}
+          {assignments.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead>Template</TableHead>
+                    <TableHead>Filter</TableHead>
+                    <TableHead>Specificity</TableHead>
+                    <TableHead className="text-right w-24">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignments.map((a: SubscriptionTemplate) => (
+                    <TableRow key={a.id}>
+                      <TableCell>{a.template_name || `Template ${a.template_id}`}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {a.leagues?.map((l: string) => (
+                            <Badge key={l} variant="secondary" className="text-xs">
+                              {allLeagues.find((lg) => lg.slug === l)?.name || l}
+                            </Badge>
+                          ))}
+                          {a.sports?.map((s: string) => (
+                            <Badge key={s} variant="outline" className="text-xs">
+                              {sportsMap[s] || s}
+                            </Badge>
+                          ))}
+                          {!a.leagues?.length && !a.sports?.length && (
+                            <span className="text-muted-foreground text-xs">All events</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            getSpecificityLabel(a) === "League"
+                              ? "default"
+                              : getSpecificityLabel(a) === "Sport"
+                              ? "secondary"
+                              : "outline"
+                          }
+                          className="text-xs"
+                        >
+                          {getSpecificityLabel(a)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handleEdit(a)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(a.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No template assignments yet. Add one to get started.
+            </div>
+          )}
+
+          {/* Add/Edit form */}
+          {editing && (
+            <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+              <h4 className="font-medium text-sm">
+                {editing.id ? "Edit Assignment" : "New Assignment"}
+              </h4>
+
+              {/* Template select */}
+              <div className="space-y-2">
+                <Label>Template</Label>
+                <Select
+                  value={editing.template_id?.toString() || ""}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      template_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                >
+                  <option value="">Select template...</option>
+                  {eventTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {/* Sports filter */}
+              {subscribedSports.length > 1 && (
+                <div className="space-y-2">
+                  <Label>Sports (optional — leave empty for all)</Label>
+                  <CheckboxListPicker
+                    selected={editing.sports}
+                    onChange={handleSportsChange}
+                    items={sportItems}
+                    searchPlaceholder="Search sports..."
+                    maxHeight="max-h-36"
+                  />
+                </div>
+              )}
+
+              {/* Leagues filter */}
+              <div className="space-y-2">
+                <Label>Leagues (optional — leave empty for all)</Label>
+                <CheckboxListPicker
+                  selected={editing.leagues}
+                  onChange={handleLeaguesChange}
+                  groups={leagueGroups}
+                  searchPlaceholder="Search leagues..."
+                  maxHeight="max-h-48"
+                />
+              </div>
+
+              {/* Form actions */}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={handleCancel}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={!editing.template_id || createMutation.isPending || updateMutation.isPending}
+                >
+                  {createMutation.isPending || updateMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : null}
+                  {editing.id ? "Update" : "Add"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }

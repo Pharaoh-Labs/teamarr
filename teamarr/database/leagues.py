@@ -211,3 +211,155 @@ def get_all_leagues(conn: sqlite3.Connection) -> list[dict]:
         """
     )
     return [dict(row) for row in cursor.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Custom-league write path (epic teamarrv2-eqz)
+#
+# The functions above are read-only. These add the write path the table lacked.
+# They are deliberately low-level (raw row I/O); all policy — premium gate,
+# TSDB-only, sport/event_type guardrails, built-in protection — lives one layer
+# up in ``services/custom_leagues.py``. ``get_db()`` auto-commits on success and
+# rolls back on exception, so these never commit themselves.
+# ---------------------------------------------------------------------------
+
+
+def get_league_row(conn: sqlite3.Connection, league_code: str) -> dict | None:
+    """Return a full league row (or None), regardless of ``enabled``.
+
+    Unlike :func:`get_league`, this returns every column — including
+    ``is_custom`` and ``enabled`` — and does not filter on ``enabled``. The
+    write path needs the raw row to enforce built-in protection and to detect
+    code collisions against disabled built-ins.
+    """
+    cursor = conn.execute(
+        "SELECT * FROM leagues WHERE league_code = ?",
+        (league_code.lower(),),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def list_custom_leagues(conn: sqlite3.Connection) -> list[dict]:
+    """Return all user-added (``is_custom=1``) leagues for the management UI.
+
+    Only the fields the custom-league UI renders/edits, ordered by display name.
+    """
+    cursor = conn.execute(
+        """
+        SELECT league_code, provider, provider_league_id, provider_league_name,
+               display_name, sport, event_type, tsdb_tier, enabled
+        FROM leagues
+        WHERE is_custom = 1
+        ORDER BY display_name
+        """
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def insert_custom_league(
+    conn: sqlite3.Connection,
+    *,
+    league_code: str,
+    provider_league_id: str,
+    provider_league_name: str,
+    display_name: str,
+    sport: str,
+    event_type: str,
+    tsdb_tier: str | None = None,
+) -> None:
+    """Insert a new user-added (``is_custom=1``) TSDB league row.
+
+    Always TSDB, always enabled, always importer-visible (so the user can pull
+    its teams). Caller is responsible for collision/policy checks.
+    """
+    conn.execute(
+        """
+        INSERT INTO leagues (
+            league_code, provider, provider_league_id, provider_league_name,
+            display_name, sport, event_type, tsdb_tier,
+            enabled, import_enabled, is_custom
+        ) VALUES (?, 'tsdb', ?, ?, ?, ?, ?, ?, 1, 1, 1)
+        """,
+        (
+            league_code,
+            provider_league_id,
+            provider_league_name,
+            display_name,
+            sport,
+            event_type,
+            tsdb_tier,
+        ),
+    )
+
+
+def update_custom_league_row(
+    conn: sqlite3.Connection,
+    league_code: str,
+    *,
+    provider_league_id: str,
+    provider_league_name: str,
+    display_name: str,
+    sport: str,
+    event_type: str,
+    tsdb_tier: str | None = None,
+) -> int:
+    """Update an existing custom league. Returns the number of rows changed.
+
+    The ``is_custom = 1`` clause is a defense-in-depth guard so a built-in can
+    never be mutated even if the service-layer check were bypassed.
+    """
+    cursor = conn.execute(
+        """
+        UPDATE leagues
+        SET provider_league_id = ?, provider_league_name = ?, display_name = ?,
+            sport = ?, event_type = ?, tsdb_tier = ?
+        WHERE league_code = ? AND is_custom = 1
+        """,
+        (
+            provider_league_id,
+            provider_league_name,
+            display_name,
+            sport,
+            event_type,
+            tsdb_tier,
+            league_code,
+        ),
+    )
+    return cursor.rowcount
+
+
+def delete_custom_league_row(conn: sqlite3.Connection, league_code: str) -> int:
+    """Delete a custom league. Returns the number of rows deleted.
+
+    The ``is_custom = 1`` clause ensures only user rows are ever removed.
+    """
+    cursor = conn.execute(
+        "DELETE FROM leagues WHERE league_code = ? AND is_custom = 1",
+        (league_code,),
+    )
+    return cursor.rowcount
+
+
+def purge_league_cache_rows(conn: sqlite3.Connection, league_code: str) -> tuple[int, int]:
+    """Drop a league's cached ``team_cache``/``league_cache`` rows.
+
+    Counterpart to the create path's :meth:`CacheRefresher._save_league_teams`,
+    which scopes those caches by ``(provider, league)``. Deleting a custom league
+    only removes its ``leagues`` row, so without this the cached teams + league
+    row linger until the next full refresh (harmless to matching, but they show
+    as ghosts in team/league pickers — see bead eqz.9). Scoped by ``league_code``
+    alone (not provider): a custom code is unique, so this is both sufficient and
+    robust against any provider drift between create and delete.
+
+    Returns ``(team_rows_deleted, league_rows_deleted)``.
+    """
+    teams = conn.execute(
+        "DELETE FROM team_cache WHERE league = ?",
+        (league_code,),
+    ).rowcount
+    leagues = conn.execute(
+        "DELETE FROM league_cache WHERE league_slug = ?",
+        (league_code,),
+    ).rowcount
+    return teams, leagues

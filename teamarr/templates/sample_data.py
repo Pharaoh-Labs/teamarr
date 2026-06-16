@@ -3861,6 +3861,74 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "fight_summary": {
         "UFC": "TKO R2 4:31",
     },
+    # Feed separation (event-only): sample models a channel carrying the HOME
+    # team's broadcast feed, so feed_* mirrors the home team and is_home_feed=true.
+    "feed_team": {
+        "NBA": "Detroit Pistons",
+        "NFL": "Detroit Lions",
+        "MLB": "Detroit Tigers",
+        "NHL": "Detroit Red Wings",
+        "NCAAM": "Michigan Wolverines",
+        "NCAAF": "Michigan Wolverines",
+        "Soccer": "Liverpool",
+    },
+    "feed_team_short": {
+        "NBA": "Pistons",
+        "NFL": "Lions",
+        "MLB": "Tigers",
+        "NHL": "Red Wings",
+        "NCAAM": "Wolverines",
+        "NCAAF": "Wolverines",
+        "Soccer": "Liverpool",
+    },
+    "feed_team_abbrev": {
+        "NBA": "DET",
+        "NFL": "DET",
+        "MLB": "DET",
+        "NHL": "DET",
+        "NCAAM": "MICH",
+        "NCAAF": "MICH",
+        "Soccer": "LIV",
+    },
+    "feed_team_abbrev_lower": {
+        "NBA": "det",
+        "NFL": "det",
+        "MLB": "det",
+        "NHL": "det",
+        "NCAAM": "mich",
+        "NCAAF": "mich",
+        "Soccer": "liv",
+    },
+    "feed_team_logo": {
+        "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
+        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/16.png",
+        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/9.png",
+        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/30.png",
+        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
+        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
+        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/364.png",
+    },
+    "is_home_feed": {
+        "NBA": "true",
+    },
+    "is_away_feed": {
+        "NBA": "false",
+    },
+    "feed_home_away": {
+        "NBA": "Home",
+    },
+    "broadcast_feed": {
+        "NBA": "Home Team Feed",
+    },
+    "broadcast_feed_team": {
+        "NBA": "Detroit Pistons",
+        "NFL": "Detroit Lions",
+        "MLB": "Detroit Tigers",
+        "NHL": "Detroit Red Wings",
+        "NCAAM": "Michigan Wolverines",
+        "NCAAF": "Michigan Wolverines",
+        "Soccer": "Liverpool",
+    },
 }
 
 

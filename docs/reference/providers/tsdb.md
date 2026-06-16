@@ -8,7 +8,7 @@ docs_version: "2.3.1"
 
 # TheSportsDB Provider
 
-TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including Australian sports, rugby, cricket, boxing, CFL, and Scandinavian leagues.
+TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including Australian sports, cricket, boxing, CFL, and Scandinavian leagues.
 
 ## API Details
 
@@ -39,9 +39,9 @@ These leagues have low enough event volume to work within free tier limits:
 
 These leagues have high event volume or unreliable free-tier data and require a premium key for full coverage:
 
-- AFL, NRL, Super Rugby (Australian/rugby)
+- AFL (Australian football)
 - IPL, BBL, SA20 (cricket)
-- Svenska Cupen (soccer)
+- Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
 
 The `tsdb_tier` column in `schema.sql` classifies each league as `free` or `premium`.
 
@@ -60,12 +60,20 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
 | Boxing | `boxing` | 4445 | Boxing | Free |
 | Australian Football League | `afl` | 4456 | Australian Football | Premium |
-| National Rugby League | `nrl` | 4416 | Rugby | Premium |
-| Super Rugby Pacific | `super-rugby` | 4551 | Rugby | Premium |
 | Indian Premier League | `ipl` | 4460 | Cricket | Premium |
 | Big Bash League | `bbl` | 4461 | Cricket | Premium |
 | SA20 | `sa20` | 5532 | Cricket | Premium |
 | Svenska Cupen | `svenska-cupen` | 4756 | Soccer | Premium |
+| Canadian Premier League | `can.1` | 4820 | Soccer | Premium |
+| Swedish Superettan | `swe.2` | 4403 | Soccer | Premium |
+| Swedish Division 1 North | `swe.3.n` | 4674 | Soccer | Premium |
+| Swedish Division 1 South | `swe.3.s` | 4845 | Soccer | Premium |
+| Icelandic Úrvalsdeild karla | `ice.1` | 4642 | Soccer | Premium |
+| Icelandic 1. deild karla | `ice.2` | 4906 | Soccer | Premium |
+| Venezuelan Segunda División | `ven.2` | 5659 | Soccer | Premium |
+| Gambia GFA League | `gam.1` | 5238 | Soccer | Premium |
+| Aruban Division di Honor | `arb.1` | 5230 | Soccer | Premium |
+| Northern Irish Premiership | `nifl.1` | 4659 | Soccer | Premium |
 
 ## Event Resolution
 
@@ -73,7 +81,7 @@ TSDB uses a three-step fallback chain when fetching events:
 
 1. **`eventsday.php`** — date-specific lookup (primary, works for most leagues)
 2. **`eventsnextleague.php`** — upcoming events filtered by date (fallback)
-3. **`eventsround.php`** — full round/season events filtered by date (last resort, used for leagues like Unrivaled)
+3. **`eventsseason.php`** — full-season events filtered by date (last resort, gated to sparse leagues like Unrivaled where the day endpoints return nothing)
 
 ## Rate Limiting
 
@@ -121,7 +129,7 @@ TSDB has no dedicated playoff/season-type field, but TheSportsDB's API conventio
 
 Verified on 2026-04-22 against NBA 2024 Playoffs, NHL 2024 Stanley Cup Final, and IPL 2024 playoffs — all use these codes. UCL knockouts, international tournaments, and other cup competitions also use them.
 
-**Known gap:** Not every TSDB league opts into the special codes. AFL and NRL keep simple round numbering through finals (AFL Grand Final → `intRound=19`; NRL Grand Final → `intRound=24`), so we can't distinguish their postseason from regular season. For those leagues `{season_type}` returns empty. Adding per-league heuristics (e.g. "NRL round 27+ is finals") would be fragile and unmaintainable — the provider deliberately returns `None` rather than `regular` for non-postseason events so the gap is detectable.
+**Known gap:** Not every TSDB league opts into the special codes. AFL keeps simple round numbering through finals (AFL Grand Final → `intRound=19`), so we can't distinguish its postseason from regular season. For those leagues `{season_type}` returns empty. Adding per-league heuristics (e.g. "AFL round 24+ is finals") would be fragile and unmaintainable — the provider deliberately returns `None` rather than `regular` for non-postseason events so the gap is detectable.
 
 Preseason is not detected for any TSDB league — there's no corresponding convention.
 

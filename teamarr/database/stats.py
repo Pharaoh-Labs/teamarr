@@ -638,6 +638,11 @@ def get_current_stats(conn: Connection) -> dict:
             AVG(duration_ms) as avg_duration,
             MAX(duration_ms) as max_duration
         FROM processing_runs
+        -- Only full EPG generations (the "Generate" runs). Without this the
+        -- averages/totals are dragged down by the many tiny scoped runs
+        -- (single-team/league refreshes, event-group sub-runs) — e.g. an
+        -- 8s avg when real generations take minutes.
+        WHERE run_type = 'full_epg'
         """
     ).fetchone()
 

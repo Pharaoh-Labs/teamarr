@@ -25,6 +25,7 @@ class StreamCategory(Enum):
 
     TEAM_VS_TEAM = "team_vs_team"  # Standard team matchup (vs/@/at)
     EVENT_CARD = "event_card"  # Combat sports (UFC, Boxing)
+    TEAM_ONLY = "team_only"  # Single-team branded stream (e.g., "NHL | Toronto Maple Leafs")
     PLACEHOLDER = "placeholder"  # No event info, skip
 
 
@@ -772,9 +773,15 @@ def _clean_team_name(name: str) -> str:
     # Remove channel numbers like "(1)" or "[2]"
     name = re.sub(r"\s*[\(\[]\d+[\)\]]\s*$", "", name)
 
-    # Remove gender markers like (W), (M), (Women), (Men)
-    # Common in NCAAB streams: "LSU (W)", "Duke (M)"
-    name = re.sub(r"\s*\((?:W|M|Women|Men)\)", "", name, flags=re.IGNORECASE)
+    # Remove parenthetical gender markers: English (W)/(M)/(Women)/(Men) seen in
+    # NCAAB streams ("LSU (W)", "Duke (M)") and Spanish/Portuguese (F)/(Femenino)/
+    # (Masculino) seen in non-English feeds ("España (F)").
+    name = re.sub(
+        r"\s*\((?:W|M|F|Women|Men|Fem[ei]nin[oa]|Masculin[oa])\)",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
 
     # Remove HD, SD, 4K, UHD quality indicators (at start or end)
     name = re.sub(r"^\s*\b(HD|SD|FHD|4K|UHD)\b\s*", "", name, flags=re.IGNORECASE)
@@ -921,10 +928,13 @@ def detect_league_hint(text: str) -> str | list[str] | None:
     return DetectionKeywordService.detect_league(text)
 
 
-# Gender keywords that indicate women's leagues
-_WOMENS_KEYWORDS = re.compile(r"\(W\)|\bWomen", re.IGNORECASE)
-# Gender keywords that indicate men's leagues
-_MENS_KEYWORDS = re.compile(r"\(M\)|\bMen(?:'s|s)?\b", re.IGNORECASE)
+# Gender keywords that indicate women's leagues. English (W)/Women plus
+# Spanish/Portuguese femenino/femenina/feminino/feminina and the (F) marker.
+# fem[ei]nin[oa] requires the trailing o/a so English "feminine" never matches.
+_WOMENS_KEYWORDS = re.compile(r"\(W\)|\(F\)|\bWomen|\bfem[ei]nin[oa]\b", re.IGNORECASE)
+# Gender keywords that indicate men's leagues. English (M)/Men plus
+# Spanish/Portuguese masculino/masculina ((M) already doubles as Masculino).
+_MENS_KEYWORDS = re.compile(r"\(M\)|\bMen(?:'s|s)?\b|\bmasculin[oa]\b", re.IGNORECASE)
 # Regex to identify gendered league codes
 _WOMENS_LEAGUE_RE = re.compile(r"\bwomens?\b", re.IGNORECASE)
 _MENS_LEAGUE_RE = re.compile(r"\bmens?\b", re.IGNORECASE)
@@ -935,9 +945,9 @@ def _narrow_by_gender(
 ) -> str | list[str]:
     """Narrow an umbrella league hint using gender markers in the stream name.
 
-    If the stream contains (W) or Women, keep only women's leagues.
-    If (M) or Men, keep only men's leagues.
-    If neither, return the full list.
+    If the stream contains a women's marker ((W), Women, (F), femenino/femenina),
+    keep only women's leagues. If a men's marker ((M), Men, masculino/masculina),
+    keep only men's leagues. If neither, return the full list.
 
     Examples:
         ["mens-college-basketball", "womens-college-basketball"] + "(W)"
@@ -1245,6 +1255,7 @@ def classify_stream(
     2. Check for event card keywords/type → EVENT_CARD
     3. Try custom regex for team extraction (if configured) → TEAM_VS_TEAM
     4. Check for game separator (vs/@/at) → TEAM_VS_TEAM
+    4.5. Check for single-team content (no separator, no date/time) → TEAM_ONLY
     5. Default → PLACEHOLDER (can't classify)
 
     Note: Placeholder pattern detection is now handled by StreamFilter before
@@ -1439,6 +1450,25 @@ def classify_stream(
                         team1=team1,
                         team2=team2,
                         separator_found=separator,
+                        league_hint=league_hint,
+                        sport_hint=sport_hint,
+                        feed_hint=feed_hint,
+                    )
+
+        # Step 4.5: Check for single-team stream (TEAM_ONLY)
+        # Applies when no separator was found (would otherwise be PLACEHOLDER).
+        # A stream qualifies as TEAM_ONLY when:
+        #   - No date or time was extracted (stream is not event-specific)
+        #   - After stripping league/sport/noise prefixes, a non-trivial candidate remains
+        # The matcher validates the candidate against the team cache; a miss → NO_MATCH.
+        if result is None:
+            if normalized.extracted_date is None and normalized.extracted_time is None:
+                candidate = _clean_team_name(text)
+                if candidate and len(candidate) >= 3:
+                    result = ClassifiedStream(
+                        category=StreamCategory.TEAM_ONLY,
+                        normalized=normalized,
+                        team1=candidate,
                         league_hint=league_hint,
                         sport_hint=sport_hint,
                         feed_hint=feed_hint,

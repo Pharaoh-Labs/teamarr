@@ -244,6 +244,7 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
     to the sort_priorities table and event start times.
 
     Sort order:
+    0. Priority team (followed teams float to the very top — channel_priority_teams)
     1. Sport priority (from channel_sort_priorities, lower = earlier)
     2. League priority (from channel_sort_priorities, lower = earlier)
     3. Event start time (earlier = earlier)
@@ -253,6 +254,7 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
     Returns:
         List of channel dicts with sort-relevant fields, ordered globally
     """
+    from teamarr.database.priority_teams import get_priority_team_match_keys
     from teamarr.database.sort_priorities import get_all_sort_priorities
 
     # 1. Get sort priorities (normalize to lowercase for case-insensitive matching)
@@ -263,6 +265,10 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         for p in priorities
         if p.league_code is not None
     }
+
+    # Priority teams: (sport_lower, team_name_lower) keys; a channel floats to the
+    # top if either its home or away team matches one (see channel_priority_teams).
+    priority_keys = get_priority_team_match_keys(conn)
 
     # 2. Get all channels from enabled groups with event info
     cursor = conn.execute("""
@@ -276,6 +282,8 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             mc.event_id,
             mc.sport,
             mc.league,
+            mc.home_team,
+            mc.away_team,
             mc.event_date,
             mc.exception_keyword,
             mc.created_at
@@ -298,13 +306,15 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
                 "event_id": row["event_id"],
                 "sport": row["sport"],
                 "league": row["league"],
+                "home_team": row["home_team"],
+                "away_team": row["away_team"],
                 "event_date": row["event_date"],
                 "exception_keyword": row["exception_keyword"],
                 "created_at": row["created_at"],
             }
         )
 
-    # 3. Sort by: sport priority → league priority → event time → event_id → keyword
+    # 3. Sort by: priority team → sport priority → league priority → time → event_id → keyword
     def sort_key(ch):
         sport = ch.get("sport") or ""
         league = ch.get("league") or ""
@@ -314,6 +324,13 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
 
         sport_lower = sport.lower()
         league_lower = league.lower()
+
+        # Priority-team tier (0 = priority, 1 = normal): match either team by name
+        # within sport. Sorts first so followed teams lead, then normal ordering.
+        home = (ch.get("home_team") or "").lower()
+        away = (ch.get("away_team") or "").lower()
+        is_priority = (sport_lower, home) in priority_keys or (sport_lower, away) in priority_keys
+        priority_tier = 0 if is_priority else 1
 
         sport_pri = sport_order.get(sport_lower, 9999)
         league_pri = league_order.get((sport_lower, league_lower), 9999)
@@ -334,13 +351,14 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         # Main channel (no keyword) sorts before keyword channels
         keyword_sort = (0, "") if not keyword else (1, keyword)
 
-        return (sport_pri, league_pri, event_date, str(event_id), keyword_sort)
+        return (priority_tier, sport_pri, league_pri, event_date, str(event_id), keyword_sort)
 
     sorted_channels = sorted(channels, key=sort_key)
 
     logger.debug(
-        "[CHANNEL_SORT] Global sort: %d channels, %d sport priorities, %d league priorities",
-        len(sorted_channels), len(sport_order), len(league_order),
+        "[CHANNEL_SORT] Global sort: %d channels, %d sport priorities, "
+        "%d league priorities, %d priority teams",
+        len(sorted_channels), len(sport_order), len(league_order), len(priority_keys),
     )
 
     return sorted_channels

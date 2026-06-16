@@ -99,6 +99,7 @@ def init_db(db_path: Path | str | None = None) -> None:
             _rename_league_id_column_if_needed(conn)
             _migrate_exception_keywords_columns(conn)
             _migrate_settings_for_v65(conn)
+            _migrate_detection_keywords_check(conn)
 
             # ================================================================
             # Schema reconciliation — ensures ALL columns match schema.sql.
@@ -333,6 +334,39 @@ def _migrate_settings_for_v65(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_detection_keywords_check(conn: sqlite3.Connection) -> None:
+    """Pre-migration: rebuild detection_keywords if its category CHECK is stale.
+
+    The 'combat_sports' category was renamed to 'event_type_keywords'. SQLite bakes
+    CHECK constraints at table creation, so databases created before the rename
+    still reject 'event_type_keywords' inserts even though the v47 data migration
+    ran — i.e. users can't add Event Type Detection keywords. Detect the stale
+    constraint and drop the table so executescript recreates it with the current
+    CHECK; data is backed up to _detection_keywords_backup and restored (mapping
+    combat_sports -> event_type_keywords) in _run_migrations.
+    """
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type='table' AND name='detection_keywords'"
+        ).fetchone()
+    except Exception:
+        return  # Table doesn't exist yet (fresh install)
+    if not row or not row[0]:
+        return
+    if "event_type_keywords" in row[0]:
+        return  # Constraint already current — nothing to do
+
+    conn.execute("DROP TABLE IF EXISTS _detection_keywords_backup")
+    conn.execute(
+        "CREATE TABLE _detection_keywords_backup AS SELECT * FROM detection_keywords"
+    )
+    conn.execute("DROP TABLE detection_keywords")
+    logger.info(
+        "[PRE-MIGRATE] detection_keywords dropped to refresh stale category CHECK constraint"
+    )
+
+
 def _seed_tsdb_cache_if_needed(conn: sqlite3.Connection) -> None:
     """Seed TSDB cache from distributed seed file if needed."""
     from teamarr.database.seed import seed_if_needed
@@ -480,6 +514,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     # to default by the executescript that recreates settings). The version
     # bump runs unconditionally for any DB still below v65.
     _migrate_v65_lifecycle_timing_restore_if_needed(conn)
+    _migrate_detection_keywords_restore_if_needed(conn)
     if current_version < 65:
         _advance_version(conn, 65, "event-anchored lifecycle timing")
         current_version = 65
@@ -523,6 +558,27 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             _migrate_v73_dedupe_milb_renamed_codes,
         )
         current_version = 73
+
+    if current_version < 74:
+        _apply_migration(
+            conn, 74, "preserve EPG-match off-state after global switch removal",
+            _migrate_v74_preserve_epg_match_offstate,
+        )
+        current_version = 74
+
+    if current_version < 75:
+        _apply_migration(
+            conn, 75, "extract common art base URL from templates (epic z02s)",
+            _migrate_v75_extract_art_base_url,
+        )
+        current_version = 75
+
+    if current_version < 76:
+        _apply_migration(
+            conn, 76, "normalize relative template art paths to leading slash (z02s)",
+            _migrate_v76_leading_slash_art_paths,
+        )
+        current_version = 76
 
 
 # =============================================================================
@@ -1202,6 +1258,41 @@ def _migrate_v65_lifecycle_timing_restore_if_needed(conn: sqlite3.Connection) ->
         conn.execute("DROP TABLE IF EXISTS _settings_v65_backup")
 
 
+def _migrate_detection_keywords_restore_if_needed(conn: sqlite3.Connection) -> None:
+    """Restore detection_keywords from the pre-migration backup.
+
+    The structural pre-migration drops/recreates the table to refresh the stale
+    category CHECK constraint. Keyed off the backup table's existence. Maps the
+    renamed combat_sports category to event_type_keywords on the way back in.
+    """
+    has_backup = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type='table' AND name='_detection_keywords_backup'"
+    ).fetchone()[0]
+    if not has_backup:
+        return
+
+    try:
+        conn.execute(
+            "UPDATE _detection_keywords_backup SET category = 'event_type_keywords' "
+            "WHERE category = 'combat_sports'"
+        )
+        backup_cols = [r[1] for r in conn.execute("PRAGMA table_info(_detection_keywords_backup)")]
+        new_cols = [r[1] for r in conn.execute("PRAGMA table_info(detection_keywords)")]
+        common = [c for c in new_cols if c in backup_cols]
+        col_list = ", ".join(common)
+
+        conn.execute(
+            f"INSERT OR IGNORE INTO detection_keywords ({col_list}) "
+            f"SELECT {col_list} FROM _detection_keywords_backup"
+        )
+        conn.execute("DROP TABLE _detection_keywords_backup")
+        logger.info("[MIGRATE] Restored detection_keywords after CHECK constraint refresh")
+    except Exception as e:
+        logger.warning("[MIGRATE] detection_keywords restore failed: %s", e)
+        conn.execute("DROP TABLE IF EXISTS _detection_keywords_backup")
+
+
 def _migrate_v66_tsdb_tiers(conn: sqlite3.Connection) -> None:
     """v66: tag TSDB leagues with free/premium tier for capability gating."""
     _add_column_if_not_exists(conn, "leagues", "tsdb_tier", "TEXT")
@@ -1331,25 +1422,50 @@ def _migrate_v73_dedupe_milb_renamed_codes(conn: sqlite3.Connection) -> None:
     old_codes = tuple(rename.keys())
     placeholders = ",".join("?" for _ in old_codes)
 
+    # Each tuple: (table, column, unique_scope_columns_or_None).
+    # unique_scope_columns is set when the table has a UNIQUE constraint that
+    # includes the league column. For those tables, a blanket UPDATE
+    # old->new can collide if both rows already exist (GitHub #202), so we
+    # delete the old row in favor of the existing new row before updating.
     scalar_targets = (
-        ("managed_channels", "league"),
-        ("team_aliases", "league"),
-        ("channel_sort_priorities", "league_code"),
+        ("managed_channels", "league", None),
+        ("team_aliases", "league", None),
+        ("channel_sort_priorities", "league_code", ("sport",)),
         # Logs and detection caches (best-effort consistency).
-        ("epg_matched_streams", "detected_league"),
-        ("epg_failed_matches", "detected_league"),
-        ("stream_match_cache", "league"),
-        ("match_corrections", "incorrect_league"),
-        ("match_corrections", "correct_league"),
+        ("epg_matched_streams", "detected_league", None),
+        ("epg_failed_matches", "detected_league", None),
+        ("stream_match_cache", "league", None),
+        ("match_corrections", "incorrect_league", None),
+        ("match_corrections", "correct_league", None),
     )
 
     # 1. Scalar league columns. Skip silently if the table or column is missing
     # — partial schemas (e.g. unit-test fixtures, mid-migration restarts) would
     # otherwise log a noisy warning per old code per missing target.
-    for table, column in scalar_targets:
+    for table, column, unique_scope in scalar_targets:
         if not _column_exists(conn, table, column):
             continue
+        # Only attempt the UNIQUE-aware delete-before-update when every scope
+        # column is actually present. Partial schemas (test fixtures, in-flight
+        # migrations) without the scope columns can't have the corresponding
+        # UNIQUE constraint either, so a plain UPDATE is safe there.
+        scope = unique_scope if unique_scope and all(
+            _column_exists(conn, table, c) for c in unique_scope
+        ) else None
         for old, new in rename.items():
+            if scope:
+                # If a row with the new code already exists for the same
+                # unique-scope (e.g. same sport), drop the old-coded row so
+                # the UPDATE below doesn't violate UNIQUE(sport, league_code).
+                scope_cols = ", ".join(scope)
+                conn.execute(
+                    f"""DELETE FROM {table}
+                        WHERE {column} = ?
+                          AND ({scope_cols}) IN (
+                            SELECT {scope_cols} FROM {table} WHERE {column} = ?
+                          )""",
+                    (old, new),
+                )
             conn.execute(
                 f"UPDATE {table} SET {column} = ? WHERE {column} = ?",
                 (new, old),
@@ -1391,6 +1507,244 @@ def _migrate_v73_dedupe_milb_renamed_codes(conn: sqlite3.Connection) -> None:
                 )
         except sqlite3.OperationalError as e:
             logger.warning("[MIGRATE v73] leagues cleanup skipped: %s", e)
+
+
+def _migrate_v74_preserve_epg_match_offstate(conn: sqlite3.Connection) -> None:
+    """v74: preserve "EPG matching off" intent after the global switch removal.
+
+    The global ``settings.epg_match_enabled`` master switch (epic 3lp1.1) was
+    removed: EPG program matching and the Dispatcharr channel-source now activate
+    on the per-group ``event_epg_groups.epg_match_enabled`` /
+    ``settings.epg_channel_source_enabled`` flags ALONE, no longer gated by the
+    global switch. A user who left those flags set while keeping the global switch
+    OFF would otherwise have matching silently turn on at this upgrade.
+
+    Fix: if the (now-vestigial) global switch was OFF, clear the dependent flags so
+    the user's effective "off" state carries across the upgrade. When the global
+    switch was ON, every flag is left exactly as-is — matching continues unchanged.
+    The vestigial ``settings.epg_match_enabled`` column is only read here; it stays
+    in the schema for back-compat.
+    """
+    if not _column_exists(conn, "settings", "epg_match_enabled"):
+        return  # nothing to read (fresh/partial schema) — no-op
+
+    row = conn.execute("SELECT epg_match_enabled FROM settings WHERE id = 1").fetchone()
+    if row is None or row[0]:
+        return  # global switch was ON (or no settings row) — leave all flags untouched
+
+    # Global switch was OFF: matching was globally inert. Preserve that off-state
+    # so it doesn't silently activate now that the gate is gone.
+    if _column_exists(conn, "settings", "epg_channel_source_enabled"):
+        conn.execute("UPDATE settings SET epg_channel_source_enabled = 0 WHERE id = 1")
+    if _column_exists(conn, "event_epg_groups", "epg_match_enabled"):
+        cleared = conn.execute(
+            "UPDATE event_epg_groups SET epg_match_enabled = 0 WHERE epg_match_enabled = 1"
+        ).rowcount
+        logger.info(
+            "[MIGRATE v74] Global EPG-match was off; cleared %d per-group "
+            "epg_match_enabled flag(s) and channel-source to preserve off-state",
+            cleared,
+        )
+
+
+def _migrate_v75_extract_art_base_url(conn: sqlite3.Connection) -> None:
+    """v75: adopt the game-thumbs base URL convention for existing templates (z02s).
+
+    Templates historically stored FULL art URLs (program_art_url,
+    event_channel_logo_url, and art_url inside the pregame/postgame/idle fallback
+    JSON). The new convention lets users set one base URL in settings and store
+    only relative paths. This migration makes existing installs follow it:
+
+    - Collect every absolute art URL across all templates and parse its origin
+      (scheme://host[:port]).
+    - If a SINGLE origin is shared by all of them, set settings.art_base_url to it
+      and strip that origin prefix from each field (leaving the relative path).
+    - If templates span MULTIPLE origins (ambiguous) or have none, do nothing —
+      absolute URLs keep working unchanged via the resolver's passthrough.
+
+    Idempotent: once base_url is set + URLs are relative, a re-run finds no
+    absolute URLs to migrate and no-ops.
+    """
+    from urllib.parse import urlsplit
+
+    if not _table_exists(conn, "templates"):
+        return
+
+    # Safety net for tests that call _run_migrations directly (production adds the
+    # column via reconciliation before migrations run).
+    _add_column_if_not_exists(conn, "settings", "art_base_url", "TEXT DEFAULT ''")
+
+    # Already configured — don't second-guess a user-set base.
+    existing = conn.execute("SELECT art_base_url FROM settings WHERE id = 1").fetchone()
+    if existing and (existing[0] or "").strip():
+        return
+
+    # Only operate on art columns the templates table actually has (tests may
+    # build a partial schema).
+    art_columns = [
+        c for c in ("program_art_url", "event_channel_logo_url")
+        if _column_exists(conn, "templates", c)
+    ]
+    json_columns = [
+        c for c in ("pregame_fallback", "postgame_fallback", "idle_content")
+        if _column_exists(conn, "templates", c)
+    ]
+    if not art_columns and not json_columns:
+        return
+
+    def origin_of(url: str) -> str | None:
+        if not url or not isinstance(url, str):
+            return None
+        parts = urlsplit(url)
+        if not parts.scheme or not parts.netloc:
+            return None  # relative or non-URL — nothing to strip
+        return f"{parts.scheme}://{parts.netloc}"
+
+    select_cols = ["id", *art_columns, *json_columns]
+    rows = conn.execute(
+        f"SELECT {', '.join(select_cols)} FROM templates"
+    ).fetchall()
+
+    # Pass 1: tally how often each origin appears across every art value.
+    from collections import Counter
+
+    origin_counts: Counter[str] = Counter()
+    for row in rows:
+        for col in art_columns:
+            o = origin_of(row[col])
+            if o:
+                origin_counts[o] += 1
+        for col in json_columns:
+            try:
+                blob = json.loads(row[col]) if row[col] else None
+            except (TypeError, ValueError):
+                blob = None
+            if isinstance(blob, dict):
+                o = origin_of(blob.get("art_url"))
+                if o:
+                    origin_counts[o] += 1
+
+    if not origin_counts:
+        return  # no absolute art URLs to migrate
+
+    # Pick the most frequent origin as the base. When origins diverge, the
+    # winner's URLs become relative; the rest stay absolute (resolver passes
+    # them through untouched). most_common ties break on first-seen insertion.
+    base, _ = origin_counts.most_common(1)[0]
+    if len(origin_counts) > 1:
+        logger.info(
+            "[MIGRATE] v75: templates span %d art origins %s — picking most "
+            "frequent %r as the base; others left absolute",
+            len(origin_counts),
+            dict(origin_counts),
+            base,
+        )
+    prefix = base + "/"
+
+    def strip(url):
+        # Drop the origin, keep a leading-slash-rooted path (e.g. "/{league}/cover.png").
+        if isinstance(url, str) and url.startswith(prefix):
+            return "/" + url[len(prefix):]
+        return url
+
+    # Pass 2: strip the origin from every matching field.
+    for row in rows:
+        updates: dict[str, str | None] = {}
+        for col in art_columns:
+            new = strip(row[col])
+            if new != row[col]:
+                updates[col] = new
+        for col in json_columns:
+            try:
+                blob = json.loads(row[col]) if row[col] else None
+            except (TypeError, ValueError):
+                blob = None
+            if isinstance(blob, dict) and isinstance(blob.get("art_url"), str):
+                new = strip(blob["art_url"])
+                if new != blob["art_url"]:
+                    blob["art_url"] = new
+                    updates[col] = json.dumps(blob)
+        if updates:
+            sets = ", ".join(f"{c} = ?" for c in updates)
+            conn.execute(
+                f"UPDATE templates SET {sets} WHERE id = ?",
+                (*updates.values(), row["id"]),
+            )
+
+    conn.execute("UPDATE settings SET art_base_url = ? WHERE id = 1", (base,))
+    logger.info(
+        "[MIGRATE] v75: set art base URL %r and converted template art to relative paths",
+        base,
+    )
+
+
+def _migrate_v76_leading_slash_art_paths(conn: sqlite3.Connection) -> None:
+    """v76: enforce the leading-slash convention on relative template art paths.
+
+    The v75 migration (and early dev DBs) could leave relative art as
+    "{league}/cover.png" without a leading slash. The convention is a leading
+    slash ("/{league}/cover.png") for consistency. This normalizes any relative
+    (non-absolute, non-empty) art value to start with "/" across the direct art
+    columns and the art_url nested in the filler-fallback JSON. Idempotent —
+    already-slashed and absolute values are untouched.
+    """
+    from urllib.parse import urlsplit
+
+    if not _table_exists(conn, "templates"):
+        return
+
+    art_columns = [
+        c for c in ("program_art_url", "event_channel_logo_url")
+        if _column_exists(conn, "templates", c)
+    ]
+    json_columns = [
+        c for c in ("pregame_fallback", "postgame_fallback", "idle_content")
+        if _column_exists(conn, "templates", c)
+    ]
+    if not art_columns and not json_columns:
+        return
+
+    def normalize(value):
+        # Leave empty, absolute (has scheme://), and already-rooted paths alone.
+        if not isinstance(value, str) or not value:
+            return value
+        if urlsplit(value).scheme:
+            return value
+        return value if value.startswith("/") else "/" + value
+
+    select_cols = ["id", *art_columns, *json_columns]
+    rows = conn.execute(f"SELECT {', '.join(select_cols)} FROM templates").fetchall()
+
+    changed = 0
+    for row in rows:
+        updates: dict[str, str] = {}
+        for col in art_columns:
+            new = normalize(row[col])
+            if new != row[col]:
+                updates[col] = new
+        for col in json_columns:
+            try:
+                blob = json.loads(row[col]) if row[col] else None
+            except (TypeError, ValueError):
+                blob = None
+            if isinstance(blob, dict) and isinstance(blob.get("art_url"), str):
+                new = normalize(blob["art_url"])
+                if new != blob["art_url"]:
+                    blob["art_url"] = new
+                    updates[col] = json.dumps(blob)
+        if updates:
+            sets = ", ".join(f"{c} = ?" for c in updates)
+            conn.execute(
+                f"UPDATE templates SET {sets} WHERE id = ?",
+                (*updates.values(), row["id"]),
+            )
+            changed += 1
+
+    if changed:
+        logger.info(
+            "[MIGRATE] v76: added leading slash to relative art paths in %d template(s)",
+            changed,
+        )
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:

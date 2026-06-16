@@ -117,8 +117,16 @@ class ManagedChannelStream:
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
     exception_keyword: str | None = None
+    match_type: str = "event"
+    match_method: str | None = None  # 'epg', 'fuzzy', etc. — drives the epg_match ordering rule
+    # DP channel's own group name (channel-source streams) — drives the
+    # dispatcharr_group ordering rule (ybt.3). NULL for non-channel-source streams.
+    dispatcharr_channel_group: str | None = None
     added_at: datetime | None = None
     removed_at: datetime | None = None
+    # Time-windowed membership (epic teamarrv2-183.5). NULL = full-life.
+    attach_at: datetime | None = None
+    detach_at: datetime | None = None
 
     @classmethod
     def from_row(cls, row: dict) -> "ManagedChannelStream":
@@ -134,6 +142,11 @@ class ManagedChannelStream:
             m3u_account_id=row.get("m3u_account_id"),
             m3u_account_name=row.get("m3u_account_name"),
             exception_keyword=row.get("exception_keyword"),
+            match_type=row.get("match_type", "event"),
+            match_method=row.get("match_method"),
+            dispatcharr_channel_group=row.get("dispatcharr_channel_group"),
             added_at=row.get("added_at"),
             removed_at=row.get("removed_at"),
+            attach_at=row.get("attach_at"),
+            detach_at=row.get("detach_at"),
         )

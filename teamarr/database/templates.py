@@ -8,12 +8,39 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from sqlite3 import Connection, Row
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
+
+# Art fields whose RELATIVE values are normalized to a leading slash (epic z02s),
+# so the game-thumbs base URL convention is consistent across create/edit.
+_ART_FIELDS = ("program_art_url", "event_channel_logo_url")
+_ART_JSON_FIELDS = ("pregame_fallback", "postgame_fallback", "idle_content")
+_ABSOLUTE_URL = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
+
+
+def _normalize_art_path(value: Any) -> Any:
+    """Ensure a relative art path starts with '/'. Absolute URLs and empty/non-str
+    values pass through unchanged."""
+    if not isinstance(value, str) or not value or _ABSOLUTE_URL.match(value):
+        return value
+    return value if value.startswith("/") else "/" + value
+
+
+def _normalize_art_in_kwargs(kwargs: dict[str, Any]) -> None:
+    """Normalize art fields in a create/update kwargs dict in place: the direct
+    art columns and the art_url nested inside the filler-fallback dicts."""
+    for field_name in _ART_FIELDS:
+        if field_name in kwargs:
+            kwargs[field_name] = _normalize_art_path(kwargs[field_name])
+    for field_name in _ART_JSON_FIELDS:
+        blob = kwargs.get(field_name)
+        if isinstance(blob, dict) and "art_url" in blob:
+            blob["art_url"] = _normalize_art_path(blob["art_url"])
 
 if TYPE_CHECKING:
     from teamarr.core import TemplateConfig
@@ -370,6 +397,9 @@ def create_template(
     Returns:
         New template ID
     """
+    # Normalize relative art paths to leading-slash form (z02s consistency).
+    _normalize_art_in_kwargs(kwargs)
+
     # Build column list and values
     columns = ["name", "template_type"]
     values: list[Any] = [name, template_type]
@@ -427,6 +457,9 @@ def update_template(conn: Connection, template_id: int, **kwargs) -> bool:
     """
     if not kwargs:
         return False
+
+    # Normalize relative art paths to leading-slash form (z02s consistency).
+    _normalize_art_in_kwargs(kwargs)
 
     # JSON fields need serialization
     json_fields = {

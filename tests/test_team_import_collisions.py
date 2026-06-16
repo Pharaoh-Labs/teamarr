@@ -56,8 +56,18 @@ class TestTBDFiltering:
         """TBD placeholder teams should be silently filtered out."""
         teams = [
             ImportTeam("TBD", "TBD", "espn", "1153", "baseball/college-baseball", "baseball", None),
-            ImportTeam("TBD TBD", None, "espn", "1154", "baseball/college-baseball", "baseball", None),
-            ImportTeam("Boise State Broncos", "BSU", "espn", "322", "baseball/college-baseball", "baseball", None),
+            ImportTeam(
+                "TBD TBD", None, "espn", "1154", "baseball/college-baseball", "baseball", None
+            ),
+            ImportTeam(
+                "Boise State Broncos",
+                "BSU",
+                "espn",
+                "322",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
         ]
         result = bulk_import_teams(conn, teams)
         assert result.imported == 1
@@ -81,8 +91,24 @@ class TestChannelIdCollision:
     def test_duplicate_team_names_different_ids(self, conn):
         """Two ESPN entries with same name but different IDs should both import."""
         teams = [
-            ImportTeam("Boise State Broncos", "BSU", "espn", "322", "baseball/college-baseball", "baseball", None),
-            ImportTeam("Boise State Broncos", "BSU", "espn", "1139", "baseball/college-baseball", "baseball", None),
+            ImportTeam(
+                "Boise State Broncos",
+                "BSU",
+                "espn",
+                "322",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
+            ImportTeam(
+                "Boise State Broncos",
+                "BSU",
+                "espn",
+                "1139",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
         ]
         result = bulk_import_teams(conn, teams)
         assert result.imported == 2
@@ -97,9 +123,15 @@ class TestChannelIdCollision:
     def test_same_name_different_schools(self, conn):
         """Distinct teams sharing a display name (e.g., multiple 'Tigers') get unique IDs."""
         teams = [
-            ImportTeam("Tigers", "BEN", "espn", "800", "baseball/college-softball", "softball", None),
-            ImportTeam("Tigers", "CAM", "espn", "801", "baseball/college-softball", "softball", None),
-            ImportTeam("Tigers", "STI", "espn", "802", "baseball/college-softball", "softball", None),
+            ImportTeam(
+                "Tigers", "BEN", "espn", "800", "baseball/college-softball", "softball", None
+            ),
+            ImportTeam(
+                "Tigers", "CAM", "espn", "801", "baseball/college-softball", "softball", None
+            ),
+            ImportTeam(
+                "Tigers", "STI", "espn", "802", "baseball/college-softball", "softball", None
+            ),
         ]
         result = bulk_import_teams(conn, teams)
         assert result.imported == 3
@@ -112,13 +144,24 @@ class TestChannelIdCollision:
         """New import colliding with a pre-existing DB entry gets disambiguated."""
         # Pre-existing team
         conn.execute(
-            "INSERT INTO teams (provider, provider_team_id, primary_league, leagues, sport, team_name, channel_id) "
-            "VALUES ('espn', '322', 'baseball/college-baseball', '[\"baseball/college-baseball\"]', 'baseball', 'Boise State Broncos', 'BoiseStateBroncos.ncaabb')"
+            "INSERT INTO teams "
+            "(provider, provider_team_id, primary_league, leagues, sport, team_name, channel_id) "
+            "VALUES ('espn', '322', 'baseball/college-baseball', "
+            "'[\"baseball/college-baseball\"]', 'baseball', 'Boise State Broncos', "
+            "'BoiseStateBroncos.ncaabb')"
         )
         conn.commit()
 
         teams = [
-            ImportTeam("Boise State Broncos", "BSU", "espn", "1139", "baseball/college-baseball", "baseball", None),
+            ImportTeam(
+                "Boise State Broncos",
+                "BSU",
+                "espn",
+                "1139",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
         ]
         result = bulk_import_teams(conn, teams)
         assert result.imported == 1
@@ -131,7 +174,15 @@ class TestChannelIdCollision:
     def test_no_collision_no_suffix(self, conn):
         """When there's no collision, channel_id should not have a suffix."""
         teams = [
-            ImportTeam("Clemson Tigers", "CLEM", "espn", "529", "baseball/college-baseball", "baseball", None),
+            ImportTeam(
+                "Clemson Tigers",
+                "CLEM",
+                "espn",
+                "529",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
         ]
         result = bulk_import_teams(conn, teams)
         assert result.imported == 1
@@ -146,10 +197,42 @@ class TestMixedImport:
         teams = [
             ImportTeam("TBD", "TBD", "espn", "1153", "baseball/college-baseball", "baseball", None),
             ImportTeam("TBD", "TBD", "espn", "1154", "baseball/college-baseball", "baseball", None),
-            ImportTeam("Boise State Broncos", "BSU", "espn", "322", "baseball/college-baseball", "baseball", None),
-            ImportTeam("Boise State Broncos", "BSU", "espn", "1139", "baseball/college-baseball", "baseball", None),
-            ImportTeam("Clemson Tigers", "CLEM", "espn", "529", "baseball/college-baseball", "baseball", None),
-            ImportTeam("Clemson Tigers", "CLEM", "espn", "1140", "baseball/college-baseball", "baseball", None),
+            ImportTeam(
+                "Boise State Broncos",
+                "BSU",
+                "espn",
+                "322",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
+            ImportTeam(
+                "Boise State Broncos",
+                "BSU",
+                "espn",
+                "1139",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
+            ImportTeam(
+                "Clemson Tigers",
+                "CLEM",
+                "espn",
+                "529",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
+            ImportTeam(
+                "Clemson Tigers",
+                "CLEM",
+                "espn",
+                "1140",
+                "baseball/college-baseball",
+                "baseball",
+                None,
+            ),
         ]
         result = bulk_import_teams(conn, teams)
         assert result.imported == 4  # 2 TBDs filtered, 4 real teams imported

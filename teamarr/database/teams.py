@@ -59,6 +59,23 @@ def get_team(conn: Connection, team_id: int) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
+def get_team_xmltv(conn: Connection, team_id: int) -> dict | None:
+    """Get the generated XMLTV content and timestamp for a team's channel.
+
+    Args:
+        conn: Database connection
+        team_id: Team ID
+
+    Returns:
+        Dict with ``xmltv_content`` and ``updated_at``, or None if not generated yet.
+    """
+    row = conn.execute(
+        "SELECT xmltv_content, updated_at FROM team_epg_xmltv WHERE team_id = ?",
+        (team_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def create_team(
     conn: Connection,
     provider: str,

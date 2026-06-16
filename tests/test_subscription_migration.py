@@ -215,12 +215,14 @@ class TestSoccerConfigMerge:
             {"provider": "espn", "team_id": "2", "name": "Chelsea"},
         ]
         db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, soccer_mode, soccer_followed_teams, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, soccer_mode, soccer_followed_teams, enabled) "
             "VALUES (?, '[]', 'teams', ?, 1)",
             ("Group A", json.dumps(teams_a)),
         )
         db.execute(
-            "INSERT INTO event_epg_groups (name, leagues, soccer_mode, soccer_followed_teams, enabled) "
+            "INSERT INTO event_epg_groups "
+            "(name, leagues, soccer_mode, soccer_followed_teams, enabled) "
             "VALUES (?, '[]', 'teams', ?, 1)",
             ("Group B", json.dumps(teams_b)),
         )
@@ -379,4 +381,4 @@ class TestGroupNormalization:
         _run_v58_migration(db)
 
         row = db.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row[0] == 73  # v59-v73 migrations run after v58
+        assert row[0] == 76  # v59-v76 migrations run after v58

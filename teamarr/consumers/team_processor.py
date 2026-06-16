@@ -166,7 +166,11 @@ class TeamProcessor:
         """
         self._db_factory = db_factory
         self._service = service or create_default_service()
-        self._epg_generator = TeamEPGGenerator(self._service)
+        from teamarr.utilities.art_url import read_art_base_url
+
+        self._epg_generator = TeamEPGGenerator(
+            self._service, art_base_url=read_art_base_url(db_factory)
+        )
 
     def process_team(self, team_id: int) -> TeamProcessingResult:
         """Process a single team.
@@ -427,7 +431,13 @@ class TeamProcessor:
                     "name": team.team_name,
                     "icon": team.channel_logo_url or team.team_logo_url,
                 }
-                xmltv_content = programmes_to_xmltv(programmes, [channel_dict])
+                from teamarr.database.settings import get_epg_settings
+
+                xmltv_content = programmes_to_xmltv(
+                    programmes,
+                    [channel_dict],
+                    art_base_url=get_epg_settings(conn).art_base_url,
+                )
                 self._store_team_xmltv(conn, team.id, xmltv_content)
 
             logger.debug(
@@ -493,7 +503,9 @@ class TeamProcessor:
             template=template_config,  # Pre-loaded template
             filler_config=filler_config,  # Pre-loaded filler config
             filler_enabled=True,
-            include_final_events=all_settings.epg.include_final_events,
+            # Final/complete events are always included in the EPG (no longer a
+            # user setting — the toggle was removed in the v2.7.0 EPG overhaul).
+            include_final_events=True,
         )
 
     def _get_team(self, conn: Connection, team_id: int) -> TeamConfig | None:

@@ -55,16 +55,30 @@ def _make_ctx(league: str) -> tuple[TemplateContext, GameContext]:
         league=league,
         sport="soccer",
         status=EventStatus(state="scheduled"),
-        home_team=Team(id="1", provider="espn", name="Arsenal", short_name="Arsenal", abbreviation="ARS", league="eng.1", sport="soccer"),
-        away_team=Team(id="2", provider="espn", name="Chelsea", short_name="Chelsea", abbreviation="CHE", league="eng.1", sport="soccer"),
+        home_team=Team(
+            id="1",
+            provider="espn",
+            name="Arsenal",
+            short_name="Arsenal",
+            abbreviation="ARS",
+            league="eng.1",
+            sport="soccer",
+        ),
+        away_team=Team(
+            id="2",
+            provider="espn",
+            name="Chelsea",
+            short_name="Chelsea",
+            abbreviation="CHE",
+            league="eng.1",
+            sport="soccer",
+        ),
     )
     game_ctx = GameContext(event=event)
     team_config = TeamChannelContext(
         team_id="1", league="eng.1", sport="soccer", team_name="Arsenal"
     )
-    ctx = TemplateContext(
-        game_context=game_ctx, team_config=team_config, team_stats=None
-    )
+    ctx = TemplateContext(game_context=game_ctx, team_config=team_config, team_stats=None)
     return ctx, game_ctx
 
 
@@ -87,18 +101,14 @@ class TestSoccerMatchLeague:
         team_config = TeamChannelContext(
             team_id="1", league="eng.1", sport="soccer", team_name="Arsenal"
         )
-        ctx = TemplateContext(
-            game_context=None, team_config=team_config, team_stats=None
-        )
+        ctx = TemplateContext(game_context=None, team_config=team_config, team_stats=None)
         assert extract_soccer_match_league(ctx, None) == ""
 
     def test_no_event(self):
         team_config = TeamChannelContext(
             team_id="1", league="eng.1", sport="soccer", team_name="Arsenal"
         )
-        ctx = TemplateContext(
-            game_context=None, team_config=team_config, team_stats=None
-        )
+        ctx = TemplateContext(game_context=None, team_config=team_config, team_stats=None)
         game_ctx = GameContext(event=None)
         assert extract_soccer_match_league(ctx, game_ctx) == ""
 
@@ -128,9 +138,7 @@ class TestSoccerMatchLeagueName:
         team_config = TeamChannelContext(
             team_id="1", league="eng.1", sport="soccer", team_name="Arsenal"
         )
-        ctx = TemplateContext(
-            game_context=None, team_config=team_config, team_stats=None
-        )
+        ctx = TemplateContext(game_context=None, team_config=team_config, team_stats=None)
         assert extract_soccer_match_league_name(ctx, None) == ""
 
 
@@ -149,9 +157,7 @@ class TestSoccerMatchLeagueId:
         team_config = TeamChannelContext(
             team_id="1", league="eng.1", sport="soccer", team_name="Arsenal"
         )
-        ctx = TemplateContext(
-            game_context=None, team_config=team_config, team_stats=None
-        )
+        ctx = TemplateContext(game_context=None, team_config=team_config, team_stats=None)
         assert extract_soccer_match_league_id(ctx, None) == ""
 
 
@@ -174,7 +180,5 @@ class TestSoccerMatchLeagueLogo:
         team_config = TeamChannelContext(
             team_id="1", league="eng.1", sport="soccer", team_name="Arsenal"
         )
-        ctx = TemplateContext(
-            game_context=None, team_config=team_config, team_stats=None
-        )
+        ctx = TemplateContext(game_context=None, team_config=team_config, team_stats=None)
         assert extract_soccer_match_league_logo(ctx, None) == ""

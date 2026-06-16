@@ -27,6 +27,13 @@ def get_epg_settings():
         include_final_events=settings.include_final_events,
         midnight_crossover_mode=settings.midnight_crossover_mode,
         cron_expression=settings.cron_expression,
+        epg_xtream_fallback_enabled=settings.epg_xtream_fallback_enabled,
+        epg_xtream_cache_hours=settings.epg_xtream_cache_hours,
+        epg_channel_source_enabled=settings.epg_channel_source_enabled,
+        epg_channel_source_groups=settings.epg_channel_source_groups,
+        epg_stream_pre_buffer_minutes=settings.epg_stream_pre_buffer_minutes,
+        epg_stream_post_buffer_minutes=settings.epg_stream_post_buffer_minutes,
+        art_base_url=settings.art_base_url,
     )
 
 
@@ -58,6 +65,13 @@ def update_epg_settings(update: EPGSettingsModel):
             include_final_events=update.include_final_events,
             midnight_crossover_mode=update.midnight_crossover_mode,
             cron_expression=update.cron_expression,
+            epg_xtream_fallback_enabled=update.epg_xtream_fallback_enabled,
+            epg_xtream_cache_hours=update.epg_xtream_cache_hours,
+            epg_channel_source_enabled=update.epg_channel_source_enabled,
+            epg_channel_source_groups=update.epg_channel_source_groups,
+            epg_stream_pre_buffer_minutes=update.epg_stream_pre_buffer_minutes,
+            epg_stream_post_buffer_minutes=update.epg_stream_post_buffer_minutes,
+            art_base_url=update.art_base_url,
         )
 
     # Update cached timezone so new value is used immediately
@@ -81,4 +95,11 @@ def update_epg_settings(update: EPGSettingsModel):
         include_final_events=settings.include_final_events,
         midnight_crossover_mode=settings.midnight_crossover_mode,
         cron_expression=settings.cron_expression,
+        epg_xtream_fallback_enabled=settings.epg_xtream_fallback_enabled,
+        epg_xtream_cache_hours=settings.epg_xtream_cache_hours,
+        epg_channel_source_enabled=settings.epg_channel_source_enabled,
+        epg_channel_source_groups=settings.epg_channel_source_groups,
+        epg_stream_pre_buffer_minutes=settings.epg_stream_pre_buffer_minutes,
+        epg_stream_post_buffer_minutes=settings.epg_stream_post_buffer_minutes,
+        art_base_url=settings.art_base_url,
     )

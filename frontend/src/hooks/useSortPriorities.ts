@@ -7,8 +7,12 @@ import {
   deleteSortPriorityLeague,
   reorderSortPriorities,
   autoPopulateSortPriorities,
+  getPriorityTeams,
+  addPriorityTeam,
+  deletePriorityTeam,
 } from "@/api/sortPriorities"
 import type { SortPriorityCreate, SortPriorityReorderItem } from "@/api/sortPriorities"
+import type { TeamFilterEntry } from "@/api/types"
 
 export function useSortPriorities() {
   return useQuery({
@@ -70,6 +74,37 @@ export function useAutoPopulateSortPriorities() {
     mutationFn: autoPopulateSortPriorities,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sort-priorities"] })
+    },
+  })
+}
+
+// --- Priority teams ---
+
+export function usePriorityTeams() {
+  return useQuery({
+    queryKey: ["priority-teams"],
+    queryFn: getPriorityTeams,
+  })
+}
+
+export function useAddPriorityTeam() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (team: TeamFilterEntry) => addPriorityTeam(team),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["priority-teams"] })
+    },
+  })
+}
+
+export function useDeletePriorityTeam() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: number) => deletePriorityTeam(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["priority-teams"] })
     },
   })
 }

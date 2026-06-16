@@ -50,6 +50,28 @@ class AutoPopulateResponse(BaseModel):
     message: str
 
 
+class PriorityTeamModel(BaseModel):
+    """A team whose channels float to the top of the global channel list."""
+
+    id: int
+    provider: str
+    provider_team_id: str
+    team_name: str
+    league: str | None = None
+    sport: str
+
+
+class PriorityTeamCreate(BaseModel):
+    """Add a priority team (a TeamPicker ``TeamFilterEntry``).
+
+    Name + sport are resolved server-side from ``team_cache``.
+    """
+
+    provider: str
+    team_id: str
+    league: str | None = None
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
@@ -144,6 +166,57 @@ def create_sort_priority(data: SortPriorityCreate):
         league_code=entry.league_code,
         sort_priority=entry.sort_priority,
     )
+
+
+# =============================================================================
+# PRIORITY TEAMS — a team-level tier that floats above sport/league ordering.
+# Defined BEFORE the `/{sport}` routes below so `/teams/{id}` isn't shadowed by
+# `DELETE /{sport}/{league_code}` (Starlette matches in definition order).
+# =============================================================================
+
+
+@router.get("/teams", response_model=list[PriorityTeamModel])
+def get_priority_teams():
+    """List teams whose channels float to the top of the global channel list."""
+    from teamarr.database.priority_teams import get_priority_teams
+
+    with get_db() as conn:
+        teams = get_priority_teams(conn)
+
+    return [PriorityTeamModel(**t) for t in teams]
+
+
+@router.post("/teams", response_model=PriorityTeamModel)
+def add_priority_team(data: PriorityTeamCreate):
+    """Add a priority team. Name + sport are resolved from ``team_cache``."""
+    from teamarr.database.priority_teams import add_priority_team
+
+    with get_db() as conn:
+        team = add_priority_team(
+            conn,
+            provider=data.provider,
+            provider_team_id=data.team_id,
+            league=data.league,
+        )
+
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Team not found in cache — refresh the team directory and try again",
+        )
+
+    return PriorityTeamModel(**team)
+
+
+@router.delete("/teams/{team_pk}")
+def delete_priority_team(team_pk: int):
+    """Remove a priority team by id."""
+    from teamarr.database.priority_teams import delete_priority_team
+
+    with get_db() as conn:
+        removed = delete_priority_team(conn, team_pk)
+
+    return {"success": removed, "id": team_pk}
 
 
 @router.delete("/{sport}")

@@ -101,10 +101,13 @@ Override the global default team filter for this group:
 By default, groups inherit the global league subscription. To override:
 
 1. Edit the group
-2. Under "Subscription Override", toggle on custom leagues
-3. Select the specific leagues this group should scan
+2. Under "Subscription Override", uncheck **Use global subscription**
+3. The picker automatically seeds from your current global subscription
+4. Deselect any leagues or sports you want to exclude, then save
 
-This is useful when a stream source only covers certain sports (e.g., a hockey-only IPTV group that shouldn't waste time scanning for NFL events).
+Use **Match Global** at any time to reset the picker back to the current global subscription and start over.
+
+This is useful when a stream source mixes sports and you need to exclude specific leagues from a group — for example, excluding MLB from a multi-sport group where the provider labels all streams with the same channel format regardless of sport.
 
 ## Channel Sort Order
 
@@ -125,3 +128,11 @@ Toggle the group on/off without deleting it. Disabled groups are skipped during 
 ### Priority
 
 When multiple groups could match the same stream, higher priority groups are checked first. Lower numbers = higher priority.
+
+### Team Stream Source
+
+Allow team-branded streams (e.g. `NHL | Toronto Maple Leafs`) to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
+
+### EPG Program Matching
+
+Match static-named linear channels (e.g. `ESPN`, `FS1`, `NBA1`) in this group to events using Dispatcharr's program guide, and time-share one stream across many event channels near game time. Requires the global EPG switch (Settings → EPG). Built-in filtering is bypassed for this group. See [EPG Program Matching](../epg-matching.md) for the full guide.

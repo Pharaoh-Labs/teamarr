@@ -203,6 +203,7 @@ class KeywordEnforcer:
                             source_group_type=stream.source_group_type,
                             exception_keyword=expected_keyword,
                             m3u_account_name=stream.m3u_account_name,
+                            dispatcharr_channel_group=stream.dispatcharr_channel_group,
                         )
 
                         # Sync to Dispatcharr

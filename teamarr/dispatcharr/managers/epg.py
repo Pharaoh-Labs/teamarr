@@ -6,9 +6,14 @@ Handles EPG source operations including refresh and status polling.
 import logging
 import time
 from collections.abc import Callable
+from urllib.parse import urlencode
 
 from teamarr.dispatcharr.client import DispatcharrClient
-from teamarr.dispatcharr.types import DispatcharrEPGSource, RefreshResult
+from teamarr.dispatcharr.types import (
+    DispatcharrEPGSource,
+    DispatcharrProgram,
+    RefreshResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +29,9 @@ class EPGManager:
         result = manager.wait_for_refresh(epg_id=21, timeout=60)
     """
 
+    # Endpoint for program-data search (newer Dispatcharr builds only).
+    _PROGRAMS_SEARCH_PATH = "/api/epg/programs/search/"
+
     def __init__(self, client: DispatcharrClient):
         """Initialize EPG manager.
 
@@ -31,6 +39,9 @@ class EPGManager:
             client: Authenticated DispatcharrClient instance
         """
         self._client = client
+        # Cached feature-detection result for the program-search endpoint.
+        # None = not probed yet, True/False = endpoint present/absent.
+        self._programs_search_supported: bool | None = None
 
     def list_sources(self, include_dummy: bool = True) -> list[DispatcharrEPGSource]:
         """List all EPG sources.
@@ -269,6 +280,115 @@ class EPGManager:
                 message=f"No EPG source found matching '{name}'",
             )
         return self.refresh(source.id)
+
+    def supports_program_search(self, force: bool = False) -> bool:
+        """Check whether this Dispatcharr build exposes program-data search.
+
+        Probes GET /api/epg/programs/search/ once with page_size=1 and caches
+        the result. A 404 means the endpoint is unavailable (older Dispatcharr)
+        and callers should degrade gracefully. The result is cached so this is
+        cheap to call repeatedly within a generation run.
+
+        Args:
+            force: Re-probe even if a cached result exists.
+
+        Returns:
+            True if the endpoint responds (HTTP 200), False if absent (404).
+            On other/transient errors, returns False without caching so a
+            later call can retry.
+        """
+        if self._programs_search_supported is not None and not force:
+            return self._programs_search_supported
+
+        response = self._client.get(f"{self._PROGRAMS_SEARCH_PATH}?page_size=1")
+        if response is None:
+            # Connection/auth failure — unknown, don't cache a negative.
+            logger.debug("[EPG] Program-search probe got no response; treating as unsupported")
+            return False
+
+        if response.status_code == 200:
+            self._programs_search_supported = True
+            logger.debug("[EPG] Program-search endpoint supported")
+            return True
+
+        if response.status_code == 404:
+            self._programs_search_supported = False
+            logger.info(
+                "[EPG] Program-search endpoint not available on this Dispatcharr build "
+                "(HTTP 404); EPG-based matching disabled"
+            )
+            return False
+
+        # Other status (401/5xx) — unknown, don't cache so we retry later.
+        logger.debug(
+            "[EPG] Program-search probe returned HTTP %s; treating as unsupported for now",
+            response.status_code,
+        )
+        return False
+
+    def search_programs(
+        self,
+        tvg_id: str | None = None,
+        start_before: str | None = None,
+        end_after: str | None = None,
+        title: str | None = None,
+        channel_id: int | None = None,
+        epg_source: int | str | None = None,
+        page_size: int = 500,
+        fields: str | None = None,
+    ) -> list[DispatcharrProgram]:
+        """Search EPG programs via /api/epg/programs/search/.
+
+        Fetches all matching programs across pages (DRF-paginated). Use the
+        time-window params to scope a single day: pass start_before=<window end>
+        and end_after=<window start> to get programs overlapping that window.
+
+        Feature-gated: if the endpoint is unavailable (older Dispatcharr), this
+        returns an empty list and logs once. Check supports_program_search()
+        first if you need to distinguish "unsupported" from "no results".
+
+        Args:
+            tvg_id: Restrict to a single tvg_id (guide channel).
+            start_before: Only programs starting before this ISO8601 time.
+            end_after: Only programs ending after this ISO8601 time.
+            title: Server-side substring filter on program title.
+            channel_id: Restrict to programs on a specific Dispatcharr channel.
+            epg_source: Restrict to a specific EPG source (id or name).
+            page_size: Page size for pagination (default 500).
+            fields: Optional comma-separated field projection (server-supported).
+
+        Returns:
+            List of DispatcharrProgram. Empty if unsupported or no matches.
+        """
+        if not self.supports_program_search():
+            return []
+
+        params: dict[str, str | int] = {"page_size": page_size}
+        if tvg_id is not None:
+            params["tvg_id"] = tvg_id
+        if start_before is not None:
+            params["start_before"] = start_before
+        if end_after is not None:
+            params["end_after"] = end_after
+        if title is not None:
+            params["title"] = title
+        if channel_id is not None:
+            params["channel_id"] = channel_id
+        if epg_source is not None:
+            params["epg_source"] = epg_source
+        if fields is not None:
+            params["fields"] = fields
+
+        endpoint = f"{self._PROGRAMS_SEARCH_PATH}?{urlencode(params)}"
+        raw = self._client.paginated_get(endpoint, error_context="epg programs")
+
+        programs: list[DispatcharrProgram] = []
+        for item in raw:
+            try:
+                programs.append(DispatcharrProgram.from_api(item))
+            except (KeyError, TypeError) as e:
+                logger.debug("[EPG] Skipping malformed program record: %s", e)
+        return programs
 
     def test_connection(self) -> dict:
         """Test connection to Dispatcharr EPG API.

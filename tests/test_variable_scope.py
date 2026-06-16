@@ -18,7 +18,6 @@ from teamarr.templates.variables import (
     get_registry,
 )
 
-
 # --- Registry-level tests ---
 
 
@@ -88,9 +87,7 @@ def test_scope_counts_partition_the_registry():
     # Each scope view = ALL count + that-scope-only count.
     # So team_count + event_count = 2*ALL + TEAM_ONLY + EVENT_ONLY
     # And 2*ALL + TEAM_ONLY + EVENT_ONLY = ALL + total
-    all_count = sum(
-        1 for v in registry.all_variables() if v.scope is TemplateScope.ALL
-    )
+    all_count = sum(1 for v in registry.all_variables() if v.scope is TemplateScope.ALL)
     assert team_count + event_count == all_count + total
 
 

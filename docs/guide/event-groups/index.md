@@ -37,11 +37,14 @@ Below Global Defaults, the event groups table shows all configured groups with:
 | Column | Description |
 |--------|-------------|
 | **Name** | Group name and M3U account |
-| **Matched** | Streams matched to events (with match rate and last-run timestamp) |
+| **Matched** | Stream coverage — how many of the group's eligible streams matched at least one event, as a 0–100% rate. Hover for the total *matches produced* and the last-run timestamp. |
 | **Status** | Enable/disable toggle |
 | **Actions** | Preview matches, clear cache, edit, delete |
 
 Click **Matched** numbers to see which streams matched to which events. Click the preview button to see current stream matches without running a full generation.
+
+!!! info "Coverage vs. matches produced"
+    The percentage is **stream coverage**: distinct streams matched ÷ eligible streams (always 0–100%). The hover tooltip shows **matches produced** — the total number of stream→event matches. With [EPG matching](../epg-matching.md), one linear stream (ESPN, FS1…) is time-shared across many events, so matches produced can far exceed the stream count. These are tracked separately so coverage stays a true health signal.
 
 ## Importing Groups
 

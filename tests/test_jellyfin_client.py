@@ -16,16 +16,11 @@ class TestUrlPrefix:
 
     def test_jellyfin_omits_emby_prefix(self):
         client = JellyfinClient(base_url="http://jellyfin:8096")
-        assert (
-            client._url("/ScheduledTasks") == "http://jellyfin:8096/ScheduledTasks"
-        )
+        assert client._url("/ScheduledTasks") == "http://jellyfin:8096/ScheduledTasks"
 
     def test_jellyfin_strips_trailing_slash(self):
         client = JellyfinClient(base_url="http://jellyfin:8096/")
-        assert (
-            client._url("/System/Info/Public")
-            == "http://jellyfin:8096/System/Info/Public"
-        )
+        assert client._url("/System/Info/Public") == "http://jellyfin:8096/System/Info/Public"
 
     def test_jellyfin_inherits_emby_token_header(self):
         # Jellyfin accepts X-Emby-Token for back-compat — same auth path as Emby.

@@ -710,3 +710,28 @@ class ChannelManager:
                 return epg_data
 
         return None
+
+    def get_stream_channel_map(self) -> dict[int, dict]:
+        """Map each assigned stream id -> the Dispatcharr channel that carries it.
+
+        A raw M3U stream's ``tvg_id`` lives in a different namespace from EPG
+        program ``tvg_id`` values, so streams cannot be matched to programs
+        directly. EPG attaches to *channels* (via ``epg_data_id``); the only
+        reliable stream->EPG link is through the channel a stream is assigned
+        to. This builds that reverse index in one paginated fetch so EPG
+        matching can resolve a candidate stream to a channel and fetch its
+        programs by ``channel_id``.
+
+        Returns:
+            Dict mapping stream id -> channel dict (id, epg_data_id, etc.).
+            A stream assigned to multiple channels keeps the last one seen.
+        """
+        channels = self._client.paginated_get(
+            "/api/channels/channels/?page_size=500",
+            error_context="channels",
+        )
+        mapping: dict[int, dict] = {}
+        for ch in channels:
+            for stream_id in ch.get("streams") or []:
+                mapping[stream_id] = ch
+        return mapping

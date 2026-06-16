@@ -8,25 +8,30 @@ docs_version: "2.3.0"
 
 # Team vs Event Templates
 
-Teamarr supports two template types designed for different EPG workflows. Understanding the difference is essential for setting up your system correctly.
+Teamarr supports two template types designed for different EPG workflows. The key difference is *where each one lives*:
+
+- **Team templates** populate the **XMLTV channel** Teamarr writes for that team. You map the XMLTV channel to one of your existing Dispatcharr channels.
+- **Event templates** populate the **Dispatcharr channels** Teamarr creates from matched event streams.
+
+Understanding the difference is essential for setting up your system correctly.
 
 ## Team Templates
 
-Team templates are for **persistent channels dedicated to a specific team**.
+Team templates fill in the EPG for a **persistent XMLTV channel dedicated to a specific team**. Teamarr does not create a Dispatcharr channel here — you point one of your existing Dispatcharr channels at this XMLTV channel id.
 
 ### How They Work
 
-- Each team gets its own channel that exists 24/7
+- Each team has its own XMLTV channel that exists 24/7 in the guide Teamarr generates
 - The template is assigned to a specific team, so Teamarr knows the "viewpoint"
 - Content is written from that team's perspective using variables like `{team_name}` and `{opponent}`
 - Whether the team is home or away, `{team_name}` is always your team and `{opponent}` is always the other team
-- Filler content (pregame, postgame, idle) keeps the channel populated even when no game is live
+- Filler programmes (pregame, postgame, idle) keep the channel populated even when no game is live
 
 ### Use Cases
 
-- "Detroit Lions" channel showing all Lions games
+- "Detroit Lions" channel in your guide showing all Lions games
 - "LA Lakers" channel with Lakers schedule
-- Regional sports network style - one channel per team
+- Regional sports network style — one XMLTV channel per team, mapped onto a fixed Dispatcharr channel you already have
 
 ### Variable Context
 
@@ -96,6 +101,7 @@ Each event group can have one template that applies to all matched events in tha
 
 | Feature | Team Templates | Event Templates |
 |---------|---------------|-----------------|
+| Channel target | XMLTV channel per team (you map it to a Dispatcharr channel) | Dispatcharr channel per matched game (Teamarr creates it) |
 | Channel lifetime | Persistent (24/7) | Temporary (per game) |
 | Perspective | Team-specific ("our team") | Positional (home/away) |
 | Suffix support | `.next`, `.last` | None needed |

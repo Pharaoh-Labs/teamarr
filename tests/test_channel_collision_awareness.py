@@ -52,6 +52,8 @@ def conn():
             event_id TEXT,
             sport TEXT,
             league TEXT,
+            home_team TEXT,
+            away_team TEXT,
             event_date TEXT,
             exception_keyword TEXT,
             created_at TEXT
@@ -65,6 +67,16 @@ def conn():
             sort_priority INTEGER,
             created_at TEXT,
             updated_at TEXT
+        )
+    """)
+    db.execute("""
+        CREATE TABLE channel_priority_teams (
+            id INTEGER PRIMARY KEY,
+            provider TEXT,
+            provider_team_id TEXT,
+            team_name TEXT,
+            league TEXT,
+            sport TEXT
         )
     """)
     db.commit()
@@ -88,9 +100,7 @@ class TestAutoModeWithExternals:
         """AUTO mode skips both Teamarr managed and external numbers."""
         from teamarr.database.channel_numbers import get_next_channel_number
 
-        conn.execute(
-            "INSERT INTO event_epg_groups (id, name, enabled) VALUES (1, 'NHL', 1)"
-        )
+        conn.execute("INSERT INTO event_epg_groups (id, name, enabled) VALUES (1, 'NHL', 1)")
         conn.execute(
             "INSERT INTO managed_channels (id, event_epg_group_id, channel_number) "
             "VALUES (1, 1, '104')"
@@ -188,9 +198,7 @@ class TestGlobalReassignWithExternals:
         """reassign_all_channels skips external channel numbers."""
         from teamarr.database.channel_numbers import reassign_all_channels
 
-        conn.execute(
-            "INSERT INTO event_epg_groups (id, name, enabled) VALUES (1, 'NHL', 1)"
-        )
+        conn.execute("INSERT INTO event_epg_groups (id, name, enabled) VALUES (1, 'NHL', 1)")
         conn.execute(
             "INSERT INTO managed_channels (id, event_epg_group_id, channel_number, "
             "dispatcharr_channel_id, channel_name, sport, league) "
@@ -208,9 +216,7 @@ class TestGlobalReassignWithExternals:
         result = reassign_all_channels(conn, external_occupied=external)
 
         assert result["channels_moved"] == 2
-        rows = conn.execute(
-            "SELECT channel_number FROM managed_channels ORDER BY id"
-        ).fetchall()
+        rows = conn.execute("SELECT channel_number FROM managed_channels ORDER BY id").fetchall()
         assert int(rows[0]["channel_number"]) == 102
         assert int(rows[1]["channel_number"]) == 103
 
@@ -218,9 +224,7 @@ class TestGlobalReassignWithExternals:
         """Reassignment without externals keeps channels at same position."""
         from teamarr.database.channel_numbers import reassign_all_channels
 
-        conn.execute(
-            "INSERT INTO event_epg_groups (id, name, enabled) VALUES (1, 'NHL', 1)"
-        )
+        conn.execute("INSERT INTO event_epg_groups (id, name, enabled) VALUES (1, 'NHL', 1)")
         conn.execute(
             "INSERT INTO managed_channels (id, event_epg_group_id, channel_number, "
             "dispatcharr_channel_id, channel_name, sport, league) "
@@ -228,10 +232,8 @@ class TestGlobalReassignWithExternals:
         )
         conn.commit()
 
-        result = reassign_all_channels(conn, external_occupied=None)
-        rows = conn.execute(
-            "SELECT channel_number FROM managed_channels ORDER BY id"
-        ).fetchall()
+        reassign_all_channels(conn, external_occupied=None)
+        rows = conn.execute("SELECT channel_number FROM managed_channels ORDER BY id").fetchall()
         assert int(rows[0]["channel_number"]) == 101
 
 

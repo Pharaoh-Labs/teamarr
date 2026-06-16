@@ -7,10 +7,12 @@ import json
 from sqlite3 import Connection
 
 from .types import (
+    NO_VALUE_RULE_TYPES,
     AllSettings,
     APISettings,
     BackupSettings,
     ChannelNumberingSettings,
+    ChannelsDVRSettings,
     DispatcharrSettings,
     DisplaySettings,
     DurationSettings,
@@ -139,6 +141,35 @@ def get_all_settings(conn: Connection) -> AllSettings:
             prepend_postponed_label=bool(row["prepend_postponed_label"])
             if row["prepend_postponed_label"] is not None
             else True,
+            epg_xtream_fallback_enabled=bool(row["epg_xtream_fallback_enabled"])
+            if "epg_xtream_fallback_enabled" in row.keys()
+            else False,
+            epg_xtream_cache_hours=(
+                row["epg_xtream_cache_hours"]
+                if "epg_xtream_cache_hours" in row.keys()
+                else 24
+            ) or 24,
+            epg_channel_source_enabled=bool(row["epg_channel_source_enabled"])
+            if "epg_channel_source_enabled" in row.keys()
+            else False,
+            epg_channel_source_groups=json.loads(
+                row["epg_channel_source_groups"] or "[]"
+            )
+            if "epg_channel_source_groups" in row.keys()
+            else [],
+            epg_stream_pre_buffer_minutes=(
+                row["epg_stream_pre_buffer_minutes"]
+                if "epg_stream_pre_buffer_minutes" in row.keys()
+                else 60
+            ) or 60,
+            epg_stream_post_buffer_minutes=(
+                row["epg_stream_post_buffer_minutes"]
+                if "epg_stream_post_buffer_minutes" in row.keys()
+                else 60
+            ) or 60,
+            art_base_url=(
+                row["art_base_url"] if "art_base_url" in row.keys() else ""
+            ) or "",
         ),
         durations=DurationSettings(
             default=row["duration_default"] or 3.0,
@@ -195,6 +226,7 @@ def get_all_settings(conn: Connection) -> AllSettings:
         feed_separation=_build_feed_separation_settings(row),
         emby=_build_emby_settings(row),
         jellyfin=_build_jellyfin_settings(row),
+        channelsdvr=_build_channelsdvr_settings(row),
         epg_generation_counter=row["epg_generation_counter"] or 0,
         schema_version=row["schema_version"] or 2,
     )
@@ -341,7 +373,13 @@ def get_epg_settings(conn: Connection) -> EPGSettings:
         """SELECT team_schedule_days_ahead, event_match_days_ahead, event_match_days_back,
                   epg_output_days_ahead, epg_lookback_hours, epg_timezone,
                   epg_output_path, include_final_events, midnight_crossover_mode,
-                  cron_expression, prepend_postponed_label
+                  cron_expression, prepend_postponed_label,
+                  epg_xtream_fallback_enabled,
+                  epg_xtream_cache_hours,
+                  epg_channel_source_enabled, epg_channel_source_groups,
+                  epg_stream_pre_buffer_minutes,
+                  epg_stream_post_buffer_minutes,
+                  art_base_url
            FROM settings WHERE id = 1"""
     )
     row = cursor.fetchone()
@@ -363,6 +401,13 @@ def get_epg_settings(conn: Connection) -> EPGSettings:
         prepend_postponed_label=bool(row["prepend_postponed_label"])
         if row["prepend_postponed_label"] is not None
         else True,
+        epg_xtream_fallback_enabled=bool(row["epg_xtream_fallback_enabled"]),
+        epg_xtream_cache_hours=row["epg_xtream_cache_hours"] or 24,
+        epg_channel_source_enabled=bool(row["epg_channel_source_enabled"]),
+        epg_channel_source_groups=json.loads(row["epg_channel_source_groups"] or "[]"),
+        epg_stream_pre_buffer_minutes=row["epg_stream_pre_buffer_minutes"] or 60,
+        epg_stream_post_buffer_minutes=row["epg_stream_post_buffer_minutes"] or 60,
+        art_base_url=row["art_base_url"] or "",
     )
 
 
@@ -515,7 +560,9 @@ def _parse_stream_ordering_rules(rules_json: str | None) -> list[StreamOrderingR
                 priority=rule.get("priority", 99),
             )
             for rule in rules_data
-            if isinstance(rule, dict) and rule.get("type") and rule.get("value")
+            if isinstance(rule, dict)
+            and rule.get("type")
+            and (rule.get("type") in NO_VALUE_RULE_TYPES or rule.get("value"))
         ]
     except json.JSONDecodeError:
         return []
@@ -790,3 +837,48 @@ def get_jellyfin_settings(conn: Connection) -> JellyfinSettings:
         return JellyfinSettings()
 
     return _build_jellyfin_settings(row)
+
+
+_CHANNELSDVR_DEFAULTS = ChannelsDVRSettings()
+
+
+def _build_channelsdvr_settings(row) -> ChannelsDVRSettings:
+    """Build ChannelsDVRSettings from DB row, using dataclass defaults for NULL."""
+    d = _CHANNELSDVR_DEFAULTS
+    return ChannelsDVRSettings(
+        enabled=bool(row["channelsdvr_enabled"])
+        if "channelsdvr_enabled" in row.keys()
+        and row["channelsdvr_enabled"] is not None
+        else d.enabled,
+        url=row["channelsdvr_url"]
+        if "channelsdvr_url" in row.keys()
+        else d.url,
+        source_name=row["channelsdvr_source_name"]
+        if "channelsdvr_source_name" in row.keys()
+        else d.source_name,
+        lineup_id=row["channelsdvr_lineup_id"]
+        if "channelsdvr_lineup_id" in row.keys()
+        else d.lineup_id,
+    )
+
+
+def get_channelsdvr_settings(conn: Connection) -> ChannelsDVRSettings:
+    """Get Channels DVR integration settings.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        ChannelsDVRSettings object with Channels DVR configuration
+    """
+    cursor = conn.execute(
+        """SELECT channelsdvr_enabled, channelsdvr_url, channelsdvr_source_name,
+                  channelsdvr_lineup_id
+           FROM settings WHERE id = 1"""
+    )
+    row = cursor.fetchone()
+
+    if not row:
+        return ChannelsDVRSettings()
+
+    return _build_channelsdvr_settings(row)

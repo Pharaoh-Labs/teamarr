@@ -66,7 +66,8 @@ def _make_event() -> Event:
 
 
 def _context_with_feed(
-    feed_team: Team | None, event: Event | None = None,
+    feed_team: Team | None,
+    event: Event | None = None,
 ) -> tuple[TemplateContext, GameContext | None]:
     game_ctx = None
     if event:

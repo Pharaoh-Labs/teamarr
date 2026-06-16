@@ -5,7 +5,7 @@ provider to be recreated with the updated API key from the database,
 without requiring a restart.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 
@@ -93,6 +93,7 @@ class TestDisplaySettingsReloadIntegration:
     def test_endpoint_source_contains_reinitialize_call(self):
         """The display settings endpoint should call reinitialize_provider for tsdb."""
         import inspect
+
         from teamarr.api.routes.settings.display import update_display_settings_endpoint
 
         source = inspect.getsource(update_display_settings_endpoint)

@@ -39,6 +39,42 @@ In the tables below, the **Suffixes** column indicates which suffixes are availa
 
 ---
 
+## Artwork & Game Thumbs
+
+Three template fields hold image URLs and accept the same variables as any other field:
+
+| Field | Used for |
+|-------|----------|
+| **Program Art URL** (`program_art_url`) | the programme `<icon>` in the EPG (per-game artwork) |
+| **Channel Logo URL** (`event_channel_logo_url`, event templates) | the Dispatcharr channel logo **and** the EPG channel icon |
+| **Filler Art URL** (pregame/postgame/idle `art_url`) | artwork on filler programmes |
+
+### Game-Thumbs base URL
+
+Instead of writing the full image host in every template, set it **once** in
+**EPG → Output → Game Thumbs → Game-Thumbs Base URL** (e.g. your
+[Game Thumbs](../game-thumbs) host). Templates then store only the **relative path**,
+always starting with `/`:
+
+```
+/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=6&logo=true&fallback=true
+```
+
+At generation the base URL — host **and port**, exactly as you entered it — is prefixed onto the
+relative path. Rules:
+
+- **Relative paths** (start with `/`) get the base prefixed.
+- **Absolute URLs** (anything with `http://`/`https://`) are left **unchanged**, so you can
+  still hardcode a one-off full URL in a single field.
+- Empty base URL = no prefixing (every art field must then be a full URL).
+
+The same reconstructed URL is sent everywhere it's needed — the EPG `<icon>` **and** the
+Dispatcharr channel logo — so the guide artwork and the channel logo always match. The
+live preview in the template editor applies the base URL too, so what you see matches the
+generated output (and renders the actual image so you can confirm the link resolves).
+
+---
+
 ## Identity
 
 Core identifiers for teams, leagues, and matchups.

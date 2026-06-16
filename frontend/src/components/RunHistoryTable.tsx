@@ -12,14 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { ResponsiveTable, type ResponsiveColumn } from "@/components/ui/responsive-table"
 import {
   Dialog,
   DialogContent,
@@ -225,87 +218,102 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
     setFailedGroupFilter("all")
   }
 
+  // One column config drives both the desktop table and the mobile cards.
+  const columns: ResponsiveColumn<ProcessingRun>[] = [
+    {
+      key: "status",
+      header: "Status",
+      headerClassName: "w-10",
+      mobileTitle: true,
+      cell: (run) => <StatusIcon status={run.status} />,
+    },
+    {
+      key: "time",
+      header: "Time",
+      mobileTitle: true,
+      cell: (run) => <span className="text-muted-foreground">{formatDateTime(run.started_at)}</span>,
+    },
+    {
+      key: "processed",
+      header: "Processed",
+      align: "center",
+      cell: (run) => {
+        const teams = (run.extra_metrics?.teams_processed as number) ?? 0
+        const groups = (run.extra_metrics?.groups_processed as number) ?? 0
+        return (
+          <span className="text-muted-foreground text-xs">
+            {teams} Teams / {groups} Event Groups
+          </span>
+        )
+      },
+    },
+    {
+      key: "programmes",
+      header: "Programmes",
+      align: "center",
+      cell: (run) => (
+        <RichTooltip
+          title="Breakdown"
+          rows={[
+            { label: "Events", value: run.programmes?.events ?? 0 },
+            { label: "Pregame", value: run.programmes?.pregame ?? 0 },
+            { label: "Postgame", value: run.programmes?.postgame ?? 0 },
+            { label: "Idle", value: run.programmes?.idle ?? 0 },
+          ]}
+        >
+          <span className="cursor-help tabular-nums">{run.programmes?.total ?? 0}</span>
+        </RichTooltip>
+      ),
+    },
+    {
+      key: "matched",
+      header: "Matched",
+      align: "center",
+      cell: (run) => (
+        <button
+          className="cursor-pointer text-green-600 hover:underline font-medium tabular-nums"
+          onClick={() => setMatchedModalRunId(run.id)}
+        >
+          {run.streams?.matched ?? 0}
+        </button>
+      ),
+    },
+    {
+      key: "failed",
+      header: "Failed",
+      align: "center",
+      cell: (run) => (
+        <button
+          className="cursor-pointer text-red-600 hover:underline font-medium tabular-nums"
+          onClick={() => setFailedModalRunId(run.id)}
+        >
+          {run.streams?.unmatched ?? 0}
+        </button>
+      ),
+    },
+    {
+      key: "channels",
+      header: "Channels",
+      align: "center",
+      cell: (run) => <span className="tabular-nums">{run.channels?.active ?? 0}</span>,
+    },
+    {
+      key: "duration",
+      header: "Duration",
+      cell: (run) => formatDuration(run.duration_ms),
+    },
+    {
+      key: "size",
+      header: "Size",
+      cell: (run) => (
+        <span className="text-muted-foreground">{formatBytes(run.xmltv_size_bytes)}</span>
+      ),
+    },
+  ]
+
   return (
     <>
-      {/* Table */}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-10">Status</TableHead>
-            <TableHead>Time</TableHead>
-            <TableHead className="text-center">Processed</TableHead>
-            <TableHead className="text-center">Programmes</TableHead>
-            <TableHead className="text-center">Matched</TableHead>
-            <TableHead className="text-center">Failed</TableHead>
-            <TableHead className="text-center">Channels</TableHead>
-            <TableHead>Duration</TableHead>
-            <TableHead>Size</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {runs.map((run) => {
-            const teams = (run.extra_metrics?.teams_processed as number) ?? 0
-            const groups = (run.extra_metrics?.groups_processed as number) ?? 0
-            const events = run.programmes?.events ?? 0
-            const pregame = run.programmes?.pregame ?? 0
-            const postgame = run.programmes?.postgame ?? 0
-            const idle = run.programmes?.idle ?? 0
-            const total = run.programmes?.total ?? 0
-            const matched = run.streams?.matched ?? 0
-            const unmatched = run.streams?.unmatched ?? 0
-
-            return (
-              <TableRow key={run.id}>
-                <TableCell>
-                  <StatusIcon status={run.status} />
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDateTime(run.started_at)}
-                </TableCell>
-                <TableCell className="text-center">
-                  <span className="text-muted-foreground text-xs">
-                    {teams} Teams / {groups} Event Groups
-                  </span>
-                </TableCell>
-                <TableCell className="text-center">
-                  <RichTooltip
-                    title="Breakdown"
-                    rows={[
-                      { label: "Events", value: events },
-                      { label: "Pregame", value: pregame },
-                      { label: "Postgame", value: postgame },
-                      { label: "Idle", value: idle },
-                    ]}
-                  >
-                    <span className="cursor-help tabular-nums">{total}</span>
-                  </RichTooltip>
-                </TableCell>
-                <TableCell className="text-center">
-                  <button
-                    className="text-green-600 hover:underline font-medium"
-                    onClick={() => setMatchedModalRunId(run.id)}
-                  >
-                    {matched}
-                  </button>
-                </TableCell>
-                <TableCell className="text-center">
-                  <button
-                    className="text-red-600 hover:underline font-medium"
-                    onClick={() => setFailedModalRunId(run.id)}
-                  >
-                    {unmatched}
-                  </button>
-                </TableCell>
-                <TableCell className="text-center">{run.channels?.active ?? 0}</TableCell>
-                <TableCell>{formatDuration(run.duration_ms)}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatBytes(run.xmltv_size_bytes)}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+      <ResponsiveTable rows={runs} columns={columns} keyExtractor={(run) => run.id} />
 
       {/* Matched Streams Modal */}
       <Dialog open={matchedModalRunId !== null} onOpenChange={(open) => { if (!open) closeMatchedModal() }}>

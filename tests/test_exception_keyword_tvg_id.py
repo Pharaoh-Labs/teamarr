@@ -12,9 +12,8 @@ from unittest.mock import patch
 import pytest
 
 from teamarr.consumers.lifecycle.types import generate_event_tvg_id, slugify_keyword
-from teamarr.templates.context import TemplateContext, TeamChannelContext
+from teamarr.templates.context import TeamChannelContext, TemplateContext
 from teamarr.templates.resolver import TemplateResolver
-
 
 # =============================================================================
 # SLUGIFY KEYWORD
@@ -80,22 +79,14 @@ class TestGenerateEventTvgId:
         assert result == "teamarr-event-401547679-spanish"
 
     def test_with_segment_and_keyword(self):
-        result = generate_event_tvg_id(
-            "401547679", "espn", "main_card", "French", None
-        )
+        result = generate_event_tvg_id("401547679", "espn", "main_card", "French", None)
         assert result == "teamarr-event-401547679-main_card-french"
 
     def test_none_keyword_same_as_no_keyword(self):
-        assert (
-            generate_event_tvg_id("123", "espn", None, None, None)
-            == "teamarr-event-123"
-        )
+        assert generate_event_tvg_id("123", "espn", None, None, None) == "teamarr-event-123"
 
     def test_empty_keyword_same_as_no_keyword(self):
-        assert (
-            generate_event_tvg_id("123", "espn", None, "", None)
-            == "teamarr-event-123"
-        )
+        assert generate_event_tvg_id("123", "espn", None, "", None) == "teamarr-event-123"
 
     def test_different_keywords_produce_different_ids(self):
         id_spanish = generate_event_tvg_id("123", "espn", None, "Spanish", None)
@@ -126,17 +117,12 @@ class TestGenerateEventTvgId:
         assert away_feed == "teamarr-event-401-feed-20"
 
     def test_feed_team_id_combines_with_segment_and_keyword(self):
-        result = generate_event_tvg_id(
-            "401", "espn", "prelims", "Spanish", "23"
-        )
+        result = generate_event_tvg_id("401", "espn", "prelims", "Spanish", "23")
         assert result == "teamarr-event-401-prelims-spanish-feed-23"
 
     def test_none_feed_team_id_unchanged(self):
         # Backwards compat: no feed_team_id matches the pre-fix tvg_id format
-        assert (
-            generate_event_tvg_id("123", "espn", None, None, None)
-            == "teamarr-event-123"
-        )
+        assert generate_event_tvg_id("123", "espn", None, None, None) == "teamarr-event-123"
 
     def test_feed_team_id_slugified(self):
         # Provider IDs are usually numeric but the function accepts strings —
@@ -218,9 +204,7 @@ class TestTemplateContextExtraVars:
         mock_build = self._make_build_vars({"exception_keyword": ""})
 
         with patch.object(resolver, "_build_all_variables", side_effect=mock_build):
-            result = resolver.resolve(
-                "Game ({exception_keyword})", minimal_context
-            )
+            result = resolver.resolve("Game ({exception_keyword})", minimal_context)
         assert result == "Game (French)"
 
     def test_extra_vars_empty_keyword_cleaned_up(self, minimal_context):
@@ -230,9 +214,7 @@ class TestTemplateContextExtraVars:
         mock_build = self._make_build_vars({"exception_keyword": ""})
 
         with patch.object(resolver, "_build_all_variables", side_effect=mock_build):
-            result = resolver.resolve(
-                "Game ({exception_keyword})", minimal_context
-            )
+            result = resolver.resolve("Game ({exception_keyword})", minimal_context)
         # Resolver cleans up empty wrappers
         assert result == "Game"
 
@@ -250,11 +232,13 @@ class TestTemplateContextExtraVars:
         """Extra vars work alongside normal template variables."""
         resolver = TemplateResolver()
         minimal_context.extra_vars = {"exception_keyword": "Spanish"}
-        mock_build = self._make_build_vars({
-            "exception_keyword": "",
-            "home_team": "Lakers",
-            "away_team": "Celtics",
-        })
+        mock_build = self._make_build_vars(
+            {
+                "exception_keyword": "",
+                "home_team": "Lakers",
+                "away_team": "Celtics",
+            }
+        )
 
         with patch.object(resolver, "_build_all_variables", side_effect=mock_build):
             result = resolver.resolve(

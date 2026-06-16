@@ -70,7 +70,9 @@ Templates use variables enclosed in curly braces that get replaced with real dat
 
 **Event templates** don't use suffixes - each channel exists for a single event, so there's no "next" or "last" game to reference.
 
-See [Variables](variables) for the complete list of 192 available variables.
+See [Variables](variables) for the complete list of 207 available variables. Artwork
+fields support a shared [Game Thumbs](../game-thumbs) base URL so templates can store
+relative image paths — see [Artwork & Game Thumbs](variables#artwork--game-thumbs).
 
 ## Filler Content
 

@@ -7,11 +7,7 @@ Validates fixes from epic ou3:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from datetime import UTC, datetime
 
 # ---------- Minimal stubs for event / template / filler ----------
 
@@ -36,9 +32,7 @@ class FakeEvent:
     sport: str = "mma"
     league: str = "ufc"
     provider: str = "espn"
-    start_time: datetime = field(
-        default_factory=lambda: datetime(2026, 3, 1, 20, 0, tzinfo=timezone.utc)
-    )
+    start_time: datetime = field(default_factory=lambda: datetime(2026, 3, 1, 20, 0, tzinfo=UTC))
     home_team: FakeTeam = field(default_factory=FakeTeam)
     away_team: FakeTeam = field(default_factory=FakeTeam)
     status: FakeStatus = field(default_factory=FakeStatus)
@@ -52,7 +46,6 @@ class TestPerEventFillerAnnotation:
 
     def test_matches_get_event_filler_config_annotation(self):
         """Each match should be annotated with _event_filler_config from its template."""
-        import sqlite3
 
         from teamarr.consumers.filler.event_filler import (
             EventFillerConfig,
@@ -81,6 +74,7 @@ class TestPerEventFillerAnnotation:
 
     def test_filler_cache_skips_templates_without_filler(self):
         """Templates with both pregame/postgame disabled → None in filler cache."""
+
         @dataclass
         class NoFillerTemplate:
             id: int = 6
@@ -155,8 +149,7 @@ class TestSegmentAutoAppendRemoval:
         source = inspect.getsource(EventEPGGenerator.generate_for_matched_streams)
         # The auto-append pattern was: channel_name = f"{channel_name} - {segment_display}"
         assert '- {segment_display}"' not in source, (
-            "segment_display auto-append should be removed from "
-            "generate_for_matched_streams"
+            "segment_display auto-append should be removed from generate_for_matched_streams"
         )
 
     def test_lifecycle_create_channel_no_segment_append(self):

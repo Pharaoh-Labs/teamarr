@@ -15,7 +15,12 @@ from datetime import date, time
 
 from unidecode import unidecode
 
-from teamarr.utilities.constants import BROADCAST_NETWORKS, CITY_TRANSLATIONS, PROVIDER_PREFIXES
+from teamarr.utilities.constants import (
+    BROADCAST_NETWORKS,
+    CITY_TRANSLATIONS,
+    LIVE_STATUS_PREFIXES,
+    PROVIDER_PREFIXES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +120,39 @@ def strip_provider_prefix(text: str) -> tuple[str, str | None]:
             return text[len(prefix) :].strip(), prefix.strip()
 
     return text, None
+
+
+# Leading live-status token + any immediate separator noise (": ", " - ", "| ").
+# The token requires a trailing word boundary (so a name merely starting with the
+# letters is safe); the trailing class stops before a real team name, so a matchup
+# separator further along ("DIRECTO España - Inglaterra") is left untouched.
+_LIVE_STATUS_RE = re.compile(
+    r"^(?:" + "|".join(re.escape(p) for p in LIVE_STATUS_PREFIXES) + r")\b[\s:|–—-]*",
+    re.IGNORECASE,
+)
+
+
+def strip_live_status_prefix(text: str) -> tuple[str, str | None]:
+    """Remove a leading live-broadcast status word from a stream name.
+
+    "DIRECTO España - Inglaterra" -> ("España - Inglaterra", "DIRECTO")
+    "Real Madrid - Barcelona"     -> ("Real Madrid - Barcelona", None)
+
+    Args:
+        text: Stream name potentially prefixed with a live-status word.
+
+    Returns:
+        Tuple of (cleaned text, removed token or None).
+    """
+    if not text:
+        return text, None
+
+    match = _LIVE_STATUS_RE.match(text)
+    if not match:
+        return text, None
+
+    removed = text[: match.end()].strip()
+    return text[match.end() :].strip(), removed
 
 
 # =============================================================================
@@ -235,7 +273,7 @@ TZ_ABBREVIATION_MAP = {
     "NDT": "America/St_Johns",
     # === UTC/GMT ===
     "UTC": "UTC",
-    "GMT": "Europe/London",
+    "GMT": "UTC",
     "Z": "UTC",
     # === Europe ===
     # UK/Ireland
@@ -504,7 +542,7 @@ def normalize_stream(stream_name: str) -> NormalizedStream:
 
     Applies all normalization steps in order:
     1. Fix mojibake (double-encoded UTF-8)
-    2. Strip provider prefix
+    2. Strip provider and live-status prefixes
     3. Apply city translations (with unidecode)
     4. Extract and mask datetime
     5. Clean whitespace
@@ -529,8 +567,17 @@ def normalize_stream(stream_name: str) -> NormalizedStream:
     # Step 1: Fix mojibake
     text = fix_mojibake(text)
 
-    # Step 2: Strip provider prefix
-    text, provider_prefix = strip_provider_prefix(text)
+    # Step 2: Strip leading provider and live-status prefixes. Loop because they
+    # stack in either order ("DIRECTO DAZN ...", "DAZN EN DIRECTO ..."); keep the
+    # first provider seen for metadata.
+    provider_prefix: str | None = None
+    for _ in range(3):
+        text, found_provider = strip_provider_prefix(text)
+        if found_provider and provider_prefix is None:
+            provider_prefix = found_provider
+        text, found_live = strip_live_status_prefix(text)
+        if not found_provider and not found_live:
+            break
 
     # Step 3: Apply city translations (includes unidecode)
     text = apply_city_translations(text)

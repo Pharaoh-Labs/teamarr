@@ -297,8 +297,7 @@ class TestV65SchemaVersionCorrection:
 
         # Backup table should be cleaned up by v65 restore
         backup_exists = conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master "
-            "WHERE type='table' AND name='_settings_v65_backup'"
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_settings_v65_backup'"
         ).fetchone()[0]
         assert backup_exists == 0
 
@@ -343,8 +342,7 @@ class TestFullSchemaReconciliation:
 
         # Verify a specific column that caused #178
         cols = {
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(event_epg_groups)").fetchall()
+            row["name"] for row in conn.execute("PRAGMA table_info(event_epg_groups)").fetchall()
         }
         assert "subscription_leagues" in cols
         assert "subscription_soccer_mode" in cols

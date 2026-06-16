@@ -39,6 +39,39 @@ def get_team_name_by_id(
     return row["team_name"] if row else None
 
 
+def get_team_identity(
+    conn: Connection,
+    provider: str,
+    provider_team_id: str,
+    league: str,
+) -> dict | None:
+    """Look up canonical team identity from the cache.
+
+    Returns the team_name / team_abbrev / team_short_name fields seeded by the
+    cache refresh, which pull from each provider's `/teams` endpoint (where
+    short_name and abbreviation are reliably populated). Used by the service
+    layer to backfill events whose teams came from a degraded endpoint
+    (e.g. ESPN's summary endpoint, which omits shortDisplayName).
+    """
+    cursor = conn.execute(
+        """
+        SELECT team_name, team_abbrev, team_short_name, logo_url
+        FROM team_cache
+        WHERE provider = ? AND provider_team_id = ? AND league = ?
+        """,
+        (provider, provider_team_id, league),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    return {
+        "name": row["team_name"],
+        "abbreviation": row["team_abbrev"],
+        "short_name": row["team_short_name"],
+        "logo_url": row["logo_url"],
+    }
+
+
 def get_team_leagues_from_cache(
     conn: Connection,
     provider: str,

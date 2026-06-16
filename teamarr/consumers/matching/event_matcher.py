@@ -206,6 +206,7 @@ class EventCardMatcher:
 
         # Strategy 1: Match by event number (UFC 315)
         # Uses word-boundary matching to avoid "UFC 32" matching "UFC 325"
+        event_num = None
         if event_hint:
             event_num = self._extract_event_number(event_hint)
             if event_num:
@@ -291,6 +292,51 @@ class EventCardMatcher:
                     return MatchOutcome.matched(
                         MatchMethod.FUZZY,
                         event,
+                        detected_league=league,
+                        confidence=confidence,
+                        stream_name=ctx.stream_name,
+                        stream_id=ctx.stream_id,
+                    )
+
+        # Strategy 3: Fuzzy event name matching
+        # For named events without a standard number (e.g. "UFC at the White House").
+        if not event_num:
+            stream_norm = normalize_text(ctx.stream_name)
+            # Strip generic/noise words to ensure the stream has a distinct name.
+            stream_norm_clean = re.sub(
+                r'\b(ufc|mma|boxing|prelims|main card|early prelims'
+                r'|live|event|ppv|pm|am|et|pt|ct|mt)\b',
+                '',
+                stream_norm
+            ).strip()
+
+            if stream_norm_clean and len(stream_norm_clean) > 3:
+                best_score = 0
+                best_event = None
+
+                for event in events:
+                    event_norm = normalize_text(event.name)
+                    # Match on the DISTINCTIVE (noise-stripped) stream name with
+                    # token_set_ratio. Matching the raw stream with
+                    # partial_token_set_ratio scored 100 for any event sharing the
+                    # league token ("ufc") — so it picked an arbitrary event. Using
+                    # stream_norm_clean + token_set_ratio requires real name overlap.
+                    score = fuzz.token_set_ratio(stream_norm_clean, event_norm)
+                    if score > best_score:
+                        best_score = score
+                        best_event = event
+
+                if best_score >= FIGHTER_MATCH_THRESHOLD and best_event:
+                    confidence = best_score / 100.0
+                    logger.debug(
+                        "[MATCHED] event_card stream=%s -> %s (method=fuzzy_event_name, score=%d)",
+                        ctx.stream_name[:40],
+                        best_event.name,
+                        best_score,
+                    )
+                    return MatchOutcome.matched(
+                        MatchMethod.FUZZY,
+                        best_event,
                         detected_league=league,
                         confidence=confidence,
                         stream_name=ctx.stream_name,

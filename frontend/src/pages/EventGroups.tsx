@@ -7,7 +7,7 @@ import {
   Trash2,
   Pencil,
   Loader2,
-  Download,
+  Plus,
   X,
   Check,
   AlertCircle,
@@ -16,11 +16,12 @@ import {
   ArrowDown,
   ArrowUpDown,
   RotateCcw,
-  Library,
 } from "lucide-react"
+import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { RichTooltip } from "@/components/ui/rich-tooltip"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -51,11 +52,13 @@ import {
   usePreviewGroup,
   useReorderGroups,
 } from "@/hooks/useGroups"
+import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
 import type { EventGroup, PreviewGroupResponse, TeamFilterEntry } from "@/api/types"
+import { getStaleGroups } from "@/api/groups"
+import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
 import { TeamPicker } from "@/components/TeamPicker"
-import { GlobalDefaults } from "@/components/GlobalDefaults"
 import { Label } from "@/components/ui/label"
 import { getLeagueDisplayName } from "@/lib/utils"
 
@@ -69,6 +72,15 @@ export function EventGroups() {
   const cachedLeagues = leaguesResponse?.leagues
   const allLeagueSlugs = useMemo(() => cachedLeagues?.map(l => l.slug) ?? [], [cachedLeagues])
   const deleteMutation = useDeleteGroup()
+  const { formatRelativeTime } = useDateFormat()
+  // Stale source groups (lylt.2) — their Dispatcharr M3U group is gone.
+  const { data: staleGroups = [] } = useQuery({
+    queryKey: ["groups", "stale"],
+    queryFn: getStaleGroups,
+  })
+  const [showStaleDelete, setShowStaleDelete] = useState(false)
+  const [deletingStale, setDeletingStale] = useState(false)
+  const staleIds = useMemo(() => new Set(staleGroups.map((g) => g.id)), [staleGroups])
   const toggleMutation = useToggleGroup()
   const bulkUpdateMutation = useBulkUpdateGroups()
   const previewMutation = usePreviewGroup()
@@ -78,6 +90,7 @@ export function EventGroups() {
 
   // Drag-and-drop state
   const [draggedGroupId, setDraggedGroupId] = useState<number | null>(null)
+  const [dragOverGroupId, setDragOverGroupId] = useState<number | null>(null)
 
   // Preview modal state
   const [previewData, setPreviewData] = useState<PreviewGroupResponse | null>(null)
@@ -107,6 +120,10 @@ export function EventGroups() {
   const [bulkEditTeamFilterMode, setBulkEditTeamFilterMode] = useState<"include" | "exclude">("include")
   const [bulkEditTeamFilterTeams, setBulkEditTeamFilterTeams] = useState<TeamFilterEntry[]>([])
   const [bulkEditBypassPlayoffs, setBulkEditBypassPlayoffs] = useState(false)
+  const [bulkEditTeamStreamsEnabled, setBulkEditTeamStreamsEnabled] = useState(false)
+  const [bulkEditTeamStreams, setBulkEditTeamStreams] = useState(false)
+  const [bulkEditEPGMatchEnabled, setBulkEditEPGMatchEnabled] = useState(false)
+  const [bulkEditEPGMatch, setBulkEditEPGMatch] = useState(false)
   // Column sorting state
   type SortColumn = "name" | "matched" | "status" | null
   type SortDirection = "asc" | "desc"
@@ -178,69 +195,8 @@ export function EventGroups() {
     return [...filteredGroups].sort(sortFn)
   }, [filteredGroups, sortColumn, sortDirection])
 
-  // Calculate rich stats like V1
-  const stats = useMemo(() => {
-    if (!data?.groups) return {
-      totalStreams: 0,
-      totalFiltered: 0,
-      filteredIncludeRegex: 0,
-      filteredExcludeRegex: 0,
-      filteredNotEvent: 0,
-      failedCount: 0,
-      streamsExcluded: 0,
-      excludedEventFinal: 0,
-      excludedEventPast: 0,
-      excludedBeforeWindow: 0,
-      excludedLeagueNotIncluded: 0,
-      matched: 0,
-      matchRate: 0,
-      // Per-group breakdowns for tooltips
-      streamsByGroup: [] as { name: string; count: number }[],
-    }
-
-    // Sum all groups (parents + children) - each has distinct streams from different M3U accounts
-    const groups = data.groups
-    const totalStreams = groups.reduce((sum, g) => sum + (g.total_stream_count || 0), 0)
-    const filteredIncludeRegex = groups.reduce((sum, g) => sum + (g.filtered_include_regex || 0), 0)
-    const filteredExcludeRegex = groups.reduce((sum, g) => sum + (g.filtered_exclude_regex || 0), 0)
-    const filteredNotEvent = groups.reduce((sum, g) => sum + (g.filtered_not_event || 0), 0)
-    const filteredTeam = groups.reduce((sum, g) => sum + (g.filtered_team || 0), 0)
-    const streamsExcluded = groups.reduce((sum, g) => sum + (g.streams_excluded || 0), 0)
-    const excludedEventFinal = groups.reduce((sum, g) => sum + (g.excluded_event_final || 0), 0)
-    const excludedEventPast = groups.reduce((sum, g) => sum + (g.excluded_event_past || 0), 0)
-    const excludedBeforeWindow = groups.reduce((sum, g) => sum + (g.excluded_before_window || 0), 0)
-    const excludedLeagueNotIncluded = groups.reduce((sum, g) => sum + (g.excluded_league_not_included || 0), 0)
-    const totalFiltered = filteredIncludeRegex + filteredExcludeRegex + filteredNotEvent + filteredTeam
-    const matched = groups.reduce((sum, g) => sum + (g.matched_count || 0), 0)
-    const failedCount = groups.reduce((sum, g) => sum + (g.failed_count || 0), 0)
-    // Match rate = matched / (matched + failed) - percentage of match attempts that succeeded
-    const totalAttempted = matched + failedCount
-    const matchRate = totalAttempted > 0 ? Math.round((matched / totalAttempted) * 100) : 0
-
-    // Per-group breakdowns for tooltips (all groups, not just parents)
-    const streamsByGroup = groups
-      .filter(g => (g.total_stream_count || 0) > 0)
-      .map(g => ({ name: getDisplayName(g), count: g.total_stream_count || 0 }))
-      .sort((a, b) => b.count - a.count)
-
-    return {
-      totalStreams,
-      totalFiltered,
-      filteredIncludeRegex,
-      filteredExcludeRegex,
-      filteredNotEvent,
-      filteredTeam,
-      failedCount,
-      streamsExcluded,
-      excludedEventFinal,
-      excludedEventPast,
-      excludedBeforeWindow,
-      excludedLeagueNotIncluded,
-      matched,
-      matchRate,
-      streamsByGroup,
-    }
-  }, [data?.groups])
+  // Overall match rate (shared definition via useMatchRate)
+  const matchRate = useMatchRate()
 
   // League slug -> display name lookup (uses {league} variable resolution: alias first, then name)
   const getLeagueDisplay = useMemo(() => {
@@ -264,6 +220,24 @@ export function EventGroups() {
       setDeleteConfirm(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete group")
+    }
+  }
+
+  const handleDeleteAllStale = async () => {
+    setDeletingStale(true)
+    try {
+      const results = await Promise.allSettled(
+        staleGroups.map((g) => deleteMutation.mutateAsync(g.id)),
+      )
+      const ok = results.filter((r) => r.status === "fulfilled").length
+      const failed = results.length - ok
+      if (failed === 0) toast.success(`Deleted ${ok} stale source${ok === 1 ? "" : "s"}`)
+      else toast.warning(`Deleted ${ok}, failed ${failed}`)
+      setShowStaleDelete(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete stale sources")
+    } finally {
+      setDeletingStale(false)
     }
   }
 
@@ -302,7 +276,7 @@ export function EventGroups() {
   const handleBulkClearCache = async () => {
     try {
       const result = await clearCachesBulkMutation.mutateAsync(Array.from(selectedIds))
-      toast.success(`Cleared ${result.total_cleared} cache entries across ${result.by_group?.length || 0} groups`)
+      toast.success(`Cleared ${result.total_cleared} cache entries across ${result.by_group?.length || 0} stream sources`)
       setShowBulkClearCache(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to clear cache")
@@ -316,14 +290,16 @@ export function EventGroups() {
     e.dataTransfer.setData("text/plain", String(groupId))
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, targetGroupId: number) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = "move"
+    setDragOverGroupId(targetGroupId)
   }
 
   const handleDrop = async (e: React.DragEvent, targetGroupId: number) => {
     e.preventDefault()
     setDraggedGroupId(null)
+    setDragOverGroupId(null)
 
     if (draggedGroupId === null || draggedGroupId === targetGroupId) return
 
@@ -352,6 +328,7 @@ export function EventGroups() {
 
   const handleDragEnd = () => {
     setDraggedGroupId(null)
+    setDragOverGroupId(null)
   }
 
   // Selection handlers
@@ -416,6 +393,8 @@ export function EventGroups() {
     setBulkEditTeamFilterMode("include")
     setBulkEditTeamFilterTeams([])
     setBulkEditBypassPlayoffs(false)
+    setBulkEditTeamStreamsEnabled(false)
+    setBulkEditTeamStreams(false)
   }
 
   const handleBulkEdit = async () => {
@@ -430,6 +409,14 @@ export function EventGroups() {
       } else if (bulkEditStreamTimezone) {
         request.stream_timezone = bulkEditStreamTimezone
       }
+    }
+
+    if (bulkEditTeamStreamsEnabled) {
+      request.team_streams_enabled = bulkEditTeamStreams
+    }
+
+    if (bulkEditEPGMatchEnabled) {
+      request.epg_match_enabled = bulkEditEPGMatch
     }
 
     if (bulkEditTeamFilterEnabled) {
@@ -477,7 +464,7 @@ export function EventGroups() {
   if (error) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Event Groups</h1>
+        <h1 className="text-2xl font-bold">Sources</h1>
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">
@@ -496,157 +483,59 @@ export function EventGroups() {
     <div className="space-y-2">
       {/* Header - Compact */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Event Groups</h1>
-          <p className="text-sm text-muted-foreground">
-            Configure event-based EPG from M3U stream groups
-          </p>
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-xl font-bold">Sources</h1>
+          {matchRate.hasData && (
+            <span className="text-sm text-muted-foreground">
+              <span className={`font-semibold ${matchRateColor(matchRate.rate)}`}>{matchRate.rate}%</span> matched
+            </span>
+          )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate("/detection-library")}>
-            <Library className="h-4 w-4 mr-1" />
-            Detection Library
-          </Button>
-          <Button size="sm" onClick={() => navigate("/event-groups/import")}>
-            <Download className="h-4 w-4 mr-1" />
-            Import
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => navigate("/sources/import")}>
+          <Plus className="h-4 w-4 mr-1" />
+          Add Stream Source
+        </Button>
       </div>
 
-      {/* Subscribed Sports — global league/soccer/template management */}
-      <GlobalDefaults />
 
-      {/* Stats Tiles - V1 Style: Grid with 4 equal columns filling width */}
-      {data?.groups && data.groups.length > 0 && (
-        <div className="grid grid-cols-4 gap-3">
-            {/* Total Streams */}
-            <div className="group relative">
-              <div className="bg-secondary rounded px-3 py-2 cursor-help">
-                <div className="text-xl font-bold">{stats.totalStreams}</div>
-                <div className="text-[0.65rem] text-muted-foreground uppercase tracking-wider">Streams</div>
-              </div>
-              {stats.streamsByGroup.length > 0 && (
-                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
-                  <Card className="p-3 shadow-lg border min-w-[200px]">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">By Event Group</div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {stats.streamsByGroup.slice(0, 10).map((g, i) => (
-                        <div key={i} className="flex justify-between text-sm">
-                          <span className="truncate max-w-[140px]">{g.name}</span>
-                          <span className="font-medium ml-2">{g.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                </div>
-              )}
-            </div>
-
-            {/* Filtered */}
-            <div className="group relative">
-              <div className="bg-secondary rounded px-3 py-2 cursor-help">
-                <div className={`text-xl font-bold ${stats.totalFiltered > 0 ? 'text-amber-500' : ''}`}>{stats.totalFiltered}</div>
-                <div className="text-[0.65rem] text-muted-foreground uppercase tracking-wider">Filtered</div>
-              </div>
-              {stats.totalFiltered > 0 && (
-                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
-                  <Card className="p-3 shadow-lg border min-w-[200px]">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">Filter Breakdown</div>
-                    <div className="space-y-1">
-                      {stats.filteredNotEvent > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Not Event Stream</span>
-                          <span className="font-medium">{stats.filteredNotEvent}</span>
-                        </div>
-                      )}
-                      {stats.filteredIncludeRegex > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Include Regex not Matched</span>
-                          <span className="font-medium">{stats.filteredIncludeRegex}</span>
-                        </div>
-                      )}
-                      {stats.filteredExcludeRegex > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Exclude Regex Matched</span>
-                          <span className="font-medium">{stats.filteredExcludeRegex}</span>
-                        </div>
-                      )}
-                      {(stats.filteredTeam ?? 0) > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Team Filter</span>
-                          <span className="font-medium">{stats.filteredTeam}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm font-medium pt-1 border-t">
-                        <span>Total</span>
-                        <span>{stats.totalFiltered}</span>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              )}
-            </div>
-
-            {/* Excluded */}
-            <div className="group relative">
-              <div className="bg-secondary rounded px-3 py-2 cursor-help">
-                <div className={`text-xl font-bold ${stats.streamsExcluded > 0 ? 'text-yellow-500' : ''}`}>{stats.streamsExcluded}</div>
-                <div className="text-[0.65rem] text-muted-foreground uppercase tracking-wider">Excluded</div>
-              </div>
-              {stats.streamsExcluded > 0 && (
-                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block">
-                  <Card className="p-3 shadow-lg border min-w-[200px]">
-                    <div className="text-xs font-medium text-muted-foreground mb-2">Exclusion Breakdown</div>
-                    <div className="space-y-1">
-                      {stats.excludedLeagueNotIncluded > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>League Not Enabled</span>
-                          <span className="font-medium">{stats.excludedLeagueNotIncluded}</span>
-                        </div>
-                      )}
-                      {stats.excludedEventFinal > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Event Final</span>
-                          <span className="font-medium">{stats.excludedEventFinal}</span>
-                        </div>
-                      )}
-                      {stats.excludedEventPast > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Event in Past</span>
-                          <span className="font-medium">{stats.excludedEventPast}</span>
-                        </div>
-                      )}
-                      {stats.excludedBeforeWindow > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span>Event in Future</span>
-                          <span className="font-medium">{stats.excludedBeforeWindow}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm font-medium pt-1 border-t">
-                        <span>Total</span>
-                        <span>{stats.streamsExcluded}</span>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-              )}
-            </div>
-
-            {/* Matched - color based on match rate */}
-            <div className="bg-secondary rounded px-3 py-2">
-              <div className={`text-xl font-bold ${
-                stats.matchRate >= 85 ? 'text-green-500' :
-                stats.matchRate >= 60 ? 'text-orange-500' :
-                stats.matchRate > 0 ? 'text-red-500' : ''
-              }`}>
-                {stats.matched}/{stats.matched + stats.failedCount}
-              </div>
-              <div className="text-[0.65rem] text-muted-foreground uppercase tracking-wider">
-                Matched ({stats.matchRate}%)
-              </div>
-            </div>
-        </div>
+      {/* Stale sources — their Dispatcharr M3U group is gone (lylt.2) */}
+      {staleGroups.length > 0 && (
+        <Alert
+          variant="warning"
+          icon={<AlertCircle />}
+          title={`${staleGroups.length} stream source${staleGroups.length === 1 ? "" : "s"} missing from Dispatcharr`}
+        >
+          <div className="space-y-2">
+            <p className="text-sm">
+              {staleGroups.length === 1
+                ? "Its M3U group was removed or renamed in Dispatcharr, so it can no longer pull streams. Delete it, or restore the source in Dispatcharr."
+                : "Their M3U groups were removed or renamed in Dispatcharr, so they can no longer pull streams. Delete them, or restore the sources in Dispatcharr."}
+            </p>
+            <ul className="space-y-0.5 text-sm">
+              {staleGroups.map((g) => (
+                <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-medium">{g.display_name || g.name}</span>
+                  {g.m3u_group_name && (
+                    <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
+                  )}
+                  {g.source_last_seen && (
+                    <span className="text-xs text-muted-foreground">
+                      · last seen {formatRelativeTime(g.source_last_seen)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowStaleDelete(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete all stale
+            </Button>
+          </div>
+        </Alert>
       )}
 
       {/* Fixed Batch Operations Bar */}
@@ -655,7 +544,7 @@ export function EventGroups() {
           <div className="container max-w-screen-xl mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {selectedIds.size} group{selectedIds.size > 1 ? "s" : ""} selected
+                {selectedIds.size} stream source{selectedIds.size > 1 ? "s" : ""} selected
               </span>
               <div className="flex items-center gap-1">
                 <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
@@ -682,7 +571,7 @@ export function EventGroups() {
                   onClick={() => {
                     if (selectedIds.size === 1) {
                       const groupId = Array.from(selectedIds)[0]
-                      navigate(`/event-groups/${groupId}`)
+                      navigate(`/sources/${groupId}`)
                     } else {
                       setShowBulkEdit(true)
                     }
@@ -710,7 +599,7 @@ export function EventGroups() {
             </div>
           ) : data?.groups.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No event groups configured. Create one to get started.
+              No stream sources configured. Add one to get started.
             </div>
           ) : (
             <Table className="table-fixed">
@@ -812,7 +701,7 @@ export function EventGroups() {
                 {sortedGroups.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No groups match the current filters.
+                      No stream sources match the current filters.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -821,12 +710,16 @@ export function EventGroups() {
                   return (
                     <React.Fragment key={group.id}>
                       <TableRow
-                        className={`border-l-3 border-l-transparent hover:border-l-emerald-500 group/row ${
-                          draggedGroupId === group.id ? "opacity-50" : ""
+                        className={`border-l-3 group/row ${
+                          draggedGroupId === group.id
+                            ? "opacity-50 border-l-transparent"
+                            : dragOverGroupId === group.id
+                              ? "border-l-transparent border-t-2 border-t-emerald-500"
+                              : "border-l-transparent hover:border-l-emerald-500"
                         }`}
                         draggable={isDndActive}
                         onDragStart={(e) => isDndActive && handleDragStart(e, group.id)}
-                        onDragOver={(e) => isDndActive && handleDragOver(e)}
+                        onDragOver={(e) => isDndActive && handleDragOver(e, group.id)}
                         onDrop={(e) => isDndActive && handleDrop(e, group.id)}
                         onDragEnd={handleDragEnd}
                       >
@@ -846,6 +739,16 @@ export function EventGroups() {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{getDisplayName(group)}</span>
+                            {/* Stale-source badge (lylt) */}
+                            {staleIds.has(group.id) && (
+                              <Badge
+                                variant="destructive"
+                                className="text-xs"
+                                title="This source's M3U group no longer exists in Dispatcharr"
+                              >
+                                Source missing
+                              </Badge>
+                            )}
                             {/* Account name badge */}
                             {group.m3u_account_name && (
                               <Badge
@@ -880,28 +783,65 @@ export function EventGroups() {
                                 Regex
                               </Badge>
                             )}
+                            {/* Team Streams badge */}
+                            {group.team_streams_enabled && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs"
+                                title="Team stream source: team-branded streams match events where that team plays"
+                              >
+                                Team Streams
+                              </Badge>
+                            )}
+                            {/* EPG Program Matching badge */}
+                            {group.epg_match_enabled && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-violet-500/15 text-violet-400 border-violet-500/30 text-xs"
+                                title="EPG program matching: static-named linear channels matched to events via Dispatcharr's program guide"
+                              >
+                                EPG Matched
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
                     {/* Matched Column with Progress Bar */}
                     <TableCell className="text-center">
-                      {group.stream_count && group.stream_count > 0 ? (
-                        <div className="flex flex-col items-center gap-0.5" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
-                          <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                (group.matched_count || 0) / group.stream_count >= 0.8
-                                  ? 'bg-green-500'
-                                  : (group.matched_count || 0) / group.stream_count >= 0.5
-                                    ? 'bg-yellow-500'
-                                    : 'bg-red-500'
-                              }`}
-                              style={{ width: `${Math.round(((group.matched_count || 0) / group.stream_count) * 100)}%` }}
-                            />
+                      {group.team_streams_enabled ? (
+                        <span className="text-[0.65rem] text-muted-foreground" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
+                          {group.stream_count ?? 0} streams
+                        </span>
+                      ) : group.stream_count && group.stream_count > 0 ? (
+                        <RichTooltip
+                          side="top"
+                          content={
+                            <div className="space-y-1 text-xs">
+                              <div>{group.match_result_count ?? 0} match{(group.match_result_count ?? 0) === 1 ? "" : "es"} produced</div>
+                              {(group.match_result_count ?? 0) > (group.matched_count ?? 0) && (
+                                <div className="text-muted-foreground">EPG time-sharing: streams matched to multiple events</div>
+                              )}
+                              <div className="text-muted-foreground">Last: {group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}</div>
+                            </div>
+                          }
+                        >
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  (group.matched_count || 0) / group.stream_count >= 0.8
+                                    ? 'bg-green-500'
+                                    : (group.matched_count || 0) / group.stream_count >= 0.5
+                                      ? 'bg-yellow-500'
+                                      : 'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(100, Math.round(((group.matched_count || 0) / group.stream_count) * 100))}%` }}
+                              />
+                            </div>
+                            <span className="text-[0.65rem]">
+                              {group.matched_count}/{group.stream_count} ({Math.round(((group.matched_count || 0) / group.stream_count) * 100)}%)
+                            </span>
                           </div>
-                          <span className="text-[0.65rem]">
-                            {group.matched_count}/{group.stream_count} ({Math.round(((group.matched_count || 0) / group.stream_count) * 100)}%)
-                          </span>
-                        </div>
+                        </RichTooltip>
                       ) : (
                         <span className="text-muted-foreground text-xs italic">—</span>
                       )}
@@ -949,7 +889,7 @@ export function EventGroups() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => navigate(`/event-groups/${group.id}`)}
+                          onClick={() => navigate(`/sources/${group.id}`)}
                           title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
@@ -983,11 +923,11 @@ export function EventGroups() {
       >
         <DialogContent onClose={() => setDeleteConfirm(null)}>
           <DialogHeader>
-            <DialogTitle>Delete Event Group</DialogTitle>
+            <DialogTitle>Delete Stream Source</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete "{deleteConfirm ? getDisplayName(deleteConfirm) : ''}"? This will
               also delete all {deleteConfirm?.channel_count ?? 0} managed
-              channels associated with this group.
+              channels associated with this stream source.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1042,9 +982,9 @@ export function EventGroups() {
       <Dialog open={showBulkClearCache} onOpenChange={setShowBulkClearCache}>
         <DialogContent onClose={() => setShowBulkClearCache(false)}>
           <DialogHeader>
-            <DialogTitle>Clear Match Cache for {selectedIds.size} Groups</DialogTitle>
+            <DialogTitle>Clear Match Cache for {selectedIds.size} Stream Sources</DialogTitle>
             <DialogDescription>
-              Clear the stream match cache for {selectedIds.size} selected groups?
+              Clear the stream match cache for {selectedIds.size} selected stream sources?
               This will force re-matching on the next EPG generation run.
             </DialogDescription>
           </DialogHeader>
@@ -1059,7 +999,7 @@ export function EventGroups() {
               {clearCachesBulkMutation.isPending && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              Clear Cache for {selectedIds.size} Groups
+              Clear Cache for {selectedIds.size} Stream Sources
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1072,7 +1012,7 @@ export function EventGroups() {
       }}>
         <DialogContent onClose={() => setShowBulkEdit(false)} className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Bulk Edit ({selectedIds.size} groups)</DialogTitle>
+            <DialogTitle>Bulk Edit ({selectedIds.size} stream sources)</DialogTitle>
             <DialogDescription>
               Only checked fields will be updated. Use "Clear" to remove values.
             </DialogDescription>
@@ -1194,9 +1134,53 @@ export function EventGroups() {
 
                   {bulkEditTeamFilterAction === "clear" && (
                     <p className="text-xs text-muted-foreground">
-                      Removes per-group team filter overrides. Groups will use the global default filter.
+                      Removes per-source team filter overrides. Stream sources will use the global default filter.
                     </p>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* Team Stream Source */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={bulkEditTeamStreamsEnabled}
+                  onCheckedChange={(checked) => setBulkEditTeamStreamsEnabled(!!checked)}
+                />
+                <span className="text-sm font-medium">Team stream source</span>
+              </label>
+              {bulkEditTeamStreamsEnabled && (
+                <div className="flex items-center gap-3 pl-6">
+                  <Switch
+                    checked={bulkEditTeamStreams}
+                    onCheckedChange={setBulkEditTeamStreams}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {bulkEditTeamStreams ? "Enabled — team-branded streams will match events where that team plays" : "Disabled"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* EPG Program Matching */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={bulkEditEPGMatchEnabled}
+                  onCheckedChange={(checked) => setBulkEditEPGMatchEnabled(!!checked)}
+                />
+                <span className="text-sm font-medium">EPG program matching</span>
+              </label>
+              {bulkEditEPGMatchEnabled && (
+                <div className="flex items-center gap-3 pl-6">
+                  <Switch
+                    checked={bulkEditEPGMatch}
+                    onCheckedChange={setBulkEditEPGMatch}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {bulkEditEPGMatch ? "Enabled — match static-named linear channels to events via Dispatcharr's program guide (requires the global EPG matching switch)" : "Disabled"}
+                  </span>
                 </div>
               )}
             </div>
@@ -1208,7 +1192,7 @@ export function EventGroups() {
             </Button>
             <Button
               onClick={handleBulkEdit}
-              disabled={bulkUpdateMutation.isPending || !(bulkEditStreamTimezoneEnabled || bulkEditTeamFilterEnabled)}
+              disabled={bulkUpdateMutation.isPending || !(bulkEditStreamTimezoneEnabled || bulkEditTeamFilterEnabled || bulkEditTeamStreamsEnabled || bulkEditEPGMatchEnabled)}
             >
               {bulkUpdateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Apply to {selectedIds.size} groups
@@ -1221,10 +1205,10 @@ export function EventGroups() {
       <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
         <DialogContent onClose={() => setShowBulkDelete(false)}>
           <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Groups</DialogTitle>
+            <DialogTitle>Delete {selectedIds.size} Stream Sources</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} groups? This will
-              also delete all managed channels associated with these groups.
+              Are you sure you want to delete {selectedIds.size} stream sources? This will
+              also delete all managed channels associated with them.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1240,6 +1224,30 @@ export function EventGroups() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               Delete {selectedIds.size} Groups
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete-all-stale confirmation */}
+      <Dialog open={showStaleDelete} onOpenChange={setShowStaleDelete}>
+        <DialogContent onClose={() => setShowStaleDelete(false)}>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {staleGroups.length} stale source{staleGroups.length === 1 ? "" : "s"}
+            </DialogTitle>
+            <DialogDescription>
+              These sources&apos; M3U groups no longer exist in Dispatcharr. Deleting them also
+              removes their managed channels. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStaleDelete(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAllStale} disabled={deletingStale}>
+              {deletingStale && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete all stale
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1290,11 +1298,11 @@ export function EventGroups() {
 
               {/* Errors */}
               {previewData.errors.length > 0 && (
-                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                <Alert variant="destructive">
                   {previewData.errors.map((err, i) => (
                     <div key={i}>{err}</div>
                   ))}
-                </div>
+                </Alert>
               )}
 
               {/* Stream table */}

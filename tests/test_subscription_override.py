@@ -38,9 +38,7 @@ def processor():
     """Create a minimal EventGroupProcessor with mocked dependencies."""
     from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-    with patch(
-        "teamarr.consumers.event_group_processor.create_default_service"
-    ):
+    with patch("teamarr.consumers.event_group_processor.create_default_service"):
         proc = EventGroupProcessor(db_factory=MagicMock())
     return proc
 
@@ -58,9 +56,7 @@ def mock_subscription():
 class TestGroupOverridePriority:
     """Group subscription_leagues != None → use group, else global."""
 
-    def test_group_override_uses_group_leagues(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_group_override_uses_group_leagues(self, processor, mock_conn, mock_subscription):
         group = FakeGroup(
             id=1,
             subscription_leagues=["mlb", "mls"],
@@ -73,9 +69,7 @@ class TestGroupOverridePriority:
 
         assert sorted(result) == ["mlb", "mls"]
 
-    def test_null_override_falls_back_to_global(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_null_override_falls_back_to_global(self, processor, mock_conn, mock_subscription):
         group = FakeGroup(id=2, subscription_leagues=None)
         with patch(
             "teamarr.database.subscription.get_subscription",
@@ -85,9 +79,7 @@ class TestGroupOverridePriority:
 
         assert sorted(result) == ["nba", "nhl"]
 
-    def test_no_group_falls_back_to_global(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_no_group_falls_back_to_global(self, processor, mock_conn, mock_subscription):
         with patch(
             "teamarr.database.subscription.get_subscription",
             return_value=mock_subscription,
@@ -96,9 +88,7 @@ class TestGroupOverridePriority:
 
         assert sorted(result) == ["nba", "nhl"]
 
-    def test_empty_override_returns_empty(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_empty_override_returns_empty(self, processor, mock_conn, mock_subscription):
         group = FakeGroup(id=3, subscription_leagues=[])
         with patch(
             "teamarr.database.subscription.get_subscription",
@@ -136,9 +126,7 @@ class TestSoccerModeOverride:
         assert "eng.1" in result
         assert "esp.1" in result
 
-    def test_group_manual_mode_keeps_leagues_as_is(
-        self, processor, mock_conn
-    ):
+    def test_group_manual_mode_keeps_leagues_as_is(self, processor, mock_conn):
         group = FakeGroup(
             id=1,
             subscription_leagues=["nhl", "eng.1"],
@@ -152,9 +140,7 @@ class TestSoccerModeOverride:
 
         assert sorted(result) == ["eng.1", "nhl"]
 
-    def test_global_soccer_mode_not_used_when_group_overrides(
-        self, processor, mock_conn
-    ):
+    def test_global_soccer_mode_not_used_when_group_overrides(self, processor, mock_conn):
         """Global has soccer_mode='all' but group overrides with manual."""
         global_sub = FakeSubscription(
             leagues=["nhl", "eng.1"],
@@ -178,9 +164,7 @@ class TestSoccerModeOverride:
 class TestCaching:
     """_get_subscription_leagues caches per group."""
 
-    def test_global_cache_shared_for_null_overrides(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_global_cache_shared_for_null_overrides(self, processor, mock_conn, mock_subscription):
         group_a = FakeGroup(id=1, subscription_leagues=None)
         group_b = FakeGroup(id=2, subscription_leagues=None)
 
@@ -188,20 +172,14 @@ class TestCaching:
             "teamarr.database.subscription.get_subscription",
             return_value=mock_subscription,
         ) as mock_get:
-            result_a = processor._get_subscription_leagues(
-                mock_conn, group_a
-            )
-            result_b = processor._get_subscription_leagues(
-                mock_conn, group_b
-            )
+            result_a = processor._get_subscription_leagues(mock_conn, group_a)
+            result_b = processor._get_subscription_leagues(mock_conn, group_b)
 
         # Same global result, subscription fetched only once
         assert result_a == result_b
         assert mock_get.call_count == 1
 
-    def test_override_groups_get_separate_cache(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_override_groups_get_separate_cache(self, processor, mock_conn, mock_subscription):
         group_a = FakeGroup(id=1, subscription_leagues=["nhl"])
         group_b = FakeGroup(id=2, subscription_leagues=["nba"])
 
@@ -209,19 +187,13 @@ class TestCaching:
             "teamarr.database.subscription.get_subscription",
             return_value=mock_subscription,
         ):
-            result_a = processor._get_subscription_leagues(
-                mock_conn, group_a
-            )
-            result_b = processor._get_subscription_leagues(
-                mock_conn, group_b
-            )
+            result_a = processor._get_subscription_leagues(mock_conn, group_a)
+            result_b = processor._get_subscription_leagues(mock_conn, group_b)
 
         assert result_a == ["nhl"]
         assert result_b == ["nba"]
 
-    def test_override_and_global_groups_coexist(
-        self, processor, mock_conn, mock_subscription
-    ):
+    def test_override_and_global_groups_coexist(self, processor, mock_conn, mock_subscription):
         group_override = FakeGroup(id=1, subscription_leagues=["mlb"])
         group_global = FakeGroup(id=2, subscription_leagues=None)
 
@@ -229,12 +201,8 @@ class TestCaching:
             "teamarr.database.subscription.get_subscription",
             return_value=mock_subscription,
         ):
-            result_override = processor._get_subscription_leagues(
-                mock_conn, group_override
-            )
-            result_global = processor._get_subscription_leagues(
-                mock_conn, group_global
-            )
+            result_override = processor._get_subscription_leagues(mock_conn, group_override)
+            result_global = processor._get_subscription_leagues(mock_conn, group_global)
 
         assert result_override == ["mlb"]
         assert sorted(result_global) == ["nba", "nhl"]

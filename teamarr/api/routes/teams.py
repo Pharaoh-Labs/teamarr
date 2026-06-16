@@ -6,7 +6,12 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from teamarr.api.models import TeamCreate, TeamResponse, TeamUpdate
+from teamarr.api.models import (
+    TeamChannelStatusResponse,
+    TeamCreate,
+    TeamResponse,
+    TeamUpdate,
+)
 from teamarr.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -138,6 +143,47 @@ def get_team(team_id: int):
         if not team:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
         return team
+
+
+@router.get("/teams/{team_id}/channel-status", response_model=TeamChannelStatusResponse)
+def get_team_channel_status(team_id: int):
+    """Get Dispatcharr mapping and next live window for a static team channel."""
+    from teamarr.database.teams import get_team as db_get_team
+    from teamarr.database.teams import get_team_xmltv
+    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
+    from teamarr.services.team_channel_status import build_team_channel_status
+
+    with get_db() as conn:
+        team = db_get_team(conn, team_id)
+        if not team:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+
+        xmltv_row = get_team_xmltv(conn, team_id)
+
+    dispatcharr_channel = None
+    dispatcharr_error = None
+    try:
+        client = get_dispatcharr_client(get_db)
+        if client:
+            manager = ChannelManager(client)
+            dispatcharr_channel = manager.find_by_tvg_id(team["channel_id"])
+        else:
+            dispatcharr_error = "Dispatcharr connection not available"
+    except Exception as exc:
+        dispatcharr_error = str(exc)
+        logger.warning(
+            "[TEAMS] Failed to resolve Dispatcharr channel for team %s: %s",
+            team_id,
+            exc,
+        )
+
+    return build_team_channel_status(
+        team=team,
+        dispatcharr_channel=dispatcharr_channel,
+        xmltv_content=xmltv_row["xmltv_content"] if xmltv_row else None,
+        xmltv_updated_at=xmltv_row["updated_at"] if xmltv_row else None,
+        dispatcharr_error=dispatcharr_error,
+    )
 
 
 @router.put("/teams/{team_id}", response_model=TeamResponse)

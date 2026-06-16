@@ -21,10 +21,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-import pytest
-
 from teamarr.database.connection import _run_migrations, init_db
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -95,7 +92,10 @@ def _make_v72_db(tmp_path: Path) -> sqlite3.Connection:
         """
         CREATE TABLE channel_sort_priorities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            league_code TEXT
+            sport TEXT NOT NULL,
+            league_code TEXT,
+            sort_priority INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(sport, league_code)
         )
         """
     )
@@ -177,10 +177,7 @@ class TestV73DeletesDuplicateLeagues:
 
         _run_migrations(conn)
 
-        codes = {
-            r["league_code"]
-            for r in conn.execute("SELECT league_code FROM leagues")
-        }
+        codes = {r["league_code"] for r in conn.execute("SELECT league_code FROM leagues")}
         assert "a" not in codes
         assert "aa" not in codes
         assert "aaa" not in codes
@@ -192,10 +189,7 @@ class TestV73DeletesDuplicateLeagues:
 
         _run_migrations(conn)
 
-        codes = {
-            r["league_code"]
-            for r in conn.execute("SELECT league_code FROM leagues")
-        }
+        codes = {r["league_code"] for r in conn.execute("SELECT league_code FROM leagues")}
         assert {"milb-a", "milb-aa", "milb-aaa", "milb-high-a", "rookie"} <= codes
         assert "mlb" in codes
 
@@ -205,10 +199,8 @@ class TestV73DeletesDuplicateLeagues:
 
         _run_migrations(conn)
 
-        row = conn.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
-        assert row["schema_version"] == 73
+        row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
+        assert row["schema_version"] == 76
 
 
 class TestV73CleansTeamCache:
@@ -218,9 +210,7 @@ class TestV73CleansTeamCache:
 
         _run_migrations(conn)
 
-        leagues_in_cache = {
-            r["league"] for r in conn.execute("SELECT league FROM team_cache")
-        }
+        leagues_in_cache = {r["league"] for r in conn.execute("SELECT league FROM team_cache")}
         assert leagues_in_cache.isdisjoint({"a", "aa", "aaa", "higha"})
 
     def test_new_coded_teams_preserved(self, tmp_path):
@@ -249,8 +239,7 @@ class TestV73RemapsUserData:
         _run_migrations(conn)
 
         leagues = [
-            r["league"]
-            for r in conn.execute("SELECT league FROM managed_channels ORDER BY id")
+            r["league"] for r in conn.execute("SELECT league FROM managed_channels ORDER BY id")
         ]
         assert leagues == ["milb-aaa", "milb-high-a", "mlb"]
 
@@ -282,9 +271,7 @@ class TestV73RemapsUserData:
         assert "aa" not in leagues
         assert "aaa" not in leagues
         assert "higha" not in leagues
-        assert {"milb-a", "milb-aa", "milb-aaa", "milb-high-a", "rookie", "mlb"} <= set(
-            leagues
-        )
+        assert {"milb-a", "milb-aa", "milb-aaa", "milb-high-a", "rookie", "mlb"} <= set(leagues)
 
     def test_sports_subscription_dedupes_when_old_and_new_both_present(self, tmp_path):
         """If a user had both 'aaa' and 'milb-aaa' in their array, the result
@@ -304,19 +291,59 @@ class TestV73RemapsUserData:
         assert leagues.count("milb-aaa") == 1
         assert "aaa" not in leagues
 
-    def test_log_table_remapped(self, tmp_path):
+    def test_channel_sort_priorities_dedupes_when_old_and_new_both_present(self, tmp_path):
+        """Regression for #202 / teamarrv2-98x: a user with sort priorities
+        configured under both the old MiLB code and the new code for the same
+        sport used to crash startup with UNIQUE(sport, league_code) violation.
+        The migration should now drop the colliding old row in favor of the
+        existing new row."""
         conn = _make_v72_db(tmp_path)
         _seed_duplicate_milb_state(conn)
         conn.execute(
-            "INSERT INTO epg_matched_streams (detected_league) VALUES ('aaa')"
+            "INSERT INTO channel_sort_priorities (sport, league_code, sort_priority)"
+            " VALUES ('baseball', 'aaa', 5)"
         )
+        conn.execute(
+            "INSERT INTO channel_sort_priorities (sport, league_code, sort_priority)"
+            " VALUES ('baseball', 'milb-aaa', 7)"
+        )
+        # Different sport, same old code — should still be remapped (no collision).
+        conn.execute(
+            "INSERT INTO channel_sort_priorities (sport, league_code, sort_priority)"
+            " VALUES ('softball', 'aaa', 9)"
+        )
+        conn.commit()
+
+        # Must not raise. Pre-fix this would have aborted with sqlite3.IntegrityError.
+        _run_migrations(conn)
+
+        rows = list(
+            conn.execute(
+                "SELECT sport, league_code, sort_priority"
+                " FROM channel_sort_priorities ORDER BY sport, league_code"
+            )
+        )
+        assert (rows[0]["sport"], rows[0]["league_code"], rows[0]["sort_priority"]) == (
+            "baseball",
+            "milb-aaa",
+            7,
+        )
+        assert (rows[1]["sport"], rows[1]["league_code"], rows[1]["sort_priority"]) == (
+            "softball",
+            "milb-aaa",
+            9,
+        )
+        assert len(rows) == 2
+
+    def test_log_table_remapped(self, tmp_path):
+        conn = _make_v72_db(tmp_path)
+        _seed_duplicate_milb_state(conn)
+        conn.execute("INSERT INTO epg_matched_streams (detected_league) VALUES ('aaa')")
         conn.commit()
 
         _run_migrations(conn)
 
-        row = conn.execute(
-            "SELECT detected_league FROM epg_matched_streams"
-        ).fetchone()
+        row = conn.execute("SELECT detected_league FROM epg_matched_streams").fetchone()
         assert row["detected_league"] == "milb-aaa"
 
 
@@ -328,10 +355,7 @@ class TestV73Idempotent:
         _run_migrations(conn)
         _run_migrations(conn)  # second run is a no-op (version is already 73)
 
-        codes = {
-            r["league_code"]
-            for r in conn.execute("SELECT league_code FROM leagues")
-        }
+        codes = {r["league_code"] for r in conn.execute("SELECT league_code FROM leagues")}
         assert "a" not in codes
         assert {"milb-a", "milb-aa", "milb-aaa", "milb-high-a"} <= codes
 
@@ -369,10 +393,8 @@ class TestV73MissingTablesGraceful:
         # Should not raise even though managed_channels, team_cache, etc. are missing.
         _run_migrations(conn)
 
-        row = conn.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
-        assert row["schema_version"] == 73
+        row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
+        assert row["schema_version"] == 76
 
 
 # ---------------------------------------------------------------------------
@@ -389,9 +411,7 @@ class TestFreshInstall:
         conn.row_factory = sqlite3.Row
         codes = {
             r["league_code"]
-            for r in conn.execute(
-                "SELECT league_code FROM leagues WHERE sport = 'baseball'"
-            )
+            for r in conn.execute("SELECT league_code FROM leagues WHERE sport = 'baseball'")
         }
         assert "a" not in codes
         assert "aa" not in codes
@@ -404,7 +424,5 @@ class TestFreshInstall:
         init_db(db_path)
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
-        assert row["schema_version"] == 73
+        row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
+        assert row["schema_version"] == 76

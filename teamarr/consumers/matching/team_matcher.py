@@ -21,6 +21,7 @@ from teamarr.consumers.matching.constants import (
     BOTH_TEAMS_THRESHOLD,
     HIGH_CONFIDENCE_THRESHOLD,
 )
+from teamarr.consumers.matching.country_resolver import CountryNameResolver
 from teamarr.consumers.matching.normalizer import normalize_for_matching
 from teamarr.consumers.matching.result import (
     FailedReason,
@@ -35,6 +36,22 @@ from teamarr.utilities.constants import TEAM_ALIASES
 from teamarr.utilities.fuzzy_match import get_matcher, normalize_text
 
 logger = logging.getLogger(__name__)
+
+# EPG anchored matching (bead t5e). A live broadcast's EPG program starts at ~the
+# event's official start; encores/replays/"classic" re-airs and the next game in a
+# series air later. When an anchor instant is supplied (the program's start), a
+# candidate event must fall within this tolerance of it to match — the definitive,
+# category-independent guard against binding a stream to an encore or the wrong
+# occurrence.
+#
+# 90 minutes (chosen 2026-06-03): a team-sport event always runs >90 min, so the
+# earliest an encore can START is >90 min after the live start — outside the gate.
+# Meanwhile ±90 min absorbs the usual broadcast-vs-scheduled-start skew (pre-game
+# lead-in). Tighter than an hours-wide window on purpose: it also excludes the
+# OTHER game of a same-day doubleheader (hours apart). Trade-off: if a provider's
+# guide lists the live program >90 min off the event start, that event simply gets
+# no EPG stream (safe no-match) rather than a wrong-occurrence bind.
+ANCHOR_MATCH_TOLERANCE_SECONDS = 90 * 60
 
 
 def _sport_hint_matches(sport_hint: str | list[str], event_sport: str) -> bool:
@@ -69,6 +86,14 @@ class MatchContext:
     stream_tz: ZoneInfo | None = None  # TZ for stream dates
     team1: str | None = None  # Extracted team names (from classifier)
     team2: str | None = None
+
+    # EPG matching (bead t5e): absolute broadcast instant of the matched program.
+    # When set, same-team candidate events are ranked by absolute time proximity
+    # to this anchor (nearest wins, tolerance-bounded) instead of by calendar
+    # date — so a series game whose title repeats across nights, or a post-game
+    # encore airing, binds to the correct occurrence. The match cache is bypassed
+    # for anchored matches (same title, different instants must not collide).
+    anchor_dt: "datetime | None" = None
 
     # Sport durations for ongoing event detection (hours)
     sport_durations: dict[str, float] = field(default_factory=dict)
@@ -127,6 +152,8 @@ class TeamMatcher:
         # Reverse cache: alias -> [(canonical, league), ...]
         # Enables finding canonical name without knowing league first
         self._reverse_aliases: dict[str, list[tuple[str, str]]] = self._build_reverse_cache()
+        # Locale-aware country name resolver (e.g. "brasil" → "Brazil")
+        self._country_resolver = CountryNameResolver()
 
     def reload_aliases(self) -> None:
         """Reload aliases from database.
@@ -154,6 +181,7 @@ class TeamMatcher:
         user_tz: ZoneInfo,
         sport_durations: dict[str, float] | None = None,
         stream_tz: ZoneInfo | None = None,
+        anchor_dt: "datetime | None" = None,
     ) -> MatchOutcome:
         """Single-league matching - search only the specified league.
 
@@ -192,6 +220,7 @@ class TeamMatcher:
             team1=classified.team1,
             team2=classified.team2,
             sport_durations=sport_durations or {},
+            anchor_dt=anchor_dt,
         )
 
         # Check cache first
@@ -242,6 +271,7 @@ class TeamMatcher:
         sport_durations: dict[str, float] | None = None,
         prefetched_events: dict[str, list["Event"]] | None = None,
         stream_tz: ZoneInfo | None = None,
+        anchor_dt: "datetime | None" = None,
     ) -> MatchOutcome:
         """Multi-league matching with league hint detection.
 
@@ -289,6 +319,7 @@ class TeamMatcher:
             team1=classified.team1,
             team2=classified.team2,
             sport_durations=sport_durations or {},
+            anchor_dt=anchor_dt,
         )
 
         # Check cache first
@@ -369,6 +400,157 @@ class TeamMatcher:
 
         return result
 
+    def match_team_only(
+        self,
+        classified: ClassifiedStream,
+        enabled_leagues: list[str],
+        target_date: date,
+        group_id: int,
+        stream_id: int,
+        generation: int,
+        user_tz: ZoneInfo,
+        sport_durations: dict[str, float] | None = None,
+        prefetched_events: dict[str, list[Event]] | None = None,
+        stream_tz: ZoneInfo | None = None,
+        anchor_dt: "datetime | None" = None,
+    ) -> list[MatchOutcome]:
+        """Match a single-team branded stream (TEAM_ONLY) to all its events in the window.
+
+        Unlike TEAM_VS_TEAM, the stream carries one team's brand (e.g.
+        "NHL | Toronto Maple Leafs") and should be added to every event where
+        that team plays within the date window. Returns one MatchOutcome per
+        matched event so the caller can fan out to multiple channels.
+
+        Args:
+            classified: Pre-classified stream (category must be TEAM_ONLY)
+            enabled_leagues: League codes subscribed for this group
+            target_date: Date to anchor the search window
+            group_id: Event group ID (for caching)
+            stream_id: Stream ID (for caching)
+            generation: Cache generation counter
+            user_tz: User timezone for date validation
+            sport_durations: Sport duration settings
+            prefetched_events: Optional pre-fetched events by league
+            stream_tz: Timezone for interpreting stream dates
+
+        Returns:
+            List of MatchOutcome — one per matched event, or a single
+            filtered/failed outcome if nothing matched.
+        """
+        if classified.category != StreamCategory.TEAM_ONLY:
+            return [MatchOutcome.filtered(
+                FilteredReason.NOT_EVENT,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+            )]
+
+        stream_name = classified.normalized.original
+
+        # Narrow search by league hint (same logic as match_multi_league)
+        league_hint = classified.league_hint
+        if league_hint:
+            hint_leagues = [league_hint] if isinstance(league_hint, str) else league_hint
+            valid_leagues = [lg for lg in hint_leagues if lg in enabled_leagues]
+            if not valid_leagues:
+                hint_display = (
+                    league_hint if isinstance(league_hint, str) else ", ".join(league_hint)
+                )
+                return [MatchOutcome.filtered(
+                    FilteredReason.LEAGUE_NOT_INCLUDED,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=f"League '{hint_display}' not in enabled leagues",
+                )]
+            leagues_to_search = valid_leagues
+        else:
+            leagues_to_search = enabled_leagues
+
+        # Narrow date window to ±2 days to minimise false positives.
+        window_days = 2
+        all_events: list[tuple[str, Event]] = []
+        if prefetched_events:
+            for league in leagues_to_search:
+                for event in prefetched_events.get(league, []):
+                    event_date = event.start_time.astimezone(user_tz).date()
+                    if abs((event_date - target_date).days) <= window_days:
+                        all_events.append((league, event))
+        else:
+            is_tsdb_map = {
+                lg: self._service.get_provider_name(lg) == "tsdb"
+                for lg in leagues_to_search
+            }
+            for league in leagues_to_search:
+                for offset in range(-window_days, window_days + 1):
+                    fetch_date = target_date + timedelta(days=offset)
+                    cache_only = is_tsdb_map[league] or offset < 0
+                    events = self._service.get_events(league, fetch_date, cache_only=cache_only)
+                    for event in events:
+                        all_events.append((league, event))
+
+        if not all_events:
+            return [MatchOutcome.failed(
+                FailedReason.NO_EVENT_FOUND,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail=f"No events in window ±{window_days}d for {target_date}",
+                parsed_team1=classified.team1,
+            )]
+
+        team_norm = normalize_for_matching(classified.team1) if classified.team1 else None
+        if not team_norm:
+            return [MatchOutcome.failed(
+                FailedReason.TEAMS_NOT_PARSED,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail="No team candidate extracted",
+            )]
+
+        matched_outcomes: list[MatchOutcome] = []
+        seen_event_ids: set[str] = set()
+
+        for league, event in all_events:
+            if event.id in seen_event_ids:
+                continue
+
+            # EPG anchored matching (bead t5e): gate to the live occurrence near
+            # the program's broadcast instant (excludes encores / wrong night).
+            if anchor_dt is not None:
+                anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
+                if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
+                    continue
+            score, _side = self._score_single_team_against_event(team_norm, event)
+            if score is None:
+                continue
+            seen_event_ids.add(event.id)
+            logger.debug(
+                "[TEAM_ONLY] Matched: stream_id=%d team='%s' event=%s league=%s conf=%.0f%%",
+                stream_id,
+                classified.team1,
+                event.id,
+                league,
+                score,
+            )
+            matched_outcomes.append(MatchOutcome.matched(
+                MatchMethod.FUZZY,
+                event,
+                detected_league=league,
+                confidence=score / 100.0,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                parsed_team1=classified.team1,
+            ))
+
+        if matched_outcomes:
+            return matched_outcomes
+
+        return [MatchOutcome.failed(
+            FailedReason.NO_EVENT_FOUND,
+            stream_name=stream_name,
+            stream_id=stream_id,
+            detail=f"No event found for team '{classified.team1}'",
+            parsed_team1=classified.team1,
+        )]
+
     # =========================================================================
     # PRIVATE METHODS
     # =========================================================================
@@ -379,6 +561,13 @@ class TeamMatcher:
         User-corrected entries are always trusted (pinned).
         Algorithmic entries are validated against date.
         """
+        # Anchored (EPG) matches are keyed only by title in the cache, but two
+        # programs with the same title (a series' Game 1/Game 2, or a live airing
+        # + its encore) must resolve to different events by their own instant.
+        # Skip the cache so each program is matched fresh against its anchor.
+        if ctx.anchor_dt is not None:
+            return None
+
         entry = self._cache.get(ctx.group_id, ctx.stream_id, ctx.stream_name)
         if not entry:
             return None
@@ -493,11 +682,22 @@ class TeamMatcher:
         best_is_future: bool = False  # Whether best match is today or future
         best_date_distance: int = 999  # Absolute days from target_date
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
+        best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
 
         for event in events:
             # Validate event is within search window (lifecycle handles exclusions)
             if not ctx.is_event_in_search_window(event):
                 continue
+
+            # EPG anchored matching (bead t5e): the candidate must air within the
+            # tolerance of the program's broadcast instant, else it is a different
+            # occurrence — an encore/replay or the next game in the series. This is
+            # the definitive, category-independent guard against encore binding.
+            anchor_dist = 0
+            if ctx.anchor_dt is not None:
+                anchor_dist = abs(int((event.start_time - ctx.anchor_dt).total_seconds()))
+                if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
+                    continue
 
             event_date = event.start_time.astimezone(ctx.user_tz).date()
 
@@ -555,12 +755,16 @@ class TeamMatcher:
                         int((event.start_time.astimezone(time_tz) - stream_dt).total_seconds())
                     )
 
-                # Ranking: score > time proximity > future over past > date proximity
+                # Ranking: score > time proximity > future over past > date proximity.
+                # For EPG anchored matches, nearest to the program instant wins
+                # outright (the encore/series guard already gated the candidates).
                 is_better = False
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if time_distance < best_time_distance:
+                    if ctx.anchor_dt is not None:
+                        is_better = anchor_dist < best_anchor_dist
+                    elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
                         is_better = True
                     elif time_distance == best_time_distance:
@@ -578,6 +782,7 @@ class TeamMatcher:
                     best_is_future = is_future
                     best_date_distance = abs_distance
                     best_time_distance = time_distance
+                    best_anchor_dist = anchor_dist
 
         if best_match:
             logger.debug(
@@ -665,11 +870,22 @@ class TeamMatcher:
         best_is_future: bool = False  # Whether best match is today or future
         best_date_distance: int = 999  # Absolute days from target_date
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
+        best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
 
         for league, event in events:
             # Validate event is within search window (lifecycle handles exclusions)
             if not ctx.is_event_in_search_window(event):
                 continue
+
+            # EPG anchored matching (bead t5e): the candidate must air within the
+            # tolerance of the program's broadcast instant, else it is a different
+            # occurrence — an encore/replay or the next game in the series. This is
+            # the definitive, category-independent guard against encore binding.
+            anchor_dist = 0
+            if ctx.anchor_dt is not None:
+                anchor_dist = abs(int((event.start_time - ctx.anchor_dt).total_seconds()))
+                if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
+                    continue
 
             event_date = event.start_time.astimezone(ctx.user_tz).date()
 
@@ -727,12 +943,16 @@ class TeamMatcher:
                         int((event.start_time.astimezone(time_tz) - stream_dt).total_seconds())
                     )
 
-                # Ranking: score > time proximity > future over past > date proximity
+                # Ranking: score > time proximity > future over past > date proximity.
+                # For EPG anchored matches, nearest to the program instant wins
+                # outright (the encore/series guard already gated the candidates).
                 is_better = False
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if time_distance < best_time_distance:
+                    if ctx.anchor_dt is not None:
+                        is_better = anchor_dist < best_anchor_dist
+                    elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
                         is_better = True
                     elif time_distance == best_time_distance:
@@ -750,6 +970,7 @@ class TeamMatcher:
                     best_confidence = score
                     best_is_future = is_future
                     best_date_distance = abs_distance
+                    best_anchor_dist = anchor_dist
                     best_time_distance = time_distance
 
         if best_match and best_league:
@@ -984,12 +1205,49 @@ class TeamMatcher:
 
         return None
 
+    def _score_single_team_against_event(
+        self,
+        team_norm: str,
+        event: "Event",
+    ) -> tuple[float, str] | tuple[None, None]:
+        """Score a single team name against an event's home and away teams.
+
+        For TEAM_ONLY streams. Returns the best score and which side matched,
+        but only when the team clearly matches ONE side and not the other.
+        This guards against the (practically impossible) case where the same
+        team name scores high on both sides of an event.
+
+        Args:
+            team_norm: Normalized candidate team name from the stream
+            event: Event to match against
+
+        Returns:
+            (score, side) where side is "home" or "away", or (None, None)
+        """
+        home_norm = normalize_text(event.home_team.name)
+        away_norm = normalize_text(event.away_team.name)
+
+        home_score = fuzz.token_set_ratio(team_norm, home_norm)
+        away_score = fuzz.token_set_ratio(team_norm, away_norm)
+
+        home_matches = home_score >= HIGH_CONFIDENCE_THRESHOLD
+        away_matches = away_score >= HIGH_CONFIDENCE_THRESHOLD
+
+        # Require exactly one side to match (not both)
+        if home_matches and not away_matches:
+            return home_score, "home"
+        if away_matches and not home_matches:
+            return away_score, "away"
+
+        return None, None
+
     def _resolve_alias(self, team_name: str, league: str | None) -> str | None:
         """Resolve a team name to its canonical form via alias lookup.
 
         Priority:
         1. Built-in aliases (TEAM_ALIASES constant) - league-agnostic
         2. User-defined aliases (database) - league-specific
+        3. International country name auto-resolution (e.g. "brasil" → "Brazil")
 
         Args:
             team_name: The team name to look up
@@ -1010,6 +1268,14 @@ class TeamMatcher:
             user_canonical = self._lookup_user_alias(normalized, league)
             if user_canonical:
                 return user_canonical
+
+        # Finally, try automatic country name resolution for national-team sports
+        country_canonical = self._country_resolver.resolve(team_name)
+        if country_canonical:
+            logger.debug(
+                "[ALIAS] Country name resolved: %r → %r", team_name, country_canonical
+            )
+            return country_canonical
 
         return None
 
@@ -1428,6 +1694,7 @@ class TeamMatcher:
                 status=status,
                 league=cached_data.get("league", ""),
                 sport=cached_data.get("sport", ""),
+                season_type=cached_data.get("season_type"),
                 venue=venue,
                 broadcasts=broadcasts,
                 segment_times=segment_times,

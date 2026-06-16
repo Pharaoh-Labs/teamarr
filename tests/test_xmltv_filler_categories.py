@@ -13,11 +13,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-import pytest
-
 from teamarr.database.connection import _run_migrations, init_db
 from teamarr.database.templates import Template, _row_to_template
-
 
 # ===========================================================================
 # Migration: v71 → v72 splits the shared list correctly
@@ -59,8 +56,7 @@ class TestV72Migration:
     def test_apply_to_all_copies_categories_to_filler(self, tmp_path):
         conn = _make_v71_templates_db(tmp_path)
         conn.execute(
-            "INSERT INTO templates (name, xmltv_categories, categories_apply_to) "
-            "VALUES (?, ?, ?)",
+            "INSERT INTO templates (name, xmltv_categories, categories_apply_to) VALUES (?, ?, ?)",
             ("EmbyShared", json.dumps(["Sports", "Sports Event"]), "all"),
         )
         conn.commit()
@@ -77,8 +73,7 @@ class TestV72Migration:
     def test_apply_to_events_leaves_filler_empty(self, tmp_path):
         conn = _make_v71_templates_db(tmp_path)
         conn.execute(
-            "INSERT INTO templates (name, xmltv_categories, categories_apply_to) "
-            "VALUES (?, ?, ?)",
+            "INSERT INTO templates (name, xmltv_categories, categories_apply_to) VALUES (?, ?, ?)",
             ("DefaultEvents", json.dumps(["Sports"]), "events"),
         )
         conn.commit()
@@ -110,9 +105,7 @@ class TestV72Migration:
         conn = _make_v71_templates_db(tmp_path)
         _run_migrations(conn)
 
-        row = conn.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
+        row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
         # v72 ran (other tests cover its data transform). Migrations after v72
         # also run from a v71 starting point — assert we're at the latest
         # version, not pinned to 72.
@@ -259,7 +252,5 @@ class TestFreshInstall:
         assert "categories_apply_to" not in cols
 
         # Fresh install should land on the current schema version (>= 72).
-        row = conn.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
+        row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
         assert row["schema_version"] >= 72

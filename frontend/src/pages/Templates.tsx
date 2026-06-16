@@ -1,7 +1,8 @@
 import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, Loader2, Copy, Download, Upload } from "lucide-react"
+import { Plus, Trash2, Pencil, Loader2, Copy, Download, Upload, Tv, User } from "lucide-react"
+import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,10 +28,14 @@ import {
   useDeleteTemplate,
 } from "@/hooks/useTemplates"
 import { getTemplate, type Template } from "@/api/templates"
+import { TemplateAssignmentManager } from "@/components/TemplateAssignmentModal"
+import { useSubscription } from "@/hooks/useSubscription"
 
 export function Templates() {
   const navigate = useNavigate()
   const { data: templates, isLoading, error, refetch } = useTemplates()
+  const { data: subscription } = useSubscription()
+  const subscribedLeagues = subscription?.leagues ?? []
   const createMutation = useCreateTemplate()
   const deleteMutation = useDeleteTemplate()
 
@@ -189,7 +194,7 @@ export function Templates() {
   if (error) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Templates</h1>
+        <h1 className="text-xl font-bold">Templates</h1>
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">Error loading templates: {error.message}</p>
@@ -204,12 +209,11 @@ export function Templates() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold">Templates</h1>
-          <p className="text-sm text-muted-foreground">Configure EPG title and description templates</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
             {isImporting ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -218,7 +222,7 @@ export function Templates() {
             )}
             Import
           </Button>
-          <Button size="sm" onClick={() => navigate("/templates/new")}>
+          <Button size="sm" onClick={() => navigate("/epg/templates/new")}>
             <Plus className="h-4 w-4 mr-1" />
             New Template
           </Button>
@@ -257,7 +261,11 @@ export function Templates() {
                   <TableRow key={template.id}>
                     <TableCell className="font-medium">{template.name}</TableCell>
                     <TableCell>
-                      <Badge variant={template.template_type === "team" ? "secondary" : "info"}>
+                      <Badge
+                        variant={template.template_type === "team" ? "secondary" : "info"}
+                        className="inline-flex items-center gap-1 capitalize"
+                      >
+                        {template.template_type === "team" ? <User className="h-3 w-3" /> : <Tv className="h-3 w-3" />}
                         {template.template_type}
                       </Badge>
                     </TableCell>
@@ -319,7 +327,7 @@ export function Templates() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => navigate(`/templates/${template.id}`)}
+                          onClick={() => navigate(`/epg/templates/${template.id}`)}
                           title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
@@ -361,6 +369,11 @@ export function Templates() {
           )}
       </div>
 
+      {/* Template Assignments — the manager owns its own header + add button */}
+      <div className="pt-4">
+        <TemplateAssignmentManager subscribedLeagues={subscribedLeagues} />
+      </div>
+
       {/* Delete Confirmation */}
       <Dialog
         open={deleteConfirm !== null}
@@ -379,15 +392,14 @@ export function Templates() {
             (deleteConfirm.template_type === "team" && deleteConfirm.team_count && deleteConfirm.team_count > 0) ||
             (deleteConfirm.template_type === "event" && deleteConfirm.global_assignments && deleteConfirm.global_assignments.length > 0)
           ) && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 text-sm">
-              <p className="font-medium text-destructive">Warning</p>
-              <p className="text-muted-foreground mt-1">
+            <Alert variant="destructive" title="Warning">
+              <p className="text-muted-foreground">
                 {deleteConfirm.template_type === "team"
                   ? `${deleteConfirm.team_count} team${deleteConfirm.team_count !== 1 ? "s are" : " is"} currently using this template. They will become unassigned and won't generate EPG data until you assign them a new template.`
                   : "This template has global assignments. Deleting it will remove those assignments and affected event groups won't generate EPG data until you assign a new template."
                 }
               </p>
-            </div>
+            </Alert>
           )}
 
           <DialogFooter>

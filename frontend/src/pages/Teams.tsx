@@ -13,6 +13,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Alert } from "@/components/ui/alert"
+import { TeamEpgSettingsCard } from "@/components/TeamEpgSettingsCard"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -104,7 +106,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="team_name">Team Name</Label>
               <Input
@@ -532,7 +534,7 @@ export function Teams() {
   if (error) {
     return (
       <div className="space-y-2">
-        <h1 className="text-xl font-bold">Teams</h1>
+        <h1 className="text-xl font-bold">Team EPG</h1>
         <Card className="border-destructive p-4">
           <p className="text-destructive">Error loading teams: {error.message}</p>
           <Button className="mt-4" onClick={() => refetch()}>
@@ -547,21 +549,27 @@ export function Teams() {
     <div className="space-y-2">
       {/* Header - Compact */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Teams</h1>
-          <p className="text-sm text-muted-foreground">
-            Team-based EPG channel configurations
-          </p>
-        </div>
-        <Button size="sm" onClick={() => navigate("/teams/import")}>
+        <h1 className="text-xl font-bold">Team EPG</h1>
+        <Button size="sm" onClick={() => navigate("/epg/teams/import")}>
           <Plus className="h-4 w-4 mr-1" />
-          Import
+          Add Team
         </Button>
       </div>
 
+      {/* What is Team EPG — info tile */}
+      <Alert variant="info" title="What is Team EPG?">
+        A secondary flow for teams you already have static channels for in Dispatcharr.
+        Teamarr generates guide data (a team-only EPG) for them but does <strong>not</strong>{" "}
+        create or manage these channels — it just fills in their EPG. Most setups rely on
+        event-based matching from Sources instead.
+      </Alert>
+
+      {/* Team EPG settings (lifted from Settings) */}
+      <TeamEpgSettingsCard />
+
       {/* Stats Tiles - V1 Style: Grid with 4 equal columns filling width */}
       {teams && teams.length > 0 && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Configured */}
           <div className="group relative">
             <div className="bg-secondary rounded px-3 py-2 cursor-help">
@@ -1147,7 +1155,7 @@ export function Teams() {
                   />
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p className="font-medium">Available variables:</p>
-                    <div className="grid grid-cols-2 gap-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                       <span><code>{"{team_name_pascal}"}</code> - PascalCase</span>
                       <span><code>{"{team_abbrev}"}</code> - Abbreviation</span>
                       <span><code>{"{team_name}"}</code> - lowercase-dashes</span>

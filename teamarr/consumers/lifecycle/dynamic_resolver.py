@@ -33,6 +33,11 @@ class DynamicResolver:
     _sport_display_names: dict[str, str] = field(default_factory=dict)
     _league_display_names: dict[str, str] = field(default_factory=dict)
     _league_aliases: dict[str, str] = field(default_factory=dict)
+    # Valid Dispatcharr channel-group ids seen at init (only trusted when the
+    # group fetch succeeded — see _groups_loaded) so a stale/deleted configured
+    # group id can be detected before it fails every channel creation.
+    _known_group_ids: set[int] = field(default_factory=set)
+    _groups_loaded: bool = False
     _initialized: bool = False
 
     def initialize(
@@ -50,6 +55,8 @@ class DynamicResolver:
         self._db_conn = db_conn
         self._initialized = False
         self._groups_by_name = {}
+        self._known_group_ids = set()
+        self._groups_loaded = False
         self._profiles_by_name = {}
         self._sport_display_names = {}
         self._league_display_names = {}
@@ -93,6 +100,8 @@ class DynamicResolver:
                 for g in groups:
                     if g.name and g.id:
                         self._groups_by_name[g.name.lower()] = g.id
+                        self._known_group_ids.add(g.id)
+                self._groups_loaded = True
             except Exception as e:
                 logger.warning("[RESOLVER] Failed to fetch channel groups: %s", e)
 
@@ -181,6 +190,30 @@ class DynamicResolver:
             result = result.replace("{league}", alias)
 
         return result
+
+    def _validate_group_id(self, group_id: int | None) -> int | None:
+        """Drop a configured group id that no longer exists in Dispatcharr.
+
+        A channel assigned to a deleted group id is rejected by Dispatcharr
+        ("Invalid pk … object does not exist"), which would fail EVERY channel
+        routed to that group (e.g. a static or per-league group the user deleted
+        — observed as 0 channels created). If the current groups loaded
+        successfully and the id isn't among them, fall back to ungrouped (None)
+        so channels are still created. Only trusted when the fetch succeeded;
+        otherwise assume valid to avoid dropping groups on a transient API error.
+        """
+        if group_id is None:
+            return None
+        self._ensure_initialized()
+        if self._groups_loaded and group_id not in self._known_group_ids:
+            logger.warning(
+                "[RESOLVER] Configured channel group id=%s no longer exists in "
+                "Dispatcharr — creating channels ungrouped. Re-select a channel "
+                "group in Settings to restore grouping.",
+                group_id,
+            )
+            return None
+        return group_id
 
     def _get_or_create_group(self, name: str) -> int | None:
         """Get group ID by name, creating if needed.
@@ -283,7 +316,7 @@ class DynamicResolver:
         )
 
         if mode == "static":
-            return static_group_id
+            return self._validate_group_id(static_group_id)
 
         # Legacy mode support (pre-v39 databases)
         if mode == "sport" and event_sport:
@@ -318,7 +351,7 @@ class DynamicResolver:
                     event_sport,
                     event_league,
                 )
-                return static_group_id  # Fallback
+                return self._validate_group_id(static_group_id)  # Fallback
 
             group_id = self._get_or_create_group(resolved_name)
             logger.info(

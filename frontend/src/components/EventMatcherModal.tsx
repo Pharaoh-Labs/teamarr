@@ -50,6 +50,7 @@ export function useEventMatcher() {
   const [targetDate, setTargetDate] = useState(() => {
     return new Date().toISOString().split("T")[0]
   })
+  const [teamFilter, setTeamFilter] = useState("")
   const [events, setEvents] = useState<EventSearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -66,6 +67,7 @@ export function useEventMatcher() {
     }
     setStream(correctable)
     setLeague(correctable.league_hint ?? "")
+    setTeamFilter("")
     setEvents([])
     setSelectedEventId(null)
     setOpen(true)
@@ -75,14 +77,14 @@ export function useEventMatcher() {
     if (!league) return
     setLoading(true)
     try {
-      const result = await searchEvents(league, undefined, targetDate || undefined, 50)
+      const result = await searchEvents(league, teamFilter || undefined, targetDate || undefined, 50)
       setEvents(result.events)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to search events")
     } finally {
       setLoading(false)
     }
-  }, [league, targetDate])
+  }, [league, teamFilter, targetDate])
 
   const handleCorrect = useCallback(async () => {
     if (!stream || !selectedEventId || !league) return
@@ -144,6 +146,8 @@ export function useEventMatcher() {
     setLeague,
     targetDate,
     setTargetDate,
+    teamFilter,
+    setTeamFilter,
     events,
     loading,
     submitting,
@@ -168,6 +172,8 @@ interface EventMatcherModalProps {
   onLeagueChange: (league: string) => void
   targetDate: string
   onTargetDateChange: (date: string) => void
+  teamFilter: string
+  onTeamFilterChange: (value: string) => void
   events: EventSearchResult[]
   loading: boolean
   submitting: boolean
@@ -186,6 +192,8 @@ export function EventMatcherModal({
   onLeagueChange,
   targetDate,
   onTargetDateChange,
+  teamFilter,
+  onTeamFilterChange,
   events,
   loading,
   submitting,
@@ -285,6 +293,13 @@ export function EventMatcherModal({
                     </optgroup>
                   ))}
                 </Select>
+                <Input
+                  type="text"
+                  value={teamFilter}
+                  onChange={(e) => onTeamFilterChange(e.target.value)}
+                  placeholder="Filter by team..."
+                  className="w-36"
+                />
                 <Input
                   type="date"
                   value={targetDate}

@@ -146,6 +146,7 @@ def list_channel_groups(exclude_m3u: bool = True) -> list[dict]:
         {
             "id": g.id,
             "name": g.name,
+            "from_m3u": bool(g.m3u_accounts),
         }
         for g in groups
     ]

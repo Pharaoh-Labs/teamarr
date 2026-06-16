@@ -7,19 +7,19 @@ docs_version: "2.3.0"
 
 # Teams
 
-Team-based EPG creates one persistent channel per team. Each channel stays in your guide 24/7 and gets populated with the team's schedule — upcoming games, live events, and recent results.
+Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. Teamarr does *not* create a Dispatcharr channel for each team — that's only done for event-based workflows. Instead, you point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association), and Teamarr keeps that XMLTV channel populated with the team's schedule — upcoming games, live events, and recent results.
 
 ## How It Works
 
 1. Import teams from the league cache
 2. Assign a **team template** to each team
-3. Teamarr looks up each team's schedule and generates EPG programmes
+3. Teamarr looks up each team's schedule and writes EPG programmes for that team's XMLTV channel
 
-Each team channel shows:
-- **Pregame** filler before the game starts
-- **Live event** programme during the game
-- **Postgame** filler after the game ends
-- **Idle** filler on days with no games
+Each team's EPG includes:
+- **Pregame** programmes before the game starts
+- **Live event** programmes during the game
+- **Postgame** programmes after the game ends
+- **Idle** programmes on days with no games
 
 ## Importing Teams
 
@@ -41,7 +41,7 @@ The Teams table shows all imported teams with:
 | **Team** | Team name with logo |
 | **League** | League the team belongs to |
 | **Template** | Assigned template (click to change) |
-| **Channel** | Dispatcharr channel ID if synced |
+| **Channel** | XMLTV channel id (e.g. `team.espn.nfl.123`) — point a Dispatcharr channel at this id to wire up the EPG |
 | **Status** | Active (has upcoming games) or inactive |
 
 ### Assigning Templates
@@ -53,14 +53,3 @@ Team templates are different from event templates — they support `.next` and `
 ### Schedule Days
 
 Configure how many days of schedule to fetch per team in **Settings > Teams**. More days means more programmes in the EPG but longer generation times.
-
-## Team Channels in Dispatcharr
-
-When Dispatcharr integration is configured, Teamarr creates and manages channels for each team:
-
-- Channel names use the team template's channel name format
-- Channel logos are set from the team's logo URL
-- Channels are assigned to the configured channel group and profiles
-- Channel numbers follow the configured numbering mode (auto or manual)
-
-Channels persist even when no game is scheduled — they show idle filler content instead.

@@ -88,3 +88,7 @@ Set default event durations (in hours) for each sport. These are used when the a
 | Golf | 6.0 |
 | Racing | 3.0 |
 | Cricket | 4.0 |
+
+## EPG Program-Data Matching
+
+EPG program-data matching settings now live on the **Event Groups** settings tab — see [Event Group Settings → EPG Program Matching](event-groups.md#epg-program-matching). They moved there because matching is enabled per event group. The full how-it-works walkthrough is in the [EPG Program Matching guide](../epg-matching.md).

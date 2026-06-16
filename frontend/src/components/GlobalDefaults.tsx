@@ -1,10 +1,11 @@
 /**
  * GlobalDefaults — global sports/league subscription + team filter management.
  *
- * Collapsible card at the top of the Event Groups page. Manages:
+ * Rendered inside the Subscriptions page tile sub-nav. Stays mounted across the
+ * "sportleague" / "soccer" / "teams" tiles so the shared subscription state is
+ * preserved, rendering only the section matching the active tile. Manages:
  * - Non-soccer league selection (via LeaguePicker)
  * - Soccer configuration (via SoccerModeSelector)
- * - Template assignments (via TemplateAssignmentModal)
  * - Default team filter (include/exclude teams, playoff bypass)
  *
  * Explicit Save buttons — league changes trigger EPG regeneration.
@@ -13,36 +14,28 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import {
-  ChevronRight,
-  ChevronDown,
-  Save,
-  Loader2,
-  Layers,
-  Trophy,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
+import { SaveButton } from "@/components/ui/save-button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { LeaguePicker } from "@/components/LeaguePicker"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
-import { TemplateAssignmentModal } from "@/components/TemplateAssignmentModal"
 import { TeamPicker } from "@/components/TeamPicker"
-import { useSubscription, useUpdateSubscription, useSubscriptionTemplates } from "@/hooks/useSubscription"
+import { useSubscription, useUpdateSubscription } from "@/hooks/useSubscription"
 import { useTeamFilterSettings, useUpdateTeamFilterSettings } from "@/hooks/useSettings"
 import { getLeagues } from "@/api/teams"
 import type { SoccerFollowedTeam } from "@/api/types"
 import type { TeamFilterSettings } from "@/api/settings"
 
-export function GlobalDefaults() {
-  const [expanded, setExpanded] = useState(false)
-  const [templateModalOpen, setTemplateModalOpen] = useState(false)
-
+export function GlobalDefaults({
+  activeTile,
+}: {
+  activeTile: "sportleague" | "soccer" | "teams"
+}) {
   // Fetch subscription state from server
   const { data: subscription, isLoading: subLoading } = useSubscription()
-  const { data: templatesData } = useSubscriptionTemplates()
   const updateMutation = useUpdateSubscription()
 
   // Fetch leagues for sport counting
@@ -102,33 +95,11 @@ export function GlobalDefaults() {
     }
   }, [teamFilterData])
 
-  // Combined leagues for template modal and team picker
+  // Combined leagues for team picker
   const allSubscribedLeagues = useMemo(
     () => [...nonSoccerLeagues, ...soccerLeagues],
     [nonSoccerLeagues, soccerLeagues]
   )
-
-  // Summary stats
-  const sportCount = useMemo(() => {
-    const sports = new Set<string>()
-    for (const slug of allSubscribedLeagues) {
-      const league = allLeagues.find((l) => l.slug === slug)
-      if (league?.sport) sports.add(league.sport)
-    }
-    return sports.size
-  }, [allSubscribedLeagues, allLeagues])
-
-  const templateCount = templatesData?.templates?.length || 0
-
-  // Team filter summary
-  const teamFilterSummary = useMemo(() => {
-    if (!teamFilter.enabled) return ""
-    const count = teamFilter.mode === "include"
-      ? (teamFilter.include_teams?.length ?? 0)
-      : (teamFilter.exclude_teams?.length ?? 0)
-    if (count === 0) return ""
-    return `, ${count} team${count !== 1 ? "s" : ""} ${teamFilter.mode === "include" ? "included" : "excluded"}`
-  }, [teamFilter])
 
   // Handle non-soccer league change
   const handleNonSoccerChange = useCallback((leagues: string[]) => {
@@ -191,118 +162,78 @@ export function GlobalDefaults() {
     })
   }, [teamFilter, updateTeamFilter])
 
-  const summaryText = subLoading
-    ? "Loading..."
-    : allSubscribedLeagues.length === 0
-    ? "No sports subscribed"
-    : `${allSubscribedLeagues.length} league${allSubscribedLeagues.length !== 1 ? "s" : ""} across ${sportCount} sport${sportCount !== 1 ? "s" : ""}${templateCount > 0 ? `, ${templateCount} template rule${templateCount !== 1 ? "s" : ""}` : ""}${teamFilterSummary}`
+  if (subLoading || !leaguesData) {
+    return (
+      <Card>
+        <CardContent>
+          <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading subscriptions…
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <>
-      <Card>
-        <CardHeader
-          className="cursor-pointer hover:bg-muted/50 rounded-t-lg"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <div className="flex items-center gap-2">
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
-            <Trophy className="h-4 w-4 text-muted-foreground" />
-            <div className="flex-1">
-              <CardTitle>Global Defaults</CardTitle>
-              {!expanded && (
-                <CardDescription className="mt-1">
-                  {summaryText}
-                </CardDescription>
-              )}
-              {expanded && (
-                <CardDescription>
-                  Configure default league subscriptions and team filtering for all event groups
-                </CardDescription>
-              )}
-            </div>
-            {hasLocalChanges && !expanded && (
+      {/* ── Tile: Sport / League ── */}
+      {activeTile === "sportleague" && (
+        <Card className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-base font-medium">Sports (Non-Soccer)</Label>
+            {hasLocalChanges && (
               <span className="text-xs text-amber-500 font-medium">Unsaved changes</span>
             )}
           </div>
-        </CardHeader>
+          <LeaguePicker
+            selectedLeagues={nonSoccerLeagues}
+            onSelectionChange={handleNonSoccerChange}
+            excludeSport="soccer"
+            maxHeight="max-h-64"
+            showSearch={true}
+            showSelectedBadges={true}
+            maxBadges={10}
+          />
+          <div className="flex justify-end pt-2">
+            <SaveButton
+              onClick={handleSave}
+              pending={updateMutation.isPending}
+              disabled={!hasLocalChanges}
+            />
+          </div>
+        </Card>
+      )}
 
-        {expanded && (
-          <CardContent className="space-y-4">
-            {/* ── Section 1: Template Assignments ── */}
-            <div className="rounded-lg border bg-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-base font-medium">Template Assignments</Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Assign templates by sport or league. More specific matches take priority (league &gt; sport &gt; default).
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setTemplateModalOpen(true)
-                  }}
-                >
-                  <Layers className="h-4 w-4 mr-1" />
-                  Manage ({templateCount})
-                </Button>
-              </div>
-            </div>
+      {/* ── Tile: Soccer ── */}
+      {activeTile === "soccer" && (
+        <Card className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-base font-medium">Soccer Leagues</Label>
+            {hasLocalChanges && (
+              <span className="text-xs text-amber-500 font-medium">Unsaved changes</span>
+            )}
+          </div>
+          <SoccerModeSelector
+            mode={soccerMode}
+            onModeChange={handleSoccerModeChange}
+            selectedLeagues={soccerLeagues}
+            onLeaguesChange={handleSoccerLeaguesChange}
+            followedTeams={followedTeams}
+            onFollowedTeamsChange={handleFollowedTeamsChange}
+          />
+          <div className="flex justify-end pt-2">
+            <SaveButton
+              onClick={handleSave}
+              pending={updateMutation.isPending}
+              disabled={!hasLocalChanges}
+            />
+          </div>
+        </Card>
+      )}
 
-            {/* ── Section 2: Sport / League Subscriptions ── */}
-            <div className="rounded-lg border bg-card p-4 space-y-4">
-              <Label className="text-base font-medium">Sport / League Subscriptions</Label>
-
-              <div className="space-y-3">
-                <Label className="text-sm font-medium text-muted-foreground">Non-Soccer Sports</Label>
-                <LeaguePicker
-                  selectedLeagues={nonSoccerLeagues}
-                  onSelectionChange={handleNonSoccerChange}
-                  excludeSport="soccer"
-                  maxHeight="max-h-64"
-                  showSearch={true}
-                  showSelectedBadges={true}
-                  maxBadges={10}
-                />
-              </div>
-
-              <div className="border-t" />
-
-              <div className="space-y-3">
-                <Label className="text-sm font-medium text-muted-foreground">Soccer Leagues</Label>
-                <SoccerModeSelector
-                  mode={soccerMode}
-                  onModeChange={handleSoccerModeChange}
-                  selectedLeagues={soccerLeagues}
-                  onLeaguesChange={handleSoccerLeaguesChange}
-                  followedTeams={followedTeams}
-                  onFollowedTeamsChange={handleFollowedTeamsChange}
-                />
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <Button
-                  onClick={handleSave}
-                  disabled={!hasLocalChanges || updateMutation.isPending}
-                >
-                  {updateMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Save Subscriptions
-                </Button>
-              </div>
-            </div>
-
-            {/* ── Section 3: Default Team Filter ── */}
-            <div className="rounded-lg border bg-card p-4 space-y-4">
+      {/* ── Tile: Teams (Default Team Filter) ── */}
+      {activeTile === "teams" && (
+            <Card className="p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">Default Team Filter</Label>
                 <div className="flex items-center gap-2">
@@ -390,29 +321,15 @@ export function GlobalDefaults() {
                         ? `Only events involving ${teamFilter.include_teams?.length} selected team(s) will be matched.`
                         : `Events involving ${teamFilter.exclude_teams?.length} selected team(s) will be excluded.`}
                 </p>
-                <Button
+                <SaveButton
                   onClick={handleSaveTeamFilter}
-                  disabled={updateTeamFilter.isPending}
+                  pending={updateTeamFilter.isPending}
                 >
-                  {updateTeamFilter.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
                   Save Team Filter
-                </Button>
+                </SaveButton>
               </div>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Template Assignment Modal */}
-      <TemplateAssignmentModal
-        open={templateModalOpen}
-        onOpenChange={setTemplateModalOpen}
-        subscribedLeagues={allSubscribedLeagues}
-      />
+            </Card>
+      )}
     </>
   )
 }

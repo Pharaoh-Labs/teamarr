@@ -13,7 +13,7 @@ Delete timing options:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from teamarr.consumers.matching.result import ExcludedReason
 from teamarr.core import Event
@@ -25,6 +25,70 @@ from teamarr.utilities.tz import now_user, to_user_tz
 from .types import CreateTiming, DeleteTiming, LifecycleDecision
 
 logger = logging.getLogger(__name__)
+
+# SQLite-native UTC timestamp format ("YYYY-MM-DD HH:MM:SS"), directly
+# comparable to datetime('now') for time-windowed stream membership gating.
+_SQLITE_UTC_FMT = "%Y-%m-%d %H:%M:%S"
+
+
+def compute_stream_window(
+    program_start: datetime | None,
+    program_end: datetime | None,
+    pre_buffer_minutes: int,
+    post_buffer_minutes: int,
+) -> tuple[str | None, str | None]:
+    """Compute the (attach_at, detach_at) window for a time-shared linear stream.
+
+    Used by epic teamarrv2-183.5: an EPG-matched linear stream attaches to an
+    event channel only near game time and detaches after. The window is the
+    matched EPG program slot widened by the global stream buffers:
+
+        attach = program_start - pre_buffer
+        detach = program_end + post_buffer
+
+    The buffers apply unclipped: if two programs on the same channel overlap once
+    widened, the stream is simply a member of both event channels during the
+    overlap (bead teamarrv2-6qx — the user owns the buffer values and accepts
+    overlap).
+
+    Returns SQLite-native UTC strings (comparable to datetime('now')), or
+    (None, None) when there is no program slot — meaning full-life membership
+    (the default for dedicated/name-matched streams; behavior unchanged).
+    """
+    if program_start is None or program_end is None:
+        return None, None
+    attach = program_start - timedelta(minutes=pre_buffer_minutes)
+    detach = program_end + timedelta(minutes=post_buffer_minutes)
+    return (
+        attach.astimezone(UTC).strftime(_SQLITE_UTC_FMT),
+        detach.astimezone(UTC).strftime(_SQLITE_UTC_FMT),
+    )
+
+
+def is_stream_in_window(
+    attach_at: str | None,
+    detach_at: str | None,
+    now: str | None = None,
+) -> bool:
+    """Whether a time-windowed stream is active right now.
+
+    Mirrors the SQL gate in ``get_ordered_stream_ids``: a stream with no window
+    (``attach_at`` IS NULL — full-life, the default) is always active; otherwise
+    it is active only when ``attach_at <= now < detach_at``. All three values are
+    SQLite-native UTC strings ("YYYY-MM-DD HH:MM:SS"), which are lexicographically
+    comparable. ``now`` defaults to the current UTC instant.
+
+    Used by the channel-creation path so a brand-new channel whose sole source is
+    an out-of-window EPG stream is not pushed live to Dispatcharr before its
+    attach window opens (bead teamarrv2-uye).
+    """
+    if not attach_at:
+        return True
+    if now is None:
+        now = datetime.now(UTC).strftime(_SQLITE_UTC_FMT)
+    if not detach_at:
+        return now >= attach_at
+    return attach_at <= now < detach_at
 
 
 class ChannelLifecycleManager:
