@@ -313,3 +313,79 @@ class TestKeyParsing:
         rows = svc._query_team_cache_by_keys(["espn:23", "espn:mlb:16"])
         names = {r["team_name"] for r in rows}
         assert {"Pittsburgh Pirates", "Chicago Cubs"} <= names
+
+
+class TestStatsMetric:
+    """The stats_metric rule matches streams by Dispatcharr stream_stats values."""
+
+    def _stream(self, stats: dict | None) -> ManagedChannelStream:
+        return ManagedChannelStream(
+            id=1, managed_channel_id=1, dispatcharr_stream_id=1, stream_stats=stats
+        )
+
+    def _svc(self, value: str) -> StreamOrderingService:
+        return StreamOrderingService([StreamOrderingRule("stats_metric", value, 1)])
+
+    @pytest.mark.parametrize(
+        "operator,threshold,bitrate,expected",
+        [
+            (">=", "4000", 4000, True),
+            (">=", "4000", 3999, False),
+            ("<=", "4000", 4000, True),
+            ("<=", "4000", 4001, False),
+            (">", "4000", 4001, True),
+            (">", "4000", 4000, False),
+            ("<", "4000", 3999, True),
+            ("<", "4000", 4000, False),
+            ("=", "4000", 4000, True),
+            ("=", "4000", 4001, False),
+        ],
+    )
+    def test_operators(self, operator, threshold, bitrate, expected):
+        svc = self._svc(f"ffmpeg_output_bitrate|{operator}|{threshold}")
+        stream = self._stream({"ffmpeg_output_bitrate": bitrate})
+        matched = svc.compute_priority(stream) == 1
+        assert matched is expected
+
+    def test_virtual_resolution_width_and_height(self):
+        stream = self._stream({"resolution": "1920x1080"})
+        assert self._svc("resolution_width|>=|1920").compute_priority(stream) == 1
+        assert self._svc("resolution_height|>=|1080").compute_priority(stream) == 1
+        assert self._svc("resolution_width|>|1920").compute_priority(stream) == NO_MATCH_PRIORITY
+
+    def test_malformed_resolution_does_not_match(self):
+        stream = self._stream({"resolution": "1080"})  # no "x"
+        assert self._svc("resolution_width|>=|720").compute_priority(stream) == NO_MATCH_PRIORITY
+
+    def test_multi_condition_and(self):
+        rule = "source_fps|>=|50;ffmpeg_output_bitrate|>=|4000"
+        both = self._stream({"source_fps": 60, "ffmpeg_output_bitrate": 5000})
+        one = self._stream({"source_fps": 30, "ffmpeg_output_bitrate": 5000})
+        assert self._svc(rule).compute_priority(both) == 1
+        assert self._svc(rule).compute_priority(one) == NO_MATCH_PRIORITY
+
+    def test_is_unknown_matches_when_absent(self):
+        # No stats at all, or the specific metric missing → is_unknown matches.
+        assert self._svc("source_fps|is_unknown").compute_priority(self._stream(None)) == 1
+        assert (
+            self._svc("source_fps|is_unknown").compute_priority(
+                self._stream({"resolution": "1920x1080"})
+            )
+            == 1
+        )
+        # Metric present → is_unknown does not match.
+        assert (
+            self._svc("source_fps|is_unknown").compute_priority(self._stream({"source_fps": 60}))
+            == NO_MATCH_PRIORITY
+        )
+
+    def test_numeric_op_with_no_stats_does_not_match(self):
+        svc = self._svc("source_fps|>=|50")
+        assert svc.compute_priority(self._stream(None)) == NO_MATCH_PRIORITY
+
+    def test_malformed_rule_value_does_not_raise(self):
+        stream = self._stream({"source_fps": 60})
+        assert self._svc("").compute_priority(stream) == NO_MATCH_PRIORITY
+        # no operator
+        assert self._svc("source_fps").compute_priority(stream) == NO_MATCH_PRIORITY
+        assert self._svc("source_fps|>=|notanumber").compute_priority(stream) == NO_MATCH_PRIORITY
