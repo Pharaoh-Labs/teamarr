@@ -176,10 +176,17 @@ export interface ChannelStreamEntry {
   source_group: string | null
   m3u_account_name: string | null
   match_method: string | null
+  match_type: string | null
+  exception_keyword: string | null
   priority: number
   stream_stats: Record<string, unknown> | null
   stream_stats_updated_at: string | null
   matched_rules: StreamRuleMatch[]
+  matched_event: string | null
+  matched_league: string | null
+  cache_match_method: string | null
+  user_corrected: boolean
+  corrected_at: string | null
 }
 
 export interface ChannelStreamsResponse {

@@ -159,10 +159,18 @@ class ChannelStreamEntry(BaseModel):
     source_group: str | None = None
     m3u_account_name: str | None = None
     match_method: str | None = None
+    match_type: str | None = None
+    exception_keyword: str | None = None
     priority: int = 0
     stream_stats: dict | None = None
     stream_stats_updated_at: str | None = None
     matched_rules: list[StreamRuleMatch] = []
+    # Cache-derived match detail (absent for EPG / dedicated matches)
+    matched_event: str | None = None
+    matched_league: str | None = None
+    cache_match_method: str | None = None
+    user_corrected: bool = False
+    corrected_at: str | None = None
 
 
 class ChannelStreamsResponse(BaseModel):
@@ -282,7 +290,11 @@ def get_managed_channel_streams(channel_id: int):
     Source group names are resolved from event_epg_groups via a join.
     """
     from teamarr.database.channels import get_managed_channel
-    from teamarr.database.channels.streams import get_channel_streams, refresh_stream_stats
+    from teamarr.database.channels.streams import (
+        get_channel_streams,
+        get_stream_match_details,
+        refresh_stream_stats,
+    )
     from teamarr.services.stream_ordering import get_stream_ordering_service
 
     with get_db() as conn:
@@ -339,6 +351,24 @@ def get_managed_channel_streams(channel_id: int):
             for s in streams
         }
 
+        # Explain how each stream matched its event (cache-derived; absent for
+        # EPG / dedicated matches that bypass the fingerprint cache).
+        match_pairs = [
+            (s.source_group_id, s.dispatcharr_stream_id)
+            for s in streams
+            if s.source_group_id is not None
+        ]
+        match_details = get_stream_match_details(conn, match_pairs)
+
+    # The channel represents one event; that's the authoritative matched event for
+    # every stream on it. (The fingerprint cache can't be trusted here: EPG streams
+    # are time-shared across many event channels, so a stream's cache row points at
+    # whatever it last matched, not this channel's event.)
+    if channel.home_team or channel.away_team:
+        channel_event = f"{channel.away_team or ''} @ {channel.home_team or ''}".strip()
+    else:
+        channel_event = channel.event_name
+
     return ChannelStreamsResponse(
         streams=[
             ChannelStreamEntry(
@@ -347,10 +377,19 @@ def get_managed_channel_streams(channel_id: int):
                 source_group=group_names.get(s.source_group_id) if s.source_group_id else None,
                 m3u_account_name=s.m3u_account_name,
                 match_method=s.match_method,
+                match_type=s.match_type,
+                exception_keyword=s.exception_keyword,
                 priority=s.priority,
                 stream_stats=s.stream_stats,
                 stream_stats_updated_at=_safe_isoformat(s.stream_stats_updated_at),
                 matched_rules=matched_by_stream.get(s.dispatcharr_stream_id, []),
+                matched_event=channel_event,
+                matched_league=channel.league,
+                cache_match_method=(d := match_details.get(
+                    (s.source_group_id, s.dispatcharr_stream_id), {}
+                )).get("match_method"),
+                user_corrected=d.get("user_corrected", False),
+                corrected_at=_safe_isoformat(d.get("corrected_at")),
             )
             for s in streams
         ],

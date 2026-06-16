@@ -146,13 +146,13 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   catch_all: "Everything else",
 }
 
-// Clickable priority number → compact popover explaining which ordering rules
-// matched the stream, with the winning rule (the one that set the priority)
-// highlighted. Mirrors the click-popover pattern used by StatsMetricBuilder.
-function PriorityCell({ priority, rules }: { priority: number; rules: StreamRuleMatch[] }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
+// Close a popover on outside-click / Escape. Shared by the click-popovers below
+// (same behavior as StatsMetricBuilder's dropdown).
+function useOutsideDismiss(
+  ref: React.RefObject<HTMLElement | null>,
+  open: boolean,
+  setOpen: (v: boolean) => void,
+) {
   useEffect(() => {
     if (!open) return
     const onMouseDown = (e: MouseEvent) => {
@@ -165,7 +165,16 @@ function PriorityCell({ priority, rules }: { priority: number; rules: StreamRule
       document.removeEventListener("mousedown", onMouseDown)
       document.removeEventListener("keydown", onKeyDown)
     }
-  }, [open])
+  }, [ref, open, setOpen])
+}
+
+// Clickable priority number → compact popover explaining which ordering rules
+// matched the stream, with the winning rule (the one that set the priority)
+// highlighted.
+function PriorityCell({ priority, rules }: { priority: number; rules: StreamRuleMatch[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideDismiss(ref, open, setOpen)
 
   if (rules.length === 0) {
     return <span className="text-muted-foreground">{priority}</span>
@@ -194,27 +203,113 @@ function PriorityCell({ priority, rules }: { priority: number; rules: StreamRule
             {ordered.map((r, i) => (
               <div
                 key={i}
-                className={`flex items-center gap-1.5 rounded px-1 py-0.5 ${
+                className={`flex items-start gap-1.5 rounded px-1 py-0.5 ${
                   r.is_winner ? "bg-primary/10" : ""
                 } ${r.type === "catch_all" && !r.is_winner ? "opacity-50" : ""}`}
               >
-                <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                <span className="shrink-0 font-mono text-[11px] leading-5 tabular-nums text-muted-foreground">
                   {r.priority}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="text-[11px] font-medium">{RULE_TYPE_LABELS[r.type] ?? r.type}</span>
+                  {/* Name shares a line with the number (and badge); subtitle drops below. */}
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium leading-5 truncate">
+                      {RULE_TYPE_LABELS[r.type] ?? r.type}
+                    </span>
+                    {r.is_winner && (
+                      <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">applied</Badge>
+                    )}
+                  </span>
                   {r.value && (
                     <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
                       {r.value}
                     </span>
                   )}
                 </span>
-                {r.is_winner && (
-                  <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">applied</Badge>
-                )}
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const METHOD_INFO: Record<string, { label: string; desc: string }> = {
+  epg: { label: "EPG", desc: "Matched via Dispatcharr's program guide (program title / sub-title)." },
+  fuzzy: { label: "Fuzzy", desc: "Matched by fuzzy comparison of the stream name to the event." },
+  exact: { label: "Exact", desc: "Exact name match." },
+  cache: { label: "Cache", desc: "Reused a previously cached match for this stream." },
+  alias: { label: "Alias", desc: "Matched via a user-defined team alias." },
+  pattern: { label: "Pattern", desc: "Matched via a team-name pattern." },
+  keyword: { label: "Keyword", desc: "Matched via an event keyword (e.g. UFC / boxing cards)." },
+  user_corrected: { label: "Pinned", desc: "Manually corrected by you — pinned, never auto-rematched." },
+  no_match: { label: "No match", desc: "No event matched this stream." },
+}
+
+// Clickable match-method badge → popover explaining how/why the stream matched
+// its event. Combines fields always on the stream (method, type, exception
+// keyword) with cache-derived detail (matched event, user correction) that's
+// only present for fingerprint-cached matches.
+function MethodCell({ stream }: { stream: ChannelStreamEntry }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideDismiss(ref, open, setOpen)
+
+  const badge = getMatchMethodBadge(stream.match_method)
+  if (!badge) return <span className="text-muted-foreground">—</span>
+
+  const info = stream.match_method ? METHOD_INFO[stream.match_method] : undefined
+  // The finer cache method only adds value when it differs from the badge method.
+  const finer =
+    stream.cache_match_method && stream.cache_match_method !== stream.match_method
+      ? METHOD_INFO[stream.cache_match_method] ?? { label: stream.cache_match_method, desc: "" }
+      : undefined
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} title="Show match details" className="cursor-pointer">
+        {badge}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border bg-popover p-2 shadow-lg space-y-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Match details
+          </div>
+          <div>
+            <span className="text-[11px] font-medium">{info?.label ?? stream.match_method}</span>
+            {info?.desc && <p className="text-[10px] text-muted-foreground leading-snug">{info.desc}</p>}
+          </div>
+          {finer && (
+            <div className="text-[10px] text-muted-foreground">
+              Cache method: <span className="font-medium text-foreground">{finer.label}</span>
+            </div>
+          )}
+          {stream.matched_event && (
+            <div className="text-[10px] text-muted-foreground">
+              Matched event:{" "}
+              <span className="font-medium text-foreground">{stream.matched_event}</span>
+              {stream.matched_league && <span className="uppercase"> ({stream.matched_league})</span>}
+            </div>
+          )}
+          {stream.match_type && (
+            <div className="text-[10px] text-muted-foreground">
+              Type: <span className="font-medium text-foreground">{stream.match_type === "team" ? "Team" : "Event"}</span>
+            </div>
+          )}
+          {stream.exception_keyword && (
+            <div className="text-[10px] text-muted-foreground">
+              Keyword: <span className="font-mono text-foreground">{stream.exception_keyword}</span>
+            </div>
+          )}
+          {stream.user_corrected && (
+            <div className="flex items-center gap-1.5">
+              <Badge variant="info" className="text-[9px] px-1 py-0">pinned</Badge>
+              <span className="text-[10px] text-muted-foreground">
+                Corrected by you{stream.corrected_at ? ` ${formatRelativeTime(stream.corrected_at)}` : ""}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -855,7 +950,7 @@ export function ManagedChannelsTable() {
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Order</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Sort</th>
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
                                   <span className="inline-flex items-center gap-1">
                                     Stats
@@ -875,7 +970,7 @@ export function ManagedChannelsTable() {
                                   <td className="py-1 pr-4 font-medium">{stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}</td>
                                   <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
                                   <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
-                                  <td className="py-1 pr-4">{getMatchMethodBadge(stream.match_method)}</td>
+                                  <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
                                   <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} /></td>
                                   <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
                                 </tr>

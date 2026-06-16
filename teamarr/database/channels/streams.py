@@ -444,6 +444,59 @@ def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     return updated
 
 
+def get_stream_match_details(
+    conn: Connection, pairs: list[tuple[int, int]]
+) -> dict[tuple[int, int], dict]:
+    """Fetch cached match details for (source_group_id, stream_id) pairs.
+
+    Reads stream_match_cache to explain how a stream matched its event: the
+    matched event name/league, the finer match method, and any user correction.
+    Returns the most recent entry per pair. Pairs with no cache row (e.g. EPG or
+    dedicated/exact matches, which don't use the fingerprint cache) are absent.
+
+    Each value dict has: event_name, league, match_method, user_corrected,
+    corrected_at.
+    """
+    if not pairs:
+        return {}
+
+    group_ids = {g for g, _ in pairs}
+    stream_ids = {s for _, s in pairs}
+    gp = ",".join("?" * len(group_ids))
+    sp = ",".join("?" * len(stream_ids))
+    rows = conn.execute(
+        f"""SELECT group_id, stream_id, event_id, league, cached_event_data,
+                   match_method, user_corrected, corrected_at
+            FROM stream_match_cache
+            WHERE group_id IN ({gp}) AND stream_id IN ({sp})
+            ORDER BY updated_at ASC""",
+        [*group_ids, *stream_ids],
+    ).fetchall()
+
+    wanted = set(pairs)
+    out: dict[tuple[int, int], dict] = {}
+    for r in rows:
+        key = (r["group_id"], r["stream_id"])
+        if key not in wanted or r["event_id"] == "__FAILED__":
+            continue
+        event_name = None
+        if r["cached_event_data"]:
+            try:
+                data = json.loads(r["cached_event_data"])
+                event_name = data.get("name") or data.get("short_name")
+            except (ValueError, AttributeError):
+                event_name = None
+        # Newer rows overwrite older ones (rows are ordered oldest-first).
+        out[key] = {
+            "event_name": event_name,
+            "league": r["league"],
+            "match_method": r["match_method"],
+            "user_corrected": bool(r["user_corrected"]),
+            "corrected_at": r["corrected_at"],
+        }
+    return out
+
+
 def clear_stream_stats(conn: Connection, group_id: int | None = None) -> int:
     """Null cached stream stats so they're freshly pulled from Dispatcharr next run.
 
