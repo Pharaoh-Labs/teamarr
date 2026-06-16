@@ -58,6 +58,7 @@ import {
 import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
+import { useGenerationProgress } from "@/contexts/GenerationContext"
 
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "-"
@@ -171,12 +172,15 @@ function useOutsideDismiss(
 // Clickable priority number → compact popover explaining which ordering rules
 // matched the stream, with the winning rule (the one that set the priority)
 // highlighted.
-function PriorityCell({ priority, rules }: { priority: number; rules: StreamRuleMatch[] }) {
+function PriorityCell(
+  { priority, rules, generating }: { priority: number; rules: StreamRuleMatch[]; generating: boolean },
+) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useOutsideDismiss(ref, open, setOpen)
 
-  if (rules.length === 0) {
+  // Nothing to explain and not generating → just the number.
+  if (rules.length === 0 && !generating) {
     return <span className="text-muted-foreground">{priority}</span>
   }
 
@@ -185,20 +189,40 @@ function PriorityCell({ priority, rules }: { priority: number; rules: StreamRule
     (a, b) => Number(b.is_winner) - Number(a.is_winner) || a.priority - b.priority
   )
 
+  // The popover evaluates the CURRENT rules; the stored number is from the last
+  // generation run. If they disagree, the rules changed since this stream was
+  // ordered and the stored order is stale until the next run. While a generation
+  // is running the number is mid-update, so we show a spinner instead of flagging
+  // it stale.
+  const winner = ordered.find((r) => r.is_winner)
+  const stale = !generating && winner != null && winner.priority !== priority
+
   return (
     <div className="relative inline-block" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-        title="Show matched rules"
+        className={`underline decoration-dotted underline-offset-2 ${
+          stale
+            ? "text-amber-500 decoration-amber-500 hover:text-amber-400"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        title={
+          generating
+            ? "Generation in progress — priority is updating"
+            : stale
+              ? "Rules changed since last sync — click for details"
+              : "Show matched rules"
+        }
       >
-        {priority}
+        {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <>{priority}{stale && "*"}</>}
       </button>
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-lg">
+          {rules.length > 0 && (
           <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
             Matched rules
           </div>
+          )}
           <div className="space-y-0.5">
             {ordered.map((r, i) => (
               <div
@@ -229,6 +253,16 @@ function PriorityCell({ priority, rules }: { priority: number; rules: StreamRule
               </div>
             ))}
           </div>
+          {generating ? (
+            <div className={`text-[10px] leading-snug text-muted-foreground ${rules.length > 0 ? "mt-1 border-t pt-1" : ""}`}>
+              Generation in progress — the order is updating.
+            </div>
+          ) : stale ? (
+            <div className="mt-1 border-t pt-1 text-[10px] leading-snug text-amber-500">
+              Rules changed since this stream was ordered (stored #{priority}). The order above
+              applies on the next generation run.
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -283,6 +317,22 @@ function MethodCell({ stream }: { stream: ChannelStreamEntry }) {
           {finer && (
             <div className="text-[10px] text-muted-foreground">
               Cache method: <span className="font-medium text-foreground">{finer.label}</span>
+            </div>
+          )}
+          {stream.cache_created_at && (
+            <div className="text-[10px] text-muted-foreground">
+              Cached {formatRelativeTime(stream.cache_created_at)}
+            </div>
+          )}
+          {[...stream.match_aliases, ...stream.match_patterns].length > 0 && (
+            <div className="text-[10px] text-muted-foreground">
+              {[...stream.match_aliases, ...stream.match_patterns].map((a, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="font-mono text-foreground">{a.text}</span>
+                  <span className="text-muted-foreground/60">→</span>
+                  <span className="font-medium text-foreground truncate">{a.team}</span>
+                </div>
+              ))}
             </div>
           )}
           {stream.matched_event && (
@@ -346,6 +396,8 @@ export function ManagedChannelsTable() {
   const [expandedChannels, setExpandedChannels] = useState<Set<number>>(new Set())
   const [channelStreams, setChannelStreams] = useState<Map<number, ChannelStreamEntry[]>>(new Map())
   const [loadingStreams, setLoadingStreams] = useState<Set<number>>(new Set())
+
+  const { isGenerating } = useGenerationProgress()
 
   // UI states
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
@@ -502,6 +554,19 @@ export function ManagedChannelsTable() {
     },
   })
 
+  // Fetch (or refetch) the stream detail for one channel into local state.
+  const fetchStreams = async (channelId: number) => {
+    setLoadingStreams((prev) => new Set(prev).add(channelId))
+    try {
+      const data = await getChannelStreams(channelId)
+      setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
+    } catch {
+      setChannelStreams((prev) => new Map(prev).set(channelId, []))
+    } finally {
+      setLoadingStreams((prev) => { const s = new Set(prev); s.delete(channelId); return s })
+    }
+  }
+
   const handleToggleExpand = async (channelId: number) => {
     const next = new Set(expandedChannels)
     if (next.has(channelId)) {
@@ -512,17 +577,24 @@ export function ManagedChannelsTable() {
     next.add(channelId)
     setExpandedChannels(next)
     if (!channelStreams.has(channelId)) {
-      setLoadingStreams((prev) => new Set(prev).add(channelId))
-      try {
-        const data = await getChannelStreams(channelId)
-        setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
-      } catch {
-        setChannelStreams((prev) => new Map(prev).set(channelId, []))
-      } finally {
-        setLoadingStreams((prev) => { const s = new Set(prev); s.delete(channelId); return s })
-      }
+      await fetchStreams(channelId)
     }
   }
+
+  // When a generation run finishes, stream priorities/membership may have
+  // changed. Refresh the channels list and any expanded stream tables so the
+  // priority spinners resolve to the new ordering.
+  const expandedRef = useRef(expandedChannels)
+  expandedRef.current = expandedChannels
+  const wasGeneratingRef = useRef(isGenerating)
+  useEffect(() => {
+    if (wasGeneratingRef.current && !isGenerating) {
+      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
+      expandedRef.current.forEach((id) => { void fetchStreams(id) })
+    }
+    wasGeneratingRef.current = isGenerating
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGenerating])
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
@@ -971,7 +1043,7 @@ export function ManagedChannelsTable() {
                                   <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
                                   <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
                                   <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
-                                  <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} /></td>
+                                  <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} generating={isGenerating} /></td>
                                   <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
                                 </tr>
                               ))}

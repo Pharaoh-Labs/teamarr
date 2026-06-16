@@ -5,6 +5,7 @@ CRUD operations for managed_channel_streams table.
 
 import json
 import logging
+import re
 from sqlite3 import Connection
 
 from .types import ManagedChannelStream
@@ -455,7 +456,8 @@ def get_stream_match_details(
     dedicated/exact matches, which don't use the fingerprint cache) are absent.
 
     Each value dict has: event_name, league, match_method, user_corrected,
-    corrected_at.
+    corrected_at, created_at, aliases (list of {alias, team} for alias matches),
+    patterns (list of {token, team} for pattern matches).
     """
     if not pairs:
         return {}
@@ -465,8 +467,9 @@ def get_stream_match_details(
     gp = ",".join("?" * len(group_ids))
     sp = ",".join("?" * len(stream_ids))
     rows = conn.execute(
-        f"""SELECT group_id, stream_id, event_id, league, cached_event_data,
-                   match_method, user_corrected, corrected_at
+        f"""SELECT group_id, stream_id, stream_name, event_id, league,
+                   cached_event_data, match_method, user_corrected, corrected_at,
+                   created_at
             FROM stream_match_cache
             WHERE group_id IN ({gp}) AND stream_id IN ({sp})
             ORDER BY updated_at ASC""",
@@ -474,18 +477,20 @@ def get_stream_match_details(
     ).fetchall()
 
     wanted = set(pairs)
+    aliases_by_league: dict[str, list] = {}  # memoize per league within this call
     out: dict[tuple[int, int], dict] = {}
     for r in rows:
         key = (r["group_id"], r["stream_id"])
         if key not in wanted or r["event_id"] == "__FAILED__":
             continue
+        data = {}
         event_name = None
         if r["cached_event_data"]:
             try:
                 data = json.loads(r["cached_event_data"])
                 event_name = data.get("name") or data.get("short_name")
             except (ValueError, AttributeError):
-                event_name = None
+                data = {}
         # Newer rows overwrite older ones (rows are ordered oldest-first).
         out[key] = {
             "event_name": event_name,
@@ -493,7 +498,74 @@ def get_stream_match_details(
             "match_method": r["match_method"],
             "user_corrected": bool(r["user_corrected"]),
             "corrected_at": r["corrected_at"],
+            "created_at": r["created_at"],
+            "aliases": _reconstruct_aliases(conn, r, data, aliases_by_league),
+            "patterns": _reconstruct_patterns(r, data),
         }
+    return out
+
+
+def _reconstruct_aliases(
+    conn: Connection, row, event_data: dict, cache: dict[str, list]
+) -> list[dict]:
+    """Find which user-defined alias(es) produced an alias match, for display.
+
+    Returns [{alias, team}] for aliases whose text appears in the cached stream
+    name and whose team is one of the matched event's teams. Non-alias matches
+    return []. Best-effort (substring match), purely informational.
+    """
+    if row["match_method"] != "alias" or not event_data:
+        return []
+    from teamarr.database.aliases import list_aliases
+
+    home = event_data.get("home_team") or {}
+    away = event_data.get("away_team") or {}
+    team_ids = {str(home.get("id")), str(away.get("id"))} - {"None"}
+    if not team_ids:
+        return []
+    league = (row["league"] or "").lower()
+    if league not in cache:
+        cache[league] = list_aliases(conn, league=league)
+    name_lower = (row["stream_name"] or "").lower()
+    return [
+        {"alias": a.alias, "team": a.team_name}
+        for a in cache[league]
+        if str(a.team_id) in team_ids and a.alias.lower() in name_lower
+    ]
+
+
+def _reconstruct_patterns(row, event_data: dict) -> list[dict]:
+    """Find which team-name form produced a pattern match, for display.
+
+    Returns [{token, team}] for the matched event's teams whose name / short
+    name / abbreviation appears in the cached stream name. Non-pattern matches
+    return []. Best-effort and purely informational: the longest (most specific)
+    form is preferred, and abbreviations match only on a word boundary to avoid
+    short-token false positives.
+    """
+    if row["match_method"] != "pattern" or not event_data:
+        return []
+    name_lower = (row["stream_name"] or "").lower()
+    if not name_lower:
+        return []
+
+    out: list[dict] = []
+    for side in ("home_team", "away_team"):
+        team = event_data.get(side) or {}
+        team_name = team.get("name")
+        if not team_name:
+            continue
+        token = None
+        for cand in (team.get("name"), team.get("short_name")):
+            if cand and cand.lower() in name_lower:
+                token = cand
+                break
+        if not token:
+            abbr = team.get("abbreviation")
+            if abbr and re.search(rf"\b{re.escape(abbr.lower())}\b", name_lower):
+                token = abbr
+        if token:
+            out.append({"token": token, "team": team_name})
     return out
 
 

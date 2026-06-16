@@ -185,8 +185,16 @@ export interface ChannelStreamEntry {
   matched_event: string | null
   matched_league: string | null
   cache_match_method: string | null
+  cache_created_at: string | null
+  match_aliases: StreamNameMatch[]
+  match_patterns: StreamNameMatch[]
   user_corrected: boolean
   corrected_at: string | null
+}
+
+export interface StreamNameMatch {
+  text: string
+  team: string
 }
 
 export interface ChannelStreamsResponse {

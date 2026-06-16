@@ -78,3 +78,107 @@ def test_most_recent_row_wins_per_pair(conn):
 
 def test_empty_pairs_returns_empty(conn):
     assert get_stream_match_details(conn, []) == {}
+
+
+def _insert_event_with_teams(conn, group_id, stream_id, *, stream_name, league,
+                             home_id, home_name, away_id, away_name, method="alias"):
+    data = json.dumps({
+        "name": f"{away_name} at {home_name}",
+        "home_team": {"id": home_id, "name": home_name},
+        "away_team": {"id": away_id, "name": away_name},
+    })
+    conn.execute(
+        """INSERT INTO stream_match_cache
+           (fingerprint, group_id, stream_id, stream_name, event_id, league,
+            cached_event_data, match_method, user_corrected, corrected_at, updated_at)
+           VALUES (?, ?, ?, ?, 'e1', ?, ?, ?, 0, NULL, '2026-06-16 00:00:00')""",
+        (f"fp-{group_id}-{stream_id}", group_id, stream_id, stream_name, league, data, method),
+    )
+    conn.commit()
+
+
+def _insert_alias(conn, alias, league, team_id, team_name, provider="espn"):
+    conn.execute(
+        "INSERT INTO team_aliases (alias, league, provider, team_id, team_name) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (alias, league, provider, team_id, team_name),
+    )
+    conn.commit()
+
+
+def test_alias_mapping_reconstructed_for_alias_match(conn):
+    _insert_event_with_teams(
+        conn, 1, 100, stream_name="Spurs vs Lakers HD", league="nba",
+        home_id="13", home_name="Los Angeles Lakers",
+        away_id="24", away_name="San Antonio Spurs",
+    )
+    _insert_alias(conn, "spurs", "nba", "24", "San Antonio Spurs")
+    _insert_alias(conn, "celtics", "nba", "2", "Boston Celtics")  # not in this event/name
+
+    d = get_stream_match_details(conn, [(1, 100)])[(1, 100)]
+    assert d["aliases"] == [{"alias": "spurs", "team": "San Antonio Spurs"}]
+
+
+def test_non_alias_match_has_no_aliases(conn):
+    _insert_event_with_teams(
+        conn, 1, 100, stream_name="Spurs vs Lakers HD", league="nba",
+        home_id="13", home_name="Los Angeles Lakers",
+        away_id="24", away_name="San Antonio Spurs", method="fuzzy",
+    )
+    _insert_alias(conn, "spurs", "nba", "24", "San Antonio Spurs")
+
+    d = get_stream_match_details(conn, [(1, 100)])[(1, 100)]
+    assert d["aliases"] == []
+
+
+def _team(tid, name, short, abbr):
+    return {"id": tid, "name": name, "short_name": short, "abbreviation": abbr}
+
+
+def _insert_event_full_teams(conn, stream_name, method, *, home, away):
+    """home/away are dicts with id/name/short_name/abbreviation."""
+    data = json.dumps({
+        "name": f"{away['name']} at {home['name']}",
+        "home_team": home,
+        "away_team": away,
+    })
+    conn.execute(
+        """INSERT INTO stream_match_cache
+           (fingerprint, group_id, stream_id, stream_name, event_id, league,
+            cached_event_data, match_method, updated_at)
+           VALUES ('fp', 1, 100, ?, 'e1', 'mlb', ?, ?, '2026-06-16 00:00:00')""",
+        (stream_name, data, method),
+    )
+    conn.commit()
+
+
+def test_pattern_match_reconstructs_team_token(conn):
+    _insert_event_full_teams(
+        conn, "Phillies vs Athletics 1080p", "pattern",
+        home=_team("22", "Philadelphia Phillies", "Phillies", "PHI"),
+        away=_team("11", "Athletics", "Athletics", "ATH"),
+    )
+    d = get_stream_match_details(conn, [(1, 100)])[(1, 100)]
+    # Short name "Phillies" appears; full name doesn't, so token is the short name.
+    assert {"token": "Phillies", "team": "Philadelphia Phillies"} in d["patterns"]
+    assert {"token": "Athletics", "team": "Athletics"} in d["patterns"]
+
+
+def test_pattern_abbreviation_matches_on_word_boundary(conn):
+    _insert_event_full_teams(
+        conn, "PHI feed", "pattern",
+        home=_team("22", "Philadelphia Phillies", "Phils", "PHI"),
+        away=_team("11", "New York Mets", "Mets", "NYM"),
+    )
+    d = get_stream_match_details(conn, [(1, 100)])[(1, 100)]
+    assert d["patterns"] == [{"token": "PHI", "team": "Philadelphia Phillies"}]
+
+
+def test_non_pattern_match_has_no_patterns(conn):
+    _insert_event_full_teams(
+        conn, "Phillies vs Athletics", "fuzzy",
+        home=_team("22", "Philadelphia Phillies", "Phillies", "PHI"),
+        away=_team("11", "Athletics", "Athletics", "ATH"),
+    )
+    d = get_stream_match_details(conn, [(1, 100)])[(1, 100)]
+    assert d["patterns"] == []

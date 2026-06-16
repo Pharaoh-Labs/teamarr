@@ -151,6 +151,13 @@ class StreamRuleMatch(BaseModel):
     is_winner: bool
 
 
+class StreamNameMatch(BaseModel):
+    """A name token that produced a match (alias text or team-name form → team)."""
+
+    text: str
+    team: str
+
+
 class ChannelStreamEntry(BaseModel):
     """A single stream attached to a managed channel, with cached stats."""
 
@@ -169,6 +176,9 @@ class ChannelStreamEntry(BaseModel):
     matched_event: str | None = None
     matched_league: str | None = None
     cache_match_method: str | None = None
+    cache_created_at: str | None = None
+    match_aliases: list[StreamNameMatch] = []
+    match_patterns: list[StreamNameMatch] = []
     user_corrected: bool = False
     corrected_at: str | None = None
 
@@ -388,6 +398,19 @@ def get_managed_channel_streams(channel_id: int):
                 cache_match_method=(d := match_details.get(
                     (s.source_group_id, s.dispatcharr_stream_id), {}
                 )).get("match_method"),
+                cache_created_at=(
+                    _safe_isoformat(d.get("created_at"))
+                    if d.get("match_method") == "cache"
+                    else None
+                ),
+                match_aliases=[
+                    StreamNameMatch(text=a["alias"], team=a["team"])
+                    for a in d.get("aliases", [])
+                ],
+                match_patterns=[
+                    StreamNameMatch(text=p["token"], team=p["team"])
+                    for p in d.get("patterns", [])
+                ],
                 user_corrected=d.get("user_corrected", False),
                 corrected_at=_safe_isoformat(d.get("corrected_at")),
             )
