@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Alert } from "@/components/ui/alert"
+import { RichTooltip } from "@/components/ui/rich-tooltip"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Trash2,
@@ -14,6 +15,7 @@ import {
   X,
   ChevronRight,
   ChevronDown,
+  Info,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -194,7 +196,7 @@ function PriorityCell({ priority, rules }: { priority: number; rules: StreamRule
                 key={i}
                 className={`flex items-center gap-1.5 rounded px-1 py-0.5 ${
                   r.is_winner ? "bg-primary/10" : ""
-                }`}
+                } ${r.type === "catch_all" && !r.is_winner ? "opacity-50" : ""}`}
               >
                 <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
                   {r.priority}
@@ -853,8 +855,18 @@ export function ManagedChannelsTable() {
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
                                 <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Priority</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">Stats</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Order</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
+                                  <span className="inline-flex items-center gap-1">
+                                    Stats
+                                    <RichTooltip
+                                      content="External stream stats (resolution, bitrate, fps, etc.) populated by Dispatcharr's stream probe. Only present once Dispatcharr has probed the stream."
+                                      side="top"
+                                    >
+                                      <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                                    </RichTooltip>
+                                  </span>
+                                </th>
                               </tr>
                             </thead>
                             <tbody>

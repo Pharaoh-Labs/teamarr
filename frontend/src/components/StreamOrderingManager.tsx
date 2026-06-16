@@ -273,7 +273,7 @@ const RULE_TYPES = [
   { value: "stream_type", label: "Stream Type", description: "Match by how the stream was recognized: event, team, or EPG-matched (time-shared linear)" },
   { value: "team_feed", label: "Home/Away Feed", description: "Match streams that appear to be a team's own broadcast (home or away feed) for any enabled team" },
   { value: "dispatcharr_group", label: "Dispatcharr Group", description: "Match channel-source streams by the Dispatcharr channel group you selected as an EPG source" },
-  { value: "stats_metric", label: "Stats Metric", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
+  { value: "stats_metric", label: "Stream Stats", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
 ] as const
 
 const STREAM_TYPE_OPTIONS = [
@@ -531,10 +531,20 @@ function RuleRow({
               />
             </div>
           ) : rule.type === "stats_metric" ? (
-            <StatsMetricBuilder
-              value={rule.value}
-              onChange={(v) => onUpdate(index, { ...rule, value: v })}
-            />
+            <div className="flex items-center gap-2">
+              <RichTooltip
+                content="Stat values (resolution, bitrate, fps, etc.) come from Dispatcharr's external stream probe — they're only available after Dispatcharr has probed a stream, so freshly added streams may not match until then."
+                side="top"
+              >
+                <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+              </RichTooltip>
+              <div className="flex-1 min-w-0">
+                <StatsMetricBuilder
+                  value={rule.value}
+                  onChange={(v) => onUpdate(index, { ...rule, value: v })}
+                />
+              </div>
+            </div>
           ) : (
             <Input
               value={rule.value}
