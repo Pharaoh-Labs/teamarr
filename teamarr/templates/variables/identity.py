@@ -214,6 +214,64 @@ def extract_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     return service.get_league_alias(ctx.team_config.league)
 
 
+def construct_league_abbrev(name: str) -> str:
+    """Build an all-caps abbreviation from a league name.
+
+    Keeps any letters that are already uppercase, digits, and the first letter
+    of every word (word boundaries are whitespace only, so an apostrophe doesn't
+    start a new word). Already-uppercase names pass through unchanged.
+
+    Examples:
+        NBA → NBA
+        World Cup → WC
+        Premier League → PL
+        La Liga → LL
+        Serie A → SA
+        UEFA Champions League → UEFACL
+        F1 → F1
+    """
+    out: list[str] = []
+    at_word_start = True
+    for ch in name:
+        if ch.isalnum():
+            if at_word_start or ch.isupper() or ch.isdigit():
+                out.append(ch.upper())
+            at_word_start = False
+        else:
+            at_word_start = ch.isspace()
+    return "".join(out)
+
+
+@register_variable(
+    name="league_abbrev",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description=(
+        "League abbreviation built from the league name — existing capitals "
+        "plus the first letter of each word (e.g., 'World Cup' → 'WC', 'NBA' → 'NBA')"
+    ),
+    sample="NBA",
+)
+def extract_league_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Return an abbreviation constructed from the league display name.
+
+    Unlike {league} (a curated alias), this is derived on the fly so it works
+    for any league. Falls back to the raw league code when no display name is
+    available.
+
+    THREAD-SAFE: Uses in-memory cache, no DB access.
+    """
+    from teamarr.services.league_mappings import get_league_mapping_service
+
+    service = get_league_mapping_service()
+    name = service.get_league_alias(ctx.team_config.league)
+    abbrev = construct_league_abbrev(name or "")
+    
+    if abbrev:
+        return abbrev
+    return construct_league_abbrev(ctx.team_config.league or "")
+
+
 @register_variable(
     name="league_name",
     category=Category.IDENTITY,

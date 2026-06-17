@@ -286,6 +286,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "NCAAM",
         "NCAAF": "NCAAF",
         "Soccer": "Premier League",
+        "UFC": "UFC",
         "F1": "F1",
     },
     "league_name": {
@@ -296,6 +297,7 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NCAAM": "NCAA Men's Basketball",
         "NCAAF": "NCAA Football",
         "Soccer": "English Premier League",
+        "UFC": "Ultimate Fighting Championship",
         "F1": "Formula 1",
     },
     "league_id": {
@@ -4170,6 +4172,19 @@ _PROFILE_OVERRIDES: dict[str, dict[str, str]] = {
 for _profile, _overrides in _PROFILE_OVERRIDES.items():
     for _var, _value in _overrides.items():
         SAMPLE_DATA.setdefault(_var, {})[_profile] = _value
+
+
+# Derive league_abbrev samples from each profile's league sample so the preview
+# matches what the live extractor produces (same construction rule).
+def _seed_league_abbrev_samples() -> None:
+    from teamarr.templates.variables.identity import construct_league_abbrev
+
+    abbrev = SAMPLE_DATA.setdefault("league_abbrev", {})
+    for _profile, _league in SAMPLE_DATA.get("league", {}).items():
+        abbrev.setdefault(_profile, construct_league_abbrev(_league))
+
+
+_seed_league_abbrev_samples()
 
 
 # --------------------------------------------------------------------------
