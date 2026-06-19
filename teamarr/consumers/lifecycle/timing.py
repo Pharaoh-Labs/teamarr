@@ -259,10 +259,7 @@ class ChannelLifecycleManager:
         Uses sport-specific duration when available.
         """
         event_start = to_user_tz(event.start_time)
-        duration_hours = get_sport_duration(
-            event.sport, self.sport_durations, self.default_duration_hours
-        )
-        event_end = event_start + timedelta(hours=duration_hours)
+        event_end = self.get_event_end_time(event)
 
         if self.delete_timing == "after_event":
             return event_end + timedelta(minutes=self.post_buffer_minutes)
@@ -283,7 +280,22 @@ class ChannelLifecycleManager:
         return self._calculate_delete_threshold(event)
 
     def get_event_end_time(self, event: Event) -> datetime:
-        """Calculate estimated event end time using sport-specific duration."""
+        """Calculate estimated event end time using sport-specific duration.
+
+        Racing events anchor `event.start_time` to the first session (e.g.
+        Friday practice), which would otherwise make a multi-day race weekend
+        look "over" as soon as practice ends. For events with sessions, use
+        the last session's start time + its duration instead.
+        """
+        if event.sessions:
+            from teamarr.consumers.racing_segments import _session_duration_hours
+
+            last_session = max(event.sessions, key=lambda s: s.start_time)
+            duration_hours = _session_duration_hours(
+                last_session.code, self.sport_durations, event.league, event.name
+            )
+            return to_user_tz(last_session.start_time) + timedelta(hours=duration_hours)
+
         duration_hours = get_sport_duration(
             event.sport, self.sport_durations, self.default_duration_hours
         )

@@ -362,6 +362,43 @@ class DispatcharrClient:
                 "message": f"Error: {e!s}",
             }
 
+    def get_stream_stats_by_ids(self, stream_ids: list[int]) -> list[dict]:
+        """Fetch stream_stats for a batch of streams by their Dispatcharr stream IDs.
+
+        Uses POST /api/channels/streams/by-ids/ which works for any stream
+        regardless of channel assignment. Returns only the fields needed for
+        stats caching; non-existent IDs are silently omitted by Dispatcharr.
+
+        Args:
+            stream_ids: List of Dispatcharr stream IDs to fetch stats for
+
+        Returns:
+            List of dicts with keys: id, stream_stats, stream_stats_updated_at
+        """
+        if not stream_ids:
+            return []
+        response = self.post(
+            "/api/channels/streams/by-ids/?page_size=1000",
+            {"ids": stream_ids},
+        )
+        if response is None or response.status_code != 200:
+            status = response.status_code if response else "no response"
+            logger.warning(
+                "[STREAM STATS] Failed to fetch stats for %d streams: %s", len(stream_ids), status
+            )
+            return []
+        data = response.json()
+        results = data.get("results", data) if isinstance(data, dict) else data
+        return [
+            {
+                "id": s["id"],
+                "stream_stats": s.get("stream_stats"),
+                "stream_stats_updated_at": s.get("stream_stats_updated_at"),
+            }
+            for s in results
+            if "id" in s
+        ]
+
     def close(self) -> None:
         """Close HTTP client.
 

@@ -179,6 +179,7 @@ export function EventGroupForm() {
         custom_regex_event_name: group.custom_regex_event_name ? pythonToJs(group.custom_regex_event_name) : null,
         custom_regex_event_name_enabled: group.custom_regex_event_name_enabled,
         skip_builtin_filter: group.skip_builtin_filter,
+        name_match_enabled: group.name_match_enabled,
         team_streams_enabled: group.team_streams_enabled,
         epg_match_enabled: group.epg_match_enabled,
         // Team filtering
@@ -223,6 +224,16 @@ export function EventGroupForm() {
     const data = overrides ? { ...formData, ...overrides } : formData
     if (!data.name.trim()) {
       toast.error("Group name is required")
+      return
+    }
+
+    // At least one matching type must be enabled (name defaults ON when undefined)
+    if (
+      (data.name_match_enabled ?? true) === false &&
+      !data.team_streams_enabled &&
+      !data.epg_match_enabled
+    ) {
+      toast.error("Enable at least one matching type")
       return
     }
 
@@ -360,13 +371,26 @@ export function EventGroupForm() {
 
                 <div className="flex items-center gap-2">
                   <Switch
+                    checked={formData.name_match_enabled ?? true}
+                    onCheckedChange={(checked) => setFormData({ ...formData, name_match_enabled: checked })}
+                  />
+                  <div>
+                    <Label className="font-normal">Stream name matching</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Match streams named after a specific event (e.g. "Bills vs Dolphins").
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
                     checked={formData.team_streams_enabled || false}
                     onCheckedChange={(checked) => setFormData({ ...formData, team_streams_enabled: checked })}
                   />
                   <div>
-                    <Label className="font-normal">Team stream source</Label>
+                    <Label className="font-normal">Team matching</Label>
                     <p className="text-xs text-muted-foreground">
-                      Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
+                      Match a team's branded stream (e.g. "NHL | Maple Leafs") to that team's games.
                     </p>
                   </div>
                 </div>
@@ -377,9 +401,9 @@ export function EventGroupForm() {
                     onCheckedChange={(checked) => setFormData({ ...formData, epg_match_enabled: checked })}
                   />
                   <div>
-                    <Label className="font-normal">EPG program matching</Label>
+                    <Label className="font-normal">EPG matching</Label>
                     <p className="text-xs text-muted-foreground">
-                      Match static-named linear channels (e.g. "ESPN", "NBA1") to events using Dispatcharr's program guide, and time-share one stream across multiple event channels near game time. Requires the global EPG matching switch (Settings &rarr; EPG). Built-in filtering is bypassed for this group.
+                      Match static linear channels (e.g. "ESPN", "NBA1") to events via EPG.
                     </p>
                   </div>
                 </div>
@@ -435,13 +459,26 @@ export function EventGroupForm() {
 
               <div className="flex items-center gap-2">
                 <Switch
+                  checked={formData.name_match_enabled ?? true}
+                  onCheckedChange={(checked) => setFormData({ ...formData, name_match_enabled: checked })}
+                />
+                <div>
+                  <Label className="font-normal">Stream name matching</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Match streams named after a specific event (e.g. "Bills vs Dolphins").
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
                   checked={formData.team_streams_enabled || false}
                   onCheckedChange={(checked) => setFormData({ ...formData, team_streams_enabled: checked })}
                 />
                 <div>
-                  <Label className="font-normal">Team stream source</Label>
+                  <Label className="font-normal">Team matching</Label>
                   <p className="text-xs text-muted-foreground">
-                    Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
+                    Match a team's branded stream (e.g. "NHL | Maple Leafs") to that team's games.
                   </p>
                 </div>
               </div>
@@ -452,9 +489,9 @@ export function EventGroupForm() {
                   onCheckedChange={(checked) => setFormData({ ...formData, epg_match_enabled: checked })}
                 />
                 <div>
-                  <Label className="font-normal">EPG program matching</Label>
+                  <Label className="font-normal">EPG matching</Label>
                   <p className="text-xs text-muted-foreground">
-                    Match static-named linear channels (e.g. "ESPN", "NBA1") to events using Dispatcharr's program guide, and time-share one stream across multiple event channels near game time. Requires the global EPG matching switch (Settings &rarr; EPG). Built-in filtering is bypassed for this group.
+                    Match static linear channels (e.g. "ESPN", "NBA1") to events via EPG.
                   </p>
                 </div>
               </div>

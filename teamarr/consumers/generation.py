@@ -219,6 +219,13 @@ def run_full_generation(
         current_generation = increment_generation_counter(db_factory)
         logger.info("[GENERATION] Starting with cache generation %d", current_generation)
 
+        # Reset the run-scoped provider-call counter so this run's totals start
+        # clean. Runs are serialized (duplicate runs are rejected above), so a
+        # single process-global counter is safe. Snapshot is persisted at run end.
+        from teamarr.utilities import call_metrics
+
+        call_metrics.reset()
+
         # Create a single SportsDataService instance to share across all processing
         # This ensures the event cache stays warm throughout the entire run
         # (Previously each consumer created its own service with a cold cache)
@@ -525,17 +532,23 @@ def run_full_generation(
                         "(and optionally a lineup) in Settings."
                     )
                 else:
-                    update_progress(
-                        "channelsdvr", 97, "Refreshing Channels DVR..."
-                    )
-
+                    # Sequence the two refreshes on real evidence: wait for the
+                    # M3U channel-list refresh to actually finish before firing
+                    # the guide PUT, so the guide doesn't index against a stale
+                    # channel list. Both waits poll CDVR /log (see client docs).
                     if client.source_name:
-                        m3u_result = client.trigger_m3u_refresh(timeout=60)
+                        update_progress(
+                            "channelsdvr", 97, "Refreshing Channels DVR channels..."
+                        )
+                        m3u_result = client.trigger_m3u_refresh(
+                            timeout=60, wait_for_completion=bool(client.lineup_id)
+                        )
                         result.channelsdvr_refresh = m3u_result
                         if m3u_result.get("success"):
                             logger.info(
-                                "[CHANNELSDVR] M3U refresh triggered in %.1fs",
+                                "[CHANNELSDVR] M3U refresh triggered in %.1fs (completion: %s)",
                                 m3u_result.get("duration", 0),
+                                m3u_result.get("completed", "not awaited"),
                             )
                         else:
                             logger.warning(
@@ -551,20 +564,33 @@ def run_full_generation(
                                 client.lineup_id,
                                 client.source_name,
                             )
-                        epg_result = client.trigger_epg_refresh(timeout=60)
+                        update_progress(
+                            "channelsdvr", 97, "Refreshing Channels DVR guide..."
+                        )
+                        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
                         result.channelsdvr_epg_refresh = epg_result
-                        if epg_result.get("success"):
-                            logger.info(
-                                "[CHANNELSDVR] EPG refresh triggered for "
-                                "lineup '%s' in %.1fs",
-                                client.lineup_id,
-                                epg_result.get("duration", 0),
-                            )
-                        else:
+                        if not epg_result.get("success"):
                             logger.warning(
                                 "[CHANNELSDVR] EPG refresh failed: %s",
                                 epg_result.get("message"),
                             )
+                        else:
+                            verification = epg_result.get("verification") or {}
+                            status = verification.get("status")
+                            if status == "no_fetch":
+                                logger.warning(
+                                    "[CHANNELSDVR] EPG refresh accepted but guide "
+                                    "'%s' was not re-fetched — guide may be stale",
+                                    client.lineup_id,
+                                )
+                            else:
+                                logger.info(
+                                    "[CHANNELSDVR] EPG refresh for lineup '%s' in "
+                                    "%.1fs (verification: %s)",
+                                    client.lineup_id,
+                                    epg_result.get("duration", 0),
+                                    status or "not verified",
+                                )
                     else:
                         logger.warning(
                             "[CHANNELSDVR] Skipping EPG/guide refresh: no XMLTV "
@@ -1138,6 +1164,15 @@ def _finalize_stats_run(
     stats_run.extra_metrics["teams_processed"] = result.teams_processed
     stats_run.extra_metrics["groups_processed"] = result.groups_processed
     stats_run.extra_metrics["file_written"] = result.file_written
+
+    # Provider HTTP call volume for this run (kbbk). The per-endpoint breakdown
+    # and total let the run summary surface calls-per-channel, making a
+    # call-volume regression (the #254 refetch bug class) visible. Snapshot the
+    # run-scoped counter that was reset at run start.
+    from teamarr.utilities import call_metrics
+
+    stats_run.extra_metrics["provider_calls"] = call_metrics.snapshot()
+    stats_run.extra_metrics["provider_calls_total"] = call_metrics.total()
 
     with db_factory() as conn:
         active_channels = get_all_managed_channels(conn, include_deleted=False)

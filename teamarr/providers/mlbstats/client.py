@@ -18,6 +18,8 @@ from typing import Any
 
 import httpx
 
+from teamarr.utilities import call_metrics
+
 logger = logging.getLogger(__name__)
 
 # Environment variable configuration with defaults
@@ -150,6 +152,7 @@ class MLBStatsClient:
 
                 response.raise_for_status()
                 logger.debug("[FETCH] %s", path)
+                call_metrics.record_call("mlbstats", path)
                 return response.json()
 
             except httpx.HTTPStatusError as e:

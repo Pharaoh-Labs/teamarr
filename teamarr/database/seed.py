@@ -9,8 +9,9 @@ The seed file is generated using a premium key and distributed with the app.
 
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
+
+from teamarr.utilities.tz import utcnow_iso
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def seed_tsdb_cache(conn) -> dict:
         return {"seeded": False, "reason": "seed_file_error", "error": str(e)}
 
     cursor = conn.cursor()
-    now = datetime.utcnow().isoformat() + "Z"
+    now = utcnow_iso()
 
     # Seed leagues
     leagues_added = 0

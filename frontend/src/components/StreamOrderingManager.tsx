@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import {
   Plus,
   Trash2,
+  X,
   Loader2,
   AlertCircle,
   ChevronDown,
@@ -272,6 +273,7 @@ const RULE_TYPES = [
   { value: "stream_type", label: "Stream Type", description: "Match by how the stream was recognized: event, team, or EPG-matched (time-shared linear)" },
   { value: "team_feed", label: "Home/Away Feed", description: "Match streams that appear to be a team's own broadcast (home or away feed) for any enabled team" },
   { value: "dispatcharr_group", label: "Dispatcharr Group", description: "Match channel-source streams by the Dispatcharr channel group you selected as an EPG source" },
+  { value: "stats_metric", label: "Stream Stats", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
 ] as const
 
 const STREAM_TYPE_OPTIONS = [
@@ -296,7 +298,7 @@ const NO_VALUE_TYPES = new Set(["team_feed", "not_team_feed", "epg_match", "catc
 // Mirrors backend VALID_RULE_TYPES (database/settings/types.py) — used to validate imports.
 const VALID_RULE_TYPES = new Set([
   "m3u", "group", "regex", "stream_type",
-  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "catch_all",
+  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "stats_metric", "catch_all",
 ])
 
 interface RuleFormData {
@@ -304,7 +306,7 @@ interface RuleFormData {
   // Without this, keying by array index causes focus to follow DOM position
   // instead of the rule, breaking double-digit priority entry (#198).
   _id: number
-  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "catch_all"
+  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "stats_metric" | "catch_all"
   value: string
   priority: number
 }
@@ -528,6 +530,21 @@ function RuleRow({
                 onChange={(ids) => onUpdate(index, { ...rule, value: ids.join(",") })}
               />
             </div>
+          ) : rule.type === "stats_metric" ? (
+            <div className="flex items-center gap-2">
+              <RichTooltip
+                content="Stat values (resolution, bitrate, fps, etc.) come from Dispatcharr's external stream probe — they're only available after Dispatcharr has probed a stream, so freshly added streams may not match until then."
+                side="top"
+              >
+                <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+              </RichTooltip>
+              <div className="flex-1 min-w-0">
+                <StatsMetricBuilder
+                  value={rule.value}
+                  onChange={(v) => onUpdate(index, { ...rule, value: v })}
+                />
+              </div>
+            </div>
           ) : (
             <Input
               value={rule.value}
@@ -555,6 +572,133 @@ function RuleRow({
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+const METRIC_LABELS: Record<string, string> = {
+  resolution_width: "Res W",
+  resolution_height: "Res H",
+  ffmpeg_output_bitrate: "Bitrate",
+  source_fps: "FPS",
+  audio_bitrate: "Audio",
+  sample_rate: "Sample",
+}
+const OP_SYMBOLS: Record<string, string> = {
+  ">=": "≥", "<=": "≤", ">": ">", "<": "<", "=": "=", is_unknown: "?",
+}
+
+function StatsMetricBuilder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  type Cond = { metric: string; operator: string; threshold: string }
+  const conditions: Cond[] = (() => {
+    const parsed = value.split(";").filter(Boolean).map(cond => {
+      const parts = cond.split("|", 3)
+      return { metric: parts[0] ?? "", operator: parts[1] ?? ">=", threshold: parts[2] ?? "" }
+    })
+    return parsed.length > 0 ? parsed : [{ metric: "", operator: ">=", threshold: "" }]
+  })()
+
+  const serialize = (conds: Cond[]) => conds.map(c => `${c.metric}|${c.operator}|${c.threshold}`).join(";")
+  const updateCond = (ci: number, patch: Partial<Cond>) =>
+    onChange(serialize(conditions.map((c, i) => i === ci ? { ...c, ...patch } : c)))
+  const removeCond = (ci: number) => onChange(serialize(conditions.filter((_, i) => i !== ci)))
+  const addCond = () => onChange(serialize([...conditions, { metric: "", operator: ">=", threshold: "" }]))
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false) }
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [])
+
+  const summary = conditions
+    .filter(c => c.metric)
+    .map(c => c.operator === "is_unknown"
+      ? `${METRIC_LABELS[c.metric] ?? c.metric} unknown`
+      : `${METRIC_LABELS[c.metric] ?? c.metric} ${OP_SYMBOLS[c.operator] ?? c.operator} ${c.threshold || "…"}`)
+    .join(" AND ")
+
+  const isMulti = conditions.length > 1
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(o => !o)}
+        className={cn(
+          "flex h-9 w-full items-center justify-between rounded-md border border-input px-3 text-sm shadow-sm transition-colors",
+          "bg-secondary text-foreground cursor-pointer",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-primary",
+          isOpen && "ring-1 ring-ring border-primary",
+        )}
+      >
+        <span className={cn("truncate", !summary && "text-muted-foreground italic text-sm")}>
+          {summary || "Configure conditions…"}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 ml-2 shrink-0 text-muted-foreground opacity-50 transition-transform", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 mt-1 w-full min-w-[360px] rounded-md border border-border bg-card shadow-lg p-3 flex flex-col gap-2">
+          {conditions.map((cond, ci) => (
+            <div key={ci} className="flex items-center gap-1.5">
+              {isMulti && (
+                <span className="w-7 shrink-0 text-center text-[10px] font-semibold text-muted-foreground">
+                  {ci === 0 ? "" : "AND"}
+                </span>
+              )}
+              <div className="grid gap-1.5 grid-cols-[1fr_68px_84px] flex-1 min-w-0 items-center">
+                <Select value={cond.metric} onChange={(e) => updateCond(ci, { metric: e.target.value })}>
+                  <option value="">Metric…</option>
+                  <option value="resolution_width">Resolution Width (px)</option>
+                  <option value="resolution_height">Resolution Height (px)</option>
+                  <option value="ffmpeg_output_bitrate">Bitrate (kbps)</option>
+                  <option value="source_fps">FPS</option>
+                  <option value="audio_bitrate">Audio Bitrate (kbps)</option>
+                  <option value="sample_rate">Sample Rate (Hz)</option>
+                </Select>
+                <Select value={cond.operator} onChange={(e) => updateCond(ci, { operator: e.target.value })}>
+                  <option value=">=">≥</option>
+                  <option value="<=">≤</option>
+                  <option value=">">{">"}</option>
+                  <option value="<">{"<"}</option>
+                  <option value="=">=</option>
+                  <option value="is_unknown">Unknown</option>
+                </Select>
+                <Input
+                  type="number"
+                  value={cond.threshold}
+                  onChange={(e) => updateCond(ci, { threshold: e.target.value })}
+                  placeholder="Value"
+                  disabled={cond.operator === "is_unknown"}
+                />
+              </div>
+              {isMulti && (
+                <button type="button" onClick={() => removeCond(ci)} className="shrink-0 text-muted-foreground hover:text-destructive">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addCond}
+            className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground mt-0.5"
+          >
+            <Plus className="h-3 w-3" />
+            AND condition
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -674,7 +818,7 @@ export function StreamOrderingManager() {
       })
       toast.success("Stream ordering rules saved")
       setHasChanges(false)
-    } catch (err) {
+    } catch {
       toast.error("Failed to save stream ordering rules")
     }
   }

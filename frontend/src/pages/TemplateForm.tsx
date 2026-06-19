@@ -13,7 +13,7 @@ import {
   type TemplateCreate,
   type FillerContent,
 } from "@/api/templates"
-import { fetchVariables, fetchSamples } from "@/api/variables"
+import { fetchVariables, fetchSamples, fetchSampleLeagues } from "@/api/variables"
 import { buildValidVariableSet } from "@/utils/templateValidation"
 import type { Tab } from "./template-form/types"
 import {
@@ -41,7 +41,11 @@ export function TemplateForm() {
   const [activeTab, setActiveTab] = useState<Tab>("basic")
   const [formData, setFormData] = useState<TemplateCreate>(DEFAULT_FORM)
   const [lastFocusedField, setLastFocusedField] = useState<string | null>(null)
-  const [previewSport, setPreviewSport] = useState("NBA")
+  const [previewLeague, setPreviewLeague] = useState("nba")
+  // Default to live: preview real event data when available (green "Live"
+  // indicator), falling back to static samples when there's no event. TSDB
+  // leagues read cache-only so this can't hammer the free tier.
+  const [liveRequested, setLiveRequested] = useState(true)
 
   // Refs for template fields
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({})
@@ -63,17 +67,42 @@ export function TemplateForm() {
     staleTime: Infinity,
   })
 
-  // Fetch sample data for preview (sport-specific)
+  // Leagues to preview against: all enabled leagues, with the subscribed subset
+  // shown by default in the sidebar (search reaches the full list).
+  const { data: sampleLeaguesData } = useQuery({
+    queryKey: ["sample-leagues"],
+    queryFn: fetchSampleLeagues,
+    staleTime: 60 * 60 * 1000, // 1 hour
+  })
+  const previewLeagues = sampleLeaguesData?.leagues ?? []
+  const subscribedSlugs = sampleLeaguesData?.subscribed_slugs ?? []
+
+  // Keep the preview league valid against the fetched list. Prefer a subscribed
+  // league (nba if subscribed, else the first subscribed), then nba, then the
+  // first available league.
+  useEffect(() => {
+    if (previewLeagues.length === 0) return
+    if (previewLeagues.some((l) => l.slug === previewLeague)) return
+    const subscribed = new Set(subscribedSlugs)
+    const fallback =
+      (subscribed.has("nba") ? previewLeagues.find((l) => l.slug === "nba") : undefined) ??
+      previewLeagues.find((l) => subscribed.has(l.slug)) ??
+      previewLeagues.find((l) => l.slug === "nba") ??
+      previewLeagues[0]
+    setPreviewLeague(fallback.slug)
+  }, [previewLeagues, subscribedSlugs, previewLeague])
+
+  // Fetch sample data for preview (league-specific, optionally live)
   const { data: samplesData } = useQuery({
-    queryKey: ["samples", previewSport],
-    queryFn: () => fetchSamples(previewSport),
+    queryKey: ["samples", previewLeague, liveRequested],
+    queryFn: () => fetchSamples(previewLeague, { byLeague: true, live: liveRequested }),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   // Create resolver with current sample data
   const sampleData = samplesData?.samples ?? DEFAULT_SAMPLE_DATA
   const resolveTemplate = createResolver(sampleData)
-  const availableSports = samplesData?.available_sports ?? variablesData?.available_sports ?? ["NBA", "NFL", "MLB", "NHL"]
+  const isLivePreview = samplesData?.live ?? false
 
   // Build validation set from variables data
   const validationData = useMemo(() => {
@@ -355,9 +384,22 @@ export function TemplateForm() {
             onInsert={insertVariable}
             lastFocusedField={lastFocusedField}
             isTeamTemplate={isTeamTemplate}
-            availableSports={availableSports}
-            previewSport={previewSport}
-            onSportChange={setPreviewSport}
+            leagues={previewLeagues}
+            subscribedSlugs={subscribedSlugs}
+            previewLeague={previewLeague}
+            onLeagueChange={setPreviewLeague}
+            liveRequested={liveRequested}
+            isLive={isLivePreview}
+            onToggleLive={() => setLiveRequested((v) => !v)}
+            liveCoverage={
+              isLivePreview && samplesData?.live_total != null
+                ? {
+                    populated: samplesData.live_populated ?? 0,
+                    total: samplesData.live_total,
+                    gaps: samplesData.gaps ?? [],
+                  }
+                : null
+            }
           />
         </div>
       </div>

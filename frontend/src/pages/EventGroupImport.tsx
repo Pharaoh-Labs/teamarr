@@ -92,6 +92,7 @@ export function EventGroupImport() {
   const [showBulkModal, setShowBulkModal] = useState(false)
   const [bulkStreamTimezone, setBulkStreamTimezone] = useState<string | null>(null)
   const [bulkEnabled, setBulkEnabled] = useState(true)
+  const [bulkNameMatch, setBulkNameMatch] = useState(true)
   const [bulkTeamStreams, setBulkTeamStreams] = useState(false)
   const [bulkEPGMatch, setBulkEPGMatch] = useState(false)
   const [bulkImporting, setBulkImporting] = useState(false)
@@ -224,6 +225,7 @@ export function EventGroupImport() {
         settings: {
           stream_timezone: bulkStreamTimezone,
           enabled: bulkEnabled,
+          name_match_enabled: bulkNameMatch,
           team_streams_enabled: bulkTeamStreams,
           epg_match_enabled: bulkEPGMatch,
         },
@@ -252,6 +254,7 @@ export function EventGroupImport() {
   const openBulkModal = () => {
     setBulkStreamTimezone(null)
     setBulkEnabled(true)
+    setBulkNameMatch(true)
     setShowBulkModal(true)
   }
 
@@ -592,6 +595,18 @@ export function EventGroupImport() {
                       onCheckedChange={setBulkEnabled}
                     />
                     <span className="text-sm">{bulkEnabled ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Stream name matching</Label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Switch
+                      checked={bulkNameMatch}
+                      onCheckedChange={setBulkNameMatch}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {bulkNameMatch ? "Enabled" : "Disabled"}
+                    </span>
                   </div>
                 </div>
                 <div className="space-y-2">

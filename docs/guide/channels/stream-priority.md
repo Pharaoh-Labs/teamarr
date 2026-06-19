@@ -22,7 +22,11 @@ This is distinct from [channel ordering](numbering#channel-ordering), which cont
 | **Stream Type** | Match by how the stream was recognized: **event stream**, **team stream**, or **EPG matched stream**. Optionally narrow a team-stream rule to specific teams. *EPG matched stream* covers streams attached via [EPG program-data matching](../matching/program-matching) — i.e. time-shared linear channels (ESPN, FS1) matched to events through Dispatcharr's program guide. | "Team stream" → priority 3 |
 | **Home/Away Feed** | Match streams that look like a team's own broadcast (its home or away feed), detected from the stream name. Pick one or more teams. **Invert** flips it to match feeds that are *not* your selected teams (useful for pushing other teams' feeds to the back). | Selected teams → priority 1 |
 | **Dispatcharr Group** | Match channel-source streams by their Dispatcharr channel group. The dropdown lists the groups you selected under [Use Dispatcharr channels as an EPG source](../matching/program-matching#dispatcharr-channels-as-an-epg-source). Only channel-source streams carry a Dispatcharr group; regular matched streams are unaffected. | "US \| Sports" → priority 2 |
+| **Stream Stats** | Match streams whose quality meets numeric thresholds — **resolution width/height**, **source FPS**, **output/audio bitrate**, or **sample rate** — using `>`, `<`, `>=`, `<=`, `=`. Combine several conditions (all must pass). Use it to float HD / high-bitrate streams ahead of lower-quality ones. | `resolution_height >= 1080` and `source_fps >= 50` → priority 1 |
 | **Everything Else** | Catch-all fallback applied to any stream not matched by the rules above. Always present and cannot be removed; set its priority to control where unmatched streams land. | Everything else → priority 99 |
+
+{: .note }
+**Stream Stats** values come from Dispatcharr's external stream probe and are cached per stream (refreshed when older than an hour). A freshly added stream has no stats until Dispatcharr has probed it, so a Stream Stats rule won't match it until then — a stream with no value for the metric is treated as not matching.
 
 Lower priority numbers = higher priority. Rules are evaluated in order — the first matching rule determines the stream's priority.
 

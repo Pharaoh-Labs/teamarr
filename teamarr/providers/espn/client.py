@@ -17,6 +17,8 @@ import time
 
 import httpx
 
+from teamarr.utilities import call_metrics
+
 logger = logging.getLogger(__name__)
 
 # Environment variable configuration with defaults
@@ -168,6 +170,7 @@ class ESPNClient:
 
                 response.raise_for_status()
                 logger.debug("[FETCH] %s", url.split("/sports/")[-1] if "/sports/" in url else url)
+                call_metrics.record_call("espn", url)
                 return response.json()
 
             except httpx.HTTPStatusError as e:
@@ -239,14 +242,16 @@ class ESPNClient:
     def get_scoreboard(
         self,
         league: str,
-        date_str: str,
+        date_str: str | None = None,
         sport_league: tuple[str, str] | None = None,
     ) -> dict | None:
-        """Fetch scoreboard for a league on a given date.
+        """Fetch scoreboard for a league.
 
         Args:
             league: Canonical league code (e.g., 'nfl', 'nba')
-            date_str: Date in YYYYMMDD format
+            date_str: Date in YYYYMMDD format. When None, ESPN returns its
+                default slate — the most-recent-relevant games, which in the
+                offseason is the last completed game (used for sample previews).
             sport_league: Optional (sport, league) tuple from database config
 
         Returns:
@@ -254,7 +259,7 @@ class ESPNClient:
         """
         sport, espn_league = self.get_sport_league(league, sport_league)
         url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/scoreboard"
-        params = {"dates": date_str}
+        params: dict = {"dates": date_str} if date_str else {}
 
         if league in COLLEGE_SCOREBOARD_GROUPS:
             params["groups"] = COLLEGE_SCOREBOARD_GROUPS[league]

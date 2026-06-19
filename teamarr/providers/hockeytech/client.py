@@ -17,6 +17,7 @@ from datetime import date
 import httpx
 
 from teamarr.core.interfaces import LeagueMappingSource
+from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -186,6 +187,7 @@ class HockeyTechClient:
                 client = self._get_client()
                 response = client.get(HOCKEYTECH_BASE_URL, params=params)
                 response.raise_for_status()
+                call_metrics.record_call("hockeytech", view)
                 return response.json()
             except httpx.HTTPStatusError as e:
                 logger.warning(

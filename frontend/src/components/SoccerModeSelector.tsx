@@ -104,6 +104,17 @@ export function SoccerModeSelector({
             </span>
           </div>
 
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
+            <span>
+              Following a team adds <strong>all leagues that team could play in</strong> (its
+              domestic league, cups, and continental competitions) — so you'll see every match in
+              those competitions, not just this team's. To surface events for the followed teams
+              only, enable the <strong>Default Team Filter</strong> in the <strong>Teams</strong> tab
+              (Include mode) and select them.
+            </span>
+          </div>
+
           {/* Show followed teams */}
           {followedTeams.length > 0 && (
             <div className="flex flex-wrap gap-2">

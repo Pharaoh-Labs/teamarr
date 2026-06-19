@@ -24,6 +24,7 @@ __all__ = [
     "get_user_timezone_str",
     "now_user",
     "now_utc",
+    "utcnow_iso",
     "to_user_tz",
     "to_utc",
     "format_time",
@@ -62,6 +63,18 @@ def now_user() -> datetime:
 def now_utc() -> datetime:
     """Get current time in UTC."""
     return datetime.now(UTC)
+
+
+def utcnow_iso() -> str:
+    """Current UTC time as an ISO-8601 string with a trailing ``Z``.
+
+    Drop-in replacement for the deprecated ``datetime.utcnow().isoformat() + "Z"``
+    that produces byte-identical output (naive ISO + ``Z``). Several callers
+    persist and *string-compare* these timestamps for cache freshness, so the
+    suffix must stay ``Z`` rather than the ``+00:00`` an aware ``isoformat()``
+    would emit.
+    """
+    return datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
 
 
 def to_user_tz(dt: datetime) -> datetime:

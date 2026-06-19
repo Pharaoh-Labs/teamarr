@@ -102,3 +102,18 @@ def extract_soccer_match_league_logo(ctx: TemplateContext, game_ctx: GameContext
 
     service = get_league_mapping_service()
     return service.get_league_logo(game_ctx.event.league)
+
+
+@register_variable(
+    name="soccer_match_note",
+    category=Category.SOCCER,
+    suffix_rules=SuffixRules.ALL,
+    description="Provider's competition note for THIS match, untouched — competition "
+    "name plus group/stage where present (e.g. 'FIFA World Cup, Group J'). Unlike "
+    "soccer_match_league_name (which Teamarr builds), this is the raw provider value "
+    "and carries group-level detail. Soccer-only; empty otherwise.",
+)
+def extract_soccer_match_note(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    return game_ctx.event.soccer_match_note or ""

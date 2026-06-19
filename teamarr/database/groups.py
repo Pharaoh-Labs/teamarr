@@ -117,6 +117,7 @@ class EventEPGGroup:
     exclude_teams: list[dict] | None = None
     team_filter_mode: str = "include"
     bypass_filter_for_playoffs: bool | None = None  # NULL=use default, True/False=override
+    name_match_enabled: bool = True  # (ahow) match streams that name a specific event
     team_streams_enabled: bool = False
     epg_match_enabled: bool = False  # (183.6) opt this group into EPG program-data matching
     # (183.9) system group sourcing candidates from curated Dispatcharr channels
@@ -252,6 +253,9 @@ def _row_to_group(row) -> EventEPGGroup:
             and row["bypass_filter_for_playoffs"] is not None
             else None
         ),
+        name_match_enabled=(
+            bool(row["name_match_enabled"]) if "name_match_enabled" in row.keys() else True
+        ),
         team_streams_enabled=(
             bool(row["team_streams_enabled"]) if "team_streams_enabled" in row.keys() else False
         ),
@@ -369,7 +373,8 @@ def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
         group_id = row["id"]
         conn.execute(
             "UPDATE event_epg_groups SET enabled = ?, epg_match_enabled = 1, "
-            "skip_builtin_filter = 1, team_streams_enabled = 1 WHERE id = ?",
+            "skip_builtin_filter = 1, team_streams_enabled = 1, name_match_enabled = 0 "
+            "WHERE id = ?",
             (int(enabled), group_id),
         )
         conn.commit()
@@ -381,6 +386,7 @@ def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
         display_name="Dispatcharr Channels (EPG source)",
         leagues=[],
         duplicate_event_handling="consolidate",
+        name_match_enabled=False,  # (ahow.7) EPG-source group: matched via EPG/team, not name
         epg_match_enabled=True,
         team_streams_enabled=True,
         skip_builtin_filter=True,
@@ -515,6 +521,7 @@ def create_group(
     custom_regex_event_name: str | None = None,
     custom_regex_event_name_enabled: bool = False,
     skip_builtin_filter: bool = False,
+    name_match_enabled: bool = True,
     team_streams_enabled: bool = False,
     epg_match_enabled: bool = False,
     is_channel_source: bool = False,
@@ -577,11 +584,12 @@ def create_group(
             custom_regex_league, custom_regex_league_enabled,
             custom_regex_fighters, custom_regex_fighters_enabled,
             custom_regex_event_name, custom_regex_event_name_enabled,
-            skip_builtin_filter, team_streams_enabled, epg_match_enabled, is_channel_source,
+            skip_builtin_filter, name_match_enabled, team_streams_enabled, epg_match_enabled,
+            is_channel_source,
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -620,6 +628,7 @@ def create_group(
             custom_regex_event_name,
             int(custom_regex_event_name_enabled),
             int(skip_builtin_filter),
+            int(name_match_enabled),
             int(team_streams_enabled),
             int(epg_match_enabled),
             int(is_channel_source),
@@ -686,6 +695,7 @@ def update_group(
     custom_regex_event_name: str | None = None,
     custom_regex_event_name_enabled: bool | None = None,
     skip_builtin_filter: bool | None = None,
+    name_match_enabled: bool | None = None,
     team_streams_enabled: bool | None = None,
     epg_match_enabled: bool | None = None,
     # Team filtering
@@ -792,6 +802,7 @@ def update_group(
     )
     builder.set_("custom_regex_event_name_enabled", custom_regex_event_name_enabled, encoder=int)
     builder.set_("skip_builtin_filter", skip_builtin_filter, encoder=int)
+    builder.set_("name_match_enabled", name_match_enabled, encoder=int)
     builder.set_("team_streams_enabled", team_streams_enabled, encoder=int)
     builder.set_("epg_match_enabled", epg_match_enabled, encoder=int)
 
@@ -1102,6 +1113,22 @@ def get_existing_group_ids(conn: Connection, group_ids: list[int]) -> set[int]:
         group_ids,
     ).fetchall()
     return {row["id"] for row in rows}
+
+
+def get_group_names_by_ids(conn: Connection, group_ids: list[int]) -> dict[int, str]:
+    """Resolve a batch of group IDs to their names in one query.
+
+    Returns:
+        ``{group_id: name}`` for the IDs that exist (missing IDs are omitted).
+    """
+    if not group_ids:
+        return {}
+    placeholders = ",".join("?" * len(group_ids))
+    rows = conn.execute(
+        f"SELECT id, name FROM event_epg_groups WHERE id IN ({placeholders})",
+        list(group_ids),
+    ).fetchall()
+    return {row["id"]: row["name"] for row in rows}
 
 
 def get_group_channel_count(conn: Connection, group_id: int) -> int:

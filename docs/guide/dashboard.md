@@ -36,6 +36,7 @@ A table of recent full-pipeline runs (matching, channels, and EPG). Showing the 
 | **Programmes** | Total programmes generated. Hover for the Events / Pregame / Postgame / Idle breakdown |
 | **Matched** | Streams matched to events. Click to open a searchable drill-down of individual matched streams, filterable by group |
 | **Channels** | Active channels after the run |
+| **API Calls** | Provider HTTP calls made during the run, shown as calls-per-channel. Hover for the per-provider/endpoint breakdown and total. Stays muted in the normal range and turns amber/red if call volume per channel climbs abnormally — a quick way to spot a fetch regression. Dashes for older runs recorded before this metric existed |
 | **Duration** | How long the run took |
 
 {: .tip }

@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 207 variables across 17 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 226 variables across 19 categories.
 
 ## Team vs Event Templates
 
@@ -22,6 +22,14 @@ Variables are scoped to the template type they make sense in. The template edito
 - **Shared variables** (most of the list) are available in both — positional teams, venue, date/time, playoffs, odds (excluding the team-perspective `{odds_moneyline}` pair), soccer, combat sports, and league/sport identifiers.
 
 If you hand-type a scope-restricted variable into a template where it doesn't belong (e.g., `{team}` in an event template), it will still resolve (backward compatibility), but the picker won't offer it. Use the picker to stay within the intended scope.
+
+## Previewing Templates
+
+The template editor renders a live preview of every field as you type. The **Preview** selector in the variable sidebar lets you choose which league to preview against — the leagues you've subscribed to (from the [Subscriptions](../subscriptions) tab, plus the leagues of teams you follow) are listed with their logos, grouped by sport and searchable. Before you've subscribed to anything, all available leagues are shown.
+
+**Live by default.** The preview tries to render **real data** for a recent or upcoming event in the selected league, and the badge turns green **Live** with a coverage count (e.g. `137/181 variables live · 44 gaps`) — how many of the variables that apply to this kind of event the real event actually populated. A "gap" is a variable that *could* apply but the event didn't provide (variables for other sports aren't counted). If no event is available or the provider can't be reached, it falls back automatically to sample data and the badge reads **No event**.
+
+Click the badge to toggle to **Sample** mode, which uses generic, intentionally-fictitious placeholders (the same three sample shapes — a team game, a fight card, a race — regardless of league) so you can see every variable filled even when nothing is live.
 
 ## Suffix Support
 
@@ -359,6 +367,22 @@ TV and streaming information.
 
 ---
 
+## Summary & Context
+
+Provider editorial/context copy for a game, passed through raw. These are **sparse by nature** — empty when the provider didn't supply them.
+
+| Variable | Description | Suffixes | Sample |
+|----------|-------------|----------|--------|
+| `{game_recap}` | Postgame recap headline — short, self-contained, carries the result. Empty until a game is final | base, .next, .last | `Brunson scores 45, and New York tops Spurs for title` |
+| `{game_preview}` | Pregame preview blurb. Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Toronto Blue Jays (35-38) vs. Boston Red Sox` |
+| `{game_event_note}` | Marquee/playoff designation. Empty for ordinary regular-season games | base, .next, .last | `NBA Finals - Game 5` |
+| `{series_summary}` | Playoff/season-series state. Empty when there's no series context | base, .next, .last | `Series tied 1-1` |
+
+{: .note }
+Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).
+
+---
+
 ## Rankings
 
 College rankings (NCAAF, NCAAM, NCAAW).
@@ -424,6 +448,10 @@ Soccer-specific variables for teams that play in multiple competitions.
 | `{soccer_match_league}` | League for THIS game (may differ from primary) | base, .next, .last | `` |
 | `{soccer_match_league_id}` | League ID for THIS game (e.g., 'uefa.champions') | base, .next, .last | `` |
 | `{soccer_match_league_logo}` | Logo URL for THIS game's league | base, .next, .last | `` |
+| `{soccer_match_note}` | Provider's competition note for the match, untouched — competition name plus group/stage where present | base, .next, .last | `FIFA World Cup, Group J` |
+
+{: .note }
+Unlike `{soccer_match_league_name}` (which Teamarr builds from its league cache), `{soccer_match_note}` is the provider's raw value and carries group-level detail. It's soccer-only and empty otherwise.
 
 {: .note }
 Soccer teams often play in multiple competitions (domestic league, cups, Champions League). The `soccer_match_league` variables tell you which competition a specific game is in, while `soccer_primary_league` is the team's home league.
@@ -466,6 +494,50 @@ UFC and MMA-specific variables for event templates. These are **event-only** (no
 
 {: .note }
 UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout.
+
+---
+
+## Motorsports
+
+F1, NASCAR, IndyCar, and MotoGP-specific variables for event templates. These are **event-only** (no `.next`/`.last` suffixes) since each race weekend is independent.
+
+### Event & Circuit
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{race_name}` | Race weekend / Grand Prix name | `Monaco Grand Prix` |
+| `{circuit_name}` | Circuit/track name | `Circuit de Monaco` |
+
+### Sessions
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{session_name}` | This channel's session display name | `Practice 1`, `Qualifying`, `Race` |
+| `{session_type}` | This channel's session code | `fp1`, `qualifying`, `race` |
+| `{next_session_name}` | Display name of the next session | `Qualifying` |
+| `{next_session_time}` | Start time of the next session | `9:00 AM` |
+
+### Grid & Qualifying
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{pole_position}` | Driver who took pole position | `Max Verstappen` |
+| `{pole_team}` | Team/constructor of the pole sitter | `Red Bull Racing` |
+| `{grid}` | Full starting grid order (newline-separated) | `1. Max Verstappen (Red Bull Racing)`<br>`2. Charles Leclerc (Ferrari)` |
+
+### Results
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{race_winner}` | Race winner's name | `Max Verstappen` |
+| `{podium_2}` | 2nd place finisher | `Charles Leclerc` |
+| `{podium_3}` | 3rd place finisher | `Lewis Hamilton` |
+| `{podium}` | Top 3 finishers, combined | `1. Max Verstappen, 2. Charles Leclerc, 3. Lewis Hamilton` |
+| `{results}` | Full finishing order (newline-separated) | `1. Max Verstappen (Red Bull Racing)`<br>`2. Charles Leclerc (Ferrari)` |
+| `{fastest_lap_driver}` | Driver awarded fastest lap | `Lando Norris` |
+
+{: .note }
+Race weekends are split into per-session channels (Practice 1/2/3, Qualifying, Sprint, Race). Each channel gets a `{session_type}`/`{session_name}` value indicating which session it covers. Grid and results variables read from the qualifying and race sessions respectively, and are empty until those sessions have data.
 
 ---
 

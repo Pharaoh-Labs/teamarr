@@ -861,6 +861,72 @@ class EventGroupProcessor:
             except Exception as e:
                 logger.warning("[EVENT_EPG] Disabled group cleanup failed: %s", e)
 
+        # 6. Subscription cleanup: delete channels for leagues no longer subscribed.
+        #    Followed leagues/teams can change while the source group stays enabled;
+        #    the stream sync won't remove those streams (they're still in the M3U),
+        #    so the channels linger until a full wipe without this (psoi).
+        if lifecycle_service:
+            try:
+                self._cleanup_unsubscribed_leagues(conn, lifecycle_service)
+            except Exception as e:
+                logger.warning("[EVENT_EPG] Subscription league cleanup failed: %s", e)
+
+    def _cleanup_unsubscribed_leagues(self, conn: Connection, lifecycle_service) -> None:
+        """Delete channels whose league is no longer subscribed in any enabled group.
+
+        The "Subscriptions" (followed leagues/teams) can change between runs while
+        the source group stays enabled. The group keeps matching its M3U streams, so
+        the per-group stream sync never removes them — leaving stale channels for
+        dropped leagues until a full wipe. This sweeps them immediately (psoi).
+
+        Conservative by construction:
+        - Union of effective subscribed leagues across all enabled, non-system
+          groups (reusing _resolve_subscription_leagues, so soccer expansion etc.
+          are honored).
+        - Bails out if that union is empty (never mass-delete on a resolution miss).
+        - Skips channel-source/system groups and channels with no league.
+        """
+        from teamarr.database.channels import get_all_managed_channels
+
+        all_groups = get_all_groups(conn, include_disabled=True)
+        enabled_real_groups = [
+            g for g in all_groups
+            if g.enabled and not getattr(g, "is_channel_source", False)
+        ]
+        subscribed: set[str] = set()
+        for g in enabled_real_groups:
+            subscribed.update(lg.lower() for lg in self._resolve_subscription_leagues(conn, g))
+
+        # Safety guard: an empty set means we couldn't resolve any subscription —
+        # never interpret that as "delete everything".
+        if not subscribed:
+            return
+
+        # Channels owned by channel-source/system groups are exempt (their leagues
+        # aren't driven by the subscription).
+        system_group_ids = {
+            g.id for g in all_groups if getattr(g, "is_channel_source", False)
+        }
+
+        deleted = 0
+        for ch in get_all_managed_channels(conn, include_deleted=False):
+            league = (ch.league or "").strip().lower()
+            if not league or league in subscribed:
+                continue
+            if ch.event_epg_group_id in system_group_ids:
+                continue
+            if lifecycle_service.delete_managed_channel(
+                conn, ch.id, reason="unsubscribed_league"
+            ):
+                deleted += 1
+
+        if deleted:
+            logger.info(
+                "[EVENT_EPG] Subscription cleanup: deleted %d channel(s) for "
+                "unsubscribed leagues",
+                deleted,
+            )
+
     def _process_group_internal(
         self,
         conn: Connection,
@@ -1399,6 +1465,10 @@ class EventGroupProcessor:
                 group.skip_builtin_filter
                 or group.team_streams_enabled
                 or group.epg_match_enabled
+                # When Stream Name matching is off, the built-in "must contain
+                # vs/@/at" pre-filter would wrongly drop the team/linear streams
+                # the active types (Team/EPG) rely on — bypass it.
+                or not group.name_match_enabled
             ),
             team_streams_enabled=group.team_streams_enabled,
         )
@@ -1604,6 +1674,7 @@ class EventGroupProcessor:
             stream_timezone=group.stream_timezone,  # TZ for interpreting stream dates
             feed_home_terms=feed_home_terms,
             feed_away_terms=feed_away_terms,
+            name_match_enabled=group.name_match_enabled,
             team_streams_enabled=group.team_streams_enabled,
             epg_index=epg_index,
         )
@@ -1837,6 +1908,10 @@ class EventGroupProcessor:
         # This splits UFC streams into separate segment channels
         matched = self._expand_ufc_segments(matched, stream_timezone)
 
+        # Apply racing session expansion
+        # This splits racing streams into separate per-session channels
+        matched = self._expand_racing_segments(matched)
+
         return matched
 
     def _resolve_feed_teams(
@@ -1966,6 +2041,24 @@ class EventGroupProcessor:
         sport_durations = self._load_sport_durations_cached()
         return expand_ufc_segments(matched_streams, sport_durations, stream_timezone)
 
+    def _expand_racing_segments(self, matched_streams: list[dict]) -> list[dict]:
+        """Expand racing streams into session-based channels.
+
+        Splits each matched racing stream into one entry per race-weekend
+        session (Practice 1, Qualifying, Race, ...) using ESPN session data.
+        Non-racing streams pass through.
+
+        Args:
+            matched_streams: List of {'stream': ..., 'event': ...} dicts
+
+        Returns:
+            Expanded list with racing streams split by session
+        """
+        from teamarr.consumers.racing_segments import expand_racing_segments
+
+        sport_durations = self._load_sport_durations_cached()
+        return expand_racing_segments(matched_streams, sport_durations)
+
     def _enrich_matched_events(self, matched_streams: list[dict]) -> list[dict]:
         """Enrich all matched events with fresh status from provider.
 
@@ -1987,7 +2080,9 @@ class EventGroupProcessor:
             event = match.get("event")
             if event:
                 old_status = event.status.state if event.status else "N/A"
-                # Refresh event status from provider (invalidates cache, fetches fresh)
+                # Refresh event status from provider. The service coalesces
+                # repeated refreshes of the same event within a run, so an event
+                # matched to many channels triggers a single provider fetch.
                 refreshed = self._service.refresh_event_status(event)
                 new_status = refreshed.status.state if refreshed.status else "N/A"
                 if old_status != new_status:

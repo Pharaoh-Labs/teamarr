@@ -331,7 +331,68 @@ def create_custom_league(
         event_type=resolved_event_type,
         tsdb_tier=tier,
     )
+    _auto_subscribe(conn, code)
     return get_league_row(conn, code)
+
+
+def _auto_subscribe(conn: sqlite3.Connection, league_code: str) -> None:
+    """Add a freshly-created custom league to the global sports subscription.
+
+    Every event group resolves its match/inclusion leagues from the global
+    ``sports_subscription`` (see ``_resolve_subscription_leagues``), so a custom
+    league the user never explicitly subscribes to produces zero matches
+    (``no_event_found``) and zero included events — the exact GH #240 footgun.
+    Subscribing on create closes that gap so a newly-added league "just works".
+
+    Idempotent: a code already in the list is left untouched. Note a soccer
+    league in ``soccer_mode='all'`` is matched via the all-soccer expansion
+    regardless, so this is a no-op-but-harmless add in that mode.
+    """
+    from teamarr.database.subscription import get_subscription, update_subscription
+
+    sub = get_subscription(conn)
+    if league_code in sub.leagues:
+        return
+    update_subscription(conn, leagues=[*sub.leagues, league_code])
+    logger.info(
+        "[CUSTOM_LEAGUE] Auto-subscribed %s to the global sports subscription",
+        league_code,
+    )
+
+
+def global_subscription_league_codes(conn: sqlite3.Connection) -> set[str]:
+    """Effective set of league codes the global subscription will match.
+
+    Mirrors the global branch of ``_resolve_subscription_leagues`` (including the
+    ``soccer_mode='all'`` expansion) so the UI's "subscribed?" signal matches what
+    generation actually includes. Per-group subscription overrides are not
+    considered here — this is the install-wide default a custom league lands in.
+    """
+    from teamarr.database.groups import get_enabled_soccer_leagues
+    from teamarr.database.subscription import get_subscription
+
+    sub = get_subscription(conn)
+    codes: set[str] = set(sub.leagues)
+    if sub.soccer_mode == "all":
+        codes.update(get_enabled_soccer_leagues(conn))
+    return codes
+
+
+def list_custom_leagues_with_state(conn: sqlite3.Connection) -> list[dict]:
+    """List custom leagues, each annotated with a ``subscribed`` flag.
+
+    ``subscribed=False`` is the #240 warning signal: the league exists but the
+    global subscription won't match its events, so it silently produces nothing
+    until the user subscribes it. Creation auto-subscribes (:func:`_auto_subscribe`),
+    so this only trips when a user later unchecks the league in Subscriptions.
+    """
+    from teamarr.database.leagues import list_custom_leagues
+
+    subscribed = global_subscription_league_codes(conn)
+    return [
+        {**row, "subscribed": row["league_code"] in subscribed}
+        for row in list_custom_leagues(conn)
+    ]
 
 
 def _load_custom_or_raise(conn: sqlite3.Connection, league_code: str) -> dict:

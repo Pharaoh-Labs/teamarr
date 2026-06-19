@@ -181,7 +181,8 @@ class StreamOrderingRule:
 
 VALID_RULE_TYPES: frozenset[str] = frozenset({
     "m3u", "group", "regex", "stream_type",
-    "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "catch_all",
+    "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
+    "stats_metric", "catch_all",
 })
 NO_VALUE_RULE_TYPES: frozenset[str] = frozenset(
     {"team_feed", "not_team_feed", "epg_match", "catch_all"}

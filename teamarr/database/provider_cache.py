@@ -7,6 +7,7 @@ JSON for storage in PersistentTTLCache (SQLite-backed).
 from datetime import datetime
 
 from teamarr.core import Event, EventStatus, Team, TeamStats, Venue
+from teamarr.core.types import RacingResult, RacingSession
 
 
 def event_to_dict(event: Event) -> dict:
@@ -41,6 +42,32 @@ def event_to_dict(event: Event) -> dict:
         # UFC-specific fields
         "segment_times": segment_times_dict,
         "main_card_start": event.main_card_start.isoformat() if event.main_card_start else None,
+        # Racing-specific fields
+        "circuit_name": event.circuit_name,
+        "sessions": [racing_session_to_dict(s) for s in event.sessions],
+    }
+
+
+def racing_session_to_dict(session: RacingSession) -> dict:
+    """Serialize RacingSession to dict."""
+    return {
+        "code": session.code,
+        "name": session.name,
+        "start_time": session.start_time.isoformat(),
+        "results": [racing_result_to_dict(r) for r in session.results],
+    }
+
+
+def racing_result_to_dict(result: RacingResult) -> dict:
+    """Serialize RacingResult to dict."""
+    return {
+        "driver_name": result.driver_name,
+        "team_name": result.team_name,
+        "position": result.position,
+        "grid_position": result.grid_position,
+        "points": result.points,
+        "fastest_lap": result.fastest_lap,
+        "status": result.status,
     }
 
 
@@ -108,6 +135,32 @@ def dict_to_event(data: dict) -> Event:
         # UFC-specific fields
         segment_times=segment_times,
         main_card_start=main_card_start,
+        # Racing-specific fields
+        circuit_name=data.get("circuit_name"),
+        sessions=[dict_to_racing_session(s) for s in data.get("sessions", [])],
+    )
+
+
+def dict_to_racing_session(data: dict) -> RacingSession:
+    """Deserialize dict to RacingSession."""
+    return RacingSession(
+        code=data["code"],
+        name=data["name"],
+        start_time=datetime.fromisoformat(data["start_time"]),
+        results=[dict_to_racing_result(r) for r in data.get("results", [])],
+    )
+
+
+def dict_to_racing_result(data: dict) -> RacingResult:
+    """Deserialize dict to RacingResult."""
+    return RacingResult(
+        driver_name=data["driver_name"],
+        team_name=data.get("team_name"),
+        position=data.get("position"),
+        grid_position=data.get("grid_position"),
+        points=data.get("points"),
+        fastest_lap=data.get("fastest_lap", False),
+        status=data.get("status"),
     )
 
 

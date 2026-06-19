@@ -2765,33 +2765,31 @@ class ChannelLifecycleService:
         return result
 
     def cleanup_disabled_groups(self) -> dict:
-        """Clean up channels from disabled event groups.
+        """Clean up streams/channels from disabled event groups.
 
-        When a group is DISABLED, channels are cleaned up at the next EPG
-        generation rather than immediately. This allows users to re-enable
-        the group without losing channels.
-
-        V1 Parity: Matches cleanup_disabled_groups() from channel_lifecycle.py
+        When a group is DISABLED, its contribution is cleaned up at the next EPG
+        generation (so users can re-enable without losing everything). The cleanup
+        is STREAM-LEVEL: detach only the disabled group's streams from each channel,
+        then delete the channel only if it has no active streams left. This protects
+        consolidated/multi-source channels — disabling one source must not delete a
+        channel still fed by other enabled groups (teamarrv2-5xou).
 
         Returns:
-            Dict with 'deleted' and 'errors' lists
+            Dict with 'deleted', 'detached', and 'errors' lists/counts
         """
         from teamarr.database.channels import (
+            get_channel_streams,
             get_managed_channels_for_group,
-            mark_channel_deleted,
+            remove_stream_from_channel,
         )
         from teamarr.database.groups import get_all_groups
 
-        result: dict = {"deleted": [], "errors": []}
+        result: dict = {"deleted": [], "detached": 0, "errors": []}
 
         try:
             with self._db_factory() as conn:
-                # Get ALL groups including disabled
                 all_groups = get_all_groups(conn, include_disabled=True)
-
-                # Filter to disabled groups only
                 disabled_groups = [g for g in all_groups if not g.enabled]
-
                 if not disabled_groups:
                     return result
 
@@ -2803,30 +2801,46 @@ class ChannelLifecycleService:
                     group_id = group.id
                     group_name = group.name
 
-                    # Get channels for this disabled group
+                    # Channels touched by this group (created by it OR carrying its streams).
                     channels = get_managed_channels_for_group(conn, group_id, include_deleted=False)
 
                     for channel in channels:
                         try:
-                            # Delete from Dispatcharr
-                            if self._channel_manager and channel.dispatcharr_channel_id:
-                                with self._dispatcharr_lock:
-                                    self._channel_manager.delete_channel(
-                                        channel.dispatcharr_channel_id
+                            active = get_channel_streams(conn, channel.id)
+                            from_group = [
+                                s for s in active if s.source_group_id == group_id
+                            ]
+
+                            # Detach only this group's streams (Dispatcharr + DB).
+                            for stream in from_group:
+                                if channel.dispatcharr_channel_id:
+                                    self._remove_stream_from_dispatcharr_channel(
+                                        channel.dispatcharr_channel_id,
+                                        stream.dispatcharr_stream_id,
                                     )
+                                remove_stream_from_channel(
+                                    conn,
+                                    channel.id,
+                                    stream.dispatcharr_stream_id,
+                                    reason=f"Group '{group_name}' disabled",
+                                )
+                                result["detached"] += 1
 
-                            # Mark as deleted in DB
-                            mark_channel_deleted(
-                                conn, channel.id, reason=f"Group '{group_name}' disabled"
-                            )
-
-                            result["deleted"].append(
-                                {
-                                    "group": group_name,
-                                    "channel_number": channel.channel_number,
-                                    "channel_name": channel.channel_name,
-                                }
-                            )
+                            # Delete the channel only if nothing else feeds it now.
+                            remaining = [s for s in active if s.source_group_id != group_id]
+                            if not remaining:
+                                if self.delete_managed_channel(
+                                    conn, channel.id, reason=f"Group '{group_name}' disabled"
+                                ):
+                                    result["deleted"].append(
+                                        {
+                                            "group": group_name,
+                                            "channel_number": channel.channel_number,
+                                            "channel_name": channel.channel_name,
+                                        }
+                                    )
+                            else:
+                                conn.commit()
                         except Exception as e:
                             result["errors"].append(
                                 {
@@ -2836,14 +2850,16 @@ class ChannelLifecycleService:
                                 }
                             )
 
-                conn.commit()
-
         except Exception as e:
             logger.exception("Error cleaning up disabled groups")
             result["errors"].append({"error": str(e)})
 
-        if result["deleted"]:
-            logger.info(f"Cleaned up {len(result['deleted'])} channel(s) from disabled groups")
+        if result["deleted"] or result["detached"]:
+            logger.info(
+                "Disabled-group cleanup: detached %d stream(s), deleted %d channel(s)",
+                result["detached"],
+                len(result["deleted"]),
+            )
 
         return result
 

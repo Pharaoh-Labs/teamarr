@@ -49,6 +49,15 @@ function formatBytes(bytes: number | undefined | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// Calls-per-channel is the call-volume regression signal (the #254 refetch bug
+// ran ~16/ch; healthy warm runs are ~2, cold-cache runs ~5). Stay calm/muted in
+// the normal band so the column only lights up when something is off.
+function callsPerChannelClass(ratio: number): string {
+  if (ratio >= 12) return "text-red-600 font-medium"
+  if (ratio >= 6) return "text-amber-600"
+  return "text-muted-foreground"
+}
+
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case "completed":
@@ -296,6 +305,30 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
       header: "Channels",
       align: "center",
       cell: (run) => <span className="tabular-nums">{run.channels?.active ?? 0}</span>,
+    },
+    {
+      key: "api_calls",
+      header: "API Calls",
+      align: "center",
+      cell: (run) => {
+        const total = run.extra_metrics?.provider_calls_total as number | undefined
+        // Runs before kbbk.2 have no telemetry — show a dash, not a fake 0.
+        if (total == null) return <span className="text-muted-foreground">—</span>
+        const calls = (run.extra_metrics?.provider_calls as Record<string, number>) ?? {}
+        const channels = run.channels?.active ?? 0
+        const ratio = channels > 0 ? total / channels : total
+        const rows = [
+          ...Object.entries(calls).map(([label, value]) => ({ label, value })),
+          { label: "Total", value: total },
+        ]
+        return (
+          <RichTooltip title="Provider calls" rows={rows}>
+            <span className={`cursor-help tabular-nums ${callsPerChannelClass(ratio)}`}>
+              {ratio.toFixed(1)}/ch
+            </span>
+          </RichTooltip>
+        )
+      },
     },
     {
       key: "duration",

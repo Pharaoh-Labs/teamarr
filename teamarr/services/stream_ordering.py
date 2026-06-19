@@ -34,6 +34,16 @@ class StreamWithPriority:
     matched_rule_type: str | None = None  # Which rule type matched
 
 
+@dataclass
+class RuleEvaluation:
+    """One ordering rule that matched a stream, for the priority explainer popup."""
+
+    type: str
+    value: str
+    priority: int
+    is_winner: bool  # True for the rule that actually set the priority
+
+
 class StreamOrderingService:
     """Service for computing stream ordering based on rules.
 
@@ -125,6 +135,52 @@ class StreamOrderingService:
             matched_rule_type="catch_all" if catch_all_priority != NO_MATCH_PRIORITY else None,
         )
 
+    def evaluate_rules(
+        self,
+        stream: ManagedChannelStream,
+        source_group_name: str | None = None,
+    ) -> list[RuleEvaluation]:
+        """Return the rules that matched a stream, marking which one won.
+
+        Mirrors compute_priority's first-match-wins / catch_all-fallback logic,
+        but reports every matching rule (not just the winner) so the UI can
+        explain why a stream got its priority. Rules are already priority-sorted.
+
+        Args:
+            stream: The stream to evaluate
+            source_group_name: Optional pre-fetched group name (for 'group' rules)
+
+        Returns:
+            Matched rules in priority order, always followed by the "everything
+            else" baseline (the configured catch_all rule, or the implicit
+            no-match default). The rule that set the priority — first match, or
+            the baseline when nothing matched — has is_winner=True.
+        """
+        matched: list[RuleEvaluation] = []
+        catch_all: StreamOrderingRule | None = None
+        winner_found = False
+
+        for rule in self.rules:
+            if rule.type == "catch_all":
+                catch_all = rule
+                continue
+            if self._matches(stream, rule, source_group_name):
+                is_winner = not winner_found
+                winner_found = winner_found or is_winner
+                matched.append(
+                    RuleEvaluation(rule.type, rule.value, rule.priority, is_winner)
+                )
+
+        # Always surface the baseline so the popup shows what "everything else"
+        # falls back to, even when a specific rule won.
+        baseline_priority = catch_all.priority if catch_all else NO_MATCH_PRIORITY
+        baseline_value = catch_all.value if catch_all else ""
+        matched.append(
+            RuleEvaluation("catch_all", baseline_value, baseline_priority, not winner_found)
+        )
+
+        return matched
+
     def sort_streams(
         self,
         streams: list[ManagedChannelStream],
@@ -185,6 +241,8 @@ class StreamOrderingService:
             return self._match_epg_match(stream)
         elif rule.type == "dispatcharr_group":
             return self._match_dispatcharr_group(stream, rule.value)
+        elif rule.type == "stats_metric":
+            return self._match_stats_metric(stream, rule.value)
         return False
 
     def _match_m3u(self, stream: ManagedChannelStream, account_name: str) -> bool:
@@ -267,6 +325,88 @@ class StreamOrderingService:
         if not stream.dispatcharr_channel_group:
             return False
         return stream.dispatcharr_channel_group.lower() == group_name.lower()
+
+    _STATS_OPERATORS = {
+        ">": lambda a, b: a > b,
+        "<": lambda a, b: a < b,
+        ">=": lambda a, b: a >= b,
+        "<=": lambda a, b: a <= b,
+        "=": lambda a, b: a == b,
+    }
+
+    def _resolve_stat_value(self, stats: dict, metric: str) -> float | None:
+        """Resolve a metric name to a float, including virtual derived fields.
+
+        resolution_width / resolution_height extract from the "1920x1080" string
+        that Dispatcharr stores in the 'resolution' key.
+        """
+        if metric == "resolution_width":
+            res = str(stats.get("resolution") or "")
+            if "x" in res:
+                try:
+                    return float(res.split("x")[0])
+                except (ValueError, IndexError):
+                    return None
+            return None
+        if metric == "resolution_height":
+            res = str(stats.get("resolution") or "")
+            if "x" in res:
+                try:
+                    return float(res.split("x")[1])
+                except (ValueError, IndexError):
+                    return None
+            return None
+        raw = stats.get(metric)
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            return None
+
+    def _match_stats_metric(self, stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match stream by numeric stat comparisons encoded in rule_value.
+
+        Supports multiple AND conditions separated by ";":
+          "ffmpeg_output_bitrate|>=|4000;source_fps|>=|50"
+
+        Each condition is "metric|operator|threshold". Actual field names match
+        Dispatcharr's stream_stats JSON: resolution, source_fps,
+        ffmpeg_output_bitrate, audio_bitrate, sample_rate. Virtual metrics
+        resolution_width / resolution_height are derived from the resolution string.
+        """
+        if not rule_value:
+            return False
+        try:
+            for cond in rule_value.split(";"):
+                parts = cond.split("|", 2)
+                if len(parts) < 2:
+                    return False
+                metric, operator = parts[0], parts[1]
+                threshold_str = parts[2] if len(parts) > 2 else ""
+
+                if operator == "is_unknown":
+                    # Matches when stats are absent entirely OR this metric has no value
+                    has_value = (
+                        stream.stream_stats is not None
+                        and self._resolve_stat_value(stream.stream_stats, metric) is not None
+                    )
+                    if has_value:
+                        return False
+                else:
+                    if not stream.stream_stats:
+                        return False
+                    val = self._resolve_stat_value(stream.stream_stats, metric)
+                    if val is None:
+                        return False
+                    compare = self._STATS_OPERATORS.get(operator)
+                    if compare is None:
+                        return False
+                    if not compare(val, float(threshold_str)):
+                        return False
+            return True
+        except (ValueError, TypeError, AttributeError):
+            return False
 
     def _match_stream_type(self, stream: ManagedChannelStream, rule_value: str) -> bool:
         """Match stream by type, with optional team filter (value may be 'team|key1,key2')."""

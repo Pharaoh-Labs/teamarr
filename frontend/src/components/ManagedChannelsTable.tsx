@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Alert } from "@/components/ui/alert"
+import { RichTooltip } from "@/components/ui/rich-tooltip"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Trash2,
@@ -12,9 +13,12 @@ import {
   Search,
   AlertTriangle,
   X,
+  ChevronRight,
+  ChevronDown,
+  Info,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -49,10 +53,12 @@ import {
   deleteManagedChannel,
   previewResetChannels,
   executeResetChannels,
+  getChannelStreams,
 } from "@/api/channels"
-import type { ManagedChannel, ResetChannelInfo } from "@/api/channels"
+import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
+import { useGenerationProgress } from "@/contexts/GenerationContext"
 
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "-"
@@ -81,6 +87,285 @@ function formatRelativeTime(dateStr: string | null): string {
   return formatDateTime(dateStr)
 }
 
+function StreamStatsBadges({ stats }: { stats: Record<string, unknown> | null }) {
+  if (!stats) return <span className="text-muted-foreground">—</span>
+
+  const chip = (content: React.ReactNode) => (
+    <span className="inline-flex rounded px-1.5 py-0.5 bg-muted text-[11px] font-mono leading-none text-muted-foreground">
+      {content}
+    </span>
+  )
+
+  const chips: React.ReactNode[] = []
+
+  const resolution = stats.resolution as string | undefined
+  if (resolution && resolution.includes("x")) {
+    chips.push(chip(resolution.replace("x", "×")))
+  }
+
+  const fps = stats.source_fps as number | undefined
+  if (fps != null) chips.push(chip(`${fps}fps`))
+
+  const bitrate = stats.ffmpeg_output_bitrate as number | undefined
+  if (bitrate != null) chips.push(chip(bitrate >= 1000 ? `${(bitrate / 1000).toFixed(1)} Mbps` : `${bitrate} kbps`))
+
+  const audioBitrate = stats.audio_bitrate as number | undefined
+  if (audioBitrate != null) chips.push(chip(`${audioBitrate} kbps audio`))
+
+  const sampleRate = stats.sample_rate as number | undefined
+  if (sampleRate != null) chips.push(chip(`${(sampleRate / 1000).toFixed(0)} kHz`))
+
+  if (chips.length === 0) return <span className="text-muted-foreground">—</span>
+
+  return <div className="flex flex-wrap gap-1 items-center">{chips.map((c, i) => <React.Fragment key={i}>{c}</React.Fragment>)}</div>
+}
+
+function getMatchMethodBadge(method: string | null) {
+  if (!method) return null
+  switch (method) {
+    case "epg":
+      return <Badge variant="info" className="text-xs">EPG</Badge>
+    case "fuzzy":
+      return <Badge variant="secondary" className="text-xs">Fuzzy</Badge>
+    case "exact":
+      return <Badge variant="outline" className="text-xs">Exact</Badge>
+    default:
+      return <Badge variant="outline" className="text-xs">{method}</Badge>
+  }
+}
+
+const RULE_TYPE_LABELS: Record<string, string> = {
+  m3u: "M3U Account",
+  group: "Event Group",
+  regex: "Regex",
+  stream_type: "Stream Type",
+  team_feed: "Home/Away Feed",
+  not_team_feed: "Not Home/Away Feed",
+  epg_match: "EPG Match",
+  dispatcharr_group: "Dispatcharr Group",
+  stats_metric: "Stats Metric",
+  catch_all: "Everything else",
+}
+
+// Close a popover on outside-click / Escape. Shared by the click-popovers below
+// (same behavior as StatsMetricBuilder's dropdown).
+function useOutsideDismiss(
+  ref: React.RefObject<HTMLElement | null>,
+  open: boolean,
+  setOpen: (v: boolean) => void,
+) {
+  useEffect(() => {
+    if (!open) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false) }
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [ref, open, setOpen])
+}
+
+// Clickable priority number → compact popover explaining which ordering rules
+// matched the stream, with the winning rule (the one that set the priority)
+// highlighted.
+function PriorityCell(
+  { priority, rules, generating }: { priority: number; rules: StreamRuleMatch[]; generating: boolean },
+) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideDismiss(ref, open, setOpen)
+
+  // Nothing to explain and not generating → just the number.
+  if (rules.length === 0 && !generating) {
+    return <span className="text-muted-foreground">{priority}</span>
+  }
+
+  // Winners first, then by ascending rule priority.
+  const ordered = [...rules].sort(
+    (a, b) => Number(b.is_winner) - Number(a.is_winner) || a.priority - b.priority
+  )
+
+  // The popover evaluates the CURRENT rules; the stored number is from the last
+  // generation run. If they disagree, the rules changed since this stream was
+  // ordered and the stored order is stale until the next run. While a generation
+  // is running the number is mid-update, so we show a spinner instead of flagging
+  // it stale.
+  const winner = ordered.find((r) => r.is_winner)
+  const stale = !generating && winner != null && winner.priority !== priority
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`underline decoration-dotted underline-offset-2 ${
+          stale
+            ? "text-amber-500 decoration-amber-500 hover:text-amber-400"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        title={
+          generating
+            ? "Generation in progress — priority is updating"
+            : stale
+              ? "Rules changed since last sync — click for details"
+              : "Show matched rules"
+        }
+      >
+        {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <>{priority}{stale && "*"}</>}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-lg">
+          {rules.length > 0 && (
+          <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Matched rules
+          </div>
+          )}
+          <div className="space-y-0.5">
+            {ordered.map((r, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-1.5 rounded px-1 py-0.5 ${
+                  r.is_winner ? "bg-primary/10" : ""
+                } ${r.type === "catch_all" && !r.is_winner ? "opacity-50" : ""}`}
+              >
+                <span className="shrink-0 font-mono text-[11px] leading-5 tabular-nums text-muted-foreground">
+                  {r.priority}
+                </span>
+                <span className="min-w-0 flex-1">
+                  {/* Name shares a line with the number (and badge); subtitle drops below. */}
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium leading-5 truncate">
+                      {RULE_TYPE_LABELS[r.type] ?? r.type}
+                    </span>
+                    {r.is_winner && (
+                      <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">applied</Badge>
+                    )}
+                  </span>
+                  {r.value && (
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
+                      {r.value}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          {generating ? (
+            <div className={`text-[10px] leading-snug text-muted-foreground ${rules.length > 0 ? "mt-1 border-t pt-1" : ""}`}>
+              Generation in progress — the order is updating.
+            </div>
+          ) : stale ? (
+            <div className="mt-1 border-t pt-1 text-[10px] leading-snug text-amber-500">
+              Rules changed since this stream was ordered (stored #{priority}). The order above
+              applies on the next generation run.
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const METHOD_INFO: Record<string, { label: string; desc: string }> = {
+  epg: { label: "EPG", desc: "Matched via Dispatcharr's program guide (program title / sub-title)." },
+  fuzzy: { label: "Fuzzy", desc: "Matched by fuzzy comparison of the stream name to the event." },
+  exact: { label: "Exact", desc: "Exact name match." },
+  cache: { label: "Cache", desc: "Reused a previously cached match for this stream." },
+  alias: { label: "Alias", desc: "Matched via a user-defined team alias." },
+  pattern: { label: "Pattern", desc: "Matched via a team-name pattern." },
+  keyword: { label: "Keyword", desc: "Matched via an event keyword (e.g. UFC / boxing cards)." },
+  user_corrected: { label: "Pinned", desc: "Manually corrected by you — pinned, never auto-rematched." },
+  no_match: { label: "No match", desc: "No event matched this stream." },
+}
+
+// Clickable match-method badge → popover explaining how/why the stream matched
+// its event. Combines fields always on the stream (method, type, exception
+// keyword) with cache-derived detail (matched event, user correction) that's
+// only present for fingerprint-cached matches.
+function MethodCell({ stream }: { stream: ChannelStreamEntry }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideDismiss(ref, open, setOpen)
+
+  const badge = getMatchMethodBadge(stream.match_method)
+  if (!badge) return <span className="text-muted-foreground">—</span>
+
+  const info = stream.match_method ? METHOD_INFO[stream.match_method] : undefined
+  // The finer cache method only adds value when it differs from the badge method.
+  const finer =
+    stream.cache_match_method && stream.cache_match_method !== stream.match_method
+      ? METHOD_INFO[stream.cache_match_method] ?? { label: stream.cache_match_method, desc: "" }
+      : undefined
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} title="Show match details" className="cursor-pointer">
+        {badge}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border bg-popover p-2 shadow-lg space-y-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Match details
+          </div>
+          <div>
+            <span className="text-[11px] font-medium">{info?.label ?? stream.match_method}</span>
+            {info?.desc && <p className="text-[10px] text-muted-foreground leading-snug">{info.desc}</p>}
+          </div>
+          {finer && (
+            <div className="text-[10px] text-muted-foreground">
+              Cache method: <span className="font-medium text-foreground">{finer.label}</span>
+            </div>
+          )}
+          {stream.cache_created_at && (
+            <div className="text-[10px] text-muted-foreground">
+              Cached {formatRelativeTime(stream.cache_created_at)}
+            </div>
+          )}
+          {[...stream.match_aliases, ...stream.match_patterns].length > 0 && (
+            <div className="text-[10px] text-muted-foreground">
+              {[...stream.match_aliases, ...stream.match_patterns].map((a, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="font-mono text-foreground">{a.text}</span>
+                  <span className="text-muted-foreground/60">→</span>
+                  <span className="font-medium text-foreground truncate">{a.team}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {stream.matched_event && (
+            <div className="text-[10px] text-muted-foreground">
+              Matched event:{" "}
+              <span className="font-medium text-foreground">{stream.matched_event}</span>
+              {stream.matched_league && <span className="uppercase"> ({stream.matched_league})</span>}
+            </div>
+          )}
+          {stream.match_type && (
+            <div className="text-[10px] text-muted-foreground">
+              Type: <span className="font-medium text-foreground">{stream.match_type === "team" ? "Team" : "Event"}</span>
+            </div>
+          )}
+          {stream.exception_keyword && (
+            <div className="text-[10px] text-muted-foreground">
+              Keyword: <span className="font-mono text-foreground">{stream.exception_keyword}</span>
+            </div>
+          )}
+          {stream.user_corrected && (
+            <div className="flex items-center gap-1.5">
+              <Badge variant="info" className="text-[9px] px-1 py-0">pinned</Badge>
+              <span className="text-[10px] text-muted-foreground">
+                Corrected by you{stream.corrected_at ? ` ${formatRelativeTime(stream.corrected_at)}` : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function getSyncStatusBadge(status: string) {
   switch (status) {
     case "in_sync":
@@ -106,6 +391,13 @@ export function ManagedChannelsTable() {
   const [sportFilter, setSportFilter] = useState<string>("")
   const [leagueFilter, setLeagueFilter] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("")
+
+  // Expand states
+  const [expandedChannels, setExpandedChannels] = useState<Set<number>>(new Set())
+  const [channelStreams, setChannelStreams] = useState<Map<number, ChannelStreamEntry[]>>(new Map())
+  const [loadingStreams, setLoadingStreams] = useState<Set<number>>(new Set())
+
+  const { isGenerating } = useGenerationProgress()
 
   // UI states
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
@@ -262,6 +554,48 @@ export function ManagedChannelsTable() {
     },
   })
 
+  // Fetch (or refetch) the stream detail for one channel into local state.
+  const fetchStreams = async (channelId: number) => {
+    setLoadingStreams((prev) => new Set(prev).add(channelId))
+    try {
+      const data = await getChannelStreams(channelId)
+      setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
+    } catch {
+      setChannelStreams((prev) => new Map(prev).set(channelId, []))
+    } finally {
+      setLoadingStreams((prev) => { const s = new Set(prev); s.delete(channelId); return s })
+    }
+  }
+
+  const handleToggleExpand = async (channelId: number) => {
+    const next = new Set(expandedChannels)
+    if (next.has(channelId)) {
+      next.delete(channelId)
+      setExpandedChannels(next)
+      return
+    }
+    next.add(channelId)
+    setExpandedChannels(next)
+    if (!channelStreams.has(channelId)) {
+      await fetchStreams(channelId)
+    }
+  }
+
+  // When a generation run finishes, stream priorities/membership may have
+  // changed. Refresh the channels list and any expanded stream tables so the
+  // priority spinners resolve to the new ordering.
+  const expandedRef = useRef(expandedChannels)
+  expandedRef.current = expandedChannels
+  const wasGeneratingRef = useRef(isGenerating)
+  useEffect(() => {
+    if (wasGeneratingRef.current && !isGenerating) {
+      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
+      expandedRef.current.forEach((id) => { void fetchStreams(id) })
+    }
+    wasGeneratingRef.current = isGenerating
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGenerating])
+
   const handleDelete = async () => {
     if (!deleteConfirm) return
     try {
@@ -400,13 +734,17 @@ export function ManagedChannelsTable() {
       <CollapsibleSection
         title="Managed Channels"
         icon={<Tv className="h-5 w-5 text-muted-foreground" />}
-        count={`(${channelsData?.channels.length ?? 0})`}
+        count={
+          filteredChannels.length !== (channelsData?.channels.length ?? 0)
+            ? `(${filteredChannels.length} of ${channelsData?.channels.length ?? 0})`
+            : `(${channelsData?.channels.length ?? 0})`
+        }
         persistKey="channels.active"
       >
 
       {/* Section actions — live inside the collapsible body so they only show
           when the section is expanded. */}
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 mb-3">
         <Button
           variant="outline"
           size="sm"
@@ -478,20 +816,6 @@ export function ManagedChannelsTable() {
       )}
 
       {/* Channels List */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
-            <Tv className="h-5 w-5" />
-            Channels ({filteredChannels.length}
-            {filteredChannels.length !== (channelsData?.channels.length ?? 0) && (
-              <span className="text-muted-foreground font-normal">
-                {" "}of {channelsData?.channels.length ?? 0}
-              </span>
-            )}
-            )
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -501,9 +825,10 @@ export function ManagedChannelsTable() {
               No managed channels found.
             </div>
           ) : (
-            <Table className="table-fixed">
+            <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead className="w-10">
                     <Checkbox
                       checked={isAllSelected}
@@ -517,9 +842,11 @@ export function ManagedChannelsTable() {
                   <TableHead className="w-20">Status</TableHead>
                   <TableHead className="w-24">Delete At</TableHead>
                   <TableHead className="w-16 text-right">Actions</TableHead>
+                  <TableHead className="w-6"></TableHead>
                 </TableRow>
                 {/* Filter row */}
                 <TableRow className="border-b-2 border-border">
+                  <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5">
                     <div className="relative">
@@ -576,17 +903,30 @@ export function ManagedChannelsTable() {
                   </TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
+                  <TableHead className="py-0.5 pb-1.5"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredChannels.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       No channels match the current filters.
                     </TableCell>
                   </TableRow>
                 ) : filteredChannels.map((channel) => (
-                  <TableRow key={channel.id}>
+                  <React.Fragment key={channel.id}>
+                  <TableRow className={expandedChannels.has(channel.id) ? "border-b-0" : ""}>
+                    <TableCell className="px-1">
+                      <button
+                        onClick={() => handleToggleExpand(channel.id)}
+                        className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
+                        aria-label={expandedChannels.has(channel.id) ? "Collapse" : "Expand"}
+                      >
+                        {expandedChannels.has(channel.id)
+                          ? <ChevronDown className="h-4 w-4" />
+                          : <ChevronRight className="h-4 w-4" />}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(channel.id)}
@@ -653,13 +993,72 @@ export function ManagedChannelsTable() {
                         </Button>
                       </div>
                     </TableCell>
+                    <TableCell></TableCell>
                   </TableRow>
+                  {expandedChannels.has(channel.id) && (
+                    <TableRow className="hover:bg-transparent border-b border-border/40">
+                      <TableCell colSpan={10} className="p-0 pb-2">
+                        <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
+                        {loadingStreams.has(channel.id) ? (
+                          <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Loading streams…
+                          </div>
+                        ) : (channelStreams.get(channel.id) ?? []).length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-1">No active streams.</p>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <colgroup>
+                              <col className="w-[28%]" />
+                              <col className="w-[18%]" />
+                              <col className="w-[16%]" />
+                              <col className="w-[10%]" />
+                              <col className="w-[6%]" />
+                              <col className="w-[22%]" />
+                            </colgroup>
+                            <thead>
+                              <tr>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Stream</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Sort</th>
+                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
+                                  <span className="inline-flex items-center gap-1">
+                                    Stats
+                                    <RichTooltip
+                                      content="External stream stats (resolution, bitrate, fps, etc.) populated by Dispatcharr's stream probe. Only present once Dispatcharr has probed the stream."
+                                      side="top"
+                                    >
+                                      <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                                    </RichTooltip>
+                                  </span>
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(channelStreams.get(channel.id) ?? []).map((stream) => (
+                                <tr key={stream.dispatcharr_stream_id} className="border-t border-border/30">
+                                  <td className="py-1 pr-4 font-medium">{stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}</td>
+                                  <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
+                                  <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
+                                  <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
+                                  <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} generating={isGenerating} /></td>
+                                  <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
 
       </CollapsibleSection>
 

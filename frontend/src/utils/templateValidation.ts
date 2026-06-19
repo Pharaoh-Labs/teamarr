@@ -4,6 +4,9 @@
  * Validates template strings for:
  * 1. Invalid/unknown variables
  * 2. Suffixed variables in event templates (not allowed)
+ *
+ * Extraction mirrors the backend resolver's VARIABLE_PATTERN so the validator and
+ * the engine agree on what counts as a variable — see VARIABLE_PATTERN below.
  */
 
 import type { VariableCategory } from "@/api/variables"
@@ -51,21 +54,36 @@ export function buildValidVariableSet(categories: VariableCategory[]): {
 }
 
 /**
- * Extract all variable references from a template string.
- * Returns array of variable names (without braces).
+ * Mirror of the backend resolver's VARIABLE_PATTERN (teamarr/templates/resolver.py).
+ *
+ * The engine only treats a braced token as a variable when it matches this shape:
+ * a lowercase/underscore-led name (digits, `_`, `@` allowed — e.g. `vs_@`) with an
+ * optional single dotted suffix. Anything else inside braces — `{2024}`, `{1-0}`,
+ * `{Team Name}`, `{a.b.c}` — is literal text the resolver leaves untouched, so the
+ * validator must ignore it too rather than cry "unknown variable". The backend
+ * lowercases the captured name before lookup, so matching is case-insensitive.
+ */
+const VARIABLE_PATTERN = /\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)\}/gi
+
+/**
+ * Extract variable references the engine would actually resolve, lowercased to
+ * match the backend (which calls `.lower()` on each captured name).
  */
 export function extractVariables(template: string): string[] {
   if (!template) return []
-  const matches = template.match(/\{([^}]+)\}/g)
-  if (!matches) return []
-  return matches.map(m => m.slice(1, -1))
+  const names: string[] = []
+  for (const match of template.matchAll(VARIABLE_PATTERN)) {
+    names.push(match[1].toLowerCase())
+  }
+  return names
 }
 
 /**
- * Check if a variable name has a suffix (.next, .last).
+ * Check if a variable name ends with a real suffix (.next, .last). Anchored so it
+ * only fires on a trailing suffix, not a substring (e.g. a name containing "next").
  */
 export function hasSuffix(varName: string): boolean {
-  return varName.includes(".next") || varName.includes(".last")
+  return /\.(next|last)$/.test(varName)
 }
 
 /**

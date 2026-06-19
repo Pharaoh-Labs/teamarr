@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { FlaskConical, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, FlaskConical, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -129,7 +129,19 @@ export function CustomLeaguesManager({
               <TableBody>
                 {leagues.map((league) => (
                   <TableRow key={league.league_code}>
-                    <TableCell className="font-medium">{league.display_name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {league.display_name}
+                        {!league.subscribed && (
+                          <Badge
+                            variant="warning"
+                            title="This league isn't in your subscription, so its games won't appear. Add it under Subscriptions."
+                          >
+                            <AlertTriangle className="h-3 w-3" /> Not subscribed
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {league.league_code}
                     </TableCell>

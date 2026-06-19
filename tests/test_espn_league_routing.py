@@ -70,3 +70,44 @@ class TestESPNSupportsLeague:
         espn = ESPNProvider(league_mapping_source=None)
         assert espn.supports_league("fra.99") is True
         assert espn.supports_league("nba") is False
+
+
+class _SportSource:
+    """Mapping source stub exercising _get_sport's resolution chain.
+
+    Returns no display mapping; ``get_league_sport`` is the cached-sport lookup.
+    """
+
+    def __init__(self, cached: dict[str, str] | None = None):
+        self._cached = cached or {}
+
+    def get_mapping(self, league, provider):
+        return None
+
+    def get_league_sport(self, league):
+        return self._cached.get(league)
+
+
+class TestGetSport:
+    """_get_sport: discovered ESPN soccer slugs must resolve to 'soccer', not 'unknown'."""
+
+    def test_dotted_discovered_league_infers_soccer(self):
+        # bug: bra.carioca.groupa / ger.a.bayernliganorth / afc.challenge_cup
+        # were cached as sport='unknown' (shown as "Unknown" in the selector).
+        espn = ESPNProvider(league_mapping_source=_SportSource())
+        assert espn._get_sport("bra.carioca.groupa") == "soccer"
+        assert espn._get_sport("ger.a.bayernliganorth") == "soccer"
+        assert espn._get_sport("afc.challenge_cup") == "soccer"
+
+    def test_dotted_inference_works_without_mapping_source(self):
+        espn = ESPNProvider(league_mapping_source=None)
+        assert espn._get_sport("eng.1") == "soccer"
+
+    def test_nondotted_unknown_stays_unknown(self):
+        espn = ESPNProvider(league_mapping_source=_SportSource())
+        assert espn._get_sport("mysteryleague") == "unknown"
+
+    def test_cached_sport_takes_precedence_over_dot_inference(self):
+        # A dotted league explicitly cached as another sport is not overridden.
+        espn = ESPNProvider(league_mapping_source=_SportSource({"foo.bar": "cricket"}))
+        assert espn._get_sport("foo.bar") == "cricket"

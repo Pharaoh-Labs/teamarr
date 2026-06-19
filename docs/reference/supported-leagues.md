@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **127 pre-configured leagues** across 13 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **134 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -256,6 +256,37 @@ Combat sports are **Event Only** - no team import available.
 | Boxing | `boxing` | TSDB | Event Card |
 
 Combat sports use "Event Card" matching rather than team vs team matching.
+
+---
+
+## Motorsports
+
+{: .warning }
+Motorsports are **Event Only** - no team import available.
+
+| League | ID | Provider | Type |
+|--------|-----|----------|------|
+| Formula 1 | `f1` | ESPN | Event |
+| NASCAR Cup Series | `nascar-cup` | ESPN | Event |
+| NASCAR Xfinity Series | `nascar-xfinity` | ESPN | Event |
+| NASCAR Craftsman Truck Series | `nascar-truck` | ESPN | Event |
+| IndyCar Series | `indycar` | ESPN | Event |
+| IMSA SportsCar Championship | `imsa` | TSDB | Event |
+| FIA World Endurance Championship | `wec` | TSDB **P** | Event |
+
+Motorsports events are race weekends made up of multiple sessions (Practice,
+Qualifying, Race). Each session is exposed as its own EPG program block. `f1`
+is the fully verified ESPN reference league; the other ESPN-backed series are
+configured against their ESPN scoreboard endpoints but session coverage may
+vary by series. `imsa` and `wec` are backed by TSDB, which groups its flat
+per-session events into the same multi-session shape — see the
+[TSDB provider docs](providers/tsdb.md) for details and the free-tier caveat
+for WEC.
+
+MotoGP (`motogp`) is currently disabled (`leagues.enabled = 0`) because ESPN's
+`racing/motogp` scoreboard endpoint returns no usable schedule or logo data.
+A TSDB-backed migration (idLeague 4407), similar to the IMSA/WEC session
+grouping above, is planned as a future enhancement.
 
 ---
 

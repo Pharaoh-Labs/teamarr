@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.services.sports_data import SportsDataService
+from teamarr.utilities.cache import make_cache_key
 
 
 def _make_event(status_state: str = "scheduled", **overrides) -> Event:
@@ -171,19 +172,30 @@ class TestRefreshIsAdditive:
 
 
 class TestRefreshCacheInvalidation:
-    """Refresh must invalidate the cache for the event so subsequent reads see fresh."""
+    """First refresh invalidates the event cache for a fresh fetch; repeats
+    within the coalesce window reuse it instead of re-hitting the provider."""
 
-    def test_cache_delete_called_with_correct_key(self):
+    def test_first_refresh_invalidates_then_coalesces(self):
         original = _make_event()
         service = SportsDataService(providers=[])
+        # The service cache is a process-wide singleton, so a prior test may have
+        # left a coalesce marker for this event — start from a clean state.
+        service._cache.delete(make_cache_key("event_refresh", original.league, original.id))
+
         mock_delete = MagicMock()
         with (
             patch.object(service, "get_event", return_value=original),
             patch.object(service._cache, "delete", mock_delete),
         ):
+            # First refresh: cache invalidated so the provider is hit fresh.
             service.refresh_event_status(original)
-        mock_delete.assert_called_once()
-        # Key shape: ("event", "mlb", "401")
-        call_args = mock_delete.call_args[0][0]
-        assert "401" in str(call_args)
-        assert "mlb" in str(call_args)
+            assert mock_delete.call_count == 1
+            # Key shape: ("event", "mlb", "401")
+            call_args = mock_delete.call_args[0][0]
+            assert "401" in str(call_args)
+            assert "mlb" in str(call_args)
+
+            # Second refresh within the window: coalesced — no re-invalidation,
+            # so a popular event matched to many channels fetches once per run.
+            service.refresh_event_status(original)
+            assert mock_delete.call_count == 1

@@ -322,6 +322,40 @@ class ConditionEvaluator:
         # If it went to decision, it went the distance
         return method is not None and "decision" in method
 
+    # =========================================================================
+    # Motorsports conditions (F1, NASCAR, IndyCar, MotoGP, ...)
+    # =========================================================================
+
+    def _eval_is_race_session(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if this channel's session is the race itself."""
+        event = game_ctx.event
+        if not event or event.sport != "racing":
+            return False
+        return game_ctx.card_segment == "race"
+
+    def _eval_is_qualifying_session(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if this channel's session is qualifying or sprint qualifying."""
+        event = game_ctx.event
+        if not event or event.sport != "racing":
+            return False
+        return game_ctx.card_segment in ("qualifying", "sprint_qualifying")
+
+    def _eval_has_results(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if this channel's session has finished with results."""
+        event = game_ctx.event
+        if not event or event.sport != "racing" or not game_ctx.card_segment:
+            return False
+        for session in event.sessions:
+            if session.code == game_ctx.card_segment:
+                return any(r.position is not None for r in session.results)
+        return False
+
 
 class ConditionalDescriptionSelector:
     """Selects the best description based on conditions and priority."""

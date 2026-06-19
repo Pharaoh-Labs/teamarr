@@ -32,6 +32,9 @@ Subscribe to as many or as few leagues as you like — there is no cost to a bro
 {: .tip }
 > Subscribe to a league *before* you expect its first game of the season. An unsubscribed league produces nothing, so it's easy to forget you never turned it on.
 
+{: .note }
+> **Unsubscribing cleans up after itself.** When you uncheck a league, the next generation run deletes the channels it created for that league — you no longer have to wipe all channels to apply the change. The source group can stay enabled; only the dropped league's channels are removed.
+
 ## Soccer modes
 
 Soccer is special because there are hundreds of leagues. Rather than checking each one, you choose a **mode**:
@@ -43,6 +46,19 @@ Soccer is special because there are hundreds of leagues. Rather than checking ea
 | **Manual** | Only the exact soccer leagues you check are matched. |
 
 In **Teams** mode, the followed-teams list lives here in Subscriptions because it's a *subscription* concept (which competitions to scan). The team-channel workflow itself — persistent channels for specific teams — lives under [EPG → Teams](epg/teams).
+
+{: .note }
+> **Following a soccer team adds *all* the leagues that team could potentially participate in** — its domestic league, cups, and continental/club competitions — not just that team's individual matches. For example, following Barcelona subscribes you to all of La Liga, the Copa del Rey, and the Champions League, so you'll see *every* match in those competitions. To surface events for the followed teams **only**, enable the **Default Team Filter** on the [Teams tab](#default-team-filter), set it to *Include only selected teams*, and select your teams. The filter is league-scoped: leagues where you've selected at least one team show only those teams' games, while leagues with no selections pass through unfiltered.
+
+## Default Team Filter
+
+The **Teams** tab adds an optional filter that narrows matched events down to specific teams — useful when a subscription pulls in a whole league (e.g. soccer [Teams mode](#soccer-modes)) but you only care about a few teams in it.
+
+- **Enabled** toggle — turn the filter on or off without losing your selections.
+- **Filter mode** — *Include only selected teams* (keep just these) or *Exclude selected teams* (drop these).
+- **Team selection** — search and pick teams, grouped by sport.
+
+The filter is **league-scoped**: it only affects leagues where you've selected at least one team. A league with no selections passes through untouched. So you can follow Barcelona, Liverpool, and AC Milan, select exactly those three here in *Include* mode, and get only their matches from La Liga, the Premier League, and Serie A — while other subscribed leagues (where you've picked no teams) stay fully covered. Playoff games can optionally bypass the filter so you never miss postseason coverage.
 
 ## Custom Leagues
 

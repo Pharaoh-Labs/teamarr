@@ -54,6 +54,48 @@ def extract_game_date_short(ctx: TemplateContext, game_ctx: GameContext | None) 
 
 
 @register_variable(
+    name="year",
+    category=Category.DATETIME,
+    suffix_rules=SuffixRules.ALL,
+    description="Game year (e.g., '2024')",
+    sample="2024",
+)
+def extract_year(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    dt = _get_local_time(game_ctx)
+    if not dt:
+        return ""
+    return dt.strftime("%Y")
+
+
+@register_variable(
+    name="month",
+    category=Category.DATETIME,
+    suffix_rules=SuffixRules.ALL,
+    description="Game month number, no leading zero (e.g., '12')",
+    sample="12",
+)
+def extract_month(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    dt = _get_local_time(game_ctx)
+    if not dt:
+        return ""
+    return strftime_compat(dt, "%-m")
+
+
+@register_variable(
+    name="day",
+    category=Category.DATETIME,
+    suffix_rules=SuffixRules.ALL,
+    description="Game day of month, no leading zero (e.g., '9')",
+    sample="22",
+)
+def extract_day(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    dt = _get_local_time(game_ctx)
+    if not dt:
+        return ""
+    return strftime_compat(dt, "%-d")
+
+
+@register_variable(
     name="game_day",
     category=Category.DATETIME,
     suffix_rules=SuffixRules.ALL,

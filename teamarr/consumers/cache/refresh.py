@@ -8,10 +8,10 @@ import os
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 
 from teamarr.core import SportsProvider
 from teamarr.database import get_db
+from teamarr.utilities.tz import utcnow_iso
 
 from .queries import TeamLeagueCache
 
@@ -322,7 +322,7 @@ class CacheRefresher:
         upserts ``league_cache`` and the league's count columns in one
         transaction.
         """
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         seen: set = set()
         rows = []
@@ -661,7 +661,7 @@ class CacheRefresher:
 
     def _save_cache(self, teams: list[dict], leagues: list[dict]) -> None:
         """Save teams and leagues to database using batch inserts."""
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         with self._db() as conn:
             cursor = conn.cursor()
@@ -746,7 +746,7 @@ class CacheRefresher:
         Updates the cached team count for configured leagues based on
         what we discovered during cache refresh.
         """
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         for league in leagues:
             league_slug = league["league_slug"]
@@ -769,7 +769,7 @@ class CacheRefresher:
         error: str | None,
     ) -> None:
         """Update cache metadata."""
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         with self._db() as conn:
             cursor = conn.cursor()

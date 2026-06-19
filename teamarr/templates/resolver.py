@@ -108,6 +108,15 @@ class TemplateResolver:
 
         return text.strip()
 
+    def build_variable_map(self, ctx: TemplateContext) -> dict[str, str]:
+        """Public: resolve every registered variable for a context.
+
+        Returns the full name -> value map (including .next/.last suffixes),
+        the same map used internally during resolution. Useful for previewing
+        a real event against every variable (live sample data).
+        """
+        return self._build_all_variables(ctx)
+
     def _build_all_variables(self, ctx: TemplateContext) -> dict[str, str]:
         """Build complete variable dict with all suffixes.
 

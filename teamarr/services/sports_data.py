@@ -13,7 +13,7 @@ Uses PersistentTTLCache for all caching:
 import logging
 import threading
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 from teamarr.core import Event, SportsProvider, Team, TeamStats
 from teamarr.database.provider_cache import (
@@ -38,6 +38,16 @@ from teamarr.utilities.cache import (
 from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
+
+# Coalesce window for refresh_event_status. The same event is matched to many
+# channels and re-checked by the filler, so during one generation run an event
+# can be refreshed dozens-to-hundreds of times — each call invalidating the
+# event cache and re-hitting the provider summary endpoint serially. The marker
+# lives in the shared cache (so the teams and event-group passes coordinate),
+# and the window is short enough that separate scheduled runs still pull fresh
+# scores. Must stay well under CACHE_TTL_SINGLE_EVENT so get_event can serve the
+# cached event during the window.
+REFRESH_COALESCE_TTL = 300  # seconds
 
 
 def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
@@ -238,6 +248,67 @@ class SportsDataService:
                 return [_enrich_event_teams(e) for e in events]
         return []
 
+    def get_sample_event(self, league: str) -> Event | None:
+        """Pick the single best real event for a template sample preview.
+
+        Selection rule (applies to ALL providers): prefer the most-recent
+        FINAL game with two identifiable teams, so postgame variables (recap,
+        scores, outcome, margin) populate — a just-completed game is the richest
+        sample. Falls back to the nearest upcoming/in-progress game when nothing
+        recent has finished.
+
+        Candidate gathering is provider-aware only for *efficiency*: TSDB exposes
+        a 2-call recent+upcoming bulk fetch (``get_sample_candidates``) so the
+        preview can't hammer its rate-limited free tier; every other provider
+        uses a small bounded scan of recent + near-future days (which captures
+        their finals just the same).
+        """
+        candidates: list[Event] = []
+        today = date.today()
+        chosen = None
+        for provider in self._providers:
+            if not provider.supports_league(league):
+                continue
+            chosen = provider
+            bulk = getattr(provider, "get_sample_candidates", None)
+            if callable(bulk):
+                candidates = bulk(league)
+            else:
+                # Recent days first (their finals), then a couple upcoming.
+                for d in (
+                    today,
+                    today - timedelta(days=1),
+                    today - timedelta(days=2),
+                    today + timedelta(days=1),
+                    today + timedelta(days=7),
+                ):
+                    candidates.extend(self.get_events(league, d))
+            break
+
+        candidates = [e for e in candidates if e.home_team and e.away_team]
+
+        finals = [e for e in candidates if is_event_final(e)]
+        if finals:
+            # Most-recently-completed game in the slate is the richest sample.
+            return _enrich_event_teams(max(finals, key=lambda e: e.start_time))
+
+        # No recent final in the primary slate — between seasons, try a deep
+        # look-back for the last completed game (e.g. NFL in June → the Super
+        # Bowl). A finished game populates every postgame variable.
+        deep = getattr(chosen, "get_recent_final", None) if chosen else None
+        if callable(deep):
+            ev = deep(league)
+            if ev and ev.home_team and ev.away_team:
+                return _enrich_event_teams(ev)
+
+        if not candidates:
+            return None
+        # Else the nearest game to now (in-progress or soonest upcoming).
+        now = datetime.now(UTC)
+        return _enrich_event_teams(
+            min(candidates, key=lambda e: abs((e.start_time - now).total_seconds()))
+        )
+
     def get_team_schedule(
         self,
         team_id: str,
@@ -359,6 +430,11 @@ class SportsDataService:
         "fight_result_method",
         "finish_round",
         "finish_time",
+        # Per-event editorial copy — only the summary endpoint carries these, so
+        # they must overlay from the fresh fetch (the scoreboard-parsed original
+        # has them empty). The summary call is already made here; zero extra cost.
+        "game_preview",
+        "series_summary",
     )
 
     def refresh_event_status(self, event: Event) -> Event:
@@ -380,9 +456,19 @@ class SportsDataService:
         if not event:
             return event
 
-        # Invalidate cache to force fresh fetch from provider
+        # Coalesce repeated refreshes of the same event within a run. Normally we
+        # invalidate the event cache to force a fresh provider fetch, but the same
+        # event is refreshed once per channel (and again by the filler), so a
+        # popular event would otherwise trigger many identical serial summary
+        # fetches. Skip the invalidating delete when we've already refreshed this
+        # event inside the coalesce window — get_event then serves the fresh-enough
+        # copy from the (30-min) event cache. The marker is in the shared cache so
+        # the teams and event-group passes coordinate.
         cache_key = make_cache_key("event", event.league, event.id)
-        self._cache.delete(cache_key)
+        coalesce_key = make_cache_key("event_refresh", event.league, event.id)
+        if not self._cache.get(coalesce_key):
+            self._cache.delete(cache_key)
+            self._cache.set(coalesce_key, True, REFRESH_COALESCE_TTL)
 
         fresh_event = self.get_event(event.id, event.league)
         if not fresh_event:

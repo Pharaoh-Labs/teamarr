@@ -23,7 +23,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -39,7 +39,9 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_data = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            # Naive-UTC ISO + "Z" — matches the deprecated utcnow() output exactly;
+            # inlined (not via tz helper) to keep this low-level formatter dep-free.
+            "timestamp": datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z",
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

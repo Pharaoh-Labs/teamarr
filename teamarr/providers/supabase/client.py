@@ -29,6 +29,7 @@ from datetime import date, timedelta
 import httpx
 
 from teamarr.core.interfaces import LeagueMappingSource
+from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,9 @@ class SupabaseLeagueClient:
     def _get(self, url: str, **kwargs) -> httpx.Response | None:
         for attempt in range(self._retry_count):
             try:
-                return self._get_client().get(url, **kwargs)
+                response = self._get_client().get(url, **kwargs)
+                call_metrics.record_call("supabase", url)
+                return response
             except (httpx.RequestError, RuntimeError, OSError) as e:
                 logger.warning(
                     "[SUPABASE] GET %s failed (attempt %d/%d): %s",

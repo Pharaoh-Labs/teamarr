@@ -162,3 +162,46 @@ export async function previewResetChannels(): Promise<ResetPreviewResponse> {
 export async function executeResetChannels(): Promise<ResetExecuteResponse> {
   return api.post("/channels/reset", {})
 }
+
+export interface StreamRuleMatch {
+  type: string
+  value: string
+  priority: number
+  is_winner: boolean
+}
+
+export interface ChannelStreamEntry {
+  dispatcharr_stream_id: number
+  stream_name: string | null
+  source_group: string | null
+  m3u_account_name: string | null
+  match_method: string | null
+  match_type: string | null
+  exception_keyword: string | null
+  priority: number
+  stream_stats: Record<string, unknown> | null
+  stream_stats_updated_at: string | null
+  matched_rules: StreamRuleMatch[]
+  matched_event: string | null
+  matched_league: string | null
+  cache_match_method: string | null
+  cache_created_at: string | null
+  match_aliases: StreamNameMatch[]
+  match_patterns: StreamNameMatch[]
+  user_corrected: boolean
+  corrected_at: string | null
+}
+
+export interface StreamNameMatch {
+  text: string
+  team: string
+}
+
+export interface ChannelStreamsResponse {
+  streams: ChannelStreamEntry[]
+  stats_refreshed: boolean
+}
+
+export async function getChannelStreams(channelId: number): Promise<ChannelStreamsResponse> {
+  return api.get(`/channels/managed/${channelId}/streams`)
+}

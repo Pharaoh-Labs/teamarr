@@ -69,6 +69,21 @@ When EPG generation runs, each stream goes through:
 
 Streams that can't be matched appear in the **Failed** count. Click it to see details and use the **Fix** button to manually link a stream to an event.
 
+## Matching Types
+
+Each Source declares which matching pipeline(s) it runs. The three types are **independent** — enable any combination, and each stream is routed to whichever applies. Every Source must have at least one enabled. The Sources table shows a color-coded badge per active type.
+
+| Type | Badge | Matches | Example |
+|------|-------|---------|---------|
+| **Stream Name** | blue | Streams whose name identifies a specific event | `Bills vs Dolphins`, `DAZN: Man City vs Arsenal` |
+| **Team** | green | A team's branded stream → that team's games in the window (one stream → many events) | `NHL \| Toronto Maple Leafs` |
+| **EPG** | violet | Static linear channels → events via Dispatcharr's program guide, time-sharing one stream across events | `ESPN`, `NBA1` |
+
+{: .note }
+> A Source that does **only** Team or EPG (Stream Name off) shows a raw stream **count** in the Matched column instead of a coverage percentage — those types fan one stream out to many events, so a `matched ÷ total` percentage isn't a meaningful health signal.
+
+Set these on a Source in the editor (and at bulk add / bulk edit). **EPG** requires a Dispatcharr build with the program-search API — see [EPG Program Matching](#epg-program-matching) below.
+
 ## Event Matching Window
 
 The **Event Lookahead** controls how far ahead Teamarr matches streams to sporting events — streams are matched only to events within this window. Default is 3 days; options are 1, 3, 7, 14, or 30 days.

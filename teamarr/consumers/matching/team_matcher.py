@@ -1669,6 +1669,35 @@ class TeamMatcher:
             if isinstance(main_card_start, str):
                 main_card_start = datetime.fromisoformat(main_card_start)
 
+            # Reconstruct racing sessions, if present
+            from teamarr.core.types import RacingResult, RacingSession
+
+            sessions = []
+            for session_data in cached_data.get("sessions") or []:
+                session_start = session_data.get("start_time")
+                if isinstance(session_start, str):
+                    session_start = datetime.fromisoformat(session_start)
+                results = [
+                    RacingResult(
+                        driver_name=r.get("driver_name", ""),
+                        team_name=r.get("team_name"),
+                        position=r.get("position"),
+                        grid_position=r.get("grid_position"),
+                        points=r.get("points"),
+                        fastest_lap=r.get("fastest_lap", False),
+                        status=r.get("status"),
+                    )
+                    for r in session_data.get("results") or []
+                ]
+                sessions.append(
+                    RacingSession(
+                        code=session_data.get("code", ""),
+                        name=session_data.get("name", ""),
+                        start_time=session_start,
+                        results=results,
+                    )
+                )
+
             # Self-heal stale cache rows: every modern provider populates
             # short_name (falling back to the full name when no shorter form
             # exists), so a row with name set but short_name empty is data
@@ -1699,6 +1728,8 @@ class TeamMatcher:
                 broadcasts=broadcasts,
                 segment_times=segment_times,
                 main_card_start=main_card_start,
+                circuit_name=cached_data.get("circuit_name"),
+                sessions=sessions,
             )
         except Exception as e:
             logger.warning("[MATCH_CACHE] Failed to reconstruct event from cache: %s", e)

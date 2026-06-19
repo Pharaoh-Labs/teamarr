@@ -17,6 +17,7 @@ import threading
 
 import httpx
 
+from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class SquiggleClient:
         try:
             resp = self._get_http().get(url, params=params)
             resp.raise_for_status()
+            call_metrics.record_call("squiggle", str(params.get("q", "api")))
             return resp.json()
         except httpx.HTTPStatusError as e:
             logger.warning(

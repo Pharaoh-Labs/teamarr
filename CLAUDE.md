@@ -250,8 +250,8 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
-- 207 variables in `variables/` (17 categories)
-- 20 condition evaluators in `conditions.py`
+- 226 variables in `variables/` (19 categories)
+- 23 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
 
@@ -259,9 +259,14 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - `{sport}` and `{league}` wildcards
 - Auto-creates in Dispatcharr
 
+**Per-Source Matching Types** (epic `teamarrv2-ahow`):
+- Each source declares which matching pipeline(s) it runs — three independent booleans on `event_epg_groups`: `name_match_enabled` (Stream Name → TEAM_VS_TEAM/EVENT_CARD/RACING categories), `team_streams_enabled` (Team → TEAM_ONLY), `epg_match_enabled` (EPG). Multi-select; ≥1 required (enforced in `api/routes/groups.py::require_matching_type`).
+- Gating is by **category at the matcher router** (`matcher.py::_match_single`, reason `name_match_disabled`) — classification always runs so the types stay independent; never skip `classify_stream`. `name_match_enabled` defaults 1 (DEFAULT-1 column backfills existing sources). The hidden `is_channel_source` group is name-off (EPG/team only).
+- UI: three toggles on add/edit/bulk-add/bulk-edit; color-coded Sources badges (Stream Name=sky, Team=emerald, EPG=violet). The Matched-column coverage % shows only when Stream Name is on (Team/EPG fan one stream → many events).
+
 **EPG Program Matching** (epic `teamarrv2-183`, `teamarr/consumers/matching/epg_*.py`):
 - Matches static-named linear channels (ESPN, FS1) to events via Dispatcharr's program guide (`GET /api/epg/programs/search/`, feature-detected, Dispatcharr 0.24.0+), then time-shares one stream across many event channels (attach/detach window per program).
-- Opt-in: per-group `epg_match_enabled` only (no global switch as of eqz/3lp1 — EPG matching is always available; each event-group opts in). Global tuning (attach/detach buffers) lives in Settings → EPG. Per-group flag also sets `skip_builtin` so static names survive filtering.
+- Opt-in: per-group `epg_match_enabled` only (no global switch as of eqz/3lp1 — EPG matching is always available; each event-group opts in). Global tuning (attach/detach buffers, `epg_stream_pre/post_buffer_minutes`, default 60) lives on the **Matching** page (`/matching`, `EpgMatchingSettings` component) as of the v2.7.0 IA overhaul — not Settings. Per-group flag also sets `skip_builtin` so static names survive filtering.
 - Channel-source mode (183.9, `epg_channel_source_enabled`): additive source from streams curated onto Dispatcharr channels (each channel's own EPG), run as a hidden system group (`is_channel_source`, `ensure_channel_source_group`); excludes Teamarr's own channels and dedupes streams already in EPG-match M3U groups. Candidate builder: `_fetch_channel_source_streams`.
 - `epg_resolver.py` bridges the stream `tvg_id` → program `tvg_id` namespace gap via a cascade: direct tvg_id → curated channel `epg_data_id` → strict name match (does NOT require an EPG-linked channel). `_Teamarr` source excluded.
 - `epg_index.py` fetches by resolved tvg_id, keys by stream tvg_id; `epg_matcher.py` routes program title+sub_title (pipe-joined) through `classify_stream → TeamMatcher`.

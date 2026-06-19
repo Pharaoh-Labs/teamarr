@@ -70,12 +70,17 @@ export const DEFAULT_SAMPLE_DATA: Record<string, string> = {
   sport: "Football",
 }
 
-// Helper to create resolveTemplate function with custom sample data
+// Helper to create resolveTemplate function with custom sample data.
+// A known variable resolves to its value even when that value is empty (e.g.
+// a pre-game {team_score.next}); only genuinely unknown variables stay literal.
 export function createResolver(sampleData: Record<string, string>) {
   return function resolveTemplate(template: string): string {
     if (!template) return ""
     return template.replace(/\{([^}]+)\}/g, (match, varName) => {
-      return sampleData[varName] || sampleData[varName.toLowerCase()] || match
+      if (varName in sampleData) return sampleData[varName]
+      const lower = varName.toLowerCase()
+      if (lower in sampleData) return sampleData[lower]
+      return match
     })
   }
 }
