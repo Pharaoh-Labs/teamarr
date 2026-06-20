@@ -20,6 +20,8 @@ import atexit
 import json
 import logging
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -243,6 +245,12 @@ class PersistentTTLCache:
         self._deleted_keys: set[str] = set()
         self._dirty_lock = threading.Lock()
 
+        # Per-key locks for single-flight fetches (see lock_key). Refcounted so
+        # an idle key's lock is dropped once no callers hold or wait on it,
+        # keeping the map bounded to keys with in-flight fetches.
+        self._keylocks: dict[str, list] = {}
+        self._keylocks_guard = threading.Lock()
+
         # Background flush thread
         self._flush_timer: threading.Timer | None = None
         self._shutdown = False
@@ -342,6 +350,38 @@ class PersistentTTLCache:
         with self._dirty_lock:
             self._deleted_keys.add(key)
             self._dirty_keys.discard(key)
+
+    @contextmanager
+    def lock_key(self, key: str) -> Iterator[None]:
+        """Serialize work for a single cache key across threads (single-flight).
+
+        Callers use the double-checked pattern: read the cache, and only on a
+        miss enter ``lock_key`` and re-read before fetching. This collapses a
+        burst of concurrent identical fetches (e.g. parallel stream matching all
+        wanting the same league/date scoreboard) into one upstream request — the
+        first thread fetches and populates the cache, the rest wait and read it.
+
+        Locks are refcounted and removed when idle so the map stays bounded.
+        """
+        with self._keylocks_guard:
+            entry = self._keylocks.get(key)
+            if entry is None:
+                entry = [threading.Lock(), 0]
+                self._keylocks[key] = entry
+            entry[1] += 1  # register as a waiter before releasing the guard
+            lock = entry[0]
+
+        lock.acquire()
+        try:
+            yield
+        finally:
+            lock.release()
+            with self._keylocks_guard:
+                entry = self._keylocks.get(key)
+                if entry is not None:
+                    entry[1] -= 1
+                    if entry[1] <= 0:
+                        del self._keylocks[key]
 
     def clear(self) -> None:
         """Clear all cached values."""

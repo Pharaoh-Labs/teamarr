@@ -9,6 +9,7 @@ Single-use fakes (FakeDispatcharrChannel, FakeTemplate, FakeMappingSource,
 ...) stay local to their test file.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -34,6 +35,13 @@ class FakeCache:
 
     def delete(self, key):
         self.data.pop(key, None)
+
+    @contextmanager
+    def lock_key(self, key):
+        """No-op single-flight lock — get_events/get_event enter this before a
+        provider fetch; the real PersistentTTLCache serializes concurrent
+        misses, but tests run single-threaded so a bare yield suffices."""
+        yield
 
 
 @dataclass

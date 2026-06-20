@@ -11,6 +11,7 @@ and shared across every team (and with event-group matching).
 from teamarr.providers.espn.provider import ESPNProvider
 from teamarr.services import sports_data
 from teamarr.services.sports_data import SportsDataService
+from teamarr.utilities.cache import PersistentTTLCache
 
 
 class _StubMapping:
@@ -48,7 +49,11 @@ class _CountingClient:
 
 
 def _build(monkeypatch, *, optimized):
-    # Isolated cache per service so the two configurations don't share hits.
+    # Isolated, hermetic cache per service: stub SQLite load/flush so the shared
+    # cache starts empty and never reads from or pollutes the real service_cache
+    # DB, then reset the process-global singleton so a fresh one is built.
+    monkeypatch.setattr(PersistentTTLCache, "_load_from_sqlite", lambda self: None)
+    monkeypatch.setattr(PersistentTTLCache, "flush", lambda self: 0)
     monkeypatch.setattr(sports_data, "_shared_cache", None)
     client = _CountingClient()
     provider = ESPNProvider(client=client, league_mapping_source=_StubMappingSource())
