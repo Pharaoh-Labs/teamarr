@@ -231,6 +231,14 @@ class SportsDataService:
     def __init__(self, providers: list[SportsProvider] | None = None):
         self._providers: list[SportsProvider] = providers or []
         self._cache = _get_shared_cache()
+        # Let providers that scan day-by-day (ESPN team schedules) reuse the
+        # cached, league-wide get_events so a league's daily scoreboard is
+        # fetched once per run instead of once per team. Providers that don't
+        # expose the hook are unaffected.
+        for provider in self._providers:
+            setter = getattr(provider, "set_cached_events_fn", None)
+            if callable(setter):
+                setter(self.get_events)
 
     def add_provider(self, provider: SportsProvider) -> None:
         """Register a provider."""
