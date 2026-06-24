@@ -184,6 +184,7 @@ class TSDBProvider(SportsProvider):
                     events.append(event)
         return events
 
+
     def _get_racing_events(self, league: str) -> list[Event]:
         """Get all session-grouped racing events for a league's current season(s).
 

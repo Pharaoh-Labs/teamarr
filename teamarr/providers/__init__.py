@@ -18,8 +18,10 @@ to inject the LeagueMappingSource into providers.
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
+from teamarr.providers.nascar import NASCARProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.squiggle import SquiggleClient, SquiggleProvider
+from teamarr.providers.static import StaticCalendarProvider
 from teamarr.providers.supabase import SupabaseLeagueClient, SupabaseProvider
 from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 
@@ -110,6 +112,20 @@ def _create_squiggle_provider() -> SquiggleProvider:
     )
 
 
+def _create_nascar_provider() -> NASCARProvider:
+    """Factory for NASCAR provider with injected dependencies."""
+    return NASCARProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
+def _create_static_calendar_provider() -> StaticCalendarProvider:
+    """Factory for static calendar provider with injected dependencies."""
+    return StaticCalendarProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 # =============================================================================
 # PROVIDER REGISTRATION
 # =============================================================================
@@ -157,10 +173,26 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="nascar",
+    provider_class=NASCARProvider,
+    factory=_create_nascar_provider,
+    priority=35,  # NASCAR Cup/ORAP/Trucks — authoritative session schedules
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="tsdb",
     provider_class=TSDBProvider,
     factory=_create_tsdb_provider,
     priority=100,  # Fallback provider for boxing, etc.
+    enabled=True,
+)
+
+ProviderRegistry.register(
+    name="static",
+    provider_class=StaticCalendarProvider,
+    factory=_create_static_calendar_provider,
+    priority=110,  # Hand-maintained calendars for leagues with no live API (IMSA, WEC)
     enabled=True,
 )
 
@@ -188,6 +220,10 @@ __all__ = [
     # Squiggle (AFL)
     "SquiggleClient",
     "SquiggleProvider",
+    # NASCAR
+    "NASCARProvider",
+    # Static calendar (IMSA, WEC)
+    "StaticCalendarProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

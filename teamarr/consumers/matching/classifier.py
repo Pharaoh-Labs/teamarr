@@ -1451,7 +1451,15 @@ def classify_stream(
             has_team_pattern = False
             if sep:
                 sep_team1, sep_team2 = extract_teams_from_separator(text, sep, sep_position)
-                has_team_pattern = bool(sep_team1 or sep_team2)
+                if sep_team1 or sep_team2:
+                    # For "at"/"@" separators, a multi-word left part is a series
+                    # or race name (e.g. "NASCAR Cup Series at San Diego", or a
+                    # stream with "@ Jun 20" as a date marker), not a team abbrev.
+                    # Single-word left parts (e.g. "SD", "NYY") are real team codes.
+                    if sep.strip() in ("at", "@") and sep_team1 and len(sep_team1.split()) > 1:
+                        has_team_pattern = False
+                    else:
+                        has_team_pattern = True
 
             # Guard against hijacking a team-sport stream that leaked into a
             # racing-dominant group. A bare team name ("Maple Leafs") has no

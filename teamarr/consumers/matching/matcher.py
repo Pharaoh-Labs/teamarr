@@ -594,7 +594,7 @@ class StreamMatcher:
                 exclusion_reason="unclassifiable",
             )]
 
-        # Step 3: Gate TEAM_ONLY when disabled, then route by category
+        # Step 3: Gate TEAM_ONLY when disabled, then route by category.
         if classified.category == StreamCategory.TEAM_ONLY and not self._team_streams_enabled:
             return [MatchedStreamResult(
                 stream_name=stream_name,
@@ -604,6 +604,8 @@ class StreamMatcher:
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="team_streams_disabled",
             )]
+
+        outcomes = self._route_to_outcomes(classified, stream_id, target_date)
 
         # Gate the name-identifies-event categories when Stream Name matching is
         # disabled for this source. TEAM_ONLY is gated above by Team matching; the
@@ -704,27 +706,67 @@ class StreamMatcher:
                 continue
             attempted += 1
 
+            epg_input = build_match_input(program)
             classified = classify_stream(
-                build_match_input(program), league_event_type, self._custom_regex,
+                epg_input, league_event_type, self._custom_regex,
                 self._feed_home_terms, self._feed_away_terms,
             )
             if classified.category == StreamCategory.PLACEHOLDER:
                 continue
-            if classified.category == StreamCategory.TEAM_ONLY and not self._team_streams_enabled:
-                continue
 
-            # Anchor matching to the program's own broadcast instant (bead t5e).
-            # EPG titles carry no date/time, so a program would otherwise match
-            # purely by team names — and a series game whose title repeats across
-            # nights, or a post-game encore/replay, would bind to the wrong
-            # occurrence and anchor its attach/detach window to the wrong slot.
-            # The matcher gates candidate events to those airing within
-            # ANCHOR_MATCH_TOLERANCE of this instant (live broadcast only).
-            for outcome in self._route_to_outcomes(
-                classified, stream_id, target_date, anchor_dt=program.start_dt
-            ):
-                if not outcome.is_matched:
+            # TEAM_ONLY gate: skip team routing when disabled, but allow the
+            # racing fallback to run if racing leagues are present. A race title
+            # like "F1 | Monaco Grand Prix" classifies TEAM_ONLY in a mixed
+            # group — we must not silently drop it here.
+            if classified.category == StreamCategory.TEAM_ONLY and not self._team_streams_enabled:
+                if not any(
+                    self._league_event_types.get(lg) == "event"
+                    for lg in self._include_leagues
+                ):
                     continue
+                primary_outcomes: list[MatchOutcome] = []
+            else:
+                # Anchor matching to the program's own broadcast instant (bead t5e).
+                # EPG titles carry no date/time, so a program would otherwise match
+                # purely by team names — and a series game whose title repeats across
+                # nights, or a post-game encore/replay, would bind to the wrong
+                # occurrence and anchor its attach/detach window to the wrong slot.
+                # The matcher gates candidate events to those airing within
+                # ANCHOR_MATCH_TOLERANCE of this instant (live broadcast only).
+                primary_outcomes = list(self._route_to_outcomes(
+                    classified, stream_id, target_date, anchor_dt=program.start_dt
+                ))
+
+            # Pair each matched outcome with its effective classification so the
+            # racing fallback (which re-classifies) can pass the right object to
+            # _outcome_to_result without losing the RACING_EVENT category.
+            matched_pairs: list[tuple[MatchOutcome, ClassifiedStream]] = [
+                (o, classified) for o in primary_outcomes if o.is_matched
+            ]
+
+            # Racing fallback for mixed groups: if primary route found nothing
+            # and racing leagues are present, re-classify the EPG title with
+            # league_event_type="event" to see if it reads as a racing stream.
+            # Both "Formula 1 | Monaco Grand Prix" (TEAM_ONLY) and
+            # "NASCAR Cup Series | at San Diego" (TEAM_VS_TEAM) match here in
+            # groups that include racing leagues alongside team-sport leagues.
+            if not matched_pairs and classified.category != StreamCategory.RACING_EVENT:
+                if any(
+                    self._league_event_types.get(lg) == "event"
+                    for lg in self._include_leagues
+                ):
+                    racing_classified = classify_stream(
+                        epg_input, "event", self._custom_regex,
+                        self._feed_home_terms, self._feed_away_terms,
+                    )
+                    if racing_classified.category == StreamCategory.RACING_EVENT:
+                        racing_outcome = self._match_racing_event(
+                            racing_classified, stream_id, target_date
+                        )
+                        if racing_outcome.is_matched:
+                            matched_pairs.append((racing_outcome, racing_classified))
+
+            for outcome, eff_classified in matched_pairs:
                 # Tag as EPG and attach the program's broadcast window (183.5).
                 outcome.match_method = MatchMethod.EPG
                 outcome.epg_program_start = program.start_dt
@@ -744,7 +786,7 @@ class StreamMatcher:
                     "[EPG_MATCH] tvg=%s stream='%s' prog='%s' @%s -> event=%s '%s' @%s (Δ=%dm)",
                     tvg_id,
                     stream_name[:32],
-                    build_match_input(program)[:48],
+                    epg_input[:48],
                     program.start_dt.isoformat() if program.start_dt else "?",
                     ev_id or "?",
                     (getattr(ev, "short_name", None) or getattr(ev, "name", None) or "?")[:32],
@@ -760,7 +802,7 @@ class StreamMatcher:
                             outcome=outcome,
                             stream_id=stream_id,
                             stream_name=stream_name,
-                            classified=classified,
+                            classified=eff_classified,
                         ),
                     )
 

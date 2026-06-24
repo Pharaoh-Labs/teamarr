@@ -34,6 +34,7 @@ TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a f
 These leagues have low enough event volume to work within free tier limits:
 
 - CFL, Unrivaled, Norwegian Hockey, Boxing
+- IMSA (one event per round, well under the 15-event/season cap)
 
 ### Premium Tier Leagues
 

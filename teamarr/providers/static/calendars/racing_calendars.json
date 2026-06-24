@@ -1,0 +1,159 @@
+{
+  "_comment": "Hand-maintained race calendars for leagues with no live API coverage (no ESPN or TheSportsDB data). Dates/sessions below are SEED/EXAMPLE data based on typical season patterns and MUST be verified/updated against the official IMSA and FIA WEC season calendars before relying on them for EPG generation. All times are UTC.",
+
+  "imsa": [
+    {
+      "id": "imsa-2026-r1-daytona",
+      "name": "Rolex 24 At Daytona",
+      "short_name": "Rolex 24",
+      "circuit_name": "Daytona International Speedway",
+      "venue": {"city": "Daytona Beach", "state": "FL", "country": "USA"},
+      "sessions": [
+        {"code": "qualifying", "name": "Qualifying", "start_time": "2026-01-21T20:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-01-24T18:40:00+00:00"}
+      ]
+    },
+    {
+      "id": "imsa-2026-r2-sebring",
+      "name": "Mobil 1 Twelve Hours of Sebring",
+      "short_name": "Sebring 12 Hours",
+      "circuit_name": "Sebring International Raceway",
+      "venue": {"city": "Sebring", "state": "FL", "country": "USA"},
+      "sessions": [
+        {"code": "qualifying", "name": "Qualifying", "start_time": "2026-03-20T20:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-03-21T14:10:00+00:00"}
+      ]
+    },
+    {
+      "id": "imsa-2026-r3-long-beach",
+      "name": "Acura Grand Prix of Long Beach",
+      "short_name": "Long Beach",
+      "circuit_name": "Long Beach Street Circuit",
+      "venue": {"city": "Long Beach", "state": "CA", "country": "USA"},
+      "sessions": [
+        {"code": "qualifying", "name": "Qualifying", "start_time": "2026-04-18T22:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-04-19T20:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "imsa-2026-r4-watkins-glen",
+      "name": "Sahlen's Six Hours of the Glen",
+      "short_name": "Watkins Glen 6 Hours",
+      "circuit_name": "Watkins Glen International",
+      "venue": {"city": "Watkins Glen", "state": "NY", "country": "USA"},
+      "sessions": [
+        {"code": "qualifying", "name": "Qualifying", "start_time": "2026-06-27T18:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-06-28T15:10:00+00:00"}
+      ]
+    },
+    {
+      "id": "imsa-2026-r5-road-america",
+      "name": "Chevrolet Grand Prix at Road America",
+      "short_name": "Road America",
+      "circuit_name": "Road America",
+      "venue": {"city": "Elkhart Lake", "state": "WI", "country": "USA"},
+      "sessions": [
+        {"code": "qualifying", "name": "Qualifying", "start_time": "2026-08-08T19:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-08-09T17:35:00+00:00"}
+      ]
+    },
+    {
+      "id": "imsa-2026-r6-petit-le-mans",
+      "name": "Motul Petit Le Mans",
+      "short_name": "Petit Le Mans",
+      "circuit_name": "Road Atlanta",
+      "venue": {"city": "Braselton", "state": "GA", "country": "USA"},
+      "sessions": [
+        {"code": "qualifying", "name": "Qualifying", "start_time": "2026-10-09T19:30:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-10-10T14:10:00+00:00"}
+      ]
+    }
+  ],
+
+  "wec": [
+    {
+      "id": "wec-2026-r1-qatar",
+      "name": "Qatar 1812 km",
+      "short_name": "Qatar 1812km",
+      "circuit_name": "Lusail International Circuit",
+      "venue": {"city": "Lusail", "country": "Qatar"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-02-19T13:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-02-20T17:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-02-21T11:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "wec-2026-r2-imola",
+      "name": "6 Hours of Imola",
+      "short_name": "Imola 6 Hours",
+      "circuit_name": "Autodromo Enzo e Dino Ferrari",
+      "venue": {"city": "Imola", "country": "Italy"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-04-17T09:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-04-17T16:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-04-18T11:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "wec-2026-r3-spa",
+      "name": "6 Hours of Spa-Francorchamps",
+      "short_name": "Spa 6 Hours",
+      "circuit_name": "Circuit de Spa-Francorchamps",
+      "venue": {"city": "Stavelot", "country": "Belgium"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-05-08T11:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-05-08T18:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-05-09T12:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "wec-2026-r4-le-mans",
+      "name": "24 Hours of Le Mans",
+      "short_name": "Le Mans 24 Hours",
+      "circuit_name": "Circuit de la Sarthe",
+      "venue": {"city": "Le Mans", "country": "France"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-06-10T16:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-06-11T20:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-06-13T14:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "wec-2026-r5-cota",
+      "name": "Lone Star COTA 6 Hours",
+      "short_name": "COTA 6 Hours",
+      "circuit_name": "Circuit of the Americas",
+      "venue": {"city": "Austin", "state": "TX", "country": "USA"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-08-28T18:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-08-29T01:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-08-29T19:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "wec-2026-r6-fuji",
+      "name": "6 Hours of Fuji",
+      "short_name": "Fuji 6 Hours",
+      "circuit_name": "Fuji Speedway",
+      "venue": {"city": "Oyama", "country": "Japan"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-09-11T03:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-09-11T09:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-09-13T05:00:00+00:00"}
+      ]
+    },
+    {
+      "id": "wec-2026-r7-bahrain",
+      "name": "8 Hours of Bahrain",
+      "short_name": "Bahrain 8 Hours",
+      "circuit_name": "Bahrain International Circuit",
+      "venue": {"city": "Sakhir", "country": "Bahrain"},
+      "sessions": [
+        {"code": "free_practice", "name": "Free Practice", "start_time": "2026-11-13T12:00:00+00:00"},
+        {"code": "qualifying", "name": "Hyperpole", "start_time": "2026-11-13T17:00:00+00:00"},
+        {"code": "race", "name": "Race", "start_time": "2026-11-14T11:00:00+00:00"}
+      ]
+    }
+  ]
+}

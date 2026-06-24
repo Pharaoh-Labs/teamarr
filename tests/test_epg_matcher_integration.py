@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+from teamarr.consumers.matching.classifier import ClassifiedStream, StreamCategory
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
 from teamarr.consumers.matching.matcher import MatchedStreamResult, StreamMatcher
 from teamarr.consumers.matching.result import MatchMethod, MatchOutcome
@@ -33,7 +34,7 @@ def _prog(title="MLB Baseball", sub="Chicago Cubs at St. Louis Cardinals", cats=
     )
 
 
-def _bare_matcher(index, team_streams_enabled=True):
+def _bare_matcher(index, team_streams_enabled=True, racing_leagues=()):
     """A StreamMatcher with only the fields the EPG methods touch."""
     m = object.__new__(StreamMatcher)
     m._epg_index = index
@@ -41,7 +42,8 @@ def _bare_matcher(index, team_streams_enabled=True):
     m._feed_home_terms = None
     m._feed_away_terms = None
     m._team_streams_enabled = team_streams_enabled
-    m._league_event_types = {}
+    m._league_event_types = {lg: "event" for lg in racing_leagues}
+    m._include_leagues = set(racing_leagues)
     m._user_tz = ZoneInfo("UTC")
     return m
 
@@ -233,3 +235,132 @@ def test_reconcile_dedicated_epg_fills_when_name_empty():
     epg = [_epg_result()]
     out = m._reconcile_epg(name, epg, "espn")
     assert out == epg
+
+
+# ============================================ racing fallback in _match_via_epg
+#
+# In a mixed group (team-sport dominant), racing EPG titles don't classify as
+# RACING_EVENT on the primary pass — they land as TEAM_VS_TEAM (NASCAR "at City"
+# format) or TEAM_ONLY (F1/WEC separator-free titles).  The racing fallback must
+# re-classify them under league_event_type="event" and try the racing matcher.
+
+
+def _racing_matched_outcome(event_id="race1", start=None):
+    ev = SimpleNamespace(league="nascar-cup", id=event_id, start_time=start or BASE, short_name="Daytona 500")
+    return MatchOutcome.matched(MatchMethod.FUZZY, event=ev, confidence=0.9)
+
+
+def test_epg_racing_fallback_nascar_at_city(monkeypatch):
+    # NASCAR "at City" EPG format: title="NASCAR Cup Series", sub="at San Diego"
+    # → build_match_input → "NASCAR Cup Series | at San Diego"
+    # In a mixed group the DOMINANT type is "team_vs_team", so this classifies
+    # TEAM_VS_TEAM on the primary pass.  Primary team route finds no match;
+    # racing fallback re-classifies with "event" type → RACING_EVENT and matches.
+    prog = _prog(title="NASCAR Cup Series", sub="at San Diego")
+    index = EPGProgramIndex({"espn": [prog]})
+    m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("nascar-cup",))
+    # Simulate a mixed group: dominant type is "team_vs_team" (NASCAR is a minority)
+    monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
+    monkeypatch.setattr(m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    monkeypatch.setattr(m, "_match_racing_event",
+        lambda classified, sid, td: _racing_matched_outcome())
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+
+    assert len(out) == 1
+    assert out[0].match_method == MatchMethod.EPG
+    assert out[0].epg_program_start == BASE
+    assert out[0].event.id == "race1"
+
+
+def test_epg_racing_fallback_f1_team_only(monkeypatch):
+    # F1 separator-free EPG: title="Formula 1", sub="Monaco Grand Prix"
+    # → "Formula 1 | Monaco Grand Prix" → TEAM_ONLY in a mixed group.
+    # With team_streams_enabled=False, the TEAM_ONLY gate normally returns early —
+    # but it must not when racing leagues are present.
+    prog = _prog(title="Formula 1", sub="Monaco Grand Prix")
+    index = EPGProgramIndex({"espn": [prog]})
+    m = _bare_matcher(index, team_streams_enabled=False, racing_leagues=("f1",))
+    monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
+    routed = []
+    monkeypatch.setattr(m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: routed.append(1) or [])
+    race_ev = SimpleNamespace(league="f1", id="monaco_gp", start_time=BASE, short_name="Monaco GP")
+    monkeypatch.setattr(m, "_match_racing_event",
+        lambda classified, sid, td: MatchOutcome.matched(MatchMethod.FUZZY, event=race_ev, confidence=0.9))
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+
+    assert len(out) == 1
+    assert out[0].match_method == MatchMethod.EPG
+    assert out[0].event.id == "monaco_gp"
+    assert not routed  # TEAM_ONLY gate was bypassed, not routed through team path
+
+
+def test_epg_racing_fallback_not_triggered_for_team_sport_title(monkeypatch):
+    # "MLB Baseball | Chicago Cubs at St. Louis Cardinals" must not produce a
+    # racing match even in a mixed group with racing leagues present. The racing
+    # fallback may attempt a match but the racing matcher returns no result for
+    # a baseball title, so the final output is still empty.
+    prog = _prog(title="MLB Baseball", sub="Chicago Cubs at St. Louis Cardinals")
+    index = EPGProgramIndex({"espn": [prog]})
+    m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("nascar-cup",))
+    monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
+    monkeypatch.setattr(m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    monkeypatch.setattr(m, "_match_racing_event",
+        lambda *a, **kw: MatchOutcome.failed(None))
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+
+    assert out == []
+
+
+def test_epg_racing_fallback_not_triggered_without_racing_leagues(monkeypatch):
+    # Without racing leagues in the group, _try_racing_fallback must bail out
+    # immediately — even if the EPG title happens to look like a racing stream.
+    prog = _prog(title="NASCAR Cup Series", sub="at San Diego")
+    index = EPGProgramIndex({"espn": [prog]})
+    m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=())
+    monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
+    monkeypatch.setattr(m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    racing_called = []
+    monkeypatch.setattr(m, "_match_racing_event",
+        lambda *a, **kw: racing_called.append(1) or MatchOutcome.failed(None))
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+
+    assert out == []
+    assert not racing_called
+
+
+def test_epg_racing_fallback_uses_racing_classification_in_result(monkeypatch):
+    # The result returned from the racing fallback must carry the RACING_EVENT
+    # classification (not the original TEAM_VS_TEAM), so downstream rules that
+    # key on category (e.g. stream ordering) see the right type.
+    prog = _prog(title="NASCAR Cup Series", sub="at San Diego")
+    index = EPGProgramIndex({"espn": [prog]})
+    m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("nascar-cup",))
+    monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
+    monkeypatch.setattr(m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    monkeypatch.setattr(m, "_match_racing_event",
+        lambda classified, sid, td: _racing_matched_outcome())
+    captured = {}
+    def capture_result(outcome, *, stream_id, stream_name, classified):
+        captured["category"] = classified.category
+        outcome.match_method = MatchMethod.EPG
+        outcome.epg_program_start = BASE
+        outcome.epg_program_end = BASE + timedelta(hours=3)
+        return outcome
+    monkeypatch.setattr(m, "_outcome_to_result", capture_result)
+
+    m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+
+    assert captured.get("category") == StreamCategory.RACING_EVENT

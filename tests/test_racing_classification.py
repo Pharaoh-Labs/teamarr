@@ -31,6 +31,19 @@ def test_nascar_stream_classifies_racing():
     assert c.category == StreamCategory.RACING_EVENT
 
 
+def test_nascar_espn_at_city_format_classifies_racing():
+    # ESPN names NASCAR events "[Series] at [City]" — the "at" must not trigger
+    # team extraction since "NASCAR Cup Series" is a series name, not a team abbrev.
+    c = classify_stream("NASCAR Cup Series at San Diego", league_event_type="event")
+    assert c.category == StreamCategory.RACING_EVENT
+
+
+def test_nascar_orap_at_city_format_classifies_racing():
+    c = classify_stream("NASCAR O'Reilly Auto Parts Series at San Diego", league_event_type="event")
+    assert c.category == StreamCategory.RACING_EVENT
+
+
+
 def test_racing_only_applies_for_event_league_type():
     # Same name, but a non-racing (team) group must not route to racing.
     c = classify_stream("F1: Monaco Grand Prix", league_event_type="team")

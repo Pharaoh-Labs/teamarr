@@ -1371,6 +1371,9 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "broadcast_feed_team": {
         "NBA": "Detroit Pistons",
     },
+    # ==========================================================================
+    # MOTORSPORTS - F1/NASCAR/IndyCar/MotoGP specific variables (event EPG only)
+    # ==========================================================================
     "race_name": {
         "F1": "Monaco Grand Prix",
     },
