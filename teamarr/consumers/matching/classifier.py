@@ -1029,20 +1029,41 @@ def is_event_card(text: str, league_event_type: str | None = None) -> bool:
     return detected == "EVENT_CARD"
 
 
-def is_racing(league_event_type: str | None = None) -> bool:
+# Known racing league codes (event_type='event' in schema). Used as a
+# secondary trigger so streams in mixed-sport groups (where team_vs_team
+# dominates the league_event_type vote) still reach the RACING_EVENT path
+# when detect_league_hint() already identified them as motorsports.
+_RACING_LEAGUE_HINTS: frozenset[str] = frozenset(
+    {"f1", "nascar-cup", "nascar-xfinity", "nascar-truck", "indycar", "motogp", "imsa", "wec"}
+)
+
+
+def is_racing(
+    league_event_type: str | None = None,
+    league_hint: str | list[str] | None = None,
+) -> bool:
     """Check if a stream's league is a racing/motorsports league.
 
-    Unlike combat sports, racing has no reliable text keywords (stream names
-    are typically "F1: Monaco Grand Prix" or "NASCAR Cup - Race"), so this
-    relies entirely on the league's configured `event_type`.
+    Two independent triggers (mirrors is_event_card() pattern):
+    1. league_event_type == "event" — dominant league type gate
+    2. league_hint is a known racing league code — text-based fallback
+
+    The fallback lets streams in mixed-sport groups (where team_vs_team
+    dominates) still reach the RACING_EVENT path when the league hint
+    already identifies them as motorsports (e.g. "IMSA" in a Peacock group).
 
     Args:
         league_event_type: event_type from leagues table (e.g., "event" for racing)
+        league_hint: Detected league hint from stream text
 
     Returns:
         True if the league is configured as an "event" (racing) league
     """
-    return league_event_type == "event"
+    if league_event_type == "event":
+        return True
+    if isinstance(league_hint, str) and league_hint in _RACING_LEAGUE_HINTS:
+        return True
+    return False
 
 
 def extract_event_card_hint(text: str) -> str | None:
@@ -1446,7 +1467,7 @@ def classify_stream(
         # has a game separator (vs/@/at) with extractable team names (e.g.
         # "SD at BAL"), it's a team-sport stream that's leaked into a
         # racing-only league set - let it fall through to Step 4 instead.
-        if result is None and is_racing(league_event_type):
+        if result is None and is_racing(league_event_type, league_hint):
             sep, sep_position = find_game_separator(text)
             has_team_pattern = False
             if sep:

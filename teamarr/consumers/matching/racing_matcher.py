@@ -221,7 +221,8 @@ class RacingMatcher:
         best_event: Event | None = None
 
         for event in events:
-            for candidate in (event.name, event.short_name, event.circuit_name):
+            venue_country = event.venue.country if event.venue else None
+            for candidate in (event.name, event.short_name, event.circuit_name, venue_country):
                 if not candidate:
                     continue
                 score = fuzz.token_set_ratio(stream_norm, normalize_text(candidate))
