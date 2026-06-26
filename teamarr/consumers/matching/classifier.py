@@ -1041,20 +1041,23 @@ _RACING_LEAGUE_HINTS: frozenset[str] = frozenset(
 def is_racing(
     league_event_type: str | None = None,
     league_hint: str | list[str] | None = None,
+    sport_hint: str | list[str] | None = None,
 ) -> bool:
     """Check if a stream's league is a racing/motorsports league.
 
-    Two independent triggers (mirrors is_event_card() pattern):
+    Three independent triggers (mirrors is_event_card() pattern):
     1. league_event_type == "event" — dominant league type gate
-    2. league_hint is a known racing league code — text-based fallback
+    2. league_hint is a known racing league code — league keyword fallback
+    3. sport_hint == "Racing" — sport keyword fallback
 
-    The fallback lets streams in mixed-sport groups (where team_vs_team
-    dominates) still reach the RACING_EVENT path when the league hint
-    already identifies them as motorsports (e.g. "IMSA" in a Peacock group).
+    Triggers 2 and 3 let streams in mixed-sport groups (where team_vs_team
+    dominates) still reach the RACING_EVENT path when text-based detection
+    already identifies them as motorsports.
 
     Args:
         league_event_type: event_type from leagues table (e.g., "event" for racing)
         league_hint: Detected league hint from stream text
+        sport_hint: Detected sport hint from stream text
 
     Returns:
         True if the league is configured as an "event" (racing) league
@@ -1062,6 +1065,8 @@ def is_racing(
     if league_event_type == "event":
         return True
     if isinstance(league_hint, str) and league_hint in _RACING_LEAGUE_HINTS:
+        return True
+    if isinstance(sport_hint, str) and sport_hint.lower() == "racing":
         return True
     return False
 
@@ -1467,7 +1472,7 @@ def classify_stream(
         # has a game separator (vs/@/at) with extractable team names (e.g.
         # "SD at BAL"), it's a team-sport stream that's leaked into a
         # racing-only league set - let it fall through to Step 4 instead.
-        if result is None and is_racing(league_event_type, league_hint):
+        if result is None and is_racing(league_event_type, league_hint, sport_hint):
             sep, sep_position = find_game_separator(text)
             has_team_pattern = False
             if sep:
