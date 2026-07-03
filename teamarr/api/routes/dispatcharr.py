@@ -56,26 +56,20 @@ def list_m3u_groups(account_id: int) -> list[dict]:
     if not conn:
         raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
 
-    # Get all groups first
-    all_groups = conn.m3u.list_groups()
+    # The account detail endpoint carries per-group stream counts, so this is
+    # two requests total instead of one stream listing per group (issue #265)
+    names_by_id = {g.id: g.name for g in conn.m3u.list_groups()}
+    counts = conn.m3u.get_account_group_counts(account_id)
 
-    # Get streams filtered by account to find groups with streams from this account
-    # Note: This is an approximation - Dispatcharr may not directly support
-    # filtering groups by account, so we list streams per group
-    result = []
-    for group in all_groups:
-        # Count streams for this group from this account
-        streams = conn.m3u.list_streams(group_name=group.name, account_id=account_id, limit=1000)
-        if streams:  # Only include groups that have streams from this account
-            result.append(
-                {
-                    "id": group.id,
-                    "name": group.name,
-                    "stream_count": len(streams),
-                }
-            )
-
-    return result
+    return [
+        {
+            "id": group_id,
+            "name": names_by_id[group_id],
+            "stream_count": count,
+        }
+        for group_id, count in counts.items()
+        if count > 0 and group_id in names_by_id
+    ]
 
 
 def _natural_sort_key(name: str) -> list:
