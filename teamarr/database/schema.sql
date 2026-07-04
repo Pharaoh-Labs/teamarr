@@ -1120,9 +1120,9 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('ercc',  'espn', 'rugby/271937',    NULL, 'European Rugby Champions Cup',    'rugby', 'https://upload.wikimedia.org/wikipedia/en/6/65/InvestecChampionsCupLogo.svg', NULL, 1, 'ERCC',  'ercc',  'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('epcr',  'espn', 'rugby/272073',    NULL, 'European Rugby Challenge Cup',    'rugby', 'https://upload.wikimedia.org/wikipedia/commons/1/17/EPCR_Logo.png', NULL, 1, 'EPCR',  'epcr',  'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('mlr',   'espn', 'rugby/289262',    NULL, 'Major League Rugby',              'rugby', 'https://upload.wikimedia.org/wikipedia/commons/b/b8/MLR_logo.png', NULL, 1, 'MLR',   'mlr',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('cc',    'espn', 'rugby/270555',    NULL, 'Currie Cup',                      'rugby', 'https://upload.wikimedia.org/wikipedia/en/b/bd/Currie_Cup_logo.svg', NULL, 1, 'CC',    'cc',    'team_vs_team', NULL, NULL, NULL, NULL, 1),
+
     ('npc',   'espn', 'rugby/270563',    NULL, 'National Provincial Championship', 'rugby', 'https://upload.wikimedia.org/wikipedia/en/8/8e/NPC-Logo_50_Years.png', NULL, 1, 'NPC',   'npc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('urba',  'espn', 'rugby/2009',      NULL, 'URBA Primera A',                  'rugby', 'https://upload.wikimedia.org/wikipedia/en/1/1f/Urba_logo.png', NULL, 1, 'URBA',  'urba',  'team_vs_team', NULL, NULL, NULL, NULL, 1),
+
     ('itm',   'espn', 'rugby/289234',    NULL, 'International Test Match',        'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/97/World_Rugby_logo.svg', NULL, 1, 'ITM',   'itm',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('lions', 'espn', 'rugby/268565',    NULL, 'British and Irish Lions Tour',    'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/93/British_%26_Irish_Lions_logo_%282023%29.svg', NULL, 1, 'Lions', 'lions', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('om7s',  'espn', 'rugby/282',       NULL, 'Olympic Men''s Rugby Sevens',     'rugby', 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Rugby_sevens_pictogram.svg', NULL, 1, 'OM7S',  'om7s',  'team_vs_team', NULL, NULL, NULL, NULL, 1),
@@ -1142,9 +1142,8 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nascar-xfinity', 'espn', 'racing/nascar-secondary', NULL, 'NASCAR Xfinity Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Xfinity', 'nascar-xfinity', 'event', 'NASCAR Racing', NULL, NULL, NULL, 1),
     ('nascar-truck', 'espn', 'racing/nascar-truck', NULL, 'NASCAR Craftsman Truck Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Trucks', 'nascar-truck', 'event', 'NASCAR Racing', NULL, NULL, NULL, 1),
     ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/i/espn/teamlogos/500/indycar_series.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL, 1),
-    -- Disabled: ESPN's racing/motogp scoreboard endpoint returns HTTP 400 (no usable schedule/logo data).
-    -- Re-enable once migrated to TSDB (idLeague 4407) - planned v2 feature alongside IMSA/WEC session grouping.
-    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL, 0),
+
+
 
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
     -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).
