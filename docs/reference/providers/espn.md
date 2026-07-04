@@ -8,7 +8,7 @@ docs_version: "2.3.1"
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 91 pre-configured leagues plus ~250 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 109 pre-configured leagues plus ~250 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -56,11 +56,11 @@ baseball/mlb
 | Sport | Leagues | Notes |
 |-------|---------|-------|
 | Football | NFL, NCAAF, UFL | |
-| Basketball | NBA, WNBA, G League, NCAAM, NCAAW, NBL (Australia), FIBA World Cup, Olympics M/W | |
+| Basketball | NBA, WNBA, G League, NCAAM, NCAAW, NBL (Australia), FIBA World Cup, Olympics M/W, Summer League | |
 | Hockey | NHL, NCAA M/W, Olympics M/W | |
-| Baseball | MLB | MiLB handled by MLB Stats provider |
+| Baseball | MLB, WBC, Caribbean Series, LIDOM/LMP/LBPRC/LVBP winter leagues, Little League WS, Olympics | MiLB handled by MLB Stats provider |
 | Soccer | 44 pre-configured, ~250 discovered | Dot notation: `eng.1`, `ger.2` |
-| Combat Sports | UFC | Event Card matching |
+| Combat Sports | UFC, PFL, LFA, Cage Warriors | Event Card matching |
 | Lacrosse | NLL, PLL, NCAA M/W | |
 | Volleyball | NCAA M/W | |
 

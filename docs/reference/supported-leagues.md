@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **138 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **162 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -67,7 +67,13 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | National Basketball League (Australia) | `nbl` | ESPN |
 | Men's Basketball - Olympics | `olymb` | ESPN |
 | Women's Basketball - Olympics | `olywb` | ESPN |
+| NBA Summer League | `nbasl` | ESPN |
 | Unrivaled | `unrivaled` | TSDB |
+| EuroLeague | `euroleague` | TSDB **P** |
+| EuroCup | `eurocup` | TSDB **P** |
+| Spanish Liga ACB | `liga-acb` | TSDB **P** |
+| Australian WNBL | `wnbl` | TSDB |
+| Argentine LNB | `lnb` | TSDB **P** |
 
 ---
 
@@ -122,6 +128,12 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | League | ID | Provider |
 |--------|-----|----------|
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | TSDB |
+| Kontinental Hockey League | `khl` | TSDB **P** |
+| Swedish Hockey League | `shl` | TSDB **P** |
+| Finnish Liiga | `liiga` | TSDB **P** |
+| German DEL | `del` | TSDB **P** |
+| Swiss National League | `swiss-nl` | TSDB **P** |
+| Czech Extraliga | `czech-extraliga` | TSDB **P** |
 
 ---
 
@@ -138,6 +150,14 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | World Baseball Classic | `wbc` | ESPN |
 | NCAA Baseball | `ncaabb` | ESPN |
 | NCAA Softball | `ncaasbw` | ESPN |
+| Caribbean Series | `caribbean-series` | ESPN |
+| Dominican Winter League | `lidom` | ESPN |
+| Mexican Winter League | `lmp` | ESPN |
+| Puerto Rican Winter League | `lbprc` | ESPN |
+| Venezuelan Winter League | `lvbp` | ESPN |
+| Little League World Series | `llws` | ESPN |
+| Little League Softball World Series | `llsws` | ESPN |
+| Men's Baseball - Olympics | `olybb` | ESPN |
 
 ---
 
@@ -257,6 +277,9 @@ Combat sports are **Event Only** - no team import available.
 | League | ID | Provider | Type |
 |--------|-----|----------|------|
 | Ultimate Fighting Championship | `ufc` | ESPN | Event Card |
+| Professional Fighters League | `pfl` | ESPN | Event Card |
+| Legacy Fighting Alliance | `lfa` | ESPN | Event Card |
+| Cage Warriors | `cage-warriors` | ESPN | Event Card |
 | Boxing | `boxing` | TSDB | Event Card |
 
 Combat sports use "Event Card" matching rather than team vs team matching.
@@ -315,6 +338,7 @@ Cricket leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is
 | Women's Rugby World Cup | `wrwc` | ESPN |
 | Six Nations | `6n` | ESPN |
 | The Rugby Championship | `trc` | ESPN |
+| Nations Championship | `natc` | ESPN |
 | Super Rugby Pacific | `super-rugby` | ESPN |
 | United Rugby Championship | `urc` | ESPN |
 | Gallagher Premiership | `prem` | ESPN |

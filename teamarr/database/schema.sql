@@ -938,6 +938,8 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('womens-college-basketball', 'espn', 'basketball/womens-college-basketball', NULL, 'NCAA Women''s Basketball', 'basketball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png', NULL, 1, 'NCAAW', 'ncaaw', 'team_vs_team', 'Women''s College Basketball', NULL, NULL, NULL, 1),
     ('fiba', 'espn', 'basketball/fiba', NULL, 'FIBA World Cup', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/fiba.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/fiba.png', 1, 'FIBA', 'fiba', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('nbl', 'espn', 'basketball/nbl', NULL, 'National Basketball League (Australia)', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nbl.png', 1, 'NBL', 'nbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    -- ESPN splits Summer League by venue; nba-summer-las-vegas is the main event (all 30 NBA teams). No dedicated logo.
+    ('nba-summer-las-vegas', 'espn', 'basketball/nba-summer-las-vegas', NULL, 'NBA Summer League', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nba.png', 1, 'NBA Summer League', 'nbasl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Basketball - Olympics (ESPN)
     ('mens-olympics-basketball', 'espn', 'basketball/mens-olympics-basketball', NULL, 'Men''s Basketball - Olympics', 'basketball', 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Basketball_pictogram.svg', NULL, 1, 'Olympic Basketball', 'olymb', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
@@ -945,6 +947,11 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Basketball (TSDB) - Leagues not on ESPN
     ('unrivaled', 'tsdb', '5622', 'Unrivaled Basketball', 'Unrivaled', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/71mier1746291561.png', NULL, 1, NULL, 'unrivaled', 'team_vs_team', 'Unrivaled Basketball', NULL, NULL, 'free', 1),
+    ('euroleague', 'tsdb', '4546', 'EuroLeague Basketball', 'EuroLeague', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/7xjtuy1554397263.png', NULL, 1, 'EuroLeague', 'euroleague', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('eurocup', 'tsdb', '4547', 'EuroCup Basketball', 'EuroCup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/w54nor1554757326.png', NULL, 1, 'EuroCup', 'eurocup', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('liga-acb', 'tsdb', '4408', 'Spanish Liga ACB', 'Spanish Liga ACB', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/4n3h6z1572778356.png', NULL, 1, 'ACB', 'liga-acb', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('wnbl', 'tsdb', '5113', 'Australian WNBL', 'Australian WNBL', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/hnate81749406441.png', NULL, 1, 'WNBL', 'wnbl', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
+    ('lnb', 'tsdb', '4734', 'Argentine LNB', 'Argentine LNB', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/exea481740429840.png', NULL, 1, 'LNB', 'lnb', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
 
     -- Hockey (ESPN)
     ('nhl', 'espn', 'hockey/nhl', NULL, 'National Hockey League', 'hockey', 'https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png', NULL, 1, 'NHL', 'nhl', 'team_vs_team', 'NHL Hockey', NULL, NULL, NULL, 1),
@@ -979,6 +986,12 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Hockey - European Leagues (TSDB)
     ('norwegian-hockey', 'tsdb', '4926', 'Norwegian Fjordkraft-ligaen', 'Norwegian Fjordkraft-ligaen', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/lpfdvc1697194460.png', NULL, 1, NULL, 'norwegian-hockey', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
+    ('khl', 'tsdb', '4920', 'Russian KHL', 'Kontinental Hockey League', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/tfmf8l1615492008.png', NULL, 1, 'KHL', 'khl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('shl', 'tsdb', '4419', 'Swedish Hockey League', 'Swedish Hockey League', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/95fnqb1547547893.png', NULL, 1, 'SHL', 'shl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('liiga', 'tsdb', '4931', 'Finnish Liiga', 'Finnish Liiga', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/thj2p31780638296.png', NULL, 1, 'Liiga', 'liiga', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('del', 'tsdb', '4925', 'German DEL', 'German DEL', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/ttrhds1615493883.png', NULL, 1, 'DEL', 'del', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('swiss-nl', 'tsdb', '4934', 'Swiss National League', 'Swiss National League', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/bibbao1626129533.png', NULL, 1, 'Swiss NL', 'swiss-nl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('czech-extraliga', 'tsdb', '4923', 'Czech Extraliga', 'Czech Extraliga', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/mx7f7p1615493091.png', NULL, 1, 'Extraliga', 'czech-extraliga', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
 
     -- Australian Football (TSDB)
     ('afl', 'squiggle', 'afl', NULL, 'Australian Football League', 'australian-football', 'https://r2.thesportsdb.com/images/media/league/badge/wvx4721525519372.png', NULL, 1, 'AFL', 'afl', 'team_vs_team', 'AFL', NULL, NULL, NULL, 1),
@@ -994,6 +1007,17 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('college-softball', 'espn', 'baseball/college-softball', NULL, 'NCAA Softball', 'softball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/softball.png', NULL, 1, NULL, 'ncaasbw', 'team_vs_team', 'College Softball', NULL, NULL, NULL, 1),
     -- ESPN serves no dedicated WBC league logo (only a generic baseball icon), so hardcode the Wikimedia Commons mark.
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/World_Baseball_Classic_logo.svg/500px-World_Baseball_Classic_logo.svg.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL, NULL, 1),
+    -- Winter/Caribbean leagues and Little League have no dedicated ESPN league logo (only the generic baseball icon).
+    ('caribbean-series', 'espn', 'baseball/caribbean-series', NULL, 'Caribbean Series', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'Serie del Caribe', 'caribbean-series', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('dominican-winter-league', 'espn', 'baseball/dominican-winter-league', NULL, 'Dominican Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LIDOM', 'lidom', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('mexican-winter-league', 'espn', 'baseball/mexican-winter-league', NULL, 'Mexican Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LMP', 'lmp', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('puerto-rican-winter-league', 'espn', 'baseball/puerto-rican-winter-league', NULL, 'Puerto Rican Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LBPRC', 'lbprc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('venezuelan-winter-league', 'espn', 'baseball/venezuelan-winter-league', NULL, 'Venezuelan Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LVBP', 'lvbp', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('llb', 'espn', 'baseball/llb', NULL, 'Little League World Series', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LLWS', 'llws', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('lls', 'espn', 'baseball/lls', NULL, 'Little League Softball World Series', 'softball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LLSWS', 'llsws', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+
+    -- Baseball - Olympics (ESPN)
+    ('olympics-baseball', 'espn', 'baseball/olympics-baseball', NULL, 'Men''s Baseball - Olympics', 'baseball', 'https://upload.wikimedia.org/wikipedia/commons/3/3c/Baseball_pictogram.svg', NULL, 1, 'Olympic Baseball', 'olybb', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('cbl', 'supabase', 'https://cbl.ca', NULL, 'Canadian Baseball League', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Canadian_Baseball_League.svg/1280px-Canadian_Baseball_League.svg.png', NULL, 1, 'CBL', 'cbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Soccer (ESPN)
@@ -1064,6 +1088,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- MMA (ESPN) - Combat sport with event cards
     ('ufc', 'espn', 'mma/ufc', NULL, 'Ultimate Fighting Championship', 'mma', 'https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png', NULL, 0, 'UFC', 'ufc', 'event_card', NULL, NULL, NULL, NULL, 1),
+    ('pfl', 'espn', 'mma/pfl', NULL, 'Professional Fighters League', 'mma', 'https://a.espncdn.com/i/teamlogos/leagues/500/pfl.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/pfl.png', 0, 'PFL', 'pfl', 'event_card', NULL, NULL, NULL, NULL, 1),
+    -- LFA and Cage Warriors have no dedicated ESPN league logo (only the generic MMA icon).
+    ('lfa', 'espn', 'mma/lfa', NULL, 'Legacy Fighting Alliance', 'mma', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-mma.png', NULL, 0, 'LFA', 'lfa', 'event_card', NULL, NULL, NULL, NULL, 1),
+    ('cage-warriors', 'espn', 'mma/cage-warriors', NULL, 'Cage Warriors', 'mma', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-mma.png', NULL, 0, 'Cage Warriors', 'cage-warriors', 'event_card', NULL, NULL, NULL, NULL, 1),
 
     -- Volleyball (ESPN)
     ('mens-college-volleyball', 'espn', 'volleyball/mens-college-volleyball', NULL, 'NCAA Men''s Volleyball', 'volleyball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png', NULL, 1, 'NCAA Volleyball', 'ncaavb', 'team_vs_team', 'Men''s College Volleyball', NULL, NULL, NULL, 1),
@@ -1087,6 +1115,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('wrwc',  'espn', 'rugby/289237',    NULL, 'Women''s Rugby World Cup',        'rugby', 'https://upload.wikimedia.org/wikipedia/commons/6/66/Rugby_World_Cup_footer_logo_%28post-2023%29.svg', NULL, 1, 'WRWC',  'wrwc',  'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('6n',    'espn', 'rugby/180659',    NULL, 'Six Nations',                     'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/72/Guinness_Six_Nations_logo.png', NULL, 1, '6N',    '6n',    'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('trc',   'espn', 'rugby/244293',    NULL, 'The Rugby Championship',          'rugby', 'https://upload.wikimedia.org/wikipedia/commons/6/69/The_Rugby_Championship_logo_%28white_background%29.png', NULL, 1, 'TRC',   'trc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('nations-championship', 'espn', 'rugby/17567', NULL, 'Nations Championship', 'rugby', 'https://upload.wikimedia.org/wikipedia/en/9/97/World_Rugby_logo.svg', NULL, 1, 'NATC', 'natc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('super-rugby', 'espn', 'rugby/242041', NULL, 'Super Rugby Pacific',          'rugby', 'https://upload.wikimedia.org/wikipedia/en/2/25/Super_Rugby_Pacific_logo.png', NULL, 1, 'SRP',   'srp',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('urc',   'espn', 'rugby/270557',    NULL, 'United Rugby Championship',       'rugby', 'https://upload.wikimedia.org/wikipedia/commons/d/d5/United_Rugby_Championship_logo.png', NULL, 1, 'URC',   'urc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('prem',  'espn', 'rugby/267979',    NULL, 'Gallagher Premiership',           'rugby', 'https://upload.wikimedia.org/wikipedia/commons/7/76/PREM_Rugby_logo_2025.png', NULL, 1, 'PREM',  'prem',  'team_vs_team', NULL, NULL, NULL, NULL, 1),

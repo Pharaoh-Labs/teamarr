@@ -33,13 +33,15 @@ TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a f
 
 These leagues have low enough event volume to work within free tier limits:
 
-- CFL, Unrivaled, Norwegian Hockey, Boxing
+- CFL, Unrivaled, Australian WNBL, Norwegian Hockey, Boxing
 
 ### Premium Tier Leagues
 
 These leagues have high event volume or unreliable free-tier data and require a premium key for full coverage:
 
 - AFL (Australian football)
+- EuroLeague, EuroCup, Liga ACB, Argentine LNB (basketball)
+- KHL, SHL, Liiga, DEL, Swiss National League, Czech Extraliga (hockey)
 - IPL, BBL, SA20 (cricket)
 - Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
 - IMSA and WEC (motor racing). WEC's 62 events/season exceeds the free `eventsseason.php` 15-event cap; IMSA fits it but is gated premium too, so all TSDB racing is premium (no silent truncation if a schedule grows).
@@ -58,7 +60,18 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 |--------|------|---------|-------|------|
 | Canadian Football League | `cfl` | 4405 | Football | Free |
 | Unrivaled | `unrivaled` | 5622 | Basketball | Free |
+| Australian WNBL | `wnbl` | 5113 | Basketball | Free |
+| EuroLeague | `euroleague` | 4546 | Basketball | Premium |
+| EuroCup | `eurocup` | 4547 | Basketball | Premium |
+| Spanish Liga ACB | `liga-acb` | 4408 | Basketball | Premium |
+| Argentine LNB | `lnb` | 4734 | Basketball | Premium |
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
+| Kontinental Hockey League | `khl` | 4920 | Hockey | Premium |
+| Swedish Hockey League | `shl` | 4419 | Hockey | Premium |
+| Finnish Liiga | `liiga` | 4931 | Hockey | Premium |
+| German DEL | `del` | 4925 | Hockey | Premium |
+| Swiss National League | `swiss-nl` | 4934 | Hockey | Premium |
+| Czech Extraliga | `czech-extraliga` | 4923 | Hockey | Premium |
 | Boxing | `boxing` | 4445 | Boxing | Free |
 | Australian Football League | `afl` | 4456 | Australian Football | Premium |
 | Indian Premier League | `ipl` | 4460 | Cricket | Premium |
