@@ -454,7 +454,7 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
     # Leagues without summary endpoint support
     # These leagues only have scoreboard data - no per-event detail endpoint
     # When get_event() is called for these, we return None immediately to avoid 404s
-    LEAGUES_WITHOUT_SUMMARY = {"ufc"}
+    LEAGUES_WITHOUT_SUMMARY = {"ufc", "pfl", "lfa", "cage-warriors"}
 
     # Leagues without teams endpoint support
     # Leagues where /teams endpoint doesn't work or isn't needed:
@@ -462,6 +462,9 @@ class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
     # - Olympics: teams only in events, no team filtering/import needed
     LEAGUES_WITHOUT_TEAMS = {
         "ufc",
+        "pfl",
+        "lfa",
+        "cage-warriors",
         "boxing",
         "olympics-mens-ice-hockey",
         "olympics-womens-ice-hockey",
