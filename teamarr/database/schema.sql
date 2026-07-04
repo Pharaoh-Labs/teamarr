@@ -1009,10 +1009,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/World_Baseball_Classic_logo.svg/500px-World_Baseball_Classic_logo.svg.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL, NULL, 1),
     -- Winter/Caribbean leagues and Little League have no dedicated ESPN league logo (only the generic baseball icon).
     ('caribbean-series', 'espn', 'baseball/caribbean-series', NULL, 'Caribbean Series', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'Serie del Caribe', 'caribbean-series', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('dominican-winter-league', 'espn', 'baseball/dominican-winter-league', NULL, 'Dominican Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LIDOM', 'lidom', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('mexican-winter-league', 'espn', 'baseball/mexican-winter-league', NULL, 'Mexican Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LMP', 'lmp', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('puerto-rican-winter-league', 'espn', 'baseball/puerto-rican-winter-league', NULL, 'Puerto Rican Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LBPRC', 'lbprc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('venezuelan-winter-league', 'espn', 'baseball/venezuelan-winter-league', NULL, 'Venezuelan Winter League', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LVBP', 'lvbp', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+
     ('llb', 'espn', 'baseball/llb', NULL, 'Little League World Series', 'baseball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LLWS', 'llws', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('lls', 'espn', 'baseball/lls', NULL, 'Little League Softball World Series', 'softball', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png', NULL, 1, 'LLSWS', 'llsws', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
