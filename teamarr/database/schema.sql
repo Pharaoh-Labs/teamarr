@@ -962,8 +962,13 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('wnba', 'espn', 'basketball/wnba', NULL, 'Women''s National Basketball Association', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png', NULL, 1, 'WNBA', 'wnba', 'team_vs_team', 'WNBA Basketball', NULL, NULL, NULL, 1),
     ('mens-college-basketball', 'espn', 'basketball/mens-college-basketball', NULL, 'NCAA Men''s Basketball', 'basketball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png', NULL, 1, 'NCAAM', 'ncaam', 'team_vs_team', 'College Basketball', NULL, NULL, NULL, 1),
     ('womens-college-basketball', 'espn', 'basketball/womens-college-basketball', NULL, 'NCAA Women''s Basketball', 'basketball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png', NULL, 1, 'NCAAW', 'ncaaw', 'team_vs_team', 'Women''s College Basketball', NULL, NULL, NULL, 1),
+    ('nbl', 'espn', 'basketball/nbl', NULL, 'National Basketball League (Australia)', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nbl.png', 1, 'NBL', 'nbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Basketball (TSDB) - Leagues not on ESPN
+    -- FIBA World Cups: ESPN's basketball/fiba only tracks the World Cup final
+    -- event itself (dead between tournaments); TSDB tracks qualifiers year-round.
+    ('fiba', 'tsdb', '4549', 'FIBA Basketball World Cup', 'FIBA Basketball World Cup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/x45gjq1764423537.png', NULL, 1, 'FIBA', 'fiba', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('fiba-women', 'tsdb', '4891', 'FIBA Womens World Cup', 'FIBA Women''s Basketball World Cup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/tlkdaq1726930250.png', NULL, 1, 'FIBA W', 'fibaw', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
     ('unrivaled', 'tsdb', '5622', 'Unrivaled Basketball', 'Unrivaled', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/71mier1746291561.png', NULL, 1, NULL, 'unrivaled', 'team_vs_team', 'Unrivaled Basketball', NULL, NULL, 'free', 1),
 
     -- Hockey (ESPN)

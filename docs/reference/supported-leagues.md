@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **136 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **139 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -63,6 +63,9 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | Women's National Basketball Association | `wnba` | ESPN |
 | NCAA Men's Basketball | `ncaam` | ESPN |
 | NCAA Women's Basketball | `ncaaw` | ESPN |
+| National Basketball League (Australia) | `nbl` | ESPN |
+| FIBA Basketball World Cup | `fiba` | TSDB |
+| FIBA Women's Basketball World Cup | `fiba-women` | TSDB |
 | Unrivaled | `unrivaled` | TSDB |
 
 ---
