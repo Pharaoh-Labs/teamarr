@@ -13,7 +13,7 @@ Developer documentation covering Teamarr's architecture, data providers, databas
 
 | Section | Contents |
 |---------|----------|
-| [Supported Leagues](supported-leagues) | All 134 pre-configured leagues and ~250 discovered soccer leagues, organized by sport |
+| [Supported Leagues](supported-leagues) | All 138 pre-configured leagues and ~250 discovered soccer leagues, organized by sport |
 | [Providers](providers/) | Data provider system — ESPN, Squiggle, MLB Stats, HockeyTech, TheSportsDB, Supabase — priority chain, API details, rate limiting |
 | [Architecture](architecture/) | API layer, consumer layer, Dispatcharr integration, detection keywords, database, template engine, migrations |
 | [Frontend](frontend/) | React + TypeScript + Vite architecture, component library, state management |

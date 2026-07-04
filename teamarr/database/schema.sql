@@ -936,6 +936,12 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('wnba', 'espn', 'basketball/wnba', NULL, 'Women''s National Basketball Association', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png', NULL, 1, 'WNBA', 'wnba', 'team_vs_team', 'WNBA Basketball', NULL, NULL, NULL, 1),
     ('mens-college-basketball', 'espn', 'basketball/mens-college-basketball', NULL, 'NCAA Men''s Basketball', 'basketball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png', NULL, 1, 'NCAAM', 'ncaam', 'team_vs_team', 'College Basketball', NULL, NULL, NULL, 1),
     ('womens-college-basketball', 'espn', 'basketball/womens-college-basketball', NULL, 'NCAA Women''s Basketball', 'basketball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/basketball.png', NULL, 1, 'NCAAW', 'ncaaw', 'team_vs_team', 'Women''s College Basketball', NULL, NULL, NULL, 1),
+    ('fiba', 'espn', 'basketball/fiba', NULL, 'FIBA World Cup', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/fiba.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/fiba.png', 1, 'FIBA', 'fiba', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('nbl', 'espn', 'basketball/nbl', NULL, 'National Basketball League (Australia)', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/nbl.png', 'https://a.espncdn.com/i/teamlogos/leagues/500-dark/nbl.png', 1, 'NBL', 'nbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+
+    -- Basketball - Olympics (ESPN)
+    ('mens-olympics-basketball', 'espn', 'basketball/mens-olympics-basketball', NULL, 'Men''s Basketball - Olympics', 'basketball', 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Basketball_pictogram.svg', NULL, 1, 'Olympic Basketball', 'olymb', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('womens-olympics-basketball', 'espn', 'basketball/womens-olympics-basketball', NULL, 'Women''s Basketball - Olympics', 'basketball', 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Basketball_pictogram.svg', NULL, 1, 'Olympic W Basketball', 'olywb', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Basketball (TSDB) - Leagues not on ESPN
     ('unrivaled', 'tsdb', '5622', 'Unrivaled Basketball', 'Unrivaled', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/71mier1746291561.png', NULL, 1, NULL, 'unrivaled', 'team_vs_team', 'Unrivaled Basketball', NULL, NULL, 'free', 1),
