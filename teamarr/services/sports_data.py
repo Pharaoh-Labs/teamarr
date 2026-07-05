@@ -49,6 +49,13 @@ logger = logging.getLogger(__name__)
 # cached event during the window.
 REFRESH_COALESCE_TTL = 300  # seconds
 
+# Negative-cache marker for get_event. A failed provider fetch must also be
+# cached: the refresh coalesce marker only skips the cache *delete*, so without
+# a negative entry every per-channel refresh of an event whose summary fetch
+# fails (e.g. ESPN 404) falls through to another serial provider call —
+# hundreds of live 404s per run for a single event.
+_EVENT_NOT_FOUND = {"__event_not_found__": True}
+
 
 def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     """Patch a Team's short_name/abbreviation/name from team_cache when missing.
@@ -394,6 +401,9 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
+            if isinstance(cached, dict) and cached.get("__event_not_found__"):
+                logger.debug("[CACHE_HIT] %s (negative — provider miss)", cache_key)
+                return None
             if isinstance(cached, dict) and _event_dict_is_stale(cached):
                 logger.debug(
                     "[CACHE_STALE] %s — team data missing short_name, re-fetching",
@@ -414,6 +424,10 @@ class SportsDataService:
                     # Serialize to dict before caching
                     self._cache.set(cache_key, event_to_dict(event), CACHE_TTL_SINGLE_EVENT)
                     return _enrich_event_teams(event)
+
+        # Short TTL: don't mask an event that becomes available, just absorb
+        # the per-channel refresh fan-out within one coalesce window.
+        self._cache.set(cache_key, _EVENT_NOT_FOUND, REFRESH_COALESCE_TTL)
         return None
 
     # Fields refreshed onto the original event by refresh_event_status. Anything
