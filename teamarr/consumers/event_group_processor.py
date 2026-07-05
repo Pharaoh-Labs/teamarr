@@ -1879,13 +1879,18 @@ class EventGroupProcessor:
             match_result: Result from matcher
             stream_timezone: Group-configured timezone for stream time interpretation
         """
-        # Build name -> stream lookup
-        stream_lookup = {s["name"]: s for s in streams}
+        # Look up by stream ID first: identically named streams (same provider,
+        # multiple M3U logins) collapse in a name-keyed dict, silently dropping
+        # all but one stream per name (#264). Name lookup is only a fallback.
+        stream_by_id = {s["id"]: s for s in streams if s.get("id") is not None}
+        stream_by_name = {s["name"]: s for s in streams}
 
         matched = []
         for result in match_result.results:
             if result.matched and result.included and result.event:
-                stream = stream_lookup.get(result.stream_name)
+                stream = stream_by_id.get(result.stream_id) or stream_by_name.get(
+                    result.stream_name
+                )
                 if stream:
                     matched.append(
                         {
@@ -2462,14 +2467,18 @@ class EventGroupProcessor:
 
         Stores both matched streams and failed/unmatched streams for analysis.
         """
-        # Build name -> stream lookup for stream IDs
-        stream_lookup = {s["name"]: s for s in streams}
+        # ID-first lookup: identically named streams collapse in a name-keyed
+        # dict (#264), which would misattribute details to one stream ID.
+        stream_by_id = {s["id"]: s for s in streams if s.get("id") is not None}
+        stream_by_name = {s["name"]: s for s in streams}
 
         matched_list: list[MatchedStream] = []
         failed_list: list[FailedMatch] = []
 
         for result in match_result.results:
-            stream = stream_lookup.get(result.stream_name, {})
+            stream = stream_by_id.get(result.stream_id) or stream_by_name.get(
+                result.stream_name, {}
+            )
             stream_id = stream.get("id")
 
             if result.matched and result.included and result.event:
