@@ -744,12 +744,8 @@ class ChannelLifecycleService:
                             )
                         )
 
-                        resolved_channel_profile_ids = (
-                            self._dynamic_resolver.resolve_channel_profiles(
-                                profile_ids=effective_profile_ids,
-                                event_sport=event_sport,
-                                event_league=event_league,
-                            )
+                        resolved_channel_profile_ids = self._resolve_profiles_for_event(
+                            effective_profile_ids, event_sport, event_league
                         )
 
                         # Create new channel
@@ -1090,6 +1086,27 @@ class ChannelLifecycleService:
 
         return result
 
+    def _resolve_profiles_for_event(
+        self,
+        profile_ids: list[int | str] | None,
+        event_sport: str | None,
+        event_league: str | None,
+    ) -> list[int] | None:
+        """Resolve configured channel profile IDs for channel creation.
+
+        None (not configured) must be preserved — _create_channel maps it to
+        the [0] all-profiles sentinel. Passing None through the dynamic
+        resolver would collapse it to [] (NO profiles), silently creating
+        channels without any profile (issue #267).
+        """
+        if profile_ids is None:
+            return None
+        return self._dynamic_resolver.resolve_channel_profiles(
+            profile_ids=profile_ids,
+            event_sport=event_sport,
+            event_league=event_league,
+        )
+
     def _create_channel(
         self,
         conn: Connection,
@@ -1099,7 +1116,7 @@ class ChannelLifecycleService:
         template: dict | None,
         matched_keyword: str | None,
         channel_group_id: int | None,
-        channel_profile_ids: list[int],
+        channel_profile_ids: list[int] | None,
         stream_profile_id: int | None = None,
         segment: str | None = None,
         segment_display: str = "",
@@ -1166,6 +1183,22 @@ class ChannelLifecycleService:
             event, template, matched_keyword, segment, feed_team=feed_team,
         )
 
+        # Dispatcharr profile semantics (as of commit 6b873be):
+        #   [] = NO profiles (explicit)
+        #   [0] = ALL profiles (sentinel)
+        #   [1, 2, ...] = specific profile IDs
+        #
+        # Logic:
+        #   None = not configured → default to [0] (all profiles, backwards compat)
+        #   [] = explicitly no profiles → send [] (no profiles)
+        #   [1, 2, ...] = specific profiles → send those
+        #
+        # Persisted to the local DB as-is so the profile drift sync compares
+        # against the same value that was pushed to Dispatcharr.
+        effective_profile_ids = (
+            channel_profile_ids if channel_profile_ids is not None else [0]
+        )
+
         # Create in Dispatcharr
         dispatcharr_channel_id = None
         dispatcharr_uuid = None
@@ -1182,19 +1215,6 @@ class ChannelLifecycleService:
                     if logo_result.success and logo_result.logo:
                         dispatcharr_logo_id = logo_result.logo.get("id")
 
-                # Create channel with channel_profile_ids
-                # Dispatcharr profile semantics (as of commit 6b873be):
-                #   [] = NO profiles (explicit)
-                #   [0] = ALL profiles (sentinel)
-                #   [1, 2, ...] = specific profile IDs
-                #
-                # Logic:
-                #   None = not configured → default to [0] (all profiles, backwards compat)
-                #   [] = explicitly no profiles → send [] (no profiles)
-                #   [1, 2, ...] = specific profiles → send those
-                effective_profile_ids = (
-                    channel_profile_ids if channel_profile_ids is not None else [0]
-                )
                 logger.debug(
                     f"Channel '{channel_name}' profile assignment: "
                     f"configured={channel_profile_ids}, effective={effective_profile_ids}"
@@ -1262,7 +1282,7 @@ class ChannelLifecycleService:
                 dispatcharr_uuid=dispatcharr_uuid,
                 dispatcharr_logo_id=dispatcharr_logo_id,
                 channel_group_id=channel_group_id,
-                channel_profile_ids=channel_profile_ids,
+                channel_profile_ids=effective_profile_ids,
                 primary_stream_id=stream_id,
                 exception_keyword=matched_keyword,
                 feed_team_id=feed_team_id,
