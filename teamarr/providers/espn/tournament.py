@@ -77,6 +77,13 @@ class TournamentParserMixin:
         for event_data in data.get("events", []):
             if sport == "racing":
                 event = self._parse_racing_event(event_data, league, sport)
+            elif sport == "tennis":
+                # Tennis expands to one Event per match (TennisParserMixin),
+                # not one placeholder Event per tournament
+                events.extend(
+                    self._parse_tennis_matches(event_data, league, sport, target_date)
+                )
+                continue
             else:
                 event = self._parse_tournament_event(event_data, league, sport)
             if event:

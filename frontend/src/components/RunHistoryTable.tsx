@@ -84,6 +84,8 @@ function getFailedReasonLabel(reason: string): string {
     ambiguous_league: "Ambiguous league",
     no_event_found: "No event found",
     no_event_card_match: "No event card match",
+    no_racing_match: "No racing match",
+    no_tennis_match: "No tennis match",
     date_mismatch: "Date mismatch",
     unmatched: "Unmatched",
   }

@@ -43,6 +43,7 @@ def _bare_matcher(index, team_streams_enabled=True, racing_leagues=()):
     m._feed_away_terms = None
     m._team_streams_enabled = team_streams_enabled
     m._league_event_types = {lg: "event" for lg in racing_leagues}
+    m._league_sports = {lg: "racing" for lg in racing_leagues}
     m._include_leagues = set(racing_leagues)
     m._user_tz = ZoneInfo("UTC")
     return m

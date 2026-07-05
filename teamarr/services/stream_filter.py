@@ -42,6 +42,7 @@ except ImportError:
 
 # Sports that can be detected but are not currently supported by Teamarr
 # These sports don't have team-based schedules we can match against
+# (Tennis graduated to a supported sport — ATP/WTA per-match events)
 UNSUPPORTED_SPORTS = frozenset(
     [
         "Swimming",
@@ -49,7 +50,6 @@ UNSUPPORTED_SPORTS = frozenset(
         "Gymnastics",
         "Wrestling",
         "Track and Field",
-        "Tennis",
         "Golf",
     ]
 )

@@ -26,6 +26,7 @@ class StreamCategory(Enum):
     TEAM_VS_TEAM = "team_vs_team"  # Standard team matchup (vs/@/at)
     EVENT_CARD = "event_card"  # Combat sports (UFC, Boxing)
     RACING_EVENT = "racing_event"  # Racing race weekends (F1, NASCAR, etc.)
+    TENNIS_MATCH = "tennis_match"  # Tennis matches ("Wimbledon: Zheng vs Norrie")
     TEAM_ONLY = "team_only"  # Single-team branded stream (e.g., "NHL | Toronto Maple Leafs")
     PLACEHOLDER = "placeholder"  # No event info, skip
 
@@ -1045,11 +1046,17 @@ def is_racing(
     league_event_type: str | None = None,
     league_hint: str | list[str] | None = None,
     sport_hint: str | list[str] | None = None,
+    event_league_sport: str | None = None,
 ) -> bool:
     """Check if a stream's league is a racing/motorsports league.
 
     Three independent triggers (mirrors is_event_card() pattern):
-    1. league_event_type == "event" — dominant league type gate
+    1. league_event_type == "event" — dominant league type gate. The "event"
+       type is shared by all tournament sports (racing, tennis, golf), so
+       when the caller knows the dominant SPORT of the group's event-type
+       leagues (event_league_sport), a non-racing sport disables this
+       trigger — a tennis-only group must not classify streams as racing.
+       None preserves legacy behavior (racing owns "event").
     2. league_hint is a known racing league code — league keyword fallback
     3. sport_hint == "Racing" — sport keyword fallback
 
@@ -1061,15 +1068,46 @@ def is_racing(
         league_event_type: event_type from leagues table (e.g., "event" for racing)
         league_hint: Detected league hint from stream text
         sport_hint: Detected sport hint from stream text
+        event_league_sport: Dominant sport of the group's event-type leagues
 
     Returns:
         True if the league is configured as an "event" (racing) league
     """
-    if league_event_type == "event":
+    if league_event_type == "event" and event_league_sport in (None, "racing"):
         return True
     if isinstance(league_hint, str) and league_hint in _RACING_LEAGUE_HINTS:
         return True
     if isinstance(sport_hint, str) and sport_hint.lower() == "racing":
+        return True
+    return False
+
+
+# Known tennis league codes — mirror of the sport='tennis' leagues in
+# schema.sql (this module is pure text classification, no DB access).
+_TENNIS_LEAGUE_HINTS: frozenset[str] = frozenset({"atp", "wta"})
+
+
+def is_tennis(
+    league_event_type: str | None = None,
+    league_hint: str | list[str] | None = None,
+    sport_hint: str | list[str] | None = None,
+    event_league_sport: str | None = None,
+) -> bool:
+    """Check if a stream belongs to a tennis league.
+
+    Mirrors is_racing()'s trigger structure:
+    1. league_event_type == "event" AND the group's event-type leagues are
+       tennis — the tennis-group gate (requires the caller to resolve
+       event_league_sport; "event" alone is ambiguous with racing/golf)
+    2. league_hint is a known tennis league code (atp/wta)
+    3. sport_hint == "Tennis" — sport keyword fallback (real streams often
+       carry a literal "Tennis" token, e.g. "... :Tennis 13")
+    """
+    if league_event_type == "event" and event_league_sport == "tennis":
+        return True
+    if isinstance(league_hint, str) and league_hint in _TENNIS_LEAGUE_HINTS:
+        return True
+    if isinstance(sport_hint, str) and sport_hint.lower() == "tennis":
         return True
     return False
 
@@ -1292,6 +1330,7 @@ def classify_stream(
     custom_regex: CustomRegexConfig | None = None,
     feed_home_terms: list[str] | None = None,
     feed_away_terms: list[str] | None = None,
+    event_league_sport: str | None = None,
 ) -> ClassifiedStream:
     """Classify a stream for matching strategy selection.
 
@@ -1312,6 +1351,9 @@ def classify_stream(
         stream_name: Raw stream name to classify
         league_event_type: Optional event_type from leagues table (e.g., "fight" for UFC)
         custom_regex: Optional custom regex configuration for team/date/time extraction
+        event_league_sport: Dominant sport of the group's event-type leagues
+            ("racing" | "tennis" | ...). Disambiguates the shared "event"
+            league_event_type between the racing and tennis paths.
 
     Returns:
         ClassifiedStream with category and extracted info
@@ -1475,7 +1517,9 @@ def classify_stream(
         # has a game separator (vs/@/at) with extractable team names (e.g.
         # "SD at BAL"), it's a team-sport stream that's leaked into a
         # racing-only league set - let it fall through to Step 4 instead.
-        if result is None and is_racing(league_event_type, league_hint, sport_hint):
+        if result is None and is_racing(
+            league_event_type, league_hint, sport_hint, event_league_sport
+        ):
             sep, sep_position = find_game_separator(text)
             has_team_pattern = False
             if sep:
@@ -1503,6 +1547,51 @@ def classify_stream(
             if not has_team_pattern and not hint_disagrees:
                 result = ClassifiedStream(
                     category=StreamCategory.RACING_EVENT,
+                    normalized=normalized,
+                    event_hint=text,
+                    league_hint=league_hint,
+                    sport_hint=sport_hint,
+                    feed_hint=feed_hint,
+                )
+
+        # Step 2.6: Check for tennis matches ("Wimbledon: Zheng vs Norrie").
+        # Tennis leagues share event_type="event" with racing, so the racing
+        # step above is disabled for tennis groups via event_league_sport and
+        # this step catches the streams instead. Match streams carry a
+        # player-vs-player separator; the players are extracted with the same
+        # separator logic as team sports (surname-based matching happens in
+        # TennisMatcher). Court/round/day feeds ("Wimbledon Day #6 No 1
+        # Court") have no separator — they still classify TENNIS_MATCH with
+        # only an event_hint so the matcher can report a precise reason
+        # (court-feed matching is a planned phase 2).
+        if result is None and is_tennis(
+            league_event_type, league_hint, sport_hint, event_league_sport
+        ):
+            separator, sep_position = find_game_separator(text)
+            if separator:
+                team1, team2 = extract_teams_from_separator(text, separator, sep_position)
+                # "at"/"@" with a multi-word left part is a tournament/day
+                # label ("Wimbledon Second Round @ Jul 2"), not a player pair.
+                if (
+                    team1
+                    and team2
+                    and not (
+                        separator.strip() in ("at", "@") and len(team1.split()) > 1
+                    )
+                ):
+                    result = ClassifiedStream(
+                        category=StreamCategory.TENNIS_MATCH,
+                        normalized=normalized,
+                        team1=team1,
+                        team2=team2,
+                        separator_found=separator,
+                        league_hint=league_hint,
+                        sport_hint=sport_hint,
+                        feed_hint=feed_hint,
+                    )
+            if result is None:
+                result = ClassifiedStream(
+                    category=StreamCategory.TENNIS_MATCH,
                     normalized=normalized,
                     event_hint=text,
                     league_hint=league_hint,
@@ -1595,6 +1684,7 @@ def classify_streams(
     custom_regex: CustomRegexConfig | None = None,
     feed_home_terms: list[str] | None = None,
     feed_away_terms: list[str] | None = None,
+    event_league_sport: str | None = None,
 ) -> list[ClassifiedStream]:
     """Classify multiple streams.
 
@@ -1604,11 +1694,19 @@ def classify_streams(
         custom_regex: Optional custom regex configuration for team extraction
         feed_home_terms: Terms indicating home feed (e.g., ["HOME"])
         feed_away_terms: Terms indicating away feed (e.g., ["AWAY"])
+        event_league_sport: Dominant sport of the group's event-type leagues
 
     Returns:
         List of ClassifiedStream objects
     """
     return [
-        classify_stream(name, league_event_type, custom_regex, feed_home_terms, feed_away_terms)
+        classify_stream(
+            name,
+            league_event_type,
+            custom_regex,
+            feed_home_terms,
+            feed_away_terms,
+            event_league_sport,
+        )
         for name in stream_names
     ]

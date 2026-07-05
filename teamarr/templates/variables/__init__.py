@@ -22,6 +22,7 @@ from teamarr.templates.variables import (  # noqa: F401 - side effect imports
     statistics,
     streaks,
     summary,
+    tennis,
     venue,
 )
 from teamarr.templates.variables import datetime as datetime_vars  # noqa: F401

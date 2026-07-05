@@ -47,6 +47,7 @@ from teamarr.consumers.matching.result import (
     ResultAggregator,
 )
 from teamarr.consumers.matching.team_matcher import TeamMatcher
+from teamarr.consumers.matching.tennis_matcher import TennisMatcher
 from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
     get_generation_counter,
@@ -344,9 +345,11 @@ class StreamMatcher:
         )
         self._event_matcher = EventCardMatcher(service, self._cache)
         self._racing_matcher = RacingMatcher(service, self._cache)
+        self._tennis_matcher = TennisMatcher(service, self._cache)
 
-        # League event types cache
+        # League event types + sports cache
         self._league_event_types: dict[str, str] = {}
+        self._league_sports: dict[str, str] = {}
 
         # Shared events cache (cross-matcher in a single generation run)
         # Keys are "league:date" strings, values are (events, was_cache_only) tuples
@@ -573,10 +576,12 @@ class StreamMatcher:
         # Step 1: Classify the stream
         # Determine event type from configured leagues
         league_event_type = self._get_dominant_event_type()
+        event_league_sport = self._get_event_league_sport()
 
         classified = classify_stream(
             stream_name, league_event_type, self._custom_regex,
             self._feed_home_terms, self._feed_away_terms,
+            event_league_sport=event_league_sport,
         )
 
         # Step 2: Handle placeholders (streams that couldn't be classified)
@@ -613,6 +618,7 @@ class StreamMatcher:
             StreamCategory.TEAM_VS_TEAM,
             StreamCategory.EVENT_CARD,
             StreamCategory.RACING_EVENT,
+            StreamCategory.TENNIS_MATCH,
         ):
             return [MatchedStreamResult(
                 stream_name=stream_name,
@@ -656,6 +662,8 @@ class StreamMatcher:
             return [self._match_event_card(classified, stream_id, target_date)]
         if classified.category == StreamCategory.RACING_EVENT:
             return [self._match_racing_event(classified, stream_id, target_date)]
+        if classified.category == StreamCategory.TENNIS_MATCH:
+            return [self._match_tennis_event(classified, stream_id, target_date)]
         if classified.category == StreamCategory.TEAM_ONLY:
             return self._match_team_only(classified, stream_id, target_date, anchor_dt=anchor_dt)
         # TEAM_VS_TEAM
@@ -691,6 +699,7 @@ class StreamMatcher:
         # t5e). Different events on the same channel keep distinct keys.
         best_by_event: dict[str, tuple[float, MatchedStreamResult]] = {}
         league_event_type = self._get_dominant_event_type()
+        event_league_sport = self._get_event_league_sport()
 
         # Full sorted timeline for this tvg_id. A linear channel legitimately
         # matches many programs/day; each matched program's broadcast slot drives
@@ -708,6 +717,7 @@ class StreamMatcher:
             classified = classify_stream(
                 epg_input, league_event_type, self._custom_regex,
                 self._feed_home_terms, self._feed_away_terms,
+                event_league_sport=event_league_sport,
             )
             if classified.category == StreamCategory.PLACEHOLDER:
                 continue
@@ -966,9 +976,14 @@ class StreamMatcher:
         target_date: date,
     ) -> MatchOutcome:
         """Match a racing stream (F1, NASCAR, IndyCar, MotoGP, ...)."""
-        # Find the racing leagues in our search leagues
+        # Find the racing leagues in our search leagues. The "event" type is
+        # shared with tennis/golf, so exclude leagues whose sport is known to
+        # be something else (unknown sport = legacy racing behavior).
         racing_leagues = [
-            lg for lg in self._search_leagues if self._league_event_types.get(lg) == "event"
+            lg
+            for lg in self._search_leagues
+            if self._league_event_types.get(lg) == "event"
+            and self._league_sports.get(lg, "racing") == "racing"
         ]
 
         if not racing_leagues:
@@ -1000,6 +1015,49 @@ class StreamMatcher:
             stream_name=classified.normalized.original,
             stream_id=stream_id,
             detail="No matching racing event found",
+        )
+
+    def _match_tennis_event(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        target_date: date,
+    ) -> MatchOutcome:
+        """Match a tennis stream (ATP, WTA) to a per-match event."""
+        tennis_leagues = [
+            lg
+            for lg in self._search_leagues
+            if self._league_event_types.get(lg) == "event"
+            and self._league_sports.get(lg) == "tennis"
+        ]
+
+        if not tennis_leagues:
+            return MatchOutcome.filtered(
+                FilteredReason.LEAGUE_NOT_INCLUDED,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+                detail="No tennis leagues configured",
+            )
+
+        outcome = None
+        for league in tennis_leagues:
+            outcome = self._tennis_matcher.match(
+                classified=classified,
+                league=league,
+                target_date=target_date,
+                group_id=self._group_id,
+                stream_id=stream_id,
+                generation=self._generation,
+                user_tz=self._user_tz,
+            )
+            if outcome.is_matched:
+                return outcome
+
+        return MatchOutcome.failed(
+            reason=outcome.failed_reason if outcome else None,
+            stream_name=classified.normalized.original,
+            stream_id=stream_id,
+            detail=outcome.detail if outcome else "No matching tennis match found",
         )
 
     def _outcome_to_result(
@@ -1087,12 +1145,35 @@ class StreamMatcher:
         return None
 
     def _load_league_event_types(self) -> None:
-        """Load event types for all search leagues."""
+        """Load event types and sports for all search leagues."""
         with self._db_factory() as conn:
             for league in self._search_leagues:
                 league_info = get_league(conn, league)
                 if league_info:
                     self._league_event_types[league] = league_info.get("event_type", "team_vs_team")
+                    sport = league_info.get("sport")
+                    if sport:
+                        self._league_sports[league] = sport
+
+    def _get_event_league_sport(self) -> str | None:
+        """Dominant sport among the group's event-type leagues.
+
+        The "event" league type is shared by all tournament sports (racing,
+        tennis, golf); the classifier needs the sport to route between the
+        RACING_EVENT and TENNIS_MATCH paths. Uses `_include_leagues` for the
+        same reason as _get_dominant_event_type.
+        """
+        sport_counts: dict[str, int] = {}
+        for league in self._include_leagues:
+            if self._league_event_types.get(league) != "event":
+                continue
+            sport = self._league_sports.get(league)
+            if sport:
+                sport_counts[sport] = sport_counts.get(sport, 0) + 1
+
+        if sport_counts:
+            return max(sport_counts, key=sport_counts.get)
+        return None
 
     def purge_stale(self) -> int:
         """Purge stale cache entries.

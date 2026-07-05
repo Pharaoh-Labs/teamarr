@@ -1745,6 +1745,10 @@ class TeamMatcher:
                 main_card_start=main_card_start,
                 circuit_name=cached_data.get("circuit_name"),
                 sessions=sessions,
+                tournament_name=cached_data.get("tournament_name"),
+                round_name=cached_data.get("round_name"),
+                court=cached_data.get("court"),
+                draw_type=cached_data.get("draw_type"),
             )
         except Exception as e:
             logger.warning("[MATCH_CACHE] Failed to reconstruct event from cache: %s", e)

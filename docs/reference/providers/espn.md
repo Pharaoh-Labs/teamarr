@@ -8,7 +8,7 @@ docs_version: "2.3.1"
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 87 pre-configured leagues plus ~250 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 89 pre-configured leagues plus ~250 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -61,6 +61,8 @@ baseball/mlb
 | Baseball | MLB | MiLB handled by MLB Stats provider |
 | Soccer | 44 pre-configured, ~250 discovered | Dot notation: `eng.1`, `ger.2` |
 | Combat Sports | UFC | Event Card matching |
+| Motorsports | F1, IndyCar | Race weekend sessions |
+| Tennis | ATP, WTA | One event per match; grand slams split by draw type |
 | Lacrosse | NLL, PLL, NCAA M/W | |
 | Volleyball | NCAA M/W | |
 
@@ -75,7 +77,7 @@ Soccer leagues use ESPN's dot notation: `{country}.{tier}` (e.g., `eng.1` for Pr
 - **Status mapping**: ESPN event statuses are normalized to Teamarr's internal `scheduled`, `in_progress`, `final`, `postponed`, `cancelled`
 - **Season type normalization**: ESPN's `season.slug` field is parsed to canonical `preseason` / `regular` / `postseason` / `offseason` values. The slug is the primary source (handles soccer knockouts: `semifinals`, `round-of-16`, `final`, etc.), falling back to the numeric `season.type` (1–4) for leagues where slug is absent. The summary endpoint (`/summary?event=`) nests `season` under `header.season`, so `get_event` passes it through explicitly — otherwise a refresh would wipe the season_type set during the initial scoreboard fetch.
 - **Team ID corrections**: Hardcoded mapping for known ESPN data mismatches (e.g., some women's hockey teams)
-- **Tournament sports**: Golf, tennis, and racing events have no home/away teams — parsed via `TournamentParserMixin`
+- **Tournament sports**: Golf and racing events have no home/away teams — parsed via `TournamentParserMixin`. Tennis is the exception: `TennisParserMixin` expands each tournament into one Event per MATCH, with the two players as home/away teams (surname as abbreviation). Grand slams appear on both the atp and wta endpoints, so each league keeps only its own draw types (atp: men's + mixed doubles; wta: women's).
 - **UFC**: Parsed via `UFCParserMixin` with fighter name extraction from the core API
 
 ## File Locations
@@ -85,5 +87,6 @@ Soccer leagues use ESPN's dot notation: `{country}.{tier}` (e.g., `eng.1` for Pr
 | `teamarr/providers/espn/provider.py` | ESPNProvider class |
 | `teamarr/providers/espn/client.py` | HTTP client with retry logic |
 | `teamarr/providers/espn/constants.py` | Status mapping |
-| `teamarr/providers/espn/tournament.py` | TournamentParserMixin (golf, tennis, racing) |
+| `teamarr/providers/espn/tournament.py` | TournamentParserMixin (golf, racing) |
+| `teamarr/providers/espn/tennis.py` | TennisParserMixin (per-match events, draw-type split) |
 | `teamarr/providers/espn/ufc.py` | UFCParserMixin |

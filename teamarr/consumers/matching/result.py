@@ -101,6 +101,9 @@ class FailedReason(Enum):
     # Racing event failures (F1, NASCAR, etc.)
     NO_RACING_MATCH = "no_racing_match"  # Could not match to a racing event
 
+    # Tennis match failures (ATP, WTA)
+    NO_TENNIS_MATCH = "no_tennis_match"  # Could not match to a tennis match
+
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
 
@@ -416,6 +419,7 @@ FAILED_DISPLAY: dict[FailedReason, str] = {
     FailedReason.NO_EVENT_FOUND: "No scheduled event found",
     FailedReason.NO_EVENT_CARD_MATCH: "No matching event card",
     FailedReason.NO_RACING_MATCH: "No matching racing event",
+    FailedReason.NO_TENNIS_MATCH: "No matching tennis match",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 

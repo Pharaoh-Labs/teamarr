@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **134 pre-configured leagues** across 14 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **136 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -287,6 +287,32 @@ MotoGP (`motogp`) is currently disabled (`leagues.enabled = 0`) because ESPN's
 `racing/motogp` scoreboard endpoint returns no usable schedule or logo data.
 A TSDB-backed migration (idLeague 4407), similar to the IMSA/WEC session
 grouping above, is planned as a future enhancement.
+
+---
+
+## Tennis
+
+{: .warning }
+Tennis is **Event Only** - no team import available (players, not teams).
+
+| League | ID | Provider | Type |
+|--------|-----|----------|------|
+| ATP Tour | `atp` | ESPN | Event |
+| WTA Tour | `wta` | ESPN | Event |
+
+Tennis is matched **per match**: one channel per match, with the two players
+filling the standard home/away variables (`{home_team}`, `{away_team_abbrev}`
+= surname). Stream names like "Wimbledon: Zheng vs Norrie @ Jun 29 12:30 PM"
+match by player surname + date. Tennis-specific template variables add the
+tournament context: `{tournament_name}`, `{tennis_round}`, `{tennis_court}`,
+`{tennis_draw}`.
+
+Grand slams are served by ESPN on both tour endpoints; Teamarr splits the
+draws so subscribing both leagues never duplicates a match — `atp` carries
+Men's Singles/Doubles and Mixed Doubles, `wta` carries Women's
+Singles/Doubles. Court day-feeds ("Wimbledon Day #6 No 1 Court") and
+round feeds are recognized but not yet matched (planned phase 2 — the ESPN
+data carries per-match court assignments).
 
 ---
 

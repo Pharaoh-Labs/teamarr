@@ -173,6 +173,14 @@ class Event:
     # Cumulative stage end laps: cumsum(stage_laps)
     stage_laps: list[int] = field(default_factory=list)
 
+    # Tennis-specific: one Event per match; players ride home_team/away_team.
+    # The tournament is context, not the event (ESPN: 1 scoreboard event =
+    # 1 tournament, matches under groupings[].competitions[]).
+    tournament_name: str | None = None  # e.g., "Wimbledon"
+    round_name: str | None = None  # e.g., "Round 4", "Qualifying 1st Round"
+    court: str | None = None  # e.g., "Centre Court", "No. 1 Court"
+    draw_type: str | None = None  # e.g., "Men's Singles", "Mixed Doubles"
+
 
 @dataclass(frozen=True)
 class TeamStats:

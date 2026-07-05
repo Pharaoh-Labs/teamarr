@@ -24,6 +24,7 @@ from teamarr.core import (
 from teamarr.core.sports import normalize_sport
 from teamarr.providers.espn.client import ESPN_TEAM_ID_CORRECTIONS, ESPNClient
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
+from teamarr.providers.espn.tennis import TennisParserMixin
 from teamarr.providers.espn.tournament import TournamentParserMixin
 from teamarr.providers.espn.ufc import UFCParserMixin
 from teamarr.utilities.event_status import is_event_final
@@ -32,7 +33,7 @@ from teamarr.utilities.tz import to_user_tz
 logger = logging.getLogger(__name__)
 
 
-class ESPNProvider(UFCParserMixin, TournamentParserMixin, SportsProvider):
+class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, SportsProvider):
     """ESPN implementation of SportsProvider.
 
     Pure fetch + normalize layer. No caching - that's handled by SportsDataService.

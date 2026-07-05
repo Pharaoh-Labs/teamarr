@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 232 variables across 19 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 236 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -551,6 +551,25 @@ NASCAR-style scheduled race format (lap counts and stages). Empty for series who
 
 {: .note }
 Race weekends are split into per-session channels (Practice 1/2/3, Qualifying, Sprint, Race). Each channel gets a `{session_type}`/`{session_name}` value indicating which session it covers. Grid and results variables read from the qualifying and race sessions respectively, and are empty until those sessions have data.
+
+---
+
+## Tennis
+
+ATP/WTA-specific variables for event templates. Tennis is matched **per
+match** — one channel per match with the players filling the standard
+home/away variables (`{home_team}` = full name, `{home_team_abbrev}` =
+surname). These variables add the tournament context and are **event-only**.
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{tournament_name}` | Tournament name | `Wimbledon` |
+| `{tennis_round}` | Round within the draw | `Round 4`, `Quarterfinals` |
+| `{tennis_court}` | Assigned court | `Centre Court`, `No. 1 Court` |
+| `{tennis_draw}` | Draw type | `Men's Singles`, `Mixed Doubles` |
+
+{: .note }
+Example: `{tournament_name} {tennis_draw}: {away_team_abbrev} vs {home_team_abbrev}` renders as `Wimbledon Men's Singles: Cobolli vs de Minaur`.
 
 ---
 

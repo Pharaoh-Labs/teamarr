@@ -1146,7 +1146,15 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
     -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).
     ('imsa', 'tsdb', '4488', 'IMSA SportsCar Championship', 'IMSA WeatherTech SportsCar Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/t3fpd41536244390.png', NULL, 0, 'IMSA', 'imsa', 'event', 'Motor Racing', NULL, NULL, 'premium', 1),
-    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/2fjrko1705526433.png', NULL, 0, 'WEC', 'wec', 'event', 'Motor Racing', NULL, NULL, 'premium', 1);
+    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/2fjrko1705526433.png', NULL, 0, 'WEC', 'wec', 'event', 'Motor Racing', NULL, NULL, 'premium', 1),
+
+    -- Tennis (ESPN) - One Event per MATCH (players as home/away), parsed from
+    -- tournament groupings (teamarr/providers/espn/tennis.py). Grand slams are
+    -- served on both endpoints; each league keeps only its own draw types
+    -- (atp: men's + mixed doubles, wta: women's) so subscribing both never
+    -- duplicates a match. import_enabled=0: players aren't importable teams.
+    ('atp', 'espn', 'tennis/atp', NULL, 'ATP Tour', 'tennis', 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/42/Letters_ATP.svg/500px-Letters_ATP.svg.png', NULL, 0, 'ATP', 'atp', 'event', 'Tennis', NULL, NULL, NULL, 1),
+    ('wta', 'espn', 'tennis/wta', NULL, 'WTA Tour', 'tennis', 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/WTA_2025.svg/500px-WTA_2025.svg.png', NULL, 0, 'WTA', 'wta', 'event', 'Tennis', NULL, NULL, NULL, 1);
 
 -- =============================================================================
 -- STREAM_MATCH_CACHE TABLE
