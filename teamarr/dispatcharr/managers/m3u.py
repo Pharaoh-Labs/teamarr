@@ -169,6 +169,32 @@ class M3UManager:
             error=f"Failed to create group: {response.status_code}",
         )
 
+    def get_account_group_counts(self, account_id: int) -> dict[int, int]:
+        """Get per-group stream counts for a single M3U account.
+
+        Uses the account detail endpoint, whose ``channel_groups`` array holds
+        one relationship entry per group with Dispatcharr's tracked
+        ``stream_count`` — one request instead of listing streams per group.
+
+        Args:
+            account_id: M3U account ID
+
+        Returns:
+            Mapping of channel group ID -> stream count for this account
+        """
+        response = self._client.get(f"/api/m3u/accounts/{account_id}/")
+        if response is None or response.status_code != 200:
+            status = response.status_code if response else "No response"
+            logger.error("[M3U] Failed to fetch account %d detail: %s", account_id, status)
+            return {}
+
+        counts: dict[int, int] = {}
+        for rel in response.json().get("channel_groups") or []:
+            group_id = rel.get("channel_group")
+            if group_id is not None:
+                counts[group_id] = rel.get("stream_count") or 0
+        return counts
+
     def get_group_name(self, group_id: int) -> str | None:
         """Get exact group name by ID (needed for stream filtering).
 
@@ -218,18 +244,19 @@ class M3UManager:
                 )
                 return []
 
-        # Build query params
-        params = ["page=1", "page_size=1000"]
+        # Build query params — don't request more per page than the caller wants
+        page_size = min(limit, 1000) if limit else 1000
+        params = ["page=1", f"page_size={page_size}"]
         if group_name:
             params.append(f"channel_group_name={urllib.parse.quote(group_name)}")
         if account_id is not None:
             params.append(f"m3u_account={account_id}")
 
-        # Fetch all pages
+        # Fetch pages until exhausted or limit reached
         raw_streams: list[dict] = []
         url: str | None = f"/api/channels/streams/?{'&'.join(params)}"
 
-        while url:
+        while url and (limit is None or len(raw_streams) < limit):
             response = self._client.get(url)
             if response is None or response.status_code != 200:
                 status = response.status_code if response else "No response"
