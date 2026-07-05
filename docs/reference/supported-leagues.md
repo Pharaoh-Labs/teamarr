@@ -303,9 +303,10 @@ Tennis is **Event Only** - no team import available (players, not teams).
 Tennis is matched **per match**: one channel per match, with the two players
 filling the standard home/away variables (`{home_team}`, `{away_team_abbrev}`
 = surname). Stream names like "Wimbledon: Zheng vs Norrie @ Jun 29 12:30 PM"
-match by player surname + date. Tennis-specific template variables add the
-tournament context: `{tournament_name}`, `{tennis_round}`, `{tennis_court}`,
-`{tennis_draw}`.
+match by player surname + date. Tennis-specific template variables cover the
+players (`{player1}`, `{player2}`, `{player1_last}`, `{player2_last}` — the
+combat `{fighter1}`/`{fighter2}` pattern) and the tournament context
+(`{tournament_name}`, `{tennis_round}`, `{tennis_court}`, `{tennis_draw}`).
 
 Grand slams are served by ESPN on both tour endpoints; Teamarr splits the
 draws so subscribing both leagues never duplicates a match — `atp` carries

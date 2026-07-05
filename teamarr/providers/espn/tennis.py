@@ -137,6 +137,9 @@ class TennisParserMixin:
 
             home = first if _is_home(competitors[0]) else second
             away = second if home is first else first
+            # Event name is always "away vs home" so the {player1}/{player2}
+            # template variables (player1 = away) match the title ordering.
+            first, second = away, home
 
             status_data = competition.get("status") or {}
             type_data = status_data.get("type") or {}

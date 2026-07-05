@@ -163,6 +163,85 @@ def test_surname_extraction():
     assert _tennis_surnames("Hugo Nys / Edouard Roger-Vasselin") == "Nys/Roger-Vasselin"
 
 
+def test_parser_title_is_away_vs_home_even_when_home_listed_first():
+    # ESPN usually lists away first, but the title ordering must be
+    # deterministic (away vs home) so {player1}/{player2} always match it.
+    tournament = {
+        "id": "188-2026",
+        "shortName": "Wimbledon",
+        "venue": {"displayName": "London, Great Britain"},
+        "groupings": [
+            {
+                "grouping": {"displayName": "Men's Singles", "slug": "mens-singles"},
+                "competitions": [
+                    {
+                        "id": "900",
+                        "date": "2026-07-06T12:00Z",
+                        "status": {"type": {"state": "pre"}},
+                        "venue": {"fullName": "London", "court": "Court 5"},
+                        "round": {"displayName": "Round 4"},
+                        "competitors": [
+                            _competitor("Home First", "H. First", "home", 1),
+                            _competitor("Away Second", "A. Second", "away", 2),
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    events = _Parser()._parse_tennis_matches(tournament, "atp", "tennis", date(2026, 7, 6))
+    assert len(events) == 1
+    e = events[0]
+    assert e.name == "Wimbledon: Away Second vs Home First"
+    assert e.short_name == "A. Second vs H. First"
+    assert e.home_team.name == "Home First"
+    assert e.away_team.name == "Away Second"
+
+
+# ---------------------------------------------------------------------------
+# Template variables — {player1}/{player2} mirror combat's fighter1/fighter2
+# ---------------------------------------------------------------------------
+
+
+def test_player_variables_match_title_order():
+    from teamarr.templates.context import GameContext, TemplateContext
+    from teamarr.templates.variables.tennis import (
+        extract_player1,
+        extract_player1_last,
+        extract_player2,
+        extract_player2_last,
+        extract_tournament_name,
+    )
+
+    events = _Parser()._parse_tennis_matches(WIMBLEDON, "atp", "tennis", date(2026, 7, 6))
+    e = next(ev for ev in events if ev.id == "188-2026-177486")
+    ctx = TemplateContext(
+        game_context=GameContext(event=e), team_config=None, team_stats=None
+    )
+    game_ctx = ctx.game_context
+
+    # Title is "Wimbledon: Flavio Cobolli vs Alex de Minaur" — player1 = Cobolli
+    assert extract_player1(ctx, game_ctx) == "Flavio Cobolli"
+    assert extract_player2(ctx, game_ctx) == "Alex de Minaur"
+    assert extract_player1_last(ctx, game_ctx) == "Cobolli"
+    assert extract_player2_last(ctx, game_ctx) == "de Minaur"
+    assert extract_tournament_name(ctx, game_ctx) == "Wimbledon"
+
+
+def test_player_variables_empty_for_non_tennis():
+    from teamarr.templates.context import GameContext, TemplateContext
+    from teamarr.templates.variables.tennis import extract_player1
+
+    hockey = _tennis_event(
+        "x", _player("A B", "B"), _player("C D", "D"), datetime(2026, 7, 6, tzinfo=ZoneInfo("UTC"))
+    )
+    hockey.sport = "hockey"
+    ctx = TemplateContext(
+        game_context=GameContext(event=hockey), team_config=None, team_stats=None
+    )
+    assert extract_player1(ctx, ctx.game_context) == ""
+
+
 # ---------------------------------------------------------------------------
 # Classification — real stream names from the user's Dispatcharr
 # ---------------------------------------------------------------------------
