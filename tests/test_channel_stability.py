@@ -473,3 +473,98 @@ def test_reset_clears_armed_flag(db):
         "SELECT force_channel_relayout_pending FROM settings WHERE id = 1"
     ).fetchone()
     assert not row[0]
+
+
+# ---------------------------------------------------------------------------
+# Auto-arm on settings changes (teamarrv2-kc43)
+# ---------------------------------------------------------------------------
+
+
+def _pending(conn) -> bool:
+    row = conn.execute(
+        "SELECT force_channel_relayout_pending FROM settings WHERE id = 1"
+    ).fetchone()
+    return bool(row[0])
+
+
+def test_range_change_arms_relayout_in_sticky_mode(db):
+    # Moving the range only takes effect at re-layout (locked channels stay
+    # put), so a range change must queue the one-shot re-grid.
+    from teamarr.database.settings.update import update_lifecycle_settings
+
+    _set_mode(db, "gap", gap=3)
+    db.commit()
+
+    assert update_lifecycle_settings(db, channel_range_start=2000)
+    assert _pending(db)
+
+
+def test_range_end_change_arms_relayout_in_sticky_mode(db):
+    from teamarr.database.settings.update import update_lifecycle_settings
+
+    _set_mode(db, "strict")
+    db.commit()
+
+    assert update_lifecycle_settings(db, channel_range_end=5000)
+    assert _pending(db)
+
+
+def test_unchanged_range_does_not_arm(db):
+    # The UI full-PUTs the settings object — saving the same values must not
+    # queue a re-grid.
+    from teamarr.database.settings.update import update_lifecycle_settings
+
+    _set_mode(db, "gap", gap=3)
+    db.execute("UPDATE settings SET channel_range_start = 101, channel_range_end = NULL")
+    db.commit()
+
+    assert update_lifecycle_settings(db, channel_range_start=101, channel_range_end=None)
+    assert not _pending(db)
+
+
+def test_range_change_does_not_arm_in_compact_mode(db):
+    # Compact re-sorts every run — the range change takes effect immediately,
+    # no re-grid needed.
+    from teamarr.database.settings.update import update_lifecycle_settings
+
+    _set_mode(db, "compact")
+    db.commit()
+
+    assert update_lifecycle_settings(db, channel_range_start=2000)
+    assert not _pending(db)
+
+
+def test_range_change_does_not_arm_in_manual_mode(db):
+    from teamarr.database.settings.update import update_lifecycle_settings
+
+    _set_mode(db, "gap", gap=3)
+    db.execute("UPDATE settings SET global_channel_mode = 'manual'")
+    db.commit()
+
+    assert update_lifecycle_settings(db, channel_range_start=2000)
+    assert not _pending(db)
+
+
+def test_switch_to_compact_clears_armed_flag(db):
+    # An armed re-grid is meaningless in compact mode — leaving the sticky
+    # modes drops it so it doesn't linger as stale queued state.
+    from teamarr.database.settings.update import update_channel_numbering_settings
+
+    _set_mode(db, "gap", gap=3)
+    db.commit()
+    cn.arm_channel_relayout(db)
+    assert _pending(db)
+
+    assert update_channel_numbering_settings(db, channel_stability_mode="compact")
+    assert not _pending(db)
+
+
+def test_switch_between_sticky_modes_keeps_arming(db):
+    # gap -> strict is a layout change: it arms (not clears) the re-grid.
+    from teamarr.database.settings.update import update_channel_numbering_settings
+
+    _set_mode(db, "gap", gap=3)
+    db.commit()
+
+    assert update_channel_numbering_settings(db, channel_stability_mode="strict")
+    assert _pending(db)

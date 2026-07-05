@@ -61,7 +61,7 @@ Reset Time is the **server's** local time. In Docker this is usually UTC unless 
 
 You don't have to wait for the daily window. **Re-grid channels now** queues a one-shot re-layout that runs on the **next generation** — renumbering every channel back into priority order and reclaiming gaps, regardless of the reset time (and even if the daily re-layout is turned off).
 
-Changing the **gap size**, switching **stability mode**, or reordering **sort priority / priority teams** queues the same re-grid automatically, so the change takes effect on the next run instead of silently waiting for the daily reset. (This is non-destructive — channels keep their identity and streams; only their numbers change.)
+Changing the **gap size**, switching **stability mode**, adjusting the **channel range**, or reordering **sort priority / priority teams** queues the same re-grid automatically, so the change takes effect on the next run instead of silently waiting for the daily reset. (This is non-destructive — channels keep their identity and streams; only their numbers change.)
 
 {: .note }
 Number Stability applies to **Auto** mode. Manual mode uses its own per-league sequential numbering.

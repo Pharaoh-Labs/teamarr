@@ -195,10 +195,42 @@ def update_lifecycle_settings(
     if not updates:
         return False
 
+    # A range change only takes effect at re-layout in the sticky modes (locked
+    # channels keep their numbers), so arm the one-shot re-grid like gap-size /
+    # stability-mode changes do — otherwise moving the range silently does
+    # nothing until the daily reset. Compare against current values so the UI's
+    # full-PUT of unchanged settings doesn't arm spuriously.
+    arm_relayout = False
+    if channel_range_start is not None or channel_range_end is not _NOT_PROVIDED:
+        try:
+            from teamarr.database.channel_numbers import is_sticky_mode
+
+            cur = conn.execute(
+                "SELECT channel_range_start, channel_range_end FROM settings WHERE id = 1"
+            ).fetchone()
+            start_changed = (
+                channel_range_start is not None
+                and cur is not None
+                and channel_range_start != cur["channel_range_start"]
+            )
+            end_changed = (
+                channel_range_end is not _NOT_PROVIDED
+                and cur is not None
+                and channel_range_end != cur["channel_range_end"]
+            )
+            arm_relayout = (start_changed or end_changed) and is_sticky_mode(conn)
+        except Exception:
+            arm_relayout = False
+
     query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
     cursor = conn.execute(query, values)
     if cursor.rowcount > 0:
         logger.info("[UPDATED] Lifecycle settings: %s", [u.split(" = ")[0] for u in updates])
+        if arm_relayout:
+            from teamarr.database.channel_numbers import arm_channel_relayout
+
+            if arm_channel_relayout(conn):
+                logger.info("[CHANNEL_NUM] Armed one-shot re-grid (channel range changed)")
         return True
     return False
 
@@ -557,6 +589,7 @@ def update_channel_numbering_settings(
     # silently do nothing. Compare against current values to avoid arming on every
     # unrelated save (the UI full-PUTs the whole settings object).
     arm_relayout = False
+    clear_pending = False
     if channel_gap_size is not None or channel_stability_mode is not None:
         try:
             cur = conn.execute(
@@ -572,6 +605,9 @@ def update_channel_numbering_settings(
                 channel_stability_mode is not None and channel_stability_mode != cur_mode
             )
             arm_relayout = (gap_changed or mode_changed) and new_mode in ("gap", "strict")
+            # Leaving the sticky modes: drop any armed re-grid so it doesn't
+            # linger as stale queued state (compact re-sorts every run anyway).
+            clear_pending = mode_changed and new_mode == "compact"
         except Exception:
             arm_relayout = False
 
@@ -584,6 +620,11 @@ def update_channel_numbering_settings(
 
             if arm_channel_relayout(conn):
                 logger.info("[CHANNEL_NUM] Armed one-shot re-grid (layout setting changed)")
+        elif clear_pending:
+            from teamarr.database.channel_numbers import clear_channel_relayout
+
+            if clear_channel_relayout(conn):
+                logger.info("[CHANNEL_NUM] Cleared armed re-grid (left sticky mode)")
         return True
     return False
 

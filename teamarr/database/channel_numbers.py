@@ -259,6 +259,22 @@ def arm_channel_relayout(conn: Connection) -> bool:
     return True
 
 
+def clear_channel_relayout(conn: Connection) -> bool:
+    """Clear an armed one-shot re-layout.
+
+    Used when leaving the sticky modes (switching to compact): the armed flag
+    would otherwise linger invisibly — should_run_channel_reset ignores it in
+    compact mode — and read as still-queued state. Returns False if the column
+    is absent on an un-reconciled DB / partial test schema.
+    """
+    if not _table_has_column(conn, "settings", "force_channel_relayout_pending"):
+        return False
+    conn.execute(
+        "UPDATE settings SET force_channel_relayout_pending = 0 WHERE id = 1"
+    )
+    return True
+
+
 def _table_has_column(conn: Connection, table: str, column: str) -> bool:
     """Return True if `table` has `column` (defensive for un-reconciled DBs/tests)."""
     try:
