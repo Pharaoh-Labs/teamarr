@@ -16,6 +16,7 @@ Matching strategy (combat-style fuzzy names + exact date, no athlete cache):
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -39,6 +40,75 @@ logger = logging.getLogger(__name__)
 # Minimum per-side score for a tennis player-name match (0-100). Both sides
 # must clear it on the same event; surname-subset hits score 100.
 TENNIS_MATCH_THRESHOLD = 75
+
+# --- Court/round feed extraction (phase 2, bead mf7.7) -----------------------
+# Streams name courts as "No 1 Court", "Court 18", "Centre Court", sometimes
+# several at once ("Court 4 AND Court 12"). ESPN names them "No. 1 Court",
+# "Court 18", "Centre Court", "Court 17 Roehampton" (qualifying). Both sides
+# reduce to a canonical key: "centre", "show 1", or the bare number.
+
+_COURT_PATTERNS = [
+    (re.compile(r"\bcent(?:re|er)\s+court\b"), lambda m: "centre"),
+    (re.compile(r"\bshow\s+court\s+(\d{1,2})\b"), lambda m: f"show {m.group(1)}"),
+    (re.compile(r"\bno\s*(\d{1,2})\s+court\b"), lambda m: m.group(1)),
+    (re.compile(r"\bcourt\s+no\s*(\d{1,2})\b"), lambda m: m.group(1)),
+    (re.compile(r"\bcourt\s+(\d{1,2})\b"), lambda m: m.group(1)),
+]
+
+# Ordinal / keyword round labels → canonical ESPN round.displayName form
+_ROUND_ORDINALS = {"first": "1", "second": "2", "third": "3", "fourth": "4"}
+
+
+def _extract_courts(text: str) -> set[str]:
+    """All canonical court keys mentioned in a (normalized) stream name.
+
+    Patterns are ordered most-specific first; a later (less specific) match
+    overlapping an earlier one is suppressed so "show court 1" doesn't also
+    yield a bare "1" via the "court N" pattern.
+    """
+    courts: set[str] = set()
+    claimed: list[tuple[int, int]] = []
+    for pattern, keyfn in _COURT_PATTERNS:
+        for m in pattern.finditer(text):
+            span = m.span()
+            if any(span[0] < end and start < span[1] for start, end in claimed):
+                continue
+            claimed.append(span)
+            courts.add(keyfn(m))
+    return courts
+
+
+def _court_key(court: str) -> str | None:
+    """Canonical key for an ESPN venue.court value (single court)."""
+    keys = _extract_courts(normalize_text(court))
+    return next(iter(keys)) if len(keys) == 1 else None
+
+
+def _extract_round(text: str) -> str | None:
+    """Canonical round label mentioned in a (normalized) stream name."""
+    m = re.search(r"\b(first|second|third|fourth)\s+round\b", text)
+    if m:
+        return f"round {_ROUND_ORDINALS[m.group(1)]}"
+    m = re.search(r"\bround\s+(\d{1,2})\b", text)
+    if m:
+        return f"round {m.group(1)}"
+    if re.search(r"\bquarter\s*finals?\b", text):
+        return "quarterfinals"
+    if re.search(r"\bsemi\s*finals?\b", text):
+        return "semifinals"
+    # Bare "final" — but not Spanish/French round-of-N phrases ("octavos de
+    # final", "cuartos de final", "huitièmes de finale"), which name EARLIER
+    # rounds and must not read as the final.
+    if re.search(r"(?<!\bde\s)(?<!\bof\s)\bfinals?\b", text):
+        return "final"
+    return None
+
+
+def _round_key(round_name: str | None) -> str | None:
+    """Canonical key for an ESPN round.displayName value."""
+    if not round_name:
+        return None
+    return _extract_round(normalize_text(round_name))
 
 
 @dataclass
@@ -84,14 +154,15 @@ class TennisMatcher:
                 detail="Not a tennis stream",
             )
 
-        # Court/round/day feeds classify TENNIS_MATCH without extracted
-        # players — per-match pairing is impossible for them today.
+        # Court/round/day feeds have no player pair — they fan out via
+        # match_feed() (routed in StreamMatcher._match_tennis_event); this
+        # guard only catches a mis-routed call.
         if not classified.team1 or not classified.team2:
             return MatchOutcome.failed(
                 FailedReason.NO_TENNIS_MATCH,
                 stream_name=classified.normalized.original,
                 stream_id=stream_id,
-                detail="Tennis court/round feeds are not yet supported (per-match streams only)",
+                detail="No player pair extracted (court/round feeds route via match_feed)",
             )
 
         match_date = classified.normalized.extracted_date or target_date
@@ -141,6 +212,96 @@ class TennisMatcher:
             self._cache_result(ctx, result)
 
         return result
+
+    def match_feed(
+        self,
+        classified: ClassifiedStream,
+        leagues: list[str],
+        target_date: date,
+        stream_id: int,
+        user_tz: ZoneInfo,
+        duration_hours: float = 3.0,
+    ) -> list[MatchOutcome]:
+        """Match a court/round day-feed to ALL its matches (phase 2, mf7.7).
+
+        Court feeds ("Wimbledon Day #6 No 1 Court ft Rybakina Zverev") carry a
+        court name that joins against ESPN's per-match venue.court; round
+        feeds ("Wimbledon Second Round") join against round.displayName. One
+        stream legitimately covers that court/round's whole slate for the
+        day, so this fans out one outcome per match — each carrying the
+        match's own time slot in epg_program_start/end so the lifecycle layer
+        time-shares the stream across the match channels (same windowing the
+        EPG-match path uses; buffers overlap-tolerant by design).
+
+        A court hosts BOTH tours' draws (grand slams), so candidates pool
+        across all configured tennis leagues. Feed fan-outs are not cached —
+        the slate changes daily.
+        """
+        text = normalize_text(classified.event_hint or classified.normalized.original)
+        stream_name = classified.normalized.original
+
+        courts = _extract_courts(text)
+        round_label = _extract_round(text)
+
+        if not courts and not round_label:
+            return [
+                MatchOutcome.failed(
+                    FailedReason.NO_TENNIS_MATCH,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail="Ambient tennis feed (no court/round/player info to match)",
+                )
+            ]
+
+        match_date = classified.normalized.extracted_date or target_date
+
+        pool: list[Event] = []
+        for league in leagues:
+            pool.extend(self._events_for_local_date(league, match_date, user_tz))
+
+        candidates = []
+        for event in pool:
+            if courts:
+                event_court = _court_key(event.court) if event.court else None
+                if event_court not in courts:
+                    continue
+            if round_label and _round_key(event.round_name) != round_label:
+                continue
+            candidates.append(event)
+
+        if not candidates:
+            what = f"courts {sorted(courts)}" if courts else f"round '{round_label}'"
+            return [
+                MatchOutcome.failed(
+                    FailedReason.NO_TENNIS_MATCH,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=f"No tennis matches on {what} for {match_date}",
+                )
+            ]
+
+        duration = timedelta(hours=duration_hours)
+        outcomes = []
+        for event in sorted(candidates, key=lambda e: e.start_time):
+            outcome = MatchOutcome.matched(
+                MatchMethod.DIRECT,
+                event,
+                detected_league=event.league,
+                confidence=0.9,
+                stream_name=stream_name,
+                stream_id=stream_id,
+            )
+            outcome.epg_program_start = event.start_time
+            outcome.epg_program_end = event.start_time + duration
+            outcomes.append(outcome)
+
+        logger.debug(
+            "[MATCHED] tennis feed stream=%s -> %d matches (%s)",
+            stream_name[:40],
+            len(outcomes),
+            f"courts={sorted(courts)}" if courts else f"round={round_label}",
+        )
+        return outcomes
 
     # =========================================================================
     # PRIVATE METHODS

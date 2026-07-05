@@ -310,9 +310,16 @@ tournament context: `{tournament_name}`, `{tennis_round}`, `{tennis_court}`,
 Grand slams are served by ESPN on both tour endpoints; Teamarr splits the
 draws so subscribing both leagues never duplicates a match — `atp` carries
 Men's Singles/Doubles and Mixed Doubles, `wta` carries Women's
-Singles/Doubles. Court day-feeds ("Wimbledon Day #6 No 1 Court") and
-round feeds are recognized but not yet matched (planned phase 2 — the ESPN
-data carries per-match court assignments).
+Singles/Doubles.
+
+Court day-feeds ("Wimbledon Day #6 No 1 Court", including multi-court names
+like "Court 4 AND Court 12") and round feeds ("Wimbledon Second Round") fan
+out to **every match on that court/round for the day** — ESPN's per-match
+court assignments provide the join. Each match gets its own channel, and the
+feed stream attaches to each channel around that match's time slot (the same
+attach/detach windowing EPG matching uses, honoring the global stream
+buffers). Ambient content (press conferences, highlight shows) is recognized
+and deliberately left unmatched.
 
 ---
 

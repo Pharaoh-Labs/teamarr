@@ -663,7 +663,7 @@ class StreamMatcher:
         if classified.category == StreamCategory.RACING_EVENT:
             return [self._match_racing_event(classified, stream_id, target_date)]
         if classified.category == StreamCategory.TENNIS_MATCH:
-            return [self._match_tennis_event(classified, stream_id, target_date)]
+            return self._match_tennis_event(classified, stream_id, target_date)
         if classified.category == StreamCategory.TEAM_ONLY:
             return self._match_team_only(classified, stream_id, target_date, anchor_dt=anchor_dt)
         # TEAM_VS_TEAM
@@ -1022,8 +1022,14 @@ class StreamMatcher:
         classified: ClassifiedStream,
         stream_id: int,
         target_date: date,
-    ) -> MatchOutcome:
-        """Match a tennis stream (ATP, WTA) to a per-match event."""
+    ) -> list[MatchOutcome]:
+        """Match a tennis stream (ATP, WTA).
+
+        Player-pair streams ("Zheng vs Norrie") match ONE event; court/round
+        day-feeds ("Day #6 No 1 Court") fan out to every match on that
+        court/round for the day (one outcome per match, each carrying its own
+        time-share window — mirrors the TEAM_ONLY/EPG fan-out shape).
+        """
         tennis_leagues = [
             lg
             for lg in self._search_leagues
@@ -1032,11 +1038,23 @@ class StreamMatcher:
         ]
 
         if not tennis_leagues:
-            return MatchOutcome.filtered(
+            return [MatchOutcome.filtered(
                 FilteredReason.LEAGUE_NOT_INCLUDED,
                 stream_name=classified.normalized.original,
                 stream_id=stream_id,
                 detail="No tennis leagues configured",
+            )]
+
+        # Court/round feeds: no player pair — fan out across ALL tennis
+        # leagues at once (a court hosts both tours' draws).
+        if not (classified.team1 and classified.team2):
+            return self._tennis_matcher.match_feed(
+                classified=classified,
+                leagues=tennis_leagues,
+                target_date=target_date,
+                stream_id=stream_id,
+                user_tz=self._user_tz,
+                duration_hours=self._sport_durations.get("tennis", 3.0),
             )
 
         outcome = None
@@ -1051,14 +1069,14 @@ class StreamMatcher:
                 user_tz=self._user_tz,
             )
             if outcome.is_matched:
-                return outcome
+                return [outcome]
 
-        return MatchOutcome.failed(
+        return [MatchOutcome.failed(
             reason=outcome.failed_reason if outcome else None,
             stream_name=classified.normalized.original,
             stream_id=stream_id,
             detail=outcome.detail if outcome else "No matching tennis match found",
-        )
+        )]
 
     def _outcome_to_result(
         self,

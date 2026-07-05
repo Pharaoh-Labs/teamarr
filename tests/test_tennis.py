@@ -6,7 +6,7 @@ Wimbledon 2026 (ESPN tennis/atp scoreboard + real Dispatcharr stream names),
 where the full pipeline validated at ~90% match rate on 683 real streams.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from teamarr.consumers.matching.classifier import (
@@ -378,28 +378,150 @@ def test_widened_fallback_requires_unique_top(monkeypatch):
     assert unique.is_matched
 
 
-def test_court_feed_fails_with_clear_reason():
+# ---------------------------------------------------------------------------
+# Court/round feed matching (phase 2, mf7.7)
+# ---------------------------------------------------------------------------
+
+from teamarr.consumers.matching.tennis_matcher import (  # noqa: E402
+    _court_key,
+    _extract_courts,
+    _extract_round,
+)
+
+
+def test_court_extraction_from_real_stream_names():
+    # Real Dispatcharr stream names (normalized: lowercase, dots stripped)
+    assert _extract_courts("wimbledon day 6 no 1 court ft rybakina zverev") == {"1"}
+    assert _extract_courts("wimbledon day 4 court 4 and court 12 ft fernandez doubles") == {
+        "4",
+        "12",
+    }
+    assert _extract_courts("wimbledon day 5 centre court ft djokovic sabalenka") == {"centre"}
+    assert _extract_courts(
+        "wimbledon day 6 court 18 court 16 no 2 court ft fernandez doubles"
+    ) == {"18", "16", "2"}
+    assert _extract_courts("wimbledon second round") == set()
+
+
+def test_court_key_canonicalizes_espn_values():
+    assert _court_key("No. 1 Court") == "1"
+    assert _court_key("Centre Court") == "centre"
+    assert _court_key("Court 18") == "18"
+    assert _court_key("Court 17 Roehampton") == "17"
+    assert _court_key("Show Court 1 Roehampton") == "show 1"
+
+
+def test_round_extraction():
+    assert _extract_round("wimbledon second round") == "round 2"
+    assert _extract_round("wimbledon round 3") == "round 3"
+    assert _extract_round("wimbledon quarterfinals day 9") == "quarterfinals"
+    assert _extract_round("wimbledon semi final") == "semifinals"
+    assert _extract_round("wimbledon final") == "final"
+    assert _extract_round("wimbledon day 6 no 1 court") is None
+    # Spanish/French round-of-N phrases name EARLIER rounds — not the final
+    assert _extract_round("wimbledon octavos de final") is None
+    assert _extract_round("cuartos de final wimbledon") is None
+
+
+class _PoolService:
+    def __init__(self, events):
+        self._events = events
+
+    def get_events(self, league, target_date, cache_only=False):
+        return [e for e in self._events if e.league == league]
+
+
+class _NoCache:
+    def get(self, *a, **k):
+        return None
+
+    def touch(self, *a, **k):
+        pass
+
+
+def _court_event(eid, league, court, start, round_name="Round 4"):
+    e = _tennis_event(
+        eid,
+        _player(f"Player {eid}A", f"{eid}A"),
+        _player(f"Player {eid}B", f"{eid}B"),
+        start,
+    )
+    e.court = court
+    e.round_name = round_name
+    e.league = league
+    return e
+
+
+def test_court_feed_fans_out_to_courts_matches():
     tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 7, 4, 8, 0, tzinfo=tz)
+    events = [
+        _court_event("m1", "atp", "No. 1 Court", day),
+        _court_event("m2", "wta", "No. 1 Court", day.replace(hour=10)),
+        _court_event("m3", "atp", "Court 18", day),  # different court
+    ]
+    tm = TennisMatcher(service=_PoolService(events), cache=_NoCache())
+
     c = classify_stream(
-        "Wimbledon Day #6 No 1 Court ft Rybakina Zverev @ Jul 4 8:00 AM",
+        "Wimbledon Day #6 No 1 Court ft Rybakina Zverev @ Jul 4 8:00 AM :Tennis  04",
         league_event_type="event",
         event_league_sport="tennis",
     )
-
-    class _NoService:
-        def get_events(self, *a, **k):
-            return []
-
-    class _NoCache:
-        def get(self, *a, **k):
-            return None
-
-        def touch(self, *a, **k):
-            pass
-
-    tm = TennisMatcher(service=_NoService(), cache=_NoCache())
-    outcome = tm.match(
-        c, "atp", date(2026, 7, 4), group_id=1, stream_id=1, generation=1, user_tz=tz
+    outcomes = tm.match_feed(
+        c, ["atp", "wta"], date(2026, 7, 4), stream_id=1, user_tz=tz, duration_hours=3.0
     )
-    assert not outcome.is_matched
-    assert "not yet supported" in (outcome.detail or "")
+    matched_ids = {o.event.id for o in outcomes if o.is_matched}
+    assert matched_ids == {"m1", "m2"}  # both tours' matches on No.1 Court
+    # each outcome carries its own time-share window
+    for o in outcomes:
+        assert o.epg_program_start == o.event.start_time
+        assert o.epg_program_end == o.event.start_time + timedelta(hours=3)
+
+
+def test_round_feed_fans_out_to_rounds_matches():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 7, 2, 6, 0, tzinfo=tz)
+    events = [
+        _court_event("r1", "atp", "Court 5", day, round_name="Round 2"),
+        _court_event("r2", "wta", "Court 8", day, round_name="Round 2"),
+        _court_event("r3", "atp", "Court 5", day.replace(hour=12), round_name="Round 1"),
+    ]
+    tm = TennisMatcher(service=_PoolService(events), cache=_NoCache())
+
+    c = classify_stream(
+        "Wimbledon Second Round @ Jul 2 5:00 AM :Tennis  01",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    outcomes = tm.match_feed(
+        c, ["atp", "wta"], date(2026, 7, 2), stream_id=1, user_tz=tz
+    )
+    assert {o.event.id for o in outcomes if o.is_matched} == {"r1", "r2"}
+
+
+def test_ambient_feed_fails_with_clear_reason():
+    tz = ZoneInfo("America/New_York")
+    tm = TennisMatcher(service=_PoolService([]), cache=_NoCache())
+    c = classify_stream(
+        "Wimbledon Press Conferences",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    outcomes = tm.match_feed(c, ["atp"], date(2026, 7, 4), stream_id=1, user_tz=tz)
+    assert len(outcomes) == 1 and not outcomes[0].is_matched
+    assert "Ambient tennis feed" in (outcomes[0].detail or "")
+
+
+def test_court_feed_no_matches_on_court_fails():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 7, 4, 8, 0, tzinfo=tz)
+    events = [_court_event("m3", "atp", "Court 18", day)]
+    tm = TennisMatcher(service=_PoolService(events), cache=_NoCache())
+    c = classify_stream(
+        "Wimbledon Day #6 No 1 Court @ Jul 4 8:00 AM",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    outcomes = tm.match_feed(c, ["atp"], date(2026, 7, 4), stream_id=1, user_tz=tz)
+    assert len(outcomes) == 1 and not outcomes[0].is_matched
+    assert "No tennis matches on" in (outcomes[0].detail or "")
