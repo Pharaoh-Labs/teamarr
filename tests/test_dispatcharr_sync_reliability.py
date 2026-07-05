@@ -641,6 +641,10 @@ class TestReconciliationDriftAutoFix:
             streams=(456,),
             channel_profile_ids=None,
         )
+        cm.get_channel_existence.return_value = (
+            _make_dispatcharr_channel(streams=(456,), channel_profile_ids=None),
+            False,
+        )
         cm.update_channel.return_value = OperationResult(success=True)
         cm.get_channels.return_value = []
         cm.clear_cache.return_value = None
@@ -722,3 +726,166 @@ class TestDispatcharrChannelProfileIds:
             }
         )
         assert ch.channel_profile_ids == ()
+
+
+# =============================================================================
+# get_channel_existence: "confirmed gone" vs "couldn't verify"
+# =============================================================================
+
+
+def _resp(status_code, json_data=None):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data or {}
+    return resp
+
+
+class TestGetChannelExistence:
+    """get_channel_existence must distinguish a real 404 from a transient
+    failure, so destructive callers don't abandon a live channel."""
+
+    def _manager(self, client):
+        from teamarr.dispatcharr.managers.channels import ChannelManager
+
+        return ChannelManager(client)
+
+    def test_http_200_returns_channel_present(self):
+        client = MagicMock()
+        client.get.return_value = _resp(
+            200,
+            {"id": 100, "uuid": "u", "name": "CH", "channel_number": "5001", "streams": []},
+        )
+        channel, confirmed_absent = self._manager(client).get_channel_existence(
+            100, use_cache=False
+        )
+        assert channel is not None and channel.id == 100
+        assert confirmed_absent is False
+
+    def test_http_404_is_confirmed_absent(self):
+        client = MagicMock()
+        client.get.return_value = _resp(404)
+        assert self._manager(client).get_channel_existence(100, use_cache=False) == (None, True)
+
+    def test_http_500_is_inconclusive(self):
+        client = MagicMock()
+        client.get.return_value = _resp(500)
+        assert self._manager(client).get_channel_existence(100, use_cache=False) == (None, False)
+
+    def test_http_502_is_inconclusive(self):
+        client = MagicMock()
+        client.get.return_value = _resp(502)
+        assert self._manager(client).get_channel_existence(100, use_cache=False) == (None, False)
+
+    def test_none_response_is_inconclusive(self):
+        client = MagicMock()
+        client.get.return_value = None
+        assert self._manager(client).get_channel_existence(100, use_cache=False) == (None, False)
+
+
+# =============================================================================
+# Transient-failure safety: never delete + recreate on an unverifiable channel
+# =============================================================================
+
+
+def _insert_managed_channel(conn):
+    conn.execute(
+        "INSERT INTO managed_channels "
+        "(id, event_epg_group_id, event_id, event_provider, channel_name, "
+        "tvg_id, dispatcharr_channel_id, dispatcharr_uuid, channel_group_id, "
+        "channel_number) "
+        "VALUES (1, 1, '123', 'espn', 'Test', 'teamarr-event-123', "
+        "100, 'uuid-100', 10, '5001')"
+    )
+    conn.commit()
+
+
+class TestReconciliationOrphanTransientSafety:
+    """Reconciliation only flags an orphan on a confirmed 404."""
+
+    def test_verify_channel_confirmed_absent_flags_orphan(self, recon_conn):
+        _insert_managed_channel(recon_conn)
+        cm = MagicMock()
+        cm.get_channel_existence.return_value = (None, True)
+        reconciler = ChannelReconciler(db_factory=lambda: recon_conn, channel_manager=cm)
+        issue = reconciler.verify_channel(1)
+        assert issue is not None
+        assert issue.issue_type == "orphan_teamarr"
+        assert issue.suggested_action == "mark_deleted"
+
+    def test_verify_channel_inconclusive_is_healthy(self, recon_conn):
+        _insert_managed_channel(recon_conn)
+        cm = MagicMock()
+        cm.get_channel_existence.return_value = (None, False)
+        reconciler = ChannelReconciler(db_factory=lambda: recon_conn, channel_manager=cm)
+        assert reconciler.verify_channel(1) is None
+
+    def test_detect_orphan_skips_on_inconclusive(self, recon_conn):
+        _insert_managed_channel(recon_conn)
+        cm = MagicMock()
+        cm.get_channel_existence.return_value = (None, False)
+        reconciler = ChannelReconciler(db_factory=lambda: recon_conn, channel_manager=cm)
+        assert reconciler._detect_orphan_teamarr(recon_conn) == []
+
+    def test_detect_orphan_flags_on_confirmed_404(self, recon_conn):
+        _insert_managed_channel(recon_conn)
+        cm = MagicMock()
+        cm.get_channel_existence.return_value = (None, True)
+        reconciler = ChannelReconciler(db_factory=lambda: recon_conn, channel_manager=cm)
+        issues = reconciler._detect_orphan_teamarr(recon_conn)
+        assert len(issues) == 1
+        assert issues[0].issue_type == "orphan_teamarr"
+
+
+class TestExistingChannelVerificationSafety:
+    """_handle_existing_channel deletes + recreates only on a confirmed 404."""
+
+    def test_confirmed_absent_marks_deleted_and_signals_recreate(self):
+        cm = MagicMock()
+        cm.get_channel_existence.return_value = (None, True)
+        service = _make_service(channel_manager=cm)
+
+        with (
+            patch("teamarr.database.channels.mark_channel_deleted") as mock_del,
+            patch("teamarr.database.channels.log_channel_history"),
+        ):
+            result = service._handle_existing_channel(
+                conn=MagicMock(),
+                existing=FakeManagedChannel(),
+                stream={"id": 456, "name": "S"},
+                event=FakeEvent(),
+                effective_mode="consolidate",
+                matched_keyword=None,
+                group_config={},
+                template=None,
+            )
+
+        # None signals the caller to create a new channel.
+        assert result is None
+        mock_del.assert_called_once()
+
+    def test_inconclusive_keeps_channel_and_does_not_recreate(self):
+        cm = MagicMock()
+        cm.get_channel_existence.return_value = (None, False)
+        service = _make_service(channel_manager=cm)
+
+        with (
+            patch("teamarr.database.channels.mark_channel_deleted") as mock_del,
+            patch("teamarr.database.channels.log_channel_history"),
+            patch.object(
+                service, "_sync_channel_settings", return_value=StreamProcessResult()
+            ),
+        ):
+            result = service._handle_existing_channel(
+                conn=MagicMock(),
+                existing=FakeManagedChannel(),
+                stream={"id": 456, "name": "S"},
+                event=FakeEvent(),
+                effective_mode="ignore",
+                matched_keyword=None,
+                group_config={},
+                template=None,
+            )
+
+        # Channel left intact: not deleted, and not signalled for recreate.
+        assert result is not None
+        mock_del.assert_not_called()

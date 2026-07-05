@@ -76,6 +76,12 @@ def add_priority_team(
         """,
         (provider, provider_team_id, league, league),
     ).fetchone()
+    if row:
+        # Priority teams float to the top of the lineup; arm a one-shot re-grid so
+        # the change applies on the next generation rather than at the daily reset.
+        from teamarr.database.channel_numbers import arm_channel_relayout
+
+        arm_channel_relayout(conn)
     return dict(row) if row else None
 
 
@@ -85,7 +91,12 @@ def delete_priority_team(conn: sqlite3.Connection, team_pk: int) -> bool:
         "DELETE FROM channel_priority_teams WHERE id = ?",
         (team_pk,),
     )
-    return cursor.rowcount > 0
+    if cursor.rowcount > 0:
+        from teamarr.database.channel_numbers import arm_channel_relayout
+
+        arm_channel_relayout(conn)
+        return True
+    return False
 
 
 def get_priority_team_match_keys(conn: sqlite3.Connection) -> set[tuple[str, str]]:

@@ -837,12 +837,26 @@ def _sync_global_channels(
     update_progress: Callable,
     external_occupied: set[int] | None = None,
 ) -> None:
-    """Reassign channel numbers globally by sort priority."""
-    from teamarr.database.channel_numbers import reassign_all_channels
+    """Reassign channel numbers globally by sort priority.
+
+    This is the single authoritative pass that pushes numbers to Dispatcharr.
+    In sticky (gap/strict) modes it places only new channels, unless the daily
+    reset window has arrived (should_run_channel_reset) — then it re-grids
+    everything once.
+    """
+    from teamarr.database.channel_numbers import (
+        reassign_all_channels,
+        should_run_channel_reset,
+    )
 
     update_progress("groups", 94, "Reassigning channels globally by sport/league priority...")
     with db_factory() as conn:
-        global_result = reassign_all_channels(conn, external_occupied=external_occupied)
+        force_reset = should_run_channel_reset(conn)
+        if force_reset:
+            update_progress("groups", 94, "Daily channel re-layout (low-traffic reset)...")
+        global_result = reassign_all_channels(
+            conn, external_occupied=external_occupied, force_reset=force_reset
+        )
         if global_result["channels_moved"] == 0:
             return
 

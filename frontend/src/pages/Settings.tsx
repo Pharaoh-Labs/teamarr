@@ -1897,8 +1897,6 @@ export function Settings() {
           <SaveButton onClick={handleSaveChannelsDVR} pending={updateChannelsDVR.isPending} />
         </CardContent>
       </Card>
-
-      <ScheduledChannelResetCard />
       </>
       )}
 
@@ -1911,6 +1909,9 @@ export function Settings() {
 
       {/* Backup & Restore */}
       <BackupRestoreCard />
+
+      {/* Scheduled Channel Reset */}
+      <ScheduledChannelResetCard />
 
       {/* Data Caches */}
       <Card>

@@ -482,6 +482,10 @@ def update_channel_numbering_settings(
     global_channel_mode: str | None = None,
     league_channel_starts: dict | None = None,
     global_consolidation_mode: str | None = None,
+    channel_stability_mode: str | None = None,
+    channel_gap_size: int | None = None,
+    channel_daily_reset_enabled: bool | None = None,
+    channel_daily_reset_time: str | None = None,
 ) -> bool:
     """Update channel numbering and consolidation settings.
 
@@ -490,6 +494,10 @@ def update_channel_numbering_settings(
         global_channel_mode: 'auto' or 'manual'
         league_channel_starts: Dict mapping league_code → starting channel number
         global_consolidation_mode: 'consolidate' or 'separate'
+        channel_stability_mode: 'compact', 'gap', or 'strict'
+        channel_gap_size: spacing between channels in 'gap' mode (>= 1)
+        channel_daily_reset_enabled: run the periodic full re-layout
+        channel_daily_reset_time: local HH:MM reset window
 
     Returns:
         True if updated
@@ -519,13 +527,63 @@ def update_channel_numbering_settings(
         updates.append("global_consolidation_mode = ?")
         values.append(global_consolidation_mode)
 
+    if channel_stability_mode is not None:
+        if channel_stability_mode not in ("compact", "gap", "strict"):
+            logger.warning(
+                "[CHANNEL_NUM] Invalid channel_stability_mode '%s'", channel_stability_mode,
+            )
+            return False
+        updates.append("channel_stability_mode = ?")
+        values.append(channel_stability_mode)
+
+    if channel_gap_size is not None:
+        updates.append("channel_gap_size = ?")
+        values.append(max(1, int(channel_gap_size)))
+
+    if channel_daily_reset_enabled is not None:
+        updates.append("channel_daily_reset_enabled = ?")
+        values.append(1 if channel_daily_reset_enabled else 0)
+
+    if channel_daily_reset_time is not None:
+        updates.append("channel_daily_reset_time = ?")
+        values.append(channel_daily_reset_time)
+
     if not updates:
         return False
+
+    # Auto-arm a one-shot re-grid when a layout-affecting setting actually changes
+    # while in (or switching into) a sticky mode — existing locked channels
+    # otherwise keep their numbers until the daily reset, so the change would
+    # silently do nothing. Compare against current values to avoid arming on every
+    # unrelated save (the UI full-PUTs the whole settings object).
+    arm_relayout = False
+    if channel_gap_size is not None or channel_stability_mode is not None:
+        try:
+            cur = conn.execute(
+                "SELECT channel_stability_mode, channel_gap_size FROM settings WHERE id = 1"
+            ).fetchone()
+            cur_mode = (cur["channel_stability_mode"] if cur else None) or "compact"
+            cur_gap = int((cur["channel_gap_size"] if cur else None) or 3)
+            new_mode = channel_stability_mode or cur_mode
+            gap_changed = (
+                channel_gap_size is not None and int(channel_gap_size) != cur_gap
+            )
+            mode_changed = (
+                channel_stability_mode is not None and channel_stability_mode != cur_mode
+            )
+            arm_relayout = (gap_changed or mode_changed) and new_mode in ("gap", "strict")
+        except Exception:
+            arm_relayout = False
 
     query = f"UPDATE settings SET {', '.join(updates)} WHERE id = 1"
     cursor = conn.execute(query, values)
     if cursor.rowcount > 0:
         logger.info("[CHANNEL_NUM] Updated settings: %s", [u.split(" = ")[0] for u in updates])
+        if arm_relayout:
+            from teamarr.database.channel_numbers import arm_channel_relayout
+
+            if arm_channel_relayout(conn):
+                logger.info("[CHANNEL_NUM] Armed one-shot re-grid (layout setting changed)")
         return True
     return False
 

@@ -209,6 +209,43 @@ class ChannelManager:
                 return channel
             return None
 
+    def get_channel_existence(
+        self,
+        channel_id: int,
+        use_cache: bool = True,
+    ) -> tuple[DispatcharrChannel | None, bool]:
+        """Fetch a channel, distinguishing "confirmed gone" from "couldn't verify".
+
+        ``get_channel`` collapses a real 404 and a transient failure (timeout,
+        5xx, auth/network error) into the same ``None`` return. Callers that take
+        a *destructive* action on a missing channel (soft-delete + recreate, or
+        flag as orphan) must not act on a transient blip — doing so abandons the
+        live Dispatcharr channel and recreates a duplicate, which in gap/strict
+        numbering modes appears far away in the range (see lifecycle
+        ``_handle_existing_channel`` and reconciliation orphan detection).
+
+        Returns ``(channel, confirmed_absent)``:
+          - ``(channel, False)`` — exists (cache hit or HTTP 200).
+          - ``(None, True)``    — Dispatcharr returned HTTP 404; really gone.
+          - ``(None, False)``   — inconclusive (no response, 5xx, network/auth
+            error). Treat the channel as still present and re-verify next run.
+        """
+        with self._lock:
+            if use_cache:
+                self._ensure_cache()
+                cached = self._cache.get_by_id(channel_id)
+                if cached:
+                    return cached, False
+
+            response = self._client.get(f"/api/channels/channels/{channel_id}/")
+            if response is not None and response.status_code == 200:
+                channel = DispatcharrChannel.from_api(response.json())
+                if use_cache:
+                    self._cache.update(channel)
+                return channel, False
+            confirmed_absent = response is not None and response.status_code == 404
+            return None, confirmed_absent
+
     def create_channel(
         self,
         name: str,

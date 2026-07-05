@@ -4,6 +4,7 @@ Query functions to fetch settings from the database.
 """
 
 import json
+import sqlite3
 from sqlite3 import Connection
 
 from .types import (
@@ -508,10 +509,22 @@ def _build_channel_numbering_settings(row) -> ChannelNumberingSettings:
         except (ValueError, TypeError, json.JSONDecodeError):
             pass
 
+    # Stability columns may be absent on un-reconciled DBs / partial test schemas.
+    keys = set(row.keys())
+
+    def _get(key, default):
+        return row[key] if key in keys else default
+
+    reset_enabled = _get("channel_daily_reset_enabled", None)
     return ChannelNumberingSettings(
         global_channel_mode=row["global_channel_mode"] or "auto",
         league_channel_starts=league_starts,
         global_consolidation_mode=row["global_consolidation_mode"] or "consolidate",
+        channel_stability_mode=_get("channel_stability_mode", None) or "compact",
+        channel_gap_size=_get("channel_gap_size", None) or 3,
+        channel_daily_reset_enabled=True if reset_enabled is None else bool(reset_enabled),
+        channel_daily_reset_time=_get("channel_daily_reset_time", None) or "04:00",
+        force_channel_relayout_pending=bool(_get("force_channel_relayout_pending", 0)),
     )
 
 
@@ -524,11 +537,22 @@ def get_channel_numbering_settings(conn: Connection) -> ChannelNumberingSettings
     Returns:
         ChannelNumberingSettings with global channel mode, league starts, consolidation
     """
-    cursor = conn.execute(
-        """SELECT global_channel_mode, league_channel_starts, global_consolidation_mode
-           FROM settings WHERE id = 1"""
-    )
-    row = cursor.fetchone()
+    try:
+        cursor = conn.execute(
+            """SELECT global_channel_mode, league_channel_starts, global_consolidation_mode,
+                      channel_stability_mode, channel_gap_size,
+                      channel_daily_reset_enabled, channel_daily_reset_time,
+                      force_channel_relayout_pending
+               FROM settings WHERE id = 1"""
+        )
+        row = cursor.fetchone()
+    except sqlite3.OperationalError:
+        # Stability columns not present yet (un-reconciled DB / partial test schema).
+        cursor = conn.execute(
+            """SELECT global_channel_mode, league_channel_starts, global_consolidation_mode
+               FROM settings WHERE id = 1"""
+        )
+        row = cursor.fetchone()
 
     if not row:
         return ChannelNumberingSettings()

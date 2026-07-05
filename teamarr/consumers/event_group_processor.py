@@ -2664,18 +2664,25 @@ class EventGroupProcessor:
         combined_result = StreamProcessResult()
 
         # v59: Global channel reassignment before processing
-        # Ensures all channels have correct numbers based on global mode
+        # Ensures all channels have correct numbers based on global mode.
+        # Skipped in sticky (gap/strict) modes — those defer all placement to the
+        # single end-of-run pass in generation, which is the only one that pushes
+        # to Dispatcharr (see is_sticky_mode).
         try:
-            from teamarr.database.channel_numbers import reassign_all_channels
+            from teamarr.database.channel_numbers import (
+                is_sticky_mode,
+                reassign_all_channels,
+            )
             with lifecycle_service._db_factory() as conn:
-                reassign_result = reassign_all_channels(
-                    conn, external_occupied=lifecycle_service._external_occupied
-                )
-                if reassign_result.get("channels_moved"):
-                    logger.info(
-                        "[EVENT_EPG] Pre-process reassignment: %d channels moved",
-                        reassign_result["channels_moved"],
+                if not is_sticky_mode(conn):
+                    reassign_result = reassign_all_channels(
+                        conn, external_occupied=lifecycle_service._external_occupied
                     )
+                    if reassign_result.get("channels_moved"):
+                        logger.info(
+                            "[EVENT_EPG] Pre-process reassignment: %d channels moved",
+                            reassign_result["channels_moved"],
+                        )
         except Exception as e:
             logger.debug("[EVENT_EPG] Error in global reassignment: %s", e)
 
@@ -2707,17 +2714,18 @@ class EventGroupProcessor:
         )
         combined_result.merge(process_result)
 
-        # v59: Post-process global reassignment
+        # v59: Post-process global reassignment (skipped in sticky modes — see above)
         try:
             with lifecycle_service._db_factory() as conn:
-                reassign_result = reassign_all_channels(
-                    conn, external_occupied=lifecycle_service._external_occupied
-                )
-                if reassign_result.get("channels_moved"):
-                    logger.info(
-                        "[EVENT_EPG] Post-process reassignment: %d channels moved",
-                        reassign_result["channels_moved"],
+                if not is_sticky_mode(conn):
+                    reassign_result = reassign_all_channels(
+                        conn, external_occupied=lifecycle_service._external_occupied
                     )
+                    if reassign_result.get("channels_moved"):
+                        logger.info(
+                            "[EVENT_EPG] Post-process reassignment: %d channels moved",
+                            reassign_result["channels_moved"],
+                        )
         except Exception as e:
             logger.debug("[EVENT_EPG] Error reassigning channel numbers: %s", e)
 

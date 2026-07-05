@@ -388,6 +388,29 @@ CREATE TABLE IF NOT EXISTS settings (
     global_consolidation_mode TEXT DEFAULT 'consolidate'
         CHECK(global_consolidation_mode IN ('consolidate', 'separate')),
 
+    -- Channel Numbering Stability Mode (how existing channel numbers behave across runs)
+    -- 'compact': Re-sort all channels into contiguous priority order every run (legacy default).
+    --            Tidy guide, but a live channel's number can shift when events start/end.
+    -- 'gap':     Sticky + gap-aware. Existing channels keep their number for their whole
+    --            lifecycle; new channels slot into a free number in their sorted neighborhood
+    --            (using channel_gap_size spacing) or append. Deleted slots are reused.
+    -- 'strict':  Sticky + no-drift. Existing channels never move; new channels that would
+    --            displace others are appended to the end of the used range. Gaps are reclaimed
+    --            only at the daily reset.
+    -- For 'gap'/'strict', a full re-layout (the only time existing channels move) runs on the
+    -- first generation at/after channel_daily_reset_time each day, if channel_daily_reset_enabled.
+    channel_stability_mode TEXT DEFAULT 'compact'
+        CHECK(channel_stability_mode IN ('compact', 'gap', 'strict')),
+    channel_gap_size INTEGER DEFAULT 3,                 -- Spacing between channels in 'gap' mode (1 = none)
+    channel_daily_reset_enabled BOOLEAN DEFAULT 1,      -- Run the periodic full re-layout (gap/strict only)
+    channel_daily_reset_time TEXT DEFAULT '04:00',      -- Local HH:MM low-traffic window for the reset
+    last_channel_reset_at TEXT,                          -- Internal: timestamp of last full reset
+    -- Internal: one-shot "re-grid on the next generation" flag. Set by the manual
+    -- "Re-grid now" action and auto-armed when a setting that only takes effect at
+    -- re-layout changes (gap size, stability mode, sort priority). Bypasses the
+    -- daily time gate and reset_enabled; cleared once the re-layout runs.
+    force_channel_relayout_pending BOOLEAN DEFAULT 0,
+
     -- Feed Separation (HOME/AWAY stream detection)
     -- When enabled, detects feed indicators in stream names and creates separate channels per feed
     feed_separation_enabled BOOLEAN DEFAULT 0,          -- Master toggle (off by default)
@@ -677,6 +700,10 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     tvg_id TEXT NOT NULL,  -- Not UNIQUE: soft-deleted records can share tvg_id with active
     channel_name TEXT NOT NULL,
     channel_number TEXT,
+    -- Stability lock (gap/strict modes only; ignored in compact mode):
+    -- 0 = not yet placed by the stability allocator (newly created, or mode just enabled)
+    -- 1 = number finalized and sticky — never moved except by the daily reset re-layout
+    channel_number_locked INTEGER DEFAULT 0,
     logo_url TEXT,
 
     -- Dispatcharr Integration

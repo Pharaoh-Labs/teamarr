@@ -256,6 +256,13 @@ def reorder_sort_priorities(conn: Connection, ordered_list: list[dict]) -> bool:
                     (priority, sport, league_code),
                 )
 
+        # Sort priority drives both the sticky-mode neighbourhood and the reset
+        # layout; arm a one-shot re-grid so the new order takes effect on the next
+        # generation instead of waiting for the daily reset (no-op in compact).
+        from teamarr.database.channel_numbers import arm_channel_relayout
+
+        arm_channel_relayout(conn)
+
         conn.commit()
         logger.info("[SORT_PRIORITY] Reordered %d entries", len(ordered_list))
         return True

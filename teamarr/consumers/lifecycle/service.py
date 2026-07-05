@@ -900,14 +900,22 @@ class ChannelLifecycleService:
         stream_id = stream.get("id")
         disp_channel = None  # Dispatcharr's view of this channel (for phantom detection)
 
-        # Verify channel exists in Dispatcharr
-        # If missing, mark as deleted and return None to signal caller to create new
+        # Verify channel exists in Dispatcharr.
+        # Only a CONFIRMED 404 means the channel is really gone; a transient blip
+        # (timeout, 5xx, auth/network error) must NOT trigger delete + recreate,
+        # or we abandon the live channel and create a duplicate (which in gap/
+        # strict modes lands far away in the range). On an inconclusive result we
+        # leave the channel intact and re-verify next run (DB is source of truth).
         if self._channel_manager and existing.dispatcharr_channel_id:
             with self._dispatcharr_lock:
-                disp_channel = self._channel_manager.get_channel(existing.dispatcharr_channel_id)
-                if not disp_channel:
-                    # Channel missing from Dispatcharr - mark old record deleted
-                    # Return None to signal caller should create new channel
+                disp_channel, confirmed_absent = (
+                    self._channel_manager.get_channel_existence(
+                        existing.dispatcharr_channel_id
+                    )
+                )
+                if disp_channel is None and confirmed_absent:
+                    # Channel confirmed missing from Dispatcharr - mark old record
+                    # deleted and return None so the caller creates a new one.
                     logger.warning(
                         f"Channel {existing.dispatcharr_channel_id} missing from "
                         f"Dispatcharr, marking deleted and will create new: {existing.channel_name}"
@@ -926,6 +934,14 @@ class ChannelLifecycleService:
                     )
                     # Return None to signal caller to create new channel
                     return None
+                if disp_channel is None:
+                    # Inconclusive — could not verify. Keep the channel as-is and
+                    # skip phantom-stream purge (disp_channel stays None).
+                    logger.warning(
+                        "Could not verify channel %s in Dispatcharr (transient error); "
+                        "leaving intact, will re-verify next run: %s",
+                        existing.dispatcharr_channel_id, existing.channel_name,
+                    )
 
         if effective_mode == "ignore":
             # Skip - don't add stream, but still sync settings

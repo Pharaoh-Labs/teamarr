@@ -233,11 +233,18 @@ class ChannelReconciler:
             if not channel.dispatcharr_channel_id:
                 continue
 
-            # Check if channel exists in Dispatcharr
+            # Check if channel exists in Dispatcharr. Only a confirmed 404 is a
+            # real orphan; a transient failure must not mark a live channel
+            # deleted (that recreates a duplicate next run).
             with self._dispatcharr_lock:
-                dispatcharr_channel = self._channel_manager.get_channel(
-                    channel.dispatcharr_channel_id
+                dispatcharr_channel, confirmed_absent = (
+                    self._channel_manager.get_channel_existence(
+                        channel.dispatcharr_channel_id
+                    )
                 )
+
+            if dispatcharr_channel is None and not confirmed_absent:
+                continue  # Inconclusive — re-verify next run
 
             if not dispatcharr_channel:
                 issues.append(
@@ -687,21 +694,26 @@ class ChannelReconciler:
                     suggested_action="sync_to_dispatcharr",
                 )
 
-            # Check if exists in Dispatcharr
+            # Check if exists in Dispatcharr. Only a confirmed 404 is a real
+            # orphan; an inconclusive result is re-verified on a later run.
             with self._dispatcharr_lock:
-                dispatcharr_channel = self._channel_manager.get_channel(
-                    channel.dispatcharr_channel_id
+                dispatcharr_channel, confirmed_absent = (
+                    self._channel_manager.get_channel_existence(
+                        channel.dispatcharr_channel_id
+                    )
                 )
 
-            if not dispatcharr_channel:
-                return ReconciliationIssue(
-                    issue_type="orphan_teamarr",
-                    severity="warning",
-                    managed_channel_id=channel.id,
-                    dispatcharr_channel_id=channel.dispatcharr_channel_id,
-                    channel_name=channel.channel_name,
-                    suggested_action="mark_deleted",
-                )
+            if dispatcharr_channel is None:
+                if confirmed_absent:
+                    return ReconciliationIssue(
+                        issue_type="orphan_teamarr",
+                        severity="warning",
+                        managed_channel_id=channel.id,
+                        dispatcharr_channel_id=channel.dispatcharr_channel_id,
+                        channel_name=channel.channel_name,
+                        suggested_action="mark_deleted",
+                    )
+                return None  # Inconclusive — re-verify on a later run
 
             # Check for drift
             if channel.tvg_id and channel.tvg_id != dispatcharr_channel.tvg_id:
