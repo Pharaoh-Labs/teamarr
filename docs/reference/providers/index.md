@@ -22,6 +22,7 @@ Request for league data
         │
         ├── ESPN (priority 0)         → supports? → Yes → use ESPN
         ├── Squiggle (priority 30)    → supports? → Yes → use Squiggle
+        ├── NASCAR (priority 35)      → supports? → Yes → use NASCAR
         ├── MLB Stats (priority 40)   → supports? → Yes → use MLB Stats
         ├── HockeyTech (priority 50)  → supports? → Yes → use HockeyTech
         └── TSDB (priority 100)       → supports? → Yes → use TSDB
@@ -33,6 +34,7 @@ Request for league data
 |----------|----------|---------|------|------------|
 | [ESPN](espn) | 0 | 52 | None (public API) | Generous (DNS is usually the bottleneck) |
 | [Squiggle](squiggle) | 30 | 1 (AFL) | None (free) | No hard limit — cache required |
+| [NASCAR](nascar) | 35 | 3 | None (public API) | None observed — season schedule cached 6h |
 | [MLB Stats](mlbstats) | 40 | 5 | None (public API) | None observed |
 | [HockeyTech](hockeytech) | 50 | 14 | Public client keys | None observed |
 | [TSDB](tsdb) | 100 | 11 | API key in URL path | 30/min free, 100/min premium |
@@ -61,6 +63,7 @@ Each league in `schema.sql` maps to a provider via the `provider` and `provider_
 |----------|--------|---------|
 | ESPN | `sport/league` | `football/nfl`, `soccer/eng.1` |
 | Squiggle | `league_code` | `afl` |
+| NASCAR | series number | `1` (Cup), `2` (ORAP), `3` (Trucks) |
 | MLB Stats | `sport_id` | `11` (Triple-A) |
 | HockeyTech | `client_code` | `ohl`, `ahl` |
 | TSDB | `league_id` | `4460` (IPL) |

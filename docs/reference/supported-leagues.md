@@ -267,9 +267,9 @@ Motorsports are **Event Only** - no team import available.
 | League | ID | Provider | Type |
 |--------|-----|----------|------|
 | Formula 1 | `f1` | ESPN | Event |
-| NASCAR Cup Series | `nascar-cup` | ESPN | Event |
-| NASCAR Xfinity Series | `nascar-xfinity` | ESPN | Event |
-| NASCAR Craftsman Truck Series | `nascar-truck` | ESPN | Event |
+| NASCAR Cup Series | `nascar-cup` | NASCAR API | Event |
+| NASCAR O'Reilly Auto Parts Series | `nascar-xfinity` | NASCAR API | Event |
+| NASCAR Craftsman Truck Series | `nascar-truck` | NASCAR API | Event |
 | IndyCar Series | `indycar` | ESPN | Event |
 | IMSA SportsCar Championship | `imsa` | TSDB | Event |
 | FIA World Endurance Championship | `wec` | TSDB **P** | Event |

@@ -25,11 +25,17 @@ from teamarr.templates.variables.motorsports import (
     extract_podium_3,
     extract_pole_position,
     extract_pole_team,
+    extract_race_distance,
+    extract_race_laps,
     extract_race_name,
     extract_race_winner,
     extract_results,
     extract_session_name,
     extract_session_type,
+    extract_stage_1_laps,
+    extract_stage_2_laps,
+    extract_stage_3_laps,
+    extract_stage_summary,
 )
 
 EVENT_TEAM = Team(
@@ -243,3 +249,77 @@ class TestRaceResults:
         ctx = _ctx(_non_racing_event())
         assert extract_race_winner(ctx, ctx.game_context) == ""
         assert extract_results(ctx, ctx.game_context) == ""
+
+
+def _nascar_event(race_laps=267, race_distance_miles=400.0, stage_laps=None) -> Event:
+    team = Team(
+        id="nascar_event_5600",
+        provider="nascar",
+        name="Goodyear 400",
+        short_name="Goodyear 400",
+        abbreviation="G400",
+        league="nascar-cup",
+        sport="racing",
+    )
+    return Event(
+        id="5600",
+        provider="nascar",
+        name="Goodyear 400",
+        short_name="Goodyear 400",
+        start_time=datetime(2026, 5, 3, 19, 0, tzinfo=UTC),
+        home_team=team,
+        away_team=team,
+        status=EventStatus(state="scheduled"),
+        league="nascar-cup",
+        sport="racing",
+        circuit_name="Darlington Raceway",
+        sessions=[_session("race", "Race", 0, [])],
+        race_laps=race_laps,
+        race_distance_miles=race_distance_miles,
+        stage_laps=stage_laps if stage_laps is not None else [85, 95, 87],
+    )
+
+
+class TestRaceFormat:
+    def test_race_laps(self):
+        ctx = _ctx(_nascar_event())
+        assert extract_race_laps(ctx, ctx.game_context) == "267"
+
+    def test_race_distance_integer(self):
+        ctx = _ctx(_nascar_event(race_distance_miles=400.0))
+        assert extract_race_distance(ctx, ctx.game_context) == "400"
+
+    def test_race_distance_fractional(self):
+        ctx = _ctx(_nascar_event(race_distance_miles=228.5))
+        assert extract_race_distance(ctx, ctx.game_context) == "228.5"
+
+    def test_stage_laps_cumulative(self):
+        ctx = _ctx(_nascar_event(stage_laps=[85, 95, 87]))
+        assert extract_stage_1_laps(ctx, ctx.game_context) == "85"
+        assert extract_stage_2_laps(ctx, ctx.game_context) == "180"
+        assert extract_stage_3_laps(ctx, ctx.game_context) == "267"
+
+    def test_stage_summary(self):
+        ctx = _ctx(_nascar_event(stage_laps=[85, 95, 87]))
+        assert extract_stage_summary(ctx, ctx.game_context) == "85/180/267"
+
+    def test_missing_stage_laps_returns_empty(self):
+        ctx = _ctx(_nascar_event(stage_laps=[]))
+        assert extract_stage_1_laps(ctx, ctx.game_context) == ""
+        assert extract_stage_2_laps(ctx, ctx.game_context) == ""
+        assert extract_stage_3_laps(ctx, ctx.game_context) == ""
+        assert extract_stage_summary(ctx, ctx.game_context) == ""
+
+    def test_missing_race_laps_returns_empty(self):
+        ctx = _ctx(_nascar_event(race_laps=None))
+        assert extract_race_laps(ctx, ctx.game_context) == ""
+
+    def test_missing_race_distance_returns_empty(self):
+        ctx = _ctx(_nascar_event(race_distance_miles=None))
+        assert extract_race_distance(ctx, ctx.game_context) == ""
+
+    def test_non_racing_event_returns_empty(self):
+        ctx = _ctx(_non_racing_event())
+        assert extract_race_laps(ctx, ctx.game_context) == ""
+        assert extract_race_distance(ctx, ctx.game_context) == ""
+        assert extract_stage_summary(ctx, ctx.game_context) == ""

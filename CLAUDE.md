@@ -234,12 +234,13 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 API Layer        → teamarr/api/routes/ (18 modules)
 Consumer Layer   → teamarr/consumers/ (orchestrator, team_epg, event_epg, cache/, lifecycle/, matching/)
 Service Layer    → teamarr/services/sports_data.py
-Provider Layer   → teamarr/providers/ (espn, hockeytech, mlbstats, tsdb)
+Provider Layer   → teamarr/providers/ (espn, hockeytech, mlbstats, nascar, tsdb)
 ```
 
 **Providers** (lower priority = tried first):
 - ESPN (0) - Primary, most leagues
 - Squiggle (30) - AFL (Australian Football League); free, no key required
+- NASCAR (35) - NASCAR Cup/O'Reilly (Xfinity)/Trucks; official cf.nascar.com schedule API, full weekend sessions, no key
 - MLB Stats (40) - MiLB (Triple-A through Rookie)
 - HockeyTech (50) - CHL, AHL, PWHL, USHL
 - TSDB (100) - Cricket, rugby, boxing, Scandinavian leagues, uru.2
@@ -250,7 +251,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
-- 226 variables in `variables/` (19 categories)
+- 232 variables in `variables/` (19 categories)
 - 23 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`

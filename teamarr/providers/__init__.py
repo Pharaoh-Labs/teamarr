@@ -18,6 +18,7 @@ to inject the LeagueMappingSource into providers.
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
+from teamarr.providers.nascar import NASCARProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.squiggle import SquiggleClient, SquiggleProvider
 from teamarr.providers.supabase import SupabaseLeagueClient, SupabaseProvider
@@ -110,6 +111,13 @@ def _create_squiggle_provider() -> SquiggleProvider:
     )
 
 
+def _create_nascar_provider() -> NASCARProvider:
+    """Factory for NASCAR provider with injected dependencies."""
+    return NASCARProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 # =============================================================================
 # PROVIDER REGISTRATION
 # =============================================================================
@@ -157,13 +165,20 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="nascar",
+    provider_class=NASCARProvider,
+    factory=_create_nascar_provider,
+    priority=35,  # NASCAR Cup/ORAP/Trucks — authoritative session schedules
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="tsdb",
     provider_class=TSDBProvider,
     factory=_create_tsdb_provider,
     priority=100,  # Fallback provider for boxing, etc.
     enabled=True,
 )
-
 
 # =============================================================================
 # EXPORTS
@@ -188,6 +203,8 @@ __all__ = [
     # Squiggle (AFL)
     "SquiggleClient",
     "SquiggleProvider",
+    # NASCAR
+    "NASCARProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

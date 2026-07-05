@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 226 variables across 19 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 232 variables across 19 categories.
 
 ## Team vs Event Templates
 
@@ -516,6 +516,19 @@ F1, NASCAR, IndyCar, and MotoGP-specific variables for event templates. These ar
 | `{session_type}` | This channel's session code | `fp1`, `qualifying`, `race` |
 | `{next_session_name}` | Display name of the next session | `Qualifying` |
 | `{next_session_time}` | Start time of the next session | `9:00 AM` |
+
+### Race Format
+
+NASCAR-style scheduled race format (lap counts and stages). Empty for series whose provider doesn't supply them (e.g. F1).
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{race_laps}` | Scheduled lap count | `200` |
+| `{race_distance}` | Scheduled distance in miles | `500` |
+| `{stage_1_laps}` | Cumulative lap where stage 1 ends | `60` |
+| `{stage_2_laps}` | Cumulative lap where stage 2 ends | `125` |
+| `{stage_3_laps}` | Cumulative lap where stage 3 ends | `200` |
+| `{stage_summary}` | All stage endpoints joined | `60/125/200` |
 
 ### Grid & Qualifying
 

@@ -31,6 +31,19 @@ def test_nascar_stream_classifies_racing():
     assert c.category == StreamCategory.RACING_EVENT
 
 
+def test_nascar_espn_at_city_format_classifies_racing():
+    # ESPN names NASCAR events "[Series] at [City]" — the "at" must not trigger
+    # team extraction since "NASCAR Cup Series" is a series name, not a team abbrev.
+    c = classify_stream("NASCAR Cup Series at San Diego", league_event_type="event")
+    assert c.category == StreamCategory.RACING_EVENT
+
+
+def test_nascar_orap_at_city_format_classifies_racing():
+    c = classify_stream("NASCAR O'Reilly Auto Parts Series at San Diego", league_event_type="event")
+    assert c.category == StreamCategory.RACING_EVENT
+
+
+
 def test_racing_only_applies_for_event_league_type():
     # Same name, but a non-racing (team) group must not route to racing.
     c = classify_stream("F1: Monaco Grand Prix", league_event_type="team")
@@ -58,3 +71,23 @@ def test_team_stream_with_nonracing_sport_hint_falls_through():
 def test_hockey_single_team_in_racing_group_is_not_racing():
     c = classify_stream("US | Ice Hockey: Maple Leafs", league_event_type="event")
     assert c.category != StreamCategory.RACING_EVENT
+
+
+def test_racing_league_hints_cover_all_schema_racing_leagues():
+    """_RACING_LEAGUE_HINTS is a hardcoded mirror of the racing leagues seeded in
+    schema.sql (the classifier is a pure text module with no DB access). This test
+    is the sync contract: add a racing league to the schema and it fails until the
+    frozenset learns the new code."""
+    import re
+    from pathlib import Path
+
+    from teamarr.consumers.matching.classifier import _RACING_LEAGUE_HINTS
+
+    schema = Path("teamarr/database/schema.sql").read_text(encoding="utf-8")
+    schema_racing_codes = {
+        m.group(1)
+        for m in re.finditer(r"^\s*\('([a-z0-9-]+)',[^)\n]*'racing'", schema, re.MULTILINE)
+    }
+    assert schema_racing_codes, "failed to parse racing leagues from schema.sql"
+    missing = schema_racing_codes - _RACING_LEAGUE_HINTS
+    assert not missing, f"racing leagues in schema.sql missing from _RACING_LEAGUE_HINTS: {missing}"

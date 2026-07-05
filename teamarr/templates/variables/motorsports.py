@@ -12,6 +12,14 @@ Sessions:
     session_type: Raw session code for this channel ("fp1", "qualifying", "race")
     next_session_name, next_session_time: Next session after this one
 
+Race Format (NASCAR, oval tracks):
+    race_laps: Scheduled lap count (e.g., "267")
+    race_distance: Scheduled distance in miles (e.g., "400")
+    stage_1_laps: Cumulative lap where stage 1 ends (e.g., "90")
+    stage_2_laps: Cumulative lap where stage 2 ends (e.g., "185")
+    stage_3_laps: Cumulative lap where stage 3 ends (e.g., "267")
+    stage_summary: All stage endpoints joined (e.g., "90/185/267")
+
 Grid/Qualifying:
     pole_position, pole_team: Driver/team that took pole position
     grid: Full starting order (newline-separated "N. Driver (Team)")
@@ -41,6 +49,7 @@ SESSION_DISPLAY_NAMES: dict[str, str] = {
     "fp1": "Practice 1",
     "fp2": "Practice 2",
     "fp3": "Practice 3",
+    "fp4": "Practice 4",
     "sprint_qualifying": "Sprint Qualifying",
     "sprint": "Sprint",
     "qualifying": "Qualifying",
@@ -195,6 +204,123 @@ def extract_next_session_time(ctx: TemplateContext, game_ctx: GameContext | None
             return sessions[idx + 1].start_time.strftime("%-I:%M %p")
 
     return ""
+
+
+@register_variable(
+    name="race_laps",
+    category=Category.MOTORSPORTS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Scheduled lap count (e.g., '267')",
+)
+def extract_race_laps(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Extract the scheduled number of laps."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    if event.sport != "racing" or event.race_laps is None:
+        return ""
+    return str(event.race_laps)
+
+
+@register_variable(
+    name="race_distance",
+    category=Category.MOTORSPORTS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Scheduled race distance in miles (e.g., '400')",
+)
+def extract_race_distance(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Extract the scheduled race distance."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    if event.sport != "racing" or event.race_distance_miles is None:
+        return ""
+    miles = event.race_distance_miles
+    return str(int(miles)) if miles == int(miles) else str(miles)
+
+
+def _cumulative_stage_laps(event) -> list[int]:
+    """Convert per-stage counts to cumulative lap endpoints."""
+    cumulative = []
+    total = 0
+    for laps in event.stage_laps:
+        total += laps
+        cumulative.append(total)
+    return cumulative
+
+
+@register_variable(
+    name="stage_1_laps",
+    category=Category.MOTORSPORTS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Cumulative lap where stage 1 ends (e.g., '90')",
+)
+def extract_stage_1_laps(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Extract the lap number at which stage 1 ends."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    if event.sport != "racing":
+        return ""
+    ends = _cumulative_stage_laps(event)
+    return str(ends[0]) if len(ends) >= 1 else ""
+
+
+@register_variable(
+    name="stage_2_laps",
+    category=Category.MOTORSPORTS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Cumulative lap where stage 2 ends (e.g., '185')",
+)
+def extract_stage_2_laps(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Extract the lap number at which stage 2 ends."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    if event.sport != "racing":
+        return ""
+    ends = _cumulative_stage_laps(event)
+    return str(ends[1]) if len(ends) >= 2 else ""
+
+
+@register_variable(
+    name="stage_3_laps",
+    category=Category.MOTORSPORTS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Cumulative lap where stage 3 ends (e.g., '267')",
+)
+def extract_stage_3_laps(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Extract the lap number at which stage 3 ends."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    if event.sport != "racing":
+        return ""
+    ends = _cumulative_stage_laps(event)
+    return str(ends[2]) if len(ends) >= 3 else ""
+
+
+@register_variable(
+    name="stage_summary",
+    category=Category.MOTORSPORTS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Stage endpoints joined by slash (e.g., '90/185/267')",
+)
+def extract_stage_summary(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Extract a slash-joined summary of cumulative stage lap endpoints."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    if event.sport != "racing":
+        return ""
+    ends = _cumulative_stage_laps(event)
+    return "/".join(str(n) for n in ends) if ends else ""
 
 
 @register_variable(

@@ -571,7 +571,11 @@ class EventGroupProcessor:
                 return result
 
             # Step 3: Match streams to events
-            match_result = self._match_streams(streams, group, target_date)
+            with self._db_factory() as preview_conn:
+                effective_leagues = self._get_subscription_leagues(preview_conn, group)
+            match_result = self._match_streams(
+                streams, group, target_date, resolved_leagues=effective_leagues
+            )
             # Coverage (distinct streams) so matched + unmatched relates to total streams,
             # rather than result count which fans out under EPG/TEAM_ONLY matching.
             result.matched_count = match_result.matched_stream_count

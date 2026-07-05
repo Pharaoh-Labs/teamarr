@@ -60,7 +60,11 @@ def normalize_text(value: str) -> str:
     """
     # Normalize: strip accents (é→e, ü→u), lowercase
     normalized = unidecode(value).lower().strip()
-    # Remove punctuation (hyphens become spaces)
+    # Remove apostrophes/backticks without adding a space so "O’Reilly",
+    # "O`Reilly", and "OReilly" all normalize to "oreilly".
+    # Hex escapes used to avoid source-encoding ambiguity: \x27=apostrophe, \x60=backtick.
+    normalized = re.sub("[\x27\x60]", "", normalized)
+    # Remove remaining punctuation (hyphens become spaces)
     normalized = re.sub(r"[^\w\s]", " ", normalized)
     # Clean up whitespace
     normalized = " ".join(normalized.split())

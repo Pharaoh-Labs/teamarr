@@ -215,10 +215,17 @@ class RacingMatcher:
         league: str,
     ) -> MatchOutcome:
         """Match stream to a racing event."""
-        # Fuzzy match against event name / short name / circuit name
+        # Fuzzy match against event name / short name / circuit name.
+        # venue.country is tracked separately: token_set_ratio scores a bare
+        # country subset at 100, so as a peer candidate it would let a
+        # low-specificity country hit outrank a real name match on another
+        # event. It only backs up the single-event sanity check and a
+        # unique-country fallback below (country-named streams, e.g.
+        # "NASCAR Cup Series at Mexico City").
         stream_norm = normalize_text(ctx.stream_name)
         best_score = 0
         best_event: Event | None = None
+        country_scores: dict[str, int] = {}
 
         for event in events:
             for candidate in (event.name, event.short_name, event.circuit_name):
@@ -228,13 +235,22 @@ class RacingMatcher:
                 if score > best_score:
                     best_score = score
                     best_event = event
+            country = event.venue.country if event.venue else None
+            if country:
+                country_scores[event.id] = fuzz.token_set_ratio(
+                    stream_norm, normalize_text(country)
+                )
 
         # Strategy 1: Single event covering the date - the common case
         # (one Grand Prix/race weekend per league per week). Still requires a
         # minimal fuzzy similarity sanity check, otherwise streams with no
         # relation to racing at all (e.g. a cycling stage or talk show that
         # got misclassified as a racing event) match to "the only race
-        # happening this weekend" purely by elimination.
+        # happening this weekend" purely by elimination. The country score
+        # counts here: with one covering event there's no ambiguity for it
+        # to create.
+        if len(events) == 1 and best_score < SINGLE_EVENT_SANITY_THRESHOLD:
+            best_score = max(best_score, country_scores.get(events[0].id, 0))
         if len(events) == 1 and best_score >= SINGLE_EVENT_SANITY_THRESHOLD:
             event = events[0]
             logger.debug(
@@ -266,6 +282,31 @@ class RacingMatcher:
                 best_event,
                 detected_league=league,
                 confidence=confidence,
+                stream_name=ctx.stream_name,
+                stream_id=ctx.stream_id,
+            )
+
+        # Strategy 3: unique-country fallback. Only when exactly one covering
+        # event's venue country clears the threshold — a country shared by two
+        # events this window (e.g. a doubleheader weekend) stays ambiguous and
+        # must not match.
+        country_hits = [
+            (eid, score) for eid, score in country_scores.items()
+            if score >= RACING_MATCH_THRESHOLD
+        ]
+        if len(country_hits) == 1:
+            event = next(e for e in events if e.id == country_hits[0][0])
+            logger.debug(
+                "[MATCHED] racing stream=%s -> %s (method=fuzzy, venue country, score=%d)",
+                ctx.stream_name[:40],
+                event.name,
+                country_hits[0][1],
+            )
+            return MatchOutcome.matched(
+                MatchMethod.FUZZY,
+                event,
+                detected_league=league,
+                confidence=country_hits[0][1] / 100.0,
                 stream_name=ctx.stream_name,
                 stream_id=ctx.stream_id,
             )

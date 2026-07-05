@@ -165,6 +165,14 @@ class Event:
     # Qualifying, Race, etc.), ordered by start_time
     sessions: list["RacingSession"] = field(default_factory=list)
 
+    # Racing-specific: scheduled lap count and distance (miles)
+    race_laps: int | None = None
+    race_distance_miles: float | None = None
+
+    # Racing-specific: per-stage lap counts [stage1, stage2, stage3, ...]
+    # Cumulative stage end laps: cumsum(stage_laps)
+    stage_laps: list[int] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class TeamStats:
