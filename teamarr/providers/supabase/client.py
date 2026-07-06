@@ -23,12 +23,12 @@ extraction is fully reusable.
 import logging
 import os
 import re
-import threading
 from datetime import date, timedelta
 
 import httpx
 
 from teamarr.core.interfaces import LeagueMappingSource
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
@@ -64,13 +64,20 @@ def _first_word(name: str) -> str:
     return name.split()[0].lower() if name else ""
 
 
-class SupabaseLeagueClient:
+class SupabaseLeagueClient(BaseHTTPClient):
     """HTTP client for Supabase-backed league websites.
 
     Handles credential extraction, logo map extraction, and Supabase REST
     API calls. League routing uses LeagueMappingSource; provider_league_id
     in the database holds the website URL to scrape for credentials.
+
+    Keeps a custom ``_get`` (instead of BaseHTTPClient._request_json) because
+    callers need the raw Response — credential extraction parses HTML/JS, and
+    REST calls inspect status codes themselves.
     """
+
+    PROVIDER = "supabase"
+    LOG_TAG = "SUPABASE"
 
     def __init__(
         self,
@@ -78,30 +85,15 @@ class SupabaseLeagueClient:
         timeout: float = SUPABASE_TIMEOUT,
         retry_count: int = SUPABASE_RETRY_COUNT,
     ):
+        super().__init__(
+            timeout=timeout,
+            retry_count=retry_count,
+            max_connections=20,
+            max_keepalive_connections=10,
+            headers={"User-Agent": _USER_AGENT},
+        )
         self._league_mapping_source = league_mapping_source
-        self._timeout = timeout
-        self._retry_count = retry_count
-        self._client: httpx.Client | None = None
-        self._client_lock = threading.Lock()
         self._cache = TTLCache()
-
-    # ------------------------------------------------------------------
-    # HTTP client
-    # ------------------------------------------------------------------
-
-    def _get_client(self) -> httpx.Client:
-        if self._client is None:
-            with self._client_lock:
-                if self._client is None:
-                    self._client = httpx.Client(
-                        timeout=self._timeout,
-                        limits=httpx.Limits(
-                            max_connections=20,
-                            max_keepalive_connections=10,
-                        ),
-                        headers={"User-Agent": _USER_AGENT},
-                    )
-        return self._client
 
     def _get(self, url: str, **kwargs) -> httpx.Response | None:
         for attempt in range(self._retry_count):
@@ -588,8 +580,3 @@ class SupabaseLeagueClient:
 
     def clear_cache(self) -> None:
         self._cache.clear()
-
-    def close(self) -> None:
-        if self._client:
-            self._client.close()
-            self._client = None

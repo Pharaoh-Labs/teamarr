@@ -35,6 +35,7 @@ from datetime import date, datetime
 import httpx
 
 from teamarr.core import LeagueMappingSource
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
@@ -204,7 +205,7 @@ class RateLimiter:
             self._requests.append(time.time())
 
 
-class TSDBClient:
+class TSDBClient(BaseHTTPClient):
     """Low-level TheSportsDB API client with rate limiting.
 
     API key resolution:
@@ -219,7 +220,14 @@ class TSDBClient:
     - No livescores or highlights
 
     League mappings provided via LeagueMappingSource (no direct database access).
+
+    Keeps a custom ``_request`` (instead of BaseHTTPClient._request_json):
+    TSDB needs the sliding-window rate limiter, 404 fast-fail (GH #217), and
+    a much harsher 429 backoff (5-120s) than the shared default.
     """
+
+    PROVIDER = "tsdb"
+    LOG_TAG = "TSDB"
 
     # Free test key
     FREE_API_KEY = "123"
@@ -233,13 +241,15 @@ class TSDBClient:
         retry_delay: float = 1.0,
         requests_per_minute: int = 30,  # TSDB free tier limit
     ):
+        super().__init__(
+            timeout=timeout,
+            retry_count=retry_count,
+            max_connections=10,
+            max_keepalive_connections=5,
+        )
         self._league_mapping_source = league_mapping_source
         self._explicit_key = api_key
-        self._timeout = timeout
-        self._retry_count = retry_count
         self._retry_delay = retry_delay
-        self._client: httpx.Client | None = None
-        self._client_lock = threading.Lock()
         self._requests_per_minute = requests_per_minute
         # Rate limiter initialized lazily after we can check is_premium
         self._rate_limiter: RateLimiter | None = None
@@ -272,17 +282,6 @@ class TSDBClient:
             if self.is_premium:
                 logger.info("[TSDB] Using premium API key (100 req/min)")
         return self._rate_limiter
-
-    def _get_client(self) -> httpx.Client:
-        if self._client is None:
-            with self._client_lock:
-                # Double-check after acquiring lock
-                if self._client is None:
-                    self._client = httpx.Client(
-                        timeout=self._timeout,
-                        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-                    )
-        return self._client
 
     # Exponential backoff for 429 responses
     # Starts at 5s, doubles each retry, caps at 120s
@@ -376,16 +375,6 @@ class TSDBClient:
                 return None
 
         return None
-
-    def _reset_client(self) -> None:
-        """Reset the HTTP client to clear stale connections."""
-        with self._client_lock:
-            if self._client:
-                try:
-                    self._client.close()
-                except Exception as e:
-                    logger.debug("[TSDB] Error closing HTTP client: %s", e)
-                self._client = None
 
     def supports_league(self, league: str) -> bool:
         """Check if we have mapping for this league."""
@@ -788,9 +777,3 @@ class TSDBClient:
         Call at the start of EPG generation to get clean stats for that run.
         """
         self._get_rate_limiter().reset_stats()
-
-    def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            self._client.close()
-            self._client = None
