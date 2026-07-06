@@ -712,26 +712,6 @@ def get_failed_matches(
     }
 
 
-@router.get("/epg/match-stats")
-def get_match_stats(
-    run_id: int | None = Query(None, description="Processing run ID (defaults to latest)"),
-):
-    """Get match statistics summary for an EPG generation run.
-
-    Returns:
-    - Total matched/unmatched/cached counts
-    - Match rate percentage
-    - Breakdown by group and league
-    - Failure reasons breakdown
-    """
-    from teamarr.database.stats import get_match_stats_summary
-
-    with get_db() as conn:
-        stats = get_match_stats_summary(conn, run_id=run_id)
-
-    return stats
-
-
 # =============================================================================
 # Match Correction Endpoints (Phase 7)
 # =============================================================================
@@ -920,26 +900,6 @@ def search_events(
         "count": len(results),
         "target_date": target.isoformat(),
         "events": [r.model_dump() for r in results],
-    }
-
-
-@router.get("/epg/streams/corrections")
-def list_user_corrections(
-    group_id: int | None = Query(None, description="Filter by group ID"),
-    limit: int = Query(100, ge=1, le=500, description="Max results"),
-):
-    """List all user-corrected stream matches.
-
-    Returns streams where users have manually overridden the match.
-    """
-    from teamarr.consumers.stream_match_cache import get_user_corrections
-
-    with get_db() as conn:
-        corrections = get_user_corrections(conn, group_id=group_id, limit=limit)
-
-    return {
-        "count": len(corrections),
-        "corrections": corrections,
     }
 
 

@@ -349,3 +349,95 @@ class TestFullSchemaReconciliation:
         assert "subscription_soccer_followed_teams" in cols
 
         conn.close()
+
+
+class TestConstraintPreservation:
+    """Added columns must carry the verbatim schema.sql constraints.
+
+    Regression tests for the reconciliation foot-gun: PRAGMA-based column
+    rebuilding dropped NOT NULL/CHECK, so upgraded databases diverged from
+    fresh installs (iua3.4).
+    """
+
+    REF_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS widgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'auto' CHECK (mode IN ('auto', 'manual')),
+        weight INTEGER NOT NULL DEFAULT 1,
+        note TEXT  -- trailing comment, with a comma: a, b
+    );
+    """
+
+    def _upgraded(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript("""
+            CREATE TABLE widgets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL
+            );
+            INSERT INTO widgets (name) VALUES ('existing');
+        """)
+        result = reconcile_schema(conn, self.REF_SCHEMA)
+        assert result.errors == []
+        assert sorted(result.columns_by_table["widgets"]) == ["mode", "note", "weight"]
+        return conn
+
+    def test_check_constraint_preserved(self):
+        conn = self._upgraded()
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO widgets (name, mode) VALUES ('bad', 'invalid-mode')"
+            )
+        conn.close()
+
+    def test_not_null_preserved(self):
+        conn = self._upgraded()
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute("INSERT INTO widgets (name, weight) VALUES ('bad', NULL)")
+        conn.close()
+
+    def test_default_applied_to_existing_rows(self):
+        conn = self._upgraded()
+        row = conn.execute("SELECT mode, weight FROM widgets WHERE name='existing'").fetchone()
+        assert row["mode"] == "auto"
+        assert row["weight"] == 1
+        conn.close()
+
+    def test_illegal_alter_falls_back_without_error(self):
+        """NOT NULL without default can't be ALTERed in — falls back to nullable."""
+        ref = """
+        CREATE TABLE things (
+            id INTEGER PRIMARY KEY,
+            label TEXT NOT NULL
+        );
+        """
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript("CREATE TABLE things (id INTEGER PRIMARY KEY);")
+        conn.execute("INSERT INTO things (id) VALUES (1)")
+        result = reconcile_schema(conn, ref)
+        assert result.errors == []
+        assert result.columns_by_table["things"] == ["label"]
+        # Column exists, degraded to nullable (existing rows have no value)
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(things)").fetchall()}
+        assert "label" in cols
+        conn.close()
+
+    def test_non_constant_default_falls_back(self):
+        """DEFAULT CURRENT_TIMESTAMP is illegal in ADD COLUMN — degrade, don't fail."""
+        ref = """
+        CREATE TABLE stamps (
+            id INTEGER PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript("CREATE TABLE stamps (id INTEGER PRIMARY KEY);")
+        result = reconcile_schema(conn, ref)
+        assert result.errors == []
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(stamps)").fetchall()}
+        assert "created_at" in cols
+        conn.close()

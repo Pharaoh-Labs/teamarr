@@ -102,20 +102,6 @@ def list_keywords(
     )
 
 
-@router.get("/patterns")
-def get_keyword_patterns() -> dict:
-    """Get all enabled keyword patterns as a flat list.
-
-    Useful for stream matching preview.
-    """
-    from teamarr.database.exception_keywords import get_all_keyword_patterns
-
-    with get_db() as conn:
-        patterns = get_all_keyword_patterns(conn)
-
-    return {"patterns": patterns, "count": len(patterns)}
-
-
 @router.get("/{keyword_id}", response_model=ExceptionKeywordResponse)
 def get_keyword(keyword_id: int):
     """Get a single exception keyword by ID."""

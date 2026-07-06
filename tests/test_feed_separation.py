@@ -460,7 +460,6 @@ class TestFindExistingChannelFeedTeam:
                 sync_message TEXT,
                 last_verified_at TIMESTAMP,
                 expires_at TIMESTAMP,
-                external_channel_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );

@@ -717,28 +717,3 @@ def _json_serializer(obj: Any) -> Any:
     if isinstance(obj, datetime):
         return obj.isoformat()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-
-def get_user_corrections(
-    conn: sqlite3.Connection,
-    group_id: int | None = None,
-    limit: int = 100,
-) -> list[dict]:
-    """Get user-corrected stream matches from the cache."""
-    query = """
-        SELECT fingerprint, group_id, stream_id, stream_name,
-               event_id, league, match_method, corrected_at
-        FROM stream_match_cache
-        WHERE user_corrected = 1
-    """
-    params: list = []
-
-    if group_id is not None:
-        query += " AND group_id = ?"
-        params.append(group_id)
-
-    query += " ORDER BY corrected_at DESC LIMIT ?"
-    params.append(limit)
-
-    rows = conn.execute(query, params).fetchall()
-    return [dict(row) for row in rows]

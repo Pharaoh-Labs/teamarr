@@ -751,7 +751,6 @@ CREATE TABLE IF NOT EXISTS managed_channels (
 
     -- Legacy (for backwards compatibility)
     expires_at TIMESTAMP,
-    external_channel_id INTEGER,             -- Alias for dispatcharr_channel_id
 
     FOREIGN KEY (event_epg_group_id) REFERENCES event_epg_groups(id) ON DELETE SET NULL
     -- Note: No table-level UNIQUE on (event_id, event_provider) - use partial index instead

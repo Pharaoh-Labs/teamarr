@@ -121,24 +121,6 @@ def get_keywords_by_behavior(
     return [_row_to_keyword(row) for row in cursor.fetchall()]
 
 
-def get_all_keyword_patterns(conn: Connection) -> list[str]:
-    """Get all enabled keyword patterns as a flat list.
-
-    Useful for matching stream names against exception keywords.
-
-    Args:
-        conn: Database connection
-
-    Returns:
-        List of individual match term strings (lowercased)
-    """
-    keywords = get_all_keywords(conn, include_disabled=False)
-    patterns = []
-    for kw in keywords:
-        patterns.extend([k.lower() for k in kw.match_term_list])
-    return patterns
-
-
 # =============================================================================
 # CREATE OPERATIONS
 # =============================================================================
