@@ -189,7 +189,7 @@ export function GlobalDefaults({
             selectedLeagues={nonSoccerLeagues}
             onSelectionChange={handleNonSoccerChange}
             excludeSport="soccer"
-            maxHeight="max-h-64"
+            maxHeight="max-h-[60vh]"
             showSearch={true}
             showSelectedBadges={true}
             maxBadges={10}
