@@ -10,15 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from teamarr.api.dependencies import get_sports_service
-from teamarr.api.generation_status import (
-    complete_generation,
-    fail_generation,
-    get_status,
-    is_in_progress,
-    request_cancellation,
-    start_generation,
-    update_status,
-)
 from teamarr.api.models import (
     EPGGenerateRequest,
     EPGGenerateResponse,
@@ -28,6 +19,15 @@ from teamarr.api.models import (
     MatchCorrectionRequest,
     MatchCorrectionResponse,
     MatchStats,
+)
+from teamarr.consumers.generation_status import (
+    complete_generation,
+    fail_generation,
+    get_status,
+    is_in_progress,
+    request_cancellation,
+    start_generation,
+    update_status,
 )
 from teamarr.database import get_db
 from teamarr.services import SportsDataService

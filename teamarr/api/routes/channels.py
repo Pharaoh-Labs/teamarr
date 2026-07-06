@@ -825,7 +825,7 @@ def execute_reset_channels():
 
     Will fail if EPG generation is currently in progress.
     """
-    from teamarr.api.generation_status import is_in_progress
+    from teamarr.consumers.generation_status import is_in_progress
     from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
     # Check if EPG generation is in progress

@@ -1849,13 +1849,13 @@ def get_raw_streams(group_id: int):
         account_id=group.m3u_account_id,
     )
 
-    from teamarr.api.routes import natural_sort_key
     from teamarr.services.stream_filter import (
         UNSUPPORTED_SPORTS,
         detect_sport_hint,
         is_event_stream,
         is_placeholder,
     )
+    from teamarr.utilities.sorting import natural_sort_key
 
     def get_builtin_filter_reason(name: str) -> str | None:
         """Check all builtin filters and return reason if filtered."""

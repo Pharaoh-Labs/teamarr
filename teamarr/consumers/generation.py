@@ -204,7 +204,7 @@ def run_full_generation(
             return result
 
     # Import cancellation helpers
-    from teamarr.api.generation_status import cancel_generation, is_cancellation_requested
+    from teamarr.consumers.generation_status import cancel_generation, is_cancellation_requested
 
     def check_cancelled():
         """Check if cancellation was requested and raise if so."""

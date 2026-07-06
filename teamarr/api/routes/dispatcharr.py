@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 from teamarr.database import get_db
 from teamarr.dispatcharr.factory import get_dispatcharr_connection
+from teamarr.utilities.sorting import natural_sort_key
 
 logger = logging.getLogger(__name__)
 
@@ -72,23 +73,6 @@ def list_m3u_groups(account_id: int) -> list[dict]:
     ]
 
 
-def _natural_sort_key(name: str) -> list:
-    """Generate sort key for natural/human sorting.
-
-    Handles embedded numbers correctly:
-    - "ESPN+ 2" comes before "ESPN+ 10"
-    - "Sportsnet+ 01" comes before "Sportsnet+ 02"
-    """
-    import re
-
-    parts = []
-    for part in re.split(r"(\d+)", name.lower()):
-        if part.isdigit():
-            parts.append(int(part))  # Compare numbers as integers
-        else:
-            parts.append(part)  # Compare text as strings
-    return parts
-
 
 @router.get("/m3u-accounts/{account_id}/groups/{group_id}/streams")
 def list_group_streams(account_id: int, group_id: int) -> list[dict]:
@@ -116,7 +100,7 @@ def list_group_streams(account_id: int, group_id: int) -> list[dict]:
             }
             for s in streams
         ],
-        key=lambda x: _natural_sort_key(x["name"]),
+        key=lambda x: natural_sort_key(x["name"]),
     )
 
 

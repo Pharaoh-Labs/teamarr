@@ -529,13 +529,13 @@ class CronScheduler:
         Returns:
             Dict with generation stats
         """
-        from teamarr.api.generation_status import (
+        from teamarr.consumers.generation import run_full_generation
+        from teamarr.consumers.generation_status import (
             complete_generation,
             fail_generation,
             start_generation,
             update_status,
         )
-        from teamarr.consumers.generation import run_full_generation
 
         # Mark generation as started (enables UI polling)
         if not start_generation():
