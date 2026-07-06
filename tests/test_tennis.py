@@ -458,6 +458,57 @@ def test_widened_fallback_requires_unique_top(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# EPG path: tennis programme titles are gated out pending mf7.9
+# ---------------------------------------------------------------------------
+
+
+def test_epg_path_skips_tennis_programmes():
+    """Tennis EPG matching needs its own design (mf7.9) — one guide programme
+    covers many concurrent matches. Until then, tennis-classified programme
+    titles must be dropped from the EPG path, not routed to the matcher
+    (2026-07-05 regression: match volume 166→1,099 on the channel-source
+    group when programme titles reached the tennis pipeline)."""
+    from zoneinfo import ZoneInfo as _Z
+
+    from teamarr.consumers.matching.epg_index import EPGProgramIndex
+    from teamarr.consumers.matching.matcher import StreamMatcher
+    from teamarr.dispatcharr.types import DispatcharrProgram
+
+    start = datetime(2026, 7, 5, 13, tzinfo=_Z("UTC"))
+    prog = DispatcharrProgram.from_api(
+        {
+            "id": 1,
+            "tvg_id": "espn",
+            "title": "Tennis: Wimbledon",
+            "sub_title": "Sabalenka vs Osaka",
+            "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end_time": "2026-07-05T16:00:00Z",
+            "epg_source": "ext",
+            "custom_properties": {},
+        }
+    )
+    m = object.__new__(StreamMatcher)
+    m._epg_index = EPGProgramIndex({"espn": [prog]})
+    m._custom_regex = None
+    m._feed_home_terms = None
+    m._feed_away_terms = None
+    m._team_streams_enabled = True
+    m._league_event_types = {"atp": "event", "wta": "event"}
+    m._league_sports = {"atp": "tennis", "wta": "tennis"}
+    m._include_leagues = {"atp", "wta"}
+    m._user_tz = _Z("UTC")
+
+    called = []
+    m._route_to_outcomes = lambda *a, **k: called.append(1) or []
+
+    results = m._match_via_epg(
+        stream_id=1, stream_name="ESPN", tvg_id="espn", target_date=date(2026, 7, 5)
+    )
+    assert results == []
+    assert not called  # programme never reached the matcher
+
+
+# ---------------------------------------------------------------------------
 # Court/round feed matching (phase 2, mf7.7)
 # ---------------------------------------------------------------------------
 

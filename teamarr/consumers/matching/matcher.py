@@ -32,6 +32,7 @@ from teamarr.consumers.matching.classifier import (
     CustomRegexConfig,
     StreamCategory,
     classify_stream,
+    has_racing_text_evidence,
 )
 from teamarr.consumers.matching.constants import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
@@ -699,7 +700,6 @@ class StreamMatcher:
         # t5e). Different events on the same channel keep distinct keys.
         best_by_event: dict[str, tuple[float, MatchedStreamResult]] = {}
         league_event_type = self._get_dominant_event_type()
-        event_league_sport = self._get_event_league_sport()
 
         # Full sorted timeline for this tvg_id. A linear channel legitimately
         # matches many programs/day; each matched program's broadcast slot drives
@@ -714,12 +714,26 @@ class StreamMatcher:
             attempted += 1
 
             epg_input = build_match_input(program)
+            # NOTE: event_league_sport is deliberately NOT passed here. Tennis
+            # EPG matching needs its own design (bead mf7.9): one guide
+            # programme ("Wimbledon, Day 7") covers MANY concurrent matches,
+            # so routing programme titles through the tennis pipeline mass-
+            # matched arbitrary linear channels (2026-07-05: match volume
+            # 166 -> 1,099 on the channel-source group, 252 bindings to one
+            # WTA tournament). Omitting it preserves the pre-tennis EPG
+            # classification exactly; the gate below drops any TENNIS_MATCH
+            # that still arises via the "Tennis" sport-hint trigger.
             classified = classify_stream(
                 epg_input, league_event_type, self._custom_regex,
                 self._feed_home_terms, self._feed_away_terms,
-                event_league_sport=event_league_sport,
             )
             if classified.category == StreamCategory.PLACEHOLDER:
+                continue
+            if classified.category == StreamCategory.TENNIS_MATCH:
+                logger.debug(
+                    "[EPG_MATCH] tennis programme skipped pending mf7.9: %s",
+                    epg_input[:60],
+                )
                 continue
 
             # TEAM_ONLY gate: skip team routing when disabled, but allow the
@@ -767,7 +781,18 @@ class StreamMatcher:
                         epg_input, "event", self._custom_regex,
                         self._feed_home_terms, self._feed_away_terms,
                     )
-                    if racing_classified.category == StreamCategory.RACING_EVENT:
+                    # Require TEXT evidence of racing (a series name in the
+                    # programme title), not just the RACING_EVENT category.
+                    # With league_event_type="event", racing is the
+                    # classifier's default bucket for anything unrecognized —
+                    # fine inside a curated racing group, but EPG programmes
+                    # are arbitrary TV (documentaries, movies), and the racing
+                    # matcher's date-coverage strategy then binds them to
+                    # whatever race covers the date ("Brimstone" fuzzy-matched
+                    # Silverstone at 62).
+                    if racing_classified.category == StreamCategory.RACING_EVENT and (
+                        has_racing_text_evidence(epg_input)
+                    ):
                         racing_outcome = self._match_racing_event(
                             racing_classified, stream_id, target_date
                         )

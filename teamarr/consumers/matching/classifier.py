@@ -1082,6 +1082,30 @@ def is_racing(
     return False
 
 
+# Motorsports series names — text evidence that a string is actually about
+# racing. Used by the EPG racing fallback, which re-classifies arbitrary
+# programme titles with league_event_type="event": racing is the classifier's
+# default bucket there, so without this gate any documentary or movie title
+# reaches the racing matcher and can bind to "the race happening today" by
+# date coverage ("Brimstone" fuzzy-matched Silverstone at 62). Series names
+# only — venue words like "Silverstone" are places, not proof of a broadcast.
+# Deliberately NOT in SPORT_HINT_PATTERNS: a global Racing sport hint would
+# make is_racing trigger 3 fire during primary classification and reroute
+# team-group streams (see test_racing_only_applies_for_event_league_type).
+RACING_TEXT_EVIDENCE: Pattern[str] = re.compile(
+    r"\b(?:"
+    r"formula\s*[123e]|f1|nascar|indycar|indy\s*(?:500|nxt)|"
+    r"motogp|moto\s*[23]|grand\s+prix|imsa|supercross|motocross"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def has_racing_text_evidence(text: str) -> bool:
+    """True when the text names a motorsports series (or 'grand prix')."""
+    return bool(text) and RACING_TEXT_EVIDENCE.search(text) is not None
+
+
 # Known tennis league codes — mirror of the sport='tennis' leagues in
 # schema.sql (this module is pure text classification, no DB access).
 _TENNIS_LEAGUE_HINTS: frozenset[str] = frozenset({"atp", "wta"})

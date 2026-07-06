@@ -365,3 +365,27 @@ def test_epg_racing_fallback_uses_racing_classification_in_result(monkeypatch):
     m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
 
     assert captured.get("category") == StreamCategory.RACING_EVENT
+
+
+def test_epg_racing_fallback_requires_text_evidence(monkeypatch):
+    # teamarrv2-w42k: with league_event_type="event", RACING_EVENT is the
+    # classifier's default bucket, so without a text gate ANY unmatched
+    # programme (documentary, movie) reaches the racing matcher and can bind
+    # to the day's race by date coverage — one run produced 853 false
+    # stream-event pairs ("Impossible Repairs" → Pirelli British GP).
+    # The fallback must skip titles with no motorsports series name.
+    prog = _prog(title="Impossible Repairs", sub="Big City Tunnel Boring Machine")
+    index = EPGProgramIndex({"espn": [prog]})
+    m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("f1",))
+    monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
+    monkeypatch.setattr(m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    racing_called = []
+    monkeypatch.setattr(m, "_match_racing_event",
+        lambda classified, sid, td: racing_called.append(1) or _racing_matched_outcome())
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(100, "US: Smithsonian Channel", "espn", date(2026, 6, 1))
+
+    assert racing_called == []  # racing matcher never consulted
+    assert out == []
