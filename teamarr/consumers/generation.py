@@ -1179,6 +1179,14 @@ def _finalize_stats_run(
     stats_run.extra_metrics["groups_processed"] = result.groups_processed
     stats_run.extra_metrics["file_written"] = result.file_written
 
+    # Post-processing enforcement outcomes (iua3.7): one record per step with
+    # ok/count/error, so a silently failing enforcement step shows up in the
+    # run summary instead of only in warning logs.
+    if getattr(group_result, "enforcement", None):
+        stats_run.extra_metrics["enforcement"] = [
+            step.to_dict() for step in group_result.enforcement
+        ]
+
     # Provider HTTP call volume for this run (kbbk). The per-endpoint breakdown
     # and total let the run summary surface calls-per-channel, making a
     # call-volume regression (the #254 refetch bug class) visible. Snapshot the

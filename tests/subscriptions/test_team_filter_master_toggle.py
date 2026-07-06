@@ -19,7 +19,7 @@ from tests.fakes import FakeGroup
 def processor():
     from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-    with patch("teamarr.consumers.event_group_processor.create_default_service"):
+    with patch("teamarr.consumers.event_group_processor.processor.create_default_service"):
         return EventGroupProcessor(db_factory=MagicMock())
 
 

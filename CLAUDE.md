@@ -232,7 +232,7 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 
 ```
 API Layer        → teamarr/api/routes/ (18 modules)
-Consumer Layer   → teamarr/consumers/ (orchestrator, team_epg, event_epg, cache/, lifecycle/, matching/)
+Consumer Layer   → teamarr/consumers/ (generation, team_epg, event_epg, event_group_processor/, cache/, lifecycle/, matching/)
 Service Layer    → teamarr/services/sports_data.py
 Provider Layer   → teamarr/providers/ (espn, hockeytech, mlbstats, nascar, tsdb)
 ```

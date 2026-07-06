@@ -17,7 +17,7 @@ from tests.fakes import FakeChannel, FakeGroup
 def processor():
     from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-    with patch("teamarr.consumers.event_group_processor.create_default_service"):
+    with patch("teamarr.consumers.event_group_processor.processor.create_default_service"):
         proc = EventGroupProcessor(db_factory=MagicMock())
     return proc
 
@@ -29,7 +29,7 @@ def _run(processor, groups, channels, subscribed):
     processor._resolve_subscription_leagues = MagicMock(return_value=subscribed)
     with (
         patch(
-            "teamarr.consumers.event_group_processor.get_all_groups",
+            "teamarr.consumers.event_group_processor.processor.get_all_groups",
             return_value=groups,
         ),
         patch(
@@ -108,7 +108,7 @@ def test_disabled_group_not_counted_toward_subscription(processor):
     channels = [FakeChannel(id=10, league="nba"), FakeChannel(id=11, league="nhl")]
     with (
         patch(
-            "teamarr.consumers.event_group_processor.get_all_groups",
+            "teamarr.consumers.event_group_processor.processor.get_all_groups",
             return_value=groups,
         ),
         patch(

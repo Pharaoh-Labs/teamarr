@@ -36,7 +36,7 @@ A global lock prevents concurrent runs. The workflow progresses through 8 phases
 
 ## Event Group Processor
 
-`event_group_processor.py` handles the core matching and channel lifecycle for event groups.
+The `event_group_processor/` package handles the core matching and channel lifecycle for event groups. `processor.py` holds the `EventGroupProcessor` coordinator; the pipeline stages live in sibling modules (`stream_fetcher.py`, `matching.py`, `team_filter.py`, `persistence.py`, `xmltv.py`, `preview.py`, `results.py`).
 
 ### Processing Pipeline
 
@@ -218,7 +218,7 @@ No match defaults to priority 999 (sorted to end). Channels are sorted by priori
 | File | Purpose |
 |------|---------|
 | `consumers/generation.py` | Unified generation workflow |
-| `consumers/event_group_processor.py` | Event group processing pipeline |
+| `consumers/event_group_processor/` | Event group processing pipeline (coordinator + stage modules) |
 | `consumers/team_processor.py` | Team EPG generation |
 | `consumers/matching/classifier.py` | Stream classification |
 | `consumers/matching/matcher.py` | Stream-to-event matching |

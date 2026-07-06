@@ -20,7 +20,7 @@ def processor():
     """Create a minimal EventGroupProcessor with mocked dependencies."""
     from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-    with patch("teamarr.consumers.event_group_processor.create_default_service"):
+    with patch("teamarr.consumers.event_group_processor.processor.create_default_service"):
         proc = EventGroupProcessor(db_factory=MagicMock())
     return proc
 
@@ -97,7 +97,7 @@ class TestSoccerModeOverride:
                 return_value=FakeSubscription(),
             ),
             patch(
-                "teamarr.consumers.event_group_processor.get_enabled_soccer_leagues",
+                "teamarr.consumers.event_group_processor.processor.get_enabled_soccer_leagues",
                 return_value=fake_soccer,
             ),
         ):
