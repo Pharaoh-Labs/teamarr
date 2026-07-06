@@ -14,6 +14,14 @@ from datetime import datetime
 from sqlite3 import Connection, Row
 from typing import TYPE_CHECKING, Any
 
+from teamarr.core import TemplateConfig
+from teamarr.core.filler_types import (
+    ConditionalFillerTemplate,
+    FillerConfig,
+    FillerTemplate,
+    OffseasonFillerTemplate,
+)
+
 logger = logging.getLogger(__name__)
 
 # Art fields whose RELATIVE values are normalized to a leading slash (epic z02s),
@@ -538,12 +546,6 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         FillerConfig ready for FillerGenerator
     """
     # Import from core layer (proper layer isolation)
-    from teamarr.core.filler_types import (
-        ConditionalFillerTemplate,
-        FillerConfig,
-        FillerTemplate,
-        OffseasonFillerTemplate,
-    )
 
     # Build pregame template from fallback (no hardcoded defaults - schema provides them)
     pregame_fb = template.pregame_fallback or {}
@@ -635,7 +637,6 @@ def template_to_programme_config(template: Template) -> TemplateConfig:
     Returns:
         TemplateConfig ready for TeamEPGGenerator
     """
-    from teamarr.core import TemplateConfig
 
     # Get categories from template
     categories = template.xmltv_categories or []

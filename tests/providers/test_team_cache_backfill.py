@@ -140,7 +140,7 @@ class TestBackfillTeam:
             league="mlb",
             sport="Baseball",
         )
-        with patch("teamarr.database.get_db", side_effect=Exception("nope")):
+        with patch("teamarr.services.sports_data.get_db", side_effect=Exception("nope")):
             result = _backfill_team_from_cache(team, "mlb")
         # Lookup failed → original team returned unchanged.
         assert result is team

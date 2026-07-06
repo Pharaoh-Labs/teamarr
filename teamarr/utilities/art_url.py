@@ -8,6 +8,8 @@ via the resolver's `resolve_art()`, so the reconstruction happens in exactly one
 
 import re
 
+from teamarr.database.settings import get_epg_settings
+
 _ABSOLUTE_URL = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 
 
@@ -33,7 +35,6 @@ def read_art_base_url(db_factory) -> str:
     resolvers at construction. Returns "" on any failure (no prefixing).
     """
     try:
-        from teamarr.database.settings import get_epg_settings
 
         with db_factory() as conn:
             return get_epg_settings(conn).art_base_url or ""

@@ -9,6 +9,8 @@ import logging
 from dataclasses import dataclass
 from sqlite3 import Connection
 
+from teamarr.database.leagues import get_league_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +61,6 @@ def _generate_channel_id(
     If the base channel_id collides with an existing DB row or an ID already
     used in this import batch, appends the provider_team_id to disambiguate.
     """
-    from teamarr.database.leagues import get_league_id
 
     name = "".join(
         word.capitalize()

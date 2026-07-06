@@ -27,6 +27,8 @@ from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from teamarr.config import VERSION
+
 # Track if logging has been configured
 _configured = False
 
@@ -187,7 +189,6 @@ def setup_logging(
     _configured = True
 
     # Log startup info
-    from teamarr.config import VERSION
 
     logger = logging.getLogger("teamarr")
     logger.info("[STARTUP] " + "=" * 60)

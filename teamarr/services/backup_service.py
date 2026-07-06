@@ -16,6 +16,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from teamarr.database.connection import resolve_db_path
+from teamarr.database.settings import get_backup_settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,7 +86,6 @@ class BackupService:
 
     def _get_db_path(self) -> Path:
         """Get the current database file path."""
-        from teamarr.database.connection import resolve_db_path
 
         return resolve_db_path(None)
 
@@ -466,7 +468,6 @@ def create_backup_service(
     """
     if backup_path is None:
         # Get path from settings
-        from teamarr.database.settings import get_backup_settings
 
         with db_factory() as conn:
             settings = get_backup_settings(conn)

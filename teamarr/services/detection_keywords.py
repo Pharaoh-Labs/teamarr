@@ -19,6 +19,7 @@ import re
 from re import Pattern
 from typing import ClassVar
 
+from teamarr.database import get_db
 from teamarr.utilities.constants import (
     CARD_SEGMENT_PATTERNS,
     COMBAT_SPORTS_EXCLUDE_PATTERNS,
@@ -42,7 +43,6 @@ def _load_user_keywords(category: str) -> list[dict]:
         List of keyword dicts with keys: keyword, is_regex, target_value, priority
     """
     try:
-        from teamarr.database import get_db
 
         with get_db() as conn:
             rows = conn.execute(
@@ -521,7 +521,6 @@ class DetectionKeywordService:
         if cls._league_alias_map is None:
             cls._league_alias_map = {}
             try:
-                from teamarr.database import get_db
 
                 with get_db() as conn:
                     rows = conn.execute(

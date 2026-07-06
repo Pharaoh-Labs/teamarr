@@ -4,6 +4,7 @@ These variables identify teams and the competition context.
 Most are BASE_ONLY since they don't change between games.
 """
 
+from teamarr.services.league_mappings import get_league_mapping_service
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -208,7 +209,6 @@ def extract_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_alias(ctx.team_config.league)
@@ -261,7 +261,6 @@ def extract_league_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) ->
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     name = service.get_league_alias(ctx.team_config.league)
@@ -293,7 +292,6 @@ def extract_league_name(ctx: TemplateContext, game_ctx: GameContext | None) -> s
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_display_name(ctx.team_config.league)
@@ -317,7 +315,6 @@ def extract_sport(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not sport_code:
         return ""
 
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_sport_display_name(sport_code)
@@ -354,7 +351,6 @@ def extract_league_id(ctx: TemplateContext, game_ctx: GameContext | None) -> str
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_id(ctx.team_config.league)
@@ -391,7 +387,6 @@ def extract_gracenote_category(ctx: TemplateContext, game_ctx: GameContext | Non
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_gracenote_category(ctx.team_config.league)

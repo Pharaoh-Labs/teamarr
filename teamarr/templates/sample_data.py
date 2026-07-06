@@ -5,6 +5,10 @@ Used for live preview in the UI.
 
 Organization: Variables grouped by category, with base/.next/.last variants together.
 """
+from teamarr.config import get_show_timezone, get_time_format, get_user_timezone_str
+from teamarr.templates.variables import get_registry
+from teamarr.templates.variables.identity import construct_league_abbrev
+from teamarr.utilities.sports import get_sport_from_league
 
 # Available sample "profiles" — the three shape bases. Every league previews
 # against one of three generic, fictitious shapes ("team" / "combat" / "racing")
@@ -1433,7 +1437,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
 # Derive league_abbrev samples from each profile's league sample so the preview
 # matches what the live extractor produces (same construction rule).
 def _seed_league_abbrev_samples() -> None:
-    from teamarr.templates.variables.identity import construct_league_abbrev
 
     abbrev = SAMPLE_DATA.setdefault("league_abbrev", {})
     for _profile, _league in SAMPLE_DATA.get("league", {}).items():
@@ -1798,7 +1801,6 @@ def _seed_shape_league_abbrevs() -> None:
     Mirrors the live extractor's construction rule (e.g. "Placeholder Premier
     League" -> "PPL"), keeping the shape preview consistent with real output.
     """
-    from teamarr.templates.variables.identity import construct_league_abbrev
 
     for overrides in _SHAPE_OVERRIDES.values():
         league = overrides.get("league")
@@ -1830,7 +1832,6 @@ def resolve_profile_for_league(
     if sport:
         return resolve_shape(sport)
     # Name-heuristic fallback: derive the sport, then the shape (defaults team).
-    from teamarr.utilities.sports import get_sport_from_league
 
     return resolve_shape(get_sport_from_league(league_code).lower())
 
@@ -1973,7 +1974,6 @@ def get_sample_value(var_name: str, sport: str) -> str:
     Resolves via curated SAMPLE_DATA -> inline registry sample -> category
     default, so unknown/new variables still return a plausible placeholder.
     """
-    from teamarr.templates.variables import get_registry
 
     registry = get_registry()
     base_var = var_name.replace(".next", "").replace(".last", "")
@@ -2002,7 +2002,6 @@ def get_all_sample_data(sport: str) -> dict[str, str]:
     Time-related variables are formatted according to user's display settings
     (12h/24h format, show/hide timezone).
     """
-    from teamarr.templates.variables import get_registry
 
     registry = get_registry()
     result: dict[str, str] = {}
@@ -2060,7 +2059,6 @@ def _format_time_samples(samples: dict[str, str]) -> dict[str, str]:
 
     Converts hardcoded time strings like "7:00 PM EST" to user's preferred format.
     """
-    from teamarr.config import get_show_timezone, get_time_format, get_user_timezone_str
 
     time_format = get_time_format()
     show_tz = get_show_timezone()

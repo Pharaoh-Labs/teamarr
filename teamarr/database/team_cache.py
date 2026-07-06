@@ -6,6 +6,8 @@ Used by providers to look up team names without going through consumers layer.
 
 from sqlite3 import Connection
 
+from teamarr.core.sports import get_sport_display_names_from_db
+
 
 def get_team_name_by_id(
     conn: Connection,
@@ -239,7 +241,6 @@ def get_team_picker_leagues(conn: Connection) -> list[dict]:
     Returns:
         List of league dicts with sport, provider, team_count, is_configured, name, logo_url
     """
-    from teamarr.core.sports import get_sport_display_names_from_db
 
     sport_display_names = get_sport_display_names_from_db(conn)
 

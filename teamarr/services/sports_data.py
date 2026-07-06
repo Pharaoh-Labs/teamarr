@@ -17,6 +17,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 from teamarr.core import Event, SportsProvider, Team, TeamStats
+from teamarr.database import get_db
 from teamarr.database.provider_cache import (
     dict_to_event,
     dict_to_stats,
@@ -76,7 +77,6 @@ def _cached_team_identity(provider: str, team_id: str, league: str) -> dict | No
     if hit is not None and now - hit[0] < _TEAM_IDENTITY_MEMO_TTL:
         return hit[1]
 
-    from teamarr.database import get_db
 
     with get_db() as conn:
         cached = get_team_identity(conn, provider, team_id, league)
@@ -185,7 +185,6 @@ def _ensure_registry_initialized() -> None:
     if ProviderRegistry.is_initialized():
         return
 
-    from teamarr.database import get_db
     from teamarr.services.league_mappings import init_league_mapping_service
 
     league_mapping_service = init_league_mapping_service(get_db)

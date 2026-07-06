@@ -14,6 +14,7 @@ from typing import Any
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables import SuffixRules, get_registry
+from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,6 @@ class TemplateResolver:
         happens in one place and propagates to every consumer. Relative paths get
         the base prefixed; absolute URLs pass through unchanged (idempotent).
         """
-        from teamarr.utilities.art_url import apply_art_base_url
 
         return apply_art_base_url(self.resolve(template, context), self.art_base_url) or ""
 

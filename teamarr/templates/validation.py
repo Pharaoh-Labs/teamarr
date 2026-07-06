@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 
+from teamarr.templates.conditions import ConditionEvaluator
 from teamarr.templates.resolver import VARIABLE_PATTERN
 from teamarr.templates.variables import SuffixRules, get_registry
 
@@ -130,7 +131,6 @@ def valid_condition_names() -> set[str]:
     (conditions.py), so the valid set is exactly the evaluator's ``_eval_*``
     methods — introspected here rather than hardcoded, so it can't drift.
     """
-    from teamarr.templates.conditions import ConditionEvaluator
 
     prefix = "_eval_"
     return {

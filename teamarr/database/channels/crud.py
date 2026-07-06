@@ -7,6 +7,8 @@ import json
 import logging
 from sqlite3 import Connection
 
+from teamarr.utilities.tz import now_user
+
 from .types import ManagedChannel
 
 logger = logging.getLogger(__name__)
@@ -270,7 +272,6 @@ def get_channels_pending_deletion(conn: Connection) -> list[ManagedChannel]:
 
     from dateutil import parser
 
-    from teamarr.utilities.tz import now_user
 
     # Get all active channels with scheduled_delete_at
     cursor = conn.execute(

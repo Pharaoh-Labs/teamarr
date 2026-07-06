@@ -9,6 +9,8 @@ import logging
 from dataclasses import dataclass
 from sqlite3 import Connection
 
+from teamarr.core.sports import get_sport_display_names_from_db
+
 logger = logging.getLogger(__name__)
 
 
@@ -368,7 +370,6 @@ def get_sort_priorities_with_channel_counts(
     Returns:
         List of dicts with priority info + display data
     """
-    from teamarr.core.sports import get_sport_display_names_from_db
 
     priorities = get_all_sort_priorities(conn)
 

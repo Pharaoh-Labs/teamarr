@@ -518,9 +518,9 @@ class _FakeTSDBClient:
 
 
 def _patch_client(monkeypatch, cls=_FakeTSDBClient):
-    import teamarr.providers.tsdb as tsdb_pkg
+    import teamarr.services.custom_leagues as custom_leagues_mod
 
-    monkeypatch.setattr(tsdb_pkg, "TSDBClient", cls)
+    monkeypatch.setattr(custom_leagues_mod, "TSDBClient", cls)
 
 
 def test_test_fetch_requires_premium(monkeypatch):
@@ -895,7 +895,7 @@ def test_refresh_custom_league_teams_wrapper_never_raises(monkeypatch):
             raise RuntimeError("kaboom")
 
     monkeypatch.setattr(
-        "teamarr.consumers.cache.refresh.CacheRefresher", lambda *a, **k: _Exploding()
+        "teamarr.services.custom_leagues.CacheRefresher", lambda *a, **k: _Exploding()
     )
     out = svc.refresh_custom_league_teams("swe.1")
     assert out["success"] is False

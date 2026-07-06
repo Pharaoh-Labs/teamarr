@@ -14,6 +14,9 @@ import sqlite3
 from datetime import datetime
 from sqlite3 import Connection
 
+from teamarr.database.priority_teams import get_priority_team_match_keys
+from teamarr.database.sort_priorities import get_all_sort_priorities
+
 logger = logging.getLogger(__name__)
 
 MAX_CHANNEL = 999999  # Effectively no limit per Dispatcharr update
@@ -449,8 +452,6 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
     Returns:
         List of channel dicts with sort-relevant fields, ordered globally
     """
-    from teamarr.database.priority_teams import get_priority_team_match_keys
-    from teamarr.database.sort_priorities import get_all_sort_priorities
 
     # 1. Get sort priorities (normalize to lowercase for case-insensitive matching)
     priorities = get_all_sort_priorities(conn)

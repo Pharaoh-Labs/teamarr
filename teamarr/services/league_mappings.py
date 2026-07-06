@@ -13,6 +13,7 @@ from sqlite3 import Connection
 
 from teamarr.core import LeagueMapping
 from teamarr.core.sports import get_sport_display_names_from_db
+from teamarr.providers import ProviderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +414,6 @@ class LeagueMappingService:
             return None
 
         # Check if primary provider has premium/full capabilities
-        from teamarr.providers import ProviderRegistry
 
         if not ProviderRegistry.is_provider_premium(mapping.provider):
             # Primary provider is limited, check for fallback

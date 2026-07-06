@@ -7,6 +7,8 @@ import json
 import logging
 from sqlite3 import Connection
 
+from teamarr.database.leagues import get_league_display, get_league_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -214,7 +216,6 @@ def bulk_update_channel_ids(
     """
     import re
 
-    from teamarr.database.leagues import get_league_display, get_league_id
 
     def to_pascal_case(name: str) -> str:
         return "".join(

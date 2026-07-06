@@ -15,6 +15,8 @@ ProviderRegistry.initialize() must be called during app startup
 to inject the LeagueMappingSource into providers.
 """
 
+from teamarr.database import get_db
+from teamarr.database.team_cache import get_team_name_by_id
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
@@ -44,7 +46,6 @@ def _get_tsdb_api_key() -> str | None:
     passing to the provider layer (which should not access database).
     """
     try:
-        from teamarr.database import get_db
 
         with get_db() as conn:
             cursor = conn.execute("SELECT tsdb_api_key FROM settings WHERE id = 1")
@@ -64,8 +65,6 @@ def _create_tsdb_team_name_resolver() -> callable:
     This callback accesses the database, keeping DB access at the factory
     boundary rather than inside the provider layer.
     """
-    from teamarr.database import get_db
-    from teamarr.database.team_cache import get_team_name_by_id
 
     def resolver(team_id: str, league: str) -> str | None:
         with get_db() as conn:

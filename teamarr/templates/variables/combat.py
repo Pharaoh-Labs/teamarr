@@ -50,6 +50,7 @@ from teamarr.templates.variables.registry import (
     SuffixRules,
     register_variable,
 )
+from teamarr.utilities.tz import format_time
 
 
 @register_variable(
@@ -238,7 +239,6 @@ def extract_card_segment_display(ctx: TemplateContext, game_ctx: GameContext | N
 )
 def extract_main_card_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract main card start time from ESPN segment data."""
-    from teamarr.utilities.tz import format_time
 
     if not game_ctx or not game_ctx.event:
         return ""
@@ -262,7 +262,6 @@ def extract_main_card_time(ctx: TemplateContext, game_ctx: GameContext | None) -
 )
 def extract_prelims_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract prelims start time from ESPN segment data."""
-    from teamarr.utilities.tz import format_time
 
     if not game_ctx or not game_ctx.event:
         return ""
@@ -286,7 +285,6 @@ def extract_prelims_time(ctx: TemplateContext, game_ctx: GameContext | None) -> 
 )
 def extract_early_prelims_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract early prelims start time from ESPN segment data."""
-    from teamarr.utilities.tz import format_time
 
     if not game_ctx or not game_ctx.event:
         return ""

@@ -26,15 +26,21 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from teamarr.consumers.cache.refresh import CacheRefresher
 from teamarr.database import get_db
+from teamarr.database.groups import get_enabled_soccer_leagues
 from teamarr.database.leagues import (
     delete_custom_league_row,
     get_league_row,
     insert_custom_league,
+    list_custom_leagues,
     purge_league_cache_rows,
     update_custom_league_row,
 )
 from teamarr.database.settings.read import get_tsdb_api_key
+from teamarr.database.subscription import get_subscription, update_subscription
+from teamarr.providers.tsdb import TSDBClient
+from teamarr.services.league_mappings import get_league_mapping_service
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +354,6 @@ def _auto_subscribe(conn: sqlite3.Connection, league_code: str) -> None:
     league in ``soccer_mode='all'`` is matched via the all-soccer expansion
     regardless, so this is a no-op-but-harmless add in that mode.
     """
-    from teamarr.database.subscription import get_subscription, update_subscription
 
     sub = get_subscription(conn)
     if league_code in sub.leagues:
@@ -368,8 +373,6 @@ def global_subscription_league_codes(conn: sqlite3.Connection) -> set[str]:
     generation actually includes. Per-group subscription overrides are not
     considered here — this is the install-wide default a custom league lands in.
     """
-    from teamarr.database.groups import get_enabled_soccer_leagues
-    from teamarr.database.subscription import get_subscription
 
     sub = get_subscription(conn)
     codes: set[str] = set(sub.leagues)
@@ -386,7 +389,6 @@ def list_custom_leagues_with_state(conn: sqlite3.Connection) -> list[dict]:
     until the user subscribes it. Creation auto-subscribes (:func:`_auto_subscribe`),
     so this only trips when a user later unchecks the league in Subscriptions.
     """
-    from teamarr.database.leagues import list_custom_leagues
 
     subscribed = global_subscription_league_codes(conn)
     return [
@@ -523,7 +525,6 @@ def run_custom_league_test_fetch(
     validate_custom_league_sport(chosen_sport)
 
     # Imported lazily so the policy module stays import-light and test-friendly.
-    from teamarr.providers.tsdb import TSDBClient
 
     client = TSDBClient(api_key=get_tsdb_api_key(conn))
 
@@ -581,7 +582,6 @@ def refresh_custom_league_teams(league_code: str) -> dict:
     Returns the refresher's result dict, or a ``success=False`` dict if the
     refresh machinery itself blows up.
     """
-    from teamarr.consumers.cache.refresh import CacheRefresher
 
     try:
         return CacheRefresher().refresh_league(league_code)
@@ -618,7 +618,6 @@ def _reload_league_mappings() -> None:
     Best-effort: if the service isn't initialized (e.g. in unit tests that call
     the create path directly), there's nothing to reload and we move on.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     try:
         get_league_mapping_service().reload()

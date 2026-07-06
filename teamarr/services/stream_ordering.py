@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from sqlite3 import Connection
 
 from teamarr.database.channels.types import ManagedChannelStream
+from teamarr.database.settings import get_stream_ordering_settings
 from teamarr.database.settings.types import StreamOrderingRule
 
 logger = logging.getLogger(__name__)
@@ -648,7 +649,6 @@ def get_stream_ordering_service(conn: Connection) -> StreamOrderingService:
     Returns:
         Configured StreamOrderingService
     """
-    from teamarr.database.settings import get_stream_ordering_settings
 
     settings = get_stream_ordering_settings(conn)
     return StreamOrderingService(rules=settings.rules, conn=conn)

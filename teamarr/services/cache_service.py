@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from teamarr.database import get_db
+
 
 @dataclass
 class CacheStats:
@@ -196,7 +198,6 @@ class CacheService:
         Returns:
             List of matching TeamInfo
         """
-        from teamarr.database import get_db
 
         q_lower = query.lower().strip()
 

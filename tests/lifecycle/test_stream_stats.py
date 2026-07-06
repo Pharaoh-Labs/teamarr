@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-import teamarr.dispatcharr.factory as factory
+import teamarr.database.channels.streams as streams_mod
 from teamarr.database.channels.streams import clear_stream_stats, refresh_stream_stats
 from teamarr.database.channels.types import ManagedChannelStream
 
@@ -109,7 +109,7 @@ def patch_client(monkeypatch):
 
     def install(client):
         holder["client"] = client
-        monkeypatch.setattr(factory, "get_dispatcharr_client", lambda: client)
+        monkeypatch.setattr(streams_mod, "get_dispatcharr_client", lambda: client)
         return client
 
     install(None)

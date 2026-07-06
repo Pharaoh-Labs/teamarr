@@ -3,6 +3,7 @@
 Variables for handling multi-league soccer (team plays in multiple competitions).
 """
 
+from teamarr.services.league_mappings import get_league_mapping_service
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -50,7 +51,6 @@ def extract_soccer_match_league(ctx: TemplateContext, game_ctx: GameContext | No
         return ""
     if not game_ctx.event.league:
         return ""
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_alias(game_ctx.event.league)
@@ -69,7 +69,6 @@ def extract_soccer_match_league_name(
         return ""
     if not game_ctx.event.league:
         return ""
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_display_name(game_ctx.event.league)
@@ -98,7 +97,6 @@ def extract_soccer_match_league_logo(ctx: TemplateContext, game_ctx: GameContext
         return ""
     if not game_ctx.event.league:
         return ""
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_logo(game_ctx.event.league)

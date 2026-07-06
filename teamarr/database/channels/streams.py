@@ -8,6 +8,9 @@ import logging
 import re
 from sqlite3 import Connection
 
+from teamarr.database.aliases import list_aliases
+from teamarr.dispatcharr.factory import get_dispatcharr_client
+
 from .types import ManagedChannelStream
 
 logger = logging.getLogger(__name__)
@@ -403,7 +406,6 @@ def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     Returns:
         Number of streams whose stats were updated
     """
-    from teamarr.dispatcharr.factory import get_dispatcharr_client
 
     cursor = conn.execute(
         """SELECT dispatcharr_stream_id FROM managed_channel_streams
@@ -516,7 +518,6 @@ def _reconstruct_aliases(
     """
     if row["match_method"] != "alias" or not event_data:
         return []
-    from teamarr.database.aliases import list_aliases
 
     home = event_data.get("home_team") or {}
     away = event_data.get("away_team") or {}

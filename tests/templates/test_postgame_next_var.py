@@ -36,8 +36,8 @@ def mock_league_mapping_service():
     svc.get_gracenote_category.side_effect = lambda code: code.upper()
     svc.get_sport_display_name.side_effect = lambda code: code.title()
     with patch(
-        "teamarr.services.league_mappings.get_league_mapping_service",
-        return_value=svc,
+        "teamarr.services.league_mappings._league_mapping_service",
+        svc,
     ):
         yield svc
 
