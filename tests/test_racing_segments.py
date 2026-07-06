@@ -35,7 +35,8 @@ class TestSessionDurationHours:
 
     def test_explicit_name_duration_wins(self):
         assert _session_duration_hours("race", {}, "wec", "24 Hours of Le Mans") == 24.0
-        assert _session_duration_hours("race", {}, "imsa", "Mobil 1 Twelve Hours of Sebring") == 12.0
+        twelve = _session_duration_hours("race", {}, "imsa", "Mobil 1 Twelve Hours of Sebring")
+        assert twelve == 12.0
 
     def test_league_fallback_when_name_has_no_duration(self):
         assert _session_duration_hours("race", {}, "wec", "Petit Le Mans") == 6.0

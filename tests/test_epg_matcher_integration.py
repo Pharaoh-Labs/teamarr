@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from teamarr.consumers.matching.classifier import ClassifiedStream, StreamCategory
+from teamarr.consumers.matching.classifier import StreamCategory
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
 from teamarr.consumers.matching.matcher import MatchedStreamResult, StreamMatcher
 from teamarr.consumers.matching.result import MatchMethod, MatchOutcome
@@ -247,7 +247,9 @@ def test_reconcile_dedicated_epg_fills_when_name_empty():
 
 
 def _racing_matched_outcome(event_id="race1", start=None):
-    ev = SimpleNamespace(league="nascar-cup", id=event_id, start_time=start or BASE, short_name="Daytona 500")
+    ev = SimpleNamespace(
+        league="nascar-cup", id=event_id, start_time=start or BASE, short_name="Daytona 500"
+    )
     return MatchOutcome.matched(MatchMethod.FUZZY, event=ev, confidence=0.9)
 
 
@@ -289,8 +291,13 @@ def test_epg_racing_fallback_f1_team_only(monkeypatch):
     monkeypatch.setattr(m, "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: routed.append(1) or [])
     race_ev = SimpleNamespace(league="f1", id="monaco_gp", start_time=BASE, short_name="Monaco GP")
-    monkeypatch.setattr(m, "_match_racing_event",
-        lambda classified, sid, td: MatchOutcome.matched(MatchMethod.FUZZY, event=race_ev, confidence=0.9))
+    monkeypatch.setattr(
+        m,
+        "_match_racing_event",
+        lambda classified, sid, td: MatchOutcome.matched(
+            MatchMethod.FUZZY, event=race_ev, confidence=0.9
+        ),
+    )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
     out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))

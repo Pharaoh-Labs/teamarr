@@ -333,8 +333,9 @@ def test_constructor_does_not_fetch():
 
 def test_first_get_events_triggers_load():
     p = NASCARProvider(league_mapping_source=None)
+    year = datetime.now(UTC).year
     responses = {
-        f"https://cf.nascar.com/cacher/{datetime.now(UTC).year}/1/race_list_basic.json": [_DAYTONA_500],
+        f"https://cf.nascar.com/cacher/{year}/1/race_list_basic.json": [_DAYTONA_500],
     }
     p._fetch = lambda url: responses.get(url)
     events = p.get_events("nascar-cup", date(2026, 2, 15))

@@ -12,7 +12,10 @@ from teamarr.providers.tsdb.provider import TSDBProvider
 from teamarr.providers.tsdb.racing import parse_racing_events
 
 
-def _event(event_id, name, date_str, time_str, round_, season="2026", venue="Circuit de la Sarthe", country="France"):
+def _event(
+    event_id, name, date_str, time_str, round_,
+    season="2026", venue="Circuit de la Sarthe", country="France",
+):
     return {
         "idEvent": event_id,
         "strEvent": name,
@@ -33,8 +36,14 @@ WEC_ROUND = [
     _event("1", "24 Hours of Le Mans Free Practice 1", "2026-06-10", "12:00:00", "3"),
     _event("2", "24 Hours of Le Mans Free Practice 2", "2026-06-10", "20:00:00", "3"),
     _event("3", "24 Hours of Le Mans Free Practice 3", "2026-06-11", "12:45:00", "3"),
-    _event("4", "24 Hours of Le Mans Hyperpole Qualifying – LMP2 & LMGT3", "2026-06-10", "16:45:00", "3"),
-    _event("5", "24 Hours of Le Mans Hyperpole Qualifying – Hypercar", "2026-06-10", "17:30:00", "3"),
+    _event(
+        "4", "24 Hours of Le Mans Hyperpole Qualifying – LMP2 & LMGT3",
+        "2026-06-10", "16:45:00", "3",
+    ),
+    _event(
+        "5", "24 Hours of Le Mans Hyperpole Qualifying – Hypercar",
+        "2026-06-10", "17:30:00", "3",
+    ),
     _event("6", "24 Hours of Le Mans Hyperpole 1 - LMP2 & LMGT3", "2026-06-11", "18:00:00", "3"),
     _event("7", "24 Hours of Le Mans Hyperpole 1 - Hypercar", "2026-06-11", "19:05:00", "3"),
     _event("8", "24 Hours of Le Mans", "2026-06-13", "10:00:00", "3"),
@@ -43,13 +52,22 @@ WEC_ROUND = [
 # A round-500 "Prologue" weekend with only Morning/Afternoon sessions - no
 # event in the group qualifies as "the race".
 WEC_PROLOGUE = [
-    _event("10", "Imola Prologue Morning Session", "2026-04-14", "07:00:00", "500", venue="Imola Circuit", country="Italy"),
-    _event("11", "Imola Prologue Afternoon Session", "2026-04-14", "12:00:00", "500", venue="Imola Circuit", country="Italy"),
+    _event(
+        "10", "Imola Prologue Morning Session", "2026-04-14", "07:00:00", "500",
+        venue="Imola Circuit", country="Italy",
+    ),
+    _event(
+        "11", "Imola Prologue Afternoon Session", "2026-04-14", "12:00:00", "500",
+        venue="Imola Circuit", country="Italy",
+    ),
 ]
 
 # IMSA: one event per round, no session suffix.
 IMSA_ROUND = [
-    _event("20", "Rolex 24 At DAYTONA", "2026-01-25", "00:00:00", "1", venue="Daytona International Speedway", country="USA"),
+    _event(
+        "20", "Rolex 24 At DAYTONA", "2026-01-25", "00:00:00", "1",
+        venue="Daytona International Speedway", country="USA",
+    ),
 ]
 
 

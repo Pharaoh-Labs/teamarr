@@ -1,18 +1,18 @@
 name: Tests
 
+# Branch pushes are tested via the Docker Build and Publish workflow, which
+# calls this workflow as its gate (workflow_call) — no duplicate runs.
 on:
-  push:
-    branches:
-      - main
-      - dev
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
   pull_request:
     branches:
       - main
       - dev
+  workflow_call:
   workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -26,15 +26,38 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.11'
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
       - name: Ruff
-        run: uv run ruff check teamarr/
+        run: uv run ruff check teamarr/ tests/
 
       - name: Pytest
         run: uv run pytest tests/ -q
+
+  typecheck:
+    name: Pyright (advisory)
+    runs-on: ubuntu-latest
+    # Non-blocking: 401-error baseline as of 2026-07 (iua3.10). Tighten to a
+    # blocking gate once the baseline is burned down.
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.11'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Pyright
+        run: uv run pyright teamarr/
 
   frontend:
     name: Build frontend

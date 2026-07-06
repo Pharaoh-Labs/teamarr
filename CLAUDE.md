@@ -64,7 +64,7 @@ bd sync                               # Sync beads data
 4. **Review docs impact** (MANDATORY consideration — not every change needs doc updates, but every change must be *evaluated* against the Documentation Updates table below). If the change touches user-visible behavior, template variables, schema, providers, config, API endpoints, or changes a count/version referenced in docs, update the relevant page(s) in the same commit or a paired commit. Do not wait for the user to prompt.
 5. **Run quality gates** (MANDATORY when shipping):
    ```bash
-   ruff check teamarr/
+   ruff check teamarr/ tests/
    pytest tests/ -v
    cd frontend && npm run build
    ```
@@ -103,7 +103,7 @@ When the user says **"release"**, **"/release"**, or **"version bump"**, execute
 3. **Quality gates** (MANDATORY):
    ```bash
    source .venv/bin/activate
-   ruff check teamarr/
+   ruff check teamarr/ tests/
    pytest tests/ -v
    cd frontend && npm run build
    ```
@@ -116,7 +116,7 @@ When the user says **"release"**, **"/release"**, or **"version bump"**, execute
    git push origin main
    git checkout dev
    ```
-7. **Create GitHub release** — `gh release create v<version> --repo Pharaoh-Labs/teamarr --target main` with summarized release notes (not commit-by-commit — group into categories)
+7. **Create GitHub release** — `gh release create v<version> --repo Pharaoh-Labs/teamarr --target main` with summarized release notes (not commit-by-commit — group into categories). CI notes: the tag push triggers `release.yml`, which sees the release already exists and skips (it only auto-creates releases for raw tag pushes); Docker publish and release are gated on the Tests workflow and on the tag matching `pyproject.toml`'s version — a mismatched tag will not publish.
 8. **Generate Discord changelog** — use the Release Template below, output ready to paste
 9. **Update plans/STATUS.md** — add release to changelog, update version
 
@@ -356,7 +356,7 @@ Add to `INSERT OR REPLACE INTO leagues` in `teamarr/database/schema.sql`. Restar
 source .venv/bin/activate
 python3 app.py                    # Run on port 9195
 pytest tests/ -v                  # Run tests
-ruff check teamarr/               # Lint
+ruff check teamarr/ tests/        # Lint
 ruff format teamarr/              # Format
 cd frontend && npm run build      # Build frontend
 ```

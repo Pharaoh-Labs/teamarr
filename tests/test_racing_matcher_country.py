@@ -11,7 +11,7 @@ from datetime import date
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from teamarr.consumers.matching.racing_matcher import RacingMatcher, RacingMatchContext
+from teamarr.consumers.matching.racing_matcher import RacingMatchContext, RacingMatcher
 
 
 def _event(eid, name, circuit=None, country=None):
