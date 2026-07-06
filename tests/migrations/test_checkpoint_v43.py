@@ -620,7 +620,7 @@ class TestFullMigrationPath:
         conn.commit()
 
         # Import and run migrations
-        from teamarr.database.connection import _run_migrations
+        from teamarr.database.migrations import _run_migrations
 
         _run_migrations(conn)
 

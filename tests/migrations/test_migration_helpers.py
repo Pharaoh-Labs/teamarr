@@ -79,7 +79,7 @@ class TestV50SoccerModes:
         """)
 
     def test_group_with_all_soccer_leagues_becomes_all(self, db):
-        from teamarr.database.connection import _migrate_v50_soccer_modes
+        from teamarr.database.migrations import _migrate_v50_soccer_modes
 
         self._setup(db)
         db.execute(
@@ -93,7 +93,7 @@ class TestV50SoccerModes:
         assert row["soccer_mode"] == "all"
 
     def test_group_with_subset_becomes_manual(self, db):
-        from teamarr.database.connection import _migrate_v50_soccer_modes
+        from teamarr.database.migrations import _migrate_v50_soccer_modes
 
         self._setup(db)
         db.execute(
@@ -107,7 +107,7 @@ class TestV50SoccerModes:
         assert row["soccer_mode"] == "manual"
 
     def test_non_soccer_group_stays_null(self, db):
-        from teamarr.database.connection import _migrate_v50_soccer_modes
+        from teamarr.database.migrations import _migrate_v50_soccer_modes
 
         self._setup(db)
         db.execute(
@@ -121,7 +121,7 @@ class TestV50SoccerModes:
         assert row["soccer_mode"] is None
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v50_soccer_modes
+        from teamarr.database.migrations import _migrate_v50_soccer_modes
 
         self._setup(db)
         db.execute(
@@ -135,7 +135,7 @@ class TestV50SoccerModes:
 
     def test_no_soccer_leagues_in_db_is_safe(self, db):
         """If the leagues table has no soccer entries, leave everything NULL."""
-        from teamarr.database.connection import _migrate_v50_soccer_modes
+        from teamarr.database.migrations import _migrate_v50_soccer_modes
 
         _settings_table(db)
         db.execute("""
@@ -174,7 +174,7 @@ class TestV53ApiDefaults:
     only for users still on the old defaults. Customized values stay."""
 
     def test_lifts_old_defaults(self, db):
-        from teamarr.database.connection import _migrate_v53_api_defaults
+        from teamarr.database.migrations import _migrate_v53_api_defaults
 
         _settings_table(db)
         # Both at old defaults
@@ -184,7 +184,7 @@ class TestV53ApiDefaults:
         assert row["api_retry_count"] == 5
 
     def test_preserves_customized_values(self, db):
-        from teamarr.database.connection import _migrate_v53_api_defaults
+        from teamarr.database.migrations import _migrate_v53_api_defaults
 
         _settings_table(db)
         db.execute("UPDATE settings SET api_timeout = 60, api_retry_count = 7 WHERE id = 1")
@@ -194,7 +194,7 @@ class TestV53ApiDefaults:
         assert row["api_retry_count"] == 7
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v53_api_defaults
+        from teamarr.database.migrations import _migrate_v53_api_defaults
 
         _settings_table(db)
         _migrate_v53_api_defaults(db)
@@ -213,7 +213,7 @@ class TestV53ApiDefaults:
 
 class TestV61SubscriptionLeagueConfig:
     def test_creates_table(self, db):
-        from teamarr.database.connection import _migrate_v61_subscription_league_config
+        from teamarr.database.migrations import _migrate_v61_subscription_league_config
 
         _migrate_v61_subscription_league_config(db)
         cursor = db.execute(
@@ -223,7 +223,7 @@ class TestV61SubscriptionLeagueConfig:
         assert cursor.fetchone() is not None
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v61_subscription_league_config
+        from teamarr.database.migrations import _migrate_v61_subscription_league_config
 
         _migrate_v61_subscription_league_config(db)
         # Insert a row
@@ -257,7 +257,7 @@ class TestV62DefaultChannelGroup:
         """)
 
     def test_adds_default_channel_group_columns(self, db):
-        from teamarr.database.connection import _migrate_v62_default_channel_group
+        from teamarr.database.migrations import _migrate_v62_default_channel_group
 
         self._setup(db)
         _migrate_v62_default_channel_group(db)
@@ -267,7 +267,7 @@ class TestV62DefaultChannelGroup:
         assert "default_channel_group_mode" in cols
 
     def test_relaxes_check_constraint_allowing_custom_pattern(self, db):
-        from teamarr.database.connection import _migrate_v62_default_channel_group
+        from teamarr.database.migrations import _migrate_v62_default_channel_group
 
         self._setup(db)
         _migrate_v62_default_channel_group(db)
@@ -283,7 +283,7 @@ class TestV62DefaultChannelGroup:
         assert row["channel_group_mode"] == "{sport} | {league}"
 
     def test_preserves_existing_rows(self, db):
-        from teamarr.database.connection import _migrate_v62_default_channel_group
+        from teamarr.database.migrations import _migrate_v62_default_channel_group
 
         self._setup(db)
         db.execute(
@@ -298,7 +298,7 @@ class TestV62DefaultChannelGroup:
         assert row["channel_group_mode"] == "sport"
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v62_default_channel_group
+        from teamarr.database.migrations import _migrate_v62_default_channel_group
 
         self._setup(db)
         _migrate_v62_default_channel_group(db)
@@ -326,7 +326,7 @@ class TestV66TsdbTiers:
             db.execute("INSERT INTO leagues (league_code) VALUES (?)", (code,))
 
     def test_tags_free_leagues(self, db):
-        from teamarr.database.connection import _migrate_v66_tsdb_tiers
+        from teamarr.database.migrations import _migrate_v66_tsdb_tiers
 
         self._setup(db)
         _migrate_v66_tsdb_tiers(db)
@@ -337,7 +337,7 @@ class TestV66TsdbTiers:
         assert row["tsdb_tier"] == "free"
 
     def test_tags_premium_leagues(self, db):
-        from teamarr.database.connection import _migrate_v66_tsdb_tiers
+        from teamarr.database.migrations import _migrate_v66_tsdb_tiers
 
         self._setup(db)
         _migrate_v66_tsdb_tiers(db)
@@ -346,7 +346,7 @@ class TestV66TsdbTiers:
         assert row["tsdb_tier"] == "premium"
 
     def test_unrecognized_leagues_stay_null(self, db):
-        from teamarr.database.connection import _migrate_v66_tsdb_tiers
+        from teamarr.database.migrations import _migrate_v66_tsdb_tiers
 
         self._setup(db)
         _migrate_v66_tsdb_tiers(db)
@@ -355,7 +355,7 @@ class TestV66TsdbTiers:
         assert row["tsdb_tier"] is None
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v66_tsdb_tiers
+        from teamarr.database.migrations import _migrate_v66_tsdb_tiers
 
         self._setup(db)
         _migrate_v66_tsdb_tiers(db)
@@ -365,7 +365,7 @@ class TestV66TsdbTiers:
 
     def test_handles_missing_leagues_table(self, db):
         """No leagues table (minimal test DB) — should not raise."""
-        from teamarr.database.connection import _migrate_v66_tsdb_tiers
+        from teamarr.database.migrations import _migrate_v66_tsdb_tiers
 
         # Just create something — column-add will look for `leagues` and skip.
         _migrate_v66_tsdb_tiers(db)
@@ -389,7 +389,7 @@ class TestV67RemoveCricbuzz:
         """)
 
     def test_clears_cricbuzz_fallback(self, db):
-        from teamarr.database.connection import _migrate_v67_remove_cricbuzz
+        from teamarr.database.migrations import _migrate_v67_remove_cricbuzz
 
         self._setup(db)
         db.execute(
@@ -408,7 +408,7 @@ class TestV67RemoveCricbuzz:
         assert row["series_slug_pattern"] is None
 
     def test_preserves_non_cricbuzz_fallbacks(self, db):
-        from teamarr.database.connection import _migrate_v67_remove_cricbuzz
+        from teamarr.database.migrations import _migrate_v67_remove_cricbuzz
 
         self._setup(db)
         db.execute("INSERT INTO leagues (league_code, fallback_provider) VALUES ('cfl', 'tsdb')")
@@ -418,7 +418,7 @@ class TestV67RemoveCricbuzz:
         assert row["fallback_provider"] == "tsdb"
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v67_remove_cricbuzz
+        from teamarr.database.migrations import _migrate_v67_remove_cricbuzz
 
         self._setup(db)
         db.execute(
@@ -431,7 +431,7 @@ class TestV67RemoveCricbuzz:
         assert row["fallback_provider"] is None
 
     def test_handles_missing_leagues_table(self, db):
-        from teamarr.database.connection import _migrate_v67_remove_cricbuzz
+        from teamarr.database.migrations import _migrate_v67_remove_cricbuzz
 
         _migrate_v67_remove_cricbuzz(db)
 
@@ -455,7 +455,7 @@ class TestV69FeedTeamChannels:
         """)
 
     def test_adds_feed_team_id_column(self, db):
-        from teamarr.database.connection import _migrate_v69_feed_team_channels
+        from teamarr.database.migrations import _migrate_v69_feed_team_channels
 
         self._setup(db)
         _migrate_v69_feed_team_channels(db)
@@ -464,7 +464,7 @@ class TestV69FeedTeamChannels:
         assert "feed_team_id" in cols
 
     def test_creates_unique_index_with_feed_team(self, db):
-        from teamarr.database.connection import _migrate_v69_feed_team_channels
+        from teamarr.database.migrations import _migrate_v69_feed_team_channels
 
         self._setup(db)
         _migrate_v69_feed_team_channels(db)
@@ -475,7 +475,7 @@ class TestV69FeedTeamChannels:
         assert cursor.fetchone() is not None
 
     def test_idempotent(self, db):
-        from teamarr.database.connection import _migrate_v69_feed_team_channels
+        from teamarr.database.migrations import _migrate_v69_feed_team_channels
 
         self._setup(db)
         _migrate_v69_feed_team_channels(db)
@@ -486,7 +486,7 @@ class TestV69FeedTeamChannels:
 
     def test_skips_when_managed_channels_missing(self, db):
         """No managed_channels table — should not error (test schemas may lack it)."""
-        from teamarr.database.connection import _migrate_v69_feed_team_channels
+        from teamarr.database.migrations import _migrate_v69_feed_team_channels
 
         _migrate_v69_feed_team_channels(db)
 
@@ -530,7 +530,7 @@ class TestV64DedupChannels:
         """)
 
     def test_merges_duplicate_channels_keeping_oldest(self, db):
-        from teamarr.database.connection import _migrate_v64_dedup_channels
+        from teamarr.database.migrations import _migrate_v64_dedup_channels
 
         self._setup(db)
         # Two channels for the same event/provider/keyword/stream across groups.
@@ -575,7 +575,7 @@ class TestV64DedupChannels:
         assert any(r["managed_channel_id"] == 1 for r in row)
 
     def test_creates_event_scoped_unique_index(self, db):
-        from teamarr.database.connection import _migrate_v64_dedup_channels
+        from teamarr.database.migrations import _migrate_v64_dedup_channels
 
         self._setup(db)
         _migrate_v64_dedup_channels(db)
@@ -586,7 +586,7 @@ class TestV64DedupChannels:
         assert cursor.fetchone() is not None
 
     def test_idempotent_when_no_dupes(self, db):
-        from teamarr.database.connection import _migrate_v64_dedup_channels
+        from teamarr.database.migrations import _migrate_v64_dedup_channels
 
         self._setup(db)
         db.execute(

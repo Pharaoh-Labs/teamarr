@@ -344,7 +344,7 @@ Add to `INSERT OR REPLACE INTO leagues` in `teamarr/database/schema.sql`. Restar
 
 **Adding a new column:** Just add it to the `CREATE TABLE` in `schema.sql`. Schema reconciliation (`teamarr/database/reconciliation.py`) automatically detects and adds missing columns on startup by comparing the real database against an in-memory reference built from `schema.sql`. No migration block needed.
 
-**Data migration (transforming existing data):** Add a versioned `if current_version < N:` block in `_run_migrations()` in `connection.py`. Bump the `schema_version DEFAULT` in `schema.sql`. Column additions in mixed blocks should use `_add_column_if_not_exists` as a safety net for tests that call `_run_migrations` directly.
+**Data migration (transforming existing data):** Add a versioned `if current_version < N:` block in `_run_migrations()` in `database/migrations/versioned.py`. Bump the `schema_version DEFAULT` in `schema.sql`. Column additions in mixed blocks should use `_add_column_if_not_exists` as a safety net for tests that call `_run_migrations` directly.
 
 **Table rebuild (CHECK constraint changes):** Add a pre-migration function in `init_db()` that backs up the table, drops it, and lets `executescript` recreate it. Add a restore block in `_run_migrations` keyed on the backup table's existence. See `_migrate_settings_for_v65` as the pattern.
 

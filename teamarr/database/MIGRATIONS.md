@@ -7,10 +7,10 @@ How database schema changes work in Teamarr v2.
 ```
 Startup (init_db):
   1. Verify integrity (corrupt files raise, V1 databases raise — no longer supported)
-  2. Structural pre-migrations (column renames, table rebuilds)
+  2. Structural pre-migrations (column renames, table rebuilds) — migrations/pre.py
   3. Schema reconciliation ← compares real DB against schema.sql
   4. conn.executescript(schema.sql) ← creates missing tables, seeds data
-  5. Data migrations (_run_migrations) ← transforms existing data
+  5. Data migrations (_run_migrations) ← transforms existing data — migrations/versioned.py
   6. Seed TSDB cache
 ```
 
@@ -20,7 +20,9 @@ Startup (init_db):
 |------|---------|
 | `schema.sql` | Single source of truth for all table/column definitions |
 | `reconciliation.py` | Compares real DB against in-memory reference, adds missing columns |
-| `connection.py` | `init_db()` startup flow + `_run_migrations()` data migrations |
+| `connection.py` | `init_db()` startup flow (connections, integrity check, orchestration) |
+| `migrations/pre.py` | Structural pre-migrations (`run_pre_migrations`): renames, table rebuilds |
+| `migrations/versioned.py` | `_run_migrations()` + all versioned `_migrate_v{N}_*` data migrations |
 | `checkpoint_v43.py` | Consolidates v2–v43 migrations into single idempotent operation |
 | `migration.py` | Backup-restore validation helpers |
 
@@ -115,7 +117,7 @@ SQLite bakes CHECK constraints and FK actions into the table at CREATE TABLE tim
 2. `executescript` recreates it with the new constraints from `schema.sql`.
 3. Add a restore helper (`_migrate_v{N}_*_restore_if_needed`) keyed on the backup table's existence.
 
-See `_migrate_settings_for_v65` (pre-migration) and `_migrate_v65_lifecycle_timing_restore_if_needed` (restore) as the reference pattern. The restore helper checks for the backup table rather than checking `schema_version`, because `executescript` reseeds `schema_version` to its default after the table rebuild.
+See `_migrate_settings_for_v65` (pre-migration, `migrations/pre.py`) and `_migrate_v65_lifecycle_timing_restore_if_needed` (restore, `migrations/versioned.py`) as the reference pattern. The restore helper checks for the backup table rather than checking `schema_version`, because `executescript` reseeds `schema_version` to its default after the table rebuild.
 
 ## Best Practices
 

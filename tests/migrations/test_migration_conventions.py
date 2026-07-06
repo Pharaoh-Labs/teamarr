@@ -18,34 +18,34 @@ import pytest
 
 from tests.helpers import REPO_ROOT
 
-CONNECTION_PY = REPO_ROOT / "teamarr" / "database" / "connection.py"
+VERSIONED_PY = REPO_ROOT / "teamarr" / "database" / "migrations" / "versioned.py"
 
 
 @pytest.fixture(scope="module")
-def connection_source() -> str:
-    return CONNECTION_PY.read_text()
+def versioned_source() -> str:
+    return VERSIONED_PY.read_text()
 
 
 @pytest.fixture(scope="module")
-def connection_ast(connection_source: str) -> ast.Module:
-    return ast.parse(connection_source)
+def versioned_ast(versioned_source: str) -> ast.Module:
+    return ast.parse(versioned_source)
 
 
 def _find_function(tree: ast.Module, name: str) -> ast.FunctionDef:
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == name:
             return node
-    raise AssertionError(f"function {name!r} not found in connection.py")
+    raise AssertionError(f"function {name!r} not found in migrations/versioned.py")
 
 
-def test_run_migrations_body_is_only_helper_calls(connection_ast: ast.Module):
+def test_run_migrations_body_is_only_helper_calls(versioned_ast: ast.Module):
     """_run_migrations should be a series of guarded `if` blocks calling helpers.
 
     No inline conn.execute() calls — they belong inside named migration
     helpers or the bootstrap helpers (_get_current_schema_version,
     _recover_schema_version_from_v65_backup_if_needed).
     """
-    fn = _find_function(connection_ast, "_run_migrations")
+    fn = _find_function(versioned_ast, "_run_migrations")
 
     for node in ast.walk(fn):
         if not isinstance(node, ast.Call):
@@ -65,13 +65,13 @@ def test_run_migrations_body_is_only_helper_calls(connection_ast: ast.Module):
         )
 
 
-def test_migration_blocks_advance_schema_version(connection_source: str):
+def test_migration_blocks_advance_schema_version(versioned_source: str):
     """Every `if current_version < N:` block must contain a `current_version = N` line.
 
     Catches the bug where you forget to bump the local var, causing later
     blocks to also run when they shouldn't.
     """
-    body = _extract_run_migrations_body(connection_source)
+    body = _extract_run_migrations_body(versioned_source)
     pattern = re.compile(
         r"^\s*if current_version < (\d+):\s*\n(.*?)(?=^\s*if current_version|^\s*$|\Z)",
         re.MULTILINE | re.DOTALL,
@@ -87,14 +87,14 @@ def test_migration_blocks_advance_schema_version(connection_source: str):
         )
 
 
-def test_no_inline_alter_table_add_column_in_run_migrations(connection_source: str):
+def test_no_inline_alter_table_add_column_in_run_migrations(versioned_source: str):
     """ALTER TABLE ADD COLUMN in _run_migrations body indicates schema drift.
 
     Allowed: inside named _migrate_v*_* helper functions (defensive against
     test paths that bypass reconciliation). Forbidden: inline in the
     _run_migrations driver itself.
     """
-    body = _extract_run_migrations_body(connection_source)
+    body = _extract_run_migrations_body(versioned_source)
     assert "ADD COLUMN" not in body.upper(), (
         "_run_migrations body contains ALTER TABLE ADD COLUMN inline. "
         "Add the column to schema.sql instead — reconciliation will create it. "
@@ -103,30 +103,30 @@ def test_no_inline_alter_table_add_column_in_run_migrations(connection_source: s
     )
 
 
-def test_migration_helpers_named_with_version_prefix(connection_ast: ast.Module):
+def test_migration_helpers_named_with_version_prefix(versioned_ast: ast.Module):
     """Functions named `_migrate_v*` should follow the `_migrate_v{N}_{desc}` pattern."""
     pattern = re.compile(r"^_migrate_v\d+(_\w+)?$")
-    for node in connection_ast.body:
+    for node in versioned_ast.body:
         if isinstance(node, ast.FunctionDef) and node.name.startswith("_migrate_v"):
             assert pattern.match(node.name), (
                 f"migration helper {node.name!r} does not match _migrate_v{{N}}_{{desc}}"
             )
 
 
-def test_apply_migration_signature_is_stable(connection_ast: ast.Module):
+def test_apply_migration_signature_is_stable(versioned_ast: ast.Module):
     """_apply_migration must accept (conn, target, description, fn).
 
     Catches accidental signature changes that would silently break callers.
     """
-    fn = _find_function(connection_ast, "_apply_migration")
+    fn = _find_function(versioned_ast, "_apply_migration")
     arg_names = [a.arg for a in fn.args.args]
     assert arg_names == ["conn", "target", "description", "migration_fn"], (
         f"_apply_migration signature drifted: {arg_names}"
     )
 
 
-def test_advance_version_signature_is_stable(connection_ast: ast.Module):
-    fn = _find_function(connection_ast, "_advance_version")
+def test_advance_version_signature_is_stable(versioned_ast: ast.Module):
+    fn = _find_function(versioned_ast, "_advance_version")
     arg_names = [a.arg for a in fn.args.args]
     assert arg_names == ["conn", "target", "reason"], (
         f"_advance_version signature drifted: {arg_names}"
@@ -157,9 +157,9 @@ def _extract_run_migrations_body(source: str) -> str:
     return "\n".join(body_lines)
 
 
-def test_extract_helper_works(connection_source: str):
+def test_extract_helper_works(versioned_source: str):
     """Sanity check: the body extractor returns something sensible."""
-    body = _extract_run_migrations_body(connection_source)
+    body = _extract_run_migrations_body(versioned_source)
     assert "current_version" in body
     assert "_apply_migration" in body
     assert "def _run_migrations" not in body  # body excludes the def line

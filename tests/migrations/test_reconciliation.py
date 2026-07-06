@@ -245,7 +245,7 @@ class TestV65SchemaVersionCorrection:
 
     def test_corrects_version_from_backup(self):
         """When v65 backup exists, schema_version is corrected from backup."""
-        from teamarr.database.connection import _run_migrations
+        from teamarr.database.migrations import _run_migrations
 
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row

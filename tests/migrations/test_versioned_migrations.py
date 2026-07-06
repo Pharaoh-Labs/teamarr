@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from teamarr.database.connection import (
+from teamarr.database.connection import init_db
+from teamarr.database.migrations import (
     _migrate_stream_match_cache_check,
     _migrate_stream_match_cache_restore_if_needed,
     _migrate_v74_preserve_epg_match_offstate,
     _migrate_v75_extract_art_base_url,
     _run_migrations,
-    init_db,
 )
 from teamarr.utilities.xmltv import apply_art_base_url
 
@@ -670,7 +670,7 @@ def test_apply_art_base_url(value, base, expected):
 
 
 def test_v76_adds_leading_slash_to_relative_paths():
-    from teamarr.database.connection import _migrate_v76_leading_slash_art_paths
+    from teamarr.database.migrations import _migrate_v76_leading_slash_art_paths
 
     conn = _art_make_db()
     conn.execute(
@@ -692,7 +692,7 @@ def test_v76_adds_leading_slash_to_relative_paths():
 
 
 def test_v76_idempotent_on_already_slashed():
-    from teamarr.database.connection import _migrate_v76_leading_slash_art_paths
+    from teamarr.database.migrations import _migrate_v76_leading_slash_art_paths
 
     conn = _art_make_db()
     conn.execute("INSERT INTO templates (id, program_art_url) VALUES (1, '/already/ok.png')")

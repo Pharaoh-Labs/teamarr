@@ -23,7 +23,7 @@ Fresh Install          Existing Database (v2-v42)      Existing Database (v43+)
                                 │
                                 ▼
                     v44, v45, ... incremental
-                    migrations (connection.py)
+                    migrations (migrations/versioned.py)
 ```
 
 ### Key Principles
@@ -39,7 +39,9 @@ Fresh Install          Existing Database (v2-v42)      Existing Database (v43+)
 | `teamarr/database/schema.sql` | Authoritative schema for fresh installs AND the reference for reconciliation |
 | `teamarr/database/checkpoint_v43.py` | Consolidates v2-v43 into single operation |
 | `teamarr/database/reconciliation.py` | Compares real DB columns against `schema.sql`, adds any that are missing |
-| `teamarr/database/connection.py` | `_run_migrations()` orchestrates everything |
+| `teamarr/database/connection.py` | `init_db()` startup orchestration |
+| `teamarr/database/migrations/pre.py` | Structural pre-migrations (renames, table rebuilds) |
+| `teamarr/database/migrations/versioned.py` | `_run_migrations()` + versioned data migrations |
 
 ## How It Works
 
@@ -113,7 +115,7 @@ When the change requires transforming data (not just adding a column), use a ver
 
 ### Pattern C — Table rebuild (CHECK constraint changes)
 
-For changes SQLite can't do via ALTER (e.g., tightening a CHECK constraint), use a pre-migration that backs up the table, drops it, and lets `executescript` recreate it from `schema.sql`. See `_migrate_settings_for_v65` in `connection.py` for the pattern.
+For changes SQLite can't do via ALTER (e.g., tightening a CHECK constraint), use a pre-migration that backs up the table, drops it, and lets `executescript` recreate it from `schema.sql`. See `_migrate_settings_for_v65` in `migrations/pre.py` for the pattern.
 
 ## Best Practices
 
@@ -169,25 +171,22 @@ Consider a new checkpoint when:
 To create:
 1. Copy `checkpoint_v43.py` to `checkpoint_vXX.py`
 2. Update all schema definitions to match current `schema.sql`
-3. Update `connection.py` to use new checkpoint
+3. Update `migrations/versioned.py` to use new checkpoint
 4. Old checkpoint can be removed (or kept for users on very old versions)
 
 ## Pre-Migrations
 
-Some schema changes need to happen **before** the checkpoint runs (e.g., renaming columns that the checkpoint references). These are handled by dedicated functions called before `apply_checkpoint_v43()`:
+Some schema changes need to happen **before** the checkpoint runs (e.g., renaming columns that the checkpoint references). These live in `teamarr/database/migrations/pre.py` and run via `run_pre_migrations()`:
 
 | Function | Purpose |
 |----------|---------|
 | `_rename_league_id_column_if_needed` | Renames legacy `league_id` column |
-| `_add_league_alias_column_if_needed` | Adds `league_alias` column |
-| `_add_gracenote_category_column_if_needed` | Adds `gracenote_category` column |
-| `_add_logo_url_dark_column_if_needed` | Adds `logo_url_dark` column |
-| `_add_series_slug_pattern_column_if_needed` | Adds `series_slug_pattern` column |
-| `_add_fallback_columns_if_needed` | Adds `fallback_provider` and `fallback_league_id` |
-| `_add_tsdb_tier_column_if_needed` | Adds `tsdb_tier` for TSDB free/premium classification |
 | `_migrate_exception_keywords_columns` | Restructures exception keyword storage |
-| `_migrate_settings_for_v65` | Channel lifecycle overhaul (v62) |
+| `_migrate_settings_for_v65` | Settings table rebuild (channel lifecycle overhaul) |
+| `_migrate_detection_keywords_check` | Rebuilds detection_keywords for a new CHECK constraint |
+| `_migrate_stream_match_cache_check` | Rebuilds stream_match_cache for a new CHECK constraint |
 
+(Column additions that used to be pre-migrations are now handled by schema reconciliation.)
 Pre-migrations are idempotent and only modify the schema if the target column/table doesn't already exist.
 
 ## Schema Reconciliation (v2.4.0+)
@@ -213,7 +212,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 | 2 | Base | Initial V2 schema |
 | 3-42 | Consolidated | Merged into checkpoint_v43 |
 | 43 | Checkpoint | Checkpoint baseline |
-| 44-71 | Incremental | Individual migrations in `connection.py` |
+| 44-77 | Incremental | Individual migrations in `migrations/versioned.py` |
 
 ## Troubleshooting
 

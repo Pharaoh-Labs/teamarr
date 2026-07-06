@@ -13,7 +13,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-from teamarr.database.connection import _run_migrations, init_db
+from teamarr.database.connection import init_db
+from teamarr.database.migrations import _run_migrations
 from teamarr.database.templates import Template, _row_to_template
 
 # ===========================================================================

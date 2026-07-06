@@ -60,7 +60,7 @@ def _create_base_schema(conn):
 
 def _run_v58_migration(conn):
     """Run just the v58 migration block from connection.py."""
-    from teamarr.database.connection import _run_migrations
+    from teamarr.database.migrations import _run_migrations
 
     _run_migrations(conn)
 
