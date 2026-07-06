@@ -100,6 +100,7 @@ def init_db(db_path: Path | str | None = None) -> None:
             _migrate_exception_keywords_columns(conn)
             _migrate_settings_for_v65(conn)
             _migrate_detection_keywords_check(conn)
+            _migrate_stream_match_cache_check(conn)
 
             # ================================================================
             # Schema reconciliation — ensures ALL columns match schema.sql.
@@ -367,6 +368,42 @@ def _migrate_detection_keywords_check(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_stream_match_cache_check(conn: sqlite3.Connection) -> None:
+    """Pre-migration: rebuild stream_match_cache if its match_method CHECK is stale.
+
+    The RacingMatcher (v2.8.0) and TennisMatcher (mf7) cache matches with
+    match_method='direct', but databases created before v77 bake a CHECK that
+    rejects it — every direct-match cache write fails (logged, non-fatal), so
+    those matches silently never cache. Detect the stale constraint and drop
+    the table so executescript recreates it with the current CHECK. Only
+    user-corrected rows are backed up (_stream_match_cache_backup) and
+    restored in _run_migrations — algorithmic rows are disposable cache and
+    re-derive on the next run.
+    """
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type='table' AND name='stream_match_cache'"
+        ).fetchone()
+    except Exception:
+        return  # Table doesn't exist yet (fresh install)
+    if not row or not row[0]:
+        return
+    if "'direct'" in row[0]:
+        return  # Constraint already current — nothing to do
+
+    conn.execute("DROP TABLE IF EXISTS _stream_match_cache_backup")
+    conn.execute(
+        "CREATE TABLE _stream_match_cache_backup AS "
+        "SELECT * FROM stream_match_cache WHERE user_corrected = 1"
+    )
+    conn.execute("DROP TABLE stream_match_cache")
+    logger.info(
+        "[PRE-MIGRATE] stream_match_cache dropped to refresh stale "
+        "match_method CHECK constraint (user corrections backed up)"
+    )
+
+
 def _seed_tsdb_cache_if_needed(conn: sqlite3.Connection) -> None:
     """Seed TSDB cache from distributed seed file if needed."""
     from teamarr.database.seed import seed_if_needed
@@ -515,6 +552,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     # bump runs unconditionally for any DB still below v65.
     _migrate_v65_lifecycle_timing_restore_if_needed(conn)
     _migrate_detection_keywords_restore_if_needed(conn)
+    _migrate_stream_match_cache_restore_if_needed(conn)
     if current_version < 65:
         _advance_version(conn, 65, "event-anchored lifecycle timing")
         current_version = 65
@@ -579,6 +617,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             _migrate_v76_leading_slash_art_paths,
         )
         current_version = 76
+
+    if current_version < 77:
+        # Structural work happens in _migrate_stream_match_cache_check /
+        # _restore (keyed on the CHECK content, not this version) — this
+        # bump is bookkeeping.
+        _advance_version(
+            conn, 77, "stream_match_cache CHECK allows 'direct'/'epg' match methods"
+        )
+        current_version = 77
 
 
 # =============================================================================
@@ -1291,6 +1338,41 @@ def _migrate_detection_keywords_restore_if_needed(conn: sqlite3.Connection) -> N
     except Exception as e:
         logger.warning("[MIGRATE] detection_keywords restore failed: %s", e)
         conn.execute("DROP TABLE IF EXISTS _detection_keywords_backup")
+
+
+def _migrate_stream_match_cache_restore_if_needed(conn: sqlite3.Connection) -> None:
+    """Restore user-corrected stream matches after the CHECK constraint rebuild.
+
+    Keyed off the backup table's existence (the pre-migration only backs up
+    user_corrected rows — algorithmic cache entries re-derive on the next run).
+    """
+    has_backup = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type='table' AND name='_stream_match_cache_backup'"
+    ).fetchone()[0]
+    if not has_backup:
+        return
+
+    try:
+        backup_cols = [
+            r[1] for r in conn.execute("PRAGMA table_info(_stream_match_cache_backup)")
+        ]
+        new_cols = [r[1] for r in conn.execute("PRAGMA table_info(stream_match_cache)")]
+        common = [c for c in new_cols if c in backup_cols]
+        col_list = ", ".join(common)
+
+        conn.execute(
+            f"INSERT OR IGNORE INTO stream_match_cache ({col_list}) "
+            f"SELECT {col_list} FROM _stream_match_cache_backup"
+        )
+        conn.execute("DROP TABLE _stream_match_cache_backup")
+        logger.info(
+            "[MIGRATE] Restored user-corrected stream matches after "
+            "match_method CHECK refresh"
+        )
+    except Exception as e:
+        logger.warning("[MIGRATE] stream_match_cache restore failed: %s", e)
+        conn.execute("DROP TABLE IF EXISTS _stream_match_cache_backup")
 
 
 def _migrate_v66_tsdb_tiers(conn: sqlite3.Connection) -> None:

@@ -444,7 +444,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_lineup_id TEXT,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 76
+    schema_version INTEGER DEFAULT 77
 );
 
 -- Insert default settings
@@ -1194,8 +1194,10 @@ CREATE TABLE IF NOT EXISTS stream_match_cache (
     -- fuzzy: matched via fuzzy string matching
     -- keyword: matched via keyword (UFC, boxing event cards)
     -- no_match: failed to match (short TTL)
+    -- direct: unambiguous non-fuzzy match (racing single-event, tennis surname pair)
+    -- epg: matched via EPG program title (epic 183)
     match_method TEXT DEFAULT 'fuzzy'
-        CHECK(match_method IN ('cache', 'user_corrected', 'alias', 'pattern', 'fuzzy', 'keyword', 'no_match')),
+        CHECK(match_method IN ('cache', 'user_corrected', 'alias', 'pattern', 'fuzzy', 'keyword', 'no_match', 'direct', 'epg')),
 
     -- User correction tracking
     user_corrected BOOLEAN DEFAULT 0,
