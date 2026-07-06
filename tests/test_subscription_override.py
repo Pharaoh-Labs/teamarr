@@ -8,29 +8,11 @@ Verifies the priority chain:
 5. Caching: groups with overrides get separate cache keys
 """
 
-from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-@dataclass
-class FakeGroup:
-    """Minimal EventEPGGroup stand-in for testing."""
-
-    id: int = 1
-    subscription_leagues: list[str] | None = None
-    subscription_soccer_mode: str | None = None
-    subscription_soccer_followed_teams: list[dict] | None = None
-
-
-@dataclass
-class FakeSubscription:
-    """Minimal SportsSubscription stand-in."""
-
-    leagues: list[str] = field(default_factory=lambda: ["nhl", "nba"])
-    soccer_mode: str | None = None
-    soccer_followed_teams: list[dict] | None = None
+from tests.fakes import FakeGroup, FakeSubscription
 
 
 @pytest.fixture

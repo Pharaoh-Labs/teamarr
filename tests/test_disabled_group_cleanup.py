@@ -5,31 +5,11 @@ channel only when nothing else feeds it — so consolidated/multi-source channel
 survive when one of several contributing groups is disabled.
 """
 
-from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-@dataclass
-class FakeGroup:
-    id: int
-    name: str = "G"
-    enabled: bool = True
-
-
-@dataclass
-class FakeChannel:
-    id: int
-    dispatcharr_channel_id: int = 100
-    channel_number: int = 1
-    channel_name: str = "Ch"
-
-
-@dataclass
-class FakeStream:
-    dispatcharr_stream_id: int
-    source_group_id: int | None
+from tests.fakes import FakeChannel, FakeGroup, FakeStream
 
 
 @pytest.fixture

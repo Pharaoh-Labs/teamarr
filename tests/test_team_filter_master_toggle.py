@@ -7,23 +7,12 @@ and the post-filter channel cleanup (_cleanup_team_filtered_channels), so
 flipping the toggle truly disables team filtering end-to-end.
 """
 
-from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from teamarr.database.settings import TeamFilterSettings
-
-
-@dataclass
-class FakeGroup:
-    """Minimal EventEPGGroup stand-in for testing _get_effective_team_filter."""
-
-    id: int = 1
-    include_teams: list[dict] | None = None
-    exclude_teams: list[dict] | None = None
-    team_filter_mode: str = "include"
-    bypass_filter_for_playoffs: bool | None = None
+from tests.fakes import FakeGroup
 
 
 @pytest.fixture

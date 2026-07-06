@@ -6,24 +6,11 @@ sweep is conservative: it bails on an empty subscription set and exempts
 channel-source/system groups and league-less channels.
 """
 
-from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-@dataclass
-class FakeGroup:
-    id: int = 1
-    enabled: bool = True
-    is_channel_source: bool = False
-
-
-@dataclass
-class FakeChannel:
-    id: int
-    league: str | None
-    event_epg_group_id: int | None = 1
+from tests.fakes import FakeChannel, FakeGroup
 
 
 @pytest.fixture

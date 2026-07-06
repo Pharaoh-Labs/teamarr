@@ -11,28 +11,10 @@ sentinel — and the same value must be persisted to the local DB so the
 profile drift sync doesn't immediately flag the new channel.
 """
 
-from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
 from teamarr.dispatcharr.types import OperationResult
-
-
-@dataclass
-class FakeEvent:
-    """Minimal event for testing."""
-
-    id: str = "123"
-    name: str = "Team A vs Team B"
-    short_name: str = "A vs B"
-    sport: str = "baseball"
-    league: str = "milb"
-    provider: str = "espn"
-    start_time: None = None
-    home_team: None = None
-    away_team: None = None
-    venue: None = None
-    broadcasts: list = field(default_factory=list)
-    status: None = None
+from tests.fakes import FakeEvent
 
 
 def _make_service(channel_manager=None):

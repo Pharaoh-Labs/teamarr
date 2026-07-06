@@ -5,7 +5,6 @@ persisting local DB state, enabling self-healing via the scheduler retry loop.
 """
 
 import sqlite3
-from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,52 +12,11 @@ import pytest
 from teamarr.consumers.lifecycle.types import StreamProcessResult
 from teamarr.consumers.reconciliation import ChannelReconciler
 from teamarr.dispatcharr.types import DispatcharrChannel, OperationResult
+from tests.fakes import FakeEvent, FakeManagedChannel
 
 # =============================================================================
 # FIXTURES
 # =============================================================================
-
-
-@dataclass
-class FakeManagedChannel:
-    """Lightweight stand-in for ManagedChannel from the DB."""
-
-    id: int = 1
-    dispatcharr_channel_id: int = 100
-    dispatcharr_uuid: str = "uuid-100"
-    channel_name: str = "Test Channel"
-    channel_number: str = "5001"
-    tvg_id: str = "teamarr-event-123"
-    event_id: str = "123"
-    event_epg_group_id: int = 1
-    channel_group_id: int = 10
-    channel_profile_ids: str = "[0]"
-    exception_keyword: str | None = None
-    dispatcharr_logo_id: int | None = None
-    logo_url: str | None = None
-    scheduled_delete_at: str | None = None
-    sport: str = "football"
-    league: str = "nfl"
-    event_date: str | None = None
-    primary_stream_id: int | None = None
-
-
-@dataclass
-class FakeEvent:
-    """Minimal event for testing."""
-
-    id: str = "123"
-    name: str = "Team A vs Team B"
-    short_name: str = "A vs B"
-    sport: str = "football"
-    league: str = "nfl"
-    provider: str = "espn"
-    start_time: None = None
-    home_team: None = None
-    away_team: None = None
-    venue: None = None
-    broadcasts: list = field(default_factory=list)
-    status: None = None
 
 
 def _make_dispatcharr_channel(

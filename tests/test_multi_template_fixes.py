@@ -6,36 +6,16 @@ Validates fixes from epic ou3:
 - ou3.5: Per-stream error isolation in lifecycle batch
 """
 
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
+
+from tests.fakes import make_event
 
 # ---------- Minimal stubs for event / template / filler ----------
 
 
-@dataclass
-class FakeTeam:
-    id: str = "1"
-    name: str = "Team A"
-    abbreviation: str = "TA"
-
-
-@dataclass
-class FakeStatus:
-    state: str = "pre"
-
-
-@dataclass
-class FakeEvent:
-    id: str = "100"
-    name: str = "Team A vs Team B"
-    short_name: str = "A v B"
-    sport: str = "mma"
-    league: str = "ufc"
-    provider: str = "espn"
-    start_time: datetime = field(default_factory=lambda: datetime(2026, 3, 1, 20, 0, tzinfo=UTC))
-    home_team: FakeTeam = field(default_factory=FakeTeam)
-    away_team: FakeTeam = field(default_factory=FakeTeam)
-    status: FakeStatus = field(default_factory=FakeStatus)
+def FakeEvent(**overrides):
+    """Populated UFC event (shared make_event with this file's defaults)."""
+    return make_event(id="100", short_name="A v B", sport="mma", league="ufc", **overrides)
 
 
 # ---------- ou3.2: Per-event filler annotation ----------
