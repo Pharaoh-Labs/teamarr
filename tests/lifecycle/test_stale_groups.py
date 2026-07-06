@@ -46,7 +46,7 @@ def _patch_dispatcharr(monkeypatch, groups):
 
     `groups` items may be ints (auto-named) or (id, name) tuples.
     """
-    import teamarr.dispatcharr.factory as factory
+    import teamarr.consumers.reconciliation as reconciliation
 
     def mk(item):
         if isinstance(item, tuple):
@@ -54,7 +54,7 @@ def _patch_dispatcharr(monkeypatch, groups):
         return SimpleNamespace(id=item, name=f"live-{item}")
 
     fake = SimpleNamespace(m3u=SimpleNamespace(list_groups=lambda: [mk(i) for i in groups]))
-    monkeypatch.setattr(factory, "get_dispatcharr_connection", lambda db_factory=None: fake)
+    monkeypatch.setattr(reconciliation, "get_dispatcharr_connection", lambda db_factory=None: fake)
 
 
 def test_missing_source_is_flagged(monkeypatch):
@@ -108,13 +108,13 @@ def test_list_groups_error_flags_nothing(monkeypatch):
     conn = _db()
     _add_group(conn, "Gone Group", 99)
 
-    import teamarr.dispatcharr.factory as factory
+    import teamarr.consumers.reconciliation as reconciliation
 
     def boom():
         raise RuntimeError("dispatcharr down")
 
     fake = SimpleNamespace(m3u=SimpleNamespace(list_groups=boom))
-    monkeypatch.setattr(factory, "get_dispatcharr_connection", lambda db_factory=None: fake)
+    monkeypatch.setattr(reconciliation, "get_dispatcharr_connection", lambda db_factory=None: fake)
 
     assert detect_stale_groups(_factory(conn)) == []
 

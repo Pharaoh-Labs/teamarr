@@ -17,6 +17,9 @@ from typing import Any
 
 from croniter import croniter
 
+from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client, get_dispatcharr_connection
+from teamarr.services import create_cache_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -398,7 +401,6 @@ class CronScheduler:
 
         logger.info("[CRON] Running scheduled channel reset")
 
-        from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
         client = get_dispatcharr_client(self._db_factory)
         if not client:
@@ -495,7 +497,6 @@ class CronScheduler:
         Returns:
             Dict with refresh status
         """
-        from teamarr.services import create_cache_service
 
         cache_service = create_cache_service(self._db_factory)
         refreshed = cache_service.refresh_if_needed(max_age_days=1)
@@ -563,7 +564,6 @@ class CronScheduler:
 
         # Get fresh Dispatcharr connection from factory
         # (stored reference may be stale if settings were updated)
-        from teamarr.dispatcharr import get_dispatcharr_connection
 
         dispatcharr_client = get_dispatcharr_connection(self._db_factory)
 

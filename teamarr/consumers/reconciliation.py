@@ -22,6 +22,9 @@ from datetime import datetime
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.dispatcharr import ChannelManager
+from teamarr.dispatcharr.factory import DispatcharrConnection, get_dispatcharr_connection
+
 logger = logging.getLogger(__name__)
 
 
@@ -768,8 +771,6 @@ def create_reconciler(
     channel_manager = None
 
     if dispatcharr_client and dispatcharr_settings.get("enabled"):
-        from teamarr.dispatcharr import ChannelManager
-        from teamarr.dispatcharr.factory import DispatcharrConnection
 
         # Extract raw client if we received a DispatcharrConnection
         raw_client = (
@@ -812,7 +813,6 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
         mark_group_source_missing,
         mark_group_source_seen,
     )
-    from teamarr.dispatcharr.factory import get_dispatcharr_connection
 
     conn_dc = get_dispatcharr_connection(db_factory=db_factory)
     if conn_dc is None:

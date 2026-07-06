@@ -26,6 +26,7 @@ from teamarr.consumers.matching.classifier import (
 )
 from teamarr.consumers.matching.normalizer import TZ_ABBREVIATION_MAP
 from teamarr.core.types import Event
+from teamarr.utilities.tz import get_user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +271,6 @@ def determine_segment_from_time(
     Returns:
         Segment code or None if can't determine
     """
-    from teamarr.utilities.tz import get_user_timezone
 
     if not event.segment_times:
         return None
@@ -365,7 +365,6 @@ def disambiguate_prelims_by_time(
     Returns:
         Disambiguated segment code
     """
-    from teamarr.utilities.tz import get_user_timezone
 
     # Only disambiguate "prelims" - other segments are unambiguous
     if detected_segment != "prelims":

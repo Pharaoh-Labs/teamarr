@@ -24,6 +24,7 @@ from teamarr.services import SportsDataService
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.event_status import is_event_final
 from teamarr.utilities.sports import get_sport_duration, get_sport_from_league
 from teamarr.utilities.time_blocks import create_filler_chunks, crosses_midnight
 from teamarr.utilities.tz import now_user, to_user_tz
@@ -619,7 +620,6 @@ class FillerGenerator:
         refreshed = self._service.refresh_event_status(event)
 
         # Use unified final status check
-        from teamarr.utilities.event_status import is_event_final
 
         return is_event_final(refreshed)
 

@@ -12,6 +12,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from teamarr.channelsdvr.client import ChannelsDVRClient
+from teamarr.dispatcharr import EPGManager, M3UManager
+from teamarr.dispatcharr.factory import DispatcharrConnection
+from teamarr.dispatcharr.managers import ChannelManager
+from teamarr.emby.client import EmbyClient
+from teamarr.jellyfin.client import JellyfinClient
+from teamarr.services import create_default_service
+from teamarr.services.sports_data import flush_shared_cache
+from teamarr.services.stream_ordering import StreamOrderingService
+from teamarr.utilities import call_metrics
+from teamarr.utilities.xmltv import merge_xmltv_content
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,9 +147,6 @@ def run_full_generation(
         get_epg_settings,
     )
     from teamarr.database.stats import create_run
-    from teamarr.dispatcharr import EPGManager
-    from teamarr.services import create_default_service
-    from teamarr.utilities.xmltv import merge_xmltv_content
 
     result = GenerationResult()
     result.started_at = time.time()
@@ -222,7 +231,6 @@ def run_full_generation(
         # Reset the run-scoped provider-call counter so this run's totals start
         # clean. Runs are serialized (duplicate runs are rejected above), so a
         # single process-global counter is safe. Snapshot is persisted at run end.
-        from teamarr.utilities import call_metrics
 
         call_metrics.reset()
 
@@ -307,11 +315,10 @@ def run_full_generation(
         # Compute external occupied channel numbers once for the entire run (#146)
         # This prevents Teamarr from assigning numbers already used by non-Teamarr channels
         from teamarr.consumers.lifecycle import compute_external_occupied
-        from teamarr.dispatcharr.factory import DispatcharrConnection as _DC
 
         _channel_mgr = (
             dispatcharr_client.channels
-            if isinstance(dispatcharr_client, _DC)
+            if isinstance(dispatcharr_client, DispatcharrConnection)
             else None
         )
         external_occupied = compute_external_occupied(db_factory, _channel_mgr)
@@ -389,7 +396,6 @@ def run_full_generation(
         check_cancelled()
         if dispatcharr_client and dispatcharr_settings.epg_id:
             update_progress("dispatcharr", 96, "Refreshing Dispatcharr EPG...")
-            from teamarr.dispatcharr.factory import DispatcharrConnection
 
             raw_client = (
                 dispatcharr_client.client
@@ -423,7 +429,6 @@ def run_full_generation(
 
             if emby_settings.enabled and emby_settings.url:
                 update_progress("emby", 97, "Refreshing Emby guide...")
-                from teamarr.emby.client import EmbyClient
 
                 client = EmbyClient(
                     base_url=emby_settings.url,
@@ -467,7 +472,6 @@ def run_full_generation(
 
             if jellyfin_settings.enabled and jellyfin_settings.url:
                 update_progress("jellyfin", 97, "Refreshing Jellyfin guide...")
-                from teamarr.jellyfin.client import JellyfinClient
 
                 client = JellyfinClient(
                     base_url=jellyfin_settings.url,
@@ -514,7 +518,6 @@ def run_full_generation(
             if not (channelsdvr_settings.enabled and channelsdvr_settings.url):
                 pass  # integration off or unconfigured — nothing to do
             else:
-                from teamarr.channelsdvr.client import ChannelsDVRClient
 
                 # The client derives lineup_id as "XMLTV-<source_name>" when no
                 # lineup is explicitly configured, so the guide refresh fires
@@ -670,7 +673,6 @@ def run_full_generation(
         update_progress("complete", 100, "Generation complete")
 
         # Flush the service cache to SQLite for immediate persistence
-        from teamarr.services.sports_data import flush_shared_cache
 
         flushed = flush_shared_cache()
         if flushed > 0:
@@ -723,7 +725,6 @@ def run_full_generation(
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:
     """Refresh M3U accounts for all event groups."""
     from teamarr.database.groups import get_all_groups
-    from teamarr.dispatcharr import M3UManager
 
     result = {"refreshed": 0, "skipped": 0, "failed": 0, "account_ids": []}
 
@@ -742,7 +743,6 @@ def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any
     result["account_ids"] = list(account_ids)
 
     # Refresh all accounts in parallel
-    from teamarr.dispatcharr.factory import DispatcharrConnection
 
     raw_client = (
         dispatcharr_client.client
@@ -902,7 +902,6 @@ def _apply_stream_ordering(
         update_stream_priority,
     )
     from teamarr.database.settings import get_stream_ordering_settings
-    from teamarr.services.stream_ordering import StreamOrderingService
 
     reorder_result: dict = {
         "channels_reordered": 0,
@@ -932,8 +931,6 @@ def _apply_stream_ordering(
             # Setup Dispatcharr channel manager once if available
             channel_mgr = None
             if dispatcharr_client:
-                from teamarr.dispatcharr.factory import DispatcharrConnection
-                from teamarr.dispatcharr.managers import ChannelManager
 
                 raw_client = (
                     dispatcharr_client.client
@@ -1030,7 +1027,6 @@ def _run_stream_audit(
     assignments. This is diagnostic-only — no changes are made.
     """
     from teamarr.database.channels import get_all_managed_channels, get_ordered_stream_ids
-    from teamarr.dispatcharr.managers.channels import ChannelManager
 
     if not dispatcharr_client:
         return
@@ -1191,7 +1187,6 @@ def _finalize_stats_run(
     # and total let the run summary surface calls-per-channel, making a
     # call-volume regression (the #254 refetch bug class) visible. Snapshot the
     # run-scoped counter that was reset at run start.
-    from teamarr.utilities import call_metrics
 
     stats_run.extra_metrics["provider_calls"] = call_metrics.snapshot()
     stats_run.extra_metrics["provider_calls_total"] = call_metrics.total()

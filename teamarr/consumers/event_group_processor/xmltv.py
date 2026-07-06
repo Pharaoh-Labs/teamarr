@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta
 from sqlite3 import Connection
 
+from teamarr.config import get_user_timezone
 from teamarr.consumers.event_epg import EventEPGOptions
 from teamarr.consumers.filler.event_filler import (
     EventFillerConfig,
@@ -275,7 +276,6 @@ class XmltvRenderer:
         Returns:
             EventFillerResult with programmes and pregame/postgame counts
         """
-        from teamarr.config import get_user_timezone
 
         filler_generator = EventFillerGenerator(self._service, art_base_url=self._art_base_url)
         result = EventFillerResult()

@@ -7,6 +7,10 @@ stream cleanup, orphan Dispatcharr channels and disabled-group cleanup.
 import logging
 from sqlite3 import Connection
 
+from teamarr.utilities.sports import get_sport_duration
+from teamarr.utilities.time_blocks import crosses_midnight
+from teamarr.utilities.tz import to_user_tz
+
 from .types import StreamProcessResult
 
 logger = logging.getLogger(__name__)
@@ -182,9 +186,6 @@ class ChannelCleanup:
         from dateutil import parser
 
         from teamarr.database.channels import get_all_managed_channels, update_managed_channel
-        from teamarr.utilities.sports import get_sport_duration
-        from teamarr.utilities.time_blocks import crosses_midnight
-        from teamarr.utilities.tz import to_user_tz
 
         channels = get_all_managed_channels(conn, include_deleted=False)
         updated_count = 0

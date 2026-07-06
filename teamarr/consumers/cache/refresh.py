@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from teamarr.core import SportsProvider
 from teamarr.database import get_db
+from teamarr.providers import ProviderRegistry
+from teamarr.providers.espn.client import ESPNClient
 from teamarr.utilities.tz import utcnow_iso
 
 from .queries import TeamLeagueCache
@@ -91,7 +93,6 @@ class CacheRefresher:
         Returns:
             Dict with refresh statistics
         """
-        from teamarr.providers import ProviderRegistry
 
         start_time = time.time()
 
@@ -239,7 +240,6 @@ class CacheRefresher:
         Returns:
             ``{success, league_code, team_count, error}``
         """
-        from teamarr.providers import ProviderRegistry
 
         def fail(msg: str) -> dict:
             logger.warning("[CACHE_REFRESH] Scoped refresh of %s failed: %s", league_code, msg)
@@ -461,7 +461,6 @@ class CacheRefresher:
                 # Fall back to ESPN API if not in leagues table
                 if (not logo_url or not league_name) and provider_name == "espn":
                     try:
-                        from teamarr.providers.espn.client import ESPNClient
 
                         client = ESPNClient()
                         league_info_api = client.get_league_info(league_slug)

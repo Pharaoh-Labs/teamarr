@@ -10,6 +10,7 @@ from sqlite3 import Connection as SQLiteConnection
 from typing import Any
 
 from teamarr.core.sports import get_sport_display_names_from_db
+from teamarr.dispatcharr.factory import get_dispatcharr_connection
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,6 @@ class DynamicResolver:
         if not self._db_factory:
             return None
         try:
-            from teamarr.dispatcharr.factory import get_dispatcharr_connection
 
             return get_dispatcharr_connection(self._db_factory)
         except Exception as e:

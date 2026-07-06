@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from teamarr.core import Event
 from teamarr.database.groups import EventEPGGroup
-from teamarr.services.stream_filter import FilterResult
+from teamarr.services.stream_filter import FilterResult, StreamFilter, StreamFilterConfig
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,6 @@ class StreamFetcher:
             Tuple of (filtered_streams, filter_result)
         """
         from teamarr.database.settings import get_stream_filter_settings
-        from teamarr.services.stream_filter import StreamFilter, StreamFilterConfig
 
         # Load global stream filter settings
         with self._db_factory() as conn:

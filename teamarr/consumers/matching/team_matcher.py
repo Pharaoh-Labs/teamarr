@@ -35,7 +35,7 @@ from teamarr.consumers.matching.result import (
     MatchOutcome,
 )
 from teamarr.consumers.stream_match_cache import StreamMatchCache, event_to_cache_data
-from teamarr.core.types import Event, Team
+from teamarr.core.types import Event, EventStatus, RacingResult, RacingSession, Team, Venue
 from teamarr.services.sports_data import SportsDataService
 from teamarr.utilities.constants import TEAM_ALIASES
 from teamarr.utilities.fuzzy_match import get_matcher, normalize_text
@@ -1633,7 +1633,6 @@ class TeamMatcher:
                 color=away_data.get("color"),
             )
 
-            from teamarr.core.types import EventStatus
 
             status_data = cached_data.get("status") or {}
             status = EventStatus(
@@ -1654,7 +1653,6 @@ class TeamMatcher:
             )
 
             # Reconstruct Venue from dict if present
-            from teamarr.core.types import Venue
 
             venue_data = cached_data.get("venue")
             venue = None
@@ -1685,7 +1683,6 @@ class TeamMatcher:
                 main_card_start = datetime.fromisoformat(main_card_start)
 
             # Reconstruct racing sessions, if present
-            from teamarr.core.types import RacingResult, RacingSession
 
             sessions = []
             for session_data in cached_data.get("sessions") or []:

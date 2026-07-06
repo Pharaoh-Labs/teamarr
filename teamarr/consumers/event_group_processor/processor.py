@@ -37,6 +37,7 @@ from teamarr.database.subscription import (
     get_subscription_templates,
 )
 from teamarr.services import SportsDataService, create_default_service
+from teamarr.utilities.art_url import read_art_base_url
 from teamarr.utilities.xmltv import merge_xmltv_content
 
 from .matching import StreamMatching
@@ -103,7 +104,6 @@ class EventGroupProcessor(
 
         # EPG generator for XMLTV output (art_base_url injected so the resolver
         # reconstructs game-thumbs URLs — epic z02s).
-        from teamarr.utilities.art_url import read_art_base_url
 
         self._art_base_url = read_art_base_url(db_factory)
         self._epg_generator = EventEPGGenerator(self._service, art_base_url=self._art_base_url)

@@ -22,6 +22,7 @@ from typing import Any
 from teamarr.consumers.team_epg import TeamEPGGenerator, TeamEPGOptions
 from teamarr.core import Programme
 from teamarr.services import SportsDataService, create_default_service
+from teamarr.utilities.art_url import read_art_base_url
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
 # Number of parallel workers for team processing
@@ -166,7 +167,6 @@ class TeamProcessor:
         """
         self._db_factory = db_factory
         self._service = service or create_default_service()
-        from teamarr.utilities.art_url import read_art_base_url
 
         self._epg_generator = TeamEPGGenerator(
             self._service, art_base_url=read_art_base_url(db_factory)

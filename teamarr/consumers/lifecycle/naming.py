@@ -10,6 +10,7 @@ import logging
 
 from teamarr.consumers.event_epg import POSTPONED_LABEL, is_event_postponed
 from teamarr.core import Event
+from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +251,6 @@ class ChannelNaming:
             # Apply the game-thumbs base URL (epic z02s) so the Dispatcharr channel
             # logo gets the SAME reconstructed URL as the EPG <icon>. Single base
             # source = the resolver. Idempotent: absolute URLs pass through.
-            from teamarr.utilities.art_url import apply_art_base_url
 
             return apply_art_base_url(resolved, self._resolver.art_base_url)
 

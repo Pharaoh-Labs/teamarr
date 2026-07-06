@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 from teamarr.core import Event, Programme
 from teamarr.database.templates import EventTemplateConfig
 from teamarr.services import SportsDataService
+from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.sports import get_sport_duration
@@ -250,7 +251,6 @@ class EventEPGGenerator:
         # Use conditional description selector if conditions are defined
         description = None
         if template.conditional_descriptions:
-            from teamarr.templates.conditions import get_condition_selector
 
             selector = get_condition_selector()
             selected_template = selector.select(

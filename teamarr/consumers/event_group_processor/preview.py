@@ -4,6 +4,7 @@ import logging
 from datetime import date
 
 from teamarr.database.groups import get_group
+from teamarr.utilities.sorting import natural_sort_key
 
 from .results import PreviewResult, PreviewStream
 
@@ -154,7 +155,6 @@ class PreviewBuilder:
                 result.streams.append(preview_stream)
 
             # Sort: matched first, then unmatched; within each, natural sort by name
-            from teamarr.utilities.sorting import natural_sort_key
 
             result.streams.sort(
                 key=lambda s: (not s.matched, natural_sort_key(s.stream_name)),

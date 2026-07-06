@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 from teamarr.consumers.matching import BatchMatchResult, StreamCategory, StreamMatcher
 from teamarr.database.groups import EventEPGGroup
 from teamarr.database.settings import get_feed_separation_settings
+from teamarr.utilities.tz import get_user_timezone, to_utc
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,6 @@ class StreamMatching:
 
         from teamarr.consumers.matching.epg_index import EPGProgramIndex
         from teamarr.consumers.matching.epg_resolver import resolve_program_tvg_ids
-        from teamarr.utilities.tz import get_user_timezone, to_utc
 
         # Resolve stream tvg_ids -> EPG-source tvg_ids. Needs the EPGData catalog
         # (for direct + name matching) and the stream->channel map (for the

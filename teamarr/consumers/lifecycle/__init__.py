@@ -16,6 +16,9 @@ from dataclasses import asdict
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.dispatcharr import ChannelManager, EPGManager, LogoManager
+from teamarr.dispatcharr.factory import DispatcharrConnection
+
 from .service import ChannelLifecycleService
 from .timing import ChannelLifecycleManager
 from .types import (
@@ -168,8 +171,6 @@ def create_lifecycle_service(
     epg_manager = None
 
     if dispatcharr_client and settings.get("enabled"):
-        from teamarr.dispatcharr import ChannelManager, EPGManager, LogoManager
-        from teamarr.dispatcharr.factory import DispatcharrConnection
 
         # Extract raw client if we received a DispatcharrConnection
         raw_client = (

@@ -24,6 +24,7 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.templates import ContextBuilder, TemplateResolver
+from teamarr.utilities.art_url import read_art_base_url
 
 from .cleanup import ChannelCleanup
 from .creator import ChannelCreator
@@ -188,7 +189,6 @@ class ChannelLifecycleService(
 
         # Template engine — art_base_url injected so channel-logo reconstruction
         # matches the EPG icon (epic z02s).
-        from teamarr.utilities.art_url import read_art_base_url
 
         self._context_builder = ContextBuilder(sports_service)
         self._resolver = TemplateResolver(read_art_base_url(db_factory))

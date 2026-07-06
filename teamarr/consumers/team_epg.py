@@ -16,6 +16,7 @@ from typing import Any
 from teamarr.consumers.event_epg import prepend_postponed_label
 from teamarr.core import Event, Programme, TemplateConfig
 from teamarr.services import SportsDataService
+from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.event_status import is_event_final
@@ -410,7 +411,6 @@ class TeamEPGGenerator:
         # Use conditional description selector if conditions are defined
         description = None
         if options.template.conditional_descriptions:
-            from teamarr.templates.conditions import get_condition_selector
 
             selector = get_condition_selector()
             selected_template = selector.select(
