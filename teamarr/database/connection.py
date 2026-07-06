@@ -5,6 +5,7 @@ Simple SQLite connection handling with schema initialization.
 
 import json
 import logging
+import os
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -21,16 +22,31 @@ DEFAULT_DB_PATH = Path(__file__).parent.parent.parent / "data" / "teamarr.db"
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 
+def resolve_db_path(db_path: Path | str | None) -> Path:
+    """Explicit argument > DATABASE_PATH env var > repo default.
+
+    Read at call time (not import time) so tests can redirect the database
+    with monkeypatch.setenv before touching any connection helper.
+    """
+    if db_path:
+        return Path(db_path)
+    env_path = os.environ.get("DATABASE_PATH")
+    if env_path:
+        return Path(env_path)
+    return DEFAULT_DB_PATH
+
+
 def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     """Get a database connection.
 
     Args:
-        db_path: Path to database file. Uses DEFAULT_DB_PATH if not specified.
+        db_path: Path to database file. Uses DATABASE_PATH env var or
+            DEFAULT_DB_PATH if not specified.
 
     Returns:
         SQLite connection with row factory set to sqlite3.Row
     """
-    path = Path(db_path) if db_path else DEFAULT_DB_PATH
+    path = resolve_db_path(db_path)
 
     # timeout=30: Wait up to 30 seconds if database is locked by another connection
     # check_same_thread=False: Allow connection to be used across threads (required for FastAPI)
@@ -82,7 +98,7 @@ def init_db(db_path: Path | str | None = None) -> None:
     Raises:
         RuntimeError: If database file exists but is not a valid V2 database
     """
-    path = Path(db_path) if db_path else DEFAULT_DB_PATH
+    path = resolve_db_path(db_path)
     schema_sql = SCHEMA_PATH.read_text()
 
     try:
@@ -2082,9 +2098,10 @@ def reset_db(db_path: Path | str | None = None) -> None:
     WARNING: This deletes all data!
 
     Args:
-        db_path: Path to database file. Uses DEFAULT_DB_PATH if not specified.
+        db_path: Path to database file. Uses DATABASE_PATH env var or
+            DEFAULT_DB_PATH if not specified.
     """
-    path = Path(db_path) if db_path else DEFAULT_DB_PATH
+    path = resolve_db_path(db_path)
 
     if path.exists():
         path.unlink()

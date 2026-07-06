@@ -177,10 +177,15 @@ def test_cross_check_rejects_unmapped_sport():
 # ---------------------------------------------------------------------------
 
 
-def test_capability_endpoint_shape():
+def test_capability_endpoint_shape(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     from teamarr.api.app import app
+    from teamarr.database import init_db
+
+    # Fresh temp DB — the live-app endpoint must not depend on the host's DB.
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
 
     resp = TestClient(app).get("/api/v1/leagues/custom/capability")
     assert resp.status_code == 200

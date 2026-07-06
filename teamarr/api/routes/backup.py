@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from teamarr.database import get_db
-from teamarr.database.connection import DEFAULT_DB_PATH
+from teamarr.database.connection import resolve_db_path
 from teamarr.database.migration import validate_backup_file
 
 logger = logging.getLogger(__name__)
@@ -396,7 +396,7 @@ def download_backup():
 
     Returns the SQLite database file as a downloadable attachment.
     """
-    if not DEFAULT_DB_PATH.exists():
+    if not resolve_db_path(None).exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Database file not found",
@@ -409,7 +409,7 @@ def download_backup():
     logger.info("[BACKUP] Downloading backup as %s", filename)
 
     return FileResponse(
-        path=str(DEFAULT_DB_PATH),
+        path=str(resolve_db_path(None)),
         filename=filename,
         media_type="application/x-sqlite3",
     )
@@ -457,14 +457,14 @@ def _restore_from_content(content: bytes) -> RestoreResponse:
 
             # Create backup of current database before restoring
             backup_path = None
-            if DEFAULT_DB_PATH.exists():
+            if resolve_db_path(None).exists():
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_path = DEFAULT_DB_PATH.parent / f"teamarr_pre_restore_{timestamp}.db"
-                shutil.copy2(DEFAULT_DB_PATH, backup_path)
+                backup_path = resolve_db_path(None).parent / f"teamarr_pre_restore_{timestamp}.db"
+                shutil.copy2(resolve_db_path(None), backup_path)
                 logger.info("[RESTORE] Created pre-restore backup at %s", backup_path)
 
             # Replace database with uploaded file
-            shutil.copy2(tmp_path, DEFAULT_DB_PATH)
+            shutil.copy2(tmp_path, resolve_db_path(None))
             logger.info("[RESTORE] Database restored from uploaded backup")
 
             return RestoreResponse(

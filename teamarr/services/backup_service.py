@@ -83,9 +83,9 @@ class BackupService:
 
     def _get_db_path(self) -> Path:
         """Get the current database file path."""
-        from teamarr.database.connection import DEFAULT_DB_PATH
+        from teamarr.database.connection import resolve_db_path
 
-        return DEFAULT_DB_PATH
+        return resolve_db_path(None)
 
     def _generate_filename(self, backup_type: str) -> str:
         """Generate backup filename with timestamp.

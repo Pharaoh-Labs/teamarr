@@ -12,11 +12,21 @@ endpoints against whatever the current DB holds, so any omitted field whose
 stored value differs from the model default is caught.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
 from teamarr.api.app import app
+from teamarr.database import init_db
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_db(tmp_path, monkeypatch):
+    """Point the app at a fresh temp DB so the tests never depend on (or touch)
+    a real database on the host machine."""
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
 
 
 def test_combined_settings_epg_matches_dedicated_endpoint():

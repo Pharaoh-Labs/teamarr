@@ -45,6 +45,16 @@ def seeded_db(tmp_path, monkeypatch):
                 ("Cincinnati Reds", "CIN", "Reds", "espn", "17", "mlb", "baseball"),
             ],
         )
+        # One followed team for the legacy integer-id team_feed path.
+        conn.execute(
+            """
+            INSERT INTO teams
+            (provider, provider_team_id, primary_league, sport,
+             team_name, team_abbrev, channel_id)
+            VALUES ('espn', '8', 'mlb', 'baseball',
+                    'Detroit Tigers', 'DET', 'test.tigers')
+            """
+        )
         conn.commit()
 
     conn = get_connection()
@@ -243,9 +253,13 @@ class TestTeamFeed:
         assert svc.compute_priority(_stream("Pirates vs Cubs (Away)")) == NO_MATCH_PRIORITY
 
     def test_legacy_integer_id_path(self, seeded_db):
-        # The teams table is seeded with demo teams; id=4 is the Detroit Tigers.
         # The legacy team_feed path resolves integer IDs against the teams table.
-        svc = StreamOrderingService([StreamOrderingRule("team_feed", "4", 1)], seeded_db)
+        tigers_id = seeded_db.execute(
+            "SELECT id FROM teams WHERE team_abbrev = 'DET'"
+        ).fetchone()[0]
+        svc = StreamOrderingService(
+            [StreamOrderingRule("team_feed", str(tigers_id), 1)], seeded_db
+        )
         assert svc.compute_priority(_stream("Cubs vs Tigers (Home)")) == 1
         assert svc.compute_priority(_stream("Cubs vs Pirates (Home)")) == NO_MATCH_PRIORITY
 
