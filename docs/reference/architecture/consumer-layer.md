@@ -126,9 +126,9 @@ EPG-path caching is free: `TeamMatcher` already keys its cache on `(group_id, st
 
 ## Channel Lifecycle
 
-### Service (`lifecycle/service.py`)
+### Service (`lifecycle/service.py` + stage modules)
 
-`ChannelLifecycleService` manages channel creation, sync, and deletion in Dispatcharr.
+`ChannelLifecycleService` manages channel creation, sync, and deletion in Dispatcharr. `service.py` holds the coordinator (shared state, `_safe_update_channel`, profile-change batching); the paths live in sibling modules: `creator.py` (matched-stream driver, duplicate modes, channel creation), `syncer.py` (settings/profiles/logo sync, EPG association), `cleanup.py` (scheduled deletions, missing/rotated streams, orphan + disabled-group sweeps), `naming.py` (name/logo/template resolution shared by create and sync).
 
 **Safe update pattern** — `_safe_update_channel()`:
 - Calls Dispatcharr API
@@ -140,8 +140,8 @@ EPG-path caching is free: `TeamMatcher` already keys its cache on `(group_id, st
 
 | Path | Purpose | File |
 |------|---------|------|
-| `_create_channel` | New channel from matched stream | `lifecycle/service.py` |
-| `_sync_channel_settings` | Update existing channel | `lifecycle/service.py` |
+| `_create_channel` | New channel from matched stream | `lifecycle/creator.py` |
+| `_sync_channel_settings` | Update existing channel | `lifecycle/syncer.py` |
 | EPG Generator | XMLTV channel name/icon | `event_epg.py` |
 
 All three resolve: name, tvg_id, logo, channel group, profiles, stream profile, channel number, and delete timing from the same event + template context.
@@ -224,7 +224,7 @@ No match defaults to priority 999 (sorted to end). Channels are sorted by priori
 | `consumers/matching/matcher.py` | Stream-to-event matching |
 | `consumers/matching/epg_index.py` | Per-run scoped EPG program index (tvg_id → programs) |
 | `consumers/matching/epg_matcher.py` | EPG title/category matching helpers |
-| `consumers/lifecycle/service.py` | Channel lifecycle management |
+| `consumers/lifecycle/` | Channel lifecycle management (service coordinator + creator/syncer/cleanup/naming) |
 | `consumers/lifecycle/dynamic_resolver.py` | Wildcard resolution |
 | `consumers/lifecycle/reconciliation.py` | Drift detection and repair |
 | `consumers/lifecycle/timing.py` | Channel create/delete timing |

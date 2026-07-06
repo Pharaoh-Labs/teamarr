@@ -392,7 +392,7 @@ class TestFeedTemplateVarsConstant:
     """FEED_TEMPLATE_VARS is the source of truth for the gating list."""
 
     def test_constant_contents(self):
-        from teamarr.consumers.lifecycle.service import FEED_TEMPLATE_VARS
+        from teamarr.consumers.lifecycle.naming import FEED_TEMPLATE_VARS
 
         # Naming-relevant feed vars only — logo URL and directional booleans
         # are deliberately excluded.
