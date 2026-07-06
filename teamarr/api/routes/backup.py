@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -107,7 +108,7 @@ class BackupSettingsUpdate(BaseModel):
 
 
 @router.get("/list", response_model=BackupListResponse)
-async def list_backups():
+def list_backups():
     """List all backup files.
 
     Returns backup files sorted by creation date (newest first).
@@ -134,7 +135,7 @@ async def list_backups():
 
 
 @router.post("/create", response_model=BackupCreateResponse)
-async def create_backup():
+def create_backup():
     """Create a manual backup of the database.
 
     Creates a new backup file in the configured backup directory.
@@ -159,7 +160,7 @@ async def create_backup():
 
 
 @router.delete("/{filename}", response_model=BackupDeleteResponse)
-async def delete_backup(filename: str):
+def delete_backup(filename: str):
     """Delete a backup file.
 
     Protected backups cannot be deleted. Unprotect them first.
@@ -192,7 +193,7 @@ async def delete_backup(filename: str):
 
 
 @router.post("/{filename}/protect", response_model=BackupProtectResponse)
-async def protect_backup(filename: str):
+def protect_backup(filename: str):
     """Protect a backup from rotation deletion.
 
     Protected backups are not counted toward the max backup limit
@@ -214,7 +215,7 @@ async def protect_backup(filename: str):
 
 
 @router.post("/{filename}/unprotect", response_model=BackupProtectResponse)
-async def unprotect_backup(filename: str):
+def unprotect_backup(filename: str):
     """Remove protection from a backup.
 
     After unprotecting, the backup may be deleted during rotation
@@ -236,7 +237,7 @@ async def unprotect_backup(filename: str):
 
 
 @router.post("/{filename}/restore", response_model=RestoreResponse)
-async def restore_from_backup(filename: str):
+def restore_from_backup(filename: str):
     """Restore database from an existing backup file.
 
     Creates a pre-restore backup of the current database before restoring.
@@ -263,7 +264,7 @@ async def restore_from_backup(filename: str):
 
 
 @router.get("/file/{filename}", response_class=FileResponse)
-async def download_specific_backup(filename: str):
+def download_specific_backup(filename: str):
     """Download a specific backup file.
 
     Args:
@@ -295,7 +296,7 @@ async def download_specific_backup(filename: str):
 
 
 @router.get("/settings", response_model=BackupSettingsResponse)
-async def get_backup_settings():
+def get_backup_settings():
     """Get scheduled backup settings."""
     from teamarr.database.settings import get_backup_settings
 
@@ -311,7 +312,7 @@ async def get_backup_settings():
 
 
 @router.put("/settings", response_model=BackupSettingsResponse)
-async def update_backup_settings(update: BackupSettingsUpdate):
+def update_backup_settings(update: BackupSettingsUpdate):
     """Update scheduled backup settings."""
     from croniter import croniter
 
@@ -390,7 +391,7 @@ async def update_backup_settings(update: BackupSettingsUpdate):
 
 
 @router.get("", response_class=FileResponse)
-async def download_backup():
+def download_backup():
     """Download a backup of the database.
 
     Returns the SQLite database file as a downloadable attachment.
@@ -430,12 +431,19 @@ async def restore_backup(file: UploadFile = File(...)):
             detail="Invalid file type. Please upload a .db file.",
         )
 
-    # Create temp file to validate upload
+    content = await file.read()
+
+    # Everything past the upload read is blocking file/sqlite work — run it
+    # off the event loop so a large restore doesn't stall other requests.
+    return await run_in_threadpool(_restore_from_content, content)
+
+
+def _restore_from_content(content: bytes) -> RestoreResponse:
+    """Validate uploaded backup bytes and swap in the new database."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
         tmp_path = Path(tmp.name)
         try:
             # Write uploaded content to temp file
-            content = await file.read()
             tmp.write(content)
             tmp.flush()
 

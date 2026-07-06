@@ -15,13 +15,11 @@ ARG GIT_SHA=unknown
 
 WORKDIR /app
 
-# Install system dependencies + lightweight troubleshooting tools
+# Lightweight network troubleshooting tools (all Python deps ship wheels — no compiler needed)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
     curl \
     dnsutils \
     iputils-ping \
-    nano \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy uv binary from official image
