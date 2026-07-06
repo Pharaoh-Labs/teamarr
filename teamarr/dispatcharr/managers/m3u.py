@@ -311,6 +311,39 @@ class M3UManager:
 
         return streams
 
+    def get_streams_by_ids(self, stream_ids: list[int]) -> list[DispatcharrStream]:
+        """Fetch stream details for specific stream IDs.
+
+        Uses POST /api/channels/streams/by-ids/ in chunks of 1000 (matching
+        page_size, so each chunk fits one page). Far cheaper than list_streams()
+        when the caller already knows which streams it needs. Non-existent IDs
+        are silently omitted by Dispatcharr.
+
+        Args:
+            stream_ids: Dispatcharr stream IDs to fetch
+
+        Returns:
+            List of DispatcharrStream objects (empty on API failure)
+        """
+        streams: list[DispatcharrStream] = []
+        for i in range(0, len(stream_ids), 1000):
+            chunk = stream_ids[i : i + 1000]
+            response = self._client.post(
+                "/api/channels/streams/by-ids/?page_size=1000",
+                {"ids": chunk},
+            )
+            if response is None or response.status_code != 200:
+                status = response.status_code if response else "No response"
+                logger.error("[M3U] Failed to fetch %d streams by ids: %s", len(chunk), status)
+                return []
+            data = response.json()
+            results = data.get("results", data) if isinstance(data, dict) else data
+            for raw in results:
+                if "name" in raw:
+                    raw["name"] = _fix_double_encoded_utf8(raw["name"])
+                streams.append(DispatcharrStream.from_api(raw))
+        return streams
+
     def get_group_with_streams(
         self,
         group_id: int,

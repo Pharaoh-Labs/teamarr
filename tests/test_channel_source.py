@@ -41,7 +41,9 @@ def _make_processor(stream_channel_map, epg_data_list, streams, managed, epg_gro
             get_stream_channel_map=lambda: stream_channel_map,
             get_epg_data_list=lambda: epg_data_list,
         ),
-        m3u=SimpleNamespace(list_streams=lambda: streams),
+        m3u=SimpleNamespace(
+            get_streams_by_ids=lambda ids: [s for s in streams if s.id in set(ids)]
+        ),
     )
 
     proc = object.__new__(EventGroupProcessor)

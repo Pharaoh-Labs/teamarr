@@ -1268,8 +1268,15 @@ class EventGroupProcessor:
             if group.m3u_group_id:
                 streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
             else:
-                # Fetch all streams if no group filter
-                streams = m3u_manager.list_streams()
+                # No M3U group configured — never fall back to listing Dispatcharr's
+                # entire stream catalog (tens of thousands of streams on large
+                # instances; the paginated fetch can tip over Dispatcharr's workers).
+                logger.warning(
+                    "[EVENT_EPG] Group '%s' has no m3u_group_id configured - "
+                    "skipping stream fetch",
+                    group.name,
+                )
+                return []
 
             # Convert to dicts for matcher (sorted by name for consistent order)
             stream_dicts = [
@@ -1348,11 +1355,13 @@ class EventGroupProcessor:
         except Exception as e:
             logger.warning("[CHANNEL_SOURCE] Failed to load managed/group ids: %s", e)
 
-        # Stream detail (name, account) keyed by id — listed once.
+        # Stream detail (name, account) keyed by id — fetched by-ids for just the
+        # curated streams instead of listing Dispatcharr's entire catalog.
         try:
-            detail_by_id = {s.id: s for s in client.m3u.list_streams()}
+            curated_ids = sorted(stream_channel_map.keys())
+            detail_by_id = {s.id: s for s in client.m3u.get_streams_by_ids(curated_ids)}
         except Exception as e:
-            logger.warning("[CHANNEL_SOURCE] Failed to list streams: %s", e)
+            logger.warning("[CHANNEL_SOURCE] Failed to fetch stream details: %s", e)
             detail_by_id = {}
 
         candidates: list[dict] = []
