@@ -4,7 +4,16 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException, status
 
+from teamarr.config import set_display_settings as set_config_display
 from teamarr.database import get_db
+from teamarr.database.settings import (
+    get_all_settings,
+    update_display_settings,
+)
+from teamarr.database.settings import (
+    update_duration_settings as db_update,
+)
+from teamarr.providers.registry import ProviderRegistry
 
 from .models import (
     DisplaySettingsModel,
@@ -30,7 +39,6 @@ def get_duration_settings() -> dict[str, float]:
     Sports are defined in DurationSettings dataclass - adding a new sport
     there automatically exposes it here.
     """
-    from teamarr.database.settings import get_all_settings
 
     with get_db() as conn:
         settings = get_all_settings(conn)
@@ -45,8 +53,6 @@ def update_duration_settings(update: dict[str, float]) -> dict[str, float]:
     Accepts a dict of sport names to duration hours.
     Only known sports (defined in DurationSettings) will be updated.
     """
-    from teamarr.database.settings import get_all_settings
-    from teamarr.database.settings import update_duration_settings as db_update
 
     with get_db() as conn:
         # Pass all values from the update dict as kwargs
@@ -66,7 +72,6 @@ def update_duration_settings(update: dict[str, float]) -> dict[str, float]:
 @router.get("/settings/reconciliation", response_model=ReconciliationSettingsModel)
 def get_reconciliation_settings():
     """Get reconciliation settings."""
-    from teamarr.database.settings import get_all_settings
 
     with get_db() as conn:
         settings = get_all_settings(conn)
@@ -131,7 +136,6 @@ def update_reconciliation_settings(update: ReconciliationSettingsModel):
 @router.get("/settings/display", response_model=DisplaySettingsModel)
 def get_display_settings():
     """Get display/formatting settings."""
-    from teamarr.database.settings import get_all_settings
 
     with get_db() as conn:
         settings = get_all_settings(conn)
@@ -149,8 +153,6 @@ def get_display_settings():
 @router.put("/settings/display", response_model=DisplaySettingsModel)
 def update_display_settings_endpoint(update: DisplaySettingsModel):
     """Update display/formatting settings."""
-    from teamarr.config import set_display_settings as set_config_display
-    from teamarr.database.settings import get_all_settings, update_display_settings
 
     valid_time_formats = {"12h", "24h"}
     if update.time_format not in valid_time_formats:
@@ -182,7 +184,6 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
     # Reinitialize TSDB provider so it picks up the new API key
     # without requiring a restart. The factory re-reads the key from DB.
     if unmask_or_skip(update.tsdb_api_key) is not None:
-        from teamarr.providers.registry import ProviderRegistry
 
         ProviderRegistry.reinitialize_provider("tsdb")
 

@@ -2,7 +2,14 @@
 
 from fastapi import APIRouter, HTTPException, status
 
+from teamarr.consumers.scheduler import (
+    restart_scheduler_sub_task,
+    start_lifecycle_scheduler,
+    stop_lifecycle_scheduler,
+)
 from teamarr.database import get_db
+from teamarr.dispatcharr import get_dispatcharr_client
+from teamarr.services import create_scheduler_service
 
 from .models import (
     LifecycleSettingsModel,
@@ -122,10 +129,6 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
     """Update scheduler settings."""
     from croniter import croniter
 
-    from teamarr.consumers.scheduler import (
-        start_lifecycle_scheduler,
-        stop_lifecycle_scheduler,
-    )
     from teamarr.database.settings import (
         get_scheduler_settings,
         update_scheduler_settings,
@@ -164,7 +167,6 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
 
     # Restart channel reset sub-scheduler if its settings changed
     if update.channel_reset_enabled is not None or update.channel_reset_cron is not None:
-        from teamarr.consumers.scheduler import restart_scheduler_sub_task
 
         restart_scheduler_sub_task("channel_reset")
 
@@ -182,7 +184,6 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
 @router.get("/scheduler/status", response_model=SchedulerStatusResponse)
 def get_scheduler_status():
     """Get current scheduler status."""
-    from teamarr.services import create_scheduler_service
 
     scheduler_service = create_scheduler_service(get_db)
     status = scheduler_service.get_status()
@@ -198,8 +199,6 @@ def get_scheduler_status():
 @router.post("/scheduler/run")
 def trigger_scheduler_run() -> dict:
     """Manually trigger a scheduler run."""
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_scheduler_service
 
     try:
         client = get_dispatcharr_client(get_db)

@@ -11,6 +11,26 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from teamarr.database.connection import get_db
+from teamarr.database.detection_keywords import (
+    bulk_import_keywords,
+    export_keywords,
+)
+from teamarr.database.detection_keywords import (
+    create_keyword as db_create,
+)
+from teamarr.database.detection_keywords import (
+    delete_keyword as db_delete,
+)
+from teamarr.database.detection_keywords import (
+    get_keyword as db_get,
+)
+from teamarr.database.detection_keywords import (
+    list_keywords as db_list,
+)
+from teamarr.database.detection_keywords import (
+    update_keyword as db_update,
+)
+from teamarr.services.detection_keywords import DetectionKeywordService
 
 router = APIRouter(prefix="/api/v1/detection-keywords", tags=["Detection Keywords"])
 
@@ -117,7 +137,6 @@ def _row_to_response(row: dict) -> DetectionKeywordResponse:
 
 def _invalidate_detection_cache():
     """Invalidate the detection keyword service cache after mutations."""
-    from teamarr.services.detection_keywords import DetectionKeywordService
 
     DetectionKeywordService.invalidate_cache()
 
@@ -133,7 +152,6 @@ def list_keywords(
     enabled_only: bool = False,
 ):
     """List all detection keywords, optionally filtered by category."""
-    from teamarr.database.detection_keywords import list_keywords as db_list
 
     with get_db() as conn:
         rows = db_list(conn, category=category, enabled_only=enabled_only)
@@ -209,7 +227,6 @@ def list_by_category(
     enabled_only: bool = False,
 ):
     """List detection keywords for a specific category."""
-    from teamarr.database.detection_keywords import list_keywords as db_list
 
     with get_db() as conn:
         rows = db_list(conn, category=category, enabled_only=enabled_only)
@@ -224,7 +241,6 @@ def create_keyword(
     request: DetectionKeywordCreate,
 ):
     """Create a new detection keyword."""
-    from teamarr.database.detection_keywords import create_keyword as db_create
 
     try:
         with get_db() as conn:
@@ -255,7 +271,6 @@ def get_keyword(
     keyword_id: int,
 ):
     """Get a specific detection keyword by ID."""
-    from teamarr.database.detection_keywords import get_keyword as db_get
 
     with get_db() as conn:
         row = db_get(conn, keyword_id)
@@ -270,7 +285,6 @@ def update_keyword(
     request: DetectionKeywordUpdate,
 ):
     """Update a detection keyword."""
-    from teamarr.database.detection_keywords import update_keyword as db_update
 
     with get_db() as conn:
         row = db_update(
@@ -296,7 +310,6 @@ def delete_keyword(
     keyword_id: int,
 ):
     """Delete a detection keyword."""
-    from teamarr.database.detection_keywords import delete_keyword as db_delete
 
     with get_db() as conn:
         result = db_delete(conn, keyword_id)
@@ -310,7 +323,6 @@ def bulk_import(
     request: BulkImportRequest,
 ):
     """Bulk import detection keywords."""
-    from teamarr.database.detection_keywords import bulk_import_keywords
 
     keyword_dicts = [
         {
@@ -344,7 +356,6 @@ def bulk_export(
     category: CategoryType | None = None,
 ):
     """Export detection keywords as JSON."""
-    from teamarr.database.detection_keywords import export_keywords
 
     with get_db() as conn:
         keywords = export_keywords(conn, category=category)

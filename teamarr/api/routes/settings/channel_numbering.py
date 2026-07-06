@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from teamarr.database import get_db
+from teamarr.database.channel_numbers import arm_channel_relayout, get_global_channel_mode
 
 from .models import (
     ChannelNumberingSettingsModel,
@@ -111,10 +112,6 @@ def request_channel_relayout():
     reclaiming gaps) on the next run, bypassing the daily reset window. Only
     meaningful in gap/strict stability modes; harmless otherwise.
     """
-    from teamarr.database.channel_numbers import (
-        arm_channel_relayout,
-        get_global_channel_mode,
-    )
     from teamarr.database.settings import get_channel_numbering_settings
 
     with get_db() as conn:

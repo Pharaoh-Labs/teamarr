@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.emby.client import EmbyClient
 
 from .models import (
     EmbyConnectionTestRequest,
@@ -72,7 +73,6 @@ def test_emby_connection(
     Accepts optional url/username/password overrides.
     """
     from teamarr.database.settings import get_emby_settings
-    from teamarr.emby.client import EmbyClient
 
     with get_db() as conn:
         saved = get_emby_settings(conn)

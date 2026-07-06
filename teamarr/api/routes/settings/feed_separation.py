@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.database.settings import update_feed_separation_settings as db_update
 
 from .models import (
     FeedSeparationSettingsModel,
@@ -34,9 +35,6 @@ def update_feed_separation_settings(update: FeedSeparationSettingsUpdate):
     """Update feed separation settings."""
     from teamarr.database.settings import (
         get_feed_separation_settings,
-    )
-    from teamarr.database.settings import (
-        update_feed_separation_settings as db_update,
     )
 
     with get_db() as conn:

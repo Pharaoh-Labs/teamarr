@@ -14,7 +14,24 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from teamarr.consumers.generation_status import is_in_progress
 from teamarr.database import get_db
+from teamarr.database.channels import (
+    get_all_managed_channels,
+    get_channels_pending_deletion,
+    get_managed_channels_for_group,
+)
+from teamarr.database.channels.crud import mark_all_channels_deleted
+from teamarr.database.channels.streams import (
+    get_channel_streams,
+    get_stream_match_details,
+    refresh_stream_stats,
+)
+from teamarr.database.groups import get_group_names_by_ids
+from teamarr.database.settings import get_dispatcharr_settings
+from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
+from teamarr.services import create_channel_service, create_default_service
+from teamarr.services.stream_ordering import get_stream_ordering_service
 
 logger = logging.getLogger(__name__)
 
@@ -207,10 +224,6 @@ def list_managed_channels(
     Returns channels tracked by Teamarr for lifecycle management.
     Primary filters: sport, league. Secondary: group_id (source provenance).
     """
-    from teamarr.database.channels import (
-        get_all_managed_channels,
-        get_managed_channels_for_group,
-    )
 
     with get_db() as conn:
         if group_id:
@@ -300,13 +313,6 @@ def get_managed_channel_streams(channel_id: int):
     Source group names are resolved from event_epg_groups via a join.
     """
     from teamarr.database.channels import get_managed_channel
-    from teamarr.database.channels.streams import (
-        get_channel_streams,
-        get_stream_match_details,
-        refresh_stream_stats,
-    )
-    from teamarr.database.groups import get_group_names_by_ids
-    from teamarr.services.stream_ordering import get_stream_ordering_service
 
     with get_db() as conn:
         channel = get_managed_channel(conn, channel_id)
@@ -421,8 +427,6 @@ def delete_managed_channel(channel_id: int):
     Removes the channel from Dispatcharr (if configured) and marks as deleted in DB.
     """
     from teamarr.database.channels import get_managed_channel
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         channel = get_managed_channel(conn, channel_id)
@@ -464,9 +468,6 @@ def sync_lifecycle():
     Creates channels that are due and deletes expired channels.
     Requires Dispatcharr to be configured.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -512,9 +513,6 @@ def get_reconciliation_status():
 
     Checks all channels for issues without making any changes.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -572,9 +570,6 @@ def fix_reconciliation(request: ReconciliationRequest):
 
     Detects issues and optionally fixes them based on settings.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -637,7 +632,6 @@ def get_pending_deletions() -> dict:
 
     Returns channels that are past their scheduled delete time.
     """
-    from teamarr.database.channels import get_channels_pending_deletion
 
     with get_db() as conn:
         channels = get_channels_pending_deletion(conn)
@@ -689,9 +683,6 @@ def delete_dispatcharr_channel(channel_id: int):
     Use this for orphan_dispatcharr channels that exist in Dispatcharr
     but aren't tracked by Teamarr. This bypasses the managed channels table.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.dispatcharr.managers.channels import ChannelManager
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -781,7 +772,6 @@ def preview_reset_channels():
     Returns all channels in Dispatcharr with teamarr-event-* tvg_id,
     regardless of whether they're tracked in managed_channels.
     """
-    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
     client = get_dispatcharr_client(get_db)
     if not client:
@@ -825,8 +815,6 @@ def execute_reset_channels():
 
     Will fail if EPG generation is currently in progress.
     """
-    from teamarr.consumers.generation_status import is_in_progress
-    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
     # Check if EPG generation is in progress
     if is_in_progress():
@@ -861,7 +849,6 @@ def execute_reset_channels():
             errors.append(f"Failed to delete {ch.name}: {result.error}")
 
     # Mark all managed_channels as deleted
-    from teamarr.database.channels.crud import mark_all_channels_deleted
 
     with get_db() as conn:
         mark_all_channels_deleted(conn)

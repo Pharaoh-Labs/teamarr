@@ -12,9 +12,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from teamarr.consumers.scheduler import restart_scheduler_sub_task
 from teamarr.database import get_db
 from teamarr.database.connection import resolve_db_path
 from teamarr.database.migration import validate_backup_file
+from teamarr.services.backup_service import create_backup_service
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +115,6 @@ def list_backups():
 
     Returns backup files sorted by creation date (newest first).
     """
-    from teamarr.services.backup_service import create_backup_service
 
     backup_service = create_backup_service(get_db)
     backups = backup_service.list_backups()
@@ -140,7 +141,6 @@ def create_backup():
 
     Creates a new backup file in the configured backup directory.
     """
-    from teamarr.services.backup_service import create_backup_service
 
     backup_service = create_backup_service(get_db)
     result = backup_service.create_backup(manual=True)
@@ -165,7 +165,6 @@ def delete_backup(filename: str):
 
     Protected backups cannot be deleted. Unprotect them first.
     """
-    from teamarr.services.backup_service import create_backup_service
 
     _validate_backup_filename(filename)
 
@@ -199,7 +198,6 @@ def protect_backup(filename: str):
     Protected backups are not counted toward the max backup limit
     and will not be deleted during automatic rotation.
     """
-    from teamarr.services.backup_service import create_backup_service
 
     _validate_backup_filename(filename)
 
@@ -221,7 +219,6 @@ def unprotect_backup(filename: str):
     After unprotecting, the backup may be deleted during rotation
     if it exceeds the maximum backup count.
     """
-    from teamarr.services.backup_service import create_backup_service
 
     _validate_backup_filename(filename)
 
@@ -243,7 +240,6 @@ def restore_from_backup(filename: str):
     Creates a pre-restore backup of the current database before restoring.
     The application will need to be restarted for changes to take effect.
     """
-    from teamarr.services.backup_service import create_backup_service
 
     _validate_backup_filename(filename)
 
@@ -270,7 +266,6 @@ def download_specific_backup(filename: str):
     Args:
         filename: The backup filename to download
     """
-    from teamarr.services.backup_service import create_backup_service
 
     _validate_backup_filename(filename)
 
@@ -369,7 +364,6 @@ def update_backup_settings(update: BackupSettingsUpdate):
         )
 
     # Restart backup sub-scheduler with new settings
-    from teamarr.consumers.scheduler import restart_scheduler_sub_task
 
     restart_scheduler_sub_task("backup")
 

@@ -5,6 +5,13 @@ import time
 
 from fastapi import APIRouter
 
+from teamarr.database import get_db
+from teamarr.database.leagues import get_league
+from teamarr.database.subscription import get_subscribed_league_codes
+from teamarr.services.cache_service import create_cache_service
+from teamarr.services.sports_data import create_default_service
+from teamarr.templates.context_builder import ContextBuilder, find_adjacent_games
+from teamarr.templates.resolver import TemplateResolver
 from teamarr.templates.sample_data import (
     AVAILABLE_SPORTS,
     get_all_sample_data,
@@ -12,6 +19,7 @@ from teamarr.templates.sample_data import (
     resolve_profile_for_league,
     resolve_shape,
 )
+from teamarr.templates.validation import supported_suffixes
 from teamarr.templates.variables import Category, SuffixRules, get_registry
 
 router = APIRouter()
@@ -59,8 +67,6 @@ _LIVE_CACHE_TTL = 300  # seconds
 def _lookup_league_fields(league_code: str) -> tuple[str | None, str | None]:
     """Get (sport, provider) for a league from its record, or (None, None)."""
     try:
-        from teamarr.database import get_db
-        from teamarr.database.leagues import get_league
 
         with get_db() as conn:
             rec = get_league(conn, league_code)
@@ -83,12 +89,6 @@ def _fetch_live_samples(league: str) -> dict[str, str] | None:
         return cached[1]
 
     try:
-        from teamarr.services.sports_data import create_default_service
-        from teamarr.templates.context_builder import (
-            ContextBuilder,
-            find_adjacent_games,
-        )
-        from teamarr.templates.resolver import TemplateResolver
 
         service = create_default_service()
 
@@ -161,7 +161,6 @@ def _category_display_name(category: Category) -> str:
 
 def _suffix_rules_display(rules: SuffixRules) -> list[str]:
     """Get list of supported suffixes for a variable (shared with validation)."""
-    from teamarr.templates.validation import supported_suffixes
 
     return supported_suffixes(rules)
 
@@ -244,9 +243,6 @@ def get_sample_leagues():
     teams). The picker shows the subscribed subset by default but can search the
     full list.
     """
-    from teamarr.database import get_db
-    from teamarr.database.subscription import get_subscribed_league_codes
-    from teamarr.services.cache_service import create_cache_service
 
     with get_db() as conn:
         codes = get_subscribed_league_codes(conn)

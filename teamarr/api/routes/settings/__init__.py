@@ -10,7 +10,9 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
+from teamarr.config import get_ui_timezone_str, is_ui_timezone_from_env
 from teamarr.database import get_db
+from teamarr.database.settings import get_all_settings
 
 from .channel_numbering import router as channel_numbering_router
 from .channelsdvr import router as channelsdvr_router
@@ -69,8 +71,6 @@ router.include_router(feed_separation_router)
 @router.get("/settings", response_model=AllSettingsModel)
 def get_settings():
     """Get all application settings."""
-    from teamarr.config import get_ui_timezone_str, is_ui_timezone_from_env
-    from teamarr.database.settings import get_all_settings
 
     with get_db() as conn:
         settings = get_all_settings(conn)

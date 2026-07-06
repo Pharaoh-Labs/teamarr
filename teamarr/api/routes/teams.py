@@ -13,6 +13,32 @@ from teamarr.api.models import (
     TeamUpdate,
 )
 from teamarr.database import get_db
+from teamarr.database.leagues import get_league_id, get_league_sport
+from teamarr.database.teams import (
+    bulk_update_channel_ids as db_bulk_update,
+)
+from teamarr.database.teams import (
+    create_team as db_create_team,
+)
+from teamarr.database.teams import (
+    delete_team as db_delete_team,
+)
+from teamarr.database.teams import (
+    get_team as db_get_team,
+)
+from teamarr.database.teams import (
+    get_team_xmltv,
+)
+from teamarr.database.teams import (
+    list_teams as db_list_teams,
+)
+from teamarr.database.teams import (
+    update_team as db_update_team,
+)
+from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
+from teamarr.services.team_channel_status import build_team_channel_status
+from teamarr.services.team_import import ImportTeam
+from teamarr.services.team_import import bulk_import_teams as do_import
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +47,6 @@ router = APIRouter()
 
 def generate_channel_id(team_name: str, primary_league: str) -> str:
     """Generate channel ID from team name and league."""
-    from teamarr.database.leagues import get_league_id
 
     name = "".join(
         word.capitalize()
@@ -46,7 +71,6 @@ def _can_consolidate_leagues(conn, league1: str, league2: str) -> bool:
     Returns:
         True if leagues can share a team, False if they must be separate.
     """
-    from teamarr.database.leagues import get_league_sport
 
     if league1 == league2:
         return True
@@ -91,7 +115,6 @@ class BulkImportResponse(BaseModel):
 @router.get("/teams", response_model=list[TeamResponse])
 def list_teams(active_only: bool = False):
     """List all teams."""
-    from teamarr.database.teams import list_teams as db_list_teams
 
     with get_db() as conn:
         return db_list_teams(conn, active_only=active_only)
@@ -100,7 +123,6 @@ def list_teams(active_only: bool = False):
 @router.post("/teams", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
 def create_team(team: TeamCreate):
     """Create a new team."""
-    from teamarr.database.teams import create_team as db_create_team
 
     # Ensure primary_league is in leagues list
     leagues = list(set(team.leagues + [team.primary_league]))
@@ -136,7 +158,6 @@ def create_team(team: TeamCreate):
 @router.get("/teams/{team_id}", response_model=TeamResponse)
 def get_team(team_id: int):
     """Get a team by ID."""
-    from teamarr.database.teams import get_team as db_get_team
 
     with get_db() as conn:
         team = db_get_team(conn, team_id)
@@ -148,10 +169,6 @@ def get_team(team_id: int):
 @router.get("/teams/{team_id}/channel-status", response_model=TeamChannelStatusResponse)
 def get_team_channel_status(team_id: int):
     """Get Dispatcharr mapping and next live window for a static team channel."""
-    from teamarr.database.teams import get_team as db_get_team
-    from teamarr.database.teams import get_team_xmltv
-    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
-    from teamarr.services.team_channel_status import build_team_channel_status
 
     with get_db() as conn:
         team = db_get_team(conn, team_id)
@@ -190,7 +207,6 @@ def get_team_channel_status(team_id: int):
 @router.patch("/teams/{team_id}", response_model=TeamResponse)
 def update_team(team_id: int, team: TeamUpdate):
     """Update a team (full or partial)."""
-    from teamarr.database.teams import update_team as db_update_team
 
     updates = {k: v for k, v in team.model_dump().items() if v is not None}
     if not updates:
@@ -210,7 +226,6 @@ def update_team(team_id: int, team: TeamUpdate):
 @router.delete("/teams/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_team(team_id: int):
     """Delete a team and its associated XMLTV content."""
-    from teamarr.database.teams import delete_team as db_delete_team
 
     with get_db() as conn:
         if not db_delete_team(conn, team_id):
@@ -224,8 +239,6 @@ def bulk_import_teams(request: BulkImportRequest):
     Delegates to service layer for business logic (soccer consolidation,
     deduplication, indexing). See teamarr/services/team_import.py.
     """
-    from teamarr.services.team_import import ImportTeam
-    from teamarr.services.team_import import bulk_import_teams as do_import
 
     import_teams = [
         ImportTeam(
@@ -275,7 +288,6 @@ def bulk_update_channel_ids(request: BulkChannelIdRequest):
     - {league}: League display name (e.g., "NCAAM")
     - {sport}: Sport name lowercase (e.g., "basketball")
     """
-    from teamarr.database.teams import bulk_update_channel_ids as db_bulk_update
 
     if not request.team_ids:
         return BulkChannelIdResponse(updated=0, errors=["No teams selected"])

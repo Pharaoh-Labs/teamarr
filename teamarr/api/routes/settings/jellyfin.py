@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.jellyfin.client import JellyfinClient
 
 from .models import (
     JellyfinConnectionTestRequest,
@@ -72,7 +73,6 @@ def test_jellyfin_connection(
     Accepts optional url/username/password overrides.
     """
     from teamarr.database.settings import get_jellyfin_settings
-    from teamarr.jellyfin.client import JellyfinClient
 
     with get_db() as conn:
         saved = get_jellyfin_settings(conn)

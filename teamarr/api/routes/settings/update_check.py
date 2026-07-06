@@ -4,6 +4,8 @@ from fastapi import APIRouter
 
 from teamarr.config import VERSION
 from teamarr.database import get_db
+from teamarr.database.settings import update_update_check_settings as db_update
+from teamarr.services.update_checker import create_update_checker
 
 from .models import (
     UpdateCheckSettingsModel,
@@ -43,9 +45,6 @@ def update_update_check_settings(update: UpdateCheckSettingsUpdate):
     """Update update check settings."""
     from teamarr.database.settings import (
         get_update_check_settings,
-    )
-    from teamarr.database.settings import (
-        update_update_check_settings as db_update,
     )
 
     with get_db() as conn:
@@ -90,7 +89,6 @@ def check_for_updates(force: bool = False):
     and whether an update is available.
     """
     from teamarr.database.settings import get_update_check_settings
-    from teamarr.services.update_checker import create_update_checker
 
     with get_db() as conn:
         settings = get_update_check_settings(conn)

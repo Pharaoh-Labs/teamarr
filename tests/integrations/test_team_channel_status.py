@@ -246,8 +246,6 @@ def test_team_channel_status_endpoint_ready(monkeypatch):
     conn = _team_status_db(_live_now_xmltv())
     _patch_team_status_db(monkeypatch, conn)
 
-    import teamarr.dispatcharr as dispatcharr
-
     class FakeManager:
         def __init__(self, client):
             self.client = client
@@ -256,8 +254,8 @@ def test_team_channel_status_endpoint_ready(monkeypatch):
             assert tvg_id == TEAM["channel_id"]
             return FakeDispatcharrChannel()
 
-    monkeypatch.setattr(dispatcharr, "get_dispatcharr_client", lambda db_factory: object())
-    monkeypatch.setattr(dispatcharr, "ChannelManager", FakeManager)
+    monkeypatch.setattr(teams_route, "get_dispatcharr_client", lambda db_factory: object())
+    monkeypatch.setattr(teams_route, "ChannelManager", FakeManager)
 
     response = teams_route.get_team_channel_status(TEAM["id"])
 
@@ -271,9 +269,7 @@ def test_team_channel_status_endpoint_missing_dispatcharr(monkeypatch):
     conn = _team_status_db(_live_now_xmltv())
     _patch_team_status_db(monkeypatch, conn)
 
-    import teamarr.dispatcharr as dispatcharr
-
-    monkeypatch.setattr(dispatcharr, "get_dispatcharr_client", lambda db_factory: None)
+    monkeypatch.setattr(teams_route, "get_dispatcharr_client", lambda db_factory: None)
 
     response = teams_route.get_team_channel_status(TEAM["id"])
 

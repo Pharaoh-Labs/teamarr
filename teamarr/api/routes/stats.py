@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query
 
 from teamarr.database import get_db
 from teamarr.database.settings import get_all_settings
+from teamarr.database.stats import get_current_stats, get_live_xmltv_content, get_recent_runs
 
 router = APIRouter()
 
@@ -36,7 +37,6 @@ def get_stats():
     - Last 24 hour summary
     - Breakdown by run type
     """
-    from teamarr.database.stats import get_current_stats
 
     with get_db() as conn:
         return get_current_stats(conn)
@@ -68,7 +68,6 @@ def get_live_stats(
             "event": {"games_today": 0, "live_now": 0, "by_league": {}, "live_events": []},
         }
 
-        from teamarr.database.stats import get_live_xmltv_content
 
         xmltv = get_live_xmltv_content(conn)
 
@@ -242,7 +241,6 @@ def get_runs(
     Returns detailed information about recent processing runs
     with optional filtering.
     """
-    from teamarr.database.stats import get_recent_runs
 
     with get_db() as conn:
         runs = get_recent_runs(

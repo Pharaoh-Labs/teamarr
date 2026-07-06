@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from teamarr.channelsdvr.client import ChannelsDVRClient
 from teamarr.database import get_db
 
 from .models import (
@@ -70,7 +71,6 @@ def test_channelsdvr_connection(
     If no parameters provided, tests with saved settings.
     Accepts optional url/source_name overrides.
     """
-    from teamarr.channelsdvr.client import ChannelsDVRClient
     from teamarr.database.settings import get_channelsdvr_settings
 
     with get_db() as conn:
@@ -105,7 +105,6 @@ def list_channelsdvr_sources(url: str | None = None):
     Used by the settings UI to populate the source-name dropdown.
     Falls back to the saved URL when none is provided.
     """
-    from teamarr.channelsdvr.client import ChannelsDVRClient
     from teamarr.database.settings import get_channelsdvr_settings
 
     if not url:
@@ -137,7 +136,6 @@ def list_channelsdvr_lineups(url: str | None = None):
     selected lineup ID is what we PUT to ``/dvr/lineups/<id>`` to
     refresh the EPG.
     """
-    from teamarr.channelsdvr.client import ChannelsDVRClient
     from teamarr.database.settings import get_channelsdvr_settings
 
     if not url:

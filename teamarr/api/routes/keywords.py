@@ -10,6 +10,22 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from teamarr.database import get_db
+from teamarr.database.exception_keywords import (
+    create_keyword as db_create_keyword,
+)
+from teamarr.database.exception_keywords import (
+    delete_keyword as db_delete_keyword,
+)
+from teamarr.database.exception_keywords import (
+    get_all_keywords,
+    set_keyword_enabled,
+)
+from teamarr.database.exception_keywords import (
+    get_keyword as db_get_keyword,
+)
+from teamarr.database.exception_keywords import (
+    update_keyword as db_update_keyword,
+)
 
 router = APIRouter()
 
@@ -80,7 +96,6 @@ def list_keywords(
     include_disabled: bool = Query(False, description="Include disabled keywords"),
 ):
     """List all exception keywords."""
-    from teamarr.database.exception_keywords import get_all_keywords
 
     with get_db() as conn:
         keywords = get_all_keywords(conn, include_disabled=include_disabled)
@@ -105,7 +120,6 @@ def list_keywords(
 @router.get("/{keyword_id}", response_model=ExceptionKeywordResponse)
 def get_keyword(keyword_id: int):
     """Get a single exception keyword by ID."""
-    from teamarr.database.exception_keywords import get_keyword as db_get_keyword
 
     with get_db() as conn:
         keyword = db_get_keyword(conn, keyword_id)
@@ -132,12 +146,6 @@ def create_keyword(request: ExceptionKeywordCreate):
     """Create a new exception keyword."""
     import sqlite3
 
-    from teamarr.database.exception_keywords import (
-        create_keyword as db_create_keyword,
-    )
-    from teamarr.database.exception_keywords import (
-        get_keyword as db_get_keyword,
-    )
 
     try:
         with get_db() as conn:
@@ -171,12 +179,6 @@ def update_keyword(keyword_id: int, request: ExceptionKeywordUpdate):
     """Update an exception keyword."""
     import sqlite3
 
-    from teamarr.database.exception_keywords import (
-        get_keyword as db_get_keyword,
-    )
-    from teamarr.database.exception_keywords import (
-        update_keyword as db_update_keyword,
-    )
 
     try:
         with get_db() as conn:
@@ -216,12 +218,6 @@ def update_keyword(keyword_id: int, request: ExceptionKeywordUpdate):
 @router.patch("/{keyword_id}/enabled")
 def toggle_keyword(keyword_id: int, enabled: bool = Query(...)) -> dict:
     """Enable or disable an exception keyword."""
-    from teamarr.database.exception_keywords import (
-        get_keyword as db_get_keyword,
-    )
-    from teamarr.database.exception_keywords import (
-        set_keyword_enabled,
-    )
 
     with get_db() as conn:
         keyword = db_get_keyword(conn, keyword_id)
@@ -239,12 +235,6 @@ def toggle_keyword(keyword_id: int, enabled: bool = Query(...)) -> dict:
 @router.delete("/{keyword_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_keyword(keyword_id: int):
     """Delete an exception keyword."""
-    from teamarr.database.exception_keywords import (
-        delete_keyword as db_delete_keyword,
-    )
-    from teamarr.database.exception_keywords import (
-        get_keyword as db_get_keyword,
-    )
 
     with get_db() as conn:
         keyword = db_get_keyword(conn, keyword_id)

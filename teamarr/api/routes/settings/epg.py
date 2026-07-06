@@ -2,6 +2,12 @@
 
 from fastapi import APIRouter
 
+from teamarr.config import set_timezone
+from teamarr.consumers.scheduler import (
+    get_scheduler_status,
+    start_lifecycle_scheduler,
+    stop_lifecycle_scheduler,
+)
 from teamarr.database import get_db
 
 from .models import EPGSettingsModel
@@ -40,12 +46,6 @@ def get_epg_settings():
 @router.put("/settings/epg", response_model=EPGSettingsModel)
 def update_epg_settings(update: EPGSettingsModel):
     """Update EPG generation settings."""
-    from teamarr.config import set_timezone
-    from teamarr.consumers.scheduler import (
-        get_scheduler_status,
-        start_lifecycle_scheduler,
-        stop_lifecycle_scheduler,
-    )
     from teamarr.database.settings import get_epg_settings, update_epg_settings
 
     # Check if cron expression is changing while scheduler is running

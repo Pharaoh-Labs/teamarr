@@ -7,6 +7,22 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from teamarr.database import get_db
+from teamarr.database.subscription import (
+    add_subscription_template,
+    delete_league_config,
+    delete_subscription_template,
+    get_league_configs,
+    get_subscription_template,
+    get_subscription_templates,
+    update_subscription_template,
+    upsert_league_config,
+)
+from teamarr.database.subscription import (
+    get_subscription as db_get_subscription,
+)
+from teamarr.database.subscription import (
+    update_subscription as db_update_subscription,
+)
 
 router = APIRouter()
 
@@ -102,9 +118,6 @@ class LeagueConfigListResponse(BaseModel):
 )
 def get_subscription():
     """Get the global sports subscription."""
-    from teamarr.database.subscription import (
-        get_subscription as db_get_subscription,
-    )
 
     with get_db() as conn:
         sub = db_get_subscription(conn)
@@ -124,9 +137,6 @@ def get_subscription():
 )
 def update_subscription(request: SubscriptionUpdate):
     """Update the global sports subscription."""
-    from teamarr.database.subscription import (
-        update_subscription as db_update_subscription,
-    )
 
     kwargs = {}
     if request.leagues is not None:
@@ -159,7 +169,6 @@ def update_subscription(request: SubscriptionUpdate):
 )
 def list_subscription_templates():
     """List all global template assignments."""
-    from teamarr.database.subscription import get_subscription_templates
 
     with get_db() as conn:
         templates = get_subscription_templates(conn)
@@ -186,10 +195,6 @@ def list_subscription_templates():
 )
 def create_subscription_template(request: TemplateAssignmentCreate):
     """Add a global template assignment."""
-    from teamarr.database.subscription import (
-        add_subscription_template,
-        get_subscription_template,
-    )
 
     with get_db() as conn:
         assignment_id = add_subscription_template(
@@ -217,10 +222,6 @@ def update_subscription_template_endpoint(
     assignment_id: int, request: TemplateAssignmentUpdate
 ):
     """Update a global template assignment."""
-    from teamarr.database.subscription import (
-        get_subscription_template,
-        update_subscription_template,
-    )
 
     with get_db() as conn:
         existing = get_subscription_template(conn, assignment_id)
@@ -256,10 +257,6 @@ def update_subscription_template_endpoint(
 )
 def delete_subscription_template_endpoint(assignment_id: int):
     """Delete a global template assignment."""
-    from teamarr.database.subscription import (
-        delete_subscription_template,
-        get_subscription_template,
-    )
 
     with get_db() as conn:
         existing = get_subscription_template(conn, assignment_id)
@@ -283,7 +280,6 @@ def delete_subscription_template_endpoint(assignment_id: int):
 )
 def list_league_configs():
     """List all per-league subscription configs."""
-    from teamarr.database.subscription import get_league_configs
 
     with get_db() as conn:
         configs = get_league_configs(conn)
@@ -308,7 +304,6 @@ def list_league_configs():
 )
 def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate):
     """Create or update per-league subscription config."""
-    from teamarr.database.subscription import upsert_league_config
 
     with get_db() as conn:
         config = upsert_league_config(
@@ -333,7 +328,6 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
 )
 def delete_league_config_endpoint(league_code: str):
     """Delete per-league subscription config."""
-    from teamarr.database.subscription import delete_league_config
 
     with get_db() as conn:
         deleted = delete_league_config(conn, league_code)

@@ -3,6 +3,8 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
+from teamarr.dispatcharr.factory import DispatcharrFactory
 
 from .models import (
     ConnectionTestRequest,
@@ -44,7 +46,6 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
         get_dispatcharr_settings,
         update_dispatcharr_settings,
     )
-    from teamarr.dispatcharr import get_factory
 
     with get_db() as conn:
         update_dispatcharr_settings(
@@ -92,13 +93,11 @@ def test_dispatcharr_connection(request: ConnectionTestRequest | None = None):
 
     If no parameters provided, tests with saved settings.
     """
-    from teamarr.dispatcharr import get_factory
 
     try:
         factory = get_factory(get_db)
     except RuntimeError:
         # Factory not initialized, create one
-        from teamarr.dispatcharr.factory import DispatcharrFactory
 
         factory = DispatcharrFactory(get_db)
 
@@ -135,7 +134,6 @@ def get_dispatcharr_status() -> dict:
         connected: Connection test succeeded
         error: Error message if connection failed (only present on failure)
     """
-    from teamarr.dispatcharr import get_factory
 
     try:
         factory = get_factory(get_db)
@@ -173,7 +171,6 @@ def get_dispatcharr_epg_sources() -> dict:
     Returns list of EPG sources that can be selected for EPG ID.
     Requires Dispatcharr to be configured and connected.
     """
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     try:
         conn = get_dispatcharr_connection(get_db)

@@ -12,7 +12,38 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from teamarr.consumers.stream_match_cache import (
+    StreamMatchCache,
+    clear_all_match_data,
+    clear_group_match_data,
+)
 from teamarr.database import get_db
+from teamarr.database.groups import (
+    delete_group,
+    delete_group_xmltv,
+    get_all_group_stats,
+    get_all_group_xmltv,
+    get_all_groups,
+    get_group,
+    get_group_by_name,
+    get_group_channel_count,
+    get_group_xmltv_with_metadata,
+    get_stale_groups,
+    reorder_groups,
+    set_group_enabled,
+    update_group,
+)
+from teamarr.database.settings import get_display_settings
+from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
+from teamarr.services import create_group_service
+from teamarr.services.stream_filter import (
+    UNSUPPORTED_SPORTS,
+    detect_sport_hint,
+    is_event_stream,
+    is_placeholder,
+)
+from teamarr.utilities.sorting import natural_sort_key
+from teamarr.utilities.xmltv import merge_xmltv_content
 
 logger = logging.getLogger(__name__)
 
@@ -533,8 +564,6 @@ def list_groups(
     include_stats: bool = Query(False, description="Include channel counts"),
 ):
     """List all event EPG groups."""
-    from teamarr.database.groups import get_all_group_stats, get_all_groups
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     with get_db() as conn:
         # Hide the system-managed channel-source group (183.9) — it is controlled
@@ -930,7 +959,6 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
     Only provided (non-None) fields will be updated across all selected groups.
     Use clear_* flags to explicitly set fields to NULL.
     """
-    from teamarr.database.groups import get_group, update_group
 
     # Validate fields
     validate_group_fields(
@@ -1058,7 +1086,6 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
 @router.post("/reorder", response_model=ReorderGroupsResponse)
 def reorder_groups_endpoint(request: ReorderGroupsRequest):
     """Reorder event groups by updating sort_order values."""
-    from teamarr.database.groups import reorder_groups
 
     if not request.groups:
         raise HTTPException(
@@ -1086,7 +1113,6 @@ class MatchCacheStatsResponse(BaseModel):
 @router.get("/cache/stats", response_model=MatchCacheStatsResponse)
 def get_match_cache_stats():
     """Get stream match cache statistics."""
-    from teamarr.consumers.stream_match_cache import StreamMatchCache
 
     cache = StreamMatchCache(get_db)
     return MatchCacheStatsResponse(total_entries=cache.get_size())
@@ -1099,7 +1125,6 @@ def list_stale_groups() -> list[dict]:
     Populated by the post-generation stale-source detection (lylt.1). Delete a
     stale group via the standard DELETE /groups/{id} endpoint.
     """
-    from teamarr.database.groups import get_stale_groups
 
     with get_db() as conn:
         return get_stale_groups(conn)
@@ -1108,8 +1133,6 @@ def list_stale_groups() -> list[dict]:
 @router.get("/{group_id}", response_model=GroupResponse)
 def get_group_by_id(group_id: int):
     """Get a single event EPG group."""
-    from teamarr.database.groups import get_group, get_group_channel_count
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1218,12 +1241,6 @@ def get_group_by_id(group_id: int):
 @router.put("/{group_id}", response_model=GroupResponse)
 def update_group_by_id(group_id: int, request: GroupUpdate):
     """Update an event EPG group."""
-    from teamarr.database.groups import (
-        get_group,
-        get_group_by_name,
-        get_group_channel_count,
-        update_group,
-    )
 
     # Deprecated per-group channel fields accepted but ignored (v59)
 
@@ -1355,7 +1372,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
 
         # Clean up XMLTV content when group is disabled
         if request.enabled is False:
-            from teamarr.database.groups import delete_group_xmltv
 
             delete_group_xmltv(conn, group_id)
 
@@ -1450,7 +1466,6 @@ def delete_group_by_id(group_id: int) -> dict:
 
     Warning: This will cascade delete all managed channels for this group.
     """
-    from teamarr.database.groups import delete_group, get_group, get_group_channel_count
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1498,7 +1513,6 @@ def get_group_stats(group_id: int):
 @router.post("/{group_id}/enable")
 def enable_group(group_id: int) -> dict:
     """Enable an event EPG group."""
-    from teamarr.database.groups import get_group, set_group_enabled
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1516,7 +1530,6 @@ def enable_group(group_id: int) -> dict:
 @router.post("/{group_id}/disable")
 def disable_group(group_id: int) -> dict:
     """Disable an event EPG group."""
-    from teamarr.database.groups import get_group, set_group_enabled
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1538,8 +1551,6 @@ def clear_group_match_cache(group_id: int):
     Forces re-matching on next EPG generation run. Useful when matching
     algorithm changes or cached matches are incorrect.
     """
-    from teamarr.consumers.stream_match_cache import clear_group_match_data
-    from teamarr.database.groups import get_group
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1570,8 +1581,6 @@ def clear_groups_match_cache(request: ClearCacheRequest):
 
     Forces re-matching on next EPG generation run for all specified groups.
     """
-    from teamarr.consumers.stream_match_cache import clear_group_match_data
-    from teamarr.database.groups import get_group
 
     results: list[ClearCacheGroupResult] = []
     total_cleared = 0
@@ -1606,7 +1615,6 @@ def clear_all_match_cache():
 
     Forces re-matching on next EPG generation run for every group.
     """
-    from teamarr.consumers.stream_match_cache import clear_all_match_data
 
     cleared, stats_cleared = clear_all_match_data(get_db)
 
@@ -1629,7 +1637,6 @@ def list_m3u_groups():
 
     Returns groups that can be used as stream sources for event EPG groups.
     """
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     conn = get_dispatcharr_connection(get_db)
     if not conn:
@@ -1665,7 +1672,6 @@ def list_dispatcharr_channel_groups() -> dict:
 
     Returns channel groups that can be assigned to event EPG groups.
     """
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     conn = get_dispatcharr_connection(get_db)
     if not conn:
@@ -1737,9 +1743,6 @@ def preview_group(group_id: int):
     """
     from datetime import date
 
-    from teamarr.database.groups import get_group
-    from teamarr.dispatcharr import get_factory
-    from teamarr.services import create_group_service
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1815,8 +1818,6 @@ def get_raw_streams(group_id: int):
     Returns minimal stream data (id + name) for regex testing in the UI.
     Fetches directly from Dispatcharr without running the matching pipeline.
     """
-    from teamarr.database.groups import get_group
-    from teamarr.dispatcharr import get_factory
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1849,13 +1850,6 @@ def get_raw_streams(group_id: int):
         account_id=group.m3u_account_id,
     )
 
-    from teamarr.services.stream_filter import (
-        UNSUPPORTED_SPORTS,
-        detect_sport_hint,
-        is_event_stream,
-        is_placeholder,
-    )
-    from teamarr.utilities.sorting import natural_sort_key
 
     def get_builtin_filter_reason(name: str) -> str | None:
         """Check all builtin filters and return reason if filtered."""
@@ -1906,7 +1900,6 @@ def get_group_xmltv(group_id: int) -> Response:
 
     Returns 404 if the group hasn't been processed yet.
     """
-    from teamarr.database.groups import get_group, get_group_xmltv_with_metadata
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -1941,9 +1934,6 @@ def get_combined_xmltv() -> Response:
     Merges XMLTV content from all groups that have been processed.
     This is useful for having a single EPG source in Dispatcharr.
     """
-    from teamarr.database.groups import get_all_group_xmltv
-    from teamarr.database.settings import get_display_settings
-    from teamarr.utilities.xmltv import merge_xmltv_content
 
     with get_db() as conn:
         xmltv_contents = get_all_group_xmltv(conn)

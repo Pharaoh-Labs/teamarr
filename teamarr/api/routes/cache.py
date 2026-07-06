@@ -25,6 +25,18 @@ from teamarr.api.cache_refresh_status import (
     update_refresh_status,
 )
 from teamarr.database import get_db
+from teamarr.database.team_cache import (
+    get_league_teams as db_get_league_teams,
+)
+from teamarr.database.team_cache import (
+    get_team_picker_leagues as db_get_picker_leagues,
+)
+from teamarr.database.team_cache import (
+    list_sports as db_list_sports,
+)
+from teamarr.database.team_cache import (
+    search_teams as db_search,
+)
 from teamarr.services import create_cache_service
 from teamarr.services.league_mappings import get_league_mapping_service
 
@@ -184,7 +196,6 @@ def list_sports() -> dict:
     Returns:
         Dict mapping sport codes to display names
     """
-    from teamarr.database.team_cache import list_sports as db_list_sports
 
     with get_db() as conn:
         sports = db_list_sports(conn)
@@ -244,7 +255,6 @@ def search_teams(
     sport: str | None = Query(None, description="Filter by sport"),
 ) -> dict:
     """Search for teams in the cache."""
-    from teamarr.database.team_cache import search_teams as db_search
 
     with get_db() as conn:
         teams = db_search(conn, query=q, league=league, sport=sport)
@@ -266,7 +276,6 @@ def get_league_teams(league_slug: str) -> list[dict]:
     Returns:
         List of teams in the league
     """
-    from teamarr.database.team_cache import get_league_teams as db_get_league_teams
 
     with get_db() as conn:
         return db_get_league_teams(conn, league_slug)
@@ -284,7 +293,6 @@ def get_team_picker_leagues() -> dict:
     Returns:
         List of leagues with sport and is_configured flag, plus sport display names
     """
-    from teamarr.database.team_cache import get_team_picker_leagues as db_get_picker_leagues
 
     with get_db() as conn:
         leagues = db_get_picker_leagues(conn)
