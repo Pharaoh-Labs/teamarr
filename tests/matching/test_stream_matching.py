@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 import pytest
 
 from teamarr.consumers.matching.result import MatchMethod
-from teamarr.consumers.matching.team_matcher import TeamMatcher
 from teamarr.core.types import Event, EventStatus, Team
 
 # ---------------------------------------------------------------------------
@@ -62,23 +61,10 @@ class TestCheckAbbreviationMatch:
     @pytest.fixture
     def matcher(self):
         """Create a TeamMatcher with no service/cache (only need the method)."""
+        from tests.fakes import make_team_matcher
 
-        # TeamMatcher.__init__ requires service and cache; mock them minimally
-        class _Stub:
-            def get(self, *a, **kw):
-                return None
-
-        class _StubService:
-            pass
-
-        m = object.__new__(TeamMatcher)
-        m._service = _StubService()
-        m._cache = _Stub()
-        m._db = None
-        m._fuzzy = None
-        m._days_ahead = 3
-        m._user_aliases = {}
-        m._reverse_aliases = {}
+        m = make_team_matcher()
+        m._fuzzy = None  # any accidental fuzzy fallback raises instead of matching
         return m
 
     # -- Positive cases: should match --
@@ -242,17 +228,9 @@ class TestMatchTeamsToEventAbbreviationIntegration:
 
     @pytest.fixture
     def matcher(self):
-        from teamarr.utilities.fuzzy_match import get_matcher
+        from tests.fakes import make_team_matcher
 
-        m = object.__new__(TeamMatcher)
-        m._service = None
-        m._cache = None
-        m._db = None
-        m._fuzzy = get_matcher()
-        m._days_ahead = 3
-        m._user_aliases = {}
-        m._reverse_aliases = {}
-        return m
+        return make_team_matcher()
 
     def test_abbreviation_beats_fuzzy_for_tournament_stream(self, matcher):
         """Tournament stream with IOC codes should get 100% via abbreviation path."""

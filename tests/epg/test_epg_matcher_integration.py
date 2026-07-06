@@ -1,20 +1,20 @@
 """Integration tests for the EPG path in StreamMatcher (teamarrv2-183.4).
 
-StreamMatcher's constructor does DB work, so we exercise the EPG-specific
-orchestration methods (_match_via_epg, _reconcile_epg) on a bare instance with
-the few attributes they touch, patching the shared routing. This isolates the
-EPG logic: category gating, EPG/window tagging, fan-out, and reconciliation.
+We exercise the EPG-specific orchestration methods (_match_via_epg,
+_reconcile_epg) on a matcher built with no service/DB, patching the shared
+routing. This isolates the EPG logic: category gating, EPG/window tagging,
+fan-out, and reconciliation.
 """
 
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
 
 from teamarr.consumers.matching.classifier import StreamCategory
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
-from teamarr.consumers.matching.matcher import MatchedStreamResult, StreamMatcher
+from teamarr.consumers.matching.matcher import MatchedStreamResult
 from teamarr.consumers.matching.result import MatchMethod, MatchOutcome
 from teamarr.dispatcharr.types import DispatcharrProgram
+from tests.fakes import make_stream_matcher
 
 BASE = datetime(2026, 6, 1, 18, tzinfo=UTC)
 
@@ -36,17 +36,13 @@ def _prog(title="MLB Baseball", sub="Chicago Cubs at St. Louis Cardinals", cats=
 
 def _bare_matcher(index, team_streams_enabled=True, racing_leagues=()):
     """A StreamMatcher with only the fields the EPG methods touch."""
-    m = object.__new__(StreamMatcher)
-    m._epg_index = index
-    m._custom_regex = None
-    m._feed_home_terms = None
-    m._feed_away_terms = None
-    m._team_streams_enabled = team_streams_enabled
-    m._league_event_types = {lg: "event" for lg in racing_leagues}
-    m._league_sports = {lg: "racing" for lg in racing_leagues}
-    m._include_leagues = set(racing_leagues)
-    m._user_tz = ZoneInfo("UTC")
-    return m
+    return make_stream_matcher(
+        leagues=racing_leagues,
+        league_event_types={lg: "event" for lg in racing_leagues},
+        league_sports={lg: "racing" for lg in racing_leagues},
+        team_streams_enabled=team_streams_enabled,
+        epg_index=index,
+    )
 
 
 def _matched_outcome(event_id="e1", start=None):

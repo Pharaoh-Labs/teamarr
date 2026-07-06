@@ -11,12 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from teamarr.consumers.event_group_processor import EventGroupProcessor
 from teamarr.database.groups import (
     ensure_channel_source_group,
     get_all_groups,
     get_group,
 )
+from tests.fakes import make_bare_processor
 
 
 def _stream(sid, name, group_id=None):
@@ -42,15 +42,15 @@ def _make_processor(stream_channel_map, epg_data_list, streams, managed, epg_gro
         m3u=SimpleNamespace(list_streams=lambda: streams),
     )
 
-    proc = object.__new__(EventGroupProcessor)
-    proc._dispatcharr_client = client
-
     @contextmanager
     def _db():
         yield None
 
-    proc._db_factory = _db
-    proc._active_epg_source_ids = lambda: {10}  # only source id 10 is active
+    proc = make_bare_processor(
+        _dispatcharr_client=client,
+        _db_factory=_db,
+        _active_epg_source_ids=lambda: {10},  # only source id 10 is active
+    )
 
     monkeypatch.setattr(
         "teamarr.database.channels.get_all_managed_channels",

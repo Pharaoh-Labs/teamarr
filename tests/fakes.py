@@ -133,3 +133,66 @@ class FakeSubscription:
     leagues: list[str] = field(default_factory=lambda: ["nhl", "nba"])
     soccer_mode: str | None = None
     soccer_followed_teams: list[dict] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Matcher/processor factories (iua3.5 step 6)
+#
+# Prefer the REAL constructor wherever __init__ tolerates None deps (so a
+# signature refactor is caught at test time). Only EventGroupProcessor keeps
+# an object.__new__ bypass — its __init__ needs a live DB and service — and it
+# lives here so a refactor breaks one factory, not N test files.
+# ---------------------------------------------------------------------------
+
+
+def make_team_matcher(service=None, cache=None, *, db_factory=None, days_ahead=3):
+    """Real TeamMatcher via its constructor (db_factory=None → empty alias caches)."""
+    from teamarr.consumers.matching.team_matcher import TeamMatcher
+
+    return TeamMatcher(service, cache, db_factory=db_factory, days_ahead=days_ahead)
+
+
+def make_stream_matcher(
+    *,
+    leagues=(),
+    league_event_types=None,
+    league_sports=None,
+    team_streams_enabled=True,
+    epg_index=None,
+    user_tz=None,
+):
+    """Real StreamMatcher constructed with no service/DB.
+
+    generation/days_ahead are pinned so __init__ never touches db_factory;
+    league metadata (normally loaded from the DB during match_all) is set
+    directly from the given dicts.
+    """
+    from zoneinfo import ZoneInfo
+
+    from teamarr.consumers.matching.matcher import StreamMatcher
+
+    m = StreamMatcher(
+        service=None,
+        db_factory=None,
+        group_id=1,
+        search_leagues=list(leagues),
+        user_tz=user_tz or ZoneInfo("UTC"),
+        generation=1,
+        days_ahead=3,
+        team_streams_enabled=team_streams_enabled,
+        epg_index=epg_index,
+    )
+    m._league_event_types = dict(league_event_types or {})
+    m._league_sports = dict(league_sports or {})
+    return m
+
+
+def make_bare_processor(**attrs):
+    """EventGroupProcessor without running __init__ (which needs a live DB and
+    service). Set only the attributes the test actually touches."""
+    from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+    proc = object.__new__(EventGroupProcessor)
+    for k, v in attrs.items():
+        setattr(proc, k, v)
+    return proc

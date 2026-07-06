@@ -471,8 +471,8 @@ def test_epg_path_skips_tennis_programmes():
     from zoneinfo import ZoneInfo as _Z
 
     from teamarr.consumers.matching.epg_index import EPGProgramIndex
-    from teamarr.consumers.matching.matcher import StreamMatcher
     from teamarr.dispatcharr.types import DispatcharrProgram
+    from tests.fakes import make_stream_matcher
 
     start = datetime(2026, 7, 5, 13, tzinfo=_Z("UTC"))
     prog = DispatcharrProgram.from_api(
@@ -487,16 +487,13 @@ def test_epg_path_skips_tennis_programmes():
             "custom_properties": {},
         }
     )
-    m = object.__new__(StreamMatcher)
-    m._epg_index = EPGProgramIndex({"espn": [prog]})
-    m._custom_regex = None
-    m._feed_home_terms = None
-    m._feed_away_terms = None
-    m._team_streams_enabled = True
-    m._league_event_types = {"atp": "event", "wta": "event"}
-    m._league_sports = {"atp": "tennis", "wta": "tennis"}
-    m._include_leagues = {"atp", "wta"}
-    m._user_tz = _Z("UTC")
+    m = make_stream_matcher(
+        leagues=("atp", "wta"),
+        league_event_types={"atp": "event", "wta": "event"},
+        league_sports={"atp": "tennis", "wta": "tennis"},
+        epg_index=EPGProgramIndex({"espn": [prog]}),
+        user_tz=_Z("UTC"),
+    )
 
     called = []
     m._route_to_outcomes = lambda *a, **k: called.append(1) or []

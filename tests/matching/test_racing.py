@@ -137,7 +137,7 @@ def _ctx(stream_name):
 
 
 def _matcher():
-    return object.__new__(RacingMatcher)
+    return RacingMatcher(service=None, cache=None)
 
 
 def test_name_match_beats_country_on_other_event():

@@ -9,16 +9,16 @@ attached to the consolidated channel. Lookup must be ID-first.
 
 from types import SimpleNamespace
 
-from teamarr.consumers.event_group_processor import EventGroupProcessor
 from teamarr.consumers.matching.matcher import BatchMatchResult, MatchedStreamResult
+from tests.fakes import make_bare_processor
 
 
 def _make_processor():
-    proc = object.__new__(EventGroupProcessor)
     # Segment expansion needs DB-backed sport durations — pass entries through.
-    proc._expand_ufc_segments = lambda matched, tz=None: matched
-    proc._expand_racing_segments = lambda matched: matched
-    return proc
+    return make_bare_processor(
+        _expand_ufc_segments=lambda matched, tz=None: matched,
+        _expand_racing_segments=lambda matched: matched,
+    )
 
 
 def _result(stream_id: int, stream_name: str, event) -> MatchedStreamResult:
