@@ -9,49 +9,38 @@ schema split and confirm the legitimate update fields work.
 """
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
 from teamarr.database.channels.crud import update_managed_channel
-from teamarr.database.connection import get_connection, init_db
 
 
-@pytest.fixture
-def conn(tmp_path: Path):
-    db_path = tmp_path / "t.db"
-    init_db(db_path)
-    c = get_connection(db_path)
-    yield c
-    c.close()
+def _columns(db_conn, table: str) -> set[str]:
+    return {row["name"] for row in db_conn.execute(f"PRAGMA table_info({table})")}
 
 
-def _columns(conn, table: str) -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-
-
-def test_stream_id_column_lives_only_on_streams_table(conn):
+def test_stream_id_column_lives_only_on_streams_table(db_conn):
     # The schema split: per-stream id is on managed_channel_streams, never on
     # managed_channels. Code must add stream membership via add_stream_to_channel,
     # not by updating a column on the channel row.
-    assert "dispatcharr_stream_id" not in _columns(conn, "managed_channels")
-    assert "dispatcharr_stream_id" in _columns(conn, "managed_channel_streams")
+    assert "dispatcharr_stream_id" not in _columns(db_conn, "managed_channels")
+    assert "dispatcharr_stream_id" in _columns(db_conn, "managed_channel_streams")
 
 
-def _insert_channel(conn) -> int:
-    cur = conn.execute(
+def _insert_channel(db_conn) -> int:
+    cur = db_conn.execute(
         "INSERT INTO managed_channels (event_id, event_provider, tvg_id, channel_name) "
         "VALUES ('e1', 'espn', 'tvg-1', 'NHL | CAR / VGK')"
     )
-    conn.commit()
+    db_conn.commit()
     return cur.lastrowid
 
 
-def test_update_with_real_sync_fields_succeeds(conn):
+def test_update_with_real_sync_fields_succeeds(db_conn):
     # The fields the drift/settings-sync path legitimately writes.
-    cid = _insert_channel(conn)
+    cid = _insert_channel(db_conn)
     ok = update_managed_channel(
-        conn,
+        db_conn,
         cid,
         {
             "channel_name": "NHL | CAR @ VGK",
@@ -60,7 +49,7 @@ def test_update_with_real_sync_fields_succeeds(conn):
         },
     )
     assert ok is True
-    row = conn.execute(
+    row = db_conn.execute(
         "SELECT channel_name, tvg_id, scheduled_delete_at FROM managed_channels WHERE id = ?",
         (cid,),
     ).fetchone()
@@ -69,10 +58,10 @@ def test_update_with_real_sync_fields_succeeds(conn):
     assert row["scheduled_delete_at"] == "2026-06-07 02:00:00"
 
 
-def test_update_with_stream_id_column_raises(conn):
+def test_update_with_stream_id_column_raises(db_conn):
     # Guards the regression: routing a per-stream id through the channel update
     # must fail loudly (it's not a managed_channels column), so nobody reintroduces
     # the V1-parity leftover that caused bead 91l.
-    cid = _insert_channel(conn)
+    cid = _insert_channel(db_conn)
     with pytest.raises(sqlite3.OperationalError, match="dispatcharr_stream_id"):
-        update_managed_channel(conn, cid, {"dispatcharr_stream_id": 123})
+        update_managed_channel(db_conn, cid, {"dispatcharr_stream_id": 123})

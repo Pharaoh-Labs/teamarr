@@ -5,26 +5,10 @@ stream_match_cache AND nulling cached stream stats. The orchestrators keep them
 together so a caller can't clear one and forget the other.
 """
 
-from pathlib import Path
-
-import pytest
-
 from teamarr.consumers.stream_match_cache import (
     clear_all_match_data,
     clear_group_match_data,
 )
-from teamarr.database.connection import get_connection, get_db, init_db
-
-
-@pytest.fixture
-def db_env(tmp_path: Path):
-    """Isolated DB: returns (get_db factory bound to a temp file, persistent conn)."""
-    db_path = tmp_path / "test.db"
-    init_db(db_path)
-    factory = lambda: get_db(db_path)  # noqa: E731 - bind the temp path for the orchestrators
-    conn = get_connection(db_path)
-    yield factory, conn
-    conn.close()
 
 
 def _seed(conn, group_id: int, stream_id: int):
@@ -61,26 +45,24 @@ def _counts(conn, group_id: int):
     return cache, stats
 
 
-def test_clear_group_clears_both_tables(db_env):
-    factory, conn = db_env
-    _seed(conn, group_id=1, stream_id=100)
-    _seed(conn, group_id=2, stream_id=200)
+def test_clear_group_clears_both_tables(db_factory, db_conn):
+    _seed(db_conn, group_id=1, stream_id=100)
+    _seed(db_conn, group_id=2, stream_id=200)
 
-    entries, stats = clear_group_match_data(factory, 1)
+    entries, stats = clear_group_match_data(db_factory, 1)
 
     assert (entries, stats) == (1, 1)
-    assert _counts(conn, 1) == (0, 0)  # group 1 fully cleared
-    assert _counts(conn, 2) == (1, 1)  # group 2 untouched
+    assert _counts(db_conn, 1) == (0, 0)  # group 1 fully cleared
+    assert _counts(db_conn, 2) == (1, 1)  # group 2 untouched
 
 
-def test_clear_all_clears_every_group(db_env):
-    factory, conn = db_env
-    _seed(conn, group_id=1, stream_id=100)
-    _seed(conn, group_id=2, stream_id=200)
+def test_clear_all_clears_every_group(db_factory, db_conn):
+    _seed(db_conn, group_id=1, stream_id=100)
+    _seed(db_conn, group_id=2, stream_id=200)
 
-    entries, stats = clear_all_match_data(factory)
+    entries, stats = clear_all_match_data(db_factory)
 
     assert entries == 2
     assert stats == 2
-    assert _counts(conn, 1) == (0, 0)
-    assert _counts(conn, 2) == (0, 0)
+    assert _counts(db_conn, 1) == (0, 0)
+    assert _counts(db_conn, 2) == (0, 0)

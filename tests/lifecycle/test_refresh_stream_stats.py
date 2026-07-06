@@ -7,22 +7,11 @@ probed yet (stream_stats=None) are left unchanged.
 """
 
 import json
-from pathlib import Path
 
 import pytest
 
 import teamarr.dispatcharr.factory as factory
 from teamarr.database.channels.streams import refresh_stream_stats
-from teamarr.database.connection import get_connection, init_db
-
-
-@pytest.fixture
-def conn(tmp_path: Path):
-    db_path = tmp_path / "t.db"
-    init_db(db_path)
-    c = get_connection(db_path)
-    yield c
-    c.close()
 
 
 class _StubClient:
@@ -49,16 +38,16 @@ def patch_client(monkeypatch):
     return install, holder
 
 
-def _insert_channel(conn) -> int:
-    cur = conn.execute(
+def _insert_channel(db_conn) -> int:
+    cur = db_conn.execute(
         "INSERT INTO managed_channels (event_id, event_provider, tvg_id, channel_name) "
         "VALUES ('e1', 'espn', 'tvg-1', 'NHL | CAR / VGK')"
     )
     return cur.lastrowid
 
 
-def _insert_stream(conn, channel_id, stream_id, *, removed=False):
-    conn.execute(
+def _insert_stream(db_conn, channel_id, stream_id, *, removed=False):
+    db_conn.execute(
         """INSERT INTO managed_channel_streams
            (managed_channel_id, dispatcharr_stream_id, removed_at)
            VALUES (?, ?, ?)""",
@@ -66,47 +55,47 @@ def _insert_stream(conn, channel_id, stream_id, *, removed=False):
     )
 
 
-def _stats_row(conn, stream_id):
-    return conn.execute(
+def _stats_row(db_conn, stream_id):
+    return db_conn.execute(
         "SELECT stream_stats, stream_stats_updated_at FROM managed_channel_streams "
         "WHERE dispatcharr_stream_id = ?",
         (stream_id,),
     ).fetchone()
 
 
-def test_no_active_streams_returns_zero_without_client(conn, patch_client):
+def test_no_active_streams_returns_zero_without_client(db_conn, patch_client):
     install, _ = patch_client
     stub = _StubClient([{"id": 1, "stream_stats": {"x": 1}, "stream_stats_updated_at": "t"}])
     install(stub)
-    cid = _insert_channel(conn)  # channel with no streams
-    conn.commit()
+    cid = _insert_channel(db_conn)  # channel with no streams
+    db_conn.commit()
 
-    assert refresh_stream_stats(conn, cid) == 0
+    assert refresh_stream_stats(db_conn, cid) == 0
     assert stub.calls == []  # short-circuits before touching the client
 
 
-def test_client_none_returns_zero(conn, patch_client):
+def test_client_none_returns_zero(db_conn, patch_client):
     install, _ = patch_client
     install(None)
-    cid = _insert_channel(conn)
-    _insert_stream(conn, cid, 100)
-    conn.commit()
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    db_conn.commit()
 
-    assert refresh_stream_stats(conn, cid) == 0
+    assert refresh_stream_stats(db_conn, cid) == 0
 
 
-def test_empty_stats_list_returns_zero(conn, patch_client):
+def test_empty_stats_list_returns_zero(db_conn, patch_client):
     install, _ = patch_client
     install(_StubClient([]))
-    cid = _insert_channel(conn)
-    _insert_stream(conn, cid, 100)
-    conn.commit()
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    db_conn.commit()
 
-    assert refresh_stream_stats(conn, cid) == 0
-    assert _stats_row(conn, 100)["stream_stats"] is None
+    assert refresh_stream_stats(db_conn, cid) == 0
+    assert _stats_row(db_conn, 100)["stream_stats"] is None
 
 
-def test_happy_path_persists_stats_as_json(conn, patch_client):
+def test_happy_path_persists_stats_as_json(db_conn, patch_client):
     install, _ = patch_client
     install(_StubClient([
         {
@@ -115,40 +104,40 @@ def test_happy_path_persists_stats_as_json(conn, patch_client):
             "stream_stats_updated_at": "2026-06-16T00:00:00Z",
         },
     ]))
-    cid = _insert_channel(conn)
-    _insert_stream(conn, cid, 100)
-    conn.commit()
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    db_conn.commit()
 
-    assert refresh_stream_stats(conn, cid) == 1
-    row = _stats_row(conn, 100)
+    assert refresh_stream_stats(db_conn, cid) == 1
+    row = _stats_row(db_conn, 100)
     assert json.loads(row["stream_stats"]) == {"resolution": "1920x1080"}
     assert row["stream_stats_updated_at"] == "2026-06-16T00:00:00Z"
 
 
-def test_unprobed_stream_is_skipped(conn, patch_client):
+def test_unprobed_stream_is_skipped(db_conn, patch_client):
     install, _ = patch_client
     install(_StubClient([
         {"id": 100, "stream_stats": None, "stream_stats_updated_at": None},
         {"id": 101, "stream_stats": {"source_fps": 60}, "stream_stats_updated_at": "t"},
     ]))
-    cid = _insert_channel(conn)
-    _insert_stream(conn, cid, 100)
-    _insert_stream(conn, cid, 101)
-    conn.commit()
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    _insert_stream(db_conn, cid, 101)
+    db_conn.commit()
 
-    assert refresh_stream_stats(conn, cid) == 1
-    assert _stats_row(conn, 100)["stream_stats"] is None
-    assert json.loads(_stats_row(conn, 101)["stream_stats"]) == {"source_fps": 60}
+    assert refresh_stream_stats(db_conn, cid) == 1
+    assert _stats_row(db_conn, 100)["stream_stats"] is None
+    assert json.loads(_stats_row(db_conn, 101)["stream_stats"]) == {"source_fps": 60}
 
 
-def test_removed_streams_not_selected(conn, patch_client):
+def test_removed_streams_not_selected(db_conn, patch_client):
     install, _ = patch_client
     stub = _StubClient([{"id": 100, "stream_stats": {"x": 1}, "stream_stats_updated_at": "t"}])
     install(stub)
-    cid = _insert_channel(conn)
-    _insert_stream(conn, cid, 100, removed=True)
-    conn.commit()
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100, removed=True)
+    db_conn.commit()
 
     # No active streams → returns 0 and the client is never queried.
-    assert refresh_stream_stats(conn, cid) == 0
+    assert refresh_stream_stats(db_conn, cid) == 0
     assert stub.calls == []

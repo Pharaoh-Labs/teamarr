@@ -7,13 +7,11 @@ and dedupe (streams already owned by an EPG-match-enabled M3U group).
 """
 
 from contextlib import contextmanager
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from teamarr.consumers.event_group_processor import EventGroupProcessor
-from teamarr.database.connection import get_connection, init_db
 from teamarr.database.groups import (
     ensure_channel_source_group,
     get_all_groups,
@@ -187,18 +185,9 @@ def test_empty_selection_includes_all_groups(monkeypatch):
     assert sorted(s["id"] for s in out) == [500, 501]
 
 
-@pytest.fixture
-def db(tmp_path: Path):
-    db_path = tmp_path / "t.db"
-    init_db(db_path)
-    conn = get_connection(db_path)
-    yield conn
-    conn.close()
-
-
-def test_ensure_channel_source_group_idempotent_and_synced(db):
-    gid = ensure_channel_source_group(db, enabled=True)
-    g = get_group(db, gid)
+def test_ensure_channel_source_group_idempotent_and_synced(db_conn):
+    gid = ensure_channel_source_group(db_conn, enabled=True)
+    g = get_group(db_conn, gid)
     assert g is not None
     assert g.is_channel_source is True
     assert g.epg_match_enabled is True
@@ -206,19 +195,19 @@ def test_ensure_channel_source_group_idempotent_and_synced(db):
     assert g.enabled is True
 
     # Second call must not create a duplicate; it syncs the enabled flag.
-    gid2 = ensure_channel_source_group(db, enabled=False)
+    gid2 = ensure_channel_source_group(db_conn, enabled=False)
     assert gid2 == gid
-    sources = [g for g in get_all_groups(db, include_disabled=True) if g.is_channel_source]
+    sources = [g for g in get_all_groups(db_conn, include_disabled=True) if g.is_channel_source]
     assert len(sources) == 1
-    assert get_group(db, gid).enabled is False
+    assert get_group(db_conn, gid).enabled is False
 
 
-def test_channel_source_group_hidden_from_ui_list(db):
-    gid = ensure_channel_source_group(db, enabled=True)
-    visible = get_all_groups(db, include_disabled=True, exclude_channel_source=True)
+def test_channel_source_group_hidden_from_ui_list(db_conn):
+    gid = ensure_channel_source_group(db_conn, enabled=True)
+    visible = get_all_groups(db_conn, include_disabled=True, exclude_channel_source=True)
     assert gid not in {g.id for g in visible}
     # Processing path (no exclusion) still sees it.
-    everything = get_all_groups(db, include_disabled=True)
+    everything = get_all_groups(db_conn, include_disabled=True)
     assert gid in {g.id for g in everything}
 
 

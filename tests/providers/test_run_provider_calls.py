@@ -5,25 +5,11 @@ Generation snapshots the run-scoped provider-call counter into
 surfaces through ``ProcessingRun.to_dict`` (what ``GET /stats/runs`` returns).
 """
 
-from pathlib import Path
-
-import pytest
-
-from teamarr.database.connection import get_connection, init_db
 from teamarr.database.stats import create_run, get_run, save_run
 
 
-@pytest.fixture
-def conn(tmp_path: Path):
-    db_path = tmp_path / "t.db"
-    init_db(db_path)
-    c = get_connection(db_path)
-    yield c
-    c.close()
-
-
-def test_provider_calls_persist_and_surface(conn):
-    run = create_run(conn, run_type="full_epg")
+def test_provider_calls_persist_and_surface(db_conn):
+    run = create_run(db_conn, run_type="full_epg")
     run.channels_active = 126
     run.extra_metrics["provider_calls"] = {
         "espn:summary": 289,
@@ -31,9 +17,9 @@ def test_provider_calls_persist_and_surface(conn):
         "mlbstats:schedule": 12,
     }
     run.extra_metrics["provider_calls_total"] = 341
-    save_run(conn, run)
+    save_run(db_conn, run)
 
-    reloaded = get_run(conn, run.id)
+    reloaded = get_run(db_conn, run.id)
     d = reloaded.to_dict()
     assert d["extra_metrics"]["provider_calls"]["espn:summary"] == 289
     assert d["extra_metrics"]["provider_calls_total"] == 341
