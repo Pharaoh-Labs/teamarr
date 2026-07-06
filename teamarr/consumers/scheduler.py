@@ -12,7 +12,6 @@ Integrates with FastAPI lifespan for clean startup/shutdown.
 
 import logging
 import threading
-import time
 from datetime import datetime
 from typing import Any
 
@@ -94,7 +93,7 @@ class SubTaskScheduler:
                 wait_seconds,
             )
             while wait_seconds > 0 and not self._stop_event.is_set():
-                time.sleep(min(1.0, wait_seconds))
+                self._stop_event.wait(min(1.0, wait_seconds))
                 wait_seconds = (self._next_run - datetime.now()).total_seconds()
             if self._stop_event.is_set():
                 return
@@ -327,8 +326,7 @@ class CronScheduler:
 
             # Wait until next run time (checking stop event every second)
             while wait_seconds > 0 and not self._stop_event.is_set():
-                sleep_time = min(1.0, wait_seconds)
-                time.sleep(sleep_time)
+                self._stop_event.wait(min(1.0, wait_seconds))
                 wait_seconds = (self._next_run - datetime.now()).total_seconds()
 
             if self._stop_event.is_set():

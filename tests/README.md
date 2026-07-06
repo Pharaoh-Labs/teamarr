@@ -1,10 +1,11 @@
 # Test Suite Map
 
-500 tests across 28 files. This index groups them by what they protect, so you
-can navigate to the right place for a given concern instead of wading through
-the full list.
+~1,300 tests across 95 files. This index groups the older core of the suite by
+what it protects; files added after early 2026 are not yet indexed here. A
+directory-based reorganization is planned (bead `teamarrv2-iua3.5`), which will
+replace this map.
 
-To run everything: `pytest tests/ -v`. Full suite finishes in ~60s.
+To run everything: `pytest tests/ -v`. Full suite finishes in under 10s.
 
 ## Test categories at a glance
 

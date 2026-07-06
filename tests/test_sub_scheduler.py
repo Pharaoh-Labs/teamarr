@@ -2,6 +2,7 @@
 
 import threading
 import time
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from teamarr.consumers.scheduler import CronScheduler, SubTaskScheduler
@@ -47,17 +48,22 @@ class TestSubTaskScheduler:
         """SubTaskScheduler fires the task at the cron time."""
         fired = threading.Event()
 
-        def task():
-            fired.set()
+        # Shift the scheduler's clock so it always sits 59.5s into a minute —
+        # the next `* * * * *` boundary is then ~0.5s away instead of up to 60s.
+        offset = timedelta(seconds=59.5 - (time.time() % 60))
 
-        # Fire every minute — we'll wait for it
-        sub = SubTaskScheduler("test", task, "* * * * *")
-        sub.start()
-        try:
-            # Should fire within ~61 seconds
-            assert fired.wait(timeout=65), "Task did not fire within 65 seconds"
-        finally:
-            sub.stop(timeout=2.0)
+        class ShiftedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime.now(tz) + offset
+
+        with patch("teamarr.consumers.scheduler.datetime", ShiftedDateTime):
+            sub = SubTaskScheduler("test", fired.set, "* * * * *")
+            sub.start()
+            try:
+                assert fired.wait(timeout=10), "Task did not fire within 10 seconds"
+            finally:
+                sub.stop(timeout=2.0)
 
     def test_thread_is_daemon(self):
         """SubTaskScheduler thread is a daemon thread."""
