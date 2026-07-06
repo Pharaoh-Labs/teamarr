@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from rapidfuzz import fuzz
@@ -53,10 +54,15 @@ class FuzzyMatchResult:
     pattern_used: str | None = None
 
 
+@lru_cache(maxsize=16384)
 def normalize_text(value: str) -> str:
     """Normalize text for matching.
 
     Applies: unidecode, lowercase, strip punctuation, normalize whitespace.
+
+    Cached: the matcher re-normalizes the same event/team names for every
+    stream × event comparison, making this the dominant pure-Python cost of
+    the inner match loop without memoization.
     """
     # Normalize: strip accents (é→e, ü→u), lowercase
     normalized = unidecode(value).lower().strip()

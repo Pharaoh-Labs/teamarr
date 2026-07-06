@@ -26,6 +26,7 @@ import json
 import logging
 import sqlite3
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
@@ -90,6 +91,7 @@ class StreamMatchCache:
             get_connection: Function that returns a database connection
         """
         self._get_connection = get_connection
+        self._session_conn = None
         self._stats = {
             "hits": 0,
             "misses": 0,
@@ -98,6 +100,31 @@ class StreamMatchCache:
             "failed_cached": 0,
             "user_corrections": 0,
         }
+
+    @contextmanager
+    def session(self):
+        """Reuse a single connection for a batch of cache operations.
+
+        The matcher does 2-3 cache round-trips per stream; without this each
+        one opens a fresh SQLite connection (+3 PRAGMAs). Writes commit once
+        at session end (the factory's context exit). Not re-entrant and not
+        thread-safe — the match loop runs on one thread.
+        """
+        with self._get_connection() as conn:
+            self._session_conn = conn
+            try:
+                yield
+            finally:
+                self._session_conn = None
+
+    @contextmanager
+    def _conn(self):
+        """Yield the session connection if one is pinned, else a fresh one."""
+        if self._session_conn is not None:
+            yield self._session_conn
+        else:
+            with self._get_connection() as conn:
+                yield conn
 
     def get(
         self,
@@ -119,7 +146,7 @@ class StreamMatchCache:
         """
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
-        with self._get_connection() as conn:
+        with self._conn() as conn:
             cursor = conn.execute(
                 """
                 SELECT event_id, league, cached_event_data, match_method, user_corrected
@@ -213,7 +240,7 @@ class StreamMatchCache:
         cached_json = json.dumps(cached_data, default=_json_serializer)
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 conn.execute(
                     """
                     INSERT INTO stream_match_cache
@@ -281,7 +308,7 @@ class StreamMatchCache:
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 conn.execute(
                     """
                     INSERT INTO stream_match_cache
@@ -340,7 +367,7 @@ class StreamMatchCache:
         cached_json = json.dumps(cached_data, default=_json_serializer)
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 conn.execute(
                     """
                     INSERT INTO stream_match_cache
@@ -394,7 +421,7 @@ class StreamMatchCache:
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 cursor = conn.execute(
                     """
                     DELETE FROM stream_match_cache
@@ -431,7 +458,7 @@ class StreamMatchCache:
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 cursor = conn.execute(
                     """
                     UPDATE stream_match_cache
@@ -461,7 +488,7 @@ class StreamMatchCache:
         purged_total = 0
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 # Purge stale failed matches (shorter TTL)
                 # Never purge user corrections
                 failed_threshold = current_generation - self.PURGE_FAILED_AFTER_GENERATIONS
@@ -532,7 +559,7 @@ class StreamMatchCache:
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 cursor = conn.execute(
                     "DELETE FROM stream_match_cache WHERE fingerprint = ?",
                     (fingerprint,),
@@ -558,7 +585,7 @@ class StreamMatchCache:
             Number of entries cleared
         """
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 cursor = conn.execute(
                     "DELETE FROM stream_match_cache WHERE group_id = ?",
                     (group_id,),
@@ -578,7 +605,7 @@ class StreamMatchCache:
             Number of entries cleared
         """
         try:
-            with self._get_connection() as conn:
+            with self._conn() as conn:
                 cursor = conn.execute("DELETE FROM stream_match_cache")
                 cleared = cursor.rowcount
                 conn.commit()
@@ -594,7 +621,7 @@ class StreamMatchCache:
 
     def get_size(self) -> int:
         """Get total number of cached entries."""
-        with self._get_connection() as conn:
+        with self._conn() as conn:
             cursor = conn.execute("SELECT COUNT(*) FROM stream_match_cache")
             return cursor.fetchone()[0]
 

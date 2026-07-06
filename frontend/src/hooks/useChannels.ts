@@ -6,11 +6,18 @@ import {
   getPendingDeletions,
 } from "@/api/channels"
 
-export function useManagedChannels(groupId?: number, includeDeleted = false) {
+export function useManagedChannels(
+  groupId?: number,
+  includeDeleted = false,
+  opts?: { poll?: boolean }
+) {
   return useQuery({
     queryKey: ["managedChannels", { groupId, includeDeleted }],
     queryFn: () => listManagedChannels(groupId, includeDeleted),
-    refetchInterval: 30000, // Refresh every 30s
+    // Poll by default; pass poll: false for secondary views (e.g. the
+    // Recently Deleted list) so they refresh via invalidation only instead
+    // of doubling the 30s full-table poll.
+    refetchInterval: opts?.poll === false ? undefined : 30000,
   })
 }
 

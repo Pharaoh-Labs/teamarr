@@ -429,8 +429,10 @@ export function ManagedChannelsTable() {
   } = useManagedChannels(undefined, false)
   const { data: pendingData } = usePendingDeletions()
 
-  // Fetch all channels including deleted for the Recently Deleted section
-  const { data: allChannelsData } = useManagedChannels(undefined, true)
+  // Fetch all channels including deleted for the Recently Deleted section.
+  // No polling: mutations invalidate ["managedChannels"] so this refreshes on
+  // deletions without a second full-table 30s poll.
+  const { data: allChannelsData } = useManagedChannels(undefined, true, { poll: false })
 
   // Filter to get only deleted channels (last 50, sorted by deletion time)
   const deletedChannels = useMemo(() => {

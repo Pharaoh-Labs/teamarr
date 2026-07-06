@@ -55,7 +55,7 @@ from teamarr.consumers.stream_match_cache import (
     increment_generation_counter,
 )
 from teamarr.core import Event
-from teamarr.database.leagues import get_league
+from teamarr.database.leagues import get_leagues_bulk
 from teamarr.services import SportsDataService
 from teamarr.utilities.event_status import is_event_final
 
@@ -411,42 +411,45 @@ class StreamMatcher:
         )
 
         total_streams = len(streams)
-        for idx, stream in enumerate(streams, 1):
-            stream_id = stream.get("id", 0)
-            stream_name = stream.get("name", "")
+        # One DB connection for the whole batch's cache traffic (2-3 cache
+        # round-trips per stream otherwise each open a fresh connection).
+        with self._cache.session():
+            for idx, stream in enumerate(streams, 1):
+                stream_id = stream.get("id", 0)
+                stream_name = stream.get("name", "")
 
-            match_results = self._match_single(
-                stream_id=stream_id,
-                stream_name=stream_name,
-                target_date=target_date,
-            )
-
-            # EPG augmentation (epic 183.4): for streams carrying a tvg_id in an
-            # EPG-enabled group, also match via EPG program titles and reconcile.
-            tvg_id = stream.get("tvg_id")
-            if self._epg_index is not None and tvg_id:
-                epg_results = self._match_via_epg(
+                match_results = self._match_single(
                     stream_id=stream_id,
                     stream_name=stream_name,
-                    tvg_id=tvg_id,
                     target_date=target_date,
                 )
-                match_results = self._reconcile_epg(match_results, epg_results, tvg_id)
 
-            # Track cache stats and accumulate (TEAM_ONLY may return multiple results)
-            any_matched = False
-            for match_result in match_results:
-                if match_result.from_cache:
-                    result.cache_hits += 1
-                else:
-                    result.cache_misses += 1
-                result.results.append(match_result)
-                if match_result.matched:
-                    any_matched = True
+                # EPG augmentation (epic 183.4): for streams carrying a tvg_id in an
+                # EPG-enabled group, also match via EPG program titles and reconcile.
+                tvg_id = stream.get("tvg_id")
+                if self._epg_index is not None and tvg_id:
+                    epg_results = self._match_via_epg(
+                        stream_id=stream_id,
+                        stream_name=stream_name,
+                        tvg_id=tvg_id,
+                        target_date=target_date,
+                    )
+                    match_results = self._reconcile_epg(match_results, epg_results, tvg_id)
 
-            # Report per-stream progress (report once per source stream)
-            if progress_callback:
-                progress_callback(idx, total_streams, stream_name, any_matched)
+                # Track cache stats and accumulate (TEAM_ONLY may return multiple results)
+                any_matched = False
+                for match_result in match_results:
+                    if match_result.from_cache:
+                        result.cache_hits += 1
+                    else:
+                        result.cache_misses += 1
+                    result.results.append(match_result)
+                    if match_result.matched:
+                        any_matched = True
+
+                # Report per-stream progress (report once per source stream)
+                if progress_callback:
+                    progress_callback(idx, total_streams, stream_name, any_matched)
 
         logger.info(
             "[COMPLETED] Stream matching: %d/%d matched (%d included), cache_hit_rate=%.1f%%",
@@ -1188,15 +1191,16 @@ class StreamMatcher:
         return None
 
     def _load_league_event_types(self) -> None:
-        """Load event types and sports for all search leagues."""
+        """Load event types and sports for all search leagues (one bulk query)."""
         with self._db_factory() as conn:
-            for league in self._search_leagues:
-                league_info = get_league(conn, league)
-                if league_info:
-                    self._league_event_types[league] = league_info.get("event_type", "team_vs_team")
-                    sport = league_info.get("sport")
-                    if sport:
-                        self._league_sports[league] = sport
+            leagues_info = get_leagues_bulk(conn, list(self._search_leagues))
+        for league in self._search_leagues:
+            league_info = leagues_info.get(league.lower())
+            if league_info:
+                self._league_event_types[league] = league_info.get("event_type", "team_vs_team")
+                sport = league_info.get("sport")
+                if sport:
+                    self._league_sports[league] = sport
 
     def _get_event_league_sport(self) -> str | None:
         """Dominant sport among the group's event-type leagues.
