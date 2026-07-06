@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import ast
 import re
-from pathlib import Path
 
 import pytest
 
-CONNECTION_PY = Path(__file__).parent.parent / "teamarr" / "database" / "connection.py"
+from tests.helpers import REPO_ROOT
+
+CONNECTION_PY = REPO_ROOT / "teamarr" / "database" / "connection.py"
 
 
 @pytest.fixture(scope="module")

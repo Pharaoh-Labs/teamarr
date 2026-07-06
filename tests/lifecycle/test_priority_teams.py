@@ -8,7 +8,6 @@ channels are matched by (sport, team_name) against home_team/away_team.
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -19,8 +18,9 @@ from teamarr.database.priority_teams import (
     get_priority_team_match_keys,
     get_priority_teams,
 )
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 
 
 @pytest.fixture

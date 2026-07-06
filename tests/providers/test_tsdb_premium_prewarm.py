@@ -9,11 +9,11 @@ is_premium and every league is fetched again.
 import contextlib
 import sqlite3
 import threading
-from pathlib import Path
 
 from teamarr.consumers.cache.refresh import CacheRefresher
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 
 # From schema.sql leagues table (tsdb_tier).
 PREMIUM = ["ipl", "sa20", "uru.2"]

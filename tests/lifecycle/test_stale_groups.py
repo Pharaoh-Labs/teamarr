@@ -7,12 +7,12 @@ a Dispatcharr blip (empty/failed group list) must flag nothing.
 
 import contextlib
 import sqlite3
-from pathlib import Path
 from types import SimpleNamespace
 
 from teamarr.consumers.reconciliation import detect_stale_groups
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 
 
 def _db() -> sqlite3.Connection:

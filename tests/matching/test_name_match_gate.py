@@ -10,12 +10,12 @@ declared types can use it.
 
 import sqlite3
 from datetime import date
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from teamarr.consumers.matching.matcher import StreamMatcher
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 TARGET = date(2026, 6, 16)
 
 

@@ -12,13 +12,13 @@ to every category before routing.)
 """
 
 import sqlite3
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from teamarr.consumers.matching.classifier import StreamCategory, classify_stream
 from teamarr.consumers.matching.matcher import StreamMatcher
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 
 
 def _db_factory():

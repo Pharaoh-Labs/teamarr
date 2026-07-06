@@ -7,7 +7,6 @@ the write path (eqz.2) and the test-fetch validator (eqz.3) will both enforce.
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -33,8 +32,9 @@ from teamarr.services.custom_leagues import (
     validate_event_type,
     validate_tsdb_sport_matches,
 )
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 
 
 def _db() -> sqlite3.Connection:

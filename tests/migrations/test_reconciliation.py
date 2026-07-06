@@ -309,10 +309,9 @@ class TestFullSchemaReconciliation:
 
     def test_with_real_schema(self):
         """Reconciliation works with the actual schema.sql file."""
-        from pathlib import Path
+        from tests.helpers import SCHEMA_PATH
 
-        schema_path = Path(__file__).parent.parent / "teamarr" / "database" / "schema.sql"
-        schema_sql = schema_path.read_text()
+        schema_sql = SCHEMA_PATH.read_text()
 
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
