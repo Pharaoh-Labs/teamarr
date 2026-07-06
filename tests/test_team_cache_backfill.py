@@ -18,9 +18,18 @@ import pytest
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.database.connection import get_db, init_db
 from teamarr.services.sports_data import (
+    _TEAM_IDENTITY_MEMO,
     _backfill_team_from_cache,
     _enrich_event_teams,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_identity_memo():
+    """Identity lookups are memoized in-process; isolate tests from each other."""
+    _TEAM_IDENTITY_MEMO.clear()
+    yield
+    _TEAM_IDENTITY_MEMO.clear()
 
 
 @pytest.fixture

@@ -12,6 +12,7 @@ Uses PersistentTTLCache for all caching:
 
 import logging
 import threading
+import time
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
@@ -56,6 +57,35 @@ REFRESH_COALESCE_TTL = 300  # seconds
 # hundreds of live 404s per run for a single event.
 _EVENT_NOT_FOUND = {"__event_not_found__": True}
 
+# In-memory memo for team_cache identity lookups. Enrichment runs for the home
+# and away team of every event on every get_events cache hit, so without this
+# each degraded team costs a fresh SQLite connection (+3 PRAGMAs) per event —
+# multiplied by streams × leagues × dates in the multi-league match fallback.
+# Team identity is effectively static; the TTL bounds staleness from mid-run
+# short-name heals. Misses (None) are memoized too: a team absent from
+# team_cache would otherwise re-query on every event it appears in.
+_TEAM_IDENTITY_MEMO: dict[tuple[str, str, str], tuple[float, dict | None]] = {}
+_TEAM_IDENTITY_MEMO_TTL = 900.0  # seconds
+_TEAM_IDENTITY_MEMO_MAX = 8192
+
+
+def _cached_team_identity(provider: str, team_id: str, league: str) -> dict | None:
+    key = (provider, team_id, league)
+    now = time.monotonic()
+    hit = _TEAM_IDENTITY_MEMO.get(key)
+    if hit is not None and now - hit[0] < _TEAM_IDENTITY_MEMO_TTL:
+        return hit[1]
+
+    from teamarr.database import get_db
+
+    with get_db() as conn:
+        cached = get_team_identity(conn, provider, team_id, league)
+
+    if len(_TEAM_IDENTITY_MEMO) >= _TEAM_IDENTITY_MEMO_MAX:
+        _TEAM_IDENTITY_MEMO.clear()
+    _TEAM_IDENTITY_MEMO[key] = (now, cached)
+    return cached
+
 
 def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     """Patch a Team's short_name/abbreviation/name from team_cache when missing.
@@ -70,11 +100,8 @@ def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     if team.short_name and team.abbreviation and team.name:
         return team
 
-    from teamarr.database import get_db
-
     try:
-        with get_db() as conn:
-            cached = get_team_identity(conn, team.provider, team.id, league)
+        cached = _cached_team_identity(team.provider, team.id, league)
     except Exception as e:
         logger.debug("[TEAM_BACKFILL] lookup failed for %s/%s: %s", team.provider, team.id, e)
         return team
