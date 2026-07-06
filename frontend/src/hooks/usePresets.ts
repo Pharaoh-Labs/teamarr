@@ -1,10 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  fetchPresets,
-  createPreset,
-  updatePreset,
-  deletePreset,
-} from "@/api/presets"
+import { fetchPresets, createPreset, deletePreset } from "@/api/presets"
 import type { ConditionPresetCreate } from "@/api/presets"
 
 export function usePresets() {
@@ -22,24 +17,6 @@ export function useCreatePreset() {
     mutationFn: (data: ConditionPresetCreate) => createPreset(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["presets"] })
-    },
-  })
-}
-
-export function useUpdatePreset() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({
-      presetId,
-      data,
-    }: {
-      presetId: number
-      data: Partial<ConditionPresetCreate>
-    }) => updatePreset(presetId, data),
-    onSuccess: (_, { presetId }) => {
-      queryClient.invalidateQueries({ queryKey: ["presets"] })
-      queryClient.invalidateQueries({ queryKey: ["preset", presetId] })
     },
   })
 }

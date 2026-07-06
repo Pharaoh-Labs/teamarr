@@ -1,12 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   getSettings,
-  getDispatcharrSettings,
   updateDispatcharrSettings,
   testDispatcharrConnection,
   getDispatcharrStatus,
   getDispatcharrEPGSources,
-  getLifecycleSettings,
   updateLifecycleSettings,
   getSchedulerSettings,
   updateSchedulerSettings,
@@ -15,15 +13,12 @@ import {
   updateEPGSettings,
   getDurationSettings,
   updateDurationSettings,
-  getReconciliationSettings,
-  updateReconciliationSettings,
   getDisplaySettings,
   updateDisplaySettings,
   getTeamFilterSettings,
   updateTeamFilterSettings,
   getExceptionKeywords,
   createExceptionKeyword,
-  updateExceptionKeyword,
   deleteExceptionKeyword,
   getChannelNumberingSettings,
   updateChannelNumberingSettings,
@@ -55,7 +50,6 @@ import type {
   SchedulerSettingsUpdate,
   EPGSettings,
   DurationSettings,
-  ReconciliationSettings,
   DisplaySettings,
   TeamFilterSettingsUpdate,
   ChannelNumberingSettingsUpdate,
@@ -71,13 +65,6 @@ export function useSettings() {
   return useQuery({
     queryKey: ["settings"],
     queryFn: getSettings,
-  })
-}
-
-export function useDispatcharrSettings() {
-  return useQuery({
-    queryKey: ["settings", "dispatcharr"],
-    queryFn: getDispatcharrSettings,
   })
 }
 
@@ -114,13 +101,6 @@ export function useDispatcharrEPGSources(enabled: boolean = true) {
     queryFn: getDispatcharrEPGSources,
     enabled, // Only fetch when Dispatcharr is configured
     staleTime: 60000, // 1 minute
-  })
-}
-
-export function useLifecycleSettings() {
-  return useQuery({
-    queryKey: ["settings", "lifecycle"],
-    queryFn: getLifecycleSettings,
   })
 }
 
@@ -198,24 +178,6 @@ export function useUpdateDurationSettings() {
   })
 }
 
-export function useReconciliationSettings() {
-  return useQuery({
-    queryKey: ["settings", "reconciliation"],
-    queryFn: getReconciliationSettings,
-  })
-}
-
-export function useUpdateReconciliationSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: ReconciliationSettings) =>
-      updateReconciliationSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
 
 export function useDisplaySettings() {
   return useQuery({
@@ -266,18 +228,6 @@ export function useCreateExceptionKeyword() {
   return useMutation({
     mutationFn: (data: { label: string; match_terms: string; behavior: string; enabled?: boolean }) =>
       createExceptionKeyword(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["keywords"] })
-    },
-  })
-}
-
-export function useUpdateExceptionKeyword() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<{ label: string; match_terms: string; behavior: string; enabled: boolean }> }) =>
-      updateExceptionKeyword(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["keywords"] })
     },

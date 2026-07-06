@@ -134,28 +134,3 @@ export function getMatchRanges(pattern: string, text: string): MatchRange[] {
     return []
   }
 }
-
-/**
- * Extract named group values from a match.
- * Returns a map of group name → captured value.
- */
-export function extractGroups(
-  pattern: string,
-  text: string
-): Record<string, string> {
-  const v = validateRegex(pattern)
-  if (!v.valid || !v.jsPattern) return {}
-
-  try {
-    const m = new RegExp(v.jsPattern, "i").exec(text)
-    if (!m?.groups) return {}
-
-    const result: Record<string, string> = {}
-    for (const [name, value] of Object.entries(m.groups)) {
-      if (value != null) result[name] = value
-    }
-    return result
-  } catch {
-    return {}
-  }
-}

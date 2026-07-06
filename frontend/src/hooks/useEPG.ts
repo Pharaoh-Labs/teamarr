@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
-  generateTeamEpg,
   getStats,
   getRecentRuns,
   getCacheStatus,
@@ -10,7 +9,6 @@ import {
   getGameDataCacheStats,
   clearGameDataCache,
 } from "@/api/epg"
-import type { EPGGenerateRequest } from "@/api/epg"
 import { clearAllMatchCache, getMatchCacheStats } from "@/api/groups"
 import { statsApi } from "@/api/stats"
 
@@ -35,19 +33,6 @@ export function useCacheStatus() {
     queryKey: ["cacheStatus"],
     queryFn: getCacheStatus,
     refetchInterval: 10000, // Check cache status every 10s
-  })
-}
-
-export function useGenerateTeamEpg() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (request?: EPGGenerateRequest) => generateTeamEpg(request),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stats"] })
-      queryClient.invalidateQueries({ queryKey: ["runs"] })
-      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
-    },
   })
 }
 

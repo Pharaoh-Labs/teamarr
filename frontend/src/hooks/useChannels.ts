@@ -2,9 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   listManagedChannels,
   deleteManagedChannel,
-  syncLifecycle,
   getReconciliationStatus,
-  runReconciliation,
   getPendingDeletions,
 } from "@/api/channels"
 
@@ -27,33 +25,10 @@ export function useDeleteManagedChannel() {
   })
 }
 
-export function useSyncLifecycle() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: syncLifecycle,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
-    },
-  })
-}
-
 export function useReconciliationStatus() {
   return useQuery({
     queryKey: ["reconciliationStatus"],
     queryFn: () => getReconciliationStatus(),
-  })
-}
-
-export function useRunReconciliation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (autoFix: boolean) => runReconciliation(autoFix),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
-      queryClient.invalidateQueries({ queryKey: ["reconciliationStatus"] })
-    },
   })
 }
 
