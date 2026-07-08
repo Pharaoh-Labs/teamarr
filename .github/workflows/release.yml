@@ -41,9 +41,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          # Query the API directly so DRAFT releases count too — a pending
+          # draft from the Cut Release workflow must not be clobbered by an
+          # auto-generated fallback release.
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' | grep -qx "$GITHUB_REF_NAME"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Release $GITHUB_REF_NAME already exists (manual /release flow) — skipping"
+            echo "Release $GITHUB_REF_NAME already exists (manual /release or Cut Release flow) — skipping"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
