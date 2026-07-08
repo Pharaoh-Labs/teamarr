@@ -10,6 +10,7 @@ from .models import (
     EmbyConnectionTestResponse,
     EmbySettingsModel,
     EmbySettingsUpdate,
+    to_model,
     unmask_or_skip,
 )
 
@@ -24,13 +25,7 @@ def get_emby_settings():
     with get_db() as conn:
         settings = get_emby_settings(conn)
 
-    return EmbySettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        api_key=settings.api_key,
-    )
+    return to_model(EmbySettingsModel, settings)
 
 
 @router.put("/settings/emby", response_model=EmbySettingsModel)
@@ -54,13 +49,7 @@ def update_emby_settings(update: EmbySettingsUpdate):
     with get_db() as conn:
         settings = get_emby_settings(conn)
 
-    return EmbySettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        api_key=settings.api_key,
-    )
+    return to_model(EmbySettingsModel, settings)
 
 
 @router.post("/emby/test", response_model=EmbyConnectionTestResponse)

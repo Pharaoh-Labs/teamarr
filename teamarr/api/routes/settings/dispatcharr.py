@@ -11,6 +11,7 @@ from .models import (
     ConnectionTestResponse,
     DispatcharrSettingsModel,
     DispatcharrSettingsUpdate,
+    to_model,
     unmask_or_skip,
 )
 
@@ -25,18 +26,7 @@ def get_dispatcharr_settings():
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
 
-    return DispatcharrSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        epg_id=settings.epg_id,
-        default_channel_profile_ids=settings.default_channel_profile_ids,
-        default_stream_profile_id=settings.default_stream_profile_id,
-        default_channel_group_id=settings.default_channel_group_id,
-        default_channel_group_mode=settings.default_channel_group_mode,
-        cleanup_unused_logos=settings.cleanup_unused_logos,
-    )
+    return to_model(DispatcharrSettingsModel, settings)
 
 
 @router.put("/settings/dispatcharr", response_model=DispatcharrSettingsModel)
@@ -73,18 +63,7 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
 
-    return DispatcharrSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        epg_id=settings.epg_id,
-        default_channel_profile_ids=settings.default_channel_profile_ids,
-        default_stream_profile_id=settings.default_stream_profile_id,
-        default_channel_group_id=settings.default_channel_group_id,
-        default_channel_group_mode=settings.default_channel_group_mode,
-        cleanup_unused_logos=settings.cleanup_unused_logos,
-    )
+    return to_model(DispatcharrSettingsModel, settings)
 
 
 @router.post("/dispatcharr/test", response_model=ConnectionTestResponse)

@@ -3,13 +3,25 @@
 All request/response models for settings endpoints.
 """
 
-from typing import Any
+from dataclasses import asdict
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
 # Sentinel value for masked secrets in API responses.
 # Update handlers should treat this as "unchanged" (skip update).
 MASKED_SECRET = "********"
+
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def to_model(model_cls: type[_ModelT], settings_obj: Any) -> _ModelT:
+    """Build an API model from a settings dataclass.
+
+    Field names match by construction (guarded by tests/test_settings_registry.py);
+    dataclass fields the model doesn't expose are ignored.
+    """
+    return model_cls(**asdict(settings_obj))
 
 
 def unmask_or_skip(value: str | None) -> str | None:

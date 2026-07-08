@@ -8,6 +8,7 @@ from teamarr.database.channel_numbers import arm_channel_relayout, get_global_ch
 from .models import (
     ChannelNumberingSettingsModel,
     ChannelNumberingSettingsUpdate,
+    to_model,
 )
 
 router = APIRouter()
@@ -15,19 +16,6 @@ router = APIRouter()
 VALID_CHANNEL_MODES = {"auto", "manual"}
 VALID_CONSOLIDATION_MODES = {"consolidate", "separate"}
 VALID_STABILITY_MODES = {"compact", "gap", "strict"}
-
-
-def _to_model(settings) -> ChannelNumberingSettingsModel:
-    return ChannelNumberingSettingsModel(
-        global_channel_mode=settings.global_channel_mode,
-        league_channel_starts=settings.league_channel_starts,
-        global_consolidation_mode=settings.global_consolidation_mode,
-        channel_stability_mode=settings.channel_stability_mode,
-        channel_gap_size=settings.channel_gap_size,
-        channel_daily_reset_enabled=settings.channel_daily_reset_enabled,
-        channel_daily_reset_time=settings.channel_daily_reset_time,
-        force_channel_relayout_pending=settings.force_channel_relayout_pending,
-    )
 
 
 @router.get("/settings/channel-numbering", response_model=ChannelNumberingSettingsModel)
@@ -38,7 +26,7 @@ def get_channel_numbering_settings():
     with get_db() as conn:
         settings = get_channel_numbering_settings(conn)
 
-    return _to_model(settings)
+    return to_model(ChannelNumberingSettingsModel, settings)
 
 
 @router.put("/settings/channel-numbering", response_model=ChannelNumberingSettingsModel)
@@ -98,7 +86,7 @@ def update_channel_numbering_settings(update: ChannelNumberingSettingsUpdate):
     with get_db() as conn:
         settings = get_channel_numbering_settings(conn)
 
-    return _to_model(settings)
+    return to_model(ChannelNumberingSettingsModel, settings)
 
 
 @router.post(
@@ -131,7 +119,7 @@ def request_channel_relayout():
     with get_db() as conn:
         settings = get_channel_numbering_settings(conn)
 
-    return _to_model(settings)
+    return to_model(ChannelNumberingSettingsModel, settings)
 
 
 def _valid_hhmm(value: str) -> bool:

@@ -20,6 +20,7 @@ from .models import (
     ReconciliationSettingsModel,
     TSDBKeyValidationRequest,
     TSDBKeyValidationResponse,
+    to_model,
     unmask_or_skip,
 )
 
@@ -76,15 +77,7 @@ def get_reconciliation_settings():
     with get_db() as conn:
         settings = get_all_settings(conn)
 
-    return ReconciliationSettingsModel(
-        reconcile_on_epg_generation=settings.reconciliation.reconcile_on_epg_generation,
-        reconcile_on_startup=settings.reconciliation.reconcile_on_startup,
-        auto_fix_orphan_teamarr=settings.reconciliation.auto_fix_orphan_teamarr,
-        auto_fix_orphan_dispatcharr=settings.reconciliation.auto_fix_orphan_dispatcharr,
-        auto_fix_duplicates=settings.reconciliation.auto_fix_duplicates,
-        default_duplicate_event_handling=settings.reconciliation.default_duplicate_event_handling,
-        channel_history_retention_days=settings.reconciliation.channel_history_retention_days,
-    )
+    return to_model(ReconciliationSettingsModel, settings.reconciliation)
 
 
 @router.put("/settings/reconciliation", response_model=ReconciliationSettingsModel)
@@ -103,29 +96,12 @@ def update_reconciliation_settings(update: ReconciliationSettingsModel):
         )
 
     with get_db() as conn:
-        update_reconciliation_settings(
-            conn,
-            reconcile_on_epg_generation=update.reconcile_on_epg_generation,
-            reconcile_on_startup=update.reconcile_on_startup,
-            auto_fix_orphan_teamarr=update.auto_fix_orphan_teamarr,
-            auto_fix_orphan_dispatcharr=update.auto_fix_orphan_dispatcharr,
-            auto_fix_duplicates=update.auto_fix_duplicates,
-            default_duplicate_event_handling=update.default_duplicate_event_handling,
-            channel_history_retention_days=update.channel_history_retention_days,
-        )
+        update_reconciliation_settings(conn, **update.model_dump())
 
     with get_db() as conn:
         settings = get_all_settings(conn)
 
-    return ReconciliationSettingsModel(
-        reconcile_on_epg_generation=settings.reconciliation.reconcile_on_epg_generation,
-        reconcile_on_startup=settings.reconciliation.reconcile_on_startup,
-        auto_fix_orphan_teamarr=settings.reconciliation.auto_fix_orphan_teamarr,
-        auto_fix_orphan_dispatcharr=settings.reconciliation.auto_fix_orphan_dispatcharr,
-        auto_fix_duplicates=settings.reconciliation.auto_fix_duplicates,
-        default_duplicate_event_handling=settings.reconciliation.default_duplicate_event_handling,
-        channel_history_retention_days=settings.reconciliation.channel_history_retention_days,
-    )
+    return to_model(ReconciliationSettingsModel, settings.reconciliation)
 
 
 # =============================================================================
@@ -140,14 +116,7 @@ def get_display_settings():
     with get_db() as conn:
         settings = get_all_settings(conn)
 
-    return DisplaySettingsModel(
-        time_format=settings.display.time_format,
-        show_timezone=settings.display.show_timezone,
-        channel_id_format=settings.display.channel_id_format,
-        xmltv_generator_name=settings.display.xmltv_generator_name,
-        xmltv_generator_url=settings.display.xmltv_generator_url,
-        tsdb_api_key=settings.display.tsdb_api_key,
-    )
+    return to_model(DisplaySettingsModel, settings.display)
 
 
 @router.put("/settings/display", response_model=DisplaySettingsModel)
@@ -190,14 +159,7 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
     with get_db() as conn:
         settings = get_all_settings(conn)
 
-    return DisplaySettingsModel(
-        time_format=settings.display.time_format,
-        show_timezone=settings.display.show_timezone,
-        channel_id_format=settings.display.channel_id_format,
-        xmltv_generator_name=settings.display.xmltv_generator_name,
-        xmltv_generator_url=settings.display.xmltv_generator_url,
-        tsdb_api_key=settings.display.tsdb_api_key,
-    )
+    return to_model(DisplaySettingsModel, settings.display)
 
 
 # =============================================================================

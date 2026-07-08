@@ -256,6 +256,11 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
 
+**Settings Registry** (`teamarr/database/settings/`, bead `teamarrv2-iua3.8`):
+- Each setting is declared once: a typed dataclass field in `types.py` plus a column/JSON/hook binding in `registry.py` (`GROUPS`). `read.py` and `update.py` are generic (registry-driven); group-specific behavior (validation, relayout arming, clear-to-NULL, `_NOT_PROVIDED` sentinels) lives in the update wrappers — public signatures are stable, don't change them without auditing callers.
+- Adding a setting: add the column to `schema.sql` + the field to its dataclass; touch `registry.py` only if the column name differs from the field name or it needs JSON/custom parse/dump hooks. Parity tests (`tests/test_settings_registry.py`) enforce schema ↔ registry ↔ dataclass ↔ Pydantic alignment.
+- API routes build responses with `to_model(Model, dataclass)` from `api/routes/settings/models.py`; frontend hooks are factory-generated with scoped cache invalidation (`frontend/src/hooks/useSettings.ts`).
+
 **Dynamic Groups** (`teamarr/consumers/lifecycle/dynamic_resolver.py`):
 - `{sport}` and `{league}` wildcards
 - Auto-creates in Dispatcharr

@@ -155,5 +155,5 @@ The allocator respects:
 | `teamarr/database/schema.sql` | Authoritative schema for fresh installs |
 | `teamarr/database/connection.py` | Connection manager, startup orchestration |
 | `teamarr/database/migrations/` | Pre-migrations (`pre.py`) + versioned migrations (`versioned.py`) |
-| `teamarr/database/settings.py` | Settings with typed dataclasses |
+| `teamarr/database/settings/` | Settings package: typed dataclasses (`types.py`), declarative field registry mapping each field to its DB column and serialization (`registry.py`), registry-driven readers (`read.py`) and updaters (`update.py`) |
 | `teamarr/database/channel_numbers.py` | Numbering algorithm |

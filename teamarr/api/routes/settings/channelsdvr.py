@@ -13,6 +13,7 @@ from .models import (
     ChannelsDVRSettingsModel,
     ChannelsDVRSettingsUpdate,
     ChannelsDVRSourcesResponse,
+    to_model,
 )
 
 router = APIRouter()
@@ -26,12 +27,7 @@ def get_channelsdvr_settings():
     with get_db() as conn:
         settings = get_channelsdvr_settings(conn)
 
-    return ChannelsDVRSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        source_name=settings.source_name,
-        lineup_id=settings.lineup_id,
-    )
+    return to_model(ChannelsDVRSettingsModel, settings)
 
 
 @router.put("/settings/channelsdvr", response_model=ChannelsDVRSettingsModel)
@@ -43,23 +39,12 @@ def update_channelsdvr_settings(update: ChannelsDVRSettingsUpdate):
     )
 
     with get_db() as conn:
-        update_channelsdvr_settings(
-            conn,
-            enabled=update.enabled,
-            url=update.url,
-            source_name=update.source_name,
-            lineup_id=update.lineup_id,
-        )
+        update_channelsdvr_settings(conn, **update.model_dump())
 
     with get_db() as conn:
         settings = get_channelsdvr_settings(conn)
 
-    return ChannelsDVRSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        source_name=settings.source_name,
-        lineup_id=settings.lineup_id,
-    )
+    return to_model(ChannelsDVRSettingsModel, settings)
 
 
 @router.post("/channelsdvr/test", response_model=ChannelsDVRConnectionTestResponse)

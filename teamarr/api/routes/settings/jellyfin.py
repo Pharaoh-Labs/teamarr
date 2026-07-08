@@ -10,6 +10,7 @@ from .models import (
     JellyfinConnectionTestResponse,
     JellyfinSettingsModel,
     JellyfinSettingsUpdate,
+    to_model,
     unmask_or_skip,
 )
 
@@ -24,13 +25,7 @@ def get_jellyfin_settings():
     with get_db() as conn:
         settings = get_jellyfin_settings(conn)
 
-    return JellyfinSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        api_key=settings.api_key,
-    )
+    return to_model(JellyfinSettingsModel, settings)
 
 
 @router.put("/settings/jellyfin", response_model=JellyfinSettingsModel)
@@ -54,13 +49,7 @@ def update_jellyfin_settings(update: JellyfinSettingsUpdate):
     with get_db() as conn:
         settings = get_jellyfin_settings(conn)
 
-    return JellyfinSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        api_key=settings.api_key,
-    )
+    return to_model(JellyfinSettingsModel, settings)
 
 
 @router.post("/jellyfin/test", response_model=JellyfinConnectionTestResponse)

@@ -11,6 +11,7 @@ from .models import (
     UpdateCheckSettingsModel,
     UpdateCheckSettingsUpdate,
     UpdateInfoModel,
+    to_model,
 )
 
 router = APIRouter()
@@ -29,15 +30,7 @@ def get_update_check_settings():
     with get_db() as conn:
         settings = get_update_check_settings(conn)
 
-    return UpdateCheckSettingsModel(
-        enabled=settings.enabled,
-        notify_stable=settings.notify_stable,
-        notify_dev=settings.notify_dev,
-        github_owner=settings.github_owner,
-        github_repo=settings.github_repo,
-        dev_branch=settings.dev_branch,
-        auto_detect_branch=settings.auto_detect_branch,
-    )
+    return to_model(UpdateCheckSettingsModel, settings)
 
 
 @router.put("/settings/update-check", response_model=UpdateCheckSettingsModel)
@@ -48,29 +41,12 @@ def update_update_check_settings(update: UpdateCheckSettingsUpdate):
     )
 
     with get_db() as conn:
-        db_update(
-            conn,
-            enabled=update.enabled,
-            notify_stable=update.notify_stable,
-            notify_dev=update.notify_dev,
-            github_owner=update.github_owner,
-            github_repo=update.github_repo,
-            dev_branch=update.dev_branch,
-            auto_detect_branch=update.auto_detect_branch,
-        )
+        db_update(conn, **update.model_dump())
 
     with get_db() as conn:
         settings = get_update_check_settings(conn)
 
-    return UpdateCheckSettingsModel(
-        enabled=settings.enabled,
-        notify_stable=settings.notify_stable,
-        notify_dev=settings.notify_dev,
-        github_owner=settings.github_owner,
-        github_repo=settings.github_repo,
-        dev_branch=settings.dev_branch,
-        auto_detect_branch=settings.auto_detect_branch,
-    )
+    return to_model(UpdateCheckSettingsModel, settings)
 
 
 # =============================================================================

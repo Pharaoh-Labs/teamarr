@@ -6,9 +6,9 @@ from teamarr.database import get_db
 from teamarr.database.settings.types import NO_VALUE_RULE_TYPES, VALID_RULE_TYPES
 
 from .models import (
-    StreamOrderingRuleModel,
     StreamOrderingSettingsModel,
     StreamOrderingSettingsUpdate,
+    to_model,
 )
 
 router = APIRouter()
@@ -27,16 +27,7 @@ def get_stream_ordering_settings():
     with get_db() as conn:
         settings = get_stream_ordering_settings(conn)
 
-    return StreamOrderingSettingsModel(
-        rules=[
-            StreamOrderingRuleModel(
-                type=rule.type,
-                value=rule.value,
-                priority=rule.priority,
-            )
-            for rule in settings.rules
-        ]
-    )
+    return to_model(StreamOrderingSettingsModel, settings)
 
 
 @router.put("/settings/stream-ordering", response_model=StreamOrderingSettingsModel)
@@ -93,13 +84,4 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
     with get_db() as conn:
         settings = get_stream_ordering_settings(conn)
 
-    return StreamOrderingSettingsModel(
-        rules=[
-            StreamOrderingRuleModel(
-                type=rule.type,
-                value=rule.value,
-                priority=rule.priority,
-            )
-            for rule in settings.rules
-        ]
-    )
+    return to_model(StreamOrderingSettingsModel, settings)

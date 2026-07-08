@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query"
 import {
   getSettings,
   updateDispatcharrSettings,
@@ -44,48 +44,158 @@ import {
   getChannelsDVRSources,
   getChannelsDVRLineups,
 } from "@/api/settings"
-import type {
-  DispatcharrSettings,
-  LifecycleSettings,
-  SchedulerSettingsUpdate,
-  EPGSettings,
-  DurationSettings,
-  DisplaySettings,
-  TeamFilterSettingsUpdate,
-  ChannelNumberingSettingsUpdate,
-  StreamOrderingSettingsUpdate,
-  UpdateCheckSettingsUpdate,
-  FeedSeparationSettingsUpdate,
-  EmbySettings,
-  JellyfinSettings,
-  ChannelsDVRSettings,
-} from "@/api/settings"
+
+// ---------------------------------------------------------------------------
+// Factories
+//
+// Every settings group gets a query hook keyed ["settings", <scope>] and a
+// mutation hook with SCOPED invalidation: the all-settings query (exact) plus
+// the group's own scoped query and any listed dependents — not the whole
+// ["settings"] prefix tree, so saving one group no longer refetches them all.
+// ---------------------------------------------------------------------------
+
+const SETTINGS_ROOT: QueryKey = ["settings"]
+
+function settingsQueryHook<T>(scope: string, queryFn: () => Promise<T>) {
+  return function useSettingsGroupQuery() {
+    return useQuery({ queryKey: ["settings", scope], queryFn })
+  }
+}
+
+function settingsMutationHook<TData, TVariables>(
+  mutationFn: (variables: TVariables) => Promise<TData>,
+  invalidates: QueryKey[] = [],
+) {
+  return function useSettingsGroupMutation() {
+    const queryClient = useQueryClient()
+    return useMutation({
+      mutationFn,
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: SETTINGS_ROOT, exact: true })
+        for (const key of invalidates) {
+          queryClient.invalidateQueries({ queryKey: key })
+        }
+      },
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// All settings
+// ---------------------------------------------------------------------------
 
 export function useSettings() {
   return useQuery({
-    queryKey: ["settings"],
+    queryKey: SETTINGS_ROOT,
     queryFn: getSettings,
   })
 }
 
-export function useUpdateDispatcharrSettings() {
-  const queryClient = useQueryClient()
+// ---------------------------------------------------------------------------
+// Settings groups (query + mutation pairs)
+// ---------------------------------------------------------------------------
 
-  return useMutation({
-    mutationFn: (data: Partial<DispatcharrSettings>) =>
-      updateDispatcharrSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
+export const useUpdateDispatcharrSettings = settingsMutationHook(updateDispatcharrSettings)
+
+// Lifecycle range changes can arm a channel re-grid (force_channel_relayout_pending)
+export const useUpdateLifecycleSettings = settingsMutationHook(updateLifecycleSettings, [
+  ["settings", "channel-numbering"],
+])
+
+export const useSchedulerSettings = settingsQueryHook("scheduler", getSchedulerSettings)
+export const useUpdateSchedulerSettings = settingsMutationHook(updateSchedulerSettings, [
+  ["settings", "scheduler"],
+  ["scheduler"],
+])
+
+export const useEPGSettings = settingsQueryHook("epg", getEPGSettings)
+export const useUpdateEPGSettings = settingsMutationHook(updateEPGSettings, [["settings", "epg"]])
+
+export const useDurationSettings = settingsQueryHook("durations", getDurationSettings)
+export const useUpdateDurationSettings = settingsMutationHook(updateDurationSettings, [
+  ["settings", "durations"],
+])
+
+export const useDisplaySettings = settingsQueryHook("display", getDisplaySettings)
+export const useUpdateDisplaySettings = settingsMutationHook(updateDisplaySettings, [
+  ["settings", "display"],
+])
+
+export const useTeamFilterSettings = settingsQueryHook("team-filter", getTeamFilterSettings)
+export const useUpdateTeamFilterSettings = settingsMutationHook(updateTeamFilterSettings, [
+  ["settings", "team-filter"],
+])
+
+export const useChannelNumberingSettings = settingsQueryHook(
+  "channel-numbering",
+  getChannelNumberingSettings,
+)
+export const useUpdateChannelNumberingSettings = settingsMutationHook(
+  updateChannelNumberingSettings,
+  [["settings", "channel-numbering"]],
+)
+
+export const useStreamOrderingSettings = settingsQueryHook(
+  "stream-ordering",
+  getStreamOrderingSettings,
+)
+export const useUpdateStreamOrderingSettings = settingsMutationHook(updateStreamOrderingSettings, [
+  ["settings", "stream-ordering"],
+])
+
+export const useUpdateCheckSettings = settingsQueryHook("update-check", getUpdateCheckSettings)
+export const useUpdateUpdateCheckSettings = settingsMutationHook(updateUpdateCheckSettings, [
+  ["settings", "update-check"],
+])
+
+export const useFeedSeparationSettings = settingsQueryHook(
+  "feed-separation",
+  getFeedSeparationSettings,
+)
+export const useUpdateFeedSeparationSettings = settingsMutationHook(updateFeedSeparationSettings, [
+  ["settings", "feed-separation"],
+])
+
+export const useEmbySettings = settingsQueryHook("emby", getEmbySettings)
+export const useUpdateEmbySettings = settingsMutationHook(updateEmbySettings, [
+  ["settings", "emby"],
+])
+
+export const useJellyfinSettings = settingsQueryHook("jellyfin", getJellyfinSettings)
+export const useUpdateJellyfinSettings = settingsMutationHook(updateJellyfinSettings, [
+  ["settings", "jellyfin"],
+])
+
+export const useChannelsDVRSettings = settingsQueryHook("channelsdvr", getChannelsDVRSettings)
+export const useUpdateChannelsDVRSettings = settingsMutationHook(updateChannelsDVRSettings, [
+  ["settings", "channelsdvr"],
+  ["channelsdvr", "sources"],
+  ["channelsdvr", "lineups"],
+])
+
+// ---------------------------------------------------------------------------
+// Connection tests (no cache interaction)
+// ---------------------------------------------------------------------------
 
 export function useTestDispatcharrConnection() {
-  return useMutation({
-    mutationFn: (data?: { url?: string; username?: string; password?: string }) =>
-      testDispatcharrConnection(data),
-  })
+  return useMutation({ mutationFn: testDispatcharrConnection })
 }
+
+export function useTestEmbyConnection() {
+  return useMutation({ mutationFn: testEmbyConnection })
+}
+
+export function useTestJellyfinConnection() {
+  return useMutation({ mutationFn: testJellyfinConnection })
+}
+
+export function useTestChannelsDVRConnection() {
+  return useMutation({ mutationFn: testChannelsDVRConnection })
+}
+
+// ---------------------------------------------------------------------------
+// Status / discovery queries
+// ---------------------------------------------------------------------------
 
 export function useDispatcharrStatus() {
   return useQuery({
@@ -104,36 +214,6 @@ export function useDispatcharrEPGSources(enabled: boolean = true) {
   })
 }
 
-export function useUpdateLifecycleSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: LifecycleSettings) => updateLifecycleSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useSchedulerSettings() {
-  return useQuery({
-    queryKey: ["settings", "scheduler"],
-    queryFn: getSchedulerSettings,
-  })
-}
-
-export function useUpdateSchedulerSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: SchedulerSettingsUpdate) => updateSchedulerSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-      queryClient.invalidateQueries({ queryKey: ["scheduler"] })
-    },
-  })
-}
-
 export function useSchedulerStatus() {
   return useQuery({
     queryKey: ["scheduler", "status"],
@@ -142,78 +222,55 @@ export function useSchedulerStatus() {
   })
 }
 
-export function useEPGSettings() {
+export function useChannelsDVRSources(url: string | null | undefined) {
   return useQuery({
-    queryKey: ["settings", "epg"],
-    queryFn: getEPGSettings,
+    queryKey: ["channelsdvr", "sources", url ?? ""],
+    queryFn: () => getChannelsDVRSources(url ?? undefined),
+    enabled: !!url,
+    retry: false,
+    staleTime: 30_000,
   })
 }
 
-export function useUpdateEPGSettings() {
+export function useChannelsDVRLineups(url: string | null | undefined) {
+  return useQuery({
+    queryKey: ["channelsdvr", "lineups", url ?? ""],
+    queryFn: () => getChannelsDVRLineups(url ?? undefined),
+    enabled: !!url,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Update checks
+// ---------------------------------------------------------------------------
+
+export function useCheckForUpdates(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["updates", "check"],
+    queryFn: () => checkForUpdates(false),
+    enabled,
+    staleTime: 1000 * 60 * 60, // 1 hour (matches backend cache)
+    refetchInterval: 1000 * 60 * 60, // Refetch every hour
+    refetchOnWindowFocus: false, // Don't spam GitHub API
+  })
+}
+
+export function useForceCheckForUpdates() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: EPGSettings) => updateEPGSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
+    mutationFn: () => checkForUpdates(true),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["updates", "check"], data)
     },
   })
 }
 
-export function useDurationSettings() {
-  return useQuery({
-    queryKey: ["settings", "durations"],
-    queryFn: getDurationSettings,
-  })
-}
-
-export function useUpdateDurationSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: DurationSettings) => updateDurationSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-
-export function useDisplaySettings() {
-  return useQuery({
-    queryKey: ["settings", "display"],
-    queryFn: getDisplaySettings,
-  })
-}
-
-export function useUpdateDisplaySettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: DisplaySettings) => updateDisplaySettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useTeamFilterSettings() {
-  return useQuery({
-    queryKey: ["settings", "team-filter"],
-    queryFn: getTeamFilterSettings,
-  })
-}
-
-export function useUpdateTeamFilterSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: TeamFilterSettingsUpdate) => updateTeamFilterSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
+// ---------------------------------------------------------------------------
+// Exception keywords
+// ---------------------------------------------------------------------------
 
 export function useExceptionKeywords(includeDisabled: boolean = false) {
   return useQuery({
@@ -245,103 +302,9 @@ export function useDeleteExceptionKeyword() {
   })
 }
 
-export function useChannelNumberingSettings() {
-  return useQuery({
-    queryKey: ["settings", "channel-numbering"],
-    queryFn: getChannelNumberingSettings,
-  })
-}
-
-export function useUpdateChannelNumberingSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: ChannelNumberingSettingsUpdate) =>
-      updateChannelNumberingSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useStreamOrderingSettings() {
-  return useQuery({
-    queryKey: ["settings", "stream-ordering"],
-    queryFn: getStreamOrderingSettings,
-  })
-}
-
-export function useUpdateStreamOrderingSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: StreamOrderingSettingsUpdate) =>
-      updateStreamOrderingSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useUpdateCheckSettings() {
-  return useQuery({
-    queryKey: ["settings", "update-check"],
-    queryFn: getUpdateCheckSettings,
-  })
-}
-
-export function useUpdateUpdateCheckSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: UpdateCheckSettingsUpdate) =>
-      updateUpdateCheckSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useCheckForUpdates(enabled: boolean = true) {
-  return useQuery({
-    queryKey: ["updates", "check"],
-    queryFn: () => checkForUpdates(false),
-    enabled,
-    staleTime: 1000 * 60 * 60, // 1 hour (matches backend cache)
-    refetchInterval: 1000 * 60 * 60, // Refetch every hour
-    refetchOnWindowFocus: false, // Don't spam GitHub API
-  })
-}
-
-export function useForceCheckForUpdates() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: () => checkForUpdates(true),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["updates", "check"], data)
-    },
-  })
-}
-
-export function useFeedSeparationSettings() {
-  return useQuery({
-    queryKey: ["settings", "feed-separation"],
-    queryFn: getFeedSeparationSettings,
-  })
-}
-
-export function useUpdateFeedSeparationSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: FeedSeparationSettingsUpdate) =>
-      updateFeedSeparationSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
+// ---------------------------------------------------------------------------
+// Per-league channel configs
+// ---------------------------------------------------------------------------
 
 export function useLeagueConfigs() {
   return useQuery({
@@ -376,108 +339,5 @@ export function useDeleteLeagueConfig() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["league-configs"] })
     },
-  })
-}
-
-// Emby Settings Hooks
-export function useEmbySettings() {
-  return useQuery({
-    queryKey: ["settings", "emby"],
-    queryFn: getEmbySettings,
-  })
-}
-
-export function useUpdateEmbySettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: Partial<EmbySettings>) =>
-      updateEmbySettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useTestEmbyConnection() {
-  return useMutation({
-    mutationFn: (data?: { url?: string; username?: string; password?: string; api_key?: string }) =>
-      testEmbyConnection(data),
-  })
-}
-
-// Jellyfin Settings Hooks
-export function useJellyfinSettings() {
-  return useQuery({
-    queryKey: ["settings", "jellyfin"],
-    queryFn: getJellyfinSettings,
-  })
-}
-
-export function useUpdateJellyfinSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: Partial<JellyfinSettings>) =>
-      updateJellyfinSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-    },
-  })
-}
-
-export function useTestJellyfinConnection() {
-  return useMutation({
-    mutationFn: (data?: { url?: string; username?: string; password?: string; api_key?: string }) =>
-      testJellyfinConnection(data),
-  })
-}
-
-// Channels DVR Settings Hooks
-export function useChannelsDVRSettings() {
-  return useQuery({
-    queryKey: ["settings", "channelsdvr"],
-    queryFn: getChannelsDVRSettings,
-  })
-}
-
-export function useUpdateChannelsDVRSettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: Partial<ChannelsDVRSettings>) =>
-      updateChannelsDVRSettings(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] })
-      queryClient.invalidateQueries({ queryKey: ["channelsdvr", "sources"] })
-      queryClient.invalidateQueries({ queryKey: ["channelsdvr", "lineups"] })
-    },
-  })
-}
-
-export function useTestChannelsDVRConnection() {
-  return useMutation({
-    mutationFn: (data?: { url?: string; source_name?: string }) =>
-      testChannelsDVRConnection(data),
-  })
-}
-
-export function useChannelsDVRSources(url: string | null | undefined) {
-  return useQuery({
-    queryKey: ["channelsdvr", "sources", url ?? ""],
-    queryFn: () => getChannelsDVRSources(url ?? undefined),
-    enabled: !!url,
-    retry: false,
-    staleTime: 30_000,
-  })
-}
-
-export function useChannelsDVRLineups(url: string | null | undefined) {
-  return useQuery({
-    queryKey: ["channelsdvr", "lineups", url ?? ""],
-    queryFn: () => getChannelsDVRLineups(url ?? undefined),
-    enabled: !!url,
-    retry: false,
-    staleTime: 30_000,
   })
 }
