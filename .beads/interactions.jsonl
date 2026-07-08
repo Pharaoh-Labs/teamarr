@@ -397,3 +397,5 @@
 {"id":"int-a69e2de2","kind":"field_change","created_at":"2026-07-08T20:04:51.938837775Z","actor":"egyptiangio","issue_id":"teamarrv2-12oz","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-841d13a9","kind":"field_change","created_at":"2026-07-08T20:16:25.407760721Z","actor":"egyptiangio","issue_id":"teamarrv2-0jiz","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-73094183","kind":"field_change","created_at":"2026-07-08T20:26:22.234415298Z","actor":"egyptiangio","issue_id":"teamarrv2-0jiz","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-1814c563","kind":"field_change","created_at":"2026-07-08T20:51:37.871727593Z","actor":"egyptiangio","issue_id":"teamarrv2-ylap","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-e4a7790e","kind":"field_change","created_at":"2026-07-08T20:59:40.657940422Z","actor":"egyptiangio","issue_id":"teamarrv2-ylap","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
