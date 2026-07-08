@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react"
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { StickyActionBar } from "@/components/ui/sticky-action-bar"
@@ -374,6 +374,182 @@ function getSyncStatusBadge(status: string) {
   }
 }
 
+interface ChannelRowProps {
+  channel: ManagedChannel
+  expanded: boolean
+  selected: boolean
+  streams: ChannelStreamEntry[] | undefined
+  loading: boolean
+  isGenerating: boolean
+  sportLabel: string
+  leagueLabel: string
+  groupTitle: string | undefined
+  onToggleExpand: (id: number) => void
+  onToggleSelect: (id: number) => void
+  onDelete: (channel: ManagedChannel) => void
+}
+
+// Memoized so per-row state changes (expand, select) don't re-render the whole
+// table. All callbacks passed in are identity-stable.
+const ChannelRow = React.memo(function ChannelRow({
+  channel,
+  expanded,
+  selected,
+  streams,
+  loading,
+  isGenerating,
+  sportLabel,
+  leagueLabel,
+  groupTitle,
+  onToggleExpand,
+  onToggleSelect,
+  onDelete,
+}: ChannelRowProps) {
+  return (
+    <>
+      <TableRow className={expanded ? "border-b-0" : ""}>
+        <TableCell className="px-1">
+          <button
+            onClick={() => onToggleExpand(channel.id)}
+            className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
+            aria-label={expanded ? "Collapse" : "Expand"}
+          >
+            {expanded
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />}
+          </button>
+        </TableCell>
+        <TableCell>
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect(channel.id)}
+          />
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            {channel.logo_url && (
+              <img
+                src={channel.logo_url}
+                alt=""
+                className="h-6 w-6 object-contain"
+              />
+            )}
+            <div>
+              <div className="font-medium">{channel.channel_name}</div>
+              <div className="text-xs text-muted-foreground">
+                {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
+                {channel.tvg_id}
+              </div>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell>
+          <div className="max-w-xs">
+            <div className="truncate text-sm">
+              {channel.home_team || channel.away_team
+                ? `${channel.away_team ?? ""} @ ${channel.home_team ?? ""}`
+                : channel.event_name ?? "-"}
+            </div>
+            {channel.event_date && (
+              <div className="text-xs text-muted-foreground">
+                {new Date(channel.event_date).toLocaleString(undefined, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </div>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-sm truncate" title={groupTitle}>
+          {sportLabel}
+        </TableCell>
+        <TableCell>
+          <Badge variant="secondary" className="text-xs">{leagueLabel}</Badge>
+        </TableCell>
+        <TableCell>{getSyncStatusBadge(channel.sync_status)}</TableCell>
+        <TableCell className="text-muted-foreground">
+          {formatRelativeTime(channel.scheduled_delete_at)}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(channel)}
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        </TableCell>
+        <TableCell></TableCell>
+      </TableRow>
+      {expanded && (
+        <TableRow className="hover:bg-transparent border-b border-border/40">
+          <TableCell colSpan={10} className="p-0 pb-2">
+            <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
+            {loading ? (
+              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Loading streams…
+              </div>
+            ) : (streams ?? []).length === 0 ? (
+              <p className="text-xs text-muted-foreground py-1">No active streams.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <colgroup>
+                  <col className="w-[28%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[6%]" />
+                  <col className="w-[22%]" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Stream</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Sort</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
+                      <span className="inline-flex items-center gap-1">
+                        Stats
+                        <RichTooltip
+                          content="External stream stats (resolution, bitrate, fps, etc.) populated by Dispatcharr's stream probe. Only present once Dispatcharr has probed the stream."
+                          side="top"
+                        >
+                          <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                        </RichTooltip>
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(streams ?? []).map((stream) => (
+                    <tr key={stream.dispatcharr_stream_id} className="border-t border-border/30">
+                      <td className="py-1 pr-4 font-medium">{stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}</td>
+                      <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
+                      <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
+                      <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
+                      <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} generating={isGenerating} /></td>
+                      <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  )
+})
+
 export function ManagedChannelsTable() {
   // Filter states
   const [nameFilter, setNameFilter] = useState<string>("")
@@ -524,7 +700,7 @@ export function ManagedChannelsTable() {
   })
 
   // Fetch (or refetch) the stream detail for one channel into local state.
-  const fetchStreams = async (channelId: number) => {
+  const fetchStreams = useCallback(async (channelId: number) => {
     setLoadingStreams((prev) => new Set(prev).add(channelId))
     try {
       const data = await getChannelStreams(channelId)
@@ -534,27 +710,33 @@ export function ManagedChannelsTable() {
     } finally {
       setLoadingStreams((prev) => { const s = new Set(prev); s.delete(channelId); return s })
     }
-  }
+  }, [])
 
-  const handleToggleExpand = async (channelId: number) => {
-    const next = new Set(expandedChannels)
-    if (next.has(channelId)) {
-      next.delete(channelId)
-      setExpandedChannels(next)
-      return
+  // Refs so handleToggleExpand can stay identity-stable for the memo'd rows.
+  const channelStreamsRef = useRef(channelStreams)
+  channelStreamsRef.current = channelStreams
+  const expandedRef = useRef(expandedChannels)
+  expandedRef.current = expandedChannels
+
+  const handleToggleExpand = useCallback((channelId: number) => {
+    setExpandedChannels((prev) => {
+      const next = new Set(prev)
+      if (next.has(channelId)) {
+        next.delete(channelId)
+      } else {
+        next.add(channelId)
+      }
+      return next
+    })
+    // Opening (wasn't expanded before) with no cached detail → fetch.
+    if (!expandedRef.current.has(channelId) && !channelStreamsRef.current.has(channelId)) {
+      fetchStreams(channelId)
     }
-    next.add(channelId)
-    setExpandedChannels(next)
-    if (!channelStreams.has(channelId)) {
-      await fetchStreams(channelId)
-    }
-  }
+  }, [fetchStreams])
 
   // When a generation run finishes, stream priorities/membership may have
   // changed. Refresh the channels list and any expanded stream tables so the
   // priority spinners resolve to the new ordering.
-  const expandedRef = useRef(expandedChannels)
-  expandedRef.current = expandedChannels
   const wasGeneratingRef = useRef(isGenerating)
   useEffect(() => {
     if (wasGeneratingRef.current && !isGenerating) {
@@ -777,147 +959,21 @@ export function ManagedChannelsTable() {
                     </TableCell>
                   </TableRow>
                 ) : filteredChannels.map((channel) => (
-                  <React.Fragment key={channel.id}>
-                  <TableRow className={expandedChannels.has(channel.id) ? "border-b-0" : ""}>
-                    <TableCell className="px-1">
-                      <button
-                        onClick={() => handleToggleExpand(channel.id)}
-                        className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
-                        aria-label={expandedChannels.has(channel.id) ? "Collapse" : "Expand"}
-                      >
-                        {expandedChannels.has(channel.id)
-                          ? <ChevronDown className="h-4 w-4" />
-                          : <ChevronRight className="h-4 w-4" />}
-                      </button>
-                    </TableCell>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(channel.id)}
-                        onCheckedChange={() => toggleSelect(channel.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {channel.logo_url && (
-                          <img
-                            src={channel.logo_url}
-                            alt=""
-                            className="h-6 w-6 object-contain"
-                          />
-                        )}
-                        <div>
-                          <div className="font-medium">{channel.channel_name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
-                            {channel.tvg_id}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="max-w-xs">
-                        <div className="truncate text-sm">
-                          {channel.home_team || channel.away_team
-                            ? `${channel.away_team ?? ""} @ ${channel.home_team ?? ""}`
-                            : channel.event_name ?? "-"}
-                        </div>
-                        {channel.event_date && (
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(channel.event_date).toLocaleString(undefined, {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm truncate" title={channel.event_epg_group_id ? groupLookup.get(channel.event_epg_group_id) : undefined}>
-                      {channel.sport ? getSportDisplayName(channel.sport, sportsMap) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs">{getLeagueDisplay(channel.league)}</Badge>
-                    </TableCell>
-                    <TableCell>{getSyncStatusBadge(channel.sync_status)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatRelativeTime(channel.scheduled_delete_at)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteConfirm(channel)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                  {expandedChannels.has(channel.id) && (
-                    <TableRow className="hover:bg-transparent border-b border-border/40">
-                      <TableCell colSpan={10} className="p-0 pb-2">
-                        <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
-                        {loadingStreams.has(channel.id) ? (
-                          <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Loading streams…
-                          </div>
-                        ) : (channelStreams.get(channel.id) ?? []).length === 0 ? (
-                          <p className="text-xs text-muted-foreground py-1">No active streams.</p>
-                        ) : (
-                          <table className="w-full text-xs">
-                            <colgroup>
-                              <col className="w-[28%]" />
-                              <col className="w-[18%]" />
-                              <col className="w-[16%]" />
-                              <col className="w-[10%]" />
-                              <col className="w-[6%]" />
-                              <col className="w-[22%]" />
-                            </colgroup>
-                            <thead>
-                              <tr>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Stream</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Sort</th>
-                                <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
-                                  <span className="inline-flex items-center gap-1">
-                                    Stats
-                                    <RichTooltip
-                                      content="External stream stats (resolution, bitrate, fps, etc.) populated by Dispatcharr's stream probe. Only present once Dispatcharr has probed the stream."
-                                      side="top"
-                                    >
-                                      <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
-                                    </RichTooltip>
-                                  </span>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(channelStreams.get(channel.id) ?? []).map((stream) => (
-                                <tr key={stream.dispatcharr_stream_id} className="border-t border-border/30">
-                                  <td className="py-1 pr-4 font-medium">{stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}</td>
-                                  <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
-                                  <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
-                                  <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
-                                  <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} generating={isGenerating} /></td>
-                                  <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  </React.Fragment>
+                  <ChannelRow
+                    key={channel.id}
+                    channel={channel}
+                    expanded={expandedChannels.has(channel.id)}
+                    selected={selectedIds.has(channel.id)}
+                    streams={channelStreams.get(channel.id)}
+                    loading={loadingStreams.has(channel.id)}
+                    isGenerating={isGenerating}
+                    sportLabel={channel.sport ? getSportDisplayName(channel.sport, sportsMap) : "-"}
+                    leagueLabel={getLeagueDisplay(channel.league)}
+                    groupTitle={channel.event_epg_group_id ? groupLookup.get(channel.event_epg_group_id) : undefined}
+                    onToggleExpand={handleToggleExpand}
+                    onToggleSelect={toggleSelect}
+                    onDelete={setDeleteConfirm}
+                  />
                 ))}
               </TableBody>
             </Table>
