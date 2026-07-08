@@ -173,6 +173,11 @@ class BaseHTTPClient:
                 logger.warning(
                     "[%s] HTTP %d for %s", self.LOG_TAG, e.response.status_code, url
                 )
+                # 4xx is deterministic (429 is handled before raise_for_status),
+                # so retrying just repeats the identical failure — only 5xx gets
+                # the retry/backoff treatment (#282).
+                if e.response.status_code < 500:
+                    return None
                 if attempt < self._retry_count - 1:
                     time.sleep(self._calculate_delay(attempt))
                     continue
