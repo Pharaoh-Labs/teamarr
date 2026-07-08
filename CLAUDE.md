@@ -52,34 +52,45 @@ bd close <id>                         # Complete work
 bd sync                               # Sync beads data
 ```
 
-## Development Workflow
+## Development Workflow (issue-first — MANDATORY)
 
-**Critical:** Work from `dev` branch, not `main`.
+**Nothing gets implemented without a GitHub issue.** Every feature, bug fix, and refactor — including internally-discovered work — follows this lifecycle. No coding straight onto `dev`.
 
-### Development Steps
+### The Lifecycle: issue → bead → claim → branch → dev → release
 
-1. **Check for work**: `bd ready` or `bd list`
-2. **Claim work**: `bd update <id> --status in_progress`
-3. **Implement the change**
-4. **Review docs impact** (MANDATORY consideration — not every change needs doc updates, but every change must be *evaluated* against the Documentation Updates table below). If the change touches user-visible behavior, template variables, schema, providers, config, API endpoints, or changes a count/version referenced in docs, update the relevant page(s) in the same commit or a paired commit. Do not wait for the user to prompt.
-5. **Run quality gates** (MANDATORY when shipping):
+1. **Issue first** — `gh issue create` (or an existing community issue). Applies to internal work too. *Sole exception:* trivial bookkeeping (beads sync, typo, one-line doc fix) may batch under a standing "Housekeeping" issue for the release cycle instead of individual issues.
+2. **Bead it** — `bd create` referencing the issue: put `(#NNN)` in the bead title. Larger features get an epic + child beads (see Roadmap & Feature Planning). Comment the bead id on the issue so the two stay linked.
+3. **Claim** — `bd update <id> --status in_progress` BEFORE writing code.
+4. **Branch** — from up-to-date dev:
+   ```bash
+   git checkout dev && git pull
+   git checkout -b <type>/<issue#>-<slug>    # type ∈ feat|fix|refactor|chore|docs
+   ```
+5. **Implement on the branch** — code, then docs-impact evaluation (MANDATORY — check every change against the Documentation Updates table below; doc updates ship in the same branch), then quality gates (MANDATORY):
    ```bash
    ruff check teamarr/ tests/
    pytest tests/ -v
    cd frontend && npm run build
    ```
-6. **Close the bead**: `bd close <id>`
-7. **Push to dev** (MANDATORY):
+6. **Merge to dev when happy** — gates green on the branch first:
    ```bash
-   git add <changed-files>
-   git commit -m "Brief description"
-   git push origin dev
+   git checkout dev && git pull && git merge <branch> --no-ff
+   git push origin dev && git branch -d <branch>
    ```
+   Then: comment the dev-land hash on the issue (**keep the issue open** — it closes at release), close the bead.
+7. **Release to main in batches** — `dev → main` happens ONLY via the Release Workflow below. **Release triggers** (any one): a user-facing regression fix is waiting on dev · ~2–3 weeks since the last release · dev is ≥25 commits ahead of main. Dev must never again pile up 100+ unreleased commits.
+8. **At release** — close every "fixed on dev" issue with the release link.
 
-**Critical shipping rules:**
-- Work is incomplete until `git push` succeeds
-- Never stop before pushing—it leaves work stranded locally
-- Never say "ready to push when you are"—YOU must push
+### Inbound community PRs
+
+- Triage every new PR promptly: comment with an assessment and expected timeline.
+- Review-ready PRs get attention **before** starting new self-initiated work.
+- Merge via GitHub when possible; take-and-fix with credit when conflicts force it. Always credit contributors in the changelog (`— thanks @user (#PR)`).
+
+### Session rules
+
+- **Start:** `git checkout dev && git pull` · `bd ready` · `gh pr list` (triage anything new).
+- **End:** everything committed AND pushed (work is incomplete until push succeeds — never stop before pushing, never say "ready to push when you are"); report whether dev currently meets a release trigger.
 
 ### Roadmap & Feature Planning
 

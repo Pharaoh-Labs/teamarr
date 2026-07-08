@@ -391,3 +391,4 @@
 {"id":"int-fc9f9e56","kind":"field_change","created_at":"2026-07-08T18:06:25.693388442Z","actor":"egyptiangio","issue_id":"teamarrv2-3qyp","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-5ae1d50f","kind":"field_change","created_at":"2026-07-08T18:30:33.456206327Z","actor":"egyptiangio","issue_id":"teamarrv2-sg9m","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-50d629cd","kind":"field_change","created_at":"2026-07-08T18:45:31.419521241Z","actor":"egyptiangio","issue_id":"teamarrv2-sg9m","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-a4ab3182","kind":"field_change","created_at":"2026-07-08T19:20:14.98284859Z","actor":"egyptiangio","issue_id":"teamarrv2-n2fs","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
