@@ -443,11 +443,19 @@ def get_current_stats(conn: Connection) -> dict:
     ).fetchone()
     last_run = last_run_row["completed_at"] if last_run_row else None
 
+    # Lifetime accumulator: sums of full-EPG runs already pruned from
+    # processing_runs (folded by cleanup_old_runs/clear_all_runs). Live sums
+    # above only cover the retention window; totals below report both.
+    lifetime = conn.execute("SELECT * FROM lifetime_stats WHERE id = 1").fetchone()
+
+    def _lt(key: str) -> int:
+        return (lifetime[key] if lifetime else 0) or 0
+
     # Return structure matching frontend StatsResponse interface
     return {
-        "total_runs": overall["total_runs"] or 0,
-        "successful_runs": overall["successful"] or 0,
-        "failed_runs": overall["failed"] or 0,
+        "total_runs": (overall["total_runs"] or 0) + _lt("runs"),
+        "successful_runs": (overall["successful"] or 0) + _lt("successful_runs"),
+        "failed_runs": (overall["failed"] or 0) + _lt("failed_runs"),
         "last_24h": {
             "runs": last_24h["runs"] or 0,
             "successful": last_24h["runs"] or 0,  # Approximate
@@ -457,30 +465,107 @@ def get_current_stats(conn: Connection) -> dict:
             "channels_created": last_24h["channels"] or 0,
         },
         "totals": {
-            "programmes_generated": overall["total_programmes"] or 0,
-            "streams_matched": overall["total_matched"] or 0,
-            "streams_unmatched": overall["total_unmatched"] or 0,
-            "streams_cached": overall["total_cached"] or 0,
-            "channels_created": overall["total_channels_created"] or 0,
-            "channels_deleted": overall["total_channels_deleted"] or 0,
+            "programmes_generated": (overall["total_programmes"] or 0)
+            + _lt("programmes_total"),
+            "streams_matched": (overall["total_matched"] or 0) + _lt("streams_matched"),
+            "streams_unmatched": (overall["total_unmatched"] or 0) + _lt("streams_unmatched"),
+            "streams_cached": (overall["total_cached"] or 0) + _lt("streams_cached"),
+            "channels_created": (overall["total_channels_created"] or 0)
+            + _lt("channels_created"),
+            "channels_deleted": (overall["total_channels_deleted"] or 0)
+            + _lt("channels_deleted"),
         },
         "by_type": {k: v["runs"] for k, v in by_type.items()},
+        # Average over the retention window only (folded runs keep no durations)
         "avg_duration_ms": int(overall["avg_duration"] or 0),
         "last_run": last_run,
     }
 
 
 
+def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = ()) -> None:
+    """Accumulate full-EPG run sums into lifetime_stats before rows are deleted.
+
+    Only run_type='full_epg' rows are folded, matching the filter
+    get_current_stats uses for its totals.
+    """
+    condition = f"run_type = 'full_epg' AND ({where})" if where else "run_type = 'full_epg'"
+    row = conn.execute(
+        f"""
+        SELECT
+            COUNT(*) as runs,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(streams_matched) as matched,
+            SUM(streams_unmatched) as unmatched,
+            SUM(streams_cached) as cached,
+            SUM(channels_created) as created,
+            SUM(channels_deleted) as deleted,
+            SUM(programmes_total) as programmes,
+            SUM(programmes_events) as events,
+            SUM(programmes_pregame) as pregame,
+            SUM(programmes_postgame) as postgame,
+            SUM(programmes_idle) as idle
+        FROM processing_runs WHERE {condition}
+        """,
+        params,
+    ).fetchone()
+    if not row or not row["runs"]:
+        return
+
+    conn.execute("INSERT OR IGNORE INTO lifetime_stats (id) VALUES (1)")
+    conn.execute(
+        """
+        UPDATE lifetime_stats SET
+            runs = runs + ?,
+            successful_runs = successful_runs + ?,
+            failed_runs = failed_runs + ?,
+            streams_matched = streams_matched + ?,
+            streams_unmatched = streams_unmatched + ?,
+            streams_cached = streams_cached + ?,
+            channels_created = channels_created + ?,
+            channels_deleted = channels_deleted + ?,
+            programmes_total = programmes_total + ?,
+            programmes_events = programmes_events + ?,
+            programmes_pregame = programmes_pregame + ?,
+            programmes_postgame = programmes_postgame + ?,
+            programmes_idle = programmes_idle + ?
+        WHERE id = 1
+        """,
+        (
+            row["runs"] or 0,
+            row["successful"] or 0,
+            row["failed"] or 0,
+            row["matched"] or 0,
+            row["unmatched"] or 0,
+            row["cached"] or 0,
+            row["created"] or 0,
+            row["deleted"] or 0,
+            row["programmes"] or 0,
+            row["events"] or 0,
+            row["pregame"] or 0,
+            row["postgame"] or 0,
+            row["idle"] or 0,
+        ),
+    )
+
+
 def cleanup_old_runs(conn: Connection, days: int = 30) -> int:
-    """Delete processing runs older than specified days."""
+    """Delete processing runs older than specified days.
+
+    Full-EPG run sums are folded into lifetime_stats first so all-time
+    totals survive the rolling retention window.
+    """
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    _fold_runs_into_lifetime(conn, "created_at < ?", (cutoff,))
     cursor = conn.execute("DELETE FROM processing_runs WHERE created_at < ?", (cutoff,))
     conn.commit()
     return cursor.rowcount
 
 
 def clear_all_runs(conn: Connection) -> int:
-    """Delete all processing runs."""
+    """Delete all processing runs (lifetime totals are preserved via fold)."""
+    _fold_runs_into_lifetime(conn)
     cursor = conn.execute("DELETE FROM processing_runs")
     conn.commit()
     return cursor.rowcount

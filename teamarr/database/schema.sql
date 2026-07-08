@@ -1711,6 +1711,35 @@ CREATE INDEX IF NOT EXISTS idx_processing_runs_type_created ON processing_runs(r
 
 
 -- =============================================================================
+-- LIFETIME_STATS TABLE
+-- Singleton accumulator for all-time full-EPG generation totals.
+-- processing_runs is pruned to a rolling window (cleanup_old_runs) and can be
+-- cleared from the UI, so lifetime totals cannot be derived from it. Instead,
+-- cleanup_old_runs/clear_all_runs fold the sums of full_epg rows into this row
+-- BEFORE deleting them; get_current_stats reports lifetime + live.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS lifetime_stats (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    runs INTEGER DEFAULT 0,
+    successful_runs INTEGER DEFAULT 0,
+    failed_runs INTEGER DEFAULT 0,
+    streams_matched INTEGER DEFAULT 0,
+    streams_unmatched INTEGER DEFAULT 0,
+    streams_cached INTEGER DEFAULT 0,
+    channels_created INTEGER DEFAULT 0,
+    channels_deleted INTEGER DEFAULT 0,
+    programmes_total INTEGER DEFAULT 0,
+    programmes_events INTEGER DEFAULT 0,
+    programmes_pregame INTEGER DEFAULT 0,
+    programmes_postgame INTEGER DEFAULT 0,
+    programmes_idle INTEGER DEFAULT 0
+);
+
+INSERT OR IGNORE INTO lifetime_stats (id) VALUES (1);
+
+
+-- =============================================================================
 -- STATS_SNAPSHOTS TABLE
 -- Periodic snapshots of aggregate stats (for dashboards)
 -- =============================================================================

@@ -60,3 +60,5 @@ The EPG URL itself lives in the status strip up top.
 ## All-Time Totals
 
 A compact, de-emphasized footer shows lifetime totals: generations, programmes, streams matched, channels created, channels deleted, cache hits, and average run time.
+
+These totals are genuinely all-time: before old run records are pruned from the run history (or cleared via **Clear Runs**), their sums are folded into a lifetime accumulator, so the totals keep growing across the retention window. Only full EPG generations count — scoped runs (single-team refreshes, event-group sub-runs) are excluded. Average run time reflects the retained run window only. Totals recorded before v2.8.0 that had already been pruned could not be recovered, so the accumulator starts from the run history present at upgrade.
