@@ -58,6 +58,8 @@ import {
 import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
+import { useRowSelection } from "@/hooks/useRowSelection"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useGenerationProgress } from "@/contexts/GenerationContext"
 
 function formatDateTime(dateStr: string | null): string {
@@ -401,7 +403,6 @@ export function ManagedChannelsTable() {
 
   // UI states
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [orphansModalOpen, setOrphansModalOpen] = useState(false)
   const [deletingOrphanId, setDeletingOrphanId] = useState<number | null>(null)
@@ -524,6 +525,14 @@ export function ManagedChannelsTable() {
     }
     return channels
   }, [channelsData, nameFilter, sportFilter, leagueFilter, statusFilter])
+
+  const {
+    selectedIds,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+    isAllSelected,
+    setSelectedIds,
+  } = useRowSelection(filteredChannels)
 
   // Mutation for deleting orphan channel
   const deleteOrphanMutation = useMutation({
@@ -690,30 +699,6 @@ export function ManagedChannelsTable() {
   const handleBulkDelete = () => {
     bulkDeleteMutation.mutate(Array.from(selectedIds))
   }
-
-  // Selection handlers
-  const toggleSelect = (id: number) => {
-    const newSet = new Set(selectedIds)
-    if (newSet.has(id)) {
-      newSet.delete(id)
-    } else {
-      newSet.add(id)
-    }
-    setSelectedIds(newSet)
-  }
-
-  const toggleSelectAll = () => {
-    if (filteredChannels.length === 0) return
-    if (selectedIds.size === filteredChannels.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filteredChannels.map((c) => c.id)))
-    }
-  }
-
-  const isAllSelected =
-    filteredChannels.length > 0 &&
-    selectedIds.size === filteredChannels.length
 
   if (error) {
     return (
@@ -1131,64 +1116,26 @@ export function ManagedChannelsTable() {
       )}
 
       {/* Delete Confirmation */}
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirm !== null}
         onOpenChange={(open) => !open && setDeleteConfirm(null)}
-      >
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Channel</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm?.channel_name}"? This will
-              also remove it from Dispatcharr if configured.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete Channel"
+        description={`Are you sure you want to delete "${deleteConfirm?.channel_name}"? This will also remove it from Dispatcharr if configured.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Bulk Delete Confirmation */}
-      <Dialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
-        <DialogContent onClose={() => setBulkDeleteConfirm(false)}>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Channels</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} channel
-              {selectedIds.size > 1 ? "s" : ""}? This will also remove them from
-              Dispatcharr if configured.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDeleteConfirm(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={bulkDeleteMutation.isPending}
-            >
-              {bulkDeleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete All
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={bulkDeleteConfirm}
+        onOpenChange={setBulkDeleteConfirm}
+        title={`Delete ${selectedIds.size} Channels`}
+        description={`Are you sure you want to delete ${selectedIds.size} channel${selectedIds.size > 1 ? "s" : ""}? This will also remove them from Dispatcharr if configured.`}
+        confirmLabel="Delete All"
+        isPending={bulkDeleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+      />
 
       {/* Find Orphans Modal */}
       <Dialog open={orphansModalOpen} onOpenChange={setOrphansModalOpen}>

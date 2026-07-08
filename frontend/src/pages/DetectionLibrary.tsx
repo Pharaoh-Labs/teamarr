@@ -15,6 +15,7 @@ import { EpgMatchingSettings, EventLookaheadSetting } from "@/components/EventMa
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Switch } from "@/components/ui/switch"
 import { ResponsiveTable, type ResponsiveColumn } from "@/components/ui/responsive-table"
 import {
@@ -948,60 +949,26 @@ export function DetectionLibrary() {
       </Dialog>
 
       {/* Delete Keyword Confirmation */}
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirm !== null}
         onOpenChange={(open) => !open && setDeleteConfirm(null)}
-      >
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Keyword</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm?.keyword}"? This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete Keyword"
+        description={`Are you sure you want to delete "${deleteConfirm?.keyword}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Delete Alias Confirmation */}
-      <Dialog
+      <ConfirmDialog
         open={deleteAliasConfirm !== null}
         onOpenChange={(open) => !open && setDeleteAliasConfirm(null)}
-      >
-        <DialogContent onClose={() => setDeleteAliasConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Alias</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete alias "{deleteAliasConfirm?.alias}"? This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteAliasConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAlias}
-              disabled={deleteAliasMutation.isPending}
-            >
-              {deleteAliasMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete Alias"
+        description={`Are you sure you want to delete alias "${deleteAliasConfirm?.alias}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        isPending={deleteAliasMutation.isPending}
+        onConfirm={handleDeleteAlias}
+      />
     </div>
   )
 }

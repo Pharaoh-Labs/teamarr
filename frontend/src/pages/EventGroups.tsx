@@ -41,6 +41,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { FilterSelect } from "@/components/ui/filter-select"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useTableSort } from "@/hooks/useTableSort"
+import { useRowSelection } from "@/hooks/useRowSelection"
 import { Input } from "@/components/ui/input"
 import {
   useBulkUpdateGroups,
@@ -64,6 +67,15 @@ import { getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
 const getDisplayName = (group: EventGroup) => group.display_name || group.name
+
+const SORT_COMPARATORS = {
+  name: (a: EventGroup, b: EventGroup) => getDisplayName(a).localeCompare(getDisplayName(b)),
+  matched: (a: EventGroup, b: EventGroup) => (a.matched_count || 0) - (b.matched_count || 0),
+  status: (a: EventGroup, b: EventGroup) => (a.enabled ? 1 : 0) - (b.enabled ? 1 : 0),
+}
+
+const BY_SORT_ORDER = (a: EventGroup, b: EventGroup) =>
+  (a.sort_order ?? 0) - (b.sort_order ?? 0)
 
 export function EventGroups() {
   const navigate = useNavigate()
@@ -100,9 +112,6 @@ export function EventGroups() {
   const [clearCacheConfirm, setClearCacheConfirm] = useState<EventGroup | null>(null)
   const [showBulkClearCache, setShowBulkClearCache] = useState(false)
 
-  // Selection state
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-
   // Filter state
   const [nameFilter, setNameFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | "enabled" | "disabled">("")
@@ -126,40 +135,6 @@ export function EventGroups() {
   const [bulkEditTeamStreams, setBulkEditTeamStreams] = useState(false)
   const [bulkEditEPGMatchEnabled, setBulkEditEPGMatchEnabled] = useState(false)
   const [bulkEditEPGMatch, setBulkEditEPGMatch] = useState(false)
-  // Column sorting state
-  type SortColumn = "name" | "matched" | "status" | null
-  type SortDirection = "asc" | "desc"
-  const [sortColumn, setSortColumn] = useState<SortColumn>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
-
-  // Handle column sort (3-click cycle: asc → desc → reset to sort_order)
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      if (sortDirection === "asc") {
-        setSortDirection("desc")
-      } else {
-        // Third click: reset to default sort_order
-        setSortColumn(null)
-        setSortDirection("asc")
-      }
-    } else {
-      setSortColumn(column)
-      setSortDirection("asc")
-    }
-  }
-
-  const isDndActive = sortColumn === null
-
-  // Sort icon component
-  const SortIcon = ({ column }: { column: SortColumn }) => {
-    if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />
-    return sortDirection === "asc" ? (
-      <ArrowUp className="h-3 w-3 ml-1" />
-    ) : (
-      <ArrowDown className="h-3 w-3 ml-1" />
-    )
-  }
-
   // Filter groups
   const filteredGroups = useMemo(() => {
     if (!data?.groups) return []
@@ -172,30 +147,34 @@ export function EventGroups() {
     })
   }, [data?.groups, nameFilter, statusFilter])
 
-  // Apply column sorting when a column header is clicked, default to sort_order
-  const sortedGroups = useMemo(() => {
-    if (!sortColumn) {
-      return [...filteredGroups].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    }
+  // Column sort: 3-click cycle (asc → desc → reset to persisted sort_order).
+  // DnD reordering is only active while unsorted.
+  const { sortColumn, sortDirection, handleSort, clearSort, sortedRows: sortedGroups } =
+    useTableSort<EventGroup, "name" | "matched" | "status">({
+      rows: filteredGroups,
+      comparators: SORT_COMPARATORS,
+      cycleToNull: true,
+      defaultCompare: BY_SORT_ORDER,
+    })
 
-    const sortFn = (a: EventGroup, b: EventGroup) => {
-      let cmp = 0
-      switch (sortColumn) {
-        case "name":
-          cmp = getDisplayName(a).localeCompare(getDisplayName(b))
-          break
-        case "matched":
-          cmp = (a.matched_count || 0) - (b.matched_count || 0)
-          break
-        case "status":
-          cmp = (a.enabled ? 1 : 0) - (b.enabled ? 1 : 0)
-          break
-      }
-      return sortDirection === "asc" ? cmp : -cmp
-    }
+  const isDndActive = sortColumn === null
 
-    return [...filteredGroups].sort(sortFn)
-  }, [filteredGroups, sortColumn, sortDirection])
+  // Sort icon component
+  const SortIcon = ({ column }: { column: "name" | "matched" | "status" }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-3 w-3 ml-1" />
+    ) : (
+      <ArrowDown className="h-3 w-3 ml-1" />
+    )
+  }
+
+  const {
+    selectedIds,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+    setSelectedIds,
+  } = useRowSelection(sortedGroups)
 
   // Overall match rate (shared definition via useMatchRate)
   const matchRate = useMatchRate()
@@ -331,27 +310,6 @@ export function EventGroups() {
   const handleDragEnd = () => {
     setDraggedGroupId(null)
     setDragOverGroupId(null)
-  }
-
-  // Selection handlers
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === sortedGroups.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(sortedGroups.map((g) => g.id)))
-    }
   }
 
   // Bulk actions
@@ -650,7 +608,7 @@ export function EventGroups() {
                         variant="ghost"
                         size="sm"
                         className="h-5 px-1.5 text-xs"
-                        onClick={() => { setSortColumn(null); setSortDirection("asc") }}
+                        onClick={clearSort}
                         title="Reset to priority order"
                       >
                         <RotateCcw className="h-3 w-3 mr-1" />
@@ -938,93 +896,39 @@ export function EventGroups() {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirm !== null}
         onOpenChange={(open) => !open && setDeleteConfirm(null)}
-      >
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Stream Source</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm ? getDisplayName(deleteConfirm) : ''}"? This will
-              also delete all {deleteConfirm?.channel_count ?? 0} managed
-              channels associated with this stream source.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete Stream Source"
+        description={`Are you sure you want to delete "${deleteConfirm ? getDisplayName(deleteConfirm) : ""}"? This will also delete all ${deleteConfirm?.channel_count ?? 0} managed channels associated with this stream source.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Clear Cache Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={clearCacheConfirm !== null}
         onOpenChange={(open) => !open && setClearCacheConfirm(null)}
-      >
-        <DialogContent onClose={() => setClearCacheConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Clear Match Cache</DialogTitle>
-            <DialogDescription>
-              Clear the stream match cache for "{clearCacheConfirm ? getDisplayName(clearCacheConfirm) : ''}"?
-              This will force re-matching on the next EPG generation run.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearCacheConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => clearCacheConfirm && handleClearCache(clearCacheConfirm)}
-              disabled={clearCacheMutation.isPending}
-            >
-              {clearCacheMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Clear Cache
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Clear Match Cache"
+        description={`Clear the stream match cache for "${clearCacheConfirm ? getDisplayName(clearCacheConfirm) : ""}"? This will force re-matching on the next EPG generation run.`}
+        confirmLabel="Clear Cache"
+        confirmVariant="default"
+        isPending={clearCacheMutation.isPending}
+        onConfirm={() => clearCacheConfirm && handleClearCache(clearCacheConfirm)}
+      />
 
       {/* Bulk Clear Cache Confirmation Dialog */}
-      <Dialog open={showBulkClearCache} onOpenChange={setShowBulkClearCache}>
-        <DialogContent onClose={() => setShowBulkClearCache(false)}>
-          <DialogHeader>
-            <DialogTitle>Clear Match Cache for {selectedIds.size} Stream Sources</DialogTitle>
-            <DialogDescription>
-              Clear the stream match cache for {selectedIds.size} selected stream sources?
-              This will force re-matching on the next EPG generation run.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkClearCache(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkClearCache}
-              disabled={clearCachesBulkMutation.isPending}
-            >
-              {clearCachesBulkMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Clear Cache for {selectedIds.size} Stream Sources
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showBulkClearCache}
+        onOpenChange={setShowBulkClearCache}
+        title={`Clear Match Cache for ${selectedIds.size} Stream Sources`}
+        description={`Clear the stream match cache for ${selectedIds.size} selected stream sources? This will force re-matching on the next EPG generation run.`}
+        confirmLabel={`Clear Cache for ${selectedIds.size} Stream Sources`}
+        confirmVariant="default"
+        isPending={clearCachesBulkMutation.isPending}
+        onConfirm={handleBulkClearCache}
+      />
 
       {/* Bulk Edit Dialog */}
       <Dialog open={showBulkEdit} onOpenChange={(open) => {
@@ -1245,56 +1149,26 @@ export function EventGroups() {
       </Dialog>
 
       {/* Bulk Delete Confirmation Dialog */}
-      <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
-        <DialogContent onClose={() => setShowBulkDelete(false)}>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Stream Sources</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} stream sources? This will
-              also delete all managed channels associated with them.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete {selectedIds.size} Groups
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showBulkDelete}
+        onOpenChange={setShowBulkDelete}
+        title={`Delete ${selectedIds.size} Stream Sources`}
+        description={`Are you sure you want to delete ${selectedIds.size} stream sources? This will also delete all managed channels associated with them.`}
+        confirmLabel={`Delete ${selectedIds.size} Groups`}
+        isPending={deleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+      />
 
       {/* Delete-all-stale confirmation */}
-      <Dialog open={showStaleDelete} onOpenChange={setShowStaleDelete}>
-        <DialogContent onClose={() => setShowStaleDelete(false)}>
-          <DialogHeader>
-            <DialogTitle>
-              Delete {staleGroups.length} stale source{staleGroups.length === 1 ? "" : "s"}
-            </DialogTitle>
-            <DialogDescription>
-              These sources&apos; M3U groups no longer exist in Dispatcharr. Deleting them also
-              removes their managed channels. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStaleDelete(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteAllStale} disabled={deletingStale}>
-              {deletingStale && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete all stale
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showStaleDelete}
+        onOpenChange={setShowStaleDelete}
+        title={`Delete ${staleGroups.length} stale source${staleGroups.length === 1 ? "" : "s"}`}
+        description="These sources' M3U groups no longer exist in Dispatcharr. Deleting them also removes their managed channels. This cannot be undone."
+        confirmLabel="Delete all stale"
+        isPending={deletingStale}
+        onConfirm={handleDeleteAllStale}
+      />
 
       {/* Stream Preview Modal */}
       <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>

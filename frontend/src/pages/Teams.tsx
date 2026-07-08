@@ -15,6 +15,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Alert } from "@/components/ui/alert"
 import { TeamEpgSettingsCard } from "@/components/TeamEpgSettingsCard"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useTableSort } from "@/hooks/useTableSort"
+import { useRowSelection } from "@/hooks/useRowSelection"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -52,8 +55,15 @@ import { statsApi } from "@/api/stats"
 import { useQuery } from "@tanstack/react-query"
 
 type ActiveFilter = "" | "active" | "inactive"
-type SortColumn = "team" | "league" | "sport" | "template" | "channel" | "status" | null
-type SortDirection = "asc" | "desc"
+type SortColumn = "team" | "league" | "sport" | "template" | "channel" | "status"
+
+const byString = (get: (t: Team) => string) => (a: Team, b: Team) => {
+  const x = get(a).toLowerCase()
+  const y = get(b).toLowerCase()
+  if (x < y) return -1
+  if (x > y) return 1
+  return 0
+}
 
 interface TeamUpdate {
   team_name?: string
@@ -211,13 +221,7 @@ export function Teams() {
   const [templateFilter, setTemplateFilter] = useState<string>("")
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("")
 
-  // Sorting state
-  const [sortColumn, setSortColumn] = useState<SortColumn>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
-
   // Bulk selection state
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
   const [bulkTemplateId, setBulkTemplateId] = useState<number | null>(null)
   const [showBulkTemplate, setShowBulkTemplate] = useState(false)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
@@ -275,12 +279,26 @@ export function Teams() {
     }
   }, [teams])
 
-  // Filter and sort teams
-  const filteredTeams = useMemo(() => {
+  // Ascending comparator per sortable column; useTableSort negates for desc.
+  const comparators = useMemo(
+    () => ({
+      team: byString((t) => t.team_name),
+      league: byString((t) => t.primary_league),
+      sport: byString((t) => t.sport),
+      template: byString(
+        (t) => teamTemplates.find((tpl) => tpl.id === t.template_id)?.name ?? "zzz"
+      ),
+      channel: byString((t) => t.channel_id),
+      status: byString((t) => (t.active ? "active" : "inactive")),
+    }),
+    [teamTemplates]
+  )
+
+  // Filter teams
+  const matchingTeams = useMemo(() => {
     if (!teams) return []
 
-    // First filter
-    let result = teams.filter((team) => {
+    return teams.filter((team) => {
       // Name filter
       if (nameFilter && !team.team_name.toLowerCase().includes(nameFilter.toLowerCase())) return false
 
@@ -305,68 +323,23 @@ export function Teams() {
 
       return true
     })
+  }, [teams, nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter])
 
-    // Then sort
-    if (sortColumn) {
-      result = [...result].sort((a, b) => {
-        let aVal: string
-        let bVal: string
+  const { sortColumn, sortDirection, handleSort, sortedRows: filteredTeams } =
+    useTableSort<Team, SortColumn>({ rows: matchingTeams, comparators })
 
-        switch (sortColumn) {
-          case "team":
-            aVal = a.team_name.toLowerCase()
-            bVal = b.team_name.toLowerCase()
-            break
-          case "league":
-            aVal = a.primary_league.toLowerCase()
-            bVal = b.primary_league.toLowerCase()
-            break
-          case "sport":
-            aVal = a.sport.toLowerCase()
-            bVal = b.sport.toLowerCase()
-            break
-          case "template":
-            aVal = (teamTemplates.find((t) => t.id === a.template_id)?.name ?? "zzz").toLowerCase()
-            bVal = (teamTemplates.find((t) => t.id === b.template_id)?.name ?? "zzz").toLowerCase()
-            break
-          case "channel":
-            aVal = a.channel_id.toLowerCase()
-            bVal = b.channel_id.toLowerCase()
-            break
-          case "status":
-            aVal = a.active ? "active" : "inactive"
-            bVal = b.active ? "active" : "inactive"
-            break
-          default:
-            return 0
-        }
-
-        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1
-        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1
-        return 0
-      })
-    }
-
-    return result
-  }, [teams, nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter, sortColumn, sortDirection, teamTemplates])
+  const {
+    selectedIds,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+    clear: clearSelection,
+    setSelectedIds,
+  } = useRowSelection(filteredTeams)
 
   // Clear selection when filters change
   useEffect(() => {
-    setSelectedIds(new Set())
-    setLastClickedIndex(null)
-  }, [nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter])
-
-  // Handle column sort
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      // Toggle direction if same column
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-    } else {
-      // New column, start with ascending
-      setSortColumn(column)
-      setSortDirection("asc")
-    }
-  }
+    clearSelection()
+  }, [nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter, clearSelection])
 
   // Render sort icon
   const renderSortIcon = (column: SortColumn) => {
@@ -408,42 +381,6 @@ export function Teams() {
   }
 
   // Bulk actions
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredTeams.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filteredTeams.map((t) => t.id)))
-    }
-  }
-
-  const toggleSelect = (id: number, index: number, shiftKey: boolean) => {
-    if (shiftKey && lastClickedIndex !== null) {
-      // Shift-click: select range
-      const start = Math.min(lastClickedIndex, index)
-      const end = Math.max(lastClickedIndex, index)
-
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        for (let i = start; i <= end; i++) {
-          next.add(filteredTeams[i].id)
-        }
-        return next
-      })
-    } else {
-      // Regular click: toggle single item
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        if (next.has(id)) {
-          next.delete(id)
-        } else {
-          next.add(id)
-        }
-        return next
-      })
-    }
-    setLastClickedIndex(index)
-  }
-
   const handleBulkToggleActive = async (active: boolean) => {
     const ids = Array.from(selectedIds)
     let succeeded = 0
@@ -1025,25 +962,15 @@ export function Teams() {
       )}
 
       {/* Delete Confirmation */}
-      <Dialog open={deleteConfirm !== null} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Team</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm?.team_name}"? This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+        title="Delete Team"
+        description={`Are you sure you want to delete "${deleteConfirm?.team_name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Bulk Assign Template Dialog */}
       <Dialog open={showBulkTemplate} onOpenChange={setShowBulkTemplate}>
@@ -1082,30 +1009,24 @@ export function Teams() {
       </Dialog>
 
       {/* Bulk Delete Confirmation */}
-      <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
-        <DialogContent onClose={() => setShowBulkDelete(false)}>
-          <DialogHeader>
-            <DialogTitle>Delete Teams</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} team{selectedIds.size !== 1 && "s"}?
-              This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete {selectedIds.size} Team{selectedIds.size !== 1 && "s"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showBulkDelete}
+        onOpenChange={setShowBulkDelete}
+        title="Delete Teams"
+        description={
+          <>
+            Are you sure you want to delete {selectedIds.size} team
+            {selectedIds.size !== 1 && "s"}? This cannot be undone.
+          </>
+        }
+        confirmLabel={
+          <>
+            Delete {selectedIds.size} Team{selectedIds.size !== 1 && "s"}
+          </>
+        }
+        isPending={deleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+      />
 
       {/* Change Channel ID Modal */}
       <Dialog open={showBulkChannelId} onOpenChange={setShowBulkChannelId}>
