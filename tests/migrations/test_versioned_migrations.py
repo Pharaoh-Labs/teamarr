@@ -218,7 +218,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 77
+        assert row["schema_version"] == 78
 
 
 class TestV73CleansTeamCache:
@@ -412,7 +412,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 77
+        assert row["schema_version"] == 78
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 77
+        assert row["schema_version"] == 78
 
 
 # ===========================================================================
@@ -660,6 +660,10 @@ def test_idempotent_second_run_noops():
         ("https://espn.com/a.png", "http://x:3000", "https://espn.com/a.png"),
         ("", "http://x", ""),
         ("a.png", "", "a.png"),
+        # v76-corrupted "/{var}" templates rendered "/https://…" (#275) —
+        # repaired at the choke point, with and without a base configured.
+        ("/https://espn.com/a.png", "", "https://espn.com/a.png"),
+        ("/https://espn.com/a.png", "http://x:3000", "https://espn.com/a.png"),
     ],
 )
 def test_apply_art_base_url(value, base, expected):
@@ -728,16 +732,73 @@ def test_create_update_normalize_art_paths():
     from teamarr.database.templates import _normalize_art_in_kwargs
 
     kw = {
-        "program_art_url": "{league}/cover.png",
+        "program_art_url": "art/{league}/cover.png",
         "event_channel_logo_url": "https://espn.com/x.png",
         "pregame_fallback": {"art_url": "pre.png", "title": "t"},
         "name": "x",
     }
     _normalize_art_in_kwargs(kw)
-    assert kw["program_art_url"] == "/{league}/cover.png"
+    assert kw["program_art_url"] == "/art/{league}/cover.png"
     assert kw["event_channel_logo_url"] == "https://espn.com/x.png"  # absolute untouched
     assert kw["pregame_fallback"]["art_url"] == "/pre.png"
     assert kw["name"] == "x"  # non-art untouched
+
+
+def test_create_update_never_roots_variable_led_art():
+    """Variable-led art values must not get a leading slash (#275) — the
+    variable may resolve to an absolute URL. Corrupted '/{var}' input is
+    repaired on save."""
+    from teamarr.database.templates import _normalize_art_in_kwargs
+
+    kw = {
+        "program_art_url": "{feed_team_logo}",
+        "event_channel_logo_url": "/{feed_team_logo}",  # corrupted by old save path
+        "pregame_fallback": {"art_url": "{league_logo}", "title": "t"},
+    }
+    _normalize_art_in_kwargs(kw)
+    assert kw["program_art_url"] == "{feed_team_logo}"
+    assert kw["event_channel_logo_url"] == "{feed_team_logo}"  # repaired
+    assert kw["pregame_fallback"]["art_url"] == "{league_logo}"
+
+
+# --- v78: strip corrupting slash before variable-led art values (#275) ------
+
+
+def test_v78_strips_slash_before_variable_led_art():
+    from teamarr.database.migrations import _migrate_v78_strip_slash_before_art_variable
+
+    conn = _art_make_db()
+    conn.execute(
+        "INSERT INTO templates (id, program_art_url, event_channel_logo_url, pregame_fallback) "
+        "VALUES (1, ?, ?, ?)",
+        (
+            "/{feed_team_logo}",  # corrupted by v76 -> repaired
+            "/art/{league}.png",  # genuinely relative, mid-path var -> kept
+            json.dumps({"art_url": "//{game_thumbnail}"}),  # multi-slash -> repaired
+        ),
+    )
+
+    _migrate_v78_strip_slash_before_art_variable(conn)
+
+    row = conn.execute("SELECT * FROM templates WHERE id = 1").fetchone()
+    assert row["program_art_url"] == "{feed_team_logo}"
+    assert row["event_channel_logo_url"] == "/art/{league}.png"
+    assert json.loads(row["pregame_fallback"])["art_url"] == "{game_thumbnail}"
+
+
+def test_v78_idempotent_and_leaves_clean_values():
+    from teamarr.database.migrations import _migrate_v78_strip_slash_before_art_variable
+
+    conn = _art_make_db()
+    conn.execute(
+        "INSERT INTO templates (id, program_art_url, event_channel_logo_url) VALUES (1, ?, ?)",
+        ("{feed_team_logo}", "https://espn.com/logo.png"),
+    )
+    _migrate_v78_strip_slash_before_art_variable(conn)
+    _migrate_v78_strip_slash_before_art_variable(conn)
+    row = conn.execute("SELECT * FROM templates WHERE id = 1").fetchone()
+    assert row["program_art_url"] == "{feed_team_logo}"
+    assert row["event_channel_logo_url"] == "https://espn.com/logo.png"
 
 
 # ===========================================================================

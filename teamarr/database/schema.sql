@@ -444,7 +444,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_lineup_id TEXT,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 77
+    schema_version INTEGER DEFAULT 78
 );
 
 -- Insert default settings

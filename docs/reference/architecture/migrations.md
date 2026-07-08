@@ -205,7 +205,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 77** (34 incremental migrations since checkpoint)
+**Current schema version: 78** (35 incremental migrations since checkpoint)
 
 | Version | Type | Description |
 |---------|------|-------------|

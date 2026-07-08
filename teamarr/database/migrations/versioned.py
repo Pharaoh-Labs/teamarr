@@ -9,6 +9,7 @@ _run_migrations() + bump the schema_version DEFAULT in schema.sql.
 
 import json
 import logging
+import re
 import sqlite3
 
 from teamarr.database.checkpoint_v43 import apply_checkpoint_v43
@@ -226,6 +227,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn, 77, "stream_match_cache CHECK allows 'direct'/'epg' match methods"
         )
         current_version = 77
+
+    if current_version < 78:
+        _apply_migration(
+            conn, 78,
+            "strip corrupting leading slash before variable-led art values (#275)",
+            _migrate_v78_strip_slash_before_art_variable,
+        )
+        current_version = 78
 
 
 # =============================================================================
@@ -1425,6 +1434,72 @@ def _migrate_v76_leading_slash_art_paths(conn: sqlite3.Connection) -> None:
     if changed:
         logger.info(
             "[MIGRATE] v76: added leading slash to relative art paths in %d template(s)",
+            changed,
+        )
+
+
+def _migrate_v78_strip_slash_before_art_variable(conn: sqlite3.Connection) -> None:
+    """v78: undo the v76 leading-slash normalization for VARIABLE-LED art values (#275).
+
+    v76 prepended "/" to every non-absolute art value, including ones that
+    start with a template variable (e.g. "{feed_team_logo}"). Variables like
+    {feed_team_logo} resolve to ABSOLUTE URLs at render time, so the stored
+    "/{feed_team_logo}" rendered as "/https://…" — broken logos in XMLTV and
+    the dashboard. This strips leading slash(es) when immediately followed by
+    "{". Genuinely relative paths with a mid-path variable
+    ("/art/{league}.png") are untouched. Idempotent.
+    """
+    if not _table_exists(conn, "templates"):
+        return
+
+    art_columns = [
+        c for c in ("program_art_url", "event_channel_logo_url")
+        if _column_exists(conn, "templates", c)
+    ]
+    json_columns = [
+        c for c in ("pregame_fallback", "postgame_fallback", "idle_content")
+        if _column_exists(conn, "templates", c)
+    ]
+    if not art_columns and not json_columns:
+        return
+
+    def repair(value):
+        if not isinstance(value, str):
+            return value
+        return re.sub(r"^/+(?=\{)", "", value)
+
+    select_cols = ["id", *art_columns, *json_columns]
+    rows = conn.execute(f"SELECT {', '.join(select_cols)} FROM templates").fetchall()
+
+    changed = 0
+    for row in rows:
+        updates: dict[str, str] = {}
+        for col in art_columns:
+            new = repair(row[col])
+            if new != row[col]:
+                updates[col] = new
+        for col in json_columns:
+            try:
+                blob = json.loads(row[col]) if row[col] else None
+            except (TypeError, ValueError):
+                blob = None
+            if isinstance(blob, dict) and isinstance(blob.get("art_url"), str):
+                new = repair(blob["art_url"])
+                if new != blob["art_url"]:
+                    blob["art_url"] = new
+                    updates[col] = json.dumps(blob)
+        if updates:
+            sets = ", ".join(f"{c} = ?" for c in updates)
+            conn.execute(
+                f"UPDATE templates SET {sets} WHERE id = ?",
+                (*updates.values(), row["id"]),
+            )
+            changed += 1
+
+    if changed:
+        logger.info(
+            "[MIGRATE] v78: stripped corrupting leading slash from variable-led "
+            "art values in %d template(s) (#275)",
             changed,
         )
 

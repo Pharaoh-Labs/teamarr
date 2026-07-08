@@ -33,8 +33,17 @@ _ABSOLUTE_URL = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 
 def _normalize_art_path(value: Any) -> Any:
     """Ensure a relative art path starts with '/'. Absolute URLs and empty/non-str
-    values pass through unchanged."""
+    values pass through unchanged.
+
+    Variable-LED values ("{feed_team_logo}…") are never rooted with "/" — a
+    leading variable may resolve to an absolute URL at render time, and the
+    prepended slash breaks it ("/https://…", #275). A corrupted leading
+    "/{var}" from the old behavior is repaired on save.
+    """
     if not isinstance(value, str) or not value or _ABSOLUTE_URL.match(value):
+        return value
+    value = re.sub(r"^/+(?=\{)", "", value)
+    if value.startswith("{"):
         return value
     return value if value.startswith("/") else "/" + value
 
