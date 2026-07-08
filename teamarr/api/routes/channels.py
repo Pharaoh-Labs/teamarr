@@ -165,7 +165,9 @@ class StreamRuleMatch(BaseModel):
     type: str
     value: str
     priority: int
-    is_winner: bool
+    is_winner: bool  # the priority-mode rule that set the band
+    mode: str = "priority"  # 'priority' (band) or 'score' (additive contributor)
+    points: int = 0  # signed contribution for score-mode rules
 
 
 class StreamNameMatch(BaseModel):
@@ -352,7 +354,8 @@ def get_managed_channel_streams(channel_id: int):
         matched_by_stream: dict[int, list[StreamRuleMatch]] = {
             s.dispatcharr_stream_id: [
                 StreamRuleMatch(
-                    type=e.type, value=e.value, priority=e.priority, is_winner=e.is_winner
+                    type=e.type, value=e.value, priority=e.priority, is_winner=e.is_winner,
+                    mode=e.mode, points=e.points,
                 )
                 for e in ordering_service.evaluate_rules(
                     s, group_names.get(s.source_group_id) if s.source_group_id else None
