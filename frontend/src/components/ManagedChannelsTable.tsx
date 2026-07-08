@@ -158,11 +158,27 @@ function useOutsideDismiss(
   }, [ref, open, setOpen])
 }
 
-// Clickable priority number → compact popover explaining which ordering rules
-// matched the stream, with the winning rule (the one that set the priority)
-// highlighted.
+// Collapsed-priority stride: once any score rule exists the backend stores
+// priority as band*STRIDE - score (see services/stream_ordering.py BAND_STRIDE).
+// Values >= STRIDE are decoded back to (band, score) for display; smaller values
+// are plain priority/sequential numbers shown as-is.
+const BAND_STRIDE = 1_000_000
+
+function decodePriority(priority: number): { band: number; score: number; scored: boolean } {
+  if (priority < BAND_STRIDE) return { band: priority, score: 0, scored: false }
+  const band = Math.round(priority / BAND_STRIDE)
+  return { band, score: band * BAND_STRIDE - priority, scored: true }
+}
+
+const fmtSigned = (n: number) => (n > 0 ? `+${n}` : String(n))
+
+// Clickable priority → compact popover explaining a stream's ordering: the hard
+// band (priority-mode winner) plus any additive score contributions. The stored
+// number is decoded to band(+score); staleness compares stored vs the freshly
+// recomputed `expected` priority.
 function PriorityCell(
-  { priority, rules, generating }: { priority: number; rules: StreamRuleMatch[]; generating: boolean },
+  { priority, expected, rules, generating }:
+  { priority: number; expected: number; rules: StreamRuleMatch[]; generating: boolean },
 ) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -173,24 +189,26 @@ function PriorityCell(
     return <span className="text-muted-foreground">{priority}</span>
   }
 
-  // Winners first, then by ascending rule priority.
-  const ordered = [...rules].sort(
-    (a, b) => Number(b.is_winner) - Number(a.is_winner) || a.priority - b.priority
-  )
+  const { band, score, scored } = decodePriority(priority)
 
-  // The popover evaluates the CURRENT rules; the stored number is from the last
-  // generation run. If they disagree, the rules changed since this stream was
-  // ordered and the stored order is stale until the next run. While a generation
-  // is running the number is mid-update, so we show a spinner instead of flagging
-  // it stale.
-  const winner = ordered.find((r) => r.is_winner)
-  const stale = !generating && winner != null && winner.priority !== priority
+  // Priority-mode rules (band): winners first, then ascending priority.
+  // Score-mode rules (additive contributors) listed after.
+  const priorityMatches = [...rules]
+    .filter((r) => r.mode !== "score")
+    .sort((a, b) => Number(b.is_winner) - Number(a.is_winner) || a.priority - b.priority)
+  const scoreMatches = rules.filter((r) => r.mode === "score")
+
+  // The popover evaluates CURRENT rules; the stored number is from the last
+  // generation run. If the recomputed `expected` disagrees, rules changed since
+  // this stream was ordered and the stored order is stale until the next run.
+  // While a generation runs the number is mid-update, so show a spinner instead.
+  const stale = !generating && expected !== priority
 
   return (
     <div className="relative inline-block" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`underline decoration-dotted underline-offset-2 ${
+        className={`inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 ${
           stale
             ? "text-amber-500 decoration-amber-500 hover:text-amber-400"
             : "text-muted-foreground hover:text-foreground"
@@ -203,19 +221,28 @@ function PriorityCell(
               : "Show matched rules"
         }
       >
-        {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <>{priority}{stale && "*"}</>}
+        {generating ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <>
+            <span>{band}{stale && "*"}</span>
+            {scored && score !== 0 && (
+              <span className={`text-[10px] tabular-nums ${score > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                {fmtSigned(score)}
+              </span>
+            )}
+          </>
+        )}
       </button>
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-lg">
-          {rules.length > 0 && (
           <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
             Matched rules
           </div>
-          )}
           <div className="space-y-0.5">
-            {ordered.map((r, i) => (
+            {priorityMatches.map((r, i) => (
               <div
-                key={i}
+                key={`p${i}`}
                 className={`flex items-start gap-1.5 rounded px-1 py-0.5 ${
                   r.is_winner ? "bg-primary/10" : ""
                 } ${r.type === "catch_all" && !r.is_winner ? "opacity-50" : ""}`}
@@ -224,13 +251,12 @@ function PriorityCell(
                   {r.priority}
                 </span>
                 <span className="min-w-0 flex-1">
-                  {/* Name shares a line with the number (and badge); subtitle drops below. */}
                   <span className="flex items-center gap-1.5">
                     <span className="text-[11px] font-medium leading-5 truncate">
                       {RULE_TYPE_LABELS[r.type] ?? r.type}
                     </span>
                     {r.is_winner && (
-                      <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">applied</Badge>
+                      <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">band</Badge>
                     )}
                   </span>
                   {r.value && (
@@ -241,15 +267,37 @@ function PriorityCell(
                 </span>
               </div>
             ))}
+            {scoreMatches.map((r, i) => (
+              <div key={`s${i}`} className="flex items-start gap-1.5 rounded px-1 py-0.5">
+                <span className={`shrink-0 font-mono text-[11px] leading-5 tabular-nums ${r.points > 0 ? "text-emerald-500" : r.points < 0 ? "text-rose-500" : "text-muted-foreground"}`}>
+                  {fmtSigned(r.points)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-[11px] font-medium leading-5 truncate">
+                    {RULE_TYPE_LABELS[r.type] ?? r.type}
+                  </span>
+                  {r.value && (
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
+                      {r.value}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
+          {scoreMatches.length > 0 && (
+            <div className="mt-1 border-t pt-1 px-1 text-[10px] leading-snug text-muted-foreground">
+              Band {band} · Score {fmtSigned(scoreMatches.reduce((s, r) => s + (r.points || 0), 0))}
+            </div>
+          )}
           {generating ? (
-            <div className={`text-[10px] leading-snug text-muted-foreground ${rules.length > 0 ? "mt-1 border-t pt-1" : ""}`}>
+            <div className="mt-1 border-t pt-1 text-[10px] leading-snug text-muted-foreground">
               Generation in progress — the order is updating.
             </div>
           ) : stale ? (
             <div className="mt-1 border-t pt-1 text-[10px] leading-snug text-amber-500">
-              Rules changed since this stream was ordered (stored #{priority}). The order above
-              applies on the next generation run.
+              Rules changed since this stream was ordered. The order above applies on the next
+              generation run.
             </div>
           ) : null}
         </div>
@@ -535,7 +583,7 @@ const ChannelRow = React.memo(function ChannelRow({
                       <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
                       <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
                       <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
-                      <td className="py-1 pr-4"><PriorityCell priority={stream.priority} rules={stream.matched_rules} generating={isGenerating} /></td>
+                      <td className="py-1 pr-4"><PriorityCell priority={stream.priority} expected={stream.expected_priority} rules={stream.matched_rules} generating={isGenerating} /></td>
                       <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
                     </tr>
                   ))}

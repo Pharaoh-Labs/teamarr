@@ -187,7 +187,8 @@ class ChannelStreamEntry(BaseModel):
     match_method: str | None = None
     match_type: str | None = None
     exception_keyword: str | None = None
-    priority: int = 0
+    priority: int = 0  # stored sort key from the last generation run
+    expected_priority: int = 0  # recomputed under current rules (drives staleness flag)
     stream_stats: dict | None = None
     stream_stats_updated_at: str | None = None
     matched_rules: list[StreamRuleMatch] = []
@@ -349,20 +350,30 @@ def get_managed_channel_streams(channel_id: int):
                 streams = get_channel_streams(conn, channel_id)
                 stats_refreshed = True
 
-        # Explain each stream's priority: which ordering rules currently match it.
+        # Explain each stream's priority: which ordering rules currently match it,
+        # plus the priority those current rules WOULD produce (for the staleness
+        # flag — the stored priority is a collapsed band*stride-score int once
+        # scoring is in play, so the UI can't recompute it from matched_rules alone).
         ordering_service = get_stream_ordering_service(conn)
-        matched_by_stream: dict[int, list[StreamRuleMatch]] = {
-            s.dispatcharr_stream_id: [
+        # With no rules configured, generation never reorders (streams keep their
+        # sequential added order), so 'expected' must mirror the stored priority
+        # rather than the service's no-match baseline — otherwise every stream
+        # would look stale.
+        has_rules = bool(ordering_service.rules)
+        matched_by_stream: dict[int, list[StreamRuleMatch]] = {}
+        expected_by_stream: dict[int, int] = {}
+        for s in streams:
+            group_name = group_names.get(s.source_group_id) if s.source_group_id else None
+            matched_by_stream[s.dispatcharr_stream_id] = [
                 StreamRuleMatch(
                     type=e.type, value=e.value, priority=e.priority, is_winner=e.is_winner,
                     mode=e.mode, points=e.points,
                 )
-                for e in ordering_service.evaluate_rules(
-                    s, group_names.get(s.source_group_id) if s.source_group_id else None
-                )
+                for e in ordering_service.evaluate_rules(s, group_name)
             ]
-            for s in streams
-        }
+            expected_by_stream[s.dispatcharr_stream_id] = (
+                ordering_service.compute_priority(s, group_name) if has_rules else s.priority
+            )
 
         # Explain how each stream matched its event (cache-derived; absent for
         # EPG / dedicated matches that bypass the fingerprint cache).
@@ -393,6 +404,7 @@ def get_managed_channel_streams(channel_id: int):
                 match_type=s.match_type,
                 exception_keyword=s.exception_keyword,
                 priority=s.priority,
+                expected_priority=expected_by_stream.get(s.dispatcharr_stream_id, s.priority),
                 stream_stats=s.stream_stats,
                 stream_stats_updated_at=_safe_isoformat(s.stream_stats_updated_at),
                 matched_rules=matched_by_stream.get(s.dispatcharr_stream_id, []),
