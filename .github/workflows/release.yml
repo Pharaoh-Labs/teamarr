@@ -21,6 +21,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: tests
     steps:
       - name: Checkout
