@@ -32,6 +32,7 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: tests
     permissions:
       contents: read
@@ -91,6 +92,7 @@ jobs:
           fi
 
       - name: Build and push Docker image
+        id: build-push
         uses: docker/build-push-action@v5
         with:
           context: .

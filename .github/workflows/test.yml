@@ -14,10 +14,14 @@ concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Lint & test backend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,6 +44,7 @@ jobs:
   typecheck:
     name: Pyright (advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Non-blocking: 401-error baseline as of 2026-07 (iua3.10). Tighten to a
     # blocking gate once the baseline is burned down.
     continue-on-error: true
@@ -62,6 +67,7 @@ jobs:
   frontend:
     name: Build frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
@@ -81,3 +87,31 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  frontend-lint:
+    name: ESLint (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Non-blocking: 67-error baseline as of 2026-07 (#280), mostly
+    # react-hooks/immutability. Tighten to a blocking gate once the
+    # baseline is burned down.
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
