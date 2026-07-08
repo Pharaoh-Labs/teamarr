@@ -1,0 +1,127 @@
+name: Cut Release
+
+# Push-button release (#281): Actions tab → "Cut Release" → Run workflow from
+# the dev branch. Automates the mechanical middle of the documented /release
+# flow: gates → version bump (pyproject.toml + uv.lock) → push dev →
+# fast-forward main → tag → DRAFT release. Release notes stay human-curated
+# per the CLAUDE.md changelog rules — this workflow never uses
+# --generate-notes. Docker publishes are dispatched explicitly at the end
+# because pushes made with GITHUB_TOKEN do not trigger workflows on their own.
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment (ignored if explicit version is set)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: 'Explicit version (x.y.z) — overrides version_type'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/test.yml
+
+  release:
+    name: Bump, tag, and draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: tests
+    steps:
+      - name: Require dispatch from dev
+        if: github.ref_name != 'dev'
+        run: |
+          echo "::error::Cut Release must be dispatched from the dev branch (got '${{ github.ref_name }}')"
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compute next version
+        id: ver
+        run: |
+          CURRENT=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
+          if [ -n "${{ inputs.version }}" ]; then
+            NEW="${{ inputs.version }}"
+          else
+            IFS=. read -r MAJ MIN PAT <<< "$CURRENT"
+            case "${{ inputs.version_type }}" in
+              major) NEW="$((MAJ+1)).0.0" ;;
+              minor) NEW="$MAJ.$((MIN+1)).0" ;;
+              patch) NEW="$MAJ.$MIN.$((PAT+1))" ;;
+            esac
+          fi
+          if ! echo "$NEW" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Computed version '$NEW' is not x.y.z"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$NEW" >/dev/null; then
+            echo "::error::Tag v$NEW already exists"
+            exit 1
+          fi
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Releasing $CURRENT -> $NEW"
+
+      - name: Bump version and refresh lock
+        run: |
+          sed -i "0,/^version = \".*\"/s//version = \"${{ steps.ver.outputs.version }}\"/" pyproject.toml
+          uv lock
+          git diff --stat
+
+      - name: Commit bump and push dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uv.lock
+          git commit -m "Bump version to ${{ steps.ver.outputs.version }}"
+          git push origin dev
+
+      - name: Fast-forward main and push tag
+        run: |
+          git checkout main
+          git merge dev --no-edit
+          git tag "v${{ steps.ver.outputs.version }}"
+          git push origin main
+          git push origin "v${{ steps.ver.outputs.version }}"
+
+      - name: Create draft release (curated notes pending)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" \
+            --draft \
+            --target main \
+            --title "v${{ steps.ver.outputs.version }}" \
+            --notes "Draft — curated release notes pending (CLAUDE.md Release Template)."
+
+      - name: Dispatch Docker publishes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # GITHUB_TOKEN pushes don't trigger push-event workflows, so publish
+          # main (:main + :latest) and the tag (:x.y.z semver set) explicitly.
+          gh workflow run docker-publish.yml --ref main
+          gh workflow run docker-publish.yml --ref "v${{ steps.ver.outputs.version }}"

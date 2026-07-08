@@ -131,6 +131,8 @@ When the user says **"release"**, **"/release"**, or **"version bump"**, execute
 8. **Generate Discord changelog** — use the Release Template below, output ready to paste
 9. **Update plans/STATUS.md** — add release to changelog, update version
 
+**Push-button alternative (`Cut Release` workflow, #281):** Actions tab → "Cut Release" → Run workflow from `dev`, pick patch/minor/major (or an explicit version). CI re-runs the gates, bumps `pyproject.toml` + `uv.lock`, pushes the bump to dev, fast-forwards main, pushes the tag, opens a **draft** release, and dispatches the Docker publishes for `main` and the tag (explicit dispatch — `GITHUB_TOKEN` pushes don't trigger workflows). Steps 7–9 stay manual: write curated notes on the draft and publish it, generate the Discord changelog, update `plans/STATUS.md`. After a Cut Release run, `git pull` locally — the bump commit lands on dev via the bot.
+
 **Rules:**
 - Never release with failing tests or lint errors
 - Release notes should be human-readable summaries, not raw commit messages
