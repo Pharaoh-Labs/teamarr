@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Plus, Trash2, Pencil, Loader2, Copy, Download, Upload, Tv, User } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
+import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -238,9 +239,7 @@ export function Templates() {
 
       <div className="border border-border rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Spinner />
           ) : templates?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No templates configured. Create one to get started.

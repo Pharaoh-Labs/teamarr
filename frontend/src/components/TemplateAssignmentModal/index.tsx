@@ -11,6 +11,7 @@
 import { useState, useCallback, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Select } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -224,9 +225,7 @@ export function TemplateAssignmentManager({
 
       {/* Current assignments */}
       {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <Spinner />
       )}
 
       {error && (

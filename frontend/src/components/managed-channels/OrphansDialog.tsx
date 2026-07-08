@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Trash2, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
   TableBody,
@@ -123,9 +124,7 @@ function OrphansContent({ onClose }: { onClose: () => void }) {
 
       <div className="py-4">
         {reconciliationLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <Spinner />
         ) : orphanChannels.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             No orphan channels found. Everything is in sync!

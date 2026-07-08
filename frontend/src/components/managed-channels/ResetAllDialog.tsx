@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Trash2, Loader2, AlertTriangle } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
+import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -105,9 +106,7 @@ function ResetAllContent({
 
       <div className="py-4">
         {resetLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <Spinner />
         ) : resetChannels.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             No Teamarr channels found in Dispatcharr.

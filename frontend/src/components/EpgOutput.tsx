@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from "react"
 import { Loader2, CheckCircle, AlertTriangle, Search, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Alert } from "@/components/ui/alert"
@@ -237,9 +238,7 @@ export function EpgOutput() {
 
         {/* XML content */}
         {contentLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <Spinner />
         ) : epgContent?.content ? (
           <div className="space-y-2">
             {/* Search Bar */}

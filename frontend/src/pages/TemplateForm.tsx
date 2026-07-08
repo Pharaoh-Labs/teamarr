@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, User, Tv, ArrowRight } from "lucide-react"
+import { ArrowLeft, User, Tv, ArrowRight } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { SaveButton } from "@/components/ui/save-button"
 import { SubNav } from "@/components/ui/sub-nav"
 import {
@@ -243,9 +244,7 @@ export function TemplateForm() {
 
   if (isEdit && isLoadingTemplate) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Spinner size="lg" className="py-12" />
     )
   }
 

@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { ArrowLeft, Loader2, FlaskConical } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { SaveButton } from "@/components/ui/save-button"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
@@ -306,9 +307,7 @@ export function EventGroupForm() {
 
   if (isEdit && isLoadingGroup) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Spinner size="lg" className="py-12" />
     )
   }
 

@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Card, CardContent } from "@/components/ui/card"
 import { SubNav } from "@/components/ui/sub-nav"
 import { useSettings } from "@/hooks/useSettings"
@@ -24,9 +24,7 @@ export function Settings() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Spinner size="lg" className="py-12" />
     )
   }
 

@@ -18,6 +18,8 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
+import { StickyActionBar } from "@/components/ui/sticky-action-bar"
+import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -409,13 +411,13 @@ export function EventGroups() {
 
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container max-w-screen-xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
+        <StickyActionBar
+          label={
+            <>
                 {selectedIds.size} stream source{selectedIds.size > 1 ? "s" : ""} selected
-              </span>
-              <div className="flex items-center gap-1">
+            </>
+          }
+        >
                 <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                   Clear
                 </Button>
@@ -454,18 +456,13 @@ export function EventGroups() {
                   <Trash2 className="h-3 w-3 mr-1" />
                   Delete
                 </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </StickyActionBar>
       )}
 
       {/* Groups Table - No card wrapper for more compact look */}
       <div className="border border-border rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Spinner />
           ) : data?.groups.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No stream sources configured. Add one to get started.
