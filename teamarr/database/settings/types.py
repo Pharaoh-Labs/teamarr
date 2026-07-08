@@ -174,13 +174,28 @@ class TeamFilterSettings:
 class StreamOrderingRule:
     """A single stream ordering rule.
 
-    Rules are evaluated in priority order (lowest number first).
-    First matching rule determines the stream's sort position within a channel.
+    Two rule classes, discriminated by ``mode`` (epic teamarr-5ag):
+
+    - ``mode="priority"`` (hard): an ordered, first-match-wins list. The first
+      priority rule a stream matches sets its *band*; ``priority`` (1-99, lower
+      first) orders these rules and becomes the band weight. This is the legacy
+      behaviour and the strict-precedence escape hatch.
+    - ``mode="score"`` (soft): additive. A stream *sums* ``points`` (signed)
+      across every score rule it matches; the total ranks streams within a band
+      (and is the sole ranking when no priority rule matches). Negative points
+      demote a stream below the baseline.
+
+    The dataclass default is ``mode="score"`` — a freshly constructed rule is a
+    score rule. Deserialization (``_parse_stream_ordering_rules``) overrides this
+    to ``"priority"`` for legacy rows that predate the field, preserving their
+    exact ordering (see epic note on lossless migration).
     """
 
     type: str  # "m3u", "group", "regex", "stream_type", "team_feed", "not_team_feed", "catch_all"
     value: str  # Account name, group name, regex pattern, or team key(s)
-    priority: int  # 1-99, lower = higher priority
+    priority: int  # 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
+    mode: str = "score"  # 'priority' (hard, first-match band) or 'score' (soft, additive)
+    points: int = 0  # signed; summed across matched 'score' rules (ignored for 'priority' mode)
 
 
 VALID_RULE_TYPES: frozenset[str] = frozenset({
@@ -188,6 +203,9 @@ VALID_RULE_TYPES: frozenset[str] = frozenset({
     "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
     "stats_metric", "catch_all",
 })
+VALID_RULE_MODES: frozenset[str] = frozenset({"priority", "score"})
+# Legacy rows (pre epic teamarr-5ag) carry no 'mode'; they are hard priority rules.
+LEGACY_RULE_MODE: str = "priority"
 NO_VALUE_RULE_TYPES: frozenset[str] = frozenset(
     {"team_feed", "not_team_feed", "epg_match", "catch_all"}
 )
