@@ -43,6 +43,7 @@ These leagues have high event volume or unreliable free-tier data and require a 
 - IPL, BBL, SA20 (cricket)
 - Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
 - IMSA and WEC (motor racing). WEC's 62 events/season exceeds the free `eventsseason.php` 15-event cap; IMSA fits it but is gated premium too, so all TSDB racing is premium (no silent truncation if a schedule grows).
+- FIBA Basketball World Cup (M/W) — gated premium since qualifiers run in parallel across multiple confederations, which can exceed the free tier's 5-events/day/league cap during busy qualifying windows.
 
 The `tsdb_tier` column in `schema.sql` classifies each league as `free` or `premium`.
 
