@@ -1,13 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
-import { Alert } from "@/components/ui/alert"
 import { RichTooltip } from "@/components/ui/rich-tooltip"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Trash2,
   Loader2,
-  RefreshCw,
   Clock,
   Tv,
   Search,
@@ -30,32 +28,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import { FilterSelect } from "@/components/ui/filter-select"
 import {
   useManagedChannels,
   useDeleteManagedChannel,
   usePendingDeletions,
-  useReconciliationStatus,
 } from "@/hooks/useChannels"
 import { useGroups } from "@/hooks/useGroups"
 import { useQuery } from "@tanstack/react-query"
 import { getLeagues } from "@/api/teams"
-import {
-  deleteDispatcharrChannel,
-  deleteManagedChannel,
-  previewResetChannels,
-  executeResetChannels,
-  getChannelStreams,
-} from "@/api/channels"
-import type { ManagedChannel, ResetChannelInfo, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
+import { deleteManagedChannel, getChannelStreams } from "@/api/channels"
+import type { ManagedChannel, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
+import { OrphansDialog } from "@/components/managed-channels/OrphansDialog"
+import { ResetAllDialog } from "@/components/managed-channels/ResetAllDialog"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
 import { useRowSelection } from "@/hooks/useRowSelection"
@@ -405,12 +390,7 @@ export function ManagedChannelsTable() {
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [orphansModalOpen, setOrphansModalOpen] = useState(false)
-  const [deletingOrphanId, setDeletingOrphanId] = useState<number | null>(null)
-  const [deletingAllOrphans, setDeletingAllOrphans] = useState(false)
   const [resetModalOpen, setResetModalOpen] = useState(false)
-  const [resetLoading, setResetLoading] = useState(false)
-  const [resetExecuting, setResetExecuting] = useState(false)
-  const [resetChannels, setResetChannels] = useState<ResetChannelInfo[]>([])
 
   const queryClient = useQueryClient()
 
@@ -449,21 +429,6 @@ export function ManagedChannelsTable() {
   }, [allChannelsData])
 
   const deleteMutation = useDeleteManagedChannel()
-
-  // Fetch reconciliation status (for orphans)
-  const {
-    data: reconciliationData,
-    isLoading: reconciliationLoading,
-    refetch: refetchReconciliation,
-  } = useReconciliationStatus()
-
-  // Filter orphan_dispatcharr issues
-  const orphanChannels = useMemo(() => {
-    if (!reconciliationData?.issues_found) return []
-    return reconciliationData.issues_found.filter(
-      (issue) => issue.issue_type === "orphan_dispatcharr"
-    )
-  }, [reconciliationData])
 
   // Extract unique filter values from data
   const { sports, leagues, statuses } = useMemo(() => {
@@ -533,15 +498,6 @@ export function ManagedChannelsTable() {
     isAllSelected,
     setSelectedIds,
   } = useRowSelection(filteredChannels)
-
-  // Mutation for deleting orphan channel
-  const deleteOrphanMutation = useMutation({
-    mutationFn: deleteDispatcharrChannel,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] })
-      refetchReconciliation()
-    },
-  })
 
   // Mutation for bulk delete
   const bulkDeleteMutation = useMutation({
@@ -622,80 +578,6 @@ export function ManagedChannelsTable() {
     }
   }
 
-  const handleDeleteOrphan = async (channelId: number) => {
-    setDeletingOrphanId(channelId)
-    try {
-      await deleteOrphanMutation.mutateAsync(channelId)
-      toast.success("Orphan channel deleted from Dispatcharr")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete orphan")
-    } finally {
-      setDeletingOrphanId(null)
-    }
-  }
-
-  const handleDeleteAllOrphans = async () => {
-    const channelIds = orphanChannels
-      .map((o) => o.dispatcharr_channel_id)
-      .filter((id): id is number => id !== null && id !== undefined)
-
-    if (channelIds.length === 0) return
-
-    setDeletingAllOrphans(true)
-    try {
-      const results = await Promise.allSettled(
-        channelIds.map((id) => deleteOrphanMutation.mutateAsync(id))
-      )
-      const succeeded = results.filter((r) => r.status === "fulfilled").length
-      const failed = results.filter((r) => r.status === "rejected").length
-
-      if (failed === 0) {
-        toast.success(`Deleted ${succeeded} orphan channels`)
-      } else {
-        toast.warning(`Deleted ${succeeded}, failed ${failed}`)
-      }
-      refetchReconciliation()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete orphans")
-    } finally {
-      setDeletingAllOrphans(false)
-    }
-  }
-
-  const handleOpenResetModal = async () => {
-    setResetModalOpen(true)
-    setResetLoading(true)
-    try {
-      const response = await previewResetChannels()
-      setResetChannels(response.channels)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load reset preview")
-    } finally {
-      setResetLoading(false)
-    }
-  }
-
-  const handleExecuteReset = async () => {
-    setResetExecuting(true)
-    try {
-      const response = await executeResetChannels()
-      if (response.success) {
-        toast.success(`Deleted ${response.deleted_count} channels from Dispatcharr`)
-      } else {
-        toast.warning(
-          `Deleted ${response.deleted_count}, failed ${response.error_count}`
-        )
-      }
-      setResetModalOpen(false)
-      refetch()
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] })
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset channels")
-    } finally {
-      setResetExecuting(false)
-    }
-  }
-
   const handleBulkDelete = () => {
     bulkDeleteMutation.mutate(Array.from(selectedIds))
   }
@@ -735,10 +617,7 @@ export function ManagedChannelsTable() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            refetchReconciliation()
-            setOrphansModalOpen(true)
-          }}
+          onClick={() => setOrphansModalOpen(true)}
         >
           <Search className="h-4 w-4 mr-1" />
           Find Orphans
@@ -746,7 +625,7 @@ export function ManagedChannelsTable() {
         <Button
           variant="destructive"
           size="sm"
-          onClick={handleOpenResetModal}
+          onClick={() => setResetModalOpen(true)}
         >
           <AlertTriangle className="h-4 w-4 mr-1" />
           Reset All
@@ -1138,188 +1017,17 @@ export function ManagedChannelsTable() {
       />
 
       {/* Find Orphans Modal */}
-      <Dialog open={orphansModalOpen} onOpenChange={setOrphansModalOpen}>
-        <DialogContent onClose={() => setOrphansModalOpen(false)} className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              Orphan Channels
-            </DialogTitle>
-            <DialogDescription>
-              Channels in Dispatcharr that aren't tracked by Teamarr
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            {reconciliationLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : orphanChannels.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No orphan channels found. Everything is in sync!
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Found {orphanChannels.length} orphan channel
-                  {orphanChannels.length > 1 ? "s" : ""}. These exist in Dispatcharr but
-                  aren't tracked by Teamarr.
-                </p>
-                <div className="max-h-[50vh] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Channel Name</TableHead>
-                      <TableHead>Dispatcharr ID</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orphanChannels.map((orphan, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">
-                          {orphan.channel_name ?? "Unknown"}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {orphan.dispatcharr_channel_id}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() =>
-                              orphan.dispatcharr_channel_id &&
-                              handleDeleteOrphan(orphan.dispatcharr_channel_id)
-                            }
-                            disabled={
-                              !orphan.dispatcharr_channel_id ||
-                              deletingOrphanId === orphan.dispatcharr_channel_id
-                            }
-                          >
-                            {deletingOrphanId === orphan.dispatcharr_channel_id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOrphansModalOpen(false)}>
-              Close
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => refetchReconciliation()}
-              disabled={reconciliationLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${reconciliationLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            {orphanChannels.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={handleDeleteAllOrphans}
-                disabled={deletingAllOrphans}
-              >
-                {deletingAllOrphans ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-1" />
-                )}
-                Delete All ({orphanChannels.length})
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OrphansDialog open={orphansModalOpen} onOpenChange={setOrphansModalOpen} />
 
       {/* Reset All Modal */}
-      <Dialog open={resetModalOpen} onOpenChange={setResetModalOpen}>
-        <DialogContent onClose={() => setResetModalOpen(false)} className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Reset All Teamarr Channels
-            </DialogTitle>
-            <DialogDescription>
-              This will delete ALL Teamarr-created channels from Dispatcharr
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            {resetLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : resetChannels.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No Teamarr channels found in Dispatcharr.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Alert variant="destructive" title="⚠️ Warning: Destructive Action">
-                  <p className="text-sm text-muted-foreground">
-                    This will permanently delete {resetChannels.length} channel
-                    {resetChannels.length > 1 ? "s" : ""} from Dispatcharr that have{" "}
-                    <code className="text-xs bg-muted px-1 py-0.5 rounded">teamarr-event-*</code>{" "}
-                    tvg_id.
-                  </p>
-                </Alert>
-                <div className="max-h-[40vh] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Channel Name</TableHead>
-                        <TableHead>Channel #</TableHead>
-                        <TableHead>Streams</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {resetChannels.map((ch) => (
-                        <TableRow key={ch.dispatcharr_channel_id}>
-                          <TableCell className="font-medium">{ch.channel_name}</TableCell>
-                          <TableCell>{ch.channel_number ?? "-"}</TableCell>
-                          <TableCell>{ch.stream_count}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResetModalOpen(false)}>
-              Cancel
-            </Button>
-            {resetChannels.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={handleExecuteReset}
-                disabled={resetExecuting}
-              >
-                {resetExecuting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-1" />
-                )}
-                Delete All ({resetChannels.length})
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ResetAllDialog
+        open={resetModalOpen}
+        onOpenChange={setResetModalOpen}
+        onReset={() => {
+          refetch()
+          queryClient.invalidateQueries({ queryKey: ["reconciliation"] })
+        }}
+      />
     </div>
   )
 }
