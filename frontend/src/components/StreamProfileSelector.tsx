@@ -1,22 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-
-interface StreamProfile {
-  id: number
-  name: string
-  command: string
-}
-
-async function fetchStreamProfiles(): Promise<StreamProfile[]> {
-  const response = await fetch("/api/v1/dispatcharr/stream-profiles")
-  if (!response.ok) {
-    if (response.status === 503) return [] // Dispatcharr not connected
-    throw new Error("Failed to fetch stream profiles")
-  }
-  return response.json()
-}
+import { useStreamProfiles } from "@/hooks/useDispatcharr"
 
 interface StreamProfileSelectorProps {
   /** Currently selected stream profile ID (null = use default/none) */
@@ -47,11 +32,7 @@ export function StreamProfileSelector({
   placeholder,
   isGlobalDefault = false,
 }: StreamProfileSelectorProps) {
-  const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["dispatcharr-stream-profiles"],
-    queryFn: fetchStreamProfiles,
-    retry: false,
-  })
+  const { data: profiles = [], isLoading } = useStreamProfiles()
 
   if (isLoading) {
     return (

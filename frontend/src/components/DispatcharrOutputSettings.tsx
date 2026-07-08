@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SaveButton as SaveButtonBase } from "@/components/ui/save-button"
@@ -19,6 +18,8 @@ import {
   useUpdateDispatcharrSettings,
 } from "@/hooks/useSettings"
 import type { DispatcharrSettings } from "@/api/settings"
+import { useChannelProfiles, useChannelGroups } from "@/hooks/useDispatcharr"
+import type { ChannelGroup } from "@/api/dispatcharr"
 
 /**
  * Dispatcharr Output — default channel profiles, stream profile, and channel
@@ -41,39 +42,22 @@ export function DispatcharrOutputSettings() {
   const updateDispatcharr = useUpdateDispatcharrSettings()
 
   // Fetch channel profiles for conversion helpers
-  const channelProfilesQuery = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  const channelProfilesQuery = useChannelProfiles(
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   // Always fetch the full group list (with from_m3u flag) so a saved M3U-sourced
   // group always has a matching <option> to bind to (teamarrv2-t6d). The
   // includeM3uGroups toggle filters the displayed list; the selected group is
   // always kept visible.
   const [includeM3uGroups, setIncludeM3uGroups] = useState(false)
-  const channelGroupsQuery = useQuery({
-    queryKey: ["dispatcharr-channel-groups"],
-    queryFn: async () => {
-      const response = await fetch(
-        "/api/v1/dispatcharr/channel-groups?exclude_m3u=false"
-      )
-      if (!response.ok) return []
-      return response.json() as Promise<
-        { id: number; name: string; from_m3u: boolean }[]
-      >
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  const channelGroupsQuery = useChannelGroups(
+    false,
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   const visibleChannelGroups = (
-    all: { id: number; name: string; from_m3u: boolean }[],
+    all: ChannelGroup[],
     selectedId: number | null | undefined,
   ) => {
     if (includeM3uGroups) return all

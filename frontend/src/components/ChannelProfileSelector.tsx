@@ -1,16 +1,11 @@
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Plus, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
-
-interface ChannelProfile {
-  id: number
-  name: string
-}
+import { useChannelProfiles, useCreateChannelProfile } from "@/hooks/useDispatcharr"
 
 // Preset wildcard options for dynamic profile assignment
 const WILDCARD_OPTIONS = [
@@ -20,24 +15,6 @@ const WILDCARD_OPTIONS = [
 
 // Check if a string is a preset wildcard
 const PRESET_WILDCARDS = ["{sport}", "{league}"]
-
-async function fetchChannelProfiles(): Promise<ChannelProfile[]> {
-  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-  if (!response.ok) {
-    if (response.status === 503) return [] // Dispatcharr not connected
-    throw new Error("Failed to fetch channel profiles")
-  }
-  return response.json()
-}
-
-async function createChannelProfile(name: string): Promise<ChannelProfile | null> {
-  const response = await fetch(
-    `/api/v1/dispatcharr/channel-profiles?name=${encodeURIComponent(name)}`,
-    { method: "POST" }
-  )
-  if (!response.ok) return null
-  return response.json()
-}
 
 interface ChannelProfileSelectorProps {
   /** Currently selected profile IDs and/or wildcards */
@@ -68,18 +45,14 @@ export function ChannelProfileSelector({
   className,
   showWildcards = true,
 }: ChannelProfileSelectorProps) {
-  const queryClient = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState("")
-  const [creating, setCreating] = useState(false)
   const [showCustomInput, setShowCustomInput] = useState(false)
   const [customPattern, setCustomPattern] = useState("")
 
-  const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: fetchChannelProfiles,
-    retry: false,
-  })
+  const { data: profiles = [], isLoading } = useChannelProfiles()
+  const createProfile = useCreateChannelProfile()
+  const creating = createProfile.isPending
 
   // Separate numeric IDs from wildcards/patterns
   const numericIds = selectedIds.filter((x): x is number => typeof x === "number")
@@ -139,23 +112,16 @@ export function ChannelProfileSelector({
 
   const handleCreate = async () => {
     if (!newName.trim()) return
-    setCreating(true)
     try {
-      const created = await createChannelProfile(newName.trim())
-      if (created) {
-        toast.success(`Created profile "${created.name}"`)
-        // Add to selection
-        onChange([...selectedIds, created.id])
-        setNewName("")
-        setShowCreate(false)
-        queryClient.invalidateQueries({ queryKey: ["dispatcharr-channel-profiles"] })
-      } else {
-        toast.error("Failed to create profile")
-      }
+      const created = await createProfile.mutateAsync(newName.trim())
+      toast.success(`Created profile "${created.name}"`)
+      // Add to selection
+      onChange([...selectedIds, created.id])
+      setNewName("")
+      setShowCreate(false)
     } catch {
       toast.error("Failed to create profile")
     }
-    setCreating(false)
   }
 
   // Count display

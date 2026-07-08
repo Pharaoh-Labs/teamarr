@@ -18,6 +18,7 @@ import {
   useDeleteLeagueConfig,
 } from "@/hooks/useSettings"
 import { useSubscription } from "@/hooks/useSubscription"
+import { useChannelProfiles, useChannelGroups } from "@/hooks/useDispatcharr"
 import type { SubscriptionLeagueConfig } from "@/api/settings"
 
 function LeagueConfigRow({
@@ -308,28 +309,13 @@ export function PerLeagueChannelConfig() {
   })
   const sportsMap = sportsData?.sports
 
-  const channelProfilesQuery = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
-
-  const [includeM3uGroups] = useState(false)
-  const channelGroupsQuery = useQuery({
-    queryKey: ["dispatcharr-channel-groups"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-groups?exclude_m3u=false")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string; from_m3u: boolean }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  const channelProfilesQuery = useChannelProfiles(
+    dispatcharrStatus.data?.connected ?? false
+  )
+  const channelGroupsQuery = useChannelGroups(
+    false,
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   const [expandedLeagueConfig, setExpandedLeagueConfig] = useState<string | null>(null)
   const [leagueSearch, setLeagueSearch] = useState("")
@@ -410,7 +396,7 @@ export function PerLeagueChannelConfig() {
                       hasOverride={hasOverride}
                       channelProfiles={channelProfilesQuery.data ?? []}
                       channelGroups={channelGroupsQuery.data ?? []}
-                      includeM3uGroups={includeM3uGroups}
+                      includeM3uGroups={false}
                       dispatcharrConnected={dispatcharrStatus.data?.connected ?? false}
                       onToggleExpand={() =>
                         setExpandedLeagueConfig(isExpanded ? null : league.slug)
