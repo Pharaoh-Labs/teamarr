@@ -288,11 +288,15 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         seen_ids: set[str] = set()
 
         # 1. Get past games from schedule endpoint (all past games in one call)
-        past_events = self._get_past_games_from_schedule(team_id, league, sport_league)
-        for event in past_events:
-            if event.id not in seen_ids:
-                seen_ids.add(event.id)
-                events.append(event)
+        # Skipped for leagues without a teams endpoint and for synthetic
+        # player_* ids (tennis) — /teams/{id}/schedule 400s on both (#282);
+        # scoreboard scanning below is the only source for those.
+        if league not in self.LEAGUES_WITHOUT_TEAMS and not team_id.startswith("player_"):
+            past_events = self._get_past_games_from_schedule(team_id, league, sport_league)
+            for event in past_events:
+                if event.id not in seen_ids:
+                    seen_ids.add(event.id)
+                    events.append(event)
 
         # 2. Get future games from scoreboard scanning (reliable for playoffs)
         future_events = self._scan_scoreboard_for_team(team_id, league, days_ahead, sport_league)
@@ -455,17 +459,22 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     # Leagues without summary endpoint support
     # These leagues only have scoreboard data - no per-event detail endpoint
     # When get_event() is called for these, we return None immediately to avoid 404s
-    LEAGUES_WITHOUT_SUMMARY = {"ufc"}
+    # Tennis: site/v2 summary returns HTTP 400 for atp/wta (#282)
+    LEAGUES_WITHOUT_SUMMARY = {"ufc", "atp", "wta"}
 
     # Leagues without teams endpoint support
     # Leagues where /teams endpoint doesn't work or isn't needed:
     # - Combat sports (MMA, boxing): individual fighters, not teams
     # - Olympics: teams only in events, no team filtering/import needed
+    # - Tennis: players ride as Teams with synthetic player_* ids (scoreboard
+    #   athlete ids are null); ESPN's teams endpoints 400 on them (#282)
     LEAGUES_WITHOUT_TEAMS = {
         "ufc",
         "boxing",
         "olympics-mens-ice-hockey",
         "olympics-womens-ice-hockey",
+        "atp",
+        "wta",
     }
 
     def get_event(self, event_id: str, league: str) -> Event | None:
