@@ -220,18 +220,6 @@ def update_display_settings(conn: Connection, **kwargs) -> bool:
     return _apply(conn, "display", _known_fields("display", kwargs))
 
 
-# TODO: PRUNE? — no callers; the live counter logic is duplicated in
-# consumers/stream_match_cache.py::increment_generation_counter (verify with user)
-def increment_epg_generation_counter(conn: Connection) -> int:
-    """Increment the EPG generation counter and return new value."""
-    conn.execute(
-        "UPDATE settings SET epg_generation_counter = epg_generation_counter + 1 WHERE id = 1"
-    )
-    cursor = conn.execute("SELECT epg_generation_counter FROM settings WHERE id = 1")
-    row = cursor.fetchone()
-    return row["epg_generation_counter"] if row else 1
-
-
 def update_team_filter_settings(
     conn: Connection,
     enabled: bool | None = None,
