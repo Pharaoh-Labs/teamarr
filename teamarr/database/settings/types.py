@@ -185,16 +185,17 @@ class StreamOrderingRule:
       (and is the sole ranking when no priority rule matches). Negative points
       demote a stream below the baseline.
 
-    The dataclass default is ``mode="score"`` — a freshly constructed rule is a
-    score rule. Deserialization (``_parse_stream_ordering_rules``) overrides this
-    to ``"priority"`` for legacy rows that predate the field, preserving their
-    exact ordering (see epic note on lossless migration).
+    The dataclass default is ``mode="priority"`` — the legacy-safe fallback, so
+    any rule constructed or deserialized without an explicit mode behaves exactly
+    as it did before scoring existed. "New rules default to score" is a UI/API
+    concern (the add-rule form and request model default to score); it is
+    deliberately not baked into this storage type, which must preserve old data.
     """
 
     type: str  # "m3u", "group", "regex", "stream_type", "team_feed", "not_team_feed", "catch_all"
     value: str  # Account name, group name, regex pattern, or team key(s)
     priority: int  # 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
-    mode: str = "score"  # 'priority' (hard, first-match band) or 'score' (soft, additive)
+    mode: str = "priority"  # 'priority' (hard, first-match band) or 'score' (soft, additive)
     points: int = 0  # signed; summed across matched 'score' rules (ignored for 'priority' mode)
 
 

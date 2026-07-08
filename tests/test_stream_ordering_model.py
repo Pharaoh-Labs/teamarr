@@ -68,10 +68,11 @@ def test_non_int_points_coerce_to_zero():
     assert _parse_stream_ordering_rules(stored)[0].points == 0
 
 
-def test_dataclass_default_mode_is_score():
-    """A rule constructed in code (not deserialized) defaults to score."""
+def test_dataclass_default_mode_is_priority():
+    """The storage type defaults to the legacy-safe mode; 'score' for new rules
+    is applied at the API/UI edge, not here."""
     rule = StreamOrderingRule(type="regex", value=".*HD.*", priority=99)
-    assert rule.mode == "score"
+    assert rule.mode == "priority"
     assert rule.points == 0
 
 
