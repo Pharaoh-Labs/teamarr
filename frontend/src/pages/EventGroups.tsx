@@ -46,7 +46,6 @@ import { useTableSort } from "@/hooks/useTableSort"
 import { useRowSelection } from "@/hooks/useRowSelection"
 import { Input } from "@/components/ui/input"
 import {
-  useBulkUpdateGroups,
   useClearGroupMatchCache,
   useClearGroupsMatchCache,
   useGroups,
@@ -56,13 +55,11 @@ import {
   useReorderGroups,
 } from "@/hooks/useGroups"
 import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
-import type { EventGroup, PreviewGroupResponse, TeamFilterEntry } from "@/api/types"
+import type { EventGroup, PreviewGroupResponse } from "@/api/types"
 import { getStaleGroups } from "@/api/groups"
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
-import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
-import { TeamPicker } from "@/components/TeamPicker"
-import { Label } from "@/components/ui/label"
+import { BulkEditDialog } from "./event-groups/BulkEditDialog"
 import { getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
@@ -94,7 +91,6 @@ export function EventGroups() {
   const [deletingStale, setDeletingStale] = useState(false)
   const staleIds = useMemo(() => new Set(staleGroups.map((g) => g.id)), [staleGroups])
   const toggleMutation = useToggleGroup()
-  const bulkUpdateMutation = useBulkUpdateGroups()
   const previewMutation = usePreviewGroup()
   const clearCacheMutation = useClearGroupMatchCache()
   const clearCachesBulkMutation = useClearGroupsMatchCache()
@@ -119,22 +115,6 @@ export function EventGroups() {
   const [deleteConfirm, setDeleteConfirm] = useState<EventGroup | null>(null)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
-  // Bulk edit form state - checkboxes control which fields to update
-  const [bulkEditStreamTimezoneEnabled, setBulkEditStreamTimezoneEnabled] = useState(false)
-  const [bulkEditStreamTimezone, setBulkEditStreamTimezone] = useState<string | null>(null)
-  const [bulkEditClearStreamTimezone, setBulkEditClearStreamTimezone] = useState(false)
-  // Team filter bulk edit state
-  const [bulkEditTeamFilterEnabled, setBulkEditTeamFilterEnabled] = useState(false)
-  const [bulkEditTeamFilterAction, setBulkEditTeamFilterAction] = useState<"set" | "clear">("set")
-  const [bulkEditTeamFilterMode, setBulkEditTeamFilterMode] = useState<"include" | "exclude">("include")
-  const [bulkEditTeamFilterTeams, setBulkEditTeamFilterTeams] = useState<TeamFilterEntry[]>([])
-  const [bulkEditBypassPlayoffs, setBulkEditBypassPlayoffs] = useState(false)
-  const [bulkEditNameMatchEnabled, setBulkEditNameMatchEnabled] = useState(false)
-  const [bulkEditNameMatch, setBulkEditNameMatch] = useState(true)
-  const [bulkEditTeamStreamsEnabled, setBulkEditTeamStreamsEnabled] = useState(false)
-  const [bulkEditTeamStreams, setBulkEditTeamStreams] = useState(false)
-  const [bulkEditEPGMatchEnabled, setBulkEditEPGMatchEnabled] = useState(false)
-  const [bulkEditEPGMatch, setBulkEditEPGMatch] = useState(false)
   // Filter groups
   const filteredGroups = useMemo(() => {
     if (!data?.groups) return []
@@ -341,83 +321,6 @@ export function EventGroups() {
     toast.success(`Deleted ${deleted} groups`)
     setSelectedIds(new Set())
     setShowBulkDelete(false)
-  }
-
-  // Reset bulk edit form state
-  const resetBulkEditForm = () => {
-    setBulkEditStreamTimezoneEnabled(false)
-    setBulkEditStreamTimezone(null)
-    setBulkEditClearStreamTimezone(false)
-    setBulkEditTeamFilterEnabled(false)
-    setBulkEditTeamFilterAction("set")
-    setBulkEditTeamFilterMode("include")
-    setBulkEditTeamFilterTeams([])
-    setBulkEditBypassPlayoffs(false)
-    setBulkEditNameMatchEnabled(false)
-    setBulkEditNameMatch(true)
-    setBulkEditTeamStreamsEnabled(false)
-    setBulkEditTeamStreams(false)
-  }
-
-  const handleBulkEdit = async () => {
-    const ids = Array.from(selectedIds)
-
-    // Build request with only enabled fields
-    const request: Record<string, unknown> & { group_ids: number[] } = { group_ids: ids }
-
-    if (bulkEditStreamTimezoneEnabled) {
-      if (bulkEditClearStreamTimezone) {
-        request.clear_stream_timezone = true
-      } else if (bulkEditStreamTimezone) {
-        request.stream_timezone = bulkEditStreamTimezone
-      }
-    }
-
-    if (bulkEditNameMatchEnabled) {
-      request.name_match_enabled = bulkEditNameMatch
-    }
-
-    if (bulkEditTeamStreamsEnabled) {
-      request.team_streams_enabled = bulkEditTeamStreams
-    }
-
-    if (bulkEditEPGMatchEnabled) {
-      request.epg_match_enabled = bulkEditEPGMatch
-    }
-
-    if (bulkEditTeamFilterEnabled) {
-      if (bulkEditTeamFilterAction === "clear") {
-        // Reset to global default
-        request.clear_include_teams = true
-        request.clear_exclude_teams = true
-        request.clear_bypass_filter_for_playoffs = true
-      } else {
-        // Set custom filter
-        request.team_filter_mode = bulkEditTeamFilterMode
-        request.bypass_filter_for_playoffs = bulkEditBypassPlayoffs
-        if (bulkEditTeamFilterMode === "include") {
-          request.include_teams = bulkEditTeamFilterTeams
-          request.clear_exclude_teams = true
-        } else {
-          request.exclude_teams = bulkEditTeamFilterTeams
-          request.clear_include_teams = true
-        }
-      }
-    }
-
-    try {
-      const result = await bulkUpdateMutation.mutateAsync(request)
-      if (result.total_failed > 0) {
-        toast.warning(`Updated ${result.total_updated} groups, ${result.total_failed} failed`)
-      } else {
-        toast.success(`Updated ${result.total_updated} groups`)
-      }
-      setSelectedIds(new Set())
-      setShowBulkEdit(false)
-      resetBulkEditForm()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update groups")
-    }
   }
 
   const clearFilters = () => {
@@ -931,222 +834,13 @@ export function EventGroups() {
       />
 
       {/* Bulk Edit Dialog */}
-      <Dialog open={showBulkEdit} onOpenChange={(open) => {
-        setShowBulkEdit(open)
-        if (!open) resetBulkEditForm()
-      }}>
-        <DialogContent onClose={() => setShowBulkEdit(false)} className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Bulk Edit ({selectedIds.size} stream sources)</DialogTitle>
-            <DialogDescription>
-              Only checked fields will be updated. Use "Clear" to remove values.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4 px-1 max-h-[60vh] overflow-y-auto">
-            {/* Stream Timezone */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditStreamTimezoneEnabled}
-                  onCheckedChange={(checked) => setBulkEditStreamTimezoneEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Stream Timezone</span>
-              </label>
-              {bulkEditStreamTimezoneEnabled && (
-                <div className="space-y-2 pl-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={bulkEditClearStreamTimezone}
-                      onCheckedChange={(checked) => {
-                        setBulkEditClearStreamTimezone(!!checked)
-                        if (checked) {
-                          setBulkEditStreamTimezone(null)
-                        }
-                      }}
-                    />
-                    <span className="text-sm font-normal">
-                      Auto-detect from stream
-                    </span>
-                  </label>
-                  <StreamTimezoneSelector
-                    value={bulkEditStreamTimezone}
-                    onChange={setBulkEditStreamTimezone}
-                    disabled={bulkEditClearStreamTimezone}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Timezone used in stream names for date matching
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Team Filter */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditTeamFilterEnabled}
-                  onCheckedChange={(checked) => setBulkEditTeamFilterEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Team Filter</span>
-              </label>
-              {bulkEditTeamFilterEnabled && (
-                <div className="space-y-3 pl-6">
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="bulk-team-filter-action"
-                        checked={bulkEditTeamFilterAction === "set"}
-                        onChange={() => setBulkEditTeamFilterAction("set")}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">Set custom filter</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="bulk-team-filter-action"
-                        checked={bulkEditTeamFilterAction === "clear"}
-                        onChange={() => setBulkEditTeamFilterAction("clear")}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">Reset to global default</span>
-                    </label>
-                  </div>
-
-                  {bulkEditTeamFilterAction === "set" && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-4">
-                        <Label>Mode:</Label>
-                        <div className="flex gap-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="bulk-team-filter-mode"
-                              checked={bulkEditTeamFilterMode === "include"}
-                              onChange={() => setBulkEditTeamFilterMode("include")}
-                              className="accent-primary"
-                            />
-                            <span className="text-sm">Include only</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="bulk-team-filter-mode"
-                              checked={bulkEditTeamFilterMode === "exclude"}
-                              onChange={() => setBulkEditTeamFilterMode("exclude")}
-                              className="accent-primary"
-                            />
-                            <span className="text-sm">Exclude</span>
-                          </label>
-                        </div>
-                      </div>
-                      <TeamPicker
-                        leagues={allLeagueSlugs}
-                        selectedTeams={bulkEditTeamFilterTeams}
-                        onSelectionChange={setBulkEditTeamFilterTeams}
-                        placeholder="Search teams..."
-                      />
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox
-                          checked={bulkEditBypassPlayoffs}
-                          onCheckedChange={(checked) => setBulkEditBypassPlayoffs(!!checked)}
-                        />
-                        <span className="text-sm">Include all playoff games</span>
-                      </label>
-                    </div>
-                  )}
-
-                  {bulkEditTeamFilterAction === "clear" && (
-                    <p className="text-xs text-muted-foreground">
-                      Removes per-source team filter overrides. Stream sources will use the global default filter.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Stream Name Matching */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditNameMatchEnabled}
-                  onCheckedChange={(checked) => setBulkEditNameMatchEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Stream name matching</span>
-              </label>
-              {bulkEditNameMatchEnabled && (
-                <div className="flex items-center gap-3 pl-6">
-                  <Switch
-                    checked={bulkEditNameMatch}
-                    onCheckedChange={setBulkEditNameMatch}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {bulkEditNameMatch ? "Enabled — match streams whose name identifies a specific event (e.g. \"Bills vs Dolphins\")" : "Disabled"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Team Stream Source */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditTeamStreamsEnabled}
-                  onCheckedChange={(checked) => setBulkEditTeamStreamsEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Team stream source</span>
-              </label>
-              {bulkEditTeamStreamsEnabled && (
-                <div className="flex items-center gap-3 pl-6">
-                  <Switch
-                    checked={bulkEditTeamStreams}
-                    onCheckedChange={setBulkEditTeamStreams}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {bulkEditTeamStreams ? "Enabled — team-branded streams will match events where that team plays" : "Disabled"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* EPG Program Matching */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditEPGMatchEnabled}
-                  onCheckedChange={(checked) => setBulkEditEPGMatchEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">EPG program matching</span>
-              </label>
-              {bulkEditEPGMatchEnabled && (
-                <div className="flex items-center gap-3 pl-6">
-                  <Switch
-                    checked={bulkEditEPGMatch}
-                    onCheckedChange={setBulkEditEPGMatch}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {bulkEditEPGMatch ? "Enabled — match static-named linear channels to events via Dispatcharr's program guide (requires the global EPG matching switch)" : "Disabled"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkEdit(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkEdit}
-              disabled={bulkUpdateMutation.isPending || !(bulkEditStreamTimezoneEnabled || bulkEditTeamFilterEnabled || bulkEditNameMatchEnabled || bulkEditTeamStreamsEnabled || bulkEditEPGMatchEnabled)}
-            >
-              {bulkUpdateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Apply to {selectedIds.size} groups
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkEditDialog
+        open={showBulkEdit}
+        onOpenChange={setShowBulkEdit}
+        selectedIds={selectedIds}
+        allLeagueSlugs={allLeagueSlugs}
+        onSuccess={() => setSelectedIds(new Set())}
+      />
 
       {/* Bulk Delete Confirmation Dialog */}
       <ConfirmDialog
