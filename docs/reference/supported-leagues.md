@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **140 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **141 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -121,6 +121,7 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | League | ID | Provider |
 |--------|-----|----------|
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | TSDB |
+| Swedish Hockey League | `shl` | TSDB |
 
 ---
 
