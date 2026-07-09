@@ -287,9 +287,11 @@ export function CheckboxListPicker({
                         className="h-6 text-xs"
                         onClick={(e) => {
                           e.stopPropagation()
-                          allGroupSelected
-                            ? clearAllInGroup(group.key)
-                            : selectAllInGroup(group.key)
+                          if (allGroupSelected) {
+                            clearAllInGroup(group.key)
+                          } else {
+                            selectAllInGroup(group.key)
+                          }
                         }}
                       >
                         {allGroupSelected ? "Clear" : "Select All"}

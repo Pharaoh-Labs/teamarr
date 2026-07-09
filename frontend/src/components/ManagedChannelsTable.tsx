@@ -47,7 +47,7 @@ import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
 import { useRowSelection } from "@/hooks/useRowSelection"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useGenerationProgress } from "@/hooks/useGenerationProgress"
 
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "-"

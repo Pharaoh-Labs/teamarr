@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { TabProps } from "../types"
 
-export function BasicTab({ formData, setFormData, fieldRefs, setLastFocusedField, resolveTemplate: _resolveTemplate }: TabProps) {
+export function BasicTab({ formData, setFormData, fieldRefs, setLastFocusedField }: TabProps) {
   return (
     <div className="space-y-6">
       {/* Template Name */}

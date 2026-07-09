@@ -4,7 +4,7 @@ import { CheckCircle, XCircle, AlertTriangle, Clock, Tv, Target, Copy, Check, Lo
 import { useDispatcharrStatus } from "@/hooks/useSettings"
 import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
 import { useDateFormat } from "@/hooks/useDateFormat"
-import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useGenerationProgress } from "@/hooks/useGenerationProgress"
 import { getTeamXmltvUrl } from "@/api/epg"
 import type { ProcessingRun } from "@/api/epg"
 

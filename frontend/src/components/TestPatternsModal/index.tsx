@@ -56,7 +56,7 @@ export interface PatternState {
   custom_regex_event_name_enabled: boolean
 }
 
-export const EMPTY_PATTERNS: PatternState = {
+const EMPTY_PATTERNS: PatternState = {
   skip_builtin_filter: false,
   stream_include_regex: null,
   stream_include_regex_enabled: false,
