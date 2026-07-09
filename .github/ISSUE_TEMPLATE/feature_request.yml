@@ -1,7 +1,7 @@
 name: Feature Request
 description: Suggest a new feature
 title: "[Feature]: "
-labels: ["feature-request"]
+labels: ["type: feature", "status: needs-triage"]
 body:
   - type: textarea
     id: problem
@@ -24,6 +24,22 @@ body:
     attributes:
       label: Alternatives considered
       placeholder: Other approaches you've thought about
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of Teamarr is this about?
+      options:
+        - Not sure
+        - Generation / EPG output
+        - Matching
+        - Sources
+        - Dispatcharr sync
+        - Templates
+        - Settings
+        - Frontend / UI
+        - Other
 
   - type: textarea
     id: context

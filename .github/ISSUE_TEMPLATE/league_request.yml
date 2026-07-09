@@ -1,7 +1,7 @@
 name: "League/Sport Request"
 description: "Request support for a new league or sport"
 title: "[League Request]: "
-labels: ["new-league"]
+labels: ["type: league", "status: needs-triage", "research"]
 body:
   - type: markdown
     attributes:
@@ -63,9 +63,14 @@ body:
     id: data_sources
     attributes:
       label: Data Sources
-      description: Links to where schedule/score data can be found (ESPN, official site, etc.)
+      description: >
+        Links to where schedule/score data can be found. ESPN is where most leagues get
+        implemented, so an ESPN API URL for this league is the most useful thing you can provide
+        (find your sport/league at site.api.espn.com — see the placeholder). Official sites help too.
       placeholder: |
-        - ESPN: https://www.espn.com/...
+        - ESPN API: https://site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard
+        - ESPN web: https://www.espn.com/...
+        - TheSportsDB (TSDB): https://www.thesportsdb.com/league/...
         - Official site: https://...
     validations:
       required: true
