@@ -331,12 +331,13 @@ export function TeamPicker({
       <div className="border rounded-md max-h-80 overflow-y-auto">
         {filteredBySport.map((sportGroup) => (
           <div key={sportGroup.sport} className="border-b last:border-b-0">
-            {/* Sport header */}
-            <button
-              onClick={() => toggleSport(sportGroup.sport)}
-              className="w-full flex items-center justify-between p-2 hover:bg-muted/50 text-sm font-medium bg-muted/30"
-            >
-              <div className="flex items-center gap-2">
+            {/* Sport header — actions are SIBLINGS of the toggle button, never
+                nested (invalid <button><button> HTML, 5hq.16) */}
+            <div className="flex items-center justify-between p-2 hover:bg-muted/50 text-sm font-medium bg-muted/30">
+              <button
+                onClick={() => toggleSport(sportGroup.sport)}
+                className="flex-1 flex items-center gap-2 text-left"
+              >
                 {isSportExpanded(sportGroup.sport) ? (
                   <ChevronDown className="h-4 w-4" />
                 ) : (
@@ -346,9 +347,9 @@ export function TeamPicker({
                 <span className="text-muted-foreground font-normal text-xs">
                   ({countSelectedInSport(sportGroup)} selected)
                 </span>
-              </div>
+              </button>
               {!singleSelect && (
-                <div className="flex gap-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                <div className="flex gap-2 text-xs">
                   <button
                     onClick={() => selectAllInSport(sportGroup)}
                     className="text-primary hover:underline"
@@ -363,19 +364,19 @@ export function TeamPicker({
                   </button>
                 </div>
               )}
-            </button>
+            </div>
 
             {/* Leagues within sport */}
             {isSportExpanded(sportGroup.sport) && (
               <div className="ml-4">
                 {sportGroup.leagues.map((lg) => (
                   <div key={lg.league} className="border-b last:border-b-0">
-                    {/* League header */}
-                    <button
-                      onClick={() => toggleLeague(lg.league)}
-                      className="w-full flex items-center justify-between p-2 hover:bg-muted/50 text-sm"
-                    >
-                      <div className="flex items-center gap-2">
+                    {/* League header — actions as siblings, not nested (5hq.16) */}
+                    <div className="flex items-center justify-between p-2 hover:bg-muted/50 text-sm">
+                      <button
+                        onClick={() => toggleLeague(lg.league)}
+                        className="flex-1 flex items-center gap-2 text-left"
+                      >
                         {isLeagueExpanded(lg.league) ? (
                           <ChevronDown className="h-4 w-4" />
                         ) : (
@@ -385,9 +386,9 @@ export function TeamPicker({
                         <span className="text-muted-foreground font-normal text-xs">
                           ({countSelectedInLeague(lg.league)} of {lg.teams.length})
                         </span>
-                      </div>
+                      </button>
                       {!singleSelect && (
-                        <div className="flex gap-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-2 text-xs">
                           <button
                             onClick={() => selectAllInLeague(lg.teams)}
                             className="text-primary hover:underline"
@@ -402,7 +403,7 @@ export function TeamPicker({
                           </button>
                         </div>
                       )}
-                    </button>
+                    </div>
 
                     {/* Teams list */}
                     {isLeagueExpanded(lg.league) && (
