@@ -176,7 +176,6 @@ export function Templates() {
       const fullTemplate = await getTemplate(template.id)
 
       // Export without ID/timestamps (for portability)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- discarded via rest destructure
       const { id, created_at, updated_at, team_count, global_assignments, ...exportData } = fullTemplate
       const blob = new Blob([JSON.stringify([exportData], null, 2)], { type: "application/json" })
       const url = URL.createObjectURL(blob)
