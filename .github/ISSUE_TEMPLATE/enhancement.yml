@@ -27,6 +27,22 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of Teamarr is this about?
+      options:
+        - Not sure
+        - Generation / EPG output
+        - Matching
+        - Sources
+        - Dispatcharr sync
+        - Templates
+        - Settings
+        - Frontend / UI
+        - Other
+
   - type: textarea
     id: context
     attributes:

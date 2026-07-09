@@ -12,6 +12,38 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: dispatcharr_version
+    attributes:
+      label: Dispatcharr version
+      description: "Dispatcharr version Teamarr is connected to (e.g., 0.24.0). Several features are gated on the Dispatcharr version."
+      placeholder: "e.g., 0.24.0"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: "Only if the bug is in the UI. Include the version if you can."
+      placeholder: "e.g., Firefox 128, Chrome 126, Safari 17"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of Teamarr is this about?
+      options:
+        - Not sure
+        - Generation / EPG output
+        - Matching
+        - Sources
+        - Dispatcharr sync
+        - Templates
+        - Settings
+        - Frontend / UI
+        - Other
+
   - type: textarea
     id: description
     attributes:
