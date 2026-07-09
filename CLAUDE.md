@@ -56,7 +56,7 @@ bd sync                               # Sync beads data
 
 **Nothing gets implemented without a GitHub issue.** Every feature, bug fix, and refactor — including internally-discovered work — follows this lifecycle. No coding straight onto `dev`.
 
-### The Lifecycle: issue → bead → claim → branch → dev → release
+### The Lifecycle: issue → bead → claim → branch → PR → dev → release
 
 1. **Issue first** — `gh issue create` (or an existing community issue). Applies to internal work too. *Sole exception:* trivial bookkeeping (beads sync, typo, one-line doc fix) may batch under a standing "Housekeeping" issue for the release cycle instead of individual issues.
 2. **Bead it** — `bd create` referencing the issue: put `(#NNN)` in the bead title. Larger features get an epic + child beads (see Roadmap & Feature Planning). Comment the bead id on the issue so the two stay linked.
@@ -72,14 +72,15 @@ bd sync                               # Sync beads data
    pytest tests/ -v
    cd frontend && npm run build
    ```
-6. **Merge to dev when happy** — gates green on the branch first:
+6. **Open a PR to dev when gates are green** — CI (`test.yml`, `dependency-review`) runs **only on `pull_request`**, so a direct merge to dev skips the test gate. Internal work goes through a PR too:
    ```bash
-   git checkout dev && git pull && git merge <branch> --no-ff
-   git push origin dev && git branch -d <branch>
+   git push -u origin <branch>
+   gh pr create --base dev --fill
    ```
-   Then: comment the dev-land hash on the issue (**keep the issue open** — it closes at release), close the bead.
+   Wait for checks green, then merge via GitHub: `gh pr merge <#> --merge --delete-branch`. Then comment the dev-land hash on the issue, add the `status: on-dev` label (**keep the issue open** — it closes at release), and close the bead.
+   *Exception:* trivial bookkeeping (beads sync, typo, one-line doc fix) may merge straight to dev under the standing Housekeeping issue — no PR needed.
 7. **Release to main in batches** — `dev → main` happens ONLY via the Release Workflow below. **Release triggers** (any one): a user-facing regression fix is waiting on dev · ~2–3 weeks since the last release · dev is ≥25 commits ahead of main. Dev must never again pile up 100+ unreleased commits.
-8. **At release** — close every "fixed on dev" issue with the release link.
+8. **At release** — close every `status: on-dev` issue with the release link.
 
 ### Inbound community PRs
 
@@ -167,24 +168,7 @@ Get version from `pyproject.toml` line 7, append `-dev+<short_hash>` of HEAD com
 
 ### Release Template
 
-```
-## 🎉 v<version> — <YYYY-MM-DD>
-
-🐛 **Bug Fixes**
-- <one-liner> (#issue)
-
-✨ **New Features**
-- <one-liner> (#issue)
-
-⚡ **Enhancements**
-- <one-liner> (#issue)
-
-🎨 **UI/UX**
-- <one-liner> (#issue)
-
-🔧 **Under the Hood**
-- <one-liner> — thanks @contributor (#PR)
-```
+Identical sections to the Dev Push Template, with two differences: the header is `## 🎉 v<version> — <YYYY-MM-DD>` and items carry **no commit hashes** (releases omit them).
 
 ### Rules
 - Discord markdown (## headers, **bold**, \`code\`)
@@ -245,9 +229,9 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 
 ```
 API Layer        → teamarr/api/routes/ (18 modules)
-Consumer Layer   → teamarr/consumers/ (generation, team_epg, event_epg, event_group_processor/, cache/, lifecycle/, matching/)
+Consumer Layer   → teamarr/consumers/ (key packages: generation, team_epg, event_epg, event_group_processor/, cache/, lifecycle/, matching/, enforcement/, filler/)
 Service Layer    → teamarr/services/sports_data.py
-Provider Layer   → teamarr/providers/ (espn, hockeytech, mlbstats, nascar, tsdb)
+Provider Layer   → teamarr/providers/ (espn, squiggle, nascar, mlbstats, hockeytech, supabase, tsdb)
 ```
 
 **Providers** (lower priority = tried first):
@@ -256,6 +240,7 @@ Provider Layer   → teamarr/providers/ (espn, hockeytech, mlbstats, nascar, tsd
 - NASCAR (35) - NASCAR Cup/O'Reilly (Xfinity)/Trucks; official cf.nascar.com schedule API, full weekend sessions, no key
 - MLB Stats (40) - MiLB (Triple-A through Rookie)
 - HockeyTech (50) - CHL, AHL, PWHL, USHL
+- Supabase (55) - Supabase-backed leagues (CBL, etc.)
 - TSDB (100) - Cricket, rugby, boxing, Scandinavian leagues, uru.2
 
 **Dispatcharr Sync Reliability** (`lifecycle/service.py`):
@@ -264,7 +249,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
-- 240 variables in `variables/` (20 categories)
+- 245 variables in `variables/` (20 categories)
 - 23 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
@@ -342,18 +327,21 @@ When asked to **"sync status"** or **"update status"**:
 
 **Principle: one source of truth per fact.** GitHub owns issue/PR state (via labels), beads own work state, `plans/STATUS.md` owns only judgment (priorities, next steps, standing facts). Never transcribe into STATUS.md anything that `gh`/`bd` can derive live.
 
-**Label vocabulary** (issue state lives HERE, not in prose — triagers maintain these too):
+**Label vocabulary** (issue state lives HERE, not in prose — triagers maintain these too). Status labels track the work lifecycle; `type:` labels classify the change; two special labels flag ownership/blockers:
 | Label | Meaning |
 |-------|---------|
-| `fixed-on-dev` | Landed on dev; closes at next release. `gh issue list --label fixed-on-dev` = release checklist |
-| `needs-triage` | No assessment or bead yet |
+| `status: needs-triage` | No assessment or bead yet |
+| `status: needs-bead` | Triaged; needs a bead before work |
+| `status: ready` | Bead created; queued for work |
+| `status: on-dev` | Landed on dev; closes at next release. `gh issue list --label "status: on-dev"` = release checklist |
+| `status: released` | Shipped in a release |
 | `contributor-led` | Community contributor driving implementation |
 | `research` | Blocked on research / data-source discovery |
-| `process` | Standing process/housekeeping issue |
+| `type: process` | Standing process/housekeeping issue (also `type:` bug/feature/enhancement/docs/chore/refactor/league) |
 
 **The sync:**
 1. Query live state: `gh issue list --state open`, `gh pr list`, `bd list -n 300` (beware default 50-row cap), read comment threads on anything that changed
-2. Reconcile labels — new untriaged issues get `needs-triage`; dev-landed fixes get `fixed-on-dev`; fix wrong/missing labels
+2. Reconcile labels — new untriaged issues get `status: needs-triage`; dev-landed fixes get `status: on-dev`; fix wrong/missing labels
 3. Cross-reference issues ↔ beads; file beads for triaged issues that lack them (`(#NNN)` in bead title)
 4. **Rewrite `plans/STATUS.md` from scratch** (target ≤80 lines): header (version, dev-ahead count, release-trigger check, open counts), Needs Attention (≤10 curated rows of judgment), Next Work queue, Standing Facts, last 3 changelog entries. Never append-and-patch — full regeneration makes drift impossible. Prior history lives in `plans/archive/`.
 5. Present summary; state whether a release trigger is met
