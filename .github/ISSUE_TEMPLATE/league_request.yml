@@ -1,7 +1,7 @@
 name: "League/Sport Request"
 description: "Request support for a new league or sport"
 title: "[League Request]: "
-labels: ["new-league"]
+labels: ["type: league", "status: needs-triage"]
 body:
   - type: markdown
     attributes:
