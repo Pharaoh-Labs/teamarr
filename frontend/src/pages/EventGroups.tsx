@@ -118,16 +118,17 @@ export function EventGroups() {
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   // Filter groups
+  const allGroups = data?.groups
   const filteredGroups = useMemo(() => {
-    if (!data?.groups) return []
+    if (!allGroups) return []
 
-    return data.groups.filter((group) => {
+    return allGroups.filter((group) => {
       if (nameFilter && !group.name.toLowerCase().includes(nameFilter.toLowerCase())) return false
       if (statusFilter === "enabled" && !group.enabled) return false
       if (statusFilter === "disabled" && group.enabled) return false
       return true
     })
-  }, [data?.groups, nameFilter, statusFilter])
+  }, [allGroups, nameFilter, statusFilter])
 
   // Column sort: 3-click cycle (asc → desc → reset to persisted sort_order).
   // DnD reordering is only active while unsorted.
@@ -141,8 +142,9 @@ export function EventGroups() {
 
   const isDndActive = sortColumn === null
 
-  // Sort icon component
-  const SortIcon = ({ column }: { column: "name" | "matched" | "status" }) => {
+  // Sort icon — a plain render helper, not a component (components created
+  // during render reset identity; react-hooks/static-components).
+  const sortIcon = (column: "name" | "matched" | "status") => {
     if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />
     return sortDirection === "asc" ? (
       <ArrowUp className="h-3 w-3 ml-1" />
@@ -483,7 +485,7 @@ export function EventGroups() {
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center">
-                      Name <SortIcon column="name" />
+                      Name {sortIcon("name")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -491,7 +493,7 @@ export function EventGroups() {
                     onClick={() => handleSort("matched")}
                   >
                     <div className="flex items-center justify-center">
-                      Matched <SortIcon column="matched" />
+                      Matched {sortIcon("matched")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -499,7 +501,7 @@ export function EventGroups() {
                     onClick={() => handleSort("status")}
                   >
                     <div className="flex items-center">
-                      Status <SortIcon column="status" />
+                      Status {sortIcon("status")}
                     </div>
                   </TableHead>
                   <TableHead className="w-28 text-right">

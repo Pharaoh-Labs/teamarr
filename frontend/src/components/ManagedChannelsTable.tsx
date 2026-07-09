@@ -713,10 +713,14 @@ export function ManagedChannelsTable() {
   }, [])
 
   // Refs so handleToggleExpand can stay identity-stable for the memo'd rows.
+  // Latest-ref pattern, updated post-commit: only read from event handlers,
+  // which always fire after the effect has run.
   const channelStreamsRef = useRef(channelStreams)
-  channelStreamsRef.current = channelStreams
   const expandedRef = useRef(expandedChannels)
-  expandedRef.current = expandedChannels
+  useEffect(() => {
+    channelStreamsRef.current = channelStreams
+    expandedRef.current = expandedChannels
+  }, [channelStreams, expandedChannels])
 
   const handleToggleExpand = useCallback((channelId: number) => {
     setExpandedChannels((prev) => {

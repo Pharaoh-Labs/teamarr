@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Search, Trash2, ChevronDown, ChevronRight, X } from "lucide-react"
@@ -57,8 +57,14 @@ function LeagueConfigRow({
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // Sync local state when config changes or row expands
-  useEffect(() => {
+  // Sync local state when config changes or row expands (render-time "adjust
+  // state when props change" pattern — see DispatcharrOutputSettings.tsx).
+  const [synced, setSynced] = useState<{
+    isExpanded: boolean
+    config: SubscriptionLeagueConfig | null
+  } | null>(null)
+  if (synced?.isExpanded !== isExpanded || synced?.config !== config) {
+    setSynced({ isExpanded, config })
     if (isExpanded && config) {
       setLocalProfileIds(
         config.channel_profile_ids !== null && config.channel_profile_ids !== undefined
@@ -72,7 +78,7 @@ function LeagueConfigRow({
       setLocalGroupId(null)
       setLocalGroupMode(null)
     }
-  }, [isExpanded, config])
+  }
 
   const profileSummary = (() => {
     if (!config?.channel_profile_ids) return "Default"

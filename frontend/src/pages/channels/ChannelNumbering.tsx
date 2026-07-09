@@ -77,9 +77,13 @@ export function ChannelNumbering() {
     }
   }, [settings])
 
-  useEffect(() => {
-    if (channelNumberingData) setChannelNumbering(channelNumberingData)
-  }, [channelNumberingData])
+  // Re-seed from the server blob on every refetch (render-time "adjust state
+  // when props change" pattern — see DispatcharrOutputSettings.tsx).
+  const [syncedNumbering, setSyncedNumbering] = useState<typeof channelNumberingData>(undefined)
+  if (channelNumberingData && channelNumberingData !== syncedNumbering) {
+    setSyncedNumbering(channelNumberingData)
+    setChannelNumbering(channelNumberingData)
+  }
 
   const channelRangeInitializedRef = useRef(false)
   useEffect(() => {

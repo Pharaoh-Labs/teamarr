@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -27,17 +27,21 @@ export function CategoryEditor({
   const [customInput, setCustomInput] = useState(customCategories.join(", "))
 
   // Sync from outside when the category list changes externally (form reset
-  // or initial load), but not while user is mid-typing.
-  useEffect(() => {
+  // or initial load), but not while user is mid-typing. Render-time "adjust
+  // state when props change" pattern keyed on the joined string — re-seed
+  // only when the joined string changes (see DispatcharrOutputSettings.tsx).
+  const joinedCustom = customCategories.join(",")
+  const [syncedJoined, setSyncedJoined] = useState(joinedCustom)
+  if (joinedCustom !== syncedJoined) {
+    setSyncedJoined(joinedCustom)
     const currentParsed = customInput
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
-    if (customCategories.join(",") !== currentParsed.join(",")) {
+    if (joinedCustom !== currentParsed.join(",")) {
       setCustomInput(customCategories.join(", "))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customCategories.join(",")])
+  }
 
   const toggle = (cat: string, checked: boolean) => {
     if (checked) {
