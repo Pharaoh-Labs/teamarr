@@ -294,8 +294,12 @@ class ChannelCleanup(_LifecycleHost):
         result = StreamProcessResult()
         current_ids_set = set(current_streams.keys())
 
-        # Build reverse index: stream_id → event_id (from current match results)
-        stream_event_map: dict[int, str] = {}
+        # Reverse index: stream_id → event_ids (from current match results).
+        # Multi-valued (#316): a fanned stream (tennis court/round feed, EPG
+        # time-share) legitimately matches MANY events per run — a single-value
+        # map kept only the last one, so every other channel it fed looked
+        # "rotated" and was deleted and recreated each generation.
+        stream_event_map: dict[int, set[str]] = {}
         if matched_streams:
             for ms in matched_streams:
                 stream_info = ms.get("stream", {})
@@ -304,7 +308,7 @@ class ChannelCleanup(_LifecycleHost):
                 segment = ms.get("card_segment")
                 if sid and event:
                     eid = f"{event.id}-{segment}" if segment else str(event.id)
-                    stream_event_map[sid] = eid
+                    stream_event_map.setdefault(sid, set()).add(eid)
 
         try:
             with self._db_factory() as conn:
@@ -361,13 +365,13 @@ class ChannelCleanup(_LifecycleHost):
                             # Cross-group stream: skip "missing from M3U" check
                             # But still check event rotation if we have match data
                             if stream_event_map and channel_event_id:
-                                matched_event = stream_event_map.get(stream_id)
-                                if matched_event and matched_event != channel_event_id:
+                                matched_events = stream_event_map.get(stream_id)
+                                if matched_events and channel_event_id not in matched_events:
                                     changed_streams.append(
                                         {
                                             "stream": s,
                                             "old_name": stored_name,
-                                            "new_name": f"rotated: {matched_event}",
+                                            "new_name": f"rotated: {sorted(matched_events)[0]}",
                                             "reason": "event_rotated",
                                         }
                                     )
@@ -384,11 +388,13 @@ class ChannelCleanup(_LifecycleHost):
                         current_stream = current_streams.get(stream_id, {})
                         current_name = current_stream.get("name", "")
 
-                        # Event-aware validation (when match data available)
+                        # Event-aware validation (when match data available).
+                        # Rotation = the stream's current match set no longer
+                        # CONTAINS this channel's event (fanned feeds match many).
                         if stream_event_map and channel_event_id:
-                            matched_event = stream_event_map.get(stream_id)
-                            if matched_event and matched_event != channel_event_id:
-                                # Stream now matches a different event → content rotated
+                            matched_events = stream_event_map.get(stream_id)
+                            if matched_events and channel_event_id not in matched_events:
+                                # Stream now matches different event(s) → content rotated
                                 changed_streams.append(
                                     {
                                         "stream": s,
@@ -399,10 +405,10 @@ class ChannelCleanup(_LifecycleHost):
                                 )
                                 logger.debug(
                                     "[LIFECYCLE] Stream %d rotated: "
-                        "channel event=%s, now matched to=%s",
+                                    "channel event=%s, now matched to=%s",
                                     stream_id,
                                     channel_event_id,
-                                    matched_event,
+                                    sorted(matched_events),
                                 )
                                 continue
 
@@ -410,9 +416,10 @@ class ChannelCleanup(_LifecycleHost):
                         if stored_name and current_name and stored_name != current_name:
                             # Name changed — check if it's still the same event
                             if stream_event_map:
-                                matched_event = stream_event_map.get(stream_id)
-                                if matched_event and (
-                                    not channel_event_id or matched_event == channel_event_id
+                                matched_events = stream_event_map.get(stream_id)
+                                if matched_events and (
+                                    not channel_event_id
+                                    or channel_event_id in matched_events
                                 ):
                                     # Same event, just renamed — update stored name, keep
                                     update_stream_name(conn, channel.id, stream_id, current_name)
