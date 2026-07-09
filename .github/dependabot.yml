@@ -1,9 +1,20 @@
 version: 2
 updates:
+  # target-branch: dev on every ecosystem — all work lands on dev via PR and
+  # reaches main only in batched releases (#309). Without it Dependabot opens
+  # PRs against main and the branches drift.
   - package-ecosystem: github-actions
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
+    # Same supply-chain aging as uv/npm below (#308) — actions have their own
+    # compromise history (e.g. tj-actions/changed-files).
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       actions:
         patterns:
@@ -11,8 +22,17 @@ updates:
 
   - package-ecosystem: uv
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
+    # Let routine version bumps age before opening a PR, so releases that get
+    # yanked or flagged as malicious within a few days are filtered out first.
+    # Security updates for known CVEs are exempt from cooldown by Dependabot.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       python-minor-patch:
         update-types:
@@ -21,8 +41,15 @@ updates:
 
   - package-ecosystem: npm
     directory: /frontend
+    target-branch: dev
     schedule:
       interval: weekly
+    # See uv cooldown note above.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 3
     groups:
       npm-minor-patch:
         update-types:
