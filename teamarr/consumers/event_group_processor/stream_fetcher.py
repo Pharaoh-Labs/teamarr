@@ -195,6 +195,7 @@ class StreamFetcher:
                 skipped_overlap += 1
                 continue
             seen.add(stream_id)
+            account_id = getattr(detail, "m3u_account_id", None) if detail else None
             candidates.append(
                 {
                     "id": stream_id,
@@ -212,10 +213,10 @@ class StreamFetcher:
                     # the M3U stream group above — drives scoping + the sorting rule.
                     "dp_channel_group_id": dp_group_id,
                     "dp_channel_group": ch.get("channel_group_name"),
-                    "m3u_account_id": getattr(detail, "m3u_account_id", None) if detail else None,
-                    "m3u_account_name": self._account_names().get(
-                        getattr(detail, "m3u_account_id", None) if detail else None
-                    ),
+                    "m3u_account_id": account_id,
+                    "m3u_account_name": self._account_names().get(account_id)
+                    if account_id is not None
+                    else None,
                     "is_stale": getattr(detail, "is_stale", False) if detail else False,
                 }
             )
