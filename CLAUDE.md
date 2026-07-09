@@ -340,19 +340,23 @@ When the user says **"audit"**, claim the next open child bead under `teamarrv2-
 
 When asked to **"sync status"** or **"update status"**:
 
-1. Query GitHub issues: `gh issue list --state all --limit 50`
-2. Query GitHub PRs: `gh pr list --state all --limit 20`
-3. Read PR/issue comments for context: `gh api repos/Pharaoh-Labs/teamarr/issues/<id>/comments`
-4. Query beads: `bd list`, `bd list --label roadmap`
-5. Cross-reference issues ↔ beads (check which issues have epics, which don't)
-6. Update `plans/STATUS.md` with:
-   - Open issues table (with bead mapping)
-   - Open PRs table (with status/notes)
-   - Roadmap epics (ready vs blocked)
-   - Issues needing beads
-   - Recently closed items
-   - Change log entry with date
-7. Present summary and recommend next steps
+**Principle: one source of truth per fact.** GitHub owns issue/PR state (via labels), beads own work state, `plans/STATUS.md` owns only judgment (priorities, next steps, standing facts). Never transcribe into STATUS.md anything that `gh`/`bd` can derive live.
+
+**Label vocabulary** (issue state lives HERE, not in prose — triagers maintain these too):
+| Label | Meaning |
+|-------|---------|
+| `fixed-on-dev` | Landed on dev; closes at next release. `gh issue list --label fixed-on-dev` = release checklist |
+| `needs-triage` | No assessment or bead yet |
+| `contributor-led` | Community contributor driving implementation |
+| `research` | Blocked on research / data-source discovery |
+| `process` | Standing process/housekeeping issue |
+
+**The sync:**
+1. Query live state: `gh issue list --state open`, `gh pr list`, `bd list -n 300` (beware default 50-row cap), read comment threads on anything that changed
+2. Reconcile labels — new untriaged issues get `needs-triage`; dev-landed fixes get `fixed-on-dev`; fix wrong/missing labels
+3. Cross-reference issues ↔ beads; file beads for triaged issues that lack them (`(#NNN)` in bead title)
+4. **Rewrite `plans/STATUS.md` from scratch** (target ≤80 lines): header (version, dev-ahead count, release-trigger check, open counts), Needs Attention (≤10 curated rows of judgment), Next Work queue, Standing Facts, last 3 changelog entries. Never append-and-patch — full regeneration makes drift impossible. Prior history lives in `plans/archive/`.
+5. Present summary; state whether a release trigger is met
 
 ## Adding a New League
 
