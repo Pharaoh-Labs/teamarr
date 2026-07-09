@@ -18,6 +18,7 @@ Developer documentation covering Teamarr's architecture, data providers, databas
 | [Architecture](architecture/) | API layer, consumer layer, Dispatcharr integration, detection keywords, database, template engine, migrations |
 | [Frontend](frontend/) | React + TypeScript + Vite architecture, component library, state management |
 | [Deployment](deployment/) | Environment variables, Docker configuration, logging |
+| [Gracenote EPG Reference](gracenote-categories) | Captured Gracenote field-shape conventions per sport — the model the default templates target |
 
 ## Stack
 
