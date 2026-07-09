@@ -12,24 +12,7 @@ from unittest.mock import MagicMock
 
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.services.sports_data import REFRESH_COALESCE_TTL, SportsDataService
-
-
-class _DictCache:
-    """Minimal in-memory stand-in for the shared service cache."""
-
-    def __init__(self):
-        self.data = {}
-        self.set_calls = []
-
-    def get(self, key):
-        return self.data.get(key)
-
-    def set(self, key, value, ttl=None):
-        self.data[key] = value
-        self.set_calls.append((key, value, ttl))
-
-    def delete(self, key):
-        self.data.pop(key, None)
+from tests.fakes import FakeCache
 
 
 def _service_with_missing_event():
@@ -37,7 +20,7 @@ def _service_with_missing_event():
     provider.supports_league.return_value = True
     provider.get_event.return_value = None
     service = SportsDataService(providers=[provider])
-    service._cache = _DictCache()
+    service._cache = FakeCache()
     return service, provider
 
 

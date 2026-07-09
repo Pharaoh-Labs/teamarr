@@ -13,6 +13,29 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 
+class FakeCache:
+    """Minimal in-memory stand-in for the shared PersistentTTLCache.
+
+    Stores values forever (TTLs are recorded in ``set_calls`` but not
+    enforced) — within-one-run cache semantics, which is what service-layer
+    tests exercise.
+    """
+
+    def __init__(self):
+        self.data = {}
+        self.set_calls = []
+
+    def get(self, key):
+        return self.data.get(key)
+
+    def set(self, key, value, ttl=None):
+        self.data[key] = value
+        self.set_calls.append((key, value, ttl))
+
+    def delete(self, key):
+        self.data.pop(key, None)
+
+
 @dataclass
 class FakeTeam:
     """Minimal Team stand-in."""
