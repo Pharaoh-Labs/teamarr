@@ -32,6 +32,26 @@ class StreamFetcher:
         _service: Any
         _active_epg_source_ids: Any
 
+    def _account_names(self) -> dict[int, str]:
+        """Map M3U account id → name, cached per processor instance.
+
+        Streams from Dispatcharr carry only ``m3u_account_id``; the display
+        name must be resolved here so identically named streams from multiple
+        logins are attributed to their OWN account (#297) — falling back to the
+        group's single configured account name mislabels every stream in the
+        group and mis-evaluates m3u-type stream-ordering rules.
+        """
+        cache = getattr(self, "_account_name_cache", None)
+        if cache is None:
+            try:
+                accounts = self._dispatcharr_client.m3u.list_accounts(include_custom=True)
+                cache = {a.id: a.name for a in accounts}
+            except Exception as e:
+                logger.warning("[EVENT_EPG] Failed to list M3U accounts: %s", e)
+                cache = {}
+            self._account_name_cache = cache
+        return cache
+
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
         """Fetch M3U streams from Dispatcharr for the group.
 
@@ -57,6 +77,7 @@ class StreamFetcher:
                 streams = m3u_manager.list_streams()
 
             # Convert to dicts for matcher (sorted by name for consistent order)
+            account_names = self._account_names()
             stream_dicts = [
                 {
                     "id": s.id,
@@ -66,6 +87,7 @@ class StreamFetcher:
                     "channel_group": s.channel_group,
                     "channel_group_id": s.channel_group_id,
                     "m3u_account_id": s.m3u_account_id,
+                    "m3u_account_name": account_names.get(s.m3u_account_id),
                     "is_stale": s.is_stale,
                 }
                 for s in streams
@@ -191,6 +213,9 @@ class StreamFetcher:
                     "dp_channel_group_id": dp_group_id,
                     "dp_channel_group": ch.get("channel_group_name"),
                     "m3u_account_id": getattr(detail, "m3u_account_id", None) if detail else None,
+                    "m3u_account_name": self._account_names().get(
+                        getattr(detail, "m3u_account_id", None) if detail else None
+                    ),
                     "is_stale": getattr(detail, "is_stale", False) if detail else False,
                 }
             )
