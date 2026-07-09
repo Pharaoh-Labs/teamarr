@@ -1,0 +1,47 @@
+name: Task / Chore
+description: Internal engineering work — refactor, chore, tech-debt, or docs (maintainers)
+title: "[Task]: "
+labels: ["status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For internal work that isn't a user-facing bug or feature. Under the issue-first
+        workflow, this becomes the tracking issue for a bead + branch. Add the matching
+        `type:` label (`refactor`, `chore`, or `docs`) after filing.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of work
+      options:
+        - Refactor (restructure without changing behavior)
+        - Chore (build, deps, CI, tooling, cleanup)
+        - Docs (documentation only)
+        - Tech debt / cleanup
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to happen?
+      placeholder: Describe the work and why it's worth doing now.
+    validations:
+      required: true
+
+  - type: input
+    id: area
+    attributes:
+      label: Affected area
+      description: Which subsystem(s)? e.g. templates, epg-matching, sync, settings, frontend, ci/release
+      placeholder: "e.g. epg-matching"
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How do we know this is done?
+      placeholder: |
+        - [ ]
+        - [ ]
