@@ -770,6 +770,11 @@ def create_group(request: GroupCreate):
         )
 
         group = get_group(conn, group_id)
+        if group is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Group {group_id} could not be loaded after creation",
+            )
 
     logger.info("[CREATED] Event group id=%d name=%s", group_id, request.name)
 
@@ -1376,6 +1381,11 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             delete_group_xmltv(conn, group_id)
 
         group = get_group(conn, group_id)
+        if group is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Group {group_id} could not be loaded after update",
+            )
         channel_count = get_group_channel_count(conn, group_id)
 
     logger.info("[UPDATED] Event group id=%d", group_id)
