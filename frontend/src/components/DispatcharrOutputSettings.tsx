@@ -6,11 +6,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Select } from "@/components/ui/select"
-import {
-  ChannelProfileSelector,
-  profileIdsToApi,
-  apiToProfileIds,
-} from "@/components/ChannelProfileSelector"
+import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
+import { profileIdsToApi, apiToProfileIds } from "@/lib/channel-profile-ids"
 import { StreamProfileSelector } from "@/components/StreamProfileSelector"
 import {
   useSettings,

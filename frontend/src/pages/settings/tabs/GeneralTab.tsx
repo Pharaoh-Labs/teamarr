@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import { Loader2, Play, ExternalLink, RefreshCw } from "lucide-react"
-import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useGenerationProgress } from "@/hooks/useGenerationProgress"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -410,7 +410,9 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
                 type="password"
                 value={display?.tsdb_api_key ?? ""}
                 onChange={(e) => {
-                  display && setDisplay({ ...display, tsdb_api_key: e.target.value })
+                  if (display) {
+                    setDisplay({ ...display, tsdb_api_key: e.target.value })
+                  }
                   setTsdbValidation(null)
                 }}
                 placeholder="Leave blank to use free tier"

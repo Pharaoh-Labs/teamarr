@@ -18,7 +18,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Toaster } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import { useUpdateCheckSettings, useCheckForUpdates } from "../hooks/useSettings"
-import { useGenerationProgress } from "@/contexts/GenerationContext"
+import { useGenerationProgress } from "@/hooks/useGenerationProgress"
 
 // The stepwise user flow (v2.7.0 IA). Dashboard is the landing/overview;
 // steps 1–5 are the ordered configuration flow; Generate is the end bookend.

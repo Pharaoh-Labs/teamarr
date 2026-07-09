@@ -80,7 +80,7 @@ export function ExceptionKeywordsCard() {
       keywordsQuery.refetch()
       setEditingKeyword(null)
       toast.success("Keyword updated")
-    } catch (err) {
+    } catch {
       toast.error("Failed to update keyword")
     }
   }
@@ -156,7 +156,7 @@ export function ExceptionKeywordsCard() {
                           })
                           keywordsQuery.refetch()
                           toast.success(`Updated behavior to "${newBehavior}"`)
-                        } catch (err) {
+                        } catch {
                           toast.error("Failed to update keyword behavior")
                         }
                       }}

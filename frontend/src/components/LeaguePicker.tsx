@@ -336,7 +336,11 @@ export function LeaguePicker({
                       className="h-6 text-xs"
                       onClick={(e) => {
                         e.stopPropagation()
-                        allSelected ? clearAllInSport(sport) : selectAllInSport(sport)
+                        if (allSelected) {
+                          clearAllInSport(sport)
+                        } else {
+                          selectAllInSport(sport)
+                        }
                       }}
                     >
                       {allSelected ? "Clear" : "Select All"}
