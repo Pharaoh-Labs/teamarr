@@ -231,6 +231,7 @@ class StreamMatcher:
         feed_away_terms: list[str] | None = None,
         name_match_enabled: bool = True,
         team_streams_enabled: bool = False,
+        tennis_majors_only: bool = False,
         epg_index: "EPGProgramIndex | None" = None,
     ):
         """Initialize the matcher.
@@ -346,7 +347,9 @@ class StreamMatcher:
         )
         self._event_matcher = EventCardMatcher(service, self._cache)
         self._racing_matcher = RacingMatcher(service, self._cache)
-        self._tennis_matcher = TennisMatcher(service, self._cache)
+        self._tennis_matcher = TennisMatcher(
+            service, self._cache, majors_only=tennis_majors_only
+        )
 
         # League event types + sports cache
         self._league_event_types: dict[str, str] = {}

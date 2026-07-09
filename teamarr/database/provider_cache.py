@@ -53,6 +53,7 @@ def event_to_dict(event: Event) -> dict:
         "round_name": event.round_name,
         "court": event.court,
         "draw_type": event.draw_type,
+        "is_major": event.is_major,
     }
 
 
@@ -154,6 +155,7 @@ def dict_to_event(data: dict) -> Event:
         round_name=data.get("round_name"),
         court=data.get("court"),
         draw_type=data.get("draw_type"),
+        is_major=bool(data.get("is_major", False)),
     )
 
 

@@ -206,9 +206,14 @@ class TennisMatcher:
         self,
         service: SportsDataService,
         cache: StreamMatchCache,
+        majors_only: bool = False,
     ):
         self._service = service
         self._cache = cache
+        # Only match grand-slam tournaments (#283): ESPN marks tournaments
+        # major=true; with the flag on, smaller tournaments never enter the
+        # candidate pool, so their channels are never created.
+        self._majors_only = majors_only
 
     def match(
         self,
@@ -412,6 +417,7 @@ class TennisMatcher:
         events: list[Event] = []
         for offset in (-1, 0, 1):
             events.extend(self._service.get_events(league, match_date + timedelta(days=offset)))
+        events = self._apply_majors_filter(events)
         return [
             e for e in events if e.start_time.astimezone(user_tz).date() == match_date
         ]
@@ -428,11 +434,18 @@ class TennisMatcher:
             events.extend(self._service.get_events(league, match_date + timedelta(days=offset)))
         window_start = match_date - timedelta(days=self._FALLBACK_LOOKBACK_DAYS)
         window_end = match_date + timedelta(days=1)
+        events = self._apply_majors_filter(events)
         return [
             e
             for e in events
             if window_start <= e.start_time.astimezone(user_tz).date() <= window_end
         ]
+
+    def _apply_majors_filter(self, events: list[Event]) -> list[Event]:
+        """Drop non-major tournaments when tennis_majors_only is set (#283)."""
+        if not self._majors_only:
+            return events
+        return [e for e in events if e.is_major]
 
     def _check_cache(self, ctx: TennisMatchContext) -> MatchOutcome | None:
         """Check cache for existing match."""

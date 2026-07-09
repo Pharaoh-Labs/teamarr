@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { ToggleCard } from "@/components/ui/toggle-card"
 import { CheckboxListPicker } from "@/components/ui/checkbox-list-picker"
 import {
@@ -220,6 +221,28 @@ export function EventLookaheadSetting() {
           </Select>
           <p className="text-xs text-muted-foreground">
             How many days of upcoming events to match streams against.
+          </p>
+        </div>
+
+        {/* Same card + save as the lookahead: both edit the shared epg blob,
+            and two full-PUT components in one view would overwrite each other. */}
+        <div className="space-y-2 border-t pt-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="tennis-majors-only"
+              checked={epg?.tennis_majors_only ?? false}
+              onCheckedChange={(checked) =>
+                epg && setEPG({ ...epg, tennis_majors_only: checked })
+              }
+            />
+            <Label htmlFor="tennis-majors-only" className="cursor-pointer">
+              Tennis: majors only
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Only match Grand Slam tournaments (Australian Open, French Open, Wimbledon,
+            US Open). Smaller ATP/WTA tournaments are ignored entirely — no channels are
+            created for them.
           </p>
         </div>
 

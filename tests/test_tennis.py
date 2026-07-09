@@ -798,3 +798,73 @@ def test_parser_dedups_duplicate_competition_entries():
     events = _Parser()._parse_tennis_matches(doubled, "atp", "tennis", date(2026, 7, 6))
     names = [e.short_name for e in events]
     assert names.count("F. Cobolli vs A. de Minaur") == 1
+
+
+# ---------------------------------------------------------------------------
+# Majors-only subscription (#283 first slice)
+# ---------------------------------------------------------------------------
+
+
+def test_parser_carries_major_flag():
+    import copy
+
+    slam = copy.deepcopy(WIMBLEDON)
+    slam["major"] = True
+    events = _Parser()._parse_tennis_matches(slam, "atp", "tennis", date(2026, 7, 6))
+    assert events and all(e.is_major for e in events)
+
+    minor = copy.deepcopy(WIMBLEDON)
+    minor["major"] = False
+    events = _Parser()._parse_tennis_matches(minor, "atp", "tennis", date(2026, 7, 6))
+    assert events and not any(e.is_major for e in events)
+
+
+def test_majors_only_filters_feed_fanout():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 7, 6, 8, 0, tzinfo=tz)
+    slam = _tournament_event("wim1", "Wimbledon", "No. 1 Court", day)
+    slam.is_major = True
+    minor = _tournament_event("nor1", "Nordea Open", "Court 1", day.replace(hour=9))
+    minor.is_major = False
+
+    tm = TennisMatcher(service=_PoolService([slam, minor]), cache=_NoCache(), majors_only=True)
+    # Generic court feed with no tournament hint — majors filter must still
+    # keep Nordea out of the pool entirely.
+    c = classify_stream(
+        "Day #8 No 1 Court @ Jul 6 8:00 AM :Tennis  02",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    outcomes = tm.match_feed(c, ["atp"], date(2026, 7, 6), stream_id=1, user_tz=tz)
+    assert {o.event.id for o in outcomes if o.is_matched} == {"wim1"}
+
+    # Same court key for both — filter must be the reason Nordea is out
+    tm_off = TennisMatcher(service=_PoolService([slam, minor]), cache=_NoCache(), majors_only=False)
+    outcomes_off = tm_off.match_feed(c, ["atp"], date(2026, 7, 6), stream_id=1, user_tz=tz)
+    assert {o.event.id for o in outcomes_off if o.is_matched} == {"wim1", "nor1"}
+
+
+def test_majors_only_filters_player_matching():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 7, 6, 12, 0, tzinfo=tz)
+    minor = _tennis_event(
+        "nor2", _player("Casper Ruud", "Ruud"), _player("Holger Rune", "Rune"), day
+    )
+    minor.is_major = False
+
+    tm = TennisMatcher(service=_PoolService([minor]), cache=_NoCache(), majors_only=True)
+    c = classify_stream(
+        "Nordea Open: Ruud vs Rune @ Jul 6 12:00 PM",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    outcome = tm.match(
+        c,
+        "atp",
+        date(2026, 7, 6),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
+    )
+    assert not outcome.is_matched

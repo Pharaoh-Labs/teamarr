@@ -88,6 +88,8 @@ Set these on a Source in the editor (and at bulk add / bulk edit). **EPG** requi
 
 The **Event Lookahead** controls how far ahead Teamarr matches streams to sporting events — streams are matched only to events within this window. Default is 3 days; options are 1, 3, 7, 14, or 30 days.
 
+**Tennis: majors only** (same card) restricts tennis matching to the four Grand Slams (Australian Open, French Open, Wimbledon, US Open). Smaller ATP/WTA tournaments are ignored entirely — no channels are created for them. Off by default.
+
 ## EPG Program Matching
 
 Traditional linear channels (ESPN, NBA1, FS1) carry many different games across a day under a single static stream name, so Teamarr can't match them by name. **EPG program-data matching** uses Dispatcharr's program guide to match these streams to events by the program *title* (e.g. "MLB Baseball" / "Chicago Cubs at St. Louis Cardinals"), then **time-shares** one linear stream across many event channels — attaching it to each event's channel only near game time and detaching it after.

@@ -98,6 +98,7 @@ class TennisParserMixin:
             return []
 
         venue_name = (data.get("venue") or {}).get("displayName", "")
+        is_major = bool(data.get("major"))
 
         allowed = _TENNIS_LEAGUE_GROUPINGS.get(league)
         events: list[Event] = []
@@ -119,6 +120,7 @@ class TennisParserMixin:
                     draw_type=draw_type,
                     venue_name=venue_name,
                     target_date=target_date,
+                    is_major=is_major,
                 )
                 if event is None:
                     continue
@@ -143,6 +145,7 @@ class TennisParserMixin:
         draw_type: str,
         venue_name: str,
         target_date: date,
+        is_major: bool = False,
     ) -> Event | None:
         """Parse a single tennis match (one groupings[].competitions[] entry)."""
         try:
@@ -222,6 +225,7 @@ class TennisParserMixin:
                 round_name=round_name,
                 court=court,
                 draw_type=draw_type,
+                is_major=is_major,
             )
         except Exception as e:
             logger.warning("[ESPN_TENNIS] Failed to parse match: %s", e)

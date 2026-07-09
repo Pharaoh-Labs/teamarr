@@ -1748,6 +1748,7 @@ class TeamMatcher:
                 round_name=cached_data.get("round_name"),
                 court=cached_data.get("court"),
                 draw_type=cached_data.get("draw_type"),
+                is_major=bool(cached_data.get("is_major", False)),
             )
         except Exception as e:
             logger.warning("[MATCH_CACHE] Failed to reconstruct event from cache: %s", e)

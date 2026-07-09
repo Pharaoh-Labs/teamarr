@@ -60,6 +60,7 @@ export interface EPGSettings {
   epg_channel_source_groups: number[]
   epg_stream_pre_buffer_minutes: number
   epg_stream_post_buffer_minutes: number
+  tennis_majors_only: boolean
   /** Game-thumbs base URL prefixed onto relative art paths in templates (z02s). */
   art_base_url: string
 }
