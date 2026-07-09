@@ -328,9 +328,13 @@ function PriorityInput({
   // Commits on blur or Enter; reverts to last valid value if input is invalid.
   const [text, setText] = useState(String(value))
 
-  useEffect(() => {
+  // Re-sync when the committed value changes externally (render-time "adjust
+  // state when props change" pattern — see DispatcharrOutputSettings.tsx).
+  const [syncedValue, setSyncedValue] = useState(value)
+  if (value !== syncedValue) {
+    setSyncedValue(value)
     setText(String(value))
-  }, [value])
+  }
 
   const commit = () => {
     const parsed = parseInt(text, 10)
@@ -703,6 +707,11 @@ function StatsMetricBuilder({ value, onChange }: { value: string; onChange: (v: 
   )
 }
 
+// Monotonic source for RuleFormData._id — module-level (not a ref) so it is
+// safe to call during render; ids only need to be unique, gaps are fine.
+let nextRuleId = 0
+const allocateId = () => ++nextRuleId
+
 export function StreamOrderingManager() {
   const { data: settings, isLoading, error } = useStreamOrderingSettings()
   const updateSettings = useUpdateStreamOrderingSettings()
@@ -713,8 +722,6 @@ export function StreamOrderingManager() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportWarning, setExportWarning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const nextIdRef = useRef(0)
-  const allocateId = () => ++nextIdRef.current
 
   // Extract unique M3U account names and group names from groups
   const { m3uAccounts, groupNames } = useMemo(() => {
@@ -755,21 +762,23 @@ export function StreamOrderingManager() {
   }, [appSettings, dpChannelGroups])
 
   // Initialize rules from settings; auto-inject catch_all if absent
-  useEffect(() => {
-    if (settings?.rules) {
-      const loaded: RuleFormData[] = settings.rules.map(r => ({
-        _id: allocateId(),
-        type: r.type,
-        value: r.value,
-        priority: r.priority,
-      }))
-      if (!loaded.some(r => r.type === "catch_all")) {
-        loaded.push({ _id: allocateId(), type: "catch_all", value: "", priority: 99 })
-      }
-      setRules(loaded)
-      setHasChanges(false)
+  // (render-time "adjust state when props change" pattern — see
+  // DispatcharrOutputSettings.tsx).
+  const [syncedSettings, setSyncedSettings] = useState<typeof settings>(undefined)
+  if (settings?.rules && settings !== syncedSettings) {
+    setSyncedSettings(settings)
+    const loaded: RuleFormData[] = settings.rules.map(r => ({
+      _id: allocateId(),
+      type: r.type,
+      value: r.value,
+      priority: r.priority,
+    }))
+    if (!loaded.some(r => r.type === "catch_all")) {
+      loaded.push({ _id: allocateId(), type: "catch_all", value: "", priority: 99 })
     }
-  }, [settings])
+    setRules(loaded)
+    setHasChanges(false)
+  }
 
   const handleAddRule = () => {
     // Find next available priority (skip 99 if catch_all is using it)
