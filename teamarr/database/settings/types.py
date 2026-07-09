@@ -92,6 +92,10 @@ class EPGSettings:
     epg_channel_source_groups: list[int] = field(default_factory=list)
     epg_stream_pre_buffer_minutes: int = 60
     epg_stream_post_buffer_minutes: int = 60
+    # Tennis: only match/attach grand-slam tournaments (#283 first slice) —
+    # ESPN marks tournaments major=true; smaller events are filtered at the
+    # tennis matcher so junk-tour channels never get created.
+    tennis_majors_only: bool = False
     # Game-thumbs base URL (epic z02s): optional prefix for relative art paths in
     # templates. Empty = no prefixing. Absolute (http(s)://) art values bypass it.
     art_base_url: str = ""

@@ -11,6 +11,7 @@ as Team objects, with the surname as the abbreviation (streams reference
 players by surname only: "Wimbledon: Zheng vs Norrie @ Jun 29 12:30 PM").
 """
 
+import hashlib
 import logging
 from datetime import date, datetime
 from typing import TYPE_CHECKING
@@ -18,6 +19,23 @@ from typing import TYPE_CHECKING
 from teamarr.core import Event, EventStatus, Team, Venue
 
 logger = logging.getLogger(__name__)
+
+
+def _tennis_event_id(
+    tournament_id: str, start_time: datetime, first: Team, second: Team
+) -> str:
+    """Deterministic match id: (tournament, UTC date, player pair).
+
+    ESPN's tennis competition ids are UNSTABLE — the same match resurfaces
+    under a new id across fetches (observed: 177435 → 177461 → 181129 for one
+    Wimbledon semifinal, #316). Keying Events on them churns channels every
+    generation and duplicates the same match across groups. The player pair +
+    tournament + UTC date is the match's real identity (single elimination:
+    a pair meets at most once per tournament), so derive the id from that.
+    """
+    pair = "|".join(sorted((first.id, second.id)))
+    digest = hashlib.sha1(pair.encode()).hexdigest()[:10]
+    return f"{tournament_id}-{start_time.strftime('%Y%m%d')}-{digest}"
 
 # Draw types (grouping slugs) each tennis league keeps. Grand slams appear
 # verbatim on BOTH the atp and wta endpoints with all five groupings, so the
@@ -80,9 +98,11 @@ class TennisParserMixin:
             return []
 
         venue_name = (data.get("venue") or {}).get("displayName", "")
+        is_major = bool(data.get("major"))
 
         allowed = _TENNIS_LEAGUE_GROUPINGS.get(league)
         events: list[Event] = []
+        seen_ids: set[str] = set()
         for grouping in data.get("groupings", []):
             grouping_info = grouping.get("grouping") or {}
             slug = grouping_info.get("slug", "")
@@ -100,9 +120,17 @@ class TennisParserMixin:
                     draw_type=draw_type,
                     venue_name=venue_name,
                     target_date=target_date,
+                    is_major=is_major,
                 )
-                if event:
-                    events.append(event)
+                if event is None:
+                    continue
+                # ESPN sometimes lists the same match under multiple
+                # competition entries; deterministic ids collapse those —
+                # keep the first (#316).
+                if event.id in seen_ids:
+                    continue
+                seen_ids.add(event.id)
+                events.append(event)
 
         return events
 
@@ -117,6 +145,7 @@ class TennisParserMixin:
         draw_type: str,
         venue_name: str,
         target_date: date,
+        is_major: bool = False,
     ) -> Event | None:
         """Parse a single tennis match (one groupings[].competitions[] entry)."""
         try:
@@ -179,7 +208,7 @@ class TennisParserMixin:
                     game_recap = notes[0].get("text") or ""
 
             return Event(
-                id=f"{tournament_id}-{comp_id}",
+                id=_tennis_event_id(tournament_id, start_time, first, second),
                 provider=self.name,
                 name=f"{tournament_name}: {first.name} vs {second.name}",
                 short_name=f"{first.short_name} vs {second.short_name}",
@@ -196,6 +225,7 @@ class TennisParserMixin:
                 round_name=round_name,
                 court=court,
                 draw_type=draw_type,
+                is_major=is_major,
             )
         except Exception as e:
             logger.warning("[ESPN_TENNIS] Failed to parse match: %s", e)

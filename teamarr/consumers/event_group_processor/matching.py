@@ -64,7 +64,8 @@ class StreamMatching:
             row = conn.execute(
                 "SELECT include_final_events, "
                 "epg_xtream_fallback_enabled, epg_xtream_cache_hours, "
-                "event_match_days_back, event_match_days_ahead "
+                "event_match_days_back, event_match_days_ahead, "
+                "tennis_majors_only "
                 "FROM settings WHERE id = 1"
             ).fetchone()
             include_final_events = (
@@ -74,6 +75,7 @@ class StreamMatching:
             xtream_cache_hours = (row["epg_xtream_cache_hours"] if row else 24) or 24
             match_days_back = (row["event_match_days_back"] if row else 7) or 7
             match_days_ahead = (row["event_match_days_ahead"] if row else 3) or 3
+            tennis_majors_only = bool(row["tennis_majors_only"]) if row else False
 
             # Load feed separation settings
             feed_settings = get_feed_separation_settings(conn)
@@ -132,6 +134,7 @@ class StreamMatching:
             feed_home_terms=feed_home_terms,
             feed_away_terms=feed_away_terms,
             name_match_enabled=group.name_match_enabled,
+            tennis_majors_only=tennis_majors_only,
             team_streams_enabled=group.team_streams_enabled,
             epg_index=epg_index,
         )

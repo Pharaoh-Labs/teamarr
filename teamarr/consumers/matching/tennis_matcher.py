@@ -58,6 +58,81 @@ _COURT_PATTERNS = [
 # Ordinal / keyword round labels → canonical ESPN round.displayName form
 _ROUND_ORDINALS = {"first": "1", "second": "2", "third": "3", "fourth": "4"}
 
+# Tokens too generic to identify a tournament ("Hall of Fame Open" must match
+# on hall/fame, never on open/cup) — used by the feed tournament guard (#316).
+_GENERIC_TOURNAMENT_TOKENS = frozenset(
+    {
+        "atp", "wta", "tour", "tennis", "open", "cup", "championship",
+        "championships", "masters", "classic", "international", "invitational",
+        "presented", "by", "the", "for", "of", "and", "at", "in", "de", "du",
+    }
+)
+
+# Draw hints a feed stream can declare ("Ladies' Singles Semifinals").
+# normalize_text strips apostrophes, so match the flattened token forms.
+_DRAW_GENDER_HINTS = [
+    (re.compile(r"\b(?:ladies|womens?)\b"), "women"),
+    (re.compile(r"\b(?:gentlemens?|mens?)\b"), "men"),
+]
+_DRAW_TYPE_HINTS = [
+    (re.compile(r"\bmixed\b"), "mixed"),
+    (re.compile(r"\bsingles\b"), "singles"),
+    (re.compile(r"\bdoubles\b"), "doubles"),
+]
+
+
+def _extract_draw_hints(text: str) -> tuple[str | None, str | None]:
+    """(gender, type) a feed stream declares, e.g. ("women", "singles").
+
+    "Mixed" implies doubles with no gender split, so it wins over a stray
+    gender token and suppresses the gender hint.
+    """
+    draw_type = next((v for p, v in _DRAW_TYPE_HINTS if p.search(text)), None)
+    if draw_type == "mixed":
+        return None, "mixed"
+    gender = next((v for p, v in _DRAW_GENDER_HINTS if p.search(text)), None)
+    return gender, draw_type
+
+
+def _draw_key(draw_type: str | None) -> tuple[str | None, str | None]:
+    """Canonical (gender, type) for an ESPN grouping displayName.
+
+    "Gentlemen's Singles" / "Men's Singles" → ("men", "singles");
+    "Mixed Doubles" → (None, "mixed").
+    """
+    if not draw_type:
+        return None, None
+    return _extract_draw_hints(normalize_text(draw_type))
+
+
+def _tournament_guard(text: str, pool: list[Event]) -> list[Event]:
+    """Restrict candidates to tournaments the stream names, when it names any.
+
+    A court feed says "Wimbledon Day #8 No 1 Court" — without this, its
+    court key also joins Court 1 at every OTHER tournament running that day
+    (#316). The hint set is derived from the candidate pool itself: a
+    tournament is "named" when any of its distinctive name tokens (generic
+    words like open/cup/masters excluded) appears in the stream text. When
+    the stream names no pooled tournament, the pool passes unfiltered.
+    """
+    text_tokens = set(text.split())
+    named: set[str] = set()
+    seen: dict[str, bool] = {}
+    for event in pool:
+        tname = event.tournament_name or ""
+        if not tname or tname in seen:
+            continue
+        distinctive = (
+            set(normalize_text(tname).split()) - _GENERIC_TOURNAMENT_TOKENS
+        )
+        hit = bool(distinctive and distinctive & text_tokens)
+        seen[tname] = hit
+        if hit:
+            named.add(tname)
+    if not named:
+        return pool
+    return [e for e in pool if (e.tournament_name or "") in named]
+
 
 def _extract_courts(text: str) -> set[str]:
     """All canonical court keys mentioned in a (normalized) stream name.
@@ -131,9 +206,14 @@ class TennisMatcher:
         self,
         service: SportsDataService,
         cache: StreamMatchCache,
+        majors_only: bool = False,
     ):
         self._service = service
         self._cache = cache
+        # Only match grand-slam tournaments (#283): ESPN marks tournaments
+        # major=true; with the flag on, smaller tournaments never enter the
+        # candidate pool, so their channels are never created.
+        self._majors_only = majors_only
 
     def match(
         self,
@@ -259,6 +339,16 @@ class TennisMatcher:
         for league in leagues:
             pool.extend(self._events_for_local_date(league, match_date, user_tz))
 
+        # Tournament guard (#316): "Wimbledon ... No 1 Court" must not join
+        # Court 1 at other tournaments running the same day.
+        pool = _tournament_guard(text, pool)
+
+        # Draw guard (#316): a round feed that declares its draw ("Ladies'
+        # Singles Semifinals") must not fan onto other groupings. Court feeds
+        # skip it — the court is authoritative for its whole slate, and their
+        # "ft Doubles Semifinals" suffixes are marketing, not scope.
+        gender_hint, type_hint = (None, None) if courts else _extract_draw_hints(text)
+
         candidates = []
         for event in pool:
             if courts:
@@ -267,6 +357,12 @@ class TennisMatcher:
                     continue
             if round_label and _round_key(event.round_name) != round_label:
                 continue
+            if gender_hint or type_hint:
+                event_gender, event_type = _draw_key(event.draw_type)
+                if gender_hint and event_gender and event_gender != gender_hint:
+                    continue
+                if type_hint and event_type and event_type != type_hint:
+                    continue
             candidates.append(event)
 
         if not candidates:
@@ -321,6 +417,7 @@ class TennisMatcher:
         events: list[Event] = []
         for offset in (-1, 0, 1):
             events.extend(self._service.get_events(league, match_date + timedelta(days=offset)))
+        events = self._apply_majors_filter(events)
         return [
             e for e in events if e.start_time.astimezone(user_tz).date() == match_date
         ]
@@ -337,11 +434,18 @@ class TennisMatcher:
             events.extend(self._service.get_events(league, match_date + timedelta(days=offset)))
         window_start = match_date - timedelta(days=self._FALLBACK_LOOKBACK_DAYS)
         window_end = match_date + timedelta(days=1)
+        events = self._apply_majors_filter(events)
         return [
             e
             for e in events
             if window_start <= e.start_time.astimezone(user_tz).date() <= window_end
         ]
+
+    def _apply_majors_filter(self, events: list[Event]) -> list[Event]:
+        """Drop non-major tournaments when tennis_majors_only is set (#283)."""
+        if not self._majors_only:
+            return events
+        return [e for e in events if e.is_major]
 
     def _check_cache(self, ctx: TennisMatchContext) -> MatchOutcome | None:
         """Check cache for existing match."""

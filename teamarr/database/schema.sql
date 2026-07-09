@@ -204,6 +204,9 @@ CREATE TABLE IF NOT EXISTS settings (
     epg_stream_pre_buffer_minutes INTEGER DEFAULT 60,
     epg_stream_post_buffer_minutes INTEGER DEFAULT 60,
 
+    -- Tennis: only match grand-slam tournaments (#283)
+    tennis_majors_only INTEGER DEFAULT 0,
+
     -- Filler Settings
     midnight_crossover_mode TEXT DEFAULT 'postgame' CHECK(midnight_crossover_mode IN ('postgame', 'idle')),
 
