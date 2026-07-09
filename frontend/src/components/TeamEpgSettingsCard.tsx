@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,12 +31,20 @@ export function TeamEpgSettingsCard() {
   const [epg, setEPG] = useState<EPGSettings | null>(null)
   const [display, setDisplay] = useState<DisplaySettings | null>(null)
 
-  useEffect(() => {
-    if (epgData) setEPG(epgData)
-  }, [epgData])
-  useEffect(() => {
-    if (displayData) setDisplay(displayData)
-  }, [displayData])
+  // Sync the forms from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effects, without the extra effect render pass.
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setEPG(epgData)
+  }
+  const [syncedDisplayData, setSyncedDisplayData] =
+    useState<typeof displayData>(undefined)
+  if (displayData && displayData !== syncedDisplayData) {
+    setSyncedDisplayData(displayData)
+    setDisplay(displayData)
+  }
 
   const handleSave = async () => {
     try {

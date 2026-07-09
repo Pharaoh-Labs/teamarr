@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -37,9 +37,15 @@ export function ChannelConsolidation() {
     force_channel_relayout_pending: false,
   })
 
-  useEffect(() => {
-    if (channelNumberingData) setChannelNumbering(channelNumberingData)
-  }, [channelNumberingData])
+  // Sync local state from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedChannelNumberingData, setSyncedChannelNumberingData] =
+    useState<typeof channelNumberingData>(undefined)
+  if (channelNumberingData && channelNumberingData !== syncedChannelNumberingData) {
+    setSyncedChannelNumberingData(channelNumberingData)
+    setChannelNumbering(channelNumberingData)
+  }
 
   return (
     <div className="space-y-3">

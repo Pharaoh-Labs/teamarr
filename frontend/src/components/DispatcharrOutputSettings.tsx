@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SaveButton as SaveButtonBase } from "@/components/ui/save-button"
@@ -66,34 +66,43 @@ export function DispatcharrOutputSettings() {
   const [dispatcharr, setDispatcharr] = useState<Partial<DispatcharrSettings>>({})
   const [selectedProfileIds, setSelectedProfileIds] = useState<(number | string)[]>([])
 
-  useEffect(() => {
-    if (settings) {
-      setDispatcharr({
-        enabled: settings.dispatcharr.enabled,
-        url: settings.dispatcharr.url,
-        username: settings.dispatcharr.username,
-        password: "", // Don't show masked password
-        epg_id: settings.dispatcharr.epg_id,
-        default_channel_profile_ids: settings.dispatcharr.default_channel_profile_ids,
-        default_stream_profile_id: settings.dispatcharr.default_stream_profile_id,
-        default_channel_group_id: settings.dispatcharr.default_channel_group_id,
-        default_channel_group_mode: settings.dispatcharr.default_channel_group_mode,
-        cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
-      })
-    }
-  }, [settings])
+  // Sync the form from the server blob during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every settings refetch,
+  // exactly like the previous effect, without the extra effect render pass.
+  const [syncedSettings, setSyncedSettings] = useState<typeof settings>(undefined)
+  if (settings && settings !== syncedSettings) {
+    setSyncedSettings(settings)
+    setDispatcharr({
+      enabled: settings.dispatcharr.enabled,
+      url: settings.dispatcharr.url,
+      username: settings.dispatcharr.username,
+      password: "", // Don't show masked password
+      epg_id: settings.dispatcharr.epg_id,
+      default_channel_profile_ids: settings.dispatcharr.default_channel_profile_ids,
+      default_stream_profile_id: settings.dispatcharr.default_stream_profile_id,
+      default_channel_group_id: settings.dispatcharr.default_channel_group_id,
+      default_channel_group_mode: settings.dispatcharr.default_channel_group_mode,
+      cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
+    })
+  }
 
   // Convert API profile IDs to display IDs when profiles are loaded
-  useEffect(() => {
-    if (channelProfilesQuery.data && settings) {
-      const allProfileIds = channelProfilesQuery.data.map((p) => p.id)
-      const displayIds = apiToProfileIds(
-        settings.dispatcharr.default_channel_profile_ids,
-        allProfileIds
-      )
-      setSelectedProfileIds(displayIds)
-    }
-  }, [channelProfilesQuery.data, settings])
+  const profilesData = channelProfilesQuery.data
+  const [syncedProfiles, setSyncedProfiles] = useState<{
+    profiles: typeof profilesData
+    settings: typeof settings
+  } | null>(null)
+  if (
+    profilesData &&
+    settings &&
+    (syncedProfiles?.profiles !== profilesData || syncedProfiles?.settings !== settings)
+  ) {
+    setSyncedProfiles({ profiles: profilesData, settings })
+    const allProfileIds = profilesData.map((p) => p.id)
+    setSelectedProfileIds(
+      apiToProfileIds(settings.dispatcharr.default_channel_profile_ids, allProfileIds)
+    )
+  }
 
   const handleSave = async () => {
     try {
@@ -126,7 +135,7 @@ export function DispatcharrOutputSettings() {
     }
   }
 
-  const SaveButton = () => (
+  const saveButton = (
     <SaveButtonBase onClick={handleSave} pending={updateDispatcharr.isPending} />
   )
 
@@ -150,7 +159,7 @@ export function DispatcharrOutputSettings() {
               Profile assignment is enforced on every EPG generation run.
             </p>
           </div>
-          <SaveButton />
+          {saveButton}
         </CardContent>
       </Card>
 
@@ -173,7 +182,7 @@ export function DispatcharrOutputSettings() {
               This default applies to all groups unless overridden.
             </p>
           </div>
-          <SaveButton />
+          {saveButton}
         </CardContent>
       </Card>
 
@@ -276,7 +285,7 @@ export function DispatcharrOutputSettings() {
             </div>
           )}
 
-          <SaveButton />
+          {saveButton}
         </CardContent>
       </Card>
     </div>

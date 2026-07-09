@@ -158,37 +158,41 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
     staleTime: 5 * 60 * 1000,
   })
 
+  const leagues = leaguesData?.leagues
+  const matchedStreams = matchedData?.streams
+  const failedFailures = failedData?.failures
+
   // League display lookup
   const getLeagueDisplay = useMemo(() => {
     const map = new Map<string, string>()
-    if (leaguesData?.leagues) {
-      for (const league of leaguesData.leagues) {
+    if (leagues) {
+      for (const league of leagues) {
         map.set(league.slug, getLeagueDisplayName(league, true))
       }
     }
     return (code: string | null) => (code ? (map.get(code) ?? code) : "-")
-  }, [leaguesData?.leagues])
+  }, [leagues])
 
   // Group dropdowns
   const matchedGroups = useMemo(() => {
-    if (!matchedData?.streams) return []
+    if (!matchedStreams) return []
     const groups = new Set<string>()
-    for (const s of matchedData.streams) if (s.group_name) groups.add(s.group_name)
+    for (const s of matchedStreams) if (s.group_name) groups.add(s.group_name)
     return Array.from(groups).sort()
-  }, [matchedData?.streams])
+  }, [matchedStreams])
 
   const failedGroups = useMemo(() => {
-    if (!failedData?.failures) return []
+    if (!failedFailures) return []
     const groups = new Set<string>()
-    for (const f of failedData.failures) if (f.group_name) groups.add(f.group_name)
+    for (const f of failedFailures) if (f.group_name) groups.add(f.group_name)
     return Array.from(groups).sort()
-  }, [failedData?.failures])
+  }, [failedFailures])
 
   // Filtered data
   const filteredMatchedStreams = useMemo(() => {
-    if (!matchedData?.streams) return []
+    if (!matchedStreams) return []
     const q = matchedFilter.toLowerCase()
-    return matchedData.streams.filter((s) => {
+    return matchedStreams.filter((s) => {
       if (matchedGroupFilter !== "all" && s.group_name !== matchedGroupFilter) return false
       if (!q) return true
       return (
@@ -199,12 +203,12 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
         s.league?.toLowerCase().includes(q)
       )
     })
-  }, [matchedData?.streams, matchedFilter, matchedGroupFilter])
+  }, [matchedStreams, matchedFilter, matchedGroupFilter])
 
   const filteredFailedMatches = useMemo(() => {
-    if (!failedData?.failures) return []
+    if (!failedFailures) return []
     const q = failedFilter.toLowerCase()
-    return failedData.failures.filter((f) => {
+    return failedFailures.filter((f) => {
       if (failedGroupFilter !== "all" && f.group_name !== failedGroupFilter) return false
       if (!q) return true
       return (
@@ -215,7 +219,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
         f.reason.toLowerCase().includes(q)
       )
     })
-  }, [failedData?.failures, failedFilter, failedGroupFilter])
+  }, [failedFailures, failedFilter, failedGroupFilter])
 
   const closeMatchedModal = () => {
     setMatchedModalRunId(null)

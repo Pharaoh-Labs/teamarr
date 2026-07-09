@@ -86,14 +86,16 @@ export function EventMatcherModal({
     staleTime: 5 * 60 * 1000,
   })
 
+  const leagues = leaguesData?.leagues
+
   const sortedLeagues = useMemo(() => {
-    if (!leaguesData?.leagues) return []
-    return [...leaguesData.leagues].sort((a, b) => {
+    if (!leagues) return []
+    return [...leagues].sort((a, b) => {
       const sportCompare = (a.sport ?? "").localeCompare(b.sport ?? "")
       if (sportCompare !== 0) return sportCompare
       return (a.name ?? a.slug ?? "").localeCompare(b.name ?? b.slug ?? "")
     })
-  }, [leaguesData?.leagues])
+  }, [leagues])
 
   const leaguesBySport = useMemo(() => {
     const grouped: Record<string, CachedLeague[]> = {}

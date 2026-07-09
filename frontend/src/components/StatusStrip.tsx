@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { CheckCircle, XCircle, AlertTriangle, Clock, Tv, Target, Copy, Check, Loader2 } from "lucide-react"
 import { useDispatcharrStatus } from "@/hooks/useSettings"
@@ -9,6 +9,10 @@ import { getTeamXmltvUrl } from "@/api/epg"
 import type { ProcessingRun } from "@/api/epg"
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+// While a run is active the strip's values are mid-recompute — this spinner
+// renders in their place until the run finishes and the fresh numbers land.
+const Spinner = () => <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 
 function formatDuration(ms: number | null | undefined): string | null {
   if (!ms) return null
@@ -33,9 +37,13 @@ export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
   const { isGenerating } = useGenerationProgress()
   const [copied, setCopied] = useState(false)
 
-  // While a run is active these three values are mid-recompute — show a spinner
-  // in their place until the run finishes and the fresh numbers land.
-  const Spinner = () => <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+  // Clock for the staleness chip: state instead of Date.now()-in-render
+  // (render purity), refreshed each minute so the color also updates live.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   const epgUrl = `${window.location.origin}${getTeamXmltvUrl()}`
 
@@ -81,7 +89,7 @@ export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
 
   // --- Last generated chip ---
   const finishedAt = lastRun?.completed_at ?? lastRun?.started_at ?? null
-  const ageMs = finishedAt ? Date.now() - new Date(finishedAt).getTime() : null
+  const ageMs = finishedAt ? now - new Date(finishedAt).getTime() : null
   const failed = lastRun ? lastRun.status === "failed" || lastRun.status === "cancelled" : false
 
   // Color: red if never/failed or >3 days; amber 1–3 days; green <1 day.

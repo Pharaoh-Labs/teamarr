@@ -76,16 +76,19 @@ export function TemplateAssignmentManager({
   const { data: templates } = useTemplates()
   const eventTemplates = templates?.filter((t) => t.template_type === "event") || []
 
-  // Fetch sports for dropdown
+  // Fetch sports for dropdown. useMemo (not `|| {}`): a fresh fallback object
+  // would destabilize every downstream hook dependency (exhaustive-deps).
   const { data: sportsData } = useSports()
-  const sportsMap = sportsData?.sports || {}
+  const sports = sportsData?.sports
+  const sportsMap = useMemo(() => sports ?? {}, [sports])
 
   // Fetch leagues for display
   const { data: leaguesData } = useQuery({
     queryKey: ["leagues"],
     queryFn: () => getLeagues(),
   })
-  const allLeagues = leaguesData?.leagues || []
+  const leaguesList = leaguesData?.leagues
+  const allLeagues = useMemo(() => leaguesList ?? [], [leaguesList])
 
   // Get unique sports from subscribed leagues (sorted)
   const subscribedSports = useMemo(() =>

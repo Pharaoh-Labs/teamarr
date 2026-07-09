@@ -26,12 +26,14 @@ export function VariablePicker({
     staleTime: Infinity, // Variables don't change during session
   })
 
+  const categories = data?.categories
+
   const filteredCategories = useMemo(() => {
-    if (!data?.categories) return []
-    if (!search.trim()) return data.categories
+    if (!categories) return []
+    if (!search.trim()) return categories
 
     const searchLower = search.toLowerCase()
-    return data.categories
+    return categories
       .map((cat) => ({
         ...cat,
         variables: cat.variables.filter(
@@ -41,7 +43,7 @@ export function VariablePicker({
         ),
       }))
       .filter((cat) => cat.variables.length > 0)
-  }, [data?.categories, search])
+  }, [categories, search])
 
   const handleSelect = (variable: Variable, suffix?: string) => {
     const varName = suffix && suffix !== "base" ? `${variable.name}${suffix}` : variable.name

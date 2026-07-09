@@ -83,7 +83,9 @@ export function TemplateField({
   onChange,
   placeholder,
   helpText,
-  fieldRefs,
+  // Aliased to a *Ref name so the React Compiler recognizes it as a ref and
+  // allows the ref-callback mutation below (its ref detection is name-based).
+  fieldRefs: fieldRefsRef,
   setLastFocusedField,
   multiline = false,
   resolveTemplate = defaultResolver,
@@ -122,7 +124,7 @@ export function TemplateField({
         <Textarea
           id={id}
           ref={(el) => {
-            if (fieldRefs) fieldRefs.current[id] = el
+            if (fieldRefsRef) fieldRefsRef.current[id] = el
           }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -134,7 +136,7 @@ export function TemplateField({
         <Input
           id={id}
           ref={(el) => {
-            if (fieldRefs) fieldRefs.current[id] = el
+            if (fieldRefsRef) fieldRefsRef.current[id] = el
           }}
           value={value}
           onChange={(e) => onChange(e.target.value)}

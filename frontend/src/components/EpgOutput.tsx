@@ -38,11 +38,13 @@ export function EpgOutput() {
     beforeProgram: string
   } | null>(null)
 
+  const epgXml = epgContent?.content
+
   // Search functionality for XML preview
   const searchMatches = useMemo(() => {
-    if (!searchTerm || !epgContent?.content) return []
+    if (!searchTerm || !epgXml) return []
     const matches: number[] = []
-    const lines = epgContent.content.split("\n")
+    const lines = epgXml.split("\n")
     const searchLower = searchTerm.toLowerCase()
     lines.forEach((line, idx) => {
       if (line.toLowerCase().includes(searchLower)) {
@@ -50,7 +52,7 @@ export function EpgOutput() {
       }
     })
     return matches
-  }, [searchTerm, epgContent?.content])
+  }, [searchTerm, epgXml])
 
   const scrollToMatch = useCallback((matchIndex: number) => {
     if (!previewRef.current || searchMatches.length === 0) return
@@ -75,8 +77,8 @@ export function EpgOutput() {
 
   // Highlighted XML content
   const highlightedContent = useMemo(() => {
-    if (!epgContent?.content) return ""
-    const lines = epgContent.content.split("\n")
+    if (!epgXml) return ""
+    const lines = epgXml.split("\n")
 
     if (highlightedGap) {
       const result: string[] = []
@@ -140,7 +142,7 @@ export function EpgOutput() {
       }
       return `${lineNum}${escapeHtml(line)}`
     }).join("\n")
-  }, [epgContent?.content, showLineNumbers, searchTerm, currentMatch, searchMatches, highlightedGap])
+  }, [epgXml, showLineNumbers, searchTerm, currentMatch, searchMatches, highlightedGap])
 
   const hasIssues = (analysis?.unreplaced_variables?.length ?? 0) > 0 ||
                    (analysis?.coverage_gaps?.length ?? 0) > 0

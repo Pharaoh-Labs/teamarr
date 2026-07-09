@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { ToggleCard } from "@/components/ui/toggle-card"
@@ -29,11 +29,15 @@ export function FeedSeparationCard() {
     label_style: "team_name",
   })
 
-  useEffect(() => {
-    if (feedSeparationData) {
-      setFeedSeparation(feedSeparationData)
-    }
-  }, [feedSeparationData])
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedFeedSeparationData, setSyncedFeedSeparationData] =
+    useState<typeof feedSeparationData>(undefined)
+  if (feedSeparationData && feedSeparationData !== syncedFeedSeparationData) {
+    setSyncedFeedSeparationData(feedSeparationData)
+    setFeedSeparation(feedSeparationData)
+  }
 
   return (
     <ToggleCard

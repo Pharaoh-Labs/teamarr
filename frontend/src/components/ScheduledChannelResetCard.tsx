@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -35,12 +35,16 @@ export function ScheduledChannelResetCard() {
   const [enabled, setEnabled] = useState(false)
   const [cron, setCron] = useState("")
 
-  useEffect(() => {
-    if (schedulerData) {
-      setEnabled(schedulerData.channel_reset_enabled)
-      setCron(schedulerData.channel_reset_cron ?? "")
-    }
-  }, [schedulerData])
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedSchedulerData, setSyncedSchedulerData] =
+    useState<typeof schedulerData>(undefined)
+  if (schedulerData && schedulerData !== syncedSchedulerData) {
+    setSyncedSchedulerData(schedulerData)
+    setEnabled(schedulerData.channel_reset_enabled)
+    setCron(schedulerData.channel_reset_cron ?? "")
+  }
 
   const handleSave = async () => {
     try {

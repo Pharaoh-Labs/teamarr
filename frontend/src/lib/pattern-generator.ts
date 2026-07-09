@@ -158,7 +158,7 @@ export function generatePattern(
     }
     // For date-related fields, also anchor on date separators (/, ., -)
     if (!anchorBefore && (field === "month" || field === "day" || field === "date")) {
-      const dateSepMatch = before.match(/[/.\-]\s*$/)
+      const dateSepMatch = before.match(/[/.-]\s*$/)
       if (dateSepMatch) {
         anchorBefore = escapeRegex(dateSepMatch[0])
       }
@@ -177,7 +177,7 @@ export function generatePattern(
     }
     // For date-related fields, also anchor on date separators
     if (!anchorAfter && (field === "month" || field === "day" || field === "date")) {
-      const dateSepMatch = after.match(/^\s*[/.\-]/)
+      const dateSepMatch = after.match(/^\s*[/.-]/)
       if (dateSepMatch) {
         anchorAfter = escapeRegex(dateSepMatch[0])
       }
