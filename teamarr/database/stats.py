@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 # TYPES
 # =============================================================================
 
-RunType = Literal["event_group", "team_epg", "batch", "reconciliation", "scheduler"]
+RunType = Literal[
+    "event_group", "team_epg", "batch", "reconciliation", "scheduler", "full_epg"
+]
 RunStatus = Literal["running", "completed", "failed", "partial", "cancelled"]
 
 
@@ -33,7 +35,7 @@ class ProcessingRun:
     group_id: int | None = None
     team_id: int | None = None
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime | None = field(default_factory=datetime.now)
     completed_at: datetime | None = None
     duration_ms: int | None = None
     status: RunStatus = "running"
@@ -182,6 +184,7 @@ def create_run(
         team_id=team_id,
         started_at=datetime.now(),
     )
+    assert run.started_at is not None  # just set above
 
     cursor = conn.execute(
         """

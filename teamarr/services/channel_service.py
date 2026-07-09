@@ -4,6 +4,7 @@ This module provides a clean API for channel management operations.
 """
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import datetime
 from sqlite3 import Connection
@@ -16,8 +17,8 @@ from teamarr.services.sports_data import SportsDataService
 class DeletionResult:
     """Result of channel deletion processing."""
 
-    deleted: list[int] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
+    deleted: list[dict] = field(default_factory=list)
+    errors: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -53,8 +54,8 @@ class ReconciliationResult:
     completed_at: datetime | None = None
     summary: ReconciliationSummary = field(default_factory=ReconciliationSummary)
     issues_found: list[ReconciliationIssue] = field(default_factory=list)
-    issues_fixed: int = 0
-    issues_skipped: int = 0
+    issues_fixed: list[dict] = field(default_factory=list)
+    issues_skipped: list[dict] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
@@ -66,7 +67,7 @@ class ChannelService:
 
     def __init__(
         self,
-        db_factory: Callable[[], Connection],
+        db_factory: Callable[[], AbstractContextManager[Connection]],
         sports_service: SportsDataService,
         dispatcharr_client: Any | None = None,
     ):
@@ -167,7 +168,7 @@ class ChannelService:
 
 
 def create_channel_service(
-    db_factory: Callable[[], Connection],
+    db_factory: Callable[[], AbstractContextManager[Connection]],
     sports_service: SportsDataService,
     dispatcharr_client: Any | None = None,
 ) -> ChannelService:

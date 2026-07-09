@@ -813,7 +813,10 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         slug = (season_data.get("slug") or "").lower()
         if slug in self._SEASON_SLUG_MAP:
             return self._SEASON_SLUG_MAP[slug]
-        return self._SEASON_TYPE_NUM_MAP.get(season_data.get("type"))
+        season_type_num = season_data.get("type")
+        if not isinstance(season_type_num, int):
+            return None
+        return self._SEASON_TYPE_NUM_MAP.get(season_type_num)
 
     def _parse_odds(self, odds_list: list) -> dict | None:
         """Parse ESPN odds data into structured dict.

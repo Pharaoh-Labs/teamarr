@@ -556,6 +556,9 @@ def expand_ufc_segments(
             result.append(match)
             continue
 
+        # is_ufc_event returned True, so event is a non-None UFC Event.
+        assert event is not None
+
         # Check for excluded streams (weigh-ins, etc.)
         if should_exclude_stream(stream):
             logger.debug(
@@ -617,6 +620,8 @@ def expand_ufc_segments(
         # Get the event from any stream (they all have the same event)
         first_match = next(iter(next(iter(segments.values()))))
         event = first_match.get("event")
+        # Every match grouped into ufc_by_segment carries its UFC Event.
+        assert event is not None
 
         # Create entry for each discovered segment
         for segment in SEGMENT_ORDER:

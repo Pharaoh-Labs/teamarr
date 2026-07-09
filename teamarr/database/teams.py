@@ -140,8 +140,11 @@ def create_team(
         ),
     )
     team_id = cursor.lastrowid
+    assert team_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Team id=%d name=%s", team_id, team_name)
-    return get_team(conn, team_id)
+    team = get_team(conn, team_id)
+    assert team is not None  # just inserted, row must exist
+    return team
 
 
 def update_team(conn: Connection, team_id: int, updates: dict) -> dict | None:

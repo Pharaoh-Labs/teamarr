@@ -15,6 +15,7 @@ Data flow:
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from typing import overload
 
 from teamarr.core import Event, Programme
 from teamarr.database.templates import EventTemplateConfig
@@ -65,6 +66,14 @@ def is_event_postponed(event: Event) -> bool:
     if not event.status:
         return False
     return event.status.state.lower() == "postponed"
+
+
+@overload
+def prepend_postponed_label(text: str, event: Event, enabled: bool) -> str: ...
+
+
+@overload
+def prepend_postponed_label(text: None, event: Event, enabled: bool) -> None: ...
 
 
 def prepend_postponed_label(text: str | None, event: Event, enabled: bool) -> str | None:

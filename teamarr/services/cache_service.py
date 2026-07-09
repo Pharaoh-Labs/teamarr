@@ -31,7 +31,7 @@ class LeagueInfo:
 
     slug: str
     provider: str
-    name: str
+    name: str | None
     sport: str
     team_count: int = 0
     logo_url: str | None = None

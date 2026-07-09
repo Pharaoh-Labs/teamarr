@@ -100,8 +100,10 @@ def list_keywords(
     with get_db() as conn:
         keywords = get_all_keywords(conn, include_disabled=include_disabled)
 
-    return ExceptionKeywordListResponse(
-        keywords=[
+    responses = []
+    for kw in keywords:
+        assert kw.id is not None  # persisted rows always have an id
+        responses.append(
             ExceptionKeywordResponse(
                 id=kw.id,
                 label=kw.label,
@@ -111,8 +113,10 @@ def list_keywords(
                 enabled=kw.enabled,
                 created_at=kw.created_at.isoformat() if kw.created_at else None,
             )
-            for kw in keywords
-        ],
+        )
+
+    return ExceptionKeywordListResponse(
+        keywords=responses,
         total=len(keywords),
     )
 
@@ -130,6 +134,7 @@ def get_keyword(keyword_id: int):
             detail=f"Keyword {keyword_id} not found",
         )
 
+    assert keyword.id is not None  # persisted rows always have an id
     return ExceptionKeywordResponse(
         id=keyword.id,
         label=keyword.label,
@@ -163,6 +168,13 @@ def create_keyword(request: ExceptionKeywordCreate):
             detail=f"Label '{request.label}' already exists",
         ) from e
 
+    if keyword is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Keyword could not be retrieved after creation",
+        )
+
+    assert keyword.id is not None  # persisted rows always have an id
     return ExceptionKeywordResponse(
         id=keyword.id,
         label=keyword.label,
@@ -204,6 +216,13 @@ def update_keyword(keyword_id: int, request: ExceptionKeywordUpdate):
             detail=f"Label '{request.label}' already exists",
         ) from e
 
+    if keyword is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Keyword could not be retrieved after update",
+        )
+
+    assert keyword.id is not None  # persisted rows always have an id
     return ExceptionKeywordResponse(
         id=keyword.id,
         label=keyword.label,

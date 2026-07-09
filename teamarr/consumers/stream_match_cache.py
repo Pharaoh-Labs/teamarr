@@ -346,8 +346,8 @@ class StreamMatchCache:
         group_id: int,
         stream_id: int,
         stream_name: str,
-        event_id: str,
-        league: str,
+        event_id: str | None,
+        league: str | None,
         cached_data: dict[str, Any],
     ) -> bool:
         """Set a user-corrected match (pinned, never auto-purged).

@@ -1283,7 +1283,7 @@ def _migrate_v75_extract_art_base_url(conn: sqlite3.Connection) -> None:
     if not art_columns and not json_columns:
         return
 
-    def origin_of(url: str) -> str | None:
+    def origin_of(url: object) -> str | None:
         if not url or not isinstance(url, str):
             return None
         parts = urlsplit(url)

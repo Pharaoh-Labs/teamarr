@@ -157,7 +157,8 @@ def merge_xmltv_content(
         root.set("generator-info-url", generator_url)
 
     seen_channels: set[str] = set()
-    seen_programmes: set[tuple[str, str, str]] = set()  # (channel, start, stop)
+    # (channel, start, stop)
+    seen_programmes: set[tuple[str | None, str | None, str | None]] = set()
     all_programmes: list[Element] = []
 
     for content in xmltv_contents:

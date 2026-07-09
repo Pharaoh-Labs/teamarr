@@ -208,6 +208,7 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
                 )
                 used_ids.add(channel_id)
                 new_id = cursor.lastrowid
+                assert new_id is not None  # INSERT always yields a rowid
                 existing_full[full_key] = (new_id, all_leagues)
                 existing_sport[sport_key] = [(new_id, team.league, all_leagues)]
                 imported += 1
@@ -242,6 +243,7 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
                 )
                 used_ids.add(channel_id)
                 new_id = cursor.lastrowid
+                assert new_id is not None  # INSERT always yields a rowid
                 existing_full[full_key] = (new_id, [team.league])
                 if sport_key not in existing_sport:
                     existing_sport[sport_key] = []

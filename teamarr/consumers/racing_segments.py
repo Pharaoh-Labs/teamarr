@@ -182,6 +182,9 @@ def expand_racing_segments(
             result.append(match)
             continue
 
+        # is_racing_event returned True, so event is a non-None racing Event.
+        assert event is not None
+
         expanded_streams += 1
         sessions = sorted(event.sessions, key=lambda s: s.start_time)
 

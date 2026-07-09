@@ -140,8 +140,10 @@ def create_alias(
     )
     conn.commit()
 
+    new_id = cursor.lastrowid
+    assert new_id is not None  # just-inserted row always has a rowid
     return TeamAlias(
-        id=cursor.lastrowid,
+        id=new_id,
         alias=normalized_alias,
         league=league.lower(),
         provider=provider,

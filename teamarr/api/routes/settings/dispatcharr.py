@@ -126,7 +126,7 @@ def get_dispatcharr_status() -> dict:
         # Actually test the connection to verify it works
         result = factory.test_connection()
 
-        response = {
+        response: dict[str, object] = {
             "configured": True,
             "connected": result.success,
         }

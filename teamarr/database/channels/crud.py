@@ -120,6 +120,7 @@ def create_managed_channel(
         values,
     )
     channel_id = cursor.lastrowid
+    assert channel_id is not None  # just-inserted row always has a rowid
     logger.info(
         "[CREATED] Managed channel id=%d name=%s event=%s", channel_id, channel_name, event_id
     )

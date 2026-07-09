@@ -9,13 +9,20 @@ Provides centralized access to all processing statistics:
 
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 
 from teamarr.database import get_db
 from teamarr.database.settings import get_all_settings
-from teamarr.database.stats import get_current_stats, get_live_xmltv_content, get_recent_runs
+from teamarr.database.stats import (
+    RunStatus,
+    RunType,
+    get_current_stats,
+    get_live_xmltv_content,
+    get_recent_runs,
+)
 
 router = APIRouter()
 
@@ -246,9 +253,9 @@ def get_runs(
         runs = get_recent_runs(
             conn,
             limit=limit,
-            run_type=run_type,
+            run_type=cast("RunType | None", run_type),
             group_id=group_id,
-            status=status,
+            status=cast("RunStatus | None", status),
         )
         return {
             "runs": [run.to_dict() for run in runs],

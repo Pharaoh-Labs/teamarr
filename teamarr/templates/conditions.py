@@ -34,6 +34,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
+from teamarr.core import SEASON_POSTSEASON, SEASON_PRESEASON
 from teamarr.templates.context import GameContext, TemplateContext
 
 logger = logging.getLogger(__name__)
@@ -181,14 +182,14 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if this is a playoff game."""
         event = game_ctx.event
-        return event.is_playoff if event else False
+        return bool(event and event.season_type == SEASON_POSTSEASON)
 
     def _eval_is_preseason(
         self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
     ) -> bool:
         """Check if this is a preseason game."""
         event = game_ctx.event
-        return event.is_preseason if event else False
+        return bool(event and event.season_type == SEASON_PRESEASON)
 
     # =========================================================================
     # Conference conditions (college)
@@ -223,9 +224,7 @@ class ConditionEvaluator:
 
         national_networks = {"abc", "cbs", "nbc", "fox", "espn", "espn2", "tnt", "tbs"}
         for broadcast in event.broadcasts:
-            network = broadcast.get("network", "").lower()
-            market = broadcast.get("market", "").lower()
-            if market == "national" or network in national_networks:
+            if broadcast.lower() in national_networks:
                 return True
         return False
 

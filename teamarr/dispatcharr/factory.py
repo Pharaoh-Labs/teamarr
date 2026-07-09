@@ -339,7 +339,7 @@ class ConnectionTestResult:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
-        result = {"success": self.success}
+        result: dict[str, Any] = {"success": self.success}
         if self.url:
             result["url"] = self.url
         if self.username:

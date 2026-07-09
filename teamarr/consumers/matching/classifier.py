@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date, time
 from enum import Enum
 from re import Pattern
+from typing import cast
 
 from teamarr.consumers.matching.normalizer import NormalizedStream, normalize_stream
 from teamarr.services.detection_keywords import DetectionKeywordService
@@ -998,7 +999,7 @@ def detect_sport_hint(text: str) -> str | None:
     if not text:
         return None
 
-    return DetectionKeywordService.detect_sport(text)
+    return cast("str | None", DetectionKeywordService.detect_sport(text))
 
 
 # =============================================================================

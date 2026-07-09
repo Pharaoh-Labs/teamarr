@@ -718,7 +718,7 @@ class ChannelManager:
             Dict mapping tvg_id to EPGData dict
         """
         epg_data_list = self.get_epg_data_list(epg_source_id)
-        return {e.get("tvg_id"): e for e in epg_data_list if e.get("tvg_id")}
+        return {tvg_id: e for e in epg_data_list if (tvg_id := e.get("tvg_id"))}
 
     def find_epg_data_by_tvg_id(
         self,

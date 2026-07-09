@@ -191,7 +191,7 @@ class EventGroupProcessor(
         has_override = (
             group is not None and group.subscription_leagues is not None
         )
-        cache_key = group.id if has_override else 0
+        cache_key = group.id if group is not None and has_override else 0
 
         if cache_key not in self._subscription_leagues_cache:
             self._subscription_leagues_cache[cache_key] = (
@@ -602,6 +602,8 @@ class EventGroupProcessor(
 
         # Create stats run for tracking
         stats_run = create_run(conn, run_type="event_group", group_id=group.id)
+        # create_run always returns a ProcessingRun with its DB id populated.
+        assert stats_run.id is not None
 
         try:
             # Clear any previously stored XMLTV for this group so that if
@@ -742,17 +744,17 @@ class EventGroupProcessor(
 
             # Build event lookup BEFORE team filtering (for cleanup of existing channels)
             # Use segment-aware event_id to match channel.event_id storage
-            def _effective_event_id(m):
+            def _effective_event_id(m) -> str | None:
                 event = m.get("event")
                 if not event or not hasattr(event, "id"):
                     return None
                 segment = m.get("segment")
                 return f"{event.id}-{segment}" if segment else event.id
 
-            all_matched_events = {
-                _effective_event_id(m): m.get("event")
+            all_matched_events: dict[str, Event] = {
+                eid: ev
                 for m in matched_streams
-                if _effective_event_id(m)
+                if (eid := _effective_event_id(m)) and (ev := m.get("event"))
             }
 
             # Apply team include/exclude filtering
@@ -763,7 +765,7 @@ class EventGroupProcessor(
 
             # Build set of event IDs that passed the filter (segment-aware)
             passed_event_ids = {
-                _effective_event_id(m) for m in matched_streams if _effective_event_id(m)
+                eid for m in matched_streams if (eid := _effective_event_id(m))
             }
 
             # Cleanup existing channels that no longer pass team filter
@@ -776,7 +778,7 @@ class EventGroupProcessor(
                 logger.info("[EVENT_EPG] Cleaned up %d channels due to team filter", cleanup_count)
 
             # Build stream dict for cleanup (fingerprint-based content change detection)
-            current_streams = {s.get("id"): s for s in streams if s.get("id")}
+            current_streams = {sid: s for s in streams if (sid := s.get("id"))}
 
             if matched_streams:
                 if status_callback:
@@ -926,7 +928,9 @@ class EventGroupProcessor(
 
         # Load template from database if configured
         # Resolve template from global subscription
-        template_config = None
+        # Typed Any: _load_event_template yields an EventTemplateConfig, which the
+        # lifecycle creator accepts even though its param is annotated ``dict | None``.
+        template_config: Any = None
         template_id = get_subscription_template_for_event(conn, "", "")
         if template_id:
             template_config = self._load_event_template(conn, template_id)

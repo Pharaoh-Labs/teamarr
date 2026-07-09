@@ -15,6 +15,8 @@ ProviderRegistry.initialize() must be called during app startup
 to inject the LeagueMappingSource into providers.
 """
 
+from collections.abc import Callable
+
 from teamarr.database import get_db
 from teamarr.database.team_cache import get_team_name_by_id
 from teamarr.providers.espn import ESPNClient, ESPNProvider
@@ -59,7 +61,7 @@ def _get_tsdb_api_key() -> str | None:
     return None
 
 
-def _create_tsdb_team_name_resolver() -> callable:
+def _create_tsdb_team_name_resolver() -> Callable[[str, str], str | None]:
     """Create a team name resolver callback for TSDB provider.
 
     This callback accesses the database, keeping DB access at the factory

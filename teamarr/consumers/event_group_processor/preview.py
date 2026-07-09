@@ -2,6 +2,7 @@
 
 import logging
 from datetime import date
+from typing import TYPE_CHECKING, Any
 
 from teamarr.database.groups import get_group
 from teamarr.utilities.sorting import natural_sort_key
@@ -16,6 +17,15 @@ class PreviewBuilder:
 
     Mixin for EventGroupProcessor.
     """
+
+    if TYPE_CHECKING:
+        # Provided by the EventGroupProcessor coordinator / sibling mixins.
+        # Declared for type-checkers only — no runtime effect.
+        _db_factory: Any
+        _dispatcharr_client: Any
+        _filter_streams: Any
+        _get_subscription_leagues: Any
+        _match_streams: Any
 
     def preview_group(
         self,

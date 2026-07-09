@@ -11,6 +11,7 @@ reject any non-TSDB provider; edits and deletes only ever touch user-added
 """
 
 import logging
+from typing import NoReturn
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -85,7 +86,7 @@ class CustomLeagueTestFetch(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _raise_http(exc: Exception) -> None:
+def _raise_http(exc: Exception) -> NoReturn:
     """Translate a custom-league service exception into an HTTPException."""
     if isinstance(exc, CustomLeagueGateError):
         raise HTTPException(status_code=403, detail=str(exc)) from exc

@@ -8,6 +8,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from sqlite3 import Connection
+from types import EllipsisType
 
 logger = logging.getLogger(__name__)
 
@@ -158,9 +159,9 @@ def get_subscribed_league_codes(conn: Connection) -> set[str]:
 
 def update_subscription(
     conn: Connection,
-    leagues: list[str] | None = ...,
-    soccer_mode: str | None = ...,
-    soccer_followed_teams: list[dict] | None = ...,
+    leagues: list[str] | None | EllipsisType = ...,
+    soccer_mode: str | None | EllipsisType = ...,
+    soccer_followed_teams: list[dict] | None | EllipsisType = ...,
 ) -> SportsSubscription:
     """Update the global sports subscription.
 
@@ -273,15 +274,17 @@ def add_subscription_template(
         sports,
         leagues,
     )
-    return cursor.lastrowid
+    new_id = cursor.lastrowid
+    assert new_id is not None  # just-inserted row always has a rowid
+    return new_id
 
 
 def update_subscription_template(
     conn: Connection,
     assignment_id: int,
     template_id: int | None = None,
-    sports: list[str] | None = ...,
-    leagues: list[str] | None = ...,
+    sports: list[str] | None | EllipsisType = ...,
+    leagues: list[str] | None | EllipsisType = ...,
 ) -> bool:
     """Update a subscription template assignment.
 
@@ -477,7 +480,9 @@ def upsert_league_config(
         ),
     )
     logger.info("[LEAGUE_CONFIG] Upserted config for %s", league_code)
-    return get_league_config(conn, league_code)
+    config = get_league_config(conn, league_code)
+    assert config is not None  # just upserted, row must exist
+    return config
 
 
 def delete_league_config(conn: Connection, league_code: str) -> bool:

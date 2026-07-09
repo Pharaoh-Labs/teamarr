@@ -1565,7 +1565,7 @@ class TeamMatcher:
         events: list[Event],
         stream_time: time,
         user_tz: ZoneInfo,
-    ) -> Event:
+    ) -> Event | None:
         """Pick event closest to stream time for doubleheaders."""
         if len(events) <= 1:
             return events[0] if events else None
@@ -1604,6 +1604,8 @@ class TeamMatcher:
             start_time = cached_data.get("start_time")
             if isinstance(start_time, str):
                 start_time = datetime.fromisoformat(start_time)
+            if not isinstance(start_time, datetime):
+                return None  # missing/invalid start_time -> treat as cache miss
 
             # Reconstruct teams (use `or {}` to handle explicit None values)
             home_data = cached_data.get("home_team") or {}
@@ -1728,7 +1730,7 @@ class TeamMatcher:
                 id=cached_data.get("id", ""),
                 provider=cached_data.get("provider", ""),
                 name=cached_data.get("name", ""),
-                short_name=cached_data.get("short_name"),
+                short_name=cached_data.get("short_name", ""),
                 start_time=start_time,
                 home_team=home_team,
                 away_team=away_team,

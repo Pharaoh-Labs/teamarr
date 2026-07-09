@@ -701,13 +701,13 @@ class StreamMatcher:
         # gate), we keep only the one whose start is nearest the event — the live
         # broadcast — giving a deterministic, correctly-anchored window (bead
         # t5e). Different events on the same channel keep distinct keys.
-        best_by_event: dict[str, tuple[float, MatchedStreamResult]] = {}
+        best_by_event: dict[str | None, tuple[float, MatchedStreamResult]] = {}
         league_event_type = self._get_dominant_event_type()
 
         # Full sorted timeline for this tvg_id. A linear channel legitimately
         # matches many programs/day; each matched program's broadcast slot drives
         # its own attach/detach window in the lifecycle layer.
-        programs = self._epg_index.programs_for(tvg_id)
+        programs = self._epg_index.programs_for(tvg_id) if self._epg_index is not None else []
         attempted = 0
         skipped_non_event = 0
         for program in programs:
@@ -872,7 +872,7 @@ class StreamMatcher:
           name found nothing (a static-named single-event stream).
         """
         epg_matched = [r for r in epg_results if r.matched]
-        if self._epg_index.is_linear(tvg_id):
+        if self._epg_index is not None and self._epg_index.is_linear(tvg_id):
             return epg_matched if epg_matched else name_results
         name_matched = any(r.matched for r in name_results)
         if not name_matched and epg_matched:
@@ -1187,7 +1187,7 @@ class StreamMatcher:
 
         # Return the most common type
         if type_counts:
-            return max(type_counts, key=type_counts.get)
+            return max(type_counts, key=lambda k: type_counts[k])
         return None
 
     def _load_league_event_types(self) -> None:
@@ -1219,7 +1219,7 @@ class StreamMatcher:
                 sport_counts[sport] = sport_counts.get(sport, 0) + 1
 
         if sport_counts:
-            return max(sport_counts, key=sport_counts.get)
+            return max(sport_counts, key=lambda k: sport_counts[k])
         return None
 
     def purge_stale(self) -> int:
