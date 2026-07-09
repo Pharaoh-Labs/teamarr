@@ -269,6 +269,51 @@ def update_stream_name(
     return cursor.rowcount > 0
 
 
+def update_stream_account_name(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    account_name: str,
+    account_id: int | None = None,
+) -> bool:
+    """Refresh the stored M3U account name (and optionally id) for an active stream.
+
+    Self-heal for #297: rows attached before per-stream account resolution carry
+    the group's single configured account name, mislabeling multi-login streams.
+    Called each generation for already-attached streams; the WHERE guard makes it
+    a no-op when the stored values already match.
+
+    Returns:
+        True if a row was updated (values actually changed), False otherwise
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET m3u_account_name = ?,
+               m3u_account_id = COALESCE(?, m3u_account_id)
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND (m3u_account_name IS NOT ?
+                  OR (? IS NOT NULL AND m3u_account_id IS NOT ?))""",
+        (
+            account_name,
+            account_id,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            account_name,
+            account_id,
+            account_id,
+        ),
+    )
+    if cursor.rowcount > 0:
+        logger.debug(
+            "Updated M3U account for channel=%d stream=%d: %s",
+            managed_channel_id,
+            dispatcharr_stream_id,
+            account_name,
+        )
+    return cursor.rowcount > 0
+
+
 def update_stream_priority(
     conn: Connection,
     stream_db_id: int,

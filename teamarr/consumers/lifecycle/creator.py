@@ -458,6 +458,7 @@ class ChannelCreator(_LifecycleHost):
             mark_channel_deleted,
             remove_stream_from_channel,
             stream_exists_on_channel,
+            update_stream_account_name,
             update_stream_window,
         )
 
@@ -625,17 +626,32 @@ class ChannelCreator(_LifecycleHost):
                         "channel_name": existing.channel_name,
                     }
                 )
-            elif attach_at is not None and detach_at is not None:
-                # Stream already attached: recompute its EPG time-window from the
-                # fresh program slot + current buffers (183.5 / bead 095) so a
-                # buffer-setting change takes effect on the next run, not only at
-                # first attach. Guarded on a non-None window: don't clobber a
-                # full-life/name-matched stream (None,None) or wipe a window on a
-                # transient EPG miss. Reconciliation re-pushes if membership
-                # changed — no manual Dispatcharr update needed here.
-                update_stream_window(
-                    conn, existing.id, stream_id, attach_at, detach_at
-                )
+            else:
+                # Stream already attached: self-heal the stored M3U account name
+                # (#297) — rows attached before per-stream account resolution carry
+                # the group's single account name, mislabeling multi-login streams.
+                # Guarded on a resolved name: don't null on a transient
+                # list-accounts failure.
+                resolved_account = stream.get("m3u_account_name")
+                if resolved_account:
+                    update_stream_account_name(
+                        conn,
+                        existing.id,
+                        stream_id,
+                        resolved_account,
+                        stream.get("m3u_account_id"),
+                    )
+                if attach_at is not None and detach_at is not None:
+                    # Recompute the EPG time-window from the fresh program slot +
+                    # current buffers (183.5 / bead 095) so a buffer-setting change
+                    # takes effect on the next run, not only at first attach.
+                    # Guarded on a non-None window: don't clobber a full-life/
+                    # name-matched stream (None,None) or wipe a window on a
+                    # transient EPG miss. Reconciliation re-pushes if membership
+                    # changed — no manual Dispatcharr update needed here.
+                    update_stream_window(
+                        conn, existing.id, stream_id, attach_at, detach_at
+                    )
 
             result.existing.append(
                 {
@@ -898,7 +914,10 @@ class ChannelCreator(_LifecycleHost):
                 priority=0,
                 exception_keyword=matched_keyword,
                 m3u_account_id=stream.get("m3u_account_id"),
-                m3u_account_name=group_config.get("m3u_account_name"),
+                # Per-stream account name first (#297): the group-config fallback
+                # mislabels multi-login streams with one account for the whole group.
+                m3u_account_name=stream.get("m3u_account_name")
+                or group_config.get("m3u_account_name"),
                 source_group_id=group_id,
                 match_type=match_type,
                 match_method=match_method,
