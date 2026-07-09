@@ -10,10 +10,10 @@ import json
 import pytest
 
 from teamarr.database.connection import get_db, init_db
-from teamarr.database.settings.read import (
-    _parse_stream_ordering_rules,
-    get_stream_ordering_settings,
-)
+from teamarr.database.settings.read import get_stream_ordering_settings
+
+# Rule JSON parsing moved into the registry (iua3.8 declarative field registry).
+from teamarr.database.settings.registry import _parse_ordering_rules as _parse_stream_ordering_rules
 from teamarr.database.settings.types import StreamOrderingRule
 from teamarr.database.settings.update import update_stream_ordering_rules
 
