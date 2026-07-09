@@ -1004,6 +1004,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Hockey - European Leagues (TSDB)
     ('norwegian-hockey', 'tsdb', '4926', 'Norwegian Fjordkraft-ligaen', 'Norwegian Fjordkraft-ligaen', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/lpfdvc1697194460.png', NULL, 1, NULL, 'norwegian-hockey', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
+    ('shl', 'tsdb', '4419', 'Swedish Hockey League', 'Swedish Hockey League', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/95fnqb1547547893.png', NULL, 1, 'SHL', 'shl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
 
     -- Australian Football (TSDB)
     ('afl', 'squiggle', 'afl', NULL, 'Australian Football League', 'australian-football', 'https://r2.thesportsdb.com/images/media/league/badge/wvx4721525519372.png', NULL, 1, 'AFL', 'afl', 'team_vs_team', 'AFL', NULL, NULL, NULL, 1),

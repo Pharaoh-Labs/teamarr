@@ -40,6 +40,7 @@ These leagues have low enough event volume to work within free tier limits:
 These leagues have high event volume or unreliable free-tier data and require a premium key for full coverage:
 
 - AFL (Australian football)
+- SHL (Swedish Hockey League) — a full ~52-round, 14-team season far exceeds the free tier's 15-events/call cap
 - IPL, BBL, SA20 (cricket)
 - Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
 - IMSA and WEC (motor racing). WEC's 62 events/season exceeds the free `eventsseason.php` 15-event cap; IMSA fits it but is gated premium too, so all TSDB racing is premium (no silent truncation if a schedule grows).
@@ -61,6 +62,7 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 | Unrivaled | `unrivaled` | 5622 | Basketball | Free |
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
 | Boxing | `boxing` | 4445 | Boxing | Free |
+| Swedish Hockey League | `shl` | 4419 | Hockey | Premium |
 | Australian Football League | `afl` | 4456 | Australian Football | Premium |
 | Indian Premier League | `ipl` | 4460 | Cricket | Premium |
 | Big Bash League | `bbl` | 4461 | Cricket | Premium |
