@@ -24,7 +24,12 @@ import { LeaguePicker } from "@/components/LeaguePicker"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { TeamPicker } from "@/components/TeamPicker"
 import { useSubscription, useUpdateSubscription } from "@/hooks/useSubscription"
-import { useTeamFilterSettings, useUpdateTeamFilterSettings } from "@/hooks/useSettings"
+import {
+  useEPGSettings,
+  useTeamFilterSettings,
+  useUpdateEPGSettings,
+  useUpdateTeamFilterSettings,
+} from "@/hooks/useSettings"
 import { getLeagues } from "@/api/teams"
 import type { SoccerFollowedTeam } from "@/api/types"
 import type { TeamFilterSettings } from "@/api/settings"
@@ -71,6 +76,18 @@ export function GlobalDefaults({
   // Team filter settings
   const { data: teamFilterData } = useTeamFilterSettings()
   const updateTeamFilter = useUpdateTeamFilterSettings()
+
+  // EPG settings blob — carries tennis_majors_only, edited alongside the team
+  // filter (both are "narrow what becomes a channel" controls). Full-blob PUT;
+  // safe: no other mounted view edits the epg blob at the same time.
+  const { data: epgData } = useEPGSettings()
+  const updateEPG = useUpdateEPGSettings()
+  const [tennisMajorsOnly, setTennisMajorsOnly] = useState(false)
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setTennisMajorsOnly(epgData.tennis_majors_only ?? false)
+  }
 
   // Local state for editing (synced from subscription on load)
   const [nonSoccerLeagues, setNonSoccerLeagues] = useState<string[]>([])
@@ -186,7 +203,15 @@ export function GlobalDefaults({
       onSuccess: () => toast.success("Default team filter saved"),
       onError: () => toast.error("Failed to save team filter"),
     })
-  }, [teamFilter, updateTeamFilter])
+    // tennis_majors_only rides the epg blob (separate endpoint) — only PUT
+    // when it actually changed, to avoid clobbering concurrent epg edits.
+    if (epgData && (epgData.tennis_majors_only ?? false) !== tennisMajorsOnly) {
+      updateEPG.mutate(
+        { ...epgData, tennis_majors_only: tennisMajorsOnly },
+        { onError: () => toast.error("Failed to save tennis majors-only") }
+      )
+    }
+  }, [teamFilter, updateTeamFilter, epgData, tennisMajorsOnly, updateEPG])
 
   if (subLoading || !leaguesData) {
     return (
@@ -335,6 +360,21 @@ export function GlobalDefaults({
                   Include all playoff games (bypass team filter for postseason events)
                 </span>
               </label>
+
+              {/* Tennis majors-only (#283) — shown only for tennis subscribers */}
+              {allSubscribedLeagues.some((l) => l === "atp" || l === "wta") && (
+                <label className="flex items-center gap-2 cursor-pointer py-2">
+                  <Checkbox
+                    checked={tennisMajorsOnly}
+                    onCheckedChange={(checked) => setTennisMajorsOnly(!!checked)}
+                  />
+                  <span className="text-sm">
+                    Tennis: only match Grand Slams (Australian Open, French Open,
+                    Wimbledon, US Open) — smaller ATP/WTA tournaments never create
+                    channels
+                  </span>
+                </label>
+              )}
 
               {/* Status message and Save button */}
               <div className="flex justify-between items-center">
