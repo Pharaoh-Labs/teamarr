@@ -88,7 +88,7 @@ Set these on a Source in the editor (and at bulk add / bulk edit). **EPG** requi
 
 The **Event Lookahead** controls how far ahead Teamarr matches streams to sporting events — streams are matched only to events within this window. Default is 3 days; options are 1, 3, 7, 14, or 30 days.
 
-**Tennis: majors only** (same card) restricts tennis matching to the four Grand Slams (Australian Open, French Open, Wimbledon, US Open). Smaller ATP/WTA tournaments are ignored entirely — no channels are created for them. Off by default.
+**Tennis: majors only** (Global Defaults → Teams tile, next to the playoff bypass; shown when subscribed to ATP/WTA) restricts tennis matching to the four Grand Slams (Australian Open, French Open, Wimbledon, US Open). Smaller ATP/WTA tournaments are ignored entirely — no channels are created for them. Off by default.
 
 ## EPG Program Matching
 
