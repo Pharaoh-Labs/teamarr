@@ -43,7 +43,9 @@ def log_channel_history(
     logger.debug(
         "[HISTORY] channel_id=%d type=%s source=%s", managed_channel_id, change_type, change_source
     )
-    return cursor.lastrowid
+    new_id = cursor.lastrowid
+    assert new_id is not None  # just-inserted row always has a rowid
+    return new_id
 
 
 def get_channel_history(

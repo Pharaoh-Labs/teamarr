@@ -12,6 +12,8 @@ from teamarr.consumers.event_epg import POSTPONED_LABEL, is_event_postponed
 from teamarr.core import Event
 from teamarr.utilities.art_url import apply_art_base_url
 
+from ._host import _LifecycleHost
+
 logger = logging.getLogger(__name__)
 
 # Template variables that, when present in a channel-name template, mean the
@@ -30,7 +32,7 @@ FEED_TEMPLATE_VARS = frozenset({
 })
 
 
-class ChannelNaming:
+class ChannelNaming(_LifecycleHost):
     """Resolves channel names, logo URLs and template strings.
 
     Mixin for ChannelLifecycleService — relies on the coordinator's

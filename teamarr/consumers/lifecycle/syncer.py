@@ -13,12 +13,13 @@ from typing import Any
 
 from teamarr.core import Event
 
+from ._host import _LifecycleHost
 from .types import StreamProcessResult, generate_event_tvg_id
 
 logger = logging.getLogger(__name__)
 
 
-class ChannelSyncer:
+class ChannelSyncer(_LifecycleHost):
     """Syncs existing channels' settings and EPG links to Dispatcharr.
 
     Mixin for ChannelLifecycleService — relies on the coordinator's managers,
@@ -183,7 +184,7 @@ class ChannelSyncer:
 
             # 5. Check tvg_id (regenerate with keyword + feed_team_id to migrate
             # old-format tvg_ids; feed_team_id keeps feed-separated channels distinct)
-            event_id = getattr(event, "id", None)
+            event_id = event.id
             event_provider = getattr(event, "provider", "espn")
             stored_feed_team_id_for_tvg = getattr(existing, "feed_team_id", None)
             expected_tvg_id = generate_event_tvg_id(

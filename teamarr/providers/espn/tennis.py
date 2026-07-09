@@ -13,6 +13,7 @@ players by surname only: "Wimbledon: Zheng vs Norrie @ Jun 29 12:30 PM").
 
 import logging
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from teamarr.core import Event, EventStatus, Team, Venue
 
@@ -54,6 +55,10 @@ class TennisParserMixin:
     Requires:
         - self.name: Provider name ('espn')
     """
+
+    if TYPE_CHECKING:
+        # Provided by the host provider class (ESPNProvider).
+        name: str
 
     def _parse_tennis_matches(
         self, data: dict, league: str, sport: str, target_date: date

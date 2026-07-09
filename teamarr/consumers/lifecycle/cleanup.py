@@ -11,12 +11,13 @@ from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import crosses_midnight
 from teamarr.utilities.tz import to_user_tz
 
+from ._host import _LifecycleHost
 from .types import StreamProcessResult
 
 logger = logging.getLogger(__name__)
 
 
-class ChannelCleanup:
+class ChannelCleanup(_LifecycleHost):
     """Deletes expired/stale channels and detaches dead streams.
 
     Mixin for ChannelLifecycleService — relies on the coordinator's managers,
@@ -483,10 +484,11 @@ class ChannelCleanup:
                             stream_id = getattr(s, "dispatcharr_stream_id", None)
                             if stream_id:
                                 remove_stream_from_channel(conn, channel.id, stream_id)
-                                self._remove_stream_from_dispatcharr_channel(
-                                    channel.dispatcharr_channel_id,
-                                    stream_id,
-                                )
+                                if channel.dispatcharr_channel_id:
+                                    self._remove_stream_from_dispatcharr_channel(
+                                        channel.dispatcharr_channel_id,
+                                        stream_id,
+                                    )
                                 log_channel_history(
                                     conn=conn,
                                     managed_channel_id=channel.id,
@@ -501,10 +503,11 @@ class ChannelCleanup:
                             reason = changed.get("reason", "content_changed")
                             if stream_id:
                                 remove_stream_from_channel(conn, channel.id, stream_id)
-                                self._remove_stream_from_dispatcharr_channel(
-                                    channel.dispatcharr_channel_id,
-                                    stream_id,
-                                )
+                                if channel.dispatcharr_channel_id:
+                                    self._remove_stream_from_dispatcharr_channel(
+                                        channel.dispatcharr_channel_id,
+                                        stream_id,
+                                    )
                                 if reason == "event_rotated":
                                     notes = f"Stream {stream_id} rotated to different event"
                                 else:

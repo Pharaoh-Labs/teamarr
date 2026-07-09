@@ -4,6 +4,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any
 
 from teamarr.core import Event
 from teamarr.database.groups import EventEPGGroup
@@ -22,6 +23,14 @@ class StreamFetcher:
     Mixin for EventGroupProcessor — relies on the coordinator's
     ``_db_factory``, ``_dispatcharr_client`` and ``_service`` attributes.
     """
+
+    if TYPE_CHECKING:
+        # Provided by the EventGroupProcessor coordinator / sibling mixins.
+        # Declared for type-checkers only — no runtime effect.
+        _db_factory: Any
+        _dispatcharr_client: Any
+        _service: Any
+        _active_epg_source_ids: Any
 
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
         """Fetch M3U streams from Dispatcharr for the group.

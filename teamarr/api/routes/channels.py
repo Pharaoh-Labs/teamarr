@@ -9,7 +9,7 @@ Provides REST API for:
 
 import logging
 from datetime import date, datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -396,7 +396,7 @@ def get_managed_channel_streams(channel_id: int):
                 matched_event=channel_event,
                 matched_league=channel.league,
                 cache_match_method=(d := match_details.get(
-                    (s.source_group_id, s.dispatcharr_stream_id), {}
+                    cast("tuple[int, int]", (s.source_group_id, s.dispatcharr_stream_id)), {}
                 )).get("match_method"),
                 cache_created_at=(
                     _safe_isoformat(d.get("created_at"))

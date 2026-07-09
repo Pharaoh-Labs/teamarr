@@ -452,6 +452,7 @@ def create_template(
     cursor = conn.execute(f"INSERT INTO templates ({column_str}) VALUES ({placeholders})", values)
     conn.commit()
     template_id = cursor.lastrowid
+    assert template_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Template id=%d name=%s type=%s", template_id, name, template_type)
     return template_id
 

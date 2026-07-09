@@ -4,6 +4,7 @@ import logging
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from sqlite3 import Connection
+from typing import TYPE_CHECKING, Any
 
 from teamarr.config import get_user_timezone
 from teamarr.consumers.event_epg import EventEPGOptions
@@ -30,6 +31,13 @@ class XmltvRenderer:
     Mixin for EventGroupProcessor — relies on the coordinator's
     ``_service``, ``_epg_generator`` and ``_art_base_url`` attributes.
     """
+
+    if TYPE_CHECKING:
+        # Provided by the EventGroupProcessor coordinator / sibling mixins.
+        # Declared for type-checkers only — no runtime effect.
+        _service: Any
+        _epg_generator: Any
+        _art_base_url: Any
 
     def _load_event_template(self, conn: Connection, template_id: int):
         """Load and convert template for event-based EPG.
@@ -259,7 +267,7 @@ class XmltvRenderer:
     def _generate_filler_for_streams(
         self,
         matched_streams: list[dict],
-        filler_config: EventFillerConfig,
+        filler_config: EventFillerConfig | None,
         sport_durations: dict[str, float],
         lookback_hours: int = 6,
         prepend_postponed_label: bool = True,

@@ -47,7 +47,7 @@ class ChannelCreationResult:
     success: bool
     channel_id: int | None = None
     dispatcharr_channel_id: int | None = None
-    channel_number: str | None = None
+    channel_number: int | None = None
     tvg_id: str | None = None
     error: str | None = None
 

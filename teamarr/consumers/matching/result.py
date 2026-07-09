@@ -237,7 +237,7 @@ class MatchOutcome:
     @classmethod
     def failed(
         cls,
-        reason: FailedReason,
+        reason: FailedReason | None,
         *,
         stream_name: str | None = None,
         stream_id: int | None = None,
@@ -399,7 +399,7 @@ class MatchOutcome:
 # DISPLAY TEXT - Human-readable descriptions
 # =============================================================================
 
-FILTERED_DISPLAY: dict[FilteredReason, str] = {
+FILTERED_DISPLAY: dict[FilteredReason | None, str] = {
     FilteredReason.NOT_EVENT: "Not an event stream",
     FilteredReason.INCLUDE_REGEX: "Didn't match include regex",
     FilteredReason.EXCLUDE_REGEX: "Matched exclude regex",
@@ -408,7 +408,7 @@ FILTERED_DISPLAY: dict[FilteredReason, str] = {
     FilteredReason.SPORT_NOT_SUPPORTED: "Sport not supported",
 }
 
-FAILED_DISPLAY: dict[FailedReason, str] = {
+FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.TEAMS_NOT_PARSED: "Could not parse team names",
     FailedReason.TEAM1_NOT_FOUND: "First team not found",
     FailedReason.TEAM2_NOT_FOUND: "Second team not found",
@@ -423,7 +423,7 @@ FAILED_DISPLAY: dict[FailedReason, str] = {
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 
-METHOD_DISPLAY: dict[MatchMethod, str] = {
+METHOD_DISPLAY: dict[MatchMethod | None, str] = {
     MatchMethod.CACHE: "Cache hit",
     MatchMethod.USER_CORRECTED: "User corrected",
     MatchMethod.ALIAS: "Alias match",
@@ -433,7 +433,7 @@ METHOD_DISPLAY: dict[MatchMethod, str] = {
     MatchMethod.DIRECT: "Direct assignment",
 }
 
-EXCLUDED_DISPLAY: dict[ExcludedReason, str] = {
+EXCLUDED_DISPLAY: dict[ExcludedReason | None, str] = {
     ExcludedReason.LEAGUE_NOT_INCLUDED: "League not in group",
     ExcludedReason.EVENT_FINAL: "Event is final",
     ExcludedReason.EVENT_PAST: "Event already ended",

@@ -153,6 +153,7 @@ def create_keyword(
     )
     conn.commit()
     keyword_id = cursor.lastrowid
+    assert keyword_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Exception keyword id=%d label=%s", keyword_id, label)
     return keyword_id
 

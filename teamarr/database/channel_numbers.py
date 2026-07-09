@@ -712,6 +712,7 @@ def _reassign_sticky(
     for ch in sorted_channels:
         if is_anchor(ch):
             num = _channel_num_as_int(ch["channel_number"])
+            assert num is not None  # is_anchor guarantees a valid int
             used.add(num)
             locked_teamarr.add(num)
 
@@ -727,7 +728,9 @@ def _reassign_sticky(
     for gi in range(ng - 1, -1, -1):
         next_anchor_after[gi] = upcoming
         anchor_nums = [
-            _channel_num_as_int(ch["channel_number"]) for ch in groups[gi] if is_anchor(ch)
+            n
+            for ch in groups[gi]
+            if is_anchor(ch) and (n := _channel_num_as_int(ch["channel_number"])) is not None
         ]
         if anchor_nums:
             upcoming = min(anchor_nums)
@@ -796,12 +799,17 @@ def _reassign_sticky(
 
         if not unplaced:
             # Fully anchored event — fixed; advance the neighbourhood low-water mark.
-            anchor_nums = [_channel_num_as_int(ch["channel_number"]) for ch in anchors]
+            anchor_nums = [
+                n
+                for ch in anchors
+                if (n := _channel_num_as_int(ch["channel_number"])) is not None
+            ]
             if anchor_nums:
                 lo = max(lo, max(anchor_nums))
             continue
 
-        hi = next_anchor_after[gi] if next_anchor_after[gi] is not None else (effective_end + 1)
+        na = next_anchor_after[gi]
+        hi = na if na is not None else (effective_end + 1)
 
         if anchors:
             # Mixed event: a feed was added to an already-locked game (feeds are
@@ -809,7 +817,14 @@ def _reassign_sticky(
             # extends the event's run *contiguously* into the gap reserved right
             # after its existing feeds — so all feeds of one game stay together
             # instead of being scattered a full gap (or out to the frontier) away.
-            lo = max(lo, max(_channel_num_as_int(c["channel_number"]) for c in anchors))
+            lo = max(
+                lo,
+                max(
+                    n
+                    for c in anchors
+                    if (n := _channel_num_as_int(c["channel_number"])) is not None
+                ),
+            )
             stopped = False
             for ch in unplaced:
                 target = first_free_run(lo + 1, hi, 1)

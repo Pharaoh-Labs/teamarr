@@ -141,7 +141,7 @@ def dict_to_event(data: dict) -> Event:
         season_year=data.get("season_year"),
         season_type=data.get("season_type"),
         # UFC-specific fields
-        segment_times=segment_times,
+        segment_times=segment_times or {},
         main_card_start=main_card_start,
         # Racing-specific fields
         circuit_name=data.get("circuit_name"),

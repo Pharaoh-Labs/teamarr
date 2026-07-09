@@ -80,8 +80,10 @@ def list_presets():
     with get_db() as conn:
         presets = get_all_presets(conn)
 
-    return ConditionPresetListResponse(
-        presets=[
+    responses = []
+    for p in presets:
+        assert p.id is not None  # persisted rows always have an id
+        responses.append(
             ConditionPresetResponse(
                 id=p.id,
                 name=p.name,
@@ -89,8 +91,10 @@ def list_presets():
                 conditions=p.conditions,
                 created_at=p.created_at.isoformat() if p.created_at else None,
             )
-            for p in presets
-        ],
+        )
+
+    return ConditionPresetListResponse(
+        presets=responses,
         total=len(presets),
     )
 
@@ -108,6 +112,7 @@ def get_preset(preset_id: int):
             detail=f"Preset {preset_id} not found",
         )
 
+    assert preset.id is not None  # persisted rows always have an id
     return ConditionPresetResponse(
         id=preset.id,
         name=preset.name,
@@ -138,6 +143,13 @@ def create_preset(request: ConditionPresetCreate):
         )
         preset = db_get_preset(conn, preset_id)
 
+    if preset is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Preset could not be retrieved after creation",
+        )
+
+    assert preset.id is not None  # persisted rows always have an id
     return ConditionPresetResponse(
         id=preset.id,
         name=preset.name,
@@ -178,6 +190,13 @@ def update_preset(preset_id: int, request: ConditionPresetUpdate):
         )
         preset = db_get_preset(conn, preset_id)
 
+    if preset is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Preset could not be retrieved after update",
+        )
+
+    assert preset.id is not None  # persisted rows always have an id
     return ConditionPresetResponse(
         id=preset.id,
         name=preset.name,

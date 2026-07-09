@@ -4,7 +4,7 @@ Global sports/league subscription and template assignment management.
 """
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from teamarr.database import get_db
 from teamarr.database.subscription import (
@@ -72,8 +72,8 @@ class TemplateAssignmentUpdate(BaseModel):
     """Update subscription template assignment."""
 
     template_id: int | None = None
-    sports: list[str] | None = ...
-    leagues: list[str] | None = ...
+    sports: list[str] | None = Field(...)
+    leagues: list[str] | None = Field(...)
 
 
 class TemplateAssignmentListResponse(BaseModel):
@@ -205,6 +205,12 @@ def create_subscription_template(request: TemplateAssignmentCreate):
         )
         template = get_subscription_template(conn, assignment_id)
 
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Template assignment could not be retrieved after creation",
+        )
+
     return TemplateAssignmentResponse(
         id=template.id,
         template_id=template.template_id,
@@ -241,6 +247,12 @@ def update_subscription_template_endpoint(
 
         update_subscription_template(conn, assignment_id, **kwargs)
         template = get_subscription_template(conn, assignment_id)
+
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Template assignment could not be retrieved after update",
+        )
 
     return TemplateAssignmentResponse(
         id=template.id,

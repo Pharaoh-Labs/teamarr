@@ -38,7 +38,7 @@ def add_stream_to_channel(
         ID of created stream record
     """
     columns = ["managed_channel_id", "dispatcharr_stream_id", "priority"]
-    values = [managed_channel_id, dispatcharr_stream_id, priority]
+    values: list = [managed_channel_id, dispatcharr_stream_id, priority]
 
     if stream_name:
         columns.append("stream_name")
@@ -70,6 +70,7 @@ def add_stream_to_channel(
         values,
     )
     stream_id = cursor.lastrowid
+    assert stream_id is not None  # just-inserted row always has a rowid
     logger.debug(
         "[ATTACHED] Stream %d to channel %d priority=%d",
         dispatcharr_stream_id,

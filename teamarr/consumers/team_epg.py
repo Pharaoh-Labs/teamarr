@@ -386,6 +386,9 @@ class TeamEPGGenerator:
         options: TeamEPGOptions,
     ) -> Programme | None:
         """Convert an Event to a Programme with template resolution."""
+        # Caller (generate) returns early when options.template is None, so a
+        # template is guaranteed present here.
+        assert options.template is not None
         start = event.start_time - timedelta(minutes=options.pregame_minutes)
         # V1 Parity: Use template custom duration if set
         template_dict = (

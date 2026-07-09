@@ -13,6 +13,7 @@ from typing import Any
 
 from teamarr.core import Event
 
+from ._host import _LifecycleHost
 from .timing import compute_stream_window, is_stream_in_window
 from .types import (
     ChannelCreationResult,
@@ -23,7 +24,7 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
-class ChannelCreator:
+class ChannelCreator(_LifecycleHost):
     """Creates channels from matched streams and handles duplicate modes.
 
     Mixin for ChannelLifecycleService — relies on the coordinator's managers,
@@ -354,7 +355,9 @@ class ChannelCreator:
                                 }
                             )
 
-                            # Log history
+                            # Log history — a successful create always yields a
+                            # local managed-channel id (invariant of _create_channel).
+                            assert channel_result.channel_id is not None
                             log_channel_history(
                                 conn=conn,
                                 managed_channel_id=channel_result.channel_id,
@@ -377,7 +380,7 @@ class ChannelCreator:
 
                     except Exception as stream_err:
                         event_id = matched.get("event")
-                        if hasattr(event_id, "id"):
+                        if event_id is not None and hasattr(event_id, "id"):
                             event_id = event_id.id
                         stream_name = matched.get("stream", {}).get("name", "Unknown")
                         logger.error(
@@ -461,6 +464,8 @@ class ChannelCreator:
         result = StreamProcessResult()
         stream_name = stream.get("name", "")
         stream_id = stream.get("id")
+        # A matched Dispatcharr stream always carries an integer id.
+        assert stream_id is not None
         disp_channel = None  # Dispatcharr's view of this channel (for phantom detection)
 
         # Verify channel exists in Dispatcharr.
@@ -727,6 +732,8 @@ class ChannelCreator:
         event_provider = getattr(event, "provider", "espn")
         stream_name = stream.get("name", "")
         stream_id = stream.get("id")
+        # A matched Dispatcharr stream always carries an integer id.
+        assert stream_id is not None
         group_id = group_config.get("id")
 
         # For segments, use segment-aware event_id for DB storage

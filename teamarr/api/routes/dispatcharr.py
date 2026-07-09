@@ -150,6 +150,7 @@ def create_channel_group(name: str) -> dict:
         raise HTTPException(status_code=400, detail=result.error)
 
     logger.info("[CREATED] Channel group in Dispatcharr name=%s", name)
+    assert result.data is not None  # success guaranteed non-None data above
     return result.data
 
 
@@ -194,6 +195,7 @@ def create_channel_profile(name: str) -> dict:
         raise HTTPException(status_code=400, detail=result.error)
 
     logger.info("[CREATED] Channel profile in Dispatcharr name=%s", name)
+    assert result.data is not None  # success guaranteed non-None data above
     return result.data
 
 

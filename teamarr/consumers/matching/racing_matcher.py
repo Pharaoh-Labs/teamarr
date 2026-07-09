@@ -225,7 +225,7 @@ class RacingMatcher:
         stream_norm = normalize_text(ctx.stream_name)
         best_score = 0
         best_event: Event | None = None
-        country_scores: dict[str, int] = {}
+        country_scores: dict[str, float] = {}
 
         for event in events:
             for candidate in (event.name, event.short_name, event.circuit_name):

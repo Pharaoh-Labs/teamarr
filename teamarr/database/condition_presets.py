@@ -127,6 +127,7 @@ def create_preset(
     )
     conn.commit()
     preset_id = cursor.lastrowid
+    assert preset_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Condition preset id=%d name=%s", preset_id, name)
     return preset_id
 

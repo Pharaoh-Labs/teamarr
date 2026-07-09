@@ -138,7 +138,8 @@ def resolve_program_tvg_ids(
             continue
 
         # 1. Channel (curated mapping — most trusted).
-        ch = stream_channel_map.get(s.get("id"))
+        sid = s.get("id")
+        ch = stream_channel_map.get(sid) if sid is not None else None
         if ch:
             eid = ch.get("effective_epg_data_id") or ch.get("epg_data_id")
             ed = epgdata_by_id.get(eid)

@@ -7,6 +7,7 @@ resolution and UFC/racing segment expansion of the matched-stream list.
 import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from teamarr.consumers.matching import BatchMatchResult, StreamCategory, StreamMatcher
 from teamarr.database.groups import EventEPGGroup
@@ -23,6 +24,16 @@ class StreamMatching:
     ``_db_factory``, ``_dispatcharr_client``, ``_service``,
     ``_shared_events`` and ``_generation`` attributes.
     """
+
+    if TYPE_CHECKING:
+        # Provided by the EventGroupProcessor coordinator / sibling mixins.
+        # Declared for type-checkers only — no runtime effect.
+        _db_factory: Any
+        _dispatcharr_client: Any
+        _service: Any
+        _shared_events: Any
+        _get_all_known_leagues: Any
+        _load_sport_durations: Any
 
     def _match_streams(
         self,
@@ -273,7 +284,7 @@ class StreamMatching:
         except Exception as e:
             logger.debug("[XTREAM-EPG] group=%s account fetch failed: %s", group.id, e)
             return
-        if not is_xtream_account(account):
+        if account is None or not is_xtream_account(account):
             return
 
         already = set(index.tvg_ids())
@@ -281,8 +292,13 @@ class StreamMatching:
         if not wanted:
             return
 
+        url = xmltv_url(account)
+        if url is None:
+            # Unreachable in practice — account already passed is_xtream_account,
+            # which is xmltv_url's own precondition. Guard keeps the type sound.
+            return
         programs = fetch_xtream_programs(
-            xmltv_url(account),
+            url,
             cache_key=f"acct{account_id}",
             wanted_tvg_ids=wanted,
             window_start=window_start,

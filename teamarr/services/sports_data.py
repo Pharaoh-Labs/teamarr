@@ -15,6 +15,7 @@ import threading
 import time
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from typing import Any, cast, overload
 
 from teamarr.core import Event, SportsProvider, Team, TeamStats
 from teamarr.database import get_db
@@ -118,6 +119,10 @@ def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     )
 
 
+@overload
+def _enrich_event_teams(event: Event) -> Event: ...
+@overload
+def _enrich_event_teams(event: None) -> None: ...
 def _enrich_event_teams(event: Event | None) -> Event | None:
     """Backfill home_team and away_team from team_cache where fields are empty."""
     if event is None:
@@ -305,7 +310,7 @@ class SportsDataService:
             chosen = provider
             bulk = getattr(provider, "get_sample_candidates", None)
             if callable(bulk):
-                candidates = bulk(league)
+                candidates = cast("list[Event]", bulk(league))
             else:
                 # Recent days first (their finals), then a couple upcoming.
                 for d in (
@@ -330,7 +335,7 @@ class SportsDataService:
         # Bowl). A finished game populates every postgame variable.
         deep = getattr(chosen, "get_recent_final", None) if chosen else None
         if callable(deep):
-            ev = deep(league)
+            ev = cast("Event | None", deep(league))
             if ev and ev.home_team and ev.away_team:
                 return _enrich_event_teams(ev)
 
@@ -627,7 +632,7 @@ class SportsDataService:
 
             # Check for TSDB-specific stats
             if hasattr(provider, "_client"):
-                client = provider._client
+                client: Any = getattr(provider, "_client", None)
                 if hasattr(client, "rate_limit_stats"):
                     provider_stats["has_rate_limit"] = True
                     provider_stats["rate_limit"] = client.rate_limit_stats().to_dict()
@@ -645,7 +650,7 @@ class SportsDataService:
         """
         for provider in self._providers:
             if hasattr(provider, "_client"):
-                client = provider._client
+                client: Any = getattr(provider, "_client", None)
                 if hasattr(client, "reset_rate_limit_stats"):
                     client.reset_rate_limit_stats()
 

@@ -2,6 +2,7 @@
 
 import logging
 from sqlite3 import Connection
+from typing import TYPE_CHECKING, Any
 
 from teamarr.consumers.channel_lifecycle import create_lifecycle_service
 from teamarr.core import SEASON_POSTSEASON, Event
@@ -16,6 +17,13 @@ class TeamFiltering:
     Mixin for EventGroupProcessor — relies on the coordinator's
     ``_db_factory``, ``_dispatcharr_client`` and ``_service`` attributes.
     """
+
+    if TYPE_CHECKING:
+        # Provided by the EventGroupProcessor coordinator / sibling mixins.
+        # Declared for type-checkers only — no runtime effect.
+        _db_factory: Any
+        _dispatcharr_client: Any
+        _service: Any
 
     def _filter_by_teams(
         self,
@@ -48,6 +56,9 @@ class TeamFiltering:
             return matched_streams, 0
 
         filter_list = include_teams if include_teams else exclude_teams
+        # The empty-filter guard above guarantees one of the two lists is truthy,
+        # so filter_list is always a non-None list here.
+        assert filter_list is not None
         filtered = []
         filtered_count = 0
         playoff_bypass_count = 0

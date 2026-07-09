@@ -338,7 +338,9 @@ def create_custom_league(
         tsdb_tier=tier,
     )
     _auto_subscribe(conn, code)
-    return get_league_row(conn, code)
+    row = get_league_row(conn, code)
+    assert row is not None  # row just created above
+    return row
 
 
 def _auto_subscribe(conn: sqlite3.Connection, league_code: str) -> None:
@@ -448,7 +450,9 @@ def update_custom_league(
         event_type=resolved_event_type,
         tsdb_tier=tier,
     )
-    return get_league_row(conn, code)
+    row = get_league_row(conn, code)
+    assert row is not None  # row just upserted above
+    return row
 
 
 def delete_custom_league(conn: sqlite3.Connection, league_code: str) -> None:

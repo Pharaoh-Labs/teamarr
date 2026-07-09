@@ -645,6 +645,7 @@ def create_group(
         ),
     )
     group_id = cursor.lastrowid
+    assert group_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Event group id=%d name=%s", group_id, name)
     return group_id
 
