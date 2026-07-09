@@ -87,7 +87,10 @@ export function EventGroupForm() {
     queryKey: ["leagues"],
     queryFn: () => getLeagues(),
   })
-  const allLeagues = leaguesData?.leagues || []
+  // useMemo (not `|| []`): a fresh fallback array would destabilize every
+  // downstream hook dependency (react-hooks/exhaustive-deps).
+  const leaguesList = leaguesData?.leagues
+  const allLeagues = useMemo(() => leaguesList ?? [], [leaguesList])
 
   const matchGlobal = useCallback(async () => {
     setMatchingGlobal(true)

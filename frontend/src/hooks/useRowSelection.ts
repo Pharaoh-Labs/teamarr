@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 /**
  * Multi-select state for table rows keyed by numeric id, with optional
@@ -16,7 +16,11 @@ import { useCallback, useRef, useState } from "react"
 export function useRowSelection<Row extends { id: number }>(rows: Row[]) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const rowsRef = useRef(rows)
-  rowsRef.current = rows
+  // Latest-ref pattern, updated post-commit: toggle/toggleAll only read it
+  // from event handlers, which always fire after the effect has run.
+  useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
   // Range anchor. A ref, not state: it never needs to trigger a render.
   const lastClickedIndexRef = useRef<number | null>(null)
 

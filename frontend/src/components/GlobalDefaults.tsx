@@ -11,7 +11,7 @@
  * Explicit Save buttons — league changes trigger EPG regeneration.
  */
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
@@ -28,6 +28,29 @@ import { useTeamFilterSettings, useUpdateTeamFilterSettings } from "@/hooks/useS
 import { getLeagues } from "@/api/teams"
 import type { SoccerFollowedTeam } from "@/api/types"
 import type { TeamFilterSettings } from "@/api/settings"
+
+/**
+ * Split subscribed league slugs into soccer vs non-soccer. Module-level so the
+ * render-time seeding block below stays simple enough for the React Compiler
+ * (a .find() lambda combined with a method call inside that block defeats its
+ * memoization analysis).
+ */
+function splitSubscribedLeagues(
+  slugs: string[],
+  allLeagues: { slug: string; sport?: string | null }[],
+): { soccer: string[]; nonSoccer: string[] } {
+  const soccer: string[] = []
+  const nonSoccer: string[] = []
+  for (const slug of slugs) {
+    const league = allLeagues.find((l) => l.slug === slug)
+    if (league?.sport?.toLowerCase() === "soccer") {
+      soccer.push(slug)
+    } else {
+      nonSoccer.push(slug)
+    }
+  }
+  return { soccer, nonSoccer }
+}
 
 export function GlobalDefaults({
   activeTile,
@@ -65,35 +88,38 @@ export function GlobalDefaults({
     bypass_filter_for_playoffs: false,
   })
 
-  // Sync local state from server subscription
-  useEffect(() => {
-    if (!subscription) return
+  // Sync local state from the server subscription during render (React's
+  // "adjusting state when a prop changes" pattern) — re-seeds whenever the
+  // subscription or the league list refetches, exactly like the previous
+  // effect, without the extra effect render pass.
+  const [syncedSubscription, setSyncedSubscription] = useState<{
+    subscription: typeof subscription
+    leaguesData: typeof leaguesData
+  } | null>(null)
+  if (
+    subscription &&
+    (syncedSubscription?.subscription !== subscription ||
+      syncedSubscription?.leaguesData !== leaguesData)
+  ) {
+    setSyncedSubscription({ subscription, leaguesData })
 
     // Split leagues into soccer vs non-soccer
-    const soccer: string[] = []
-    const nonSoccer: string[] = []
-    for (const slug of subscription.leagues) {
-      const league = allLeagues.find((l) => l.slug === slug)
-      if (league?.sport?.toLowerCase() === "soccer") {
-        soccer.push(slug)
-      } else {
-        nonSoccer.push(slug)
-      }
-    }
+    const { soccer, nonSoccer } = splitSubscribedLeagues(subscription.leagues, allLeagues)
 
     setNonSoccerLeagues(nonSoccer)
     setSoccerLeagues(soccer)
     setSoccerMode(subscription.soccer_mode as SoccerMode)
     setFollowedTeams(subscription.soccer_followed_teams || [])
     setHasLocalChanges(false)
-  }, [subscription, allLeagues])
+  }
 
-  // Sync team filter state when data loads
-  useEffect(() => {
-    if (teamFilterData) {
-      setTeamFilter(teamFilterData)
-    }
-  }, [teamFilterData])
+  // Sync team filter state from server data during render (same pattern) —
+  // re-seeds on every refetch, exactly like the previous effect.
+  const [syncedTeamFilterData, setSyncedTeamFilterData] = useState<typeof teamFilterData>(undefined)
+  if (teamFilterData && teamFilterData !== syncedTeamFilterData) {
+    setSyncedTeamFilterData(teamFilterData)
+    setTeamFilter(teamFilterData)
+  }
 
   // Combined leagues for team picker
   const allSubscribedLeagues = useMemo(

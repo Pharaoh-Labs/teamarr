@@ -49,8 +49,12 @@ bd ready                              # Find available work
 bd show <id>                          # View issue details
 bd update <id> --status in_progress   # Claim work
 bd close <id>                         # Complete work
-bd sync                               # Sync beads data
+bd doctor                             # Check beads health (sync issues, hooks)
 ```
+
+Beads data syncs automatically: git hooks import/export `.beads/*.jsonl` on
+checkout/merge, and the JSONL rides in normal commits. (`bd sync` no longer
+exists in bd ≥1.1.)
 
 ## Development Workflow (issue-first — MANDATORY)
 

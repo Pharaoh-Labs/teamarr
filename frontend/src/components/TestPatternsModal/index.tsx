@@ -9,7 +9,7 @@
  * 5. Syncs patterns bidirectionally with the form (reads on open, writes on Apply)
  */
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Dialog,
@@ -116,12 +116,20 @@ export function TestPatternsModal({
     streamName: string
   } | null>(null)
 
-  // Sync form → modal when opening
-  useEffect(() => {
+  // Sync form → modal when opening. Seeded during render (React's "adjusting
+  // state when a prop changes" pattern) — fires on exactly the same trigger as
+  // the previous effect: any change to `open` or `initialPatterns`, seeding
+  // only while the modal is open, without the extra effect render pass.
+  const [syncedSeedProps, setSyncedSeedProps] = useState<{
+    open: boolean
+    initialPatterns: Partial<PatternState> | undefined
+  }>({ open: false, initialPatterns: undefined })
+  if (open !== syncedSeedProps.open || initialPatterns !== syncedSeedProps.initialPatterns) {
+    setSyncedSeedProps({ open, initialPatterns })
     if (open && initialPatterns) {
       setPatterns({ ...EMPTY_PATTERNS, ...initialPatterns })
     }
-  }, [open, initialPatterns])
+  }
 
   // Fetch raw streams
   const {

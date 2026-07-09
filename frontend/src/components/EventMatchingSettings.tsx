@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,9 +30,15 @@ export function EpgMatchingSettings() {
   const dispatcharrStatus = useDispatcharrStatus()
 
   const [epg, setEPG] = useState<EPGSettings | null>(null)
-  useEffect(() => {
-    if (epgData) setEPG(epgData)
-  }, [epgData])
+
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setEPG(epgData)
+  }
 
   const channelGroupsQuery = useChannelGroups(
     true,
@@ -179,9 +185,15 @@ export function EventLookaheadSetting() {
   const updateEPG = useUpdateEPGSettings()
 
   const [epg, setEPG] = useState<EPGSettings | null>(null)
-  useEffect(() => {
-    if (epgData) setEPG(epgData)
-  }, [epgData])
+
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setEPG(epgData)
+  }
 
   return (
     <Card>

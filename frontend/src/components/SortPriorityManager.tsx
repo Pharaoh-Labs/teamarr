@@ -120,11 +120,6 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
   const reorderMutation = useReorderSortPriorities()
   const autoPopulateMutation = useAutoPopulateSortPriorities()
 
-  // Don't render if sort_by doesn't match
-  if (currentSortBy !== showWhenSortBy) {
-    return null
-  }
-
   // Transform priorities to HierarchicalItem format
   // First, build a map of sport codes to display names from sport-level entries
   const sportDisplayNames = useMemo(() => {
@@ -153,6 +148,11 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
       },
     }))
   }, [priorities, sportDisplayNames])
+
+  // Don't render if sort_by doesn't match (after hooks — rules of hooks)
+  if (currentSortBy !== showWhenSortBy) {
+    return null
+  }
 
   const handleReorder = async (newOrder: Array<{ group: string; child: string | null; priority: number }>) => {
     const reorderData: SortPriorityReorderItem[] = newOrder.map(item => ({
