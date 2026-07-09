@@ -390,7 +390,6 @@ def get_current_stats(conn: Connection) -> dict:
             SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
             SUM(streams_matched) as total_matched,
             SUM(streams_unmatched) as total_unmatched,
-            SUM(streams_cached) as total_cached,
             SUM(channels_created) as total_channels_created,
             SUM(channels_deleted) as total_channels_deleted,
             SUM(programmes_total) as total_programmes,
@@ -408,6 +407,16 @@ def get_current_stats(conn: Connection) -> dict:
         WHERE run_type = 'full_epg'
         """
     ).fetchone()
+
+    # Cache hits live ONLY on event_group sub-runs (#312): the matcher's
+    # fingerprint-cache counter is written per group run and never rolled up
+    # to the parent full_epg row, so it must be summed outside the full_epg
+    # filter above (which exists to keep averages honest).
+    cached_row = conn.execute(
+        "SELECT SUM(streams_cached) as total_cached FROM processing_runs "
+        "WHERE run_type = 'event_group'"
+    ).fetchone()
+    total_cached = (cached_row["total_cached"] if cached_row else 0) or 0
 
     # Last 24 hours
     yesterday = (datetime.now() - timedelta(days=1)).isoformat()
@@ -472,7 +481,7 @@ def get_current_stats(conn: Connection) -> dict:
             + _lt("programmes_total"),
             "streams_matched": (overall["total_matched"] or 0) + _lt("streams_matched"),
             "streams_unmatched": (overall["total_unmatched"] or 0) + _lt("streams_unmatched"),
-            "streams_cached": (overall["total_cached"] or 0) + _lt("streams_cached"),
+            "streams_cached": total_cached + _lt("streams_cached"),
             "channels_created": (overall["total_channels_created"] or 0)
             + _lt("channels_created"),
             "channels_deleted": (overall["total_channels_deleted"] or 0)
@@ -490,7 +499,9 @@ def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = 
     """Accumulate full-EPG run sums into lifetime_stats before rows are deleted.
 
     Only run_type='full_epg' rows are folded, matching the filter
-    get_current_stats uses for its totals.
+    get_current_stats uses for its totals — EXCEPT streams_cached, which lives
+    only on event_group sub-runs (#312) and is folded from those separately
+    below so cache-hit history survives retention pruning.
     """
     condition = f"run_type = 'full_epg' AND ({where})" if where else "run_type = 'full_epg'"
     row = conn.execute(
@@ -501,7 +512,6 @@ def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = 
             SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
             SUM(streams_matched) as matched,
             SUM(streams_unmatched) as unmatched,
-            SUM(streams_cached) as cached,
             SUM(channels_created) as created,
             SUM(channels_deleted) as deleted,
             SUM(programmes_total) as programmes,
@@ -513,7 +523,19 @@ def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = 
         """,
         params,
     ).fetchone()
-    if not row or not row["runs"]:
+
+    # Cache hits are written on event_group sub-runs only — fold them from
+    # those rows (same where-scope) or they vanish with the pruned rows.
+    eg_condition = (
+        f"run_type = 'event_group' AND ({where})" if where else "run_type = 'event_group'"
+    )
+    eg_cached = conn.execute(
+        f"SELECT SUM(streams_cached) as cached FROM processing_runs WHERE {eg_condition}",
+        params,
+    ).fetchone()
+    cached_to_fold = (eg_cached["cached"] if eg_cached else 0) or 0
+
+    if (not row or not row["runs"]) and not cached_to_fold:
         return
 
     conn.execute("INSERT OR IGNORE INTO lifetime_stats (id) VALUES (1)")
@@ -541,7 +563,7 @@ def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = 
             row["failed"] or 0,
             row["matched"] or 0,
             row["unmatched"] or 0,
-            row["cached"] or 0,
+            cached_to_fold,
             row["created"] or 0,
             row["deleted"] or 0,
             row["programmes"] or 0,
