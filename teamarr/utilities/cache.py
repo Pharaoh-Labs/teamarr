@@ -362,6 +362,12 @@ class PersistentTTLCache:
         first thread fetches and populates the cache, the rest wait and read it.
 
         Locks are refcounted and removed when idle so the map stays bounded.
+
+        Non-reentrant: this is a plain ``threading.Lock``, so a caller holding
+        the lock for ``key`` must not re-enter ``lock_key`` for that same key
+        (it would self-deadlock). The double-checked fetch bodies today stay
+        flat — they read the cache and call the provider, never back into a
+        lock-wrapped ``get_events``/``get_event`` for the same key.
         """
         with self._keylocks_guard:
             entry = self._keylocks.get(key)
@@ -376,12 +382,13 @@ class PersistentTTLCache:
             yield
         finally:
             lock.release()
+            # Our own refcount kept this exact entry in the map for the whole
+            # critical section (no other thread can drop it while count > 0), so
+            # the captured local is still the live entry — decrement and evict.
             with self._keylocks_guard:
-                entry = self._keylocks.get(key)
-                if entry is not None:
-                    entry[1] -= 1
-                    if entry[1] <= 0:
-                        del self._keylocks[key]
+                entry[1] -= 1
+                if entry[1] <= 0:
+                    del self._keylocks[key]
 
     def clear(self) -> None:
         """Clear all cached values."""

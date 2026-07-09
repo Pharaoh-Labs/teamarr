@@ -1,4 +1,4 @@
-"""Stream fetching/filtering and provider event fetching for event groups."""
+"""M3U stream fetching/filtering and known-league lookup for event groups."""
 
 import logging
 from typing import TYPE_CHECKING, Any
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class StreamFetcher:
-    """Fetches M3U streams from Dispatcharr and events from data providers.
+    """Fetches and filters M3U streams from Dispatcharr for event groups.
 
     Mixin for EventGroupProcessor — relies on the coordinator's
     ``_db_factory``, ``_dispatcharr_client`` and ``_service`` attributes.

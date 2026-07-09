@@ -60,8 +60,14 @@ REFRESH_COALESCE_TTL = 300  # seconds
 _EVENT_NOT_FOUND = {"__event_not_found__": True}
 
 # Sentinel distinguishing "no usable cache entry" from a legitimately cached
-# empty result (e.g. a league with no games that day, cached as []).
-_CACHE_MISS = object()
+# empty result (e.g. a league with no games that day, cached as []). A distinct
+# class (not bare object()) lets callers narrow the load_from_cache() union with
+# isinstance, so the real payload type flows through without a type: ignore.
+class _CacheMiss:
+    __slots__ = ()
+
+
+_CACHE_MISS = _CacheMiss()
 
 # In-memory memo for team_cache identity lookups. Enrichment runs for the home
 # and away team of every event on every get_events cache hit, so without this
@@ -262,7 +268,7 @@ class SportsDataService:
         """
         cache_key = make_cache_key("events", league, target_date.isoformat())
 
-        def load_from_cache() -> list[Event] | object:
+        def load_from_cache() -> list[Event] | _CacheMiss:
             """Return cached events, or _CACHE_MISS if absent/stale/corrupt."""
             cached = self._cache.get(cache_key)
             if cached is None:
@@ -284,8 +290,8 @@ class SportsDataService:
                 return _CACHE_MISS
 
         hit = load_from_cache()
-        if hit is not _CACHE_MISS:
-            return hit  # type: ignore[return-value]
+        if not isinstance(hit, _CacheMiss):
+            return hit
 
         # If cache_only, don't fetch from API
         if cache_only:
@@ -297,8 +303,8 @@ class SportsDataService:
         # request.
         with self._cache.lock_key(cache_key):
             hit = load_from_cache()
-            if hit is not _CACHE_MISS:
-                return hit  # type: ignore[return-value]
+            if not isinstance(hit, _CacheMiss):
+                return hit
 
             # Iterate through providers
             for provider in self._providers:
@@ -457,7 +463,7 @@ class SportsDataService:
 
         cache_key = make_cache_key("event", league, event_id)
 
-        def load_from_cache() -> Event | None | object:
+        def load_from_cache() -> Event | None | _CacheMiss:
             """Return cached event, or _CACHE_MISS if absent/stale/corrupt."""
             cached = self._cache.get(cache_key)
             if cached is None:
@@ -480,16 +486,16 @@ class SportsDataService:
                 return _CACHE_MISS
 
         hit = load_from_cache()
-        if hit is not _CACHE_MISS:
-            return hit  # type: ignore[return-value]
+        if not isinstance(hit, _CacheMiss):
+            return hit
 
         # Single-flight: collapse concurrent identical summary fetches (the
         # coalesce marker in refresh_event_status has a check-then-act race when
         # two threads enter together) into one upstream request.
         with self._cache.lock_key(cache_key):
             hit = load_from_cache()
-            if hit is not _CACHE_MISS:
-                return hit  # type: ignore[return-value]
+            if not isinstance(hit, _CacheMiss):
+                return hit
 
             for provider in self._providers:
                 if provider.supports_league(league):
