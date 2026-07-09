@@ -6,6 +6,7 @@ Pure fetch + normalize - no caching (caching is in service layer).
 
 import logging
 import re
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 
 from teamarr.core import (
@@ -46,10 +47,26 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     ):
         self._client = client or ESPNClient()
         self._league_mapping_source = league_mapping_source
+        # Optional cached, league-wide events fetcher injected by SportsDataService.
+        # When set, the future-day team scan reuses the shared per-(league, date)
+        # events cache instead of fetching each day's scoreboard once per team —
+        # so a league's daily scoreboard is fetched once per run, not N_teams times.
+        self._cached_events_fn: Callable[[str, date], list[Event]] | None = None
 
     @property
     def name(self) -> str:
         return "espn"
+
+    def set_cached_events_fn(
+        self, fn: Callable[[str, date], list[Event]] | None
+    ) -> None:
+        """Inject a cached league-wide events fetcher (SportsDataService.get_events).
+
+        Used by the future-day team scan so all teams in a league share one
+        scoreboard fetch per day. When unset (provider used standalone, e.g. in
+        tests or cache refresh), the scan falls back to direct per-day fetches.
+        """
+        self._cached_events_fn = fn
 
     def supports_league(self, league: str) -> bool:
         # Database is the source of truth
@@ -373,14 +390,28 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         Scans the scoreboard for the next N days, filtering for games
         involving the specified team. This approach works for all sports
         and captures both regular season and playoff games.
+
+        When a cached events fetcher is injected (the normal path via
+        SportsDataService), each day's full-league scoreboard is fetched once
+        and shared across every team in the league — and with event-group
+        matching, which reads the same cache. Falls back to direct per-day
+        scoreboard fetches when used standalone (no cache wired).
         """
         events = []
         today = date.today()
 
         for day_offset in range(days_ahead):
             target_date = today + timedelta(days=day_offset)
-            date_str = target_date.strftime("%Y%m%d")
 
+            if self._cached_events_fn is not None:
+                # Shared, cached league-wide events; league name is captured
+                # inside the underlying get_events → no separate capture needed.
+                for event in self._cached_events_fn(league, target_date):
+                    if self._event_has_team(team_id, event):
+                        events.append(event)
+                continue
+
+            date_str = target_date.strftime("%Y%m%d")
             data = self._client.get_scoreboard(league, date_str, sport_league)
             if not data:
                 continue
@@ -398,7 +429,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         return events
 
     def _team_in_event(self, team_id: str, event_data: dict) -> bool:
-        """Check if a team is playing in this event."""
+        """Check if a team is playing in this event (raw scoreboard dict)."""
         competitions = event_data.get("competitions", [])
         if not competitions:
             return False
@@ -406,6 +437,15 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         for competitor in competitions[0].get("competitors", []):
             comp_team = competitor.get("team", {})
             if str(comp_team.get("id")) == str(team_id):
+                return True
+        return False
+
+    @staticmethod
+    def _event_has_team(team_id: str, event: Event) -> bool:
+        """Check if a team is playing in this event (parsed Event)."""
+        tid = str(team_id)
+        for team in (event.home_team, event.away_team):
+            if team and str(team.id) == tid:
                 return True
         return False
 

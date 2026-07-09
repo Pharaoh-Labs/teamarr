@@ -656,33 +656,11 @@ class EventGroupProcessor(
                 )
                 return result
 
-            # Step 2: Fetch events from data providers
-            # Use subscription leagues (per-group override → global fallback)
+            # Step 2: Resolve subscription leagues (per-group override → global
+            # fallback). The matcher fetches its own events with a 30-day window,
+            # so there is no separate pre-flight event fetch here — an eventless
+            # group simply produces zero matches downstream.
             effective_leagues = self._get_subscription_leagues(conn, group)
-            events = self._fetch_events(effective_leagues, target_date)
-            logger.info(
-                f"Fetched {len(events)} events for group '{group.name}' leagues={effective_leagues}"
-            )
-
-            if not events:
-                result.errors.append(f"No events found for leagues: {effective_leagues}")
-                result.completed_at = datetime.now()
-                stats_run.complete(status="completed", error="No events found")
-                save_run(conn, stats_run)
-                # Update stats - streams are eligible but no events to match against
-                update_group_stats(
-                    conn,
-                    group.id,
-                    stream_count=result.streams_after_filter,  # Eligible streams
-                    matched_count=0,
-                    filtered_stale=filter_result.filtered_stale,
-                    filtered_include_regex=filter_result.filtered_include,
-                    filtered_exclude_regex=filter_result.filtered_exclude,
-                    failed_count=result.streams_after_filter,  # All unmatched due to no events
-                    filtered_not_event=filter_result.filtered_not_event,
-                    total_stream_count=result.streams_fetched,
-                )
-                return result
 
             # Step 3: Match streams to events (uses fingerprint cache)
             match_result = self._match_streams(

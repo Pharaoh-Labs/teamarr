@@ -3,18 +3,17 @@
 Connects stream matching to channel lifecycle:
 1. Load group config from database
 2. Fetch M3U streams from Dispatcharr
-3. Fetch events from data providers (parallel with ThreadPoolExecutor)
-4. Match streams to events
-5. Create/update channels via ChannelLifecycleService
-6. Generate XMLTV EPG
-7. Optionally push EPG to Dispatcharr
+3. Match streams to events (the matcher fetches events itself, per league)
+4. Create/update channels via ChannelLifecycleService
+5. Generate XMLTV EPG
+6. Optionally push EPG to Dispatcharr
 
 This is the main entry point for event-based EPG generation.
 
 Package layout (iua3.7):
 - processor.py       — EventGroupProcessor coordinator + convenience functions
 - results.py         — result dataclasses (processing/batch/preview/enforcement)
-- stream_fetcher.py  — M3U stream fetching/filtering + provider event fetching
+- stream_fetcher.py  — M3U stream fetching/filtering + known-league lookup
 - matching.py        — stream→event matching, EPG index, feed/segment expansion
 - team_filter.py     — team include/exclude filtering + filtered-channel cleanup
 - persistence.py     — matched/failed stream persistence for run analysis
@@ -37,10 +36,8 @@ from .results import (
     PreviewStream,
     ProcessingResult,
 )
-from .stream_fetcher import MAX_WORKERS
 
 __all__ = [
-    "MAX_WORKERS",
     "SEASON_POSTSEASON",
     "BatchProcessingResult",
     "EnforcementStepResult",
