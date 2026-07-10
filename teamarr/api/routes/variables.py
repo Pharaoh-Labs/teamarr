@@ -402,6 +402,12 @@ def get_conditions(template_type: str = "team"):
             "requires_value": False,
             "providers": "espn",
         },
+        {
+            "name": "has_structured_preview",
+            "description": "Recent-form data is available (populates days ahead)",
+            "requires_value": False,
+            "providers": "espn",
+        },
     ]
 
     # Team-only conditions (require "our team" perspective)

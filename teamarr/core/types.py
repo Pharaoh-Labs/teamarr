@@ -136,6 +136,11 @@ class Event:
     # which already fetches it, so zero extra calls).
     game_preview: str = ""  # summary article[type=Preview].description (pregame)
     series_summary: str = ""  # summary seasonseries[0].summary, e.g. "Series tied 1-1"
+    # Structured preview (tvnk.15): recent form from summary lastFiveGames —
+    # W-L over each team's last five ("4-1"). Available days ahead, unlike
+    # preview prose which only populates ~T-0/T-1.
+    home_last_five: str = ""
+    away_last_five: str = ""
 
     # MMA-specific: when main card begins (prelims start at start_time)
     main_card_start: datetime | None = None

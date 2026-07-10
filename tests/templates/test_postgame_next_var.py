@@ -86,6 +86,8 @@ def _make_generator() -> FillerGenerator:
     service = MagicMock()
     service.get_opponent_stats.return_value = None
     service.get_team_stats.return_value = None
+    # Preview enrichment (tvnk.15) is identity here — events pass through.
+    service.enrich_event_preview.side_effect = lambda e: e
     gen = FillerGenerator(service)
     gen._options = FillerOptions(epg_timezone="America/New_York")
     return gen

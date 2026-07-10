@@ -150,6 +150,11 @@ class ContextBuilder:
         card_segment: str | None = None,
     ) -> GameContext:
         """Build GameContext for a single event."""
+        # Days-ahead structured preview (tvnk.15): the service gates this to
+        # future events within its lookahead, serves a per-event cache, and
+        # enforces a fetch budget — a no-op for past/imminent/enriched events.
+        event = self._service.enrich_event_preview(event)
+
         is_home = event.home_team.id == team_id
         team = event.home_team if is_home else event.away_team
         opponent = event.away_team if is_home else event.home_team

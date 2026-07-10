@@ -581,7 +581,37 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 event.game_preview = self._editorial_text(article)
             series = data.get("seasonseries") or []
             event.series_summary = (series[0].get("summary") if series else "") or ""
+            # Structured preview (tvnk.15): recent-form W-L per team from
+            # lastFiveGames — available days ahead, unlike preview prose.
+            home_form, away_form = self._parse_last_five(
+                data.get("lastFiveGames") or [], event
+            )
+            event.home_last_five = home_form
+            event.away_last_five = away_form
         return event
+
+    @staticmethod
+    def _parse_last_five(last_five: list, event: Event) -> tuple[str, str]:
+        """W-L record over each team's last five games ('4-1'), from the
+        summary's lastFiveGames blocks. Empty strings when absent."""
+        forms = {"home": "", "away": ""}
+        for entry in last_five:
+            team_id = str((entry.get("team") or {}).get("id") or "")
+            results = [
+                (e.get("gameResult") or "").upper() for e in entry.get("events") or []
+            ]
+            if not team_id or not results:
+                continue
+            wins = results.count("W")
+            losses = results.count("L")
+            if wins + losses == 0:
+                continue
+            form = f"{wins}-{losses}"
+            if event.home_team and team_id == str(event.home_team.id):
+                forms["home"] = form
+            elif event.away_team and team_id == str(event.away_team.id):
+                forms["away"] = form
+        return forms["home"], forms["away"]
 
     def _build_short_name(self, competition: dict) -> str:
         """Build short name from competitors."""

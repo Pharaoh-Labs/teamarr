@@ -9,6 +9,7 @@ vars come from the scoreboard payload Teamarr already fetches, so they cost no
 extra API calls.
 """
 
+from teamarr.core.naming import team_with_article
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -71,3 +72,60 @@ def extract_series_summary(ctx: TemplateContext, game_ctx: GameContext | None) -
     if not game_ctx or not game_ctx.event:
         return ""
     return game_ctx.event.series_summary or ""
+
+
+# --- Structured preview: recent form (tvnk.15, #329) ---
+# From summary lastFiveGames — available days ahead, unlike preview prose.
+
+
+@register_variable(
+    name="home_last_five",
+    category=Category.SUMMARY,
+    suffix_rules=SuffixRules.ALL,
+    description="Home team's W-L over its last five games (e.g. '4-1'). "
+    "Days-ahead availability; empty when the provider has no recent-form data.",
+)
+def extract_home_last_five(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    return game_ctx.event.home_last_five or ""
+
+
+@register_variable(
+    name="away_last_five",
+    category=Category.SUMMARY,
+    suffix_rules=SuffixRules.ALL,
+    description="Away team's W-L over its last five games (e.g. '2-3').",
+)
+def extract_away_last_five(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    return game_ctx.event.away_last_five or ""
+
+
+@register_variable(
+    name="last_five_summary",
+    category=Category.SUMMARY,
+    suffix_rules=SuffixRules.ALL,
+    description="Recent-form prose for both teams (e.g. 'The Red Sox have won 4 "
+    "of their last five; the Rays have won 2 of their last five.'). Empty when "
+    "no recent-form data — pair with the has_structured_preview condition.",
+)
+def extract_last_five_summary(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    parts = []
+    # Away first — matches the seeds' "away travel to home" sentence lead.
+    for team, form in (
+        (event.away_team, event.away_last_five),
+        (event.home_team, event.home_last_five),
+    ):
+        if not team or not form or "-" not in form:
+            continue
+        wins = form.split("-", 1)[0]
+        name = team_with_article(team.name, event.league, event.sport)
+        parts.append(f"{name} have won {wins} of their last five")
+    if not parts:
+        return ""
+    return "; ".join(parts) + "."

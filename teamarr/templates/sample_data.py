@@ -1625,6 +1625,12 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "game_preview": "The Tropics look to close out the series against the Mean Time.",
         "game_preview.next": "Flint visits the Pinchy Crabs to open the next round.",
         "series_summary": "Tropics lead series 3-1",
+        "home_last_five": "4-1",
+        "away_last_five": "2-3",
+        "last_five_summary": (
+            "the Greenwich Mean Time have won 2 of their last five; "
+            "the Flint Tropics have won 4 of their last five."
+        ),
         "series_summary.last": "Tropics won series 4-2",
         # --- scores / outcome ---
         "team_score": "3",
