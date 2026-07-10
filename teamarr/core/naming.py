@@ -73,8 +73,17 @@ def is_national_team_league(league: str | None) -> bool:
 
 
 def team_takes_article(league: str | None, sport: str | None) -> bool:
-    """Gracenote article rule: clubs/franchises yes; nationals/individuals no."""
-    if (sport or "").lower() in _INDIVIDUAL_SPORTS:
+    """Gracenote article rule: clubs/franchises yes; nationals/individuals no.
+
+    Soccer is the exception (tvnk.9 hardening): club names are proper nouns in
+    the match register — "Arsenal face Chelsea", "LA Galaxy host Inter Miami" —
+    never "the Arsenal"/"the Manchester United". National sides are already
+    bare via the league heuristic, so soccer renders articleless throughout.
+    """
+    sport_code = (sport or "").lower()
+    if sport_code in _INDIVIDUAL_SPORTS:
+        return False
+    if sport_code == "soccer":
         return False
     return not is_national_team_league(league)
 
