@@ -52,6 +52,21 @@ def test_nascar_orap_at_city_format_classifies_racing():
     assert c.category == StreamCategory.RACING_EVENT
 
 
+def test_single_word_series_at_venue_classifies_racing():
+    # A single-word left part before at/@ is normally treated as a team code
+    # ("SD at BAL"), but not when it's itself a racing series name (#349) —
+    # "NASCAR @ Daytona" must reach the racing matcher, not TeamMatcher.
+    for name in (
+        "NASCAR @ Daytona",
+        "NASCAR at Daytona",
+        "F1 at Monaco",
+        "IndyCar at Long Beach",
+        "MotoGP at Mugello",
+    ):
+        c = classify_stream(name, league_event_type="event")
+        assert c.category == StreamCategory.RACING_EVENT, name
+
+
 def test_racing_only_applies_for_event_league_type():
     # Same name, but a non-racing (team) group must not route to racing.
     c = classify_stream("F1: Monaco Grand Prix", league_event_type="team")
@@ -222,3 +237,117 @@ class TestSessionDurationHours:
 
     def test_sport_default_when_no_league(self):
         assert _session_duration_hours("race", {"racing": 3.0}) == 3.0
+
+
+# ---------------------------------------------------------------------------
+# Stream-name racing fallback for mixed groups (#349)
+#
+# The mixed-group racing fallback originally existed only on the EPG-title
+# path (_match_via_epg); _match_single classified once and routed once, so a
+# racing stream masked by a team_vs_team-dominant group never got a second
+# chance. Both paths now share _try_racing_fallback.
+# ---------------------------------------------------------------------------
+
+
+def _mixed_matcher(**kw):
+    from tests.fakes import make_stream_matcher
+
+    return make_stream_matcher(
+        leagues=("nfl", "mlb", "f1"),
+        league_event_types={"nfl": "team_vs_team", "mlb": "team_vs_team", "f1": "event"},
+        league_sports={"nfl": "football", "mlb": "baseball", "f1": "racing"},
+        **kw,
+    )
+
+
+def _racing_outcome():
+    from teamarr.consumers.matching.result import MatchMethod, MatchOutcome
+
+    event = SimpleNamespace(league="f1", id="monaco_gp", start_time=None, short_name="Monaco GP")
+    return MatchOutcome.matched(MatchMethod.FUZZY, event=event, confidence=0.9)
+
+
+def _failed_route(monkeypatch, m):
+    from teamarr.consumers.matching.result import MatchOutcome
+
+    monkeypatch.setattr(
+        m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
+    )
+
+
+def test_stream_name_racing_fallback_in_mixed_group(monkeypatch):
+    # "F1 | Monaco Grand Prix" classifies TEAM_ONLY in a team-dominant group;
+    # when the primary route fails, the fallback re-classifies as racing and
+    # the result carries the RACING_EVENT classification.
+    m = _mixed_matcher()
+    _failed_route(monkeypatch, m)
+    monkeypatch.setattr(m, "_match_racing_event", lambda classified, sid, td: _racing_outcome())
+    captured = {}
+
+    def capture(outcome, *, stream_id, stream_name, classified):
+        captured["classified"] = classified
+        return outcome
+
+    monkeypatch.setattr(m, "_outcome_to_result", capture)
+
+    out = m._match_single(1, "F1 | Monaco Grand Prix", date(2026, 6, 1))
+    assert len(out) == 1
+    assert out[0].is_matched
+    assert captured["classified"].category == StreamCategory.RACING_EVENT
+
+
+def test_stream_name_racing_fallback_requires_text_evidence(monkeypatch):
+    # No racing series name in the stream → the fallback must not even attempt
+    # a racing match (racing is the classifier's default bucket under "event",
+    # so without this guard any unmatched stream could bind to a race).
+    m = _mixed_matcher()
+    _failed_route(monkeypatch, m)
+    racing_called = []
+    monkeypatch.setattr(
+        m, "_match_racing_event",
+        lambda *a, **kw: racing_called.append(1) or _racing_outcome(),
+    )
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_single(1, "Random Documentary | Brimstone", date(2026, 6, 1))
+    assert not racing_called
+    assert not out[0].is_matched
+
+
+def test_stream_name_racing_fallback_gated_by_name_match(monkeypatch):
+    # Racing-by-name is a Stream Name matching type: with name_match off (and
+    # Team matching on, so TEAM_ONLY still routes), the fallback must not run.
+    m = _mixed_matcher()
+    m._name_match_enabled = False
+    _failed_route(monkeypatch, m)
+    racing_called = []
+    monkeypatch.setattr(
+        m, "_match_racing_event",
+        lambda *a, **kw: racing_called.append(1) or _racing_outcome(),
+    )
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_single(1, "F1 | Monaco Grand Prix", date(2026, 6, 1))
+    assert not racing_called
+    assert not out[0].is_matched
+
+
+def test_stream_name_racing_fallback_on_team_only_gate(monkeypatch):
+    # Team matching OFF: a TEAM_ONLY-classified racing stream ("F1 | Monaco
+    # Grand Prix") must reach the fallback instead of being dropped with
+    # team_streams_disabled (mirrors the EPG path's TEAM_ONLY bypass).
+    m = _mixed_matcher(team_streams_enabled=False)
+    monkeypatch.setattr(m, "_match_racing_event", lambda classified, sid, td: _racing_outcome())
+    captured = {}
+
+    def capture(outcome, *, stream_id, stream_name, classified):
+        captured["classified"] = classified
+        return outcome
+
+    monkeypatch.setattr(m, "_outcome_to_result", capture)
+
+    out = m._match_single(1, "F1 | Monaco Grand Prix", date(2026, 6, 1))
+    assert len(out) == 1
+    assert out[0].is_matched
+    assert captured["classified"].category == StreamCategory.RACING_EVENT
