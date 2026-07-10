@@ -463,7 +463,7 @@ class ConditionalDescriptionSelector:
             elif not opt.condition:
                 row["reason"] = "skipped — no condition set"
                 continue
-            elif not has_event:
+            elif not has_event or ctx is None:
                 row["reason"] = f"'{opt.condition}' not evaluated — no event data"
                 continue
             else:

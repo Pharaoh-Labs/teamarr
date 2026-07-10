@@ -111,11 +111,16 @@ class TemplateResolver:
         - Multiple consecutive spaces
         - Leading/trailing whitespace
         """
-        # Remove empty parentheses and brackets
-        text = re.sub(r"\s*\(\s*\)", "", text)
-        text = re.sub(r"\s*\[\s*\]", "", text)
+        # Collapse runs of spaces first so wrapper removal sees at most one
+        # space in any position — keeps the patterns below bounded (no adjacent
+        # unbounded quantifiers; CodeQL py/polynomial-redos).
+        text = re.sub(r" {2,}", " ", text)
 
-        # Collapse multiple spaces into one
+        # Remove empty parentheses and brackets
+        text = re.sub(r" ?\( ?\)", "", text)
+        text = re.sub(r" ?\[ ?\]", "", text)
+
+        # Wrapper removal can leave one double space behind ("a () b" -> "a  b")
         text = re.sub(r" {2,}", " ", text)
 
         text = text.strip()
