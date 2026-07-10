@@ -213,3 +213,31 @@ cannot be fetched retroactively — **capture forward**: re-run this
 extraction when those seasons start (October 2026); the pattern above
 predicts them (`NBA Basketball` / `{Away} at {Home}` /
 `From {venue} in {city}.`) and NFL/NHL classics already exhibit it.
+
+### Classics + advance college listings (same capture, second sweep)
+
+League-network **classics** confirm the winter-sport conventions directly:
+
+| Sport | Title | Sub-title | Desc |
+|-------|-------|-----------|------|
+| NFL | `NFL Football` | `1994: San Francisco 49ers vs. Kansas City Chiefs` (year-prefixed; `vs.` = neutral site) | `From Sep. 11, 1994.` |
+| NHL | `NHL Hockey` | `1992/93: Toronto Maple Leafs at Los Angeles Kings` (season-prefixed; `at` = hosted) | `Campbell Conference Final, Game 7 from May 29, 1993.` |
+| NBA | `NBA Basketball` | — | `Professional basketball action from the NBA.` |
+
+**Advance college football listings** (fall 2026 games already in guide) carry
+the full Gracenote *preview register* — the best available writing model for
+event descriptions:
+
+> "The No. 16 Commodores (7-2, 3-2 SEC) try to bounce back as they host the
+> Tigers (4-5, 1-5)."
+> "The Horned Frogs head to Chapel Hill to play the Tar Heels in Bill
+> Belichick's highly-anticipated college debut."
+
+Anatomy: `[No. {rank}] {nickname} ({record}[, {conf record}]) {narrative verb}
+… {host framing}` — **nickname-led, not city-led**; records in parentheses;
+rankings inline; one storyline clause. Compare our current default
+("The {away_team_record} {away_team} travel to {venue_city}…") — close, but
+record placement and nickname-led naming differ. Model for tvnk.8.
+
+Not present in this window (Jun 30–Jul 1): NBA Summer League (starts ~Jul 10 —
+next build will carry it), boxing/MMA cards, NASCAR.
