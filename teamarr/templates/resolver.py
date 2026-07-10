@@ -209,7 +209,12 @@ class TemplateResolver:
         return self._registry.count()
 
     def get_available_conditions(self) -> list[str]:
-        """Get list of all available condition types."""
+        """Get list of all available condition types.
+
+        TODO: PRUNE? — no callers; stale vs conditions.py (missing combat/
+        racing/summary conditions). The API's /variables/conditions endpoint
+        is the served list; verify with user before removing.
+        """
         return [
             "is_home",
             "is_away",

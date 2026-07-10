@@ -19,12 +19,18 @@ class FillerType(StrEnum):
 
 @dataclass
 class FillerTemplate:
-    """Template for a specific filler type."""
+    """Template for a specific filler type.
+
+    ``description_fallback`` is used when ``description`` resolves to an
+    empty string at render time — e.g. a provider-copy primary like
+    ``{game_recap}`` before the provider publishes one (epic tvnk, #329).
+    """
 
     title: str
     subtitle: str | None = None
     description: str | None = None
     art_url: str | None = None
+    description_fallback: str | None = None
 
 
 @dataclass

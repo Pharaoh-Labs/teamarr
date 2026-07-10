@@ -17,6 +17,13 @@ decisions (bead tvnk.1, 2026-07-09):
 - SUPER SHORT channel titles are a first-class constraint: client guides
   truncate channel names aggressively (~15-20 visible chars), so every event
   template's ``event_channel_name`` is abbreviation-first with no filler.
+- ESPN copy is the PRIMARY description source; constructed prose is the
+  FALLBACK (tvnk.14): main descriptions carry a ``has_preview →
+  {game_preview}`` conditional row above the constructed default; pregame
+  fillers pair a ``{game_preview}`` primary with a ``description_fallback``;
+  postgame conditionals put ``{game_recap}`` in ``description_final`` and the
+  filler render falls through to the fallback's constructed result line when
+  the recap hasn't been published.
 """
 
 from sqlite3 import Connection
@@ -146,10 +153,13 @@ def _team_default() -> dict:
         "xmltv_categories": ["Sports", "{sport}", "Sports Event"],
         "xmltv_filler_categories": [],
         "pregame_periods": [],
+        # ESPN-copy-first (tvnk.14): provider preview is the primary text;
+        # the constructed prose is the fallback when no preview exists yet.
         "pregame_fallback": {
             "title": "Coming up: {gracenote_category} at {game_time.next}",
             "subtitle": "{away_team.next} at {home_team.next}",
-            "description": (
+            "description": "{game_preview.next}",
+            "description_fallback": (
                 "The {away_team_record.next} {away_team.next} travel to "
                 "{venue_city.next}, {venue_state.next} to play the "
                 "{home_team_record.next} {home_team.next} {today_tonight.next} "
@@ -158,18 +168,20 @@ def _team_default() -> dict:
             "art_url": _ART_NEXT,
         },
         "postgame_periods": [],
+        # Postgame chain (tvnk.14): conditional recap wins when the game is
+        # final AND the provider published one; otherwise the fallback's
+        # constructed result line renders.
         "postgame_fallback": {
             "title": "{gracenote_category}: {team_name} Postgame",
             "subtitle": "{away_team.last} at {home_team.last}",
-            "description": "{team_name} {result_text.last} the {opponent.last} {final_score.last}",
+            "description": (
+                "The {team_name} {result_text.last} the {opponent.last} {final_score.last}"
+            ),
             "art_url": _ART_LAST,
         },
         "postgame_conditional": {
             "enabled": True,
-            "description_final": (
-                "The {team_name} {result_text.last} the {opponent.last} "
-                "{final_score.last} {overtime_text.last}"
-            ),
+            "description_final": "{game_recap.last}",
             "description_not_final": (
                 "The game between the {team_name} and the {opponent.last} on "
                 "{game_date.last} has not yet ended as of the last update."
@@ -204,6 +216,13 @@ def _team_default() -> dict:
         },
         "conditional_descriptions": [
             {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+            {
                 "condition": None,
                 "condition_value": None,
                 "template": (
@@ -212,7 +231,7 @@ def _team_default() -> dict:
                 ),
                 "priority": 100,
                 "label": "Default",
-            }
+            },
         ],
         "event_channel_name": "{team_name}",
         "event_channel_logo_url": "",
@@ -235,10 +254,13 @@ def _event_base(**overrides) -> dict:
         "xmltv_categories": ["Sports", "{sport}", "Sporting Event"],
         "xmltv_filler_categories": [],
         "pregame_periods": [],
+        # ESPN-copy-first (tvnk.14): provider preview is the primary text;
+        # the constructed prose is the fallback when no preview exists yet.
         "pregame_fallback": {
             "title": "Coming up: {gracenote_category} at {game_time}",
             "subtitle": "{away_team} at {home_team}",
-            "description": (
+            "description": "{game_preview}",
+            "description_fallback": (
                 "The {away_team_record} {away_team} travel to {venue_city}, "
                 "{venue_state} to play the {home_team_record} {home_team} "
                 "{today_tonight} at {game_time}."
@@ -246,17 +268,18 @@ def _event_base(**overrides) -> dict:
             "art_url": _EVENT_ART,
         },
         "postgame_periods": [],
+        # Postgame chain (tvnk.14): conditional recap wins when the game is
+        # final AND the provider published one; otherwise the fallback's
+        # constructed result line renders.
         "postgame_fallback": {
             "title": "{gracenote_category}: Postgame",
             "subtitle": "{away_team} at {home_team}",
-            "description": "{game_recap}",
+            "description": "The {team_name} {result_text} the {opponent} {final_score}",
             "art_url": _EVENT_ART,
         },
         "postgame_conditional": {
             "enabled": True,
-            "description_final": (
-                "The {team_name} {result_text} the {opponent} {final_score} {overtime_text}"
-            ),
+            "description_final": "{game_recap}",
             "description_not_final": (
                 "The game between the {away_team} and {home_team} has not yet "
                 "ended as of the last update."
@@ -283,6 +306,13 @@ def _event_base(**overrides) -> dict:
         },
         "conditional_descriptions": [
             {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+            {
                 "condition": None,
                 "condition_value": None,
                 "template": (
@@ -291,7 +321,7 @@ def _event_base(**overrides) -> dict:
                 ),
                 "priority": 100,
                 "label": "Default",
-            }
+            },
         ],
         # SUPER SHORT: "NBA | DET/LAL" — abbrev-first, fits truncating guides.
         "event_channel_name": "{league} | {away_team_abbrev}/{home_team_abbrev}",
@@ -313,19 +343,27 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         pregame_fallback={
             "title": "Coming up: {league} {event_number} at {game_time}",
             "subtitle": "{away_team} vs {home_team}",
-            "description": (
+            "description": "{game_preview}",
+            "description_fallback": (
                 "{away_team} takes on {home_team} at {venue} {today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
             {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+            {
                 "condition": None,
                 "condition_value": None,
                 "template": "{away_team} takes on {home_team} at {venue}.",
                 "priority": 100,
                 "label": "Default",
-            }
+            },
         ],
         # "UFC 310 Main Card"
         event_channel_name="{league} {event_number} {card_segment_display}",
@@ -339,12 +377,19 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         event_channel_name="{away_team_abbrev} v {home_team_abbrev}",
         conditional_descriptions=[
             {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+            {
                 "condition": None,
                 "condition_value": None,
                 "template": "{away_team} face {home_team} at {venue}.",
                 "priority": 100,
                 "label": "Default",
-            }
+            },
         ],
     ),
     # Minor-league baseball: explicit MiLB branding (league var is the level).
@@ -360,16 +405,23 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         pregame_fallback={
             "title": "Coming up: {tournament_name} at {game_time}",
             "subtitle": "{player1} vs {player2}",
-            "description": (
+            "description": "{game_preview}",
+            "description_fallback": (
                 "{player1} takes on {player2} in the {tennis_round} of the "
                 "{tournament_name} ({tennis_draw})."
             ),
             "art_url": _EVENT_ART,
         },
+        # Recap-first with a constructed fallback — tvnk.14 finding: the
+        # prior seed had {game_recap} as BOTH primary and fallback, so a
+        # missing recap rendered an empty description.
         postgame_fallback={
             "title": "{tournament_name}: Match Complete",
             "subtitle": "{player1} vs {player2}",
-            "description": "{game_recap}",
+            "description": (
+                "{player1} and {player2} have completed their {tennis_round} "
+                "match at the {tournament_name}."
+            ),
             "art_url": _EVENT_ART,
         },
         postgame_conditional={
@@ -381,6 +433,13 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         },
         conditional_descriptions=[
             {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+            {
                 "condition": None,
                 "condition_value": None,
                 "template": (
@@ -389,7 +448,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 ),
                 "priority": 100,
                 "label": "Default",
-            }
+            },
         ],
         # "Alcaraz v Sinner" — surnames only, super short.
         event_channel_name="{player1_last} v {player2_last}",

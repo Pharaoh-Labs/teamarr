@@ -482,6 +482,10 @@ class FillerGenerator:
             description = ""
             if template.description:
                 description = self._resolver.resolve(template.description, context)
+            # Provider-copy primaries (e.g. {game_recap.last}) may resolve
+            # empty before the copy exists — fall through to constructed text.
+            if not description.strip() and template.description_fallback:
+                description = self._resolver.resolve(template.description_fallback, context)
             subtitle = None
             if template.subtitle:
                 subtitle = self._resolver.resolve(template.subtitle, context)
@@ -541,7 +545,10 @@ class FillerGenerator:
             return config.pregame_template
 
         elif filler_type == FillerType.POSTGAME:
-            # Check for conditional postgame template
+            # Check for conditional postgame template. Precedence (tvnk.14,
+            # #329): the enabled conditional's status-matched text wins over
+            # the postgame fallback, but a description that resolves empty at
+            # render time falls through to the fallback description.
             if config.postgame_conditional.enabled and last_event:
                 is_final = self._check_event_final(last_event)
                 cond = config.postgame_conditional
@@ -566,6 +573,7 @@ class FillerGenerator:
                         subtitle=subtitle,
                         description=description,
                         art_url=base.art_url,
+                        description_fallback=base.description,
                     )
             return config.postgame_template
 
@@ -604,6 +612,7 @@ class FillerGenerator:
                         subtitle=subtitle,
                         description=description,
                         art_url=base.art_url,
+                        description_fallback=base.description,
                     )
 
             return config.idle_template

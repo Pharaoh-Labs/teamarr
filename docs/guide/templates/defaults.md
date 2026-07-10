@@ -39,6 +39,24 @@ Channel names are deliberately **short**: TV guide grids truncate channel
 names aggressively (often ~15–20 visible characters), so the set leads with
 abbreviations and surnames.
 
+## Descriptions: provider copy first
+
+Starter descriptions prefer ESPN's own editorial copy and fall back to
+constructed prose when it isn't available:
+
+- **Pregame / main program** — when ESPN publishes a preview blurb (usually
+  on game day), it's used verbatim via a `has_preview → {game_preview}`
+  conditional row; otherwise the constructed "X travel to Y…" line renders.
+- **Postgame** — once a game is final and ESPN publishes a recap headline,
+  the filler shows `{game_recap}`; until then a constructed result line
+  ("The X defeated the Y 4–2") renders instead.
+
+The underlying precedence (for your own templates): an enabled **postgame
+conditional** beats the postgame fallback, but if its text resolves to an
+empty string — e.g. `{game_recap}` before a recap exists — the fallback
+description is used. Pregame fillers support the same pattern via the
+`description_fallback` field.
+
 ## Recommended scoping
 
 | Template | Assign to |

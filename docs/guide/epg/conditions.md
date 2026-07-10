@@ -139,6 +139,26 @@ When generating EPG, Teamarr evaluates all conditions and selects the highest-pr
 
 ---
 
+### Provider Copy (ESPN)
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `has_preview` | - | Provider preview blurb is available (populates same-day pregame) |
+| `has_recap` | - | Provider recap headline is available (populates once the game is final) |
+
+Use these to prefer ESPN's editorial copy and fall back to constructed prose
+when it isn't published yet — the pattern the starter templates ship with:
+
+**Example:**
+```json
+[
+  {"condition": "has_preview", "priority": 10, "template": "{game_preview}"},
+  {"priority": 100, "template": "{team_name} vs {opponent} at {venue}"}
+]
+```
+
+---
+
 ### Opponent
 
 | Condition | Value | Description |

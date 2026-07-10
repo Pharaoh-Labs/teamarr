@@ -6,6 +6,9 @@ export interface FillerContent {
   subtitle: string | null
   description: string
   art_url: string | null
+  // Used when description resolves empty at render time (e.g. a
+  // {game_preview} primary before the provider publishes one) — tvnk.14
+  description_fallback?: string | null
 }
 
 // Conditional settings for postgame/idle

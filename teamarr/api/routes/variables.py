@@ -386,6 +386,24 @@ def get_conditions(template_type: str = "team"):
         },
     ]
 
+    # Provider editorial copy — available to BOTH template types (epic tvnk,
+    # #329): event templates use has_preview/has_recap for ESPN-copy-first
+    # description chains.
+    summary_conditions = [
+        {
+            "name": "has_preview",
+            "description": "Provider preview blurb is available (same-day pregame)",
+            "requires_value": False,
+            "providers": "espn",
+        },
+        {
+            "name": "has_recap",
+            "description": "Provider recap headline is available (postgame)",
+            "requires_value": False,
+            "providers": "espn",
+        },
+    ]
+
     # Team-only conditions (require "our team" perspective)
     team_only_conditions = [
         # Universal: works with all providers
@@ -495,12 +513,16 @@ def get_conditions(template_type: str = "team"):
     ]
 
     if template_type == "event":
-        # Event templates get combat/motorsports conditions only (for event EPG)
-        conditions = combat_conditions + motorsports_conditions
+        # Event templates get game-level + combat/motorsports conditions
+        conditions = summary_conditions + combat_conditions + motorsports_conditions
     else:
         # Team templates get all conditions
         conditions = (
-            team_only_conditions + common_conditions + combat_conditions + motorsports_conditions
+            team_only_conditions
+            + common_conditions
+            + summary_conditions
+            + combat_conditions
+            + motorsports_conditions
         )
 
     return {"conditions": conditions, "template_type": template_type}
