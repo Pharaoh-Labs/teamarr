@@ -1110,6 +1110,8 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('ipl', 'tsdb', '4460', 'Indian Premier League', 'Indian Premier League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/gaiti11741709844.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
     ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
     ('sa20', 'tsdb', '5532', 'SA20', 'South Africa Twenty20', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/aakvuk1734183412.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    -- MLC: short US T20 season fits the free rolling next-events window (eventsnextleague), so no premium key needed.
+    ('mlc', 'tsdb', '5401', 'Major League Cricket', 'Major League Cricket', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/mbbos01689159510.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
 
     -- Rugby (ESPN)
     ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),

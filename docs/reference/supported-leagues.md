@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **141 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **142 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -335,9 +335,10 @@ and deliberately left unmatched.
 | Indian Premier League | `ipl` | TSDB **P** |
 | Big Bash League | `bbl` | TSDB **P** |
 | SA20 | `sa20` | TSDB **P** |
+| Major League Cricket | `mlc` | TSDB |
 
 {: .note }
-Cricket leagues are TSDB premium tier. A [premium API key](providers/tsdb.md) is required for full event coverage.
+IPL, BBL, and SA20 are TSDB premium tier — a [premium API key](providers/tsdb.md) is required for full event coverage of their long seasons. Major League Cricket works on the free tier: its short T20 season fits within TSDB's free rolling next-events window.
 
 ---
 

@@ -34,6 +34,7 @@ TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a f
 These leagues have low enough event volume to work within free tier limits:
 
 - CFL, Unrivaled, Norwegian Hockey, Boxing
+- Major League Cricket (MLC) — its short US T20 season fits within the free rolling next-events window
 
 ### Premium Tier Leagues
 
@@ -62,6 +63,7 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 | Unrivaled | `unrivaled` | 5622 | Basketball | Free |
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
 | Boxing | `boxing` | 4445 | Boxing | Free |
+| Major League Cricket | `mlc` | 5401 | Cricket | Free |
 | Swedish Hockey League | `shl` | 4419 | Hockey | Premium |
 | Australian Football League | `afl` | 4456 | Australian Football | Premium |
 | Indian Premier League | `ipl` | 4460 | Cricket | Premium |
