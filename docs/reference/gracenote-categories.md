@@ -167,3 +167,77 @@ Caveats: ESPN-only (other providers may not populate); raw format differs from G
 Genuinely-missing NEW variables: (a) article-aware team name + club/national-team flag; (b) sport-aware matchup connector (perspective-free at/vs, also fixes channel-name `@`/`v`); (c) home/away prose verb; (d) fighter last-name. Optional thin formatters (not new data): stage-only extractor over `{soccer_match_note}`. Dropped from tvnk.7 — soccer stage prefix, college-round extension, and bowl title are already served by the existing note vars (template authoring in tvnk.8, not new vars). Plus the `gracenote_category` seed/fallback fixes (tvnk.12), which should cross-check against `{soccer_match_note}` for tournament branding.
 Caveat: `{league_abbrev}` quality depends on `league_alias` being set (else "UEFA Champions League"→"UEFACL");
 audit aliases for the subscribed leagues as part of tvnk.8.
+
+## Live tmsapi capture — 2026-07-09 (Wimbledon week)
+
+Full-region tmsapi build (`US.xml`, 2026-06-30, ~354k programmes) mined for
+per-sport conventions; complements the cable-lineup capture above.
+
+### The universal pattern
+
+| Field | Convention | Live examples |
+|-------|-----------|---------------|
+| Title | `{sport-branded category}` — identical to our `{gracenote_category}` model | `MLB Baseball` · `WNBA Basketball` · `NHL Hockey` · `NFL Football` · `Minor League Baseball` · `Canadian Premier League Soccer` |
+| Sub-title | `{Away} at {Home}` for hosted games; `{A} vs. {B}` for neutral-site (NFL classics) | `St. Louis Cardinals at Atlanta Braves` · `1994: San Francisco 49ers vs. Kansas City Chiefs` |
+| Description | `From {venue} in {city}[, {state abbr}].` — the canonical baseline; marquee games get a preview paragraph | `From Truist Park in Atlanta.` · `The Tigers continue their three-game series against the Yankees at Yankee Stadium. Right-hander Troy Melton is the expected starter…` |
+| Classics | Year-prefixed subtitles | `1986: Vancouver Canucks at Edmonton Oilers` |
+
+### Tennis (validates the Tennis Event starter, with one nuance)
+
+- Title: **`2026 Wimbledon Championships`** — year + tournament, NOT "ATP Tennis".
+  Confirms tournament-led titles; note Gracenote prepends the year.
+- Sub-title: **round only** (`First Round`, `Second Round`) — Gracenote's linear
+  channels cover a whole day's play, so they *can't* name players. Teamarr's
+  channels are per-match, so our `{tennis_round} - {player1} vs {player2}`
+  subtitle is a strict superset of the convention, not a violation.
+- Description: venue prose — `From the All England Lawn Tennis and Croquet
+  Club in Wimbledon, England.` (our venue-led descriptions match).
+
+### MiLB (settles the branding question)
+
+Gracenote titles it **`Minor League Baseball`** — not "MiLB", not the level
+(`Triple-A`). Sub-title/description follow the universal pattern
+(`South Bend Cubs at Beloit Sky Carp` / `From ABC Supply Stadium in Beloit,
+Wis.`). The MiLB starter template should adopt `Minor League Baseball`
+branding when tvnk.8 revisits it.
+
+### Historical windows: ~48-hour lookback only
+
+Empirical lookback ladder against `tvlistings.gracenote.com` grid (2026-07-09,
+proxy egress, same lineup/params throughout): `now` and `-1d` return full
+grids (~164 channels / ~720 events); **`-3d` and everything beyond is empty**
+(probed to -30d; February fails on tmsapi outright). So the grid serves a
+~1–2 day rolling lookback — useful for "yesterday's" listings, useless for
+last season. Winter-season conventions (NBA/NHL/NFL/EPL regular season)
+cannot be fetched retroactively — **capture forward**: re-run this
+extraction when those seasons start (October 2026); the pattern above
+predicts them (`NBA Basketball` / `{Away} at {Home}` /
+`From {venue} in {city}.`) and NFL/NHL classics already exhibit it.
+
+### Classics + advance college listings (same capture, second sweep)
+
+League-network **classics** confirm the winter-sport conventions directly:
+
+| Sport | Title | Sub-title | Desc |
+|-------|-------|-----------|------|
+| NFL | `NFL Football` | `1994: San Francisco 49ers vs. Kansas City Chiefs` (year-prefixed; `vs.` = neutral site) | `From Sep. 11, 1994.` |
+| NHL | `NHL Hockey` | `1992/93: Toronto Maple Leafs at Los Angeles Kings` (season-prefixed; `at` = hosted) | `Campbell Conference Final, Game 7 from May 29, 1993.` |
+| NBA | `NBA Basketball` | — | `Professional basketball action from the NBA.` |
+
+**Advance college football listings** (fall 2026 games already in guide) carry
+the full Gracenote *preview register* — the best available writing model for
+event descriptions:
+
+> "The No. 16 Commodores (7-2, 3-2 SEC) try to bounce back as they host the
+> Tigers (4-5, 1-5)."
+> "The Horned Frogs head to Chapel Hill to play the Tar Heels in Bill
+> Belichick's highly-anticipated college debut."
+
+Anatomy: `[No. {rank}] {nickname} ({record}[, {conf record}]) {narrative verb}
+… {host framing}` — **nickname-led, not city-led**; records in parentheses;
+rankings inline; one storyline clause. Compare our current default
+("The {away_team_record} {away_team} travel to {venue_city}…") — close, but
+record placement and nickname-led naming differ. Model for tvnk.8.
+
+Not present in this window (Jun 30–Jul 1): NBA Summer League (starts ~Jul 10 —
+next build will carry it), boxing/MMA cards, NASCAR.
