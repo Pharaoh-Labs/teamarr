@@ -3,7 +3,7 @@ title: Stream Priority
 parent: Channels
 grand_parent: User Guide
 nav_order: 4
-docs_version: "2.10.0"
+docs_version: "2.9.1"
 ---
 
 # Stream Priority

@@ -522,6 +522,21 @@ class TestAdditiveScoring:
         uhd = _m3u_stream("Game 4K", "ProviderA")
         assert svc.compute_priority(uhd) < svc.compute_priority(hd)
 
+    def test_band1_positive_score_collapses_below_stride(self):
+        # Invariant the UI decode (ManagedChannelsTable.decodePriority) must respect:
+        # a band-1 stream with a positive score collapses to just under BAND_STRIDE
+        # (e.g. 999_975 for +25), NOT above it. The decode must split scored vs.
+        # legacy values on NO_MATCH_PRIORITY, not on BAND_STRIDE, or it renders the
+        # raw collapsed int instead of "1 +25".
+        rules = [
+            StreamOrderingRule("m3u", "ProviderA", 1, mode="priority"),
+            StreamOrderingRule("regex", r"(?i)4K", 99, mode="score", points=25),
+        ]
+        svc = StreamOrderingService(rules)
+        collapsed = svc.compute_priority(_m3u_stream("Game 4K", "ProviderA"))
+        assert collapsed == 1 * BAND_STRIDE - 25  # 999_975
+        assert NO_MATCH_PRIORITY < collapsed < BAND_STRIDE
+
     def test_negative_points_demote_below_baseline(self):
         svc = StreamOrderingService(
             [StreamOrderingRule("regex", r"(?i)SD", 99, mode="score", points=-50)]

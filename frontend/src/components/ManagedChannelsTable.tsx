@@ -159,13 +159,16 @@ function useOutsideDismiss(
 }
 
 // Collapsed-priority stride: once any score rule exists the backend stores
-// priority as band*STRIDE - score (see services/stream_ordering.py BAND_STRIDE).
-// Values >= STRIDE are decoded back to (band, score) for display; smaller values
-// are plain priority/sequential numbers shown as-is.
+// priority as band*STRIDE - clamped_score (see services/stream_ordering.py
+// BAND_STRIDE). The score clamp (STRIDE/2 - 1) guarantees collapsed values land
+// >= 500_001, while plain priority/sequential numbers stay <= NO_MATCH_PRIORITY
+// (999). We split on that gap, NOT on STRIDE: a band-1 stream with a positive
+// score collapses to e.g. 999_975, which is < STRIDE but is still a scored value.
 const BAND_STRIDE = 1_000_000
+const NO_MATCH_PRIORITY = 999
 
 function decodePriority(priority: number): { band: number; score: number; scored: boolean } {
-  if (priority < BAND_STRIDE) return { band: priority, score: 0, scored: false }
+  if (priority <= NO_MATCH_PRIORITY) return { band: priority, score: 0, scored: false }
   const band = Math.round(priority / BAND_STRIDE)
   return { band, score: band * BAND_STRIDE - priority, scored: true }
 }
