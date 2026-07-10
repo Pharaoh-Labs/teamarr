@@ -237,6 +237,39 @@ export function Templates() {
         />
       </div>
 
+      {/* Seeded-set scoping hint (tvnk.1 decision d): shown while any curated
+          starter template is still unassigned. Names mirror the backend set
+          (teamarr/database/default_templates.py). */}
+      {(() => {
+        const SEEDED_NAMES = new Set([
+          "Default Team", "Default Event", "Combat Event", "International Event",
+          "No-Abbrev Event", "MiLB Event", "Tennis Event",
+        ])
+        const unassignedSeeded = (templates ?? []).filter(
+          (t) =>
+            SEEDED_NAMES.has(t.name) &&
+            !(t.team_count && t.team_count > 0) &&
+            !(t.global_assignments && t.global_assignments.length > 0)
+        )
+        if (unassignedSeeded.length === 0) return null
+        return (
+          <Alert variant="info" className="mb-3">
+            {unassignedSeeded.length} starter template{unassignedSeeded.length !== 1 ? "s are" : " is"} not
+            assigned yet. They're designed for specific scopes (e.g. Combat Event → UFC/boxing,
+            Tennis Event → ATP/WTA) — see the{" "}
+            <a
+              href="https://pharaoh-labs.github.io/teamarr/guide/templates/defaults"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              recommended scoping guide
+            </a>
+            .
+          </Alert>
+        )
+      })()}
+
       <div className="border border-border rounded-lg overflow-hidden">
           {isLoading ? (
             <Spinner />

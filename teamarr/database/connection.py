@@ -134,6 +134,12 @@ def init_db(db_path: Path | str | None = None) -> None:
             _run_migrations(conn)
             # Seed TSDB cache if empty or incomplete
             _seed_tsdb_cache_if_needed(conn)
+            # Seed/upgrade the curated default template set (idempotent;
+            # add-missing-by-name + pristine-legacy upgrade — tvnk.1/#329).
+            # Was previously defined but never wired, so fresh installs
+            # shipped with zero templates.
+            from teamarr.database.default_templates import seed_default_templates
+            seed_default_templates(conn)
 
             # Final verification: ensure settings table exists and is queryable
             conn.execute("SELECT id FROM settings LIMIT 1")
