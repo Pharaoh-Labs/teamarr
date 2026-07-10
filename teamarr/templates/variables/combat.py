@@ -44,6 +44,7 @@ Usage example:
     -> "Volkanovski defeats Lopes by TKO R2 4:31"
 """
 
+from teamarr.core.naming import surnames
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -96,6 +97,27 @@ def extract_fighter2(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
         return event.away_team.name
 
     return ""
+
+
+@register_variable(
+    name="fighter1_last",
+    category=Category.COMBAT,
+    suffix_rules=SuffixRules.BASE_ONLY,  # Event EPG only
+    description="First fighter surname (e.g., 'Volkanovski') — Gracenote-style "
+    "'Volkanovski vs. Lopes' titles (tvnk.7)",
+)
+def extract_fighter1_last(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    return surnames(extract_fighter1(ctx, game_ctx))
+
+
+@register_variable(
+    name="fighter2_last",
+    category=Category.COMBAT,
+    suffix_rules=SuffixRules.BASE_ONLY,  # Event EPG only
+    description="Second fighter surname (e.g., 'Lopes')",
+)
+def extract_fighter2_last(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    return surnames(extract_fighter2(ctx, game_ctx))
 
 
 @register_variable(

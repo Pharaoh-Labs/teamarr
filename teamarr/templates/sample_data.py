@@ -48,6 +48,36 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "opponent.last": {
         "NBA": "Cleveland Cavaliers",
     },
+    "team_name_the": {
+        "NBA": "the Detroit Pistons",
+    },
+    "opponent_the": {
+        "NBA": "the Chicago Bulls",
+    },
+    "opponent_the.next": {
+        "NBA": "the Milwaukee Bucks",
+    },
+    "opponent_the.last": {
+        "NBA": "the Cleveland Cavaliers",
+    },
+    "home_team_the": {
+        "NBA": "the Detroit Pistons",
+    },
+    "away_team_the": {
+        "NBA": "the Chicago Bulls",
+    },
+    "at_vs": {
+        "NBA": "at",
+    },
+    "home_away_verb": {
+        "NBA": "host",
+    },
+    "home_away_verb.next": {
+        "NBA": "visit",
+    },
+    "home_away_verb.last": {
+        "NBA": "visit",
+    },
     "opponent_abbrev": {
         "NBA": "CHI",
     },
@@ -1269,6 +1299,12 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "fighter1": {
         "UFC": "Alex Volkanovski",
     },
+    "fighter1_last": {
+        "UFC": "Volkanovski",
+    },
+    "fighter2_last": {
+        "UFC": "Lopes",
+    },
     "fighter2": {
         "UFC": "Diego Lopes",
     },
@@ -1512,6 +1548,16 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "matchup_short": "Mean Time @ Tropics",
         "matchup_short.next": "Tropics @ Pinchy Crabs",
         "matchup_short.last": "Tropics @ Mile High Club",
+        "team_name_the": "the Flint Tropics",
+        "opponent_the": "the Greenwich Mean Time",
+        "opponent_the.next": "the Baltimore Pinchy Crabs",
+        "opponent_the.last": "the Denver Mile High Club",
+        "home_team_the": "the Flint Tropics",
+        "home_team_the.next": "the Baltimore Pinchy Crabs",
+        "home_team_the.last": "the Denver Mile High Club",
+        "away_team_the": "the Greenwich Mean Time",
+        "away_team_the.next": "the Flint Tropics",
+        "away_team_the.last": "the Flint Tropics",
         # --- league / sport identity ---
         "league": "Placeholder Premier League",
         "league_name": "Placeholder Premier League",

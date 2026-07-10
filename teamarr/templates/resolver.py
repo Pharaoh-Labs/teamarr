@@ -106,7 +106,15 @@ class TemplateResolver:
         # Collapse multiple spaces into one
         text = re.sub(r" {2,}", " ", text)
 
-        return text.strip()
+        text = text.strip()
+
+        # Article-aware vars ({team_name_the}, {tournament_name_the}) emit a
+        # lowercase "the " for mid-sentence use; capitalize it when it opens
+        # the rendered text (Gracenote: "The Washington Mystics play…").
+        if text.startswith("the "):
+            text = f"T{text[1:]}"
+
+        return text
 
     def build_variable_map(self, ctx: TemplateContext) -> dict[str, str]:
         """Public: resolve every registered variable for a context.

@@ -4,6 +4,7 @@ These variables provide home/away context, positional team references,
 and feed team data for streams broken out into home/away channels.
 """
 
+from teamarr.core.naming import matchup_connector, team_with_article
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -415,3 +416,65 @@ def extract_broadcast_feed_team(ctx: TemplateContext, game_ctx: GameContext | No
     if not ctx.feed_team:
         return ""
     return f"{ctx.feed_team.name} Feed"
+
+
+# --- Article-aware naming + matchup connector (tvnk.7, #329) ---
+# Gracenote convention: clubs/franchises take "the", national teams and
+# individual-sport competitors don't. Lowercase "the" — the resolver
+# capitalizes a leading "the " when it opens the rendered text.
+
+
+@register_variable(
+    name="home_team_the",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.ALL,
+    description="Home team name with Gracenote-convention article — "
+    "'the Detroit Pistons' for clubs, 'Netherlands' for national teams",
+)
+def extract_home_team_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    return team_with_article(event.home_team.name, event.league, event.sport)
+
+
+@register_variable(
+    name="away_team_the",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.ALL,
+    description="Away team name with Gracenote-convention article — "
+    "'the Green Bay Packers' for clubs, 'Japan' for national teams",
+)
+def extract_away_team_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    return team_with_article(event.away_team.name, event.league, event.sport)
+
+
+@register_variable(
+    name="at_vs",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.ALL,
+    description="Perspective-free matchup connector between away and home — "
+    "'at' for US team sports ('Mystics at Liberty'), 'vs.' otherwise "
+    "('Scotland vs. Morocco')",
+)
+def extract_at_vs(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    return matchup_connector(game_ctx.event.sport)
+
+
+@register_variable(
+    name="home_away_verb",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.ALL,
+    description="Prose verb from the team's perspective: 'host' at home, 'visit' away",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_home_away_verb(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    is_home = _is_home(ctx, game_ctx)
+    if is_home is None:
+        return ""
+    return "host" if is_home else "visit"

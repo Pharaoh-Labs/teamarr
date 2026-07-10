@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 240 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 250 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -93,11 +93,13 @@ Core identifiers for teams, leagues, and matchups.
 | Variable | Description | Suffixes | Sample |
 |----------|-------------|----------|--------|
 | `{team_name}` | Team display name | base | `Detroit Lions` |
+| `{team_name_the}` | Team name with Gracenote-convention article (clubs get 'the', national teams don't) | base | `the Detroit Lions` |
 | `{team_abbrev}` | Team abbreviation uppercase | base | `DET` |
 | `{team_abbrev_lower}` | Team abbreviation lowercase | base | `det` |
 | `{team_name_pascal}` | Team name in PascalCase for channel IDs | base | `DetroitLions` |
 | `{team_short}` | Team short name | base | `Lions` |
 | `{opponent}` | Opponent team name | base, .next, .last | `Chicago Bears` |
+| `{opponent_the}` | Opponent name with Gracenote-convention article | base, .next, .last | `the Chicago Bears` |
 | `{opponent_abbrev}` | Opponent team abbreviation uppercase | base, .next, .last | `CHI` |
 | `{opponent_abbrev_lower}` | Opponent abbreviation lowercase | base, .next, .last | `chi` |
 | `{opponent_short}` | Opponent short name | base, .next, .last | `Bears` |
@@ -154,12 +156,14 @@ Positional team references and home/away context.
 | Variable | Description | Suffixes | Sample |
 |----------|-------------|----------|--------|
 | `{home_team}` | Home team name (positional) | base, .next, .last | `Detroit Lions` |
+| `{home_team_the}` | Home team name with Gracenote-convention article | base, .next, .last | `the Detroit Lions` |
 | `{home_team_abbrev}` | Home team abbreviation uppercase | base, .next, .last | `DET` |
 | `{home_team_abbrev_lower}` | Home team abbreviation lowercase | base, .next, .last | `det` |
 | `{home_team_pascal}` | Home team name in PascalCase | base, .next, .last | `DetroitLions` |
 | `{home_team_short}` | Home team short name | base, .next, .last | `Lions` |
 | `{home_team_logo}` | Home team logo URL | base, .next, .last | ESPN logo URL |
 | `{away_team}` | Away team name (positional) | base, .next, .last | `Chicago Bears` |
+| `{away_team_the}` | Away team name with Gracenote-convention article | base, .next, .last | `the Chicago Bears` |
 | `{away_team_abbrev}` | Away team abbreviation uppercase | base, .next, .last | `CHI` |
 | `{away_team_abbrev_lower}` | Away team abbreviation lowercase | base, .next, .last | `chi` |
 | `{away_team_pascal}` | Away team name in PascalCase | base, .next, .last | `ChicagoBears` |
@@ -169,7 +173,16 @@ Positional team references and home/away context.
 | `{is_away}` | 'true' if team is away, 'false' if home | base, .next, .last | `false` |
 | `{home_away_text}` | 'at home' or 'on the road' | base, .next, .last | `at home` |
 | `{vs_at}` | 'vs' if home, 'at' if away | base, .next, .last | `vs` |
+| `{at_vs}` | Perspective-free connector: 'at' for US team sports, 'vs.' otherwise | base, .next, .last | `at` |
+| `{home_away_verb}` | 'host' at home, 'visit' away | base, .next, .last | `host` |
 | `{vs_@}` | 'vs' if home, '@' if away | base, .next, .last | `vs` |
+
+{: .note }
+The `_the` variables emit a lowercase `the` for mid-sentence use ("take on
+the Detroit Pistons"). When one opens a title or description, the renderer
+capitalizes it automatically ("The Detroit Pistons host…"). National teams
+("Netherlands") and individual-sport competitors never get the article,
+matching Gracenote convention.
 
 ### Feed Team
 
@@ -468,6 +481,8 @@ UFC and MMA-specific variables for event templates. These are **event-only** (no
 |----------|-------------|--------|
 | `{fighter1}` | First fighter name (headline bout) | `Alex Volkanovski` |
 | `{fighter2}` | Second fighter name (headline bout) | `Diego Lopes` |
+| `{fighter1_last}` | First fighter surname | `Volkanovski` |
+| `{fighter2_last}` | Second fighter surname | `Lopes` |
 | `{matchup}` | Full matchup string | `Alex Volkanovski vs Diego Lopes` |
 | `{event_number}` | UFC event number (e.g., '314' from 'UFC 314') | `314` |
 | `{event_title}` | Full event title | `UFC 314: Volkanovski vs Lopes` |
@@ -568,9 +583,11 @@ surname). These variables add the tournament context and are **event-only**.
 | `{player1_last}` | First player's surname (multi-word preserved) | `Cobolli` |
 | `{player2_last}` | Second player's surname | `de Minaur` |
 | `{tournament_name}` | Tournament name | `Wimbledon` |
+| `{tournament_name_the}` | Tournament name with its natural article | `the US Open`, `Wimbledon` |
 | `{tennis_round}` | Round within the draw | `Round 4`, `Quarterfinals` |
 | `{tennis_court}` | Assigned court | `Centre Court`, `No. 1 Court` |
 | `{tennis_draw}` | Draw type | `Men's Singles`, `Mixed Doubles` |
+| `{tennis_result}` | Prose match result once final (empty before) | `Zverev defeats Fery 6-3, 6-4, 7-6(5)` |
 
 {: .note }
 Example: `{tournament_name} {tennis_draw}: {player1_last} vs {player2_last}` renders as `Wimbledon Men's Singles: Cobolli vs de Minaur`. Like combat's `{fighter1}`/`{fighter2}`, the player variables are the idiomatic choice — the underlying home/away team variables also resolve, but tennis has no real home player.

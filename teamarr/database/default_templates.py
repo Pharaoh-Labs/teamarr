@@ -175,7 +175,7 @@ def _team_default() -> dict:
             "title": "{gracenote_category}: {team_name} Postgame",
             "subtitle": "{away_team.last} at {home_team.last}",
             "description": (
-                "The {team_name} {result_text.last} the {opponent.last} {final_score.last}"
+                "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
             ),
             "art_url": _ART_LAST,
         },
@@ -183,14 +183,14 @@ def _team_default() -> dict:
             "enabled": True,
             "description_final": "{game_recap.last}",
             "description_not_final": (
-                "The game between the {team_name} and the {opponent.last} on "
+                "The game between {team_name_the} and {opponent_the.last} on "
                 "{game_date.last} has not yet ended as of the last update."
             ),
         },
         "idle_content": {
             "title": "No {team_name} Game Today",
             "subtitle": (
-                "Next game: {game_date.next} at {game_time.next} {vs_at.next} the {opponent.next}"
+                "Next game: {game_date.next} at {game_time.next} {vs_at.next} {opponent_the.next}"
             ),
             "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}",
             "art_url": "",
@@ -198,12 +198,12 @@ def _team_default() -> dict:
         "idle_conditional": {
             "enabled": True,
             "description_final": (
-                "The {team_name} {result_text.last} the {opponent.last} "
+                "{team_name_the} {result_text.last} {opponent_the.last} "
                 "{final_score.last} {overtime_text.last} on {game_date.last}. "
-                "Next game will be with the {opponent.next} on {game_date.next}"
+                "Next game will be with {opponent_the.next} on {game_date.next}"
             ),
             "description_not_final": (
-                "The {team_name} last played against the {opponent.last} on {game_date.last}."
+                "{team_name_the} last played against {opponent_the.last} on {game_date.last}."
             ),
         },
         "idle_offseason": {
@@ -274,14 +274,14 @@ def _event_base(**overrides) -> dict:
         "postgame_fallback": {
             "title": "{gracenote_category}: Postgame",
             "subtitle": "{away_team} at {home_team}",
-            "description": "The {team_name} {result_text} the {opponent} {final_score}",
+            "description": "{team_name_the} {result_text} {opponent_the} {final_score}",
             "art_url": _EVENT_ART,
         },
         "postgame_conditional": {
             "enabled": True,
             "description_final": "{game_recap}",
             "description_not_final": (
-                "The game between the {away_team} and {home_team} has not yet "
+                "The game between {away_team_the} and {home_team_the} has not yet "
                 "ended as of the last update."
             ),
         },
@@ -407,8 +407,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "subtitle": "{player1} vs {player2}",
             "description": "{game_preview}",
             "description_fallback": (
-                "{player1} takes on {player2} in the {tennis_round} of the "
-                "{tournament_name} ({tennis_draw})."
+                "{player1} takes on {player2} in the {tennis_round} of "
+                "{tournament_name_the} ({tennis_draw})."
             ),
             "art_url": _EVENT_ART,
         },
@@ -420,13 +420,13 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "subtitle": "{player1} vs {player2}",
             "description": (
                 "{player1} and {player2} have completed their {tennis_round} "
-                "match at the {tournament_name}."
+                "match at {tournament_name_the}."
             ),
             "art_url": _EVENT_ART,
         },
         postgame_conditional={
             "enabled": True,
-            "description_final": "{game_recap}",
+            "description_final": "{tennis_result}",
             "description_not_final": (
                 "The match between {player1} and {player2} has not yet ended as of the last update."
             ),
@@ -443,8 +443,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": None,
                 "condition_value": None,
                 "template": (
-                    "{player1} takes on {player2} in the {tennis_round} of the "
-                    "{tournament_name} ({tennis_draw})."
+                    "{player1} takes on {player2} in the {tennis_round} of "
+                    "{tournament_name_the} ({tennis_draw})."
                 ),
                 "priority": 100,
                 "label": "Default",

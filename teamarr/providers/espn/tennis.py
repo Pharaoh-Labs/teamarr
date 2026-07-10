@@ -17,6 +17,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from teamarr.core import Event, EventStatus, Team, Venue
+from teamarr.core.naming import surnames
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +48,8 @@ _TENNIS_LEAGUE_GROUPINGS: dict[str, frozenset[str]] = {
 }
 
 
-def _tennis_surnames(name: str) -> str:
-    """Surname portion of a player or doubles-pair display name.
-
-    Streams reference players by surname only ("Zheng vs Norrie"), including
-    multi-word surnames ("Alex de Minaur" → "de Minaur", "Camilo Ugo
-    Carabelli" → "Ugo Carabelli"). Doubles rosters ("Hugo Nys / Edouard
-    Roger-Vasselin") yield "Nys/Roger-Vasselin".
-    """
-    parts = []
-    for person in name.split("/"):
-        tokens = person.strip().split()
-        parts.append(" ".join(tokens[1:]) if len(tokens) > 1 else person.strip())
-    return "/".join(parts)
+# Surname extraction lives in core.naming (shared with combat vars, tvnk.7).
+_tennis_surnames = surnames
 
 
 def _is_home(competitor: dict) -> bool:
