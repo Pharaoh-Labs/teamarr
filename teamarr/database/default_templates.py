@@ -19,7 +19,9 @@ decisions (bead tvnk.1, 2026-07-09):
   template's ``event_channel_name`` is abbreviation-first with no filler.
 - ESPN copy is the PRIMARY description source; constructed prose is the
   FALLBACK (tvnk.14): main descriptions carry a ``has_preview →
-  {game_preview}`` conditional row above the constructed default; pregame
+  {game_preview}`` conditional row above a Tier-2 ``has_structured_preview``
+  row (constructed line + recent form + series state, populates days ahead —
+  tvnk.15) above the constructed default; pregame
   fillers pair a ``{game_preview}`` primary with a ``description_fallback``;
   postgame conditionals put ``{game_recap}`` in ``description_final`` and the
   filler render falls through to the fallback's constructed result line when
@@ -223,6 +225,17 @@ def _team_default() -> dict:
                 "label": "Preview (provider)",
             },
             {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "The {away_team_record} {away_team} travel to {venue_city}, "
+                    "{venue_state} to take on the {home_team_record} {home_team} at "
+                    "{venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
+            },
+            {
                 "condition": None,
                 "condition_value": None,
                 "template": (
@@ -312,6 +325,19 @@ def _event_base(**overrides) -> dict:
                 "priority": 10,
                 "label": "Preview (provider)",
             },
+            # Tier-2 (tvnk.15): constructed line enriched with recent form +
+            # series state — populates days ahead, unlike preview prose.
+            {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "The {away_team_record} {away_team} travel to {venue_city}, "
+                    "{venue_state} to play the {home_team_record} {home_team} at "
+                    "{venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
+            },
             {
                 "condition": None,
                 "condition_value": None,
@@ -382,6 +408,16 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": "{game_preview}",
                 "priority": 10,
                 "label": "Preview (provider)",
+            },
+            {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "{away_team} face {home_team} at {venue}. "
+                    "{last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
             },
             {
                 "condition": None,

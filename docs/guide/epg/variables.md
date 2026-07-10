@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 250 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 253 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -390,6 +390,9 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | `{game_preview}` | Pregame preview blurb. Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Toronto Blue Jays (35-38) vs. Boston Red Sox` |
 | `{game_event_note}` | Marquee/playoff designation. Empty for ordinary regular-season games | base, .next, .last | `NBA Finals - Game 5` |
 | `{series_summary}` | Playoff/season-series state. Empty when there's no series context | base, .next, .last | `Series tied 1-1` |
+| `{home_last_five}` | Home team's W-L over its last five games (populates days ahead) | base, .next, .last | `4-1` |
+| `{away_last_five}` | Away team's W-L over its last five games | base, .next, .last | `2-3` |
+| `{last_five_summary}` | Recent-form prose for both teams; empty without data — pair with `has_structured_preview` | base, .next, .last | `The Rays have won 2 of their last five; the Red Sox have won 4 of their last five.` |
 
 {: .note }
 Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).

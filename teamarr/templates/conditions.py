@@ -14,6 +14,7 @@ Condition Types:
 - has_odds: Betting odds available
 - has_recap: Provider recap headline available (postgame)
 - has_preview: Provider preview blurb available (same-day pregame)
+- has_structured_preview: Recent-form data available (days-ahead)
 - opponent_name_contains: Opponent name contains string
 
 Priority:
@@ -257,6 +258,13 @@ class ConditionEvaluator:
         """Check if the provider's pregame preview blurb is available."""
         event = game_ctx.event
         return bool(event and event.game_preview)
+
+    def _eval_has_structured_preview(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if structured preview data (recent form) is available."""
+        event = game_ctx.event
+        return bool(event and (event.home_last_five or event.away_last_five))
 
     # =========================================================================
     # Opponent conditions

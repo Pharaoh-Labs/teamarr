@@ -46,7 +46,10 @@ constructed prose when it isn't available:
 
 - **Pregame / main program** — when ESPN publishes a preview blurb (usually
   on game day), it's used verbatim via a `has_preview → {game_preview}`
-  conditional row; otherwise the constructed "X travel to Y…" line renders.
+  conditional row; for games further out, a structured-preview row enriches
+  the constructed line with recent form and series state ("The Rays have won
+  2 of their last five… BOS leads series 3-2"); otherwise the plain
+  constructed "X travel to Y…" line renders.
 - **Postgame** — once a game is final and ESPN publishes a recap headline,
   the filler shows `{game_recap}`; until then a constructed result line
   ("The X defeated the Y 4–2") renders instead.
