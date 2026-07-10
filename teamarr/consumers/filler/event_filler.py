@@ -309,6 +309,10 @@ class EventFillerGenerator:
             description = ""
             if template.description:
                 description = self._resolver.resolve(template.description, context)
+            # Provider-copy primaries (e.g. {game_recap}) may resolve empty
+            # before the copy exists — fall through to the constructed text.
+            if not description.strip() and template.description_fallback:
+                description = self._resolver.resolve(template.description_fallback, context)
             subtitle = None
             if template.subtitle:
                 subtitle = self._resolver.resolve(template.subtitle, context)
@@ -451,7 +455,11 @@ class EventFillerGenerator:
     def _select_postgame_template(self, event: Event, config: EventFillerConfig) -> FillerTemplate:
         """Select appropriate postgame template based on game status.
 
-        Supports conditional descriptions (final vs in-progress).
+        Precedence (documented per tvnk.14, #329): when the conditional is
+        enabled, its status-matched description (final vs in-progress) wins
+        over the postgame fallback — but if that description resolves to an
+        empty string at render time (e.g. ``{game_recap}`` before the
+        provider publishes one), the fallback description is used instead.
         Fetches fresh status from provider for accurate final detection.
         """
         if not config.postgame_conditional.enabled:
@@ -466,6 +474,7 @@ class EventFillerGenerator:
                 subtitle=config.postgame_template.subtitle,
                 description=config.postgame_conditional.description_final,
                 art_url=config.postgame_template.art_url,
+                description_fallback=config.postgame_template.description,
             )
         elif not is_final and config.postgame_conditional.description_not_final:
             return FillerTemplate(
@@ -473,6 +482,7 @@ class EventFillerGenerator:
                 subtitle=config.postgame_template.subtitle,
                 description=config.postgame_conditional.description_not_final,
                 art_url=config.postgame_template.art_url,
+                description_fallback=config.postgame_template.description,
             )
 
         return config.postgame_template
@@ -512,6 +522,7 @@ def template_to_event_filler_config(template) -> EventFillerConfig:
         subtitle=pregame_fb.get("subtitle"),
         description=pregame_fb.get("description", ""),
         art_url=pregame_fb.get("art_url"),
+        description_fallback=pregame_fb.get("description_fallback"),
     )
 
     # Build postgame template from fallback (no hardcoded defaults - schema provides them)

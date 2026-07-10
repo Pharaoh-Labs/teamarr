@@ -12,6 +12,8 @@ Condition Types:
 - is_playoff, is_preseason: Season type
 - is_national_broadcast: National TV broadcast
 - has_odds: Betting odds available
+- has_recap: Provider recap headline available (postgame)
+- has_preview: Provider preview blurb available (same-day pregame)
 - opponent_name_contains: Opponent name contains string
 
 Priority:
@@ -237,6 +239,22 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if betting odds are available."""
         return game_ctx.odds is not None
+
+    # =========================================================================
+    # Provider copy availability (ESPN recaps/previews, epic tvnk #329)
+    # =========================================================================
+
+    def _eval_has_recap(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the provider's postgame recap headline is available."""
+        return bool(game_ctx.event.game_recap)
+
+    def _eval_has_preview(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the provider's pregame preview blurb is available."""
+        return bool(game_ctx.event.game_preview)
 
     # =========================================================================
     # Opponent conditions

@@ -106,6 +106,18 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
               isEventTemplate={isEventTemplate}
             />
             <TemplateField
+              id="pregame_fallback.description_fallback"
+              label="Fallback Description"
+              value={pregame.description_fallback || ""}
+              onChange={(v) => updatePregame("description_fallback", v || null)}
+              placeholder="Optional — used when Description resolves empty (e.g. {game_preview} before a preview exists)"
+              fieldRefs={fieldRefs}
+              setLastFocusedField={setLastFocusedField}
+              resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
+            />
+            <TemplateField
               id="pregame_fallback.art_url"
               isImageField
               label="Program Art URL"

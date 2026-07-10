@@ -125,6 +125,7 @@ export function TemplateForm() {
       subtitle: content.subtitle ?? defaults.subtitle,
       description: content.description ?? defaults.description,
       art_url: content.art_url ?? defaults.art_url,
+      description_fallback: content.description_fallback ?? defaults.description_fallback ?? null,
     }
   }
 

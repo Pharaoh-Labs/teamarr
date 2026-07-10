@@ -564,6 +564,7 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         subtitle=pregame_fb.get("subtitle"),
         description=pregame_fb.get("description", ""),
         art_url=pregame_fb.get("art_url"),
+        description_fallback=pregame_fb.get("description_fallback"),
     )
 
     # Build postgame template from fallback (no hardcoded defaults - schema provides them)

@@ -147,6 +147,9 @@ class FillerFallback(BaseModel):
     subtitle: str | None = None
     description: str | None = ""
     art_url: str | None = None
+    # Used when description resolves empty at render time (e.g. a
+    # {game_preview} primary before the provider publishes one) — tvnk.14.
+    description_fallback: str | None = None
 
 
 class ConditionalContent(BaseModel):
