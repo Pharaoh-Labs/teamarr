@@ -1058,12 +1058,17 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('uefa.europa', 'espn', 'soccer/uefa.europa', NULL, 'UEFA Europa League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png', NULL, 1, 'UEL', 'uel', 'team_vs_team', 'UEFA Europa League Soccer', NULL, NULL, NULL, 1),
     ('uefa.europa.conf', 'espn', 'soccer/uefa.europa.conf', NULL, 'UEFA Europa Conference League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2954.png', NULL, 1, 'UECL', 'uecl', 'team_vs_team', 'UEFA Europa Conference League Soccer', NULL, NULL, NULL, 1),
     -- International Tournaments
-    ('fifa.world', 'espn', 'soccer/fifa.world', NULL, 'FIFA World Cup', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/4.png', NULL, 1, 'World Cup', 'world-cup', 'team_vs_team', 'FIFA World Cup Soccer', NULL, NULL, NULL, 1),
-    ('fifa.wwc', 'espn', 'soccer/fifa.wwc', NULL, 'FIFA Women''s World Cup', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/131.png', NULL, 1, 'WWC', 'wwc', 'team_vs_team', 'FIFA Women''s World Cup Soccer', NULL, NULL, NULL, 1),
-    ('uefa.euro', 'espn', 'soccer/uefa.euro', NULL, 'UEFA European Championship', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/60.png', NULL, 1, 'Euro', 'euro', 'team_vs_team', 'UEFA Euro Soccer', NULL, NULL, NULL, 1),
-    ('conmebol.america', 'espn', 'soccer/conmebol.america', NULL, 'Copa America', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/73.png', NULL, 1, NULL, 'copa-america', 'team_vs_team', 'Copa America Soccer', NULL, NULL, NULL, 1),
-    ('concacaf.gold', 'espn', 'soccer/concacaf.gold', NULL, 'CONCACAF Gold Cup', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/128.png', NULL, 1, 'Gold Cup', 'gold-cup', 'team_vs_team', 'CONCACAF Gold Cup Soccer', NULL, NULL, NULL, 1),
-    ('concacaf.nations.league', 'espn', 'soccer/concacaf.nations.league', NULL, 'CONCACAF Nations League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2737.png', NULL, 1, 'CNL', 'cnl', 'team_vs_team', 'CONCACAF Nations League Soccer', NULL, NULL, NULL, 1),
+    -- gracenote_category: real Gracenote brands national-team tournaments WITHOUT the
+    -- sport suffix (captured: 'FIFA World Cup 2026', not 'FIFA World Cup Soccer').
+    -- The year is deliberately not baked in (would go stale) — templates compose it
+    -- via '{gracenote_category} {year}'. Club competitions keep the ' Soccer' suffix
+    -- (captured: 'Premier League Soccer').
+    ('fifa.world', 'espn', 'soccer/fifa.world', NULL, 'FIFA World Cup', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/4.png', NULL, 1, 'World Cup', 'world-cup', 'team_vs_team', 'FIFA World Cup', NULL, NULL, NULL, 1),
+    ('fifa.wwc', 'espn', 'soccer/fifa.wwc', NULL, 'FIFA Women''s World Cup', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/131.png', NULL, 1, 'WWC', 'wwc', 'team_vs_team', 'FIFA Women''s World Cup', NULL, NULL, NULL, 1),
+    ('uefa.euro', 'espn', 'soccer/uefa.euro', NULL, 'UEFA European Championship', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/60.png', NULL, 1, 'Euro', 'euro', 'team_vs_team', 'UEFA Euro', NULL, NULL, NULL, 1),
+    ('conmebol.america', 'espn', 'soccer/conmebol.america', NULL, 'Copa America', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/73.png', NULL, 1, NULL, 'copa-america', 'team_vs_team', 'Copa America', NULL, NULL, NULL, 1),
+    ('concacaf.gold', 'espn', 'soccer/concacaf.gold', NULL, 'CONCACAF Gold Cup', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/128.png', NULL, 1, 'Gold Cup', 'gold-cup', 'team_vs_team', 'CONCACAF Gold Cup', NULL, NULL, NULL, 1),
+    ('concacaf.nations.league', 'espn', 'soccer/concacaf.nations.league', NULL, 'CONCACAF Nations League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2737.png', NULL, 1, 'CNL', 'cnl', 'team_vs_team', 'CONCACAF Nations League', NULL, NULL, NULL, 1),
     -- Americas Leagues
     ('mex.1', 'espn', 'soccer/mex.1', NULL, 'Liga MX', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/22.png', NULL, 1, NULL, 'ligamx', 'team_vs_team', 'Liga MX Soccer', NULL, NULL, NULL, 1),
     ('arg.1', 'espn', 'soccer/arg.1', NULL, 'Argentine Liga Profesional', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/1.png', NULL, 1, 'LPA', 'lpa', 'team_vs_team', 'Argentine Liga Profesional Soccer', NULL, NULL, NULL, 1),
@@ -1145,18 +1150,21 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- Motorsports (NASCAR API) - authoritative session schedules from cf.nascar.com.
     -- provider_league_id encodes the NASCAR series number (1=Cup, 2=ORAP, 3=Trucks).
     -- The NASCAR provider uses hardcoded URL patterns; this field is for reference only.
-    ('nascar-cup',      'nascar', '1', NULL, 'NASCAR Cup Series',                    'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Cup',   'nascar-cup',      'event', 'NASCAR Racing', NULL, NULL, NULL, 1),
-    ('nascar-xfinity',  'nascar', '2', NULL, 'NASCAR O''Reilly Auto Parts Series',   'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR ORAP',  'nascar-xfinity',  'event', 'NASCAR Racing', NULL, NULL, NULL, 1),
-    ('nascar-truck',    'nascar', '3', NULL, 'NASCAR Craftsman Truck Series',         'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Trucks','nascar-truck',    'event', 'NASCAR Racing', NULL, NULL, NULL, 1),
+    -- gracenote_category NULL: real Gracenote titles NASCAR by full series name
+    -- (captured: 'NASCAR Craftsman Truck Series'), which display_name already is —
+    -- the event_type-aware fallback serves it without duplicating the string here.
+    ('nascar-cup',      'nascar', '1', NULL, 'NASCAR Cup Series',                    'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Cup',   'nascar-cup',      'event', NULL, NULL, NULL, NULL, 1),
+    ('nascar-xfinity',  'nascar', '2', NULL, 'NASCAR O''Reilly Auto Parts Series',   'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR ORAP',  'nascar-xfinity',  'event', NULL, NULL, NULL, NULL, 1),
+    ('nascar-truck',    'nascar', '3', NULL, 'NASCAR Craftsman Truck Series',         'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Trucks','nascar-truck',    'event', NULL, NULL, NULL, NULL, 1),
     ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/i/espn/teamlogos/500/indycar_series.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL, 1),
     -- Disabled: ESPN's racing/motogp scoreboard endpoint returns HTTP 400 (no usable schedule/logo data).
     -- Re-enable once migrated to TSDB (idLeague 4407) - planned v2 feature alongside IMSA/WEC session grouping.
-    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'Motorcycle Racing', NULL, NULL, NULL, 0),
+    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'MotoGP Racing', NULL, NULL, NULL, 0),
 
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
     -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).
-    ('imsa', 'tsdb', '4488', 'IMSA SportsCar Championship', 'IMSA WeatherTech SportsCar Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/t3fpd41536244390.png', NULL, 0, 'IMSA', 'imsa', 'event', 'Motor Racing', NULL, NULL, 'premium', 1),
-    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/2fjrko1705526433.png', NULL, 0, 'WEC', 'wec', 'event', 'Motor Racing', NULL, NULL, 'premium', 1),
+    ('imsa', 'tsdb', '4488', 'IMSA SportsCar Championship', 'IMSA WeatherTech SportsCar Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/t3fpd41536244390.png', NULL, 0, 'IMSA', 'imsa', 'event', NULL, NULL, NULL, 'premium', 1),
+    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/2fjrko1705526433.png', NULL, 0, 'WEC', 'wec', 'event', NULL, NULL, NULL, 'premium', 1),
 
     -- Tennis (ESPN) - One Event per MATCH (players as home/away), parsed from
     -- tournament groupings (teamarr/providers/espn/tennis.py). Grand slams are
