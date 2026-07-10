@@ -1541,8 +1541,17 @@ def _classify_racing_event(ctx: _ClassifyContext) -> ClassifiedStream | None:
             # For "at"/"@" separators, a multi-word left part is a series
             # or race name (e.g. "NASCAR Cup Series at San Diego", or a
             # stream with "@ Jun 20" as a date marker), not a team abbrev.
-            # Single-word left parts (e.g. "SD", "NYY") are real team codes.
-            if sep.strip() in ("at", "@") and sep_team1 and len(sep_team1.split()) > 1:
+            # Single-word left parts (e.g. "SD", "NYY") are real team codes —
+            # UNLESS the left side is itself a racing series name ("NASCAR @
+            # Daytona", "F1 at Monaco"): series names are the venue-style
+            # naming this step exists to catch. Checked on the raw left text,
+            # not sep_team1: "F1" is under the 3-char extraction minimum and
+            # comes back as None.
+            left_raw = ctx.text[:sep_position].strip()
+            if sep.strip() in ("at", "@") and (
+                (sep_team1 and len(sep_team1.split()) > 1)
+                or has_racing_text_evidence(left_raw)
+            ):
                 has_team_pattern = False
             else:
                 has_team_pattern = True

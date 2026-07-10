@@ -608,6 +608,20 @@ class StreamMatcher:
 
         # Step 3: Gate TEAM_ONLY when disabled, then route by category.
         if classified.category == StreamCategory.TEAM_ONLY and not self._team_streams_enabled:
+            # A racing stream without a separator ("F1 | Monaco Grand Prix")
+            # classifies TEAM_ONLY in a mixed group — give the racing
+            # fallback a chance before dropping it. Racing-by-name is a
+            # Stream Name matching type, so it stays gated on name_match.
+            if self._name_match_enabled:
+                fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+                if fallback is not None:
+                    outcome, racing_classified = fallback
+                    return [self._outcome_to_result(
+                        outcome=outcome,
+                        stream_id=stream_id,
+                        stream_name=stream_name,
+                        classified=racing_classified,
+                    )]
             return [MatchedStreamResult(
                 stream_name=stream_name,
                 stream_id=stream_id,
@@ -637,6 +651,27 @@ class StreamMatcher:
             )]
 
         outcomes = self._route_to_outcomes(classified, stream_id, target_date)
+
+        # Racing fallback for mixed groups (see _try_racing_fallback): the
+        # primary route found nothing and the stream may be a racing stream
+        # whose classification was masked by a team_vs_team-dominant group.
+        # Gated on name_match: TEAM_ONLY routing runs even when Stream Name
+        # matching is off, and racing-by-name must not sneak in through it.
+        if (
+            self._name_match_enabled
+            and classified.category != StreamCategory.RACING_EVENT
+            and not any(o.is_matched for o in outcomes)
+        ):
+            fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+            if fallback is not None:
+                outcome, racing_classified = fallback
+                return [self._outcome_to_result(
+                    outcome=outcome,
+                    stream_id=stream_id,
+                    stream_name=stream_name,
+                    classified=racing_classified,
+                )]
+
         return [
             self._outcome_to_result(
                 outcome=o,
@@ -772,38 +807,11 @@ class StreamMatcher:
                 (o, classified) for o in primary_outcomes if o.is_matched
             ]
 
-            # Racing fallback for mixed groups: if primary route found nothing
-            # and racing leagues are present, re-classify the EPG title with
-            # league_event_type="event" to see if it reads as a racing stream.
-            # Both "Formula 1 | Monaco Grand Prix" (TEAM_ONLY) and
-            # "NASCAR Cup Series | at San Diego" (TEAM_VS_TEAM) match here in
-            # groups that include racing leagues alongside team-sport leagues.
+            # Racing fallback for mixed groups (see _try_racing_fallback).
             if not matched_pairs and classified.category != StreamCategory.RACING_EVENT:
-                if any(
-                    self._league_event_types.get(lg) == "event"
-                    for lg in self._include_leagues
-                ):
-                    racing_classified = classify_stream(
-                        epg_input, "event", self._custom_regex,
-                        self._feed_home_terms, self._feed_away_terms,
-                    )
-                    # Require TEXT evidence of racing (a series name in the
-                    # programme title), not just the RACING_EVENT category.
-                    # With league_event_type="event", racing is the
-                    # classifier's default bucket for anything unrecognized —
-                    # fine inside a curated racing group, but EPG programmes
-                    # are arbitrary TV (documentaries, movies), and the racing
-                    # matcher's date-coverage strategy then binds them to
-                    # whatever race covers the date ("Brimstone" fuzzy-matched
-                    # Silverstone at 62).
-                    if racing_classified.category == StreamCategory.RACING_EVENT and (
-                        has_racing_text_evidence(epg_input)
-                    ):
-                        racing_outcome = self._match_racing_event(
-                            racing_classified, stream_id, target_date
-                        )
-                        if racing_outcome.is_matched:
-                            matched_pairs.append((racing_outcome, racing_classified))
+                fallback = self._try_racing_fallback(epg_input, stream_id, target_date)
+                if fallback is not None:
+                    matched_pairs.append(fallback)
 
             for outcome, eff_classified in matched_pairs:
                 # Tag as EPG and attach the program's broadcast window (183.5).
@@ -1047,6 +1055,54 @@ class StreamMatcher:
             stream_id=stream_id,
             detail="No matching racing event found",
         )
+
+    def _try_racing_fallback(
+        self,
+        text: str,
+        stream_id: int,
+        target_date: date,
+    ) -> "tuple[MatchOutcome, ClassifiedStream] | None":
+        """Racing fallback for mixed groups (#349): re-classify as racing and retry.
+
+        In a group where team-sport leagues dominate, the dominant
+        league_event_type is "team_vs_team", so a racing stream like
+        "Formula 1 | Monaco Grand Prix" (TEAM_ONLY) or "NASCAR Cup Series |
+        at San Diego" (TEAM_VS_TEAM) never classifies RACING_EVENT on the
+        primary pass. When the primary route found nothing and the group
+        includes event-type leagues, re-classify with
+        league_event_type="event" to see if it reads as a racing stream.
+
+        Requires TEXT evidence of racing (a series name in the input), not
+        just the RACING_EVENT category. With league_event_type="event",
+        racing is the classifier's default bucket for anything unrecognized —
+        fine inside a curated racing group, but EPG programmes are arbitrary
+        TV (documentaries, movies), and the racing matcher's date-coverage
+        strategy then binds them to whatever race covers the date
+        ("Brimstone" fuzzy-matched Silverstone at 62).
+
+        Shared by the stream-name path (_match_single) and the EPG-title
+        path (_match_via_epg). Returns the matched outcome paired with its
+        racing classification, or None if the fallback doesn't apply/match.
+        """
+        if not any(
+            self._league_event_types.get(lg) == "event"
+            for lg in self._include_leagues
+        ):
+            return None
+        if not has_racing_text_evidence(text):
+            return None
+
+        racing_classified = classify_stream(
+            text, "event", self._custom_regex,
+            self._feed_home_terms, self._feed_away_terms,
+        )
+        if racing_classified.category != StreamCategory.RACING_EVENT:
+            return None
+
+        outcome = self._match_racing_event(racing_classified, stream_id, target_date)
+        if not outcome.is_matched:
+            return None
+        return outcome, racing_classified
 
     def _match_tennis_event(
         self,
