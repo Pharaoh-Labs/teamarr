@@ -58,7 +58,9 @@ Key conventions:
 - **"at" for US team sports** (visitor at home); **"vs." for soccer/college tournament/neutral-site**
   (Summer League capture confirms: pro basketball at a neutral site switches to "vs." and drops the prose desc).
 - **Article-awareness**: club teams take "The"; national teams omit it. (Teamarr's Team model
-  lacks this today → drives tvnk.7 new vars.)
+  lacks this today → drives tvnk.7 new vars.) Soccer refinement (tvnk.9): club names are
+  proper nouns in the match register — "Arsenal face Chelsea", never "the Arsenal" — so
+  soccer renders articleless throughout (`core/naming.py::team_takes_article`).
 - Spanish duplicates exist: `Copa Mundial de la FIFA 2026` / `Escocia vs. Marruecos`.
 
 ### COMBAT shape — `title` carries event + headline, `episodeTitle` often null
