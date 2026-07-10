@@ -306,11 +306,13 @@ def _event_base(**overrides) -> dict:
         "postgame_periods": [],
         # Postgame chain (tvnk.14): conditional recap wins when the game is
         # final AND the provider published one; otherwise the fallback's
-        # constructed result line renders.
+        # constructed result line renders. Event templates are positional —
+        # only event-scope vars here ({event_result}, never {team_name_the}/
+        # {result_text}, which are TEAM_ONLY and fail builder validation, #354).
         "postgame_fallback": {
             "title": "{gracenote_category}: Postgame",
             "subtitle": "{away_team} at {home_team}",
-            "description": "{team_name_the} {result_text} {opponent_the} {final_score}",
+            "description": "Final: {event_result}",
             "art_url": _EVENT_ART,
         },
         "postgame_conditional": {
@@ -322,7 +324,9 @@ def _event_base(**overrides) -> dict:
             ),
         },
         "idle_content": {
-            "title": "{team_name} Programming",
+            # {league}, not {team_name} — event templates have no "our team"
+            # and TEAM_ONLY vars fail the event editor's validation (#354).
+            "title": "{league} Programming",
             "subtitle": "",
             "description": "",
             "art_url": "",
@@ -431,31 +435,22 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     ),
     # College team channels (tvnk.8): Gracenote's college register is home-led
     # host framing with rank + record ("No. 20 Arkansas (20-7) hosts Texas A&M
-    # (19-8) at Bud Walton Arena") — rank row only when BOTH teams are ranked
-    # (bare {away_team_rank} is empty when unranked), conference framing when
-    # it's a conference game.
+    # (19-8) at Bud Walton Arena"). Ranks render inline via the empty-safe
+    # {*_rank_display} vars ('No. 20' or nothing, #354) — no ranked-only row
+    # needed, and one-ranked matchups show the one rank. Names are bare per
+    # the captured college register (no article).
     _team_base(
         name="College Team (Starter)",
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
             {
-                "condition": "is_ranked_matchup",
-                "condition_value": None,
-                "template": (
-                    "No. {home_team_rank} {home_team} ({home_team_record}) host "
-                    "No. {away_team_rank} {away_team} ({away_team_record}) at "
-                    "{venue}. {last_five_summary} {series_summary}"
-                ),
-                "priority": 15,
-                "label": "Ranked matchup",
-            },
-            {
                 "condition": "is_conference_game",
                 "condition_value": None,
                 "template": (
-                    "{home_team_the} ({home_team_record}) host "
-                    "{away_team_the} ({away_team_record}) in {college_conference} "
-                    "play at {venue}. {last_five_summary} {series_summary}"
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) in "
+                    "{college_conference} play at {venue}. "
+                    "{last_five_summary} {series_summary}"
                 ),
                 "priority": 18,
                 "label": "Conference game",
@@ -464,9 +459,9 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": "has_structured_preview",
                 "condition_value": None,
                 "template": (
-                    "{home_team_the} ({home_team_record}) host "
-                    "{away_team_the} ({away_team_record}) at {venue}. "
-                    "{last_five_summary} {series_summary}"
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}. {last_five_summary} {series_summary}"
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -475,8 +470,9 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": None,
                 "condition_value": None,
                 "template": (
-                    "{home_team_the} ({home_team_record}) host "
-                    "{away_team_the} ({away_team_record}) at {venue}."
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}."
                 ),
                 "priority": 100,
                 "label": "Default",
@@ -486,30 +482,19 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # Universal event fallback — US pro leagues with abbreviations.
     _event_base(name="Default Event (Starter)"),
     # College events (tvnk.8): same home-led rank/record register as College
-    # Team; conference row omitted (conference stats aren't reliably present
-    # in event-channel context).
+    # Team via the empty-safe {*_rank_display} vars (#354); conference row
+    # omitted (conference stats aren't reliably present in event context).
     _event_base(
         name="College Event (Starter)",
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
             {
-                "condition": "is_ranked_matchup",
-                "condition_value": None,
-                "template": (
-                    "No. {home_team_rank} {home_team} ({home_team_record}) host "
-                    "No. {away_team_rank} {away_team} ({away_team_record}) at "
-                    "{venue}. {last_five_summary} {series_summary}"
-                ),
-                "priority": 15,
-                "label": "Ranked matchup",
-            },
-            {
                 "condition": "has_structured_preview",
                 "condition_value": None,
                 "template": (
-                    "{home_team_the} ({home_team_record}) host "
-                    "{away_team_the} ({away_team_record}) at {venue}. "
-                    "{last_five_summary} {series_summary}"
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}. {last_five_summary} {series_summary}"
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -518,8 +503,9 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": None,
                 "condition_value": None,
                 "template": (
-                    "{home_team_the} ({home_team_record}) host "
-                    "{away_team_the} ({away_team_record}) at {venue}."
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}."
                 ),
                 "priority": 100,
                 "label": "Default",
@@ -539,6 +525,12 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "{away_team_the} face {home_team_the} at {venue} "
                 "{today_tonight} at {game_time}."
             ),
+            "art_url": _EVENT_ART,
+        },
+        postgame_fallback={
+            "title": "{gracenote_category}: Full Time",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "Full time: {event_result}",
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
@@ -578,6 +570,22 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             ),
             "art_url": _EVENT_ART,
         },
+        # MMA carries no home/away scores, so the base 'Final: {event_result}'
+        # would render empty — constructed bout-register line instead (#354).
+        postgame_fallback={
+            "title": "{league} {event_number}: Postgame",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "{away_team} vs {home_team} has concluded at {venue}.",
+            "art_url": _EVENT_ART,
+        },
+        postgame_conditional={
+            "enabled": True,
+            "description_final": "{game_recap}",
+            "description_not_final": (
+                "The bout between {away_team} and {home_team} has not yet ended "
+                "as of the last update."
+            ),
+        },
         conditional_descriptions=[
             {
                 "condition": "has_preview",
@@ -608,6 +616,12 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         subtitle_template="{away_team} vs {home_team}",
         # "NED v JPN"
         event_channel_name="{away_team_abbrev} v {home_team_abbrev}",
+        postgame_fallback={
+            "title": "{gracenote_category}: Full Time",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "Full time: {event_result}",
+            "art_url": _EVENT_ART,
+        },
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
             {

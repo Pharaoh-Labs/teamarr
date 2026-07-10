@@ -445,3 +445,25 @@ def test_abbrev_variables_fall_back_without_abbreviation():
     ctx = TemplateContext(game_context=GameContext(event=e), team_config=None, team_stats=None)
     assert extract_home_team_abbrev(ctx, ctx.game_context) == "Man United"
     assert extract_away_team_abbrev(ctx, ctx.game_context) == "ARS"
+
+
+def test_seed_variables_respect_template_scope():
+    """Every variable a seed uses must be visible in that template type's
+    picker/validator (#354) — a TEAM_ONLY var in an event seed makes the
+    builder's real-time validation flag our own shipped content."""
+    import teamarr.templates.variables  # noqa: F401 — triggers registration
+    from teamarr.templates.variables import registry as reg_module
+
+    registry = reg_module.VariableRegistry()
+    by_scope = {
+        "team": {v.name for v in registry.filter_by_template_type("team")},
+        "event": {v.name for v in registry.filter_by_template_type("event")},
+    }
+    violations = []
+    for spec in DEFAULT_TEMPLATE_SET:
+        allowed = by_scope[spec["template_type"]]
+        for text in _collect_strings(spec):
+            for m in _VAR_TOKEN.finditer(text):
+                if m.group(1) not in allowed:
+                    violations.append((spec["name"], m.group(1)))
+    assert not violations, f"scope-invalid variables in seeds: {sorted(set(violations))}"
