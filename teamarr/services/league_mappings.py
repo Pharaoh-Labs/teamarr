@@ -55,6 +55,8 @@ class LeagueMappingService:
         self._gracenote_categories: dict[str, str] = {}
         # Sport per league (for gracenote_category fallback)
         self._league_sports: dict[str, str] = {}
+        # event_type per league (for gracenote_category fallback shape)
+        self._league_event_types: dict[str, str] = {}
         # {soccer_match_league_logo}: logo_url from leagues table
         self._league_logos: dict[str, str] = {}
         # Fallback from league_cache for discovered leagues
@@ -80,7 +82,7 @@ class LeagueMappingService:
                 SELECT league_code, provider, provider_league_id,
                        provider_league_name, sport, display_name, logo_url,
                        league_alias, league_id, gracenote_category,
-                       fallback_provider, fallback_league_id
+                       event_type, fallback_provider, fallback_league_id
                 FROM leagues
                 WHERE enabled = 1
                 ORDER BY provider, league_code
@@ -136,6 +138,10 @@ class LeagueMappingService:
                 if row["sport"]:
                     self._league_sports[league_code_lower] = row["sport"]
 
+                # Cache event_type for gracenote_category fallback shape
+                if row["event_type"]:
+                    self._league_event_types[league_code_lower] = row["event_type"]
+
             # Also load league names, logos, and sports from league_cache for fallback
             # This covers discovered leagues not in the static leagues table
             cursor = conn.execute(
@@ -178,6 +184,7 @@ class LeagueMappingService:
         self._league_logos.clear()
         self._gracenote_categories.clear()
         self._league_sports.clear()
+        self._league_event_types.clear()
         self._league_cache_names.clear()
         self._league_cache_logos.clear()
         self._sport_display_names.clear()
@@ -288,7 +295,12 @@ class LeagueMappingService:
 
         Fallback chain:
             1. gracenote_category from leagues table (curated value)
-            2. Auto-generated: "{display_name} {Sport}" (e.g., 'NFL Football')
+            2. Auto-generated, shaped by the league's event_type:
+               - team_vs_team: "{display_name} {Sport}" (e.g., 'NFL Football' —
+                 Gracenote suffixes the sport for head-to-head leagues)
+               - event / event_card: display_name alone (e.g., 'NASCAR Cup
+                 Series' — Gracenote titles racing/combat/tournament programming
+                 by the series or promotion name, never '<Series> Racing')
 
         Thread-safe: uses in-memory cache, no DB access.
 
@@ -304,8 +316,13 @@ class LeagueMappingService:
         if key in self._gracenote_categories:
             return self._gracenote_categories[key]
 
-        # Auto-generate from display_name + sport (with proper sport display name)
         display_name = self.get_league_display_name(league_code)
+
+        # Non-head-to-head leagues: the series/promotion name IS the title
+        if self._league_event_types.get(key) in ("event", "event_card"):
+            return display_name
+
+        # Auto-generate from display_name + sport (with proper sport display name)
         sport_code = self._league_sports.get(key, "")
 
         if display_name and sport_code:

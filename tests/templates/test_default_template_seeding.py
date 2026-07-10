@@ -1,6 +1,6 @@
 """Curated default template seeding (tvnk.1/tvnk.3/tvnk.13, #329).
 
-Fresh installs get the full 7-template set; upgrades add missing members by
+Fresh installs get the full starter set; upgrades add missing members by
 name; a PRISTINE legacy seed (still carrying the broken localhost:3000
 placeholder art) is upgraded in place (same row id → assignments survive);
 user-modified rows are never touched.
@@ -58,7 +58,7 @@ def test_fresh_install_seeds_full_set(db_conn):
     # init_db already seeded (the wiring under test); re-run is a no-op
     seed_default_templates(db_conn)
     assert _names(db_conn) == SET_NAMES
-    assert len(SET_NAMES) == 6
+    assert len(SET_NAMES) == 9
 
     for t in get_all_templates(db_conn):
         # Seeded UNASSIGNED — the user scopes them
@@ -67,6 +67,20 @@ def test_fresh_install_seeds_full_set(db_conn):
         # Variable-led values are canonically slash-less (#275).
         assert not (t.program_art_url or "").startswith("http")
         assert (t.program_art_url or "{").startswith("{")
+
+
+def test_fresh_install_starters_are_immediately_assignable(db_conn):
+    """First-run UX (tvnk.4): a brand-new install can scope a starter to a
+    league and have it resolve for that league's events with no other setup."""
+    from teamarr.database.subscription import (
+        add_subscription_template,
+        get_subscription_template_for_event,
+    )
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    starter_id = templates["Soccer Club Event (Starter)"].id
+    add_subscription_template(db_conn, template_id=starter_id, leagues=["eng.1"])
+    assert get_subscription_template_for_event(db_conn, "soccer", "eng.1") == starter_id
 
 
 def test_seeding_is_idempotent(db_conn):
@@ -136,13 +150,13 @@ def test_upgrade_adds_missing_members_only(db_conn):
     templates = {t.name: t for t in get_all_templates(db_conn)}
     from teamarr.database.templates import delete_template, update_template
 
-    delete_template(db_conn, templates["MiLB Event (Starter)"].id)
+    delete_template(db_conn, templates["Combat Event (Starter)"].id)
     update_template(db_conn, templates["Tennis Event (Starter)"].id, title_format="Custom Tennis")
 
     seed_default_templates(db_conn)
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
-    assert "MiLB Event (Starter)" in templates  # re-added (missing by name)
+    assert "Combat Event (Starter)" in templates  # re-added (missing by name)
     assert templates["Tennis Event (Starter)"].title_format == "Custom Tennis"  # untouched
 
 
@@ -251,14 +265,17 @@ def test_prior_iteration_names_renamed_in_place(db_conn):
 
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
-    # Simulate the prior iteration: same specs, prior names
+    # Simulate the prior iteration: same specs, prior names (tvnk.8 members
+    # postdate the rename era and have no prior name)
     prior_ids = {}
     for spec in DEFAULT_TEMPLATE_SET:
         prior_name = next((p for p, c in PRIOR_NAME_UPGRADES.items() if c == spec["name"]), None)
-        assert prior_name is not None
+        if prior_name is None:
+            continue
         prior = dict(spec)
         prior["name"] = prior_name
         prior_ids[spec["name"]] = create_template(db_conn, **prior)
+    assert prior_ids, "no prior-iteration members simulated"
 
     seed_default_templates(db_conn)
 
@@ -266,6 +283,71 @@ def test_prior_iteration_names_renamed_in_place(db_conn):
     assert _names(db_conn) == SET_NAMES
     for current, tid in prior_ids.items():
         assert templates[current].id == tid  # renamed in place
+
+
+def test_prior_title_upgraded_in_place_when_unedited(db_conn):
+    """tvnk.8: unedited rows still carrying a prior-iteration title get the
+    current content on the same row id (year-composed tournament titles)."""
+    from teamarr.database.default_templates import PRIOR_TITLE_UPGRADES
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    old_ids = {}
+    for member, old_title in PRIOR_TITLE_UPGRADES.items():
+        old = dict(specs[member])
+        old["title_format"] = old_title
+        old_ids[member] = create_template(db_conn, **old)
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    for member, tid in old_ids.items():
+        assert templates[member].id == tid  # upgraded in place, not duplicated
+        assert templates[member].title_format == specs[member]["title_format"]
+    assert _names(db_conn) == SET_NAMES
+
+
+def test_prior_title_row_with_user_edit_left_alone(db_conn):
+    from teamarr.database.default_templates import PRIOR_TITLE_UPGRADES
+    from teamarr.database.templates import update_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    member, old_title = next(iter(PRIOR_TITLE_UPGRADES.items()))
+    old = dict(specs[member])
+    old["title_format"] = old_title
+    tid = create_template(db_conn, **old)
+    update_template(db_conn, tid, subtitle_template="My custom subtitle")
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    assert templates[member].id == tid
+    assert templates[member].title_format == old_title  # untouched
+    assert templates[member].subtitle_template == "My custom subtitle"
+
+
+def test_prior_name_with_prior_title_renamed_and_upgraded(db_conn):
+    """A pre-tvnk.8 install: 'International Event' (no Starter suffix) with
+    the old title renames AND upgrades on the same row id."""
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    old = dict(specs["International Event (Starter)"])
+    old["name"] = "International Event"
+    old["title_format"] = "{gracenote_category}"
+    tid = create_template(db_conn, **old)
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    assert "International Event" not in templates
+    upgraded = templates["International Event (Starter)"]
+    assert upgraded.id == tid
+    assert upgraded.title_format == "{gracenote_category} {year}"
+    assert _names(db_conn) == SET_NAMES
 
 
 def test_retired_no_abbrev_member_removed_when_unedited(db_conn):
@@ -290,6 +372,39 @@ def test_retired_member_kept_when_edited(db_conn):
 
     seed_default_templates(db_conn)
     assert "No-Abbrev Event" in _names(db_conn)  # user's row survives
+
+
+def test_retired_milb_member_removed_when_unedited_and_unassigned(db_conn):
+    """MiLB Event retired in tvnk.4 — the 'Minor League Baseball' branding now
+    comes from the gracenote_category seeds, so Default Event covers MiLB."""
+    from teamarr.database.default_templates import _retired_milb_specs
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    for spec in _retired_milb_specs():
+        create_template(db_conn, **spec)
+
+    seed_default_templates(db_conn)
+    names = _names(db_conn)
+    assert "MiLB Event (Starter)" not in names
+    assert "MiLB Event" not in names
+    assert names == SET_NAMES
+
+
+def test_retired_member_kept_when_assigned(db_conn):
+    """A retired starter someone ASSIGNED is never auto-deleted — removal
+    would silently unassign their channels (SET NULL / CASCADE FKs)."""
+    from teamarr.database.default_templates import _retired_milb_specs
+    from teamarr.database.subscription import add_subscription_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = _retired_milb_specs()[0]
+    tid = create_template(db_conn, **spec)
+    add_subscription_template(db_conn, template_id=tid, leagues=["milb-aaa"])
+
+    seed_default_templates(db_conn)
+    assert "MiLB Event (Starter)" in _names(db_conn)  # assignment protected it
 
 
 def test_abbrev_variables_fall_back_without_abbreviation():
@@ -330,3 +445,25 @@ def test_abbrev_variables_fall_back_without_abbreviation():
     ctx = TemplateContext(game_context=GameContext(event=e), team_config=None, team_stats=None)
     assert extract_home_team_abbrev(ctx, ctx.game_context) == "Man United"
     assert extract_away_team_abbrev(ctx, ctx.game_context) == "ARS"
+
+
+def test_seed_variables_respect_template_scope():
+    """Every variable a seed uses must be visible in that template type's
+    picker/validator (#354) — a TEAM_ONLY var in an event seed makes the
+    builder's real-time validation flag our own shipped content."""
+    import teamarr.templates.variables  # noqa: F401 — triggers registration
+    from teamarr.templates.variables import registry as reg_module
+
+    registry = reg_module.VariableRegistry()
+    by_scope = {
+        "team": {v.name for v in registry.filter_by_template_type("team")},
+        "event": {v.name for v in registry.filter_by_template_type("event")},
+    }
+    violations = []
+    for spec in DEFAULT_TEMPLATE_SET:
+        allowed = by_scope[spec["template_type"]]
+        for text in _collect_strings(spec):
+            for m in _VAR_TOKEN.finditer(text):
+                if m.group(1) not in allowed:
+                    violations.append((spec["name"], m.group(1)))
+    assert not violations, f"scope-invalid variables in seeds: {sorted(set(violations))}"

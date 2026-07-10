@@ -67,7 +67,11 @@ def test_national_team_league_detection():
 
 def test_team_with_article():
     assert team_with_article("Detroit Pistons", "nba", "basketball") == "the Detroit Pistons"
-    assert team_with_article("Arsenal", "eng.1", "soccer") == "the Arsenal"
+    # Soccer club names are proper nouns in the match register (tvnk.9):
+    # "Arsenal face Chelsea", never "the Arsenal"/"the Manchester United"
+    assert team_with_article("Arsenal", "eng.1", "soccer") == "Arsenal"
+    assert team_with_article("Manchester United", "eng.1", "soccer") == "Manchester United"
+    assert team_with_article("LA Galaxy", "usa.1", "soccer") == "LA Galaxy"
     assert team_with_article("Netherlands", "fifa.world", "soccer") == "Netherlands"
     assert team_with_article("Carlos Alcaraz", "atp", "tennis") == "Carlos Alcaraz"
     assert team_with_article("Jon Jones", "ufc", "mma") == "Jon Jones"

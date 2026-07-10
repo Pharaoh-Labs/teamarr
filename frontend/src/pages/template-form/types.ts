@@ -1,4 +1,4 @@
-import type { TemplateCreate } from "@/api/templates"
+import type { ConditionalPreview, TemplateCreate } from "@/api/templates"
 import type { VariableCategory } from "@/api/variables"
 import type { CachedLeague } from "@/api/teams"
 
@@ -36,6 +36,10 @@ export interface TabProps {
   isTeamTemplate?: boolean
   resolveTemplate: (template: string) => string
   validationData?: { validNames: Set<string>; baseNames: Set<string> }
+  /** Server-side condition trace (#357): which description row fires and why,
+   *  evaluated against the current preview event. Null until the first render
+   *  lands or when the server preview is unavailable. */
+  conditionalPreview?: ConditionalPreview | null
 }
 
 // Template field with inline preview and validation

@@ -52,11 +52,15 @@ Mapping to Teamarr's 3 shapes: **team** = TEAM_VS_TEAM, **combat** = EVENT_CARD,
 | College baseball | `College Baseball` | `NCAA Tournament: East Carolina vs. North Carolina` | round/region: "Chapel Hill Regional, Game 4." |
 | CFB playoff | `CFP Quarterfinal at the Goodyear Cotton Bowl Classic` (bowl name in title) | `Miami vs. Ohio State` | "The No. 10 Miami Hurricanes face the No. 2 Ohio State Buckeyes at AT&T Stadium…" |
 | Cricket | `Major League Cricket` | `Seattle Orcas vs. Washington Freedom` | "From Grand Prairie Stadium…" |
+| NBA Summer League | `NBA Summer League Basketball` (event brand + sport, NOT `NBA Basketball`) | `Cleveland Cavaliers vs. Indiana Pacers` (**"vs."** — neutral site) | terse, venue-only: "From Cox Pavilion in Las Vegas, Nev." — no article-aware prose (captured 2026-07-10, ESPN/ESPN2/ESPNU) |
 
 Key conventions:
-- **"at" for US team sports** (visitor at home); **"vs." for soccer/college tournament/neutral-site**.
+- **"at" for US team sports** (visitor at home); **"vs." for soccer/college tournament/neutral-site**
+  (Summer League capture confirms: pro basketball at a neutral site switches to "vs." and drops the prose desc).
 - **Article-awareness**: club teams take "The"; national teams omit it. (Teamarr's Team model
-  lacks this today → drives tvnk.7 new vars.)
+  lacks this today → drives tvnk.7 new vars.) Soccer refinement (tvnk.9): club names are
+  proper nouns in the match register — "Arsenal face Chelsea", never "the Arsenal" — so
+  soccer renders articleless throughout (`core/naming.py::team_takes_article`).
 - Spanish duplicates exist: `Copa Mundial de la FIFA 2026` / `Escocia vs. Marruecos`.
 
 ### COMBAT shape — `title` carries event + headline, `episodeTitle` often null
@@ -123,7 +127,7 @@ Status legend: ✓ covered (single var or simple composition) · ◑ partial (ex
 ### EPG — by surface
 | Gracenote convention | Teamarr today | Status | tvnk.7 action |
 |---|---|---|---|
-| Title = league/series (`MLB Baseball`) | `{gracenote_category}` (curated → else `{display_name} {Sport}`) | ◑ | reconcile seeds — see deep-dive below |
+| Title = league/series (`MLB Baseball`) | `{gracenote_category}` (curated → else event_type-aware auto-gen) | ✓ | seeds reconciled + fallback fixed in tvnk.12 — see deep-dive below |
 | Team sub = `Away Full at Home Full` | compose `{away_team} {vs_at} {home_team}` | ◑ | `{vs_at}` is HOME/AWAY-perspective ("vs if home, at if away"), NOT sport-based. Need a perspective-free, sport-aware connector |
 | Soccer sub = `Group C: A vs. B` | `{soccer_match_note}` = ESPN `altGameNote`, live-verified `"FIFA World Cup, Group C"` | ◑→✓ | DATA EXISTS. Only need a thin "stage-only" formatter to isolate `Group C` (and it doubles as a branded-title source — see note-vars below) |
 | US round/marquee = `NCAA Tournament:` / `Game 4` | `{game_event_note}` = ESPN note headline (`NBA Finals - Game 5`, bowl names) | ◑→✓ | DATA EXISTS via the same var — no extension needed; just author into templates with empty-handling |
@@ -144,17 +148,18 @@ Status legend: ✓ covered (single var or simple composition) · ◑ partial (ex
 | Combat `Holloway v Poirier` | `{fighter1}`/`{fighter2}` are FULL names | ✗ fighter last-name var |
 | Racing `Navy 250` | `{race_name}` | ✓ |
 
-### Deep-dive: is `{gracenote_category}` built the best way?
-Construction = curated `leagues.gracenote_category` → else auto `{display_name} {sport_display}`. Verified against REAL captured Gracenote:
-- ✓ **Correct** for major US leagues (MLB Baseball, NBA Basketball, College Basketball) and **club soccer** (Premier League Soccer, MLS Soccer — Gracenote really does suffix "Soccer" for clubs).
-- ✗ **Racing**: real Gracenote uses the full series name (`NASCAR Craftsman Truck Series`, `IndyCar Racing`), NOT "X Racing". Worse, the curated `nascar-truck` value is `NASCAR Racing` — *worse than its own `display_name`* which already equals the real title. Racing categories must be curated per-league from the captured data (or auto-gen should fall back to `display_name` alone for `event`/racing leagues, not append the sport).
-- ✗ **International tournaments**: real Gracenote is branded + **year** (`FIFA World Cup 2026`), but Teamarr yields `FIFA World Cup Soccer` (appends "Soccer", no year). No year mechanism exists in the static field.
+### Deep-dive: `{gracenote_category}` construction (reconciled in tvnk.12)
+Construction = curated `leagues.gracenote_category` → else auto-gen shaped by the league's `event_type`
+(`teamarr/services/league_mappings.py::get_gracenote_category`, tests in
+`tests/templates/test_gracenote_category.py`):
+- **team_vs_team** → `{display_name} {Sport}` (`NFL Football`, `Ontario Hockey League Hockey`) — matches captured Gracenote for US majors and **club soccer** (`Premier League Soccer`, `MLS Soccer`).
+- **event / event_card** → `display_name` alone — Gracenote titles racing/combat by series or promotion name (`NASCAR Craftsman Truck Series`, never "X Racing"). The old flat fallback produced `Boxing Boxing` for the boxing league.
 
-Recommendations (own work items, candidates for tvnk.7/tvnk.8):
-1. **Reconcile the 77 curated `gracenote_category` seeds** against captured Gracenote; fix racing (use series/display name) and tournament entries. Quick data-quality win; `nascar-truck` is an outright regression to fix now.
-2. **Auto-gen fallback by `event_type`**: for `event`/`event_card`/racing leagues, fall back to `display_name` alone (don't append sport); keep `{display_name} {Sport}` only for `team_vs_team`.
-3. **Year-aware tournaments**: either drop "Soccer" + allow template composition `{gracenote_category} {year}`, or add a dynamic year-stamped category. Decide in tvnk.8.
-4. Bigger play (optional): since the Gracenote API is now cracked, auto-populate `gracenote_category` from the live feed (authoritative) instead of hand-curating.
+Seed reconciliation outcomes:
+1. **Racing**: the generic curations (`NASCAR Racing` ×3, `Motor Racing` for IMSA/WEC) were regressions vs their own `display_name` and are now **NULL** — the event-aware fallback serves the series name, so sponsor renames (e.g. Xfinity → O'Reilly) can't drift a duplicated string. Kept curated: `Formula 1 Racing`, `IndyCar Racing` (captured shape), `MotoGP Racing` (same pattern), `Tennis` for ATP/WTA.
+2. **International tournaments** (fifa.world, fifa.wwc, uefa.euro, conmebol.america, concacaf.gold, concacaf.nations.league): curated **without** the " Soccer" suffix (`FIFA World Cup`), matching the captured branded shape. Club competitions (FA Cup, UCL, …) keep the suffix per capture.
+3. **Year-stamping decision: template composition, not dynamic.** Real Gracenote is branded + year (`FIFA World Cup 2026`); a static seed would go stale annually and a dynamic year-stamped category would change the var's semantics for every league. Templates compose `{gracenote_category} {year}` where wanted (tvnk.8 authors this for tournament-heavy defaults). `{soccer_match_note}` remains a per-event branded-title source if finer fidelity is ever needed.
+4. Bigger play (optional, not done): since the Gracenote API is now cracked, auto-populate `gracenote_category` from the live feed (authoritative) instead of hand-curating.
 
 ### The note vars close more than expected (tvnk.10 — `{soccer_match_note}`, `{game_event_note}`)
 Both are ESPN-populated per-event and live-verified, and they ARE the data source for three gaps:

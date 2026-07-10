@@ -26,6 +26,14 @@ decisions (bead tvnk.1, 2026-07-09):
   postgame conditionals put ``{game_recap}`` in ``description_final`` and the
   filler render falls through to the fallback's constructed result line when
   the recap hasn't been published.
+- Per-sport-family registers (tvnk.8 synthesis): the base US-pro travel-line
+  register is joined by soccer ("face" match register, article-aware _the
+  vars, 'v' channel connector), college (home-led host framing with rank +
+  record + conference rows, per the captured Gracenote preview register), and
+  year-composed tournament titles (International ``{gracenote_category}
+  {year}`` per the tvnk.12 decision; Tennis ``{year} {tournament_name}``).
+  Combat/tennis/racing get no team variants — no meaningful team channels
+  (racing driver channels are epic hjzo).
 """
 
 from sqlite3 import Connection
@@ -74,8 +82,17 @@ PRIOR_NAME_UPGRADES = {
     "Default Event": "Default Event (Starter)",
     "Combat Event": "Combat Event (Starter)",
     "International Event": "International Event (Starter)",
-    "MiLB Event": "MiLB Event (Starter)",
+    # "MiLB Event" retired in tvnk.4 — both name generations are handled by
+    # _retired_milb_specs() removal healing instead.
     "Tennis Event": "Tennis Event (Starter)",
+}
+
+# Prior-iteration CONTENT of still-current members (tvnk.8): an unedited row
+# still carrying the old title_format is upgraded in place to the current
+# spec (same id). Maps member name → the title_format earlier seeds shipped.
+PRIOR_TITLE_UPGRADES = {
+    "International Event (Starter)": "{gracenote_category}",
+    "Tennis Event (Starter)": "{tournament_name}",
 }
 
 # Content fingerprint of the stock legacy seeds — a row is "pristine" (safe to
@@ -138,10 +155,14 @@ def _is_unedited_curated(row, spec: dict) -> bool:
     return art in (spec_art, bare)
 
 
-def _team_default() -> dict:
-    """Universal team-channel fallback (persistent team channels)."""
-    return {
-        "name": "Default Team (Starter)",
+def _team_base(**overrides) -> dict:
+    """Shared skeleton for the team templates; variants override fields.
+
+    The base register is US-pro (travel-line prose, W-L records); per-sport
+    variants (tvnk.8) swap the description register — soccer gets the "face"
+    match register, college the home-led rank/record host framing.
+    """
+    base = {
         "template_type": "team",
         "title_format": "{gracenote_category}",
         "subtitle_template": "{away_team} at {home_team}",
@@ -249,6 +270,8 @@ def _team_default() -> dict:
         "event_channel_name": "{team_name}",
         "event_channel_logo_url": "",
     }
+    base.update(overrides)
+    return base
 
 
 def _event_base(**overrides) -> dict:
@@ -283,11 +306,13 @@ def _event_base(**overrides) -> dict:
         "postgame_periods": [],
         # Postgame chain (tvnk.14): conditional recap wins when the game is
         # final AND the provider published one; otherwise the fallback's
-        # constructed result line renders.
+        # constructed result line renders. Event templates are positional —
+        # only event-scope vars here ({event_result}, never {team_name_the}/
+        # {result_text}, which are TEAM_ONLY and fail builder validation, #354).
         "postgame_fallback": {
             "title": "{gracenote_category}: Postgame",
             "subtitle": "{away_team} at {home_team}",
-            "description": "{team_name_the} {result_text} {opponent_the} {final_score}",
+            "description": "Final: {event_result}",
             "art_url": _EVENT_ART,
         },
         "postgame_conditional": {
@@ -299,7 +324,9 @@ def _event_base(**overrides) -> dict:
             ),
         },
         "idle_content": {
-            "title": "{team_name} Programming",
+            # {league}, not {team_name} — event templates have no "our team"
+            # and TEAM_ONLY vars fail the event editor's validation (#354).
+            "title": "{league} Programming",
             "subtitle": "",
             "description": "",
             "art_url": "",
@@ -357,10 +384,178 @@ def _event_base(**overrides) -> dict:
     return base
 
 
+# Shared conditional-description rows (ESPN-copy-first, tvnk.14).
+_PREVIEW_ROW = {
+    "condition": "has_preview",
+    "condition_value": None,
+    "template": "{game_preview}",
+    "priority": 10,
+    "label": "Preview (provider)",
+}
+
+
 DEFAULT_TEMPLATE_SET: list[dict] = [
-    _team_default(),
+    _team_base(name="Default Team (Starter)"),
+    # Soccer team channels (tvnk.8): the "face" match register verified live
+    # ("Belgium face Spain…"); article-aware _the vars handle club vs national
+    # naming; W-D-L records come through the generic record vars.
+    _team_base(
+        name="Soccer Team (Starter)",
+        subtitle_template="{away_team} vs {home_team}",
+        pregame_fallback={
+            "title": "Coming up: {gracenote_category} at {game_time.next}",
+            "subtitle": "{away_team.next} vs {home_team.next}",
+            "description": "{game_preview.next}",
+            "description_fallback": (
+                "{away_team_the.next} face {home_team_the.next} at {venue.next} "
+                "{today_tonight.next} at {game_time.next}."
+            ),
+            "art_url": _ART_NEXT,
+        },
+        conditional_descriptions=[
+            dict(_PREVIEW_ROW),
+            {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "{away_team_the} face {home_team_the} at {venue}. "
+                    "{last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
+            },
+            {
+                "condition": None,
+                "condition_value": None,
+                "template": "{away_team_the} face {home_team_the} at {venue}.",
+                "priority": 100,
+                "label": "Default",
+            },
+        ],
+    ),
+    # College team channels (tvnk.8): Gracenote's college register is home-led
+    # host framing with rank + record ("No. 20 Arkansas (20-7) hosts Texas A&M
+    # (19-8) at Bud Walton Arena"). Ranks render inline via the empty-safe
+    # {*_rank_display} vars ('No. 20' or nothing, #354) — no ranked-only row
+    # needed, and one-ranked matchups show the one rank. Names are bare per
+    # the captured college register (no article).
+    _team_base(
+        name="College Team (Starter)",
+        conditional_descriptions=[
+            dict(_PREVIEW_ROW),
+            {
+                "condition": "is_conference_game",
+                "condition_value": None,
+                "template": (
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) in "
+                    "{college_conference} play at {venue}. "
+                    "{last_five_summary} {series_summary}"
+                ),
+                "priority": 18,
+                "label": "Conference game",
+            },
+            {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
+            },
+            {
+                "condition": None,
+                "condition_value": None,
+                "template": (
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}."
+                ),
+                "priority": 100,
+                "label": "Default",
+            },
+        ],
+    ),
     # Universal event fallback — US pro leagues with abbreviations.
     _event_base(name="Default Event (Starter)"),
+    # College events (tvnk.8): same home-led rank/record register as College
+    # Team via the empty-safe {*_rank_display} vars (#354); conference row
+    # omitted (conference stats aren't reliably present in event context).
+    _event_base(
+        name="College Event (Starter)",
+        conditional_descriptions=[
+            dict(_PREVIEW_ROW),
+            {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
+            },
+            {
+                "condition": None,
+                "condition_value": None,
+                "template": (
+                    "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                    "{away_team_rank_display} {away_team} ({away_team_record}) at "
+                    "{venue}."
+                ),
+                "priority": 100,
+                "label": "Default",
+            },
+        ],
+    ),
+    # Club soccer events (tvnk.8): "face" match register, soccer 'v' channel
+    # connector; national-team tournaments use International Event instead.
+    _event_base(
+        name="Soccer Club Event (Starter)",
+        subtitle_template="{away_team} vs {home_team}",
+        pregame_fallback={
+            "title": "Coming up: {gracenote_category} at {game_time}",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "{game_preview}",
+            "description_fallback": (
+                "{away_team_the} face {home_team_the} at {venue} "
+                "{today_tonight} at {game_time}."
+            ),
+            "art_url": _EVENT_ART,
+        },
+        postgame_fallback={
+            "title": "{gracenote_category}: Full Time",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "Full time: {event_result}",
+            "art_url": _EVENT_ART,
+        },
+        conditional_descriptions=[
+            dict(_PREVIEW_ROW),
+            {
+                "condition": "has_structured_preview",
+                "condition_value": None,
+                "template": (
+                    "{away_team_the} face {home_team_the} at {venue}. "
+                    "{last_five_summary} {series_summary}"
+                ),
+                "priority": 20,
+                "label": "Structured preview",
+            },
+            {
+                "condition": None,
+                "condition_value": None,
+                "template": "{away_team_the} face {home_team_the} at {venue}.",
+                "priority": 100,
+                "label": "Default",
+            },
+        ],
+        # "EPL | ARS v CHE" — soccer uses 'v', not '/'
+        event_channel_name="{league} | {away_team_abbrev} v {home_team_abbrev}",
+    ),
     # Combat (MMA/boxing): card-segment channels, event-number titles.
     _event_base(
         name="Combat Event (Starter)",
@@ -374,6 +569,22 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "{away_team} takes on {home_team} at {venue} {today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,
+        },
+        # MMA carries no home/away scores, so the base 'Final: {event_result}'
+        # would render empty — constructed bout-register line instead (#354).
+        postgame_fallback={
+            "title": "{league} {event_number}: Postgame",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "{away_team} vs {home_team} has concluded at {venue}.",
+            "art_url": _EVENT_ART,
+        },
+        postgame_conditional={
+            "enabled": True,
+            "description_final": "{game_recap}",
+            "description_not_final": (
+                "The bout between {away_team} and {home_team} has not yet ended "
+                "as of the last update."
+            ),
         },
         conditional_descriptions=[
             {
@@ -395,25 +606,29 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         event_channel_name="{league} {event_number} {card_segment_display}",
     ),
     # International (national teams / tournaments): category-led naming.
+    # Title composes the year per the tvnk.12 decision — real Gracenote brands
+    # tournaments year-stamped ('FIFA World Cup 2026'); the seed carries the
+    # brand, the template adds the year. Article-aware _the vars keep national
+    # teams bare ("Belgium face Spain") and any club sides articled.
     _event_base(
         name="International Event (Starter)",
-        title_format="{gracenote_category}",
+        title_format="{gracenote_category} {year}",
         subtitle_template="{away_team} vs {home_team}",
         # "NED v JPN"
         event_channel_name="{away_team_abbrev} v {home_team_abbrev}",
+        postgame_fallback={
+            "title": "{gracenote_category}: Full Time",
+            "subtitle": "{away_team} vs {home_team}",
+            "description": "Full time: {event_result}",
+            "art_url": _EVENT_ART,
+        },
         conditional_descriptions=[
-            {
-                "condition": "has_preview",
-                "condition_value": None,
-                "template": "{game_preview}",
-                "priority": 10,
-                "label": "Preview (provider)",
-            },
+            dict(_PREVIEW_ROW),
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
                 "template": (
-                    "{away_team} face {home_team} at {venue}. "
+                    "{away_team_the} face {home_team_the} at {venue}. "
                     "{last_five_summary} {series_summary}"
                 ),
                 "priority": 20,
@@ -422,21 +637,18 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": None,
                 "condition_value": None,
-                "template": "{away_team} face {home_team} at {venue}.",
+                "template": "{away_team_the} face {home_team_the} at {venue}.",
                 "priority": 100,
                 "label": "Default",
             },
         ],
     ),
-    # Minor-league baseball: explicit MiLB branding (league var is the level).
-    _event_base(
-        name="MiLB Event (Starter)",
-        event_channel_name="MiLB | {away_team_abbrev}/{home_team_abbrev}",
-    ),
     # Tennis (bead tvnk.13): tournament-led titles, player-surname channels.
+    # Year-prefixed per the Gracenote tournament convention ('2026 U.S. Open
+    # Golf Championship' captured; tennis majors follow the same shape).
     _event_base(
         name="Tennis Event (Starter)",
-        title_format="{tournament_name}",
+        title_format="{year} {tournament_name}",
         subtitle_template="{tennis_round} - {player1} vs {player2}",
         pregame_fallback={
             "title": "Coming up: {tournament_name} at {game_time}",
@@ -503,14 +715,49 @@ def _retired_no_abbrev_spec() -> dict:
     )
 
 
+def _retired_milb_specs() -> list[dict]:
+    """The retired MiLB member's content, under both name generations.
+
+    Retired in tvnk.4: its branding rationale moved into the data layer —
+    the MiLB gracenote_category seeds ('Minor League Baseball', tvnk.8) give
+    Default Event the identical title, leaving only the 'MiLB |' channel
+    prefix vs Default Event's per-level '{league} |' ('AAA |'), which is the
+    more informative form."""
+    spec = _event_base(
+        name="MiLB Event (Starter)",
+        event_channel_name="MiLB | {away_team_abbrev}/{home_team_abbrev}",
+    )
+    prior = dict(spec)
+    prior["name"] = "MiLB Event"
+    return [spec, prior]
+
+
+def _is_referenced(conn: Connection, template_id: int) -> bool:
+    """True when any assignment or channel references the template.
+
+    Deleting a referenced template would silently unassign it (teams and
+    event_epg_groups SET NULL; group/subscription assignments CASCADE), so
+    retirement only removes rows that are unedited AND unreferenced.
+    """
+    for table in ("teams", "event_epg_groups", "group_templates", "subscription_templates"):
+        row = conn.execute(
+            f"SELECT 1 FROM {table} WHERE template_id = ? LIMIT 1", (template_id,)
+        ).fetchone()
+        if row is not None:
+            return True
+    return False
+
+
 def seed_default_templates(conn: Connection) -> None:
     """Seed the curated default set — idempotent, safe on every startup.
 
     1. A PRISTINE legacy seed ("Team"/"Event" still carrying the broken
        localhost:3000 placeholder art) is upgraded in place to its curated
        replacement — same row id, so assignments survive (tvnk.1 decision).
-    2. Any set member missing by name is created (fresh installs get all 7;
-       upgrades pick up new members). Existing rows are NEVER overwritten.
+    2. Any set member missing by name is created (fresh installs get the full
+       set; upgrades pick up new members). Existing rows are NEVER
+       overwritten — except unedited prior-iteration rows, which are healed
+       to current content in place (steps 1b/1c).
     """
     from teamarr.database.templates import (
         create_template,
@@ -542,23 +789,48 @@ def seed_default_templates(conn: Connection) -> None:
         existing[curated_name] = existing.pop(legacy_name)
 
     # 1b. Rename unedited prior-iteration curated rows in place (same id).
+    # A prior-name row may also carry a prior-iteration TITLE (a pre-tvnk.8
+    # "International Event" still titled '{gracenote_category}'), so the
+    # fingerprint accepts either title generation.
     for prior, current in PRIOR_NAME_UPGRADES.items():
         row = existing.get(prior)
         if row is None or current in existing or current not in specs:
             continue
         prior_spec = dict(specs[current])
         prior_spec["name"] = prior
-        if not _is_unedited_curated(row, prior_spec):
+        unedited = _is_unedited_curated(row, prior_spec)
+        if not unedited and current in PRIOR_TITLE_UPGRADES:
+            prior_spec["title_format"] = PRIOR_TITLE_UPGRADES[current]
+            unedited = _is_unedited_curated(row, prior_spec)
+        if not unedited:
             continue
         update_template(conn, row.id, **specs[current])
         existing[current] = existing.pop(prior)
 
-    # 1c. Remove retired members that are still our unedited seed.
-    for retired_spec in [_retired_no_abbrev_spec()]:
+    # 1c. Upgrade unedited prior-CONTENT rows in place (same id) — members
+    # whose seeded title changed across iterations (tvnk.8: year-composed
+    # International/Tennis titles). Edited rows are left alone.
+    for member, old_title in PRIOR_TITLE_UPGRADES.items():
+        row = existing.get(member)
+        if row is None or member not in specs:
+            continue
+        old_spec = dict(specs[member])
+        old_spec["title_format"] = old_title
+        if not _is_unedited_curated(row, old_spec):
+            continue
+        update_template(conn, row.id, **specs[member])
+
+    # 1d. Remove retired members that are still our unedited seed — and are
+    # unreferenced: a retired starter someone assigned stays put (deleting it
+    # would silently unassign their channels).
+    for retired_spec in [_retired_no_abbrev_spec(), *_retired_milb_specs()]:
         row = existing.get(retired_spec["name"])
-        if row is not None and _is_unedited_curated(row, retired_spec):
-            delete_template(conn, row.id)
-            del existing[retired_spec["name"]]
+        if row is None or not _is_unedited_curated(row, retired_spec):
+            continue
+        if _is_referenced(conn, row.id):
+            continue
+        delete_template(conn, row.id)
+        del existing[retired_spec["name"]]
 
     # 2. Add missing set members.
     for name, spec in specs.items():

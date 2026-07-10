@@ -21,11 +21,21 @@ import { usePresets, useCreatePreset, useDeletePreset } from "@/hooks/usePresets
 import type { ConditionPreset } from "@/api/presets"
 import type { TabProps } from "../types"
 
-export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate }: TabProps) {
+export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate, conditionalPreview }: TabProps) {
   // Filter out fallback descriptions (priority=100) - they're managed on Defaults tab
   const conditions = useMemo(() => {
     return (formData.conditional_descriptions || []).filter((c) => c.priority !== 100)
   }, [formData.conditional_descriptions])
+
+  // Map a row to its server-side trace (#357). The trace indexes the FULL
+  // conditional_descriptions array (conditions + fallbacks); filter preserves
+  // object identity, so indexOf recovers the full-array position.
+  const allDescriptions = formData.conditional_descriptions || []
+  const traceFor = (conditionIdx: number) => {
+    if (!conditionalPreview) return undefined
+    const fullIdx = allDescriptions.indexOf(conditions[conditionIdx])
+    return conditionalPreview.rows.find((r) => r.index === fullIdx)
+  }
   const [showPresetDialog, setShowPresetDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [presetName, setPresetName] = useState("")
@@ -225,6 +235,7 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                 const isExpanded = expandedConditions.has(idx)
                 const condInfo = getConditionInfo(cond.condition)
                 const isFallback = cond.priority >= 100 || cond.condition === "always"
+                const trace = traceFor(idx)
 
                 return (
                   <div
@@ -251,6 +262,21 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                           <span className="ml-1 text-[10px] text-amber-500">(ESPN)</span>
                         )}
                       </span>
+                      {trace?.selected ? (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400"
+                          title={trace.reason}
+                        >
+                          fires
+                        </span>
+                      ) : trace?.matched ? (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400"
+                          title={trace.reason}
+                        >
+                          outranked
+                        </span>
+                      ) : null}
                       {cond.template && (
                         <span className="text-xs text-muted-foreground truncate max-w-[200px]">
                           {cond.template.substring(0, 40)}{cond.template.length > 40 ? "..." : ""}
@@ -344,6 +370,14 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                               <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-2">Preview:</span>
                               <span className="text-sm italic">{resolveTemplate(cond.template)}</span>
                             </div>
+                          )}
+                          {trace && (
+                            <p className={`mt-1 text-[11px] ${
+                              trace.selected ? "text-emerald-400" : trace.matched ? "text-amber-400" : "text-muted-foreground"
+                            }`}>
+                              {trace.selected ? "▶ " : ""}{trace.reason}
+                              {trace.selected ? " — this row fires for the preview event" : ""}
+                            </p>
                           )}
                         </div>
                       </div>

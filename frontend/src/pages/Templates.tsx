@@ -256,8 +256,9 @@ export function Templates() {
           (teamarr/database/default_templates.py). */}
       {(() => {
         const SEEDED_NAMES = new Set([
-          "Default Team (Starter)", "Default Event (Starter)", "Combat Event (Starter)",
-          "International Event (Starter)", "MiLB Event (Starter)", "Tennis Event (Starter)",
+          "Default Team (Starter)", "Soccer Team (Starter)", "College Team (Starter)",
+          "Default Event (Starter)", "College Event (Starter)", "Soccer Club Event (Starter)",
+          "Combat Event (Starter)", "International Event (Starter)", "Tennis Event (Starter)",
         ])
         const unassignedSeeded = (templates ?? []).filter(
           (t) =>
@@ -270,9 +271,9 @@ export function Templates() {
           <Alert variant="info" className="mb-3">
             {unassignedSeeded.length} starter template{unassignedSeeded.length !== 1 ? "s are" : " is"} not
             assigned yet. Recommended scoping — Default Team/Event: global defaults ·
-            Combat: UFC/boxing · International: soccer & national teams ·
-            MiLB: minor-league baseball · Tennis: ATP/WTA. Assign below or via
-            Template Assignments.
+            Soccer Team/Club Event: soccer leagues · College Team/Event: NCAA ·
+            Combat: UFC/boxing · International: national-team tournaments ·
+            Tennis: ATP/WTA. Assign below or via Template Assignments.
           </Alert>
         )
       })()}

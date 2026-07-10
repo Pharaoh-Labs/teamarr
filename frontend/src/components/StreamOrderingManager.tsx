@@ -309,7 +309,14 @@ interface RuleFormData {
   type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "stats_metric" | "catch_all"
   value: string
   priority: number
+  // 'priority' rules form the hard first-match band list; 'score' rules add
+  // signed points that sum within a band (epic teamarr-5ag). catch_all is always
+  // a priority-mode baseline.
+  mode: "priority" | "score"
+  points: number
 }
+
+const DEFAULT_SCORE_POINTS = 10
 
 const TEAM_FEED_FAMILY = new Set<RuleFormData["type"]>(["team_feed", "not_team_feed"])
 // stream_type and epg_match share one UI control (the Stream Type select). epg_match
@@ -365,6 +372,55 @@ function PriorityInput({
   )
 }
 
+function PointsInput({
+  value,
+  onCommit,
+}: {
+  value: number
+  onCommit: (next: number) => void
+}) {
+  // Signed integer points for score-mode rules. Commits on blur/Enter; reverts
+  // to the last valid value on invalid input. Range mirrors the backend bound.
+  const [text, setText] = useState(String(value))
+
+  // Re-sync when the committed value changes externally (render-time "adjust
+  // state when props change" pattern — see PriorityInput above).
+  const [syncedValue, setSyncedValue] = useState(value)
+  if (value !== syncedValue) {
+    setSyncedValue(value)
+    setText(String(value))
+  }
+
+  const commit = () => {
+    const parsed = parseInt(text, 10)
+    if (!isNaN(parsed) && parsed >= -100000 && parsed <= 100000) {
+      if (parsed !== value) onCommit(parsed)
+      else setText(String(value))
+    } else {
+      setText(String(value))
+    }
+  }
+
+  return (
+    <Input
+      type="number"
+      min={-100000}
+      max={100000}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          e.currentTarget.blur()
+        }
+      }}
+      className="text-center"
+      placeholder="±pts"
+    />
+  )
+}
+
 function RuleRow({
   rule,
   index,
@@ -409,7 +465,16 @@ function RuleRow({
               onCommit={(priority) => onUpdate(index, { ...rule, priority })}
             />
           </div>
-          <div className="col-span-2 md:col-span-1" />
+          <div className="col-span-2 md:col-span-1 flex justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(index)}
+              className="h-8 w-8 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -559,10 +624,17 @@ function RuleRow({
         </div>
 
         <div className="col-span-10 md:col-span-2">
-          <PriorityInput
-            value={rule.priority}
-            onCommit={(priority) => onUpdate(index, { ...rule, priority })}
-          />
+          {rule.mode === "score" ? (
+            <PointsInput
+              value={rule.points}
+              onCommit={(points) => onUpdate(index, { ...rule, points })}
+            />
+          ) : (
+            <PriorityInput
+              value={rule.priority}
+              onCommit={(priority) => onUpdate(index, { ...rule, priority })}
+            />
+          )}
         </div>
 
         <div className="col-span-2 md:col-span-1 flex justify-end">
@@ -761,7 +833,9 @@ export function StreamOrderingManager() {
     return dpChannelGroups.filter(g => selected.has(g.id)).map(g => g.name).sort()
   }, [appSettings, dpChannelGroups])
 
-  // Initialize rules from settings; auto-inject catch_all if absent
+  // Initialize rules from settings. Legacy rows without mode default to
+  // 'priority' (backend already coerces, but guard here for safety). The
+  // catch_all baseline is optional — no longer auto-injected.
   // (render-time "adjust state when props change" pattern — see
   // DispatcharrOutputSettings.tsx).
   const [syncedSettings, setSyncedSettings] = useState<typeof settings>(undefined)
@@ -772,25 +846,43 @@ export function StreamOrderingManager() {
       type: r.type,
       value: r.value,
       priority: r.priority,
+      mode: r.mode ?? "priority",
+      points: r.points ?? 0,
     }))
-    if (!loaded.some(r => r.type === "catch_all")) {
-      loaded.push({ _id: allocateId(), type: "catch_all", value: "", priority: 99 })
-    }
     setRules(loaded)
     setHasChanges(false)
   }
 
-  const handleAddRule = () => {
-    // Find next available priority (skip 99 if catch_all is using it)
-    const usedPriorities = new Set(rules.map(r => r.priority))
+  // New rules default to Score (the common case); the Priority section adds
+  // hard-band rules explicitly.
+  const handleAddScoreRule = () => {
+    setRules([
+      ...rules,
+      { _id: allocateId(), type: "regex", value: "", priority: 99, mode: "score", points: DEFAULT_SCORE_POINTS },
+    ])
+    setHasChanges(true)
+  }
+
+  const handleAddPriorityRule = () => {
+    // Find next available priority among priority-mode rules.
+    const usedPriorities = new Set(
+      rules.filter(r => r.mode === "priority").map(r => r.priority)
+    )
     let nextPriority = 1
     while (usedPriorities.has(nextPriority) && nextPriority < 99) {
       nextPriority++
     }
-
     setRules([
       ...rules,
-      { _id: allocateId(), type: "m3u", value: "", priority: nextPriority },
+      { _id: allocateId(), type: "m3u", value: "", priority: nextPriority, mode: "priority", points: 0 },
+    ])
+    setHasChanges(true)
+  }
+
+  const handleAddBaseline = () => {
+    setRules([
+      ...rules,
+      { _id: allocateId(), type: "catch_all", value: "", priority: 99, mode: "priority", points: 0 },
     ])
     setHasChanges(true)
   }
@@ -803,7 +895,6 @@ export function StreamOrderingManager() {
   }
 
   const handleDeleteRule = (index: number) => {
-    if (rules[index].type === "catch_all") return
     setRules(rules.filter((_, i) => i !== index))
     setHasChanges(true)
   }
@@ -823,6 +914,8 @@ export function StreamOrderingManager() {
           type: r.type,
           value: r.value.trim(),
           priority: r.priority,
+          mode: r.mode,
+          points: r.mode === "score" ? r.points : 0,
         })),
       })
       toast.success("Stream ordering rules saved")
@@ -839,6 +932,8 @@ export function StreamOrderingManager() {
         type: r.type,
         value: r.value,
         priority: r.priority,
+        mode: r.mode,
+        points: r.points,
       })),
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
@@ -881,14 +976,27 @@ export function StreamOrderingManager() {
       }
 
       // Validate against the same constraints the backend PUT enforces.
-      const clean: { type: RuleFormData["type"]; value: string; priority: number }[] = []
+      // Legacy files predate mode/points: missing mode → 'priority', points → 0.
+      const clean: {
+        type: RuleFormData["type"]
+        value: string
+        priority: number
+        mode: RuleFormData["mode"]
+        points: number
+      }[] = []
       for (const r of importedRules) {
         if (!r || typeof r.type !== "string" || !VALID_RULE_TYPES.has(r.type)) continue
         const priority = Number(r.priority)
         if (!Number.isInteger(priority) || priority < 1 || priority > 99) continue
         const value = typeof r.value === "string" ? r.value.trim() : ""
         if (!NO_VALUE_TYPES.has(r.type) && !value) continue
-        clean.push({ type: r.type as RuleFormData["type"], value, priority })
+        const mode: RuleFormData["mode"] = r.mode === "score" ? "score" : "priority"
+        const pointsRaw = Number(r.points)
+        const points =
+          mode === "score" && Number.isInteger(pointsRaw)
+            ? Math.max(-100000, Math.min(100000, pointsRaw))
+            : 0
+        clean.push({ type: r.type as RuleFormData["type"], value, priority, mode, points })
       }
 
       if (clean.length === 0) {
@@ -897,10 +1005,7 @@ export function StreamOrderingManager() {
 
       const accepted = clean.length
       const skipped = importedRules.length - accepted
-      // Always keep a catch_all so unmatched streams have a defined priority.
-      if (!clean.some((r) => r.type === "catch_all")) {
-        clean.push({ type: "catch_all", value: "", priority: 99 })
-      }
+      // catch_all is optional now — do not force-inject one on import.
 
       await updateSettings.mutateAsync({ rules: clean })
       const message = skipped > 0
@@ -939,6 +1044,25 @@ export function StreamOrderingManager() {
     )
   }
 
+  // Split rules by class for the two sections. catch_all is the optional
+  // baseline, rendered at the end of the Priority section.
+  const priorityRules = rules.filter(r => r.mode === "priority" && r.type !== "catch_all")
+  const scoreRules = rules.filter(r => r.mode === "score")
+  const catchAll = rules.find(r => r.type === "catch_all")
+
+  const renderRow = (rule: RuleFormData) => (
+    <RuleRow
+      key={rule._id}
+      rule={rule}
+      index={rules.indexOf(rule)}
+      onUpdate={handleUpdateRule}
+      onDelete={handleDeleteRule}
+      m3uAccounts={m3uAccounts}
+      groupNames={groupNames}
+      dpGroupNames={dpGroupNames}
+    />
+  )
+
   return (
     <>
     <Card>
@@ -947,8 +1071,8 @@ export function StreamOrderingManager() {
           <div className="space-y-1.5">
             <CardTitle>Stream Priority</CardTitle>
             <CardDescription>
-              Prioritize streams within channels based on M3U account, event group, or custom patterns.
-              Lower priority numbers appear first. Streams not matching any rule are sorted to the end.
+              Order streams within a channel. <strong>Scoring</strong> rules add up points (highest
+              total first); <strong>Priority</strong> rules set hard bands that always outrank scoring.
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -974,49 +1098,81 @@ export function StreamOrderingManager() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {rules.length > 0 && (
-          <div className="space-y-2">
-            {/* Header row */}
-            <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
-              <div className="col-span-2">Type</div>
-              <div className="col-span-7">Value</div>
-              <div className="col-span-2 text-center">Priority</div>
-              <div className="col-span-1"></div>
-            </div>
-
-            {/* Rules */}
-            {rules
-              .slice()
-              .sort((a, b) => a.priority - b.priority)
-              .map((rule) => (
-                <RuleRow
-                  key={rule._id}
-                  rule={rule}
-                  index={rules.indexOf(rule)}
-                  onUpdate={handleUpdateRule}
-                  onDelete={handleDeleteRule}
-                  m3uAccounts={m3uAccounts}
-                  groupNames={groupNames}
-                  dpGroupNames={dpGroupNames}
-                />
-              ))}
+      <CardContent className="space-y-6">
+        {/* Scoring section (primary — new rules default here) */}
+        <div className="space-y-2">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold">Scoring</h3>
+            <p className="text-xs text-muted-foreground">
+              Every matching rule adds its points; streams sort by total (highest first) within
+              their band. Use negative points to push streams down.
+            </p>
           </div>
-        )}
+
+          {scoreRules.length > 0 && (
+            <div className="space-y-2">
+              <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                <div className="col-span-2">Type</div>
+                <div className="col-span-7">Value</div>
+                <div className="col-span-2 text-center">Points</div>
+                <div className="col-span-1"></div>
+              </div>
+              {scoreRules.map(renderRow)}
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" onClick={handleAddScoreRule}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add scoring rule
+          </Button>
+        </div>
+
+        {/* Priority section (hard-order escape hatch) */}
+        <div className="space-y-2 border-t pt-4">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold">
+              Priority <span className="font-normal text-muted-foreground">— hard order</span>
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              The first rule a stream matches sets its band, and bands always outrank scoring — use
+              these for “must always win/lose”. Lower number = higher. Optional.
+            </p>
+          </div>
+
+          {(priorityRules.length > 0 || catchAll) && (
+            <div className="space-y-2">
+              <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                <div className="col-span-2">Type</div>
+                <div className="col-span-7">Value</div>
+                <div className="col-span-2 text-center">Priority</div>
+                <div className="col-span-1"></div>
+              </div>
+              {priorityRules.slice().sort((a, b) => a.priority - b.priority).map(renderRow)}
+              {catchAll && renderRow(catchAll)}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleAddPriorityRule}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add priority rule
+            </Button>
+            {!catchAll && (
+              <Button variant="ghost" size="sm" onClick={handleAddBaseline}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add baseline (Everything Else)
+              </Button>
+            )}
+          </div>
+        </div>
 
         {rules.length === 0 && (
-          <div className="text-center py-6 text-muted-foreground">
-            <p className="text-sm">No ordering rules configured.</p>
-            <p className="text-xs mt-1">Streams will be ordered by addition time.</p>
-          </div>
+          <p className="text-center text-xs text-muted-foreground pt-1">
+            No rules yet — streams keep their addition order.
+          </p>
         )}
 
-        <div className="flex items-center justify-between pt-2">
-          <Button variant="outline" onClick={handleAddRule}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Rule
-          </Button>
-
+        <div className="flex items-center justify-end pt-2 border-t">
           <SaveButton
             onClick={handleSave}
             pending={updateSettings.isPending}

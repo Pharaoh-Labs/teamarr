@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 253 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 255 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -414,6 +414,8 @@ College rankings (NCAAF, NCAAM, NCAAW).
 | `{is_ranked_matchup}` | 'true' if both teams are ranked | base, .next, .last | `` |
 | `{home_team_rank}` | Home team's ranking for this game | base, .next, .last | `` |
 | `{away_team_rank}` | Away team's ranking for this game | base, .next, .last | `` |
+| `{home_team_rank_display}` | Home team's rank in Gracenote prose form ('No. 20'), empty when unranked | base, .next, .last | `No. 20` |
+| `{away_team_rank_display}` | Away team's rank in Gracenote prose form ('No. 15'), empty when unranked | base, .next, .last | `No. 15` |
 
 ---
 

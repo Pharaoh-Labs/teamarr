@@ -353,12 +353,15 @@ def update_stream_ordering_rules(
     Args:
         conn: Database connection
         rules: List of rules (dicts or StreamOrderingRule dataclasses).
-            Each rule: {"type": ..., "value": str, "priority": int}
+            Each rule: {"type": str, "value": str, "priority": int,
+            "mode": "priority"|"score", "points": int}. Callers omitting
+            mode/points get the legacy hard-priority defaults (mode="priority",
+            points=0).
 
     Returns:
         True if updated
     """
-    from .types import NO_VALUE_RULE_TYPES, VALID_RULE_TYPES
+    from .types import LEGACY_RULE_MODE, NO_VALUE_RULE_TYPES, VALID_RULE_MODES, VALID_RULE_TYPES
     from .types import StreamOrderingRule as RuleType
 
     validated_rules = []
@@ -369,10 +372,17 @@ def update_stream_ordering_rules(
             rule_type = rule.type
             rule_value = rule.value
             rule_priority = rule.priority
+            rule_mode = rule.mode
+            rule_points = rule.points
         else:
             rule_type = rule.get("type")
             rule_value = rule.get("value")
             rule_priority = rule.get("priority")
+            # Legacy callers (old UI/API) omit mode/points. Default mode to
+            # LEGACY_RULE_MODE ('priority') so re-saving pre-migration rules keeps
+            # their hard first-match behaviour rather than silently flipping to score.
+            rule_mode = rule.get("mode", LEGACY_RULE_MODE)
+            rule_points = rule.get("points", 0)
 
         if rule_type not in VALID_RULE_TYPES:
             logger.warning(
@@ -395,11 +405,30 @@ def update_stream_ordering_rules(
             )
             rule_priority = 99
 
+        if rule_mode not in VALID_RULE_MODES:
+            logger.warning(
+                "[STREAM_ORDER] Invalid mode %r, must be one of %s, defaulting to %r",
+                rule_mode,
+                VALID_RULE_MODES,
+                LEGACY_RULE_MODE,
+            )
+            rule_mode = LEGACY_RULE_MODE
+
+        # bool is an int subclass; reject it explicitly so True/False can't become points.
+        if isinstance(rule_points, bool) or not isinstance(rule_points, int):
+            logger.warning(
+                "[STREAM_ORDER] Invalid points %r, must be an int, defaulting to 0",
+                rule_points,
+            )
+            rule_points = 0
+
         validated_rules.append(
             {
                 "type": rule_type,
                 "value": rule_value,
                 "priority": rule_priority,
+                "mode": rule_mode,
+                "points": rule_points,
             }
         )
 
