@@ -32,8 +32,13 @@ same assignments, fixed art.
 | **Soccer Club Event (Starter)** | event | Club soccer leagues | `EPL \| ARS v CHE` |
 | **Combat Event (Starter)** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` |
 | **International Event (Starter)** | event | National-team tournaments — year-composed title (`FIFA World Cup 2026`) | `NED v JPN` |
-| **MiLB Event (Starter)** | event | Minor-league baseball | `MiLB \| ABQ/SUG` |
 | **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) — year-prefixed tournament title | `Alcaraz v Sinner` |
+
+Minor-league baseball needs no dedicated starter: **Default Event** titles
+every MiLB level as Gracenote's real `Minor League Baseball` (from the league
+data) and prefixes channels with the level (`AAA | ABQ/SUG`). An earlier
+"MiLB Event (Starter)" is removed on upgrade only if you never edited or
+assigned it.
 
 Team starters exist only for sport families that support **team subscriptions**
 (persistent team channels): the universal default plus soccer and college.
@@ -81,8 +86,9 @@ description is used. Pregame fillers support the same pattern via the
 | Soccer Club Event | Club soccer leagues (EPL, La Liga, MLS, …) |
 | Combat Event | UFC, PFL, boxing leagues |
 | International Event | National-team tournaments (World Cup, Euro, Gold Cup, …) |
-| MiLB Event | MiLB levels (Triple-A … Rookie) |
 | Tennis Event | ATP, WTA |
+
+MiLB levels (Triple-A … Rookie) are covered by **Default Event**.
 
 ## Art
 

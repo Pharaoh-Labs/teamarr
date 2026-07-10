@@ -1,6 +1,6 @@
 """Curated default template seeding (tvnk.1/tvnk.3/tvnk.13, #329).
 
-Fresh installs get the full 7-template set; upgrades add missing members by
+Fresh installs get the full starter set; upgrades add missing members by
 name; a PRISTINE legacy seed (still carrying the broken localhost:3000
 placeholder art) is upgraded in place (same row id → assignments survive);
 user-modified rows are never touched.
@@ -58,7 +58,7 @@ def test_fresh_install_seeds_full_set(db_conn):
     # init_db already seeded (the wiring under test); re-run is a no-op
     seed_default_templates(db_conn)
     assert _names(db_conn) == SET_NAMES
-    assert len(SET_NAMES) == 10
+    assert len(SET_NAMES) == 9
 
     for t in get_all_templates(db_conn):
         # Seeded UNASSIGNED — the user scopes them
@@ -67,6 +67,20 @@ def test_fresh_install_seeds_full_set(db_conn):
         # Variable-led values are canonically slash-less (#275).
         assert not (t.program_art_url or "").startswith("http")
         assert (t.program_art_url or "{").startswith("{")
+
+
+def test_fresh_install_starters_are_immediately_assignable(db_conn):
+    """First-run UX (tvnk.4): a brand-new install can scope a starter to a
+    league and have it resolve for that league's events with no other setup."""
+    from teamarr.database.subscription import (
+        add_subscription_template,
+        get_subscription_template_for_event,
+    )
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    starter_id = templates["Soccer Club Event (Starter)"].id
+    add_subscription_template(db_conn, template_id=starter_id, leagues=["eng.1"])
+    assert get_subscription_template_for_event(db_conn, "soccer", "eng.1") == starter_id
 
 
 def test_seeding_is_idempotent(db_conn):
@@ -136,13 +150,13 @@ def test_upgrade_adds_missing_members_only(db_conn):
     templates = {t.name: t for t in get_all_templates(db_conn)}
     from teamarr.database.templates import delete_template, update_template
 
-    delete_template(db_conn, templates["MiLB Event (Starter)"].id)
+    delete_template(db_conn, templates["Combat Event (Starter)"].id)
     update_template(db_conn, templates["Tennis Event (Starter)"].id, title_format="Custom Tennis")
 
     seed_default_templates(db_conn)
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
-    assert "MiLB Event (Starter)" in templates  # re-added (missing by name)
+    assert "Combat Event (Starter)" in templates  # re-added (missing by name)
     assert templates["Tennis Event (Starter)"].title_format == "Custom Tennis"  # untouched
 
 
@@ -358,6 +372,39 @@ def test_retired_member_kept_when_edited(db_conn):
 
     seed_default_templates(db_conn)
     assert "No-Abbrev Event" in _names(db_conn)  # user's row survives
+
+
+def test_retired_milb_member_removed_when_unedited_and_unassigned(db_conn):
+    """MiLB Event retired in tvnk.4 — the 'Minor League Baseball' branding now
+    comes from the gracenote_category seeds, so Default Event covers MiLB."""
+    from teamarr.database.default_templates import _retired_milb_specs
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    for spec in _retired_milb_specs():
+        create_template(db_conn, **spec)
+
+    seed_default_templates(db_conn)
+    names = _names(db_conn)
+    assert "MiLB Event (Starter)" not in names
+    assert "MiLB Event" not in names
+    assert names == SET_NAMES
+
+
+def test_retired_member_kept_when_assigned(db_conn):
+    """A retired starter someone ASSIGNED is never auto-deleted — removal
+    would silently unassign their channels (SET NULL / CASCADE FKs)."""
+    from teamarr.database.default_templates import _retired_milb_specs
+    from teamarr.database.subscription import add_subscription_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = _retired_milb_specs()[0]
+    tid = create_template(db_conn, **spec)
+    add_subscription_template(db_conn, template_id=tid, leagues=["milb-aaa"])
+
+    seed_default_templates(db_conn)
+    assert "MiLB Event (Starter)" in _names(db_conn)  # assignment protected it
 
 
 def test_abbrev_variables_fall_back_without_abbreviation():

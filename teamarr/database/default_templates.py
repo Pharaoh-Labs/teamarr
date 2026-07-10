@@ -82,7 +82,8 @@ PRIOR_NAME_UPGRADES = {
     "Default Event": "Default Event (Starter)",
     "Combat Event": "Combat Event (Starter)",
     "International Event": "International Event (Starter)",
-    "MiLB Event": "MiLB Event (Starter)",
+    # "MiLB Event" retired in tvnk.4 — both name generations are handled by
+    # _retired_milb_specs() removal healing instead.
     "Tennis Event": "Tennis Event (Starter)",
 }
 
@@ -628,11 +629,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
     ),
-    # Minor-league baseball: explicit MiLB branding (league var is the level).
-    _event_base(
-        name="MiLB Event (Starter)",
-        event_channel_name="MiLB | {away_team_abbrev}/{home_team_abbrev}",
-    ),
     # Tennis (bead tvnk.13): tournament-led titles, player-surname channels.
     # Year-prefixed per the Gracenote tournament convention ('2026 U.S. Open
     # Golf Championship' captured; tennis majors follow the same shape).
@@ -703,6 +699,39 @@ def _retired_no_abbrev_spec() -> dict:
         name="No-Abbrev Event",
         event_channel_name="{away_team} / {home_team}",
     )
+
+
+def _retired_milb_specs() -> list[dict]:
+    """The retired MiLB member's content, under both name generations.
+
+    Retired in tvnk.4: its branding rationale moved into the data layer —
+    the MiLB gracenote_category seeds ('Minor League Baseball', tvnk.8) give
+    Default Event the identical title, leaving only the 'MiLB |' channel
+    prefix vs Default Event's per-level '{league} |' ('AAA |'), which is the
+    more informative form."""
+    spec = _event_base(
+        name="MiLB Event (Starter)",
+        event_channel_name="MiLB | {away_team_abbrev}/{home_team_abbrev}",
+    )
+    prior = dict(spec)
+    prior["name"] = "MiLB Event"
+    return [spec, prior]
+
+
+def _is_referenced(conn: Connection, template_id: int) -> bool:
+    """True when any assignment or channel references the template.
+
+    Deleting a referenced template would silently unassign it (teams and
+    event_epg_groups SET NULL; group/subscription assignments CASCADE), so
+    retirement only removes rows that are unedited AND unreferenced.
+    """
+    for table in ("teams", "event_epg_groups", "group_templates", "subscription_templates"):
+        row = conn.execute(
+            f"SELECT 1 FROM {table} WHERE template_id = ? LIMIT 1", (template_id,)
+        ).fetchone()
+        if row is not None:
+            return True
+    return False
 
 
 def seed_default_templates(conn: Connection) -> None:
@@ -777,12 +806,17 @@ def seed_default_templates(conn: Connection) -> None:
             continue
         update_template(conn, row.id, **specs[member])
 
-    # 1d. Remove retired members that are still our unedited seed.
-    for retired_spec in [_retired_no_abbrev_spec()]:
+    # 1d. Remove retired members that are still our unedited seed — and are
+    # unreferenced: a retired starter someone assigned stays put (deleting it
+    # would silently unassign their channels).
+    for retired_spec in [_retired_no_abbrev_spec(), *_retired_milb_specs()]:
         row = existing.get(retired_spec["name"])
-        if row is not None and _is_unedited_curated(row, retired_spec):
-            delete_template(conn, row.id)
-            del existing[retired_spec["name"]]
+        if row is None or not _is_unedited_curated(row, retired_spec):
+            continue
+        if _is_referenced(conn, row.id):
+            continue
+        delete_template(conn, row.id)
+        del existing[retired_spec["name"]]
 
     # 2. Add missing set members.
     for name, spec in specs.items():

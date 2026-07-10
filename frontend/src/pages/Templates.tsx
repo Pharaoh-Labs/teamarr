@@ -258,8 +258,7 @@ export function Templates() {
         const SEEDED_NAMES = new Set([
           "Default Team (Starter)", "Soccer Team (Starter)", "College Team (Starter)",
           "Default Event (Starter)", "College Event (Starter)", "Soccer Club Event (Starter)",
-          "Combat Event (Starter)", "International Event (Starter)", "MiLB Event (Starter)",
-          "Tennis Event (Starter)",
+          "Combat Event (Starter)", "International Event (Starter)", "Tennis Event (Starter)",
         ])
         const unassignedSeeded = (templates ?? []).filter(
           (t) =>
@@ -274,8 +273,7 @@ export function Templates() {
             assigned yet. Recommended scoping — Default Team/Event: global defaults ·
             Soccer Team/Club Event: soccer leagues · College Team/Event: NCAA ·
             Combat: UFC/boxing · International: national-team tournaments ·
-            MiLB: minor-league baseball · Tennis: ATP/WTA. Assign below or via
-            Template Assignments.
+            Tennis: ATP/WTA. Assign below or via Template Assignments.
           </Alert>
         )
       })()}

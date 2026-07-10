@@ -177,7 +177,9 @@ def test_has_structured_preview_condition():
 def test_starters_carry_structured_preview_tier():
     by_name = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
     for name in ("Default Team (Starter)", "Default Event (Starter)",
-                 "International Event (Starter)", "MiLB Event (Starter)"):
+                 "International Event (Starter)", "Soccer Team (Starter)",
+                 "Soccer Club Event (Starter)", "College Team (Starter)",
+                 "College Event (Starter)"):
         conds = by_name[name]["conditional_descriptions"]
         tiers = [(c.get("condition"), c["priority"]) for c in conds]
         assert ("has_preview", 10) in tiers, name
