@@ -383,9 +383,13 @@ function PointsInput({
   // to the last valid value on invalid input. Range mirrors the backend bound.
   const [text, setText] = useState(String(value))
 
-  useEffect(() => {
+  // Re-sync when the committed value changes externally (render-time "adjust
+  // state when props change" pattern — see PriorityInput above).
+  const [syncedValue, setSyncedValue] = useState(value)
+  if (value !== syncedValue) {
+    setSyncedValue(value)
     setText(String(value))
-  }, [value])
+  }
 
   const commit = () => {
     const parsed = parseInt(text, 10)
