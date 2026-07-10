@@ -52,9 +52,11 @@ Mapping to Teamarr's 3 shapes: **team** = TEAM_VS_TEAM, **combat** = EVENT_CARD,
 | College baseball | `College Baseball` | `NCAA Tournament: East Carolina vs. North Carolina` | round/region: "Chapel Hill Regional, Game 4." |
 | CFB playoff | `CFP Quarterfinal at the Goodyear Cotton Bowl Classic` (bowl name in title) | `Miami vs. Ohio State` | "The No. 10 Miami Hurricanes face the No. 2 Ohio State Buckeyes at AT&T Stadium…" |
 | Cricket | `Major League Cricket` | `Seattle Orcas vs. Washington Freedom` | "From Grand Prairie Stadium…" |
+| NBA Summer League | `NBA Summer League Basketball` (event brand + sport, NOT `NBA Basketball`) | `Cleveland Cavaliers vs. Indiana Pacers` (**"vs."** — neutral site) | terse, venue-only: "From Cox Pavilion in Las Vegas, Nev." — no article-aware prose (captured 2026-07-10, ESPN/ESPN2/ESPNU) |
 
 Key conventions:
-- **"at" for US team sports** (visitor at home); **"vs." for soccer/college tournament/neutral-site**.
+- **"at" for US team sports** (visitor at home); **"vs." for soccer/college tournament/neutral-site**
+  (Summer League capture confirms: pro basketball at a neutral site switches to "vs." and drops the prose desc).
 - **Article-awareness**: club teams take "The"; national teams omit it. (Teamarr's Team model
   lacks this today → drives tvnk.7 new vars.)
 - Spanish duplicates exist: `Copa Mundial de la FIFA 2026` / `Escocia vs. Marruecos`.
