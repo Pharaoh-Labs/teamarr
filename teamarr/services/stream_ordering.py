@@ -1,7 +1,17 @@
 """Stream ordering service.
 
-Computes stream priorities based on user-defined rules.
-Rules are evaluated in priority order (lowest first); first match wins.
+Computes stream priorities from two classes of user-defined rule (epic
+teamarr-5ag):
+
+- Priority rules (``mode="priority"``): an ordered, first-match-wins list. The
+  first one a stream matches sets its hard *band*. This is the legacy behaviour
+  and the strict-precedence escape hatch.
+- Score rules (``mode="score"``): additive. A stream sums the ``points`` of
+  every score rule it matches; the total ranks streams within a band (signed —
+  negatives demote below the baseline).
+
+The two collapse into a single sortable priority int (lower = higher priority);
+pure-priority rulesets keep their legacy small values unchanged.
 """
 
 import logging
@@ -15,8 +25,19 @@ from teamarr.database.settings.types import StreamOrderingRule
 
 logger = logging.getLogger(__name__)
 
-# Default priority for streams that don't match any rule
+# Default priority for streams that don't match any rule (baseline band)
 NO_MATCH_PRIORITY = 999
+
+# Additive scoring (epic teamarr-5ag): when any score rule is present, a stream's
+# hard band and its summed points are collapsed into one sortable int:
+#     final = band * BAND_STRIDE - clamped_score      (lower sorts first)
+# The stride keeps priority bands strictly separated no matter how points
+# accumulate; the clamp guarantees no realistic score sum can bleed across a band
+# boundary. Pure-priority rulesets (every legacy/migrated config, and all existing
+# tests) skip this entirely and keep their original small 1-99/999 values, so
+# migration is byte-identical, not merely order-preserving.
+BAND_STRIDE = 1_000_000
+_SCORE_CLAMP = BAND_STRIDE // 2 - 1
 
 # Generic words that never disambiguate a team. Dropping them from the
 # team-feed/presence term set avoids over-broad matches (e.g. a club literally
@@ -32,7 +53,9 @@ class StreamWithPriority:
 
     stream: ManagedChannelStream
     computed_priority: int
-    matched_rule_type: str | None = None  # Which rule type matched
+    matched_rule_type: str | None = None  # Which rule type set the band (priority-mode winner)
+    band: int = NO_MATCH_PRIORITY  # Hard band (priority-mode winner or baseline)
+    score: int = 0  # Summed points from matched score-mode rules
 
 
 @dataclass
@@ -42,15 +65,18 @@ class RuleEvaluation:
     type: str
     value: str
     priority: int
-    is_winner: bool  # True for the rule that actually set the priority
+    is_winner: bool  # True for the priority-mode rule that set the band (the band winner)
+    mode: str = "priority"  # 'priority' (band) or 'score' (additive contributor)
+    points: int = 0  # signed contribution for score-mode rules (0 for priority-mode)
 
 
 class StreamOrderingService:
     """Service for computing stream ordering based on rules.
 
-    Rules are evaluated in priority order (lowest number first).
-    First matching rule determines the stream's position.
-    Non-matching streams get priority 999 (sorted to end).
+    A stream's priority is (hard band, additive score) collapsed into one int:
+    the first-matching priority-mode rule (or the catch_all/NO_MATCH baseline)
+    sets the band; matched score-mode rules sum their points to rank within it.
+    Non-matching streams fall to the baseline band (priority 999) with score 0.
     """
 
     def __init__(
@@ -66,6 +92,11 @@ class StreamOrderingService:
         """
         self.rules = sorted(rules, key=lambda r: r.priority)
         self.conn = conn
+        # Only widen the priority scale when scoring is actually in play; a
+        # pure-priority ruleset keeps its legacy small values (see BAND_STRIDE).
+        self._has_score_rules = any(
+            r.mode == "score" and r.type != "catch_all" for r in self.rules
+        )
         self._compiled_regex: dict[str, re.Pattern] = {}
         self._group_name_cache: dict[int, str] = {}
         # Keyed by rule.value string so different team selections cache separately
@@ -73,24 +104,58 @@ class StreamOrderingService:
         # Keyed by sorted comma-joined keys for simple team-presence patterns
         self._team_presence_patterns: dict[str, re.Pattern | None] = {}
 
-    def _find_matching_rule(
+    def _resolve_band_and_score(
         self,
         stream: ManagedChannelStream,
         source_group_name: str | None,
-    ) -> tuple[StreamOrderingRule | None, int]:
-        """Return (matched_rule_or_None, catch_all_priority).
+    ) -> tuple[int, StreamOrderingRule | None, int]:
+        """Resolve a stream's hard band and additive score in one pass.
 
-        Iterates rules in priority order, skipping catch_all (which sets the
-        fallback rather than acting as a matcher).
+        Returns (band, band_rule_or_None, total_score):
+
+        - band: the first-matching priority-mode rule's ``priority``; else the
+          catch_all baseline; else NO_MATCH_PRIORITY. This is the hard band.
+        - band_rule: the priority-mode rule that set the band (None if the
+          baseline applied — nothing matched, or only score rules matched).
+        - total_score: sum of ``points`` over every matched score-mode rule.
+
+        catch_all is always a baseline, never a band matcher or score contributor.
+        Priority-mode rules resolve the band first-match-wins (rules are already
+        priority-sorted); score-mode rules all contribute regardless of band.
         """
         catch_all_priority = NO_MATCH_PRIORITY
+        band = NO_MATCH_PRIORITY
+        band_rule: StreamOrderingRule | None = None
+        total_score = 0
+
         for rule in self.rules:
             if rule.type == "catch_all":
                 catch_all_priority = rule.priority
                 continue
-            if self._matches(stream, rule, source_group_name):
-                return rule, catch_all_priority
-        return None, catch_all_priority
+            if not self._matches(stream, rule, source_group_name):
+                continue
+            if rule.mode == "score":
+                total_score += rule.points
+            elif band_rule is None:
+                # First matching priority-mode rule wins the band.
+                band = rule.priority
+                band_rule = rule
+
+        if band_rule is None:
+            band = catch_all_priority
+        return band, band_rule, total_score
+
+    def _collapse(self, band: int, total_score: int) -> int:
+        """Collapse (band, score) into one sortable int (lower = higher priority).
+
+        Pure-priority rulesets keep the legacy plain band value so existing
+        configs are unchanged. When scoring is in play, higher score sorts a
+        stream earlier within its band via ``band * BAND_STRIDE - score``.
+        """
+        if not self._has_score_rules:
+            return band
+        clamped = max(-_SCORE_CLAMP, min(_SCORE_CLAMP, total_score))
+        return band * BAND_STRIDE - clamped
 
     def compute_priority(
         self,
@@ -106,8 +171,8 @@ class StreamOrderingService:
         Returns:
             Priority number (lower = higher priority)
         """
-        matched_rule, catch_all_priority = self._find_matching_rule(stream, source_group_name)
-        return matched_rule.priority if matched_rule else catch_all_priority
+        band, _, total_score = self._resolve_band_and_score(stream, source_group_name)
+        return self._collapse(band, total_score)
 
     def compute_priority_with_details(
         self,
@@ -121,19 +186,19 @@ class StreamOrderingService:
             source_group_name: Optional pre-fetched group name
 
         Returns:
-            StreamWithPriority with computed priority and match info
+            StreamWithPriority with computed priority, band, and summed score
         """
-        matched_rule, catch_all_priority = self._find_matching_rule(stream, source_group_name)
-        if matched_rule:
-            return StreamWithPriority(
-                stream=stream,
-                computed_priority=matched_rule.priority,
-                matched_rule_type=matched_rule.type,
-            )
+        band, band_rule, total_score = self._resolve_band_and_score(stream, source_group_name)
+        matched_type = band_rule.type if band_rule else None
+        if matched_type is None and band != NO_MATCH_PRIORITY:
+            # Band came from an explicit catch_all baseline rule.
+            matched_type = "catch_all"
         return StreamWithPriority(
             stream=stream,
-            computed_priority=catch_all_priority,
-            matched_rule_type="catch_all" if catch_all_priority != NO_MATCH_PRIORITY else None,
+            computed_priority=self._collapse(band, total_score),
+            matched_rule_type=matched_type,
+            band=band,
+            score=total_score,
         )
 
     def evaluate_rules(
@@ -141,43 +206,58 @@ class StreamOrderingService:
         stream: ManagedChannelStream,
         source_group_name: str | None = None,
     ) -> list[RuleEvaluation]:
-        """Return the rules that matched a stream, marking which one won.
+        """Return the rules that matched a stream, marking which set the band.
 
-        Mirrors compute_priority's first-match-wins / catch_all-fallback logic,
-        but reports every matching rule (not just the winner) so the UI can
-        explain why a stream got its priority. Rules are already priority-sorted.
+        Reports every matching rule (not just the band winner) so the UI can
+        explain a stream's priority: the priority-mode rule that won the band
+        (is_winner=True), each score-mode contributor (with its points), and the
+        "everything else" baseline. Rules are already priority-sorted.
 
         Args:
             stream: The stream to evaluate
             source_group_name: Optional pre-fetched group name (for 'group' rules)
 
         Returns:
-            Matched rules in priority order, always followed by the "everything
-            else" baseline (the configured catch_all rule, or the implicit
-            no-match default). The rule that set the priority — first match, or
-            the baseline when nothing matched — has is_winner=True.
+            Matched rules in priority order, always followed by the baseline
+            (the configured catch_all rule, or the implicit no-match default).
+            is_winner marks the priority-mode rule that set the band — or the
+            baseline when no priority rule matched. Score rules never carry the
+            winner flag; they contribute additively regardless of band.
         """
         matched: list[RuleEvaluation] = []
         catch_all: StreamOrderingRule | None = None
-        winner_found = False
+        band_won = False
 
         for rule in self.rules:
             if rule.type == "catch_all":
                 catch_all = rule
                 continue
-            if self._matches(stream, rule, source_group_name):
-                is_winner = not winner_found
-                winner_found = winner_found or is_winner
+            if not self._matches(stream, rule, source_group_name):
+                continue
+            if rule.mode == "score":
                 matched.append(
-                    RuleEvaluation(rule.type, rule.value, rule.priority, is_winner)
+                    RuleEvaluation(
+                        rule.type, rule.value, rule.priority, False,
+                        mode="score", points=rule.points,
+                    )
+                )
+            else:
+                is_winner = not band_won
+                band_won = band_won or is_winner
+                matched.append(
+                    RuleEvaluation(
+                        rule.type, rule.value, rule.priority, is_winner, mode="priority"
+                    )
                 )
 
         # Always surface the baseline so the popup shows what "everything else"
-        # falls back to, even when a specific rule won.
+        # falls back to, even when a specific rule won the band.
         baseline_priority = catch_all.priority if catch_all else NO_MATCH_PRIORITY
         baseline_value = catch_all.value if catch_all else ""
         matched.append(
-            RuleEvaluation("catch_all", baseline_value, baseline_priority, not winner_found)
+            RuleEvaluation(
+                "catch_all", baseline_value, baseline_priority, not band_won, mode="priority"
+            )
         )
 
         return matched

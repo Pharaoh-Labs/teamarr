@@ -4,7 +4,7 @@ All request/response models for settings endpoints.
 """
 
 from dataclasses import asdict
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -335,11 +335,25 @@ class ChannelNumberingSettingsUpdate(BaseModel):
 
 
 class StreamOrderingRuleModel(BaseModel):
-    """A single stream ordering rule."""
+    """A single stream ordering rule.
+
+    Two rule classes (epic teamarr-5ag), discriminated by ``mode``:
+    'priority' (hard, first-match band; ordered by ``priority``) and 'score'
+    (soft, additive; ``points`` are summed across matched score rules). ``mode``
+    defaults to 'priority' — the legacy-safe fallback, so a request that omits it
+    (old client, pre-feature import) keeps hard behaviour. The add-rule UI sends
+    'score' explicitly for new rules.
+    """
 
     type: str = Field(..., description="Rule type: 'm3u', 'group', or 'regex'")
     value: str = Field(..., description="M3U account name, group name, or regex pattern")
     priority: int = Field(..., ge=1, le=99, description="Priority (1-99, lower = higher)")
+    mode: Literal["priority", "score"] = Field(
+        "priority", description="'priority' (hard band) or 'score' (additive)"
+    )
+    points: int = Field(
+        0, ge=-100000, le=100000, description="Signed points, summed for score-mode rules"
+    )
 
 
 class StreamOrderingSettingsModel(BaseModel):

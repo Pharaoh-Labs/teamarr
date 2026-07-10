@@ -73,6 +73,8 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
             "type": rule.type,
             "value": rule.value.strip(),
             "priority": rule.priority,
+            "mode": rule.mode,
+            "points": rule.points,
         }
         for rule in update.rules
     ]
