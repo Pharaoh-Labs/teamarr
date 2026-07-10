@@ -201,13 +201,15 @@ Gracenote titles it **`Minor League Baseball`** — not "MiLB", not the level
 Wis.`). The MiLB starter template should adopt `Minor League Baseball`
 branding when tvnk.8 revisits it.
 
-### Historical windows: NOT available
+### Historical windows: ~48-hour lookback only
 
-Empirical probes (2026-07-09, both sources, proxy egress, current-window
-control succeeded): a February 2026 `startDateTime` returns **empty** from the
-gracenote grid and **fails** on tmsapi. Winter-season conventions
-(NBA/NHL/NFL/EPL regular season) cannot be fetched retroactively —
-**capture forward**: re-run this extraction when those seasons start
-(October 2026); the pattern above predicts them (`NBA Basketball` /
-`{Away} at {Home}` / `From {venue} in {city}.`) and NFL/NHL classics already
-exhibit it.
+Empirical lookback ladder against `tvlistings.gracenote.com` grid (2026-07-09,
+proxy egress, same lineup/params throughout): `now` and `-1d` return full
+grids (~164 channels / ~720 events); **`-3d` and everything beyond is empty**
+(probed to -30d; February fails on tmsapi outright). So the grid serves a
+~1–2 day rolling lookback — useful for "yesterday's" listings, useless for
+last season. Winter-season conventions (NBA/NHL/NFL/EPL regular season)
+cannot be fetched retroactively — **capture forward**: re-run this
+extraction when those seasons start (October 2026); the pattern above
+predicts them (`NBA Basketball` / `{Away} at {Home}` /
+`From {venue} in {city}.`) and NFL/NHL classics already exhibit it.
