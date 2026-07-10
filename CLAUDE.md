@@ -202,8 +202,8 @@ Identical sections to the Dev Push Template, with two differences: the header is
 
 | Change Type | Update |
 |-------------|--------|
-| New/renamed/removed template variable | `teamarr/templates/variables/` docstring AND `docs/guide/templates/variables.md` AND variable-count claims in `docs/guide/templates/variables.md`, `docs/reference/architecture/template-engine.md`, `docs/index.md`, and `CLAUDE.md` ("Key Subsystems") |
-| New/renamed/removed condition evaluator | `teamarr/templates/conditions.py` docstring AND `docs/guide/templates/conditions.md` AND condition-count claims |
+| New/renamed/removed template variable | `teamarr/templates/variables/` docstring AND `docs/guide/epg/variables.md` AND variable-count claims in `docs/guide/epg/variables.md`, `docs/reference/architecture/template-engine.md`, `docs/index.md`, and `CLAUDE.md` ("Key Subsystems") |
+| New/renamed/removed condition evaluator | `teamarr/templates/conditions.py` docstring AND `docs/guide/epg/conditions.md` AND condition-count claims |
 | New/renamed/removed league | `INSERT OR REPLACE INTO leagues` in `schema.sql` AND the appropriate sport section of `docs/reference/supported-leagues.md` AND league-count claims in `docs/reference/supported-leagues.md`, `docs/reference/index.md`, `docs/index.md`, and `docs/reference/providers/<provider>.md` |
 | New/renamed sport | `INSERT INTO sports` in `schema.sql` AND `docs/reference/supported-leagues.md` sport list AND sport-count claims |
 | New API endpoint | Route docstring AND OpenAPI (auto) AND relevant `docs/reference/architecture/*.md` if the endpoint shape changes subsystem behavior |
