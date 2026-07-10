@@ -58,7 +58,7 @@ def test_fresh_install_seeds_full_set(db_conn):
     # init_db already seeded (the wiring under test); re-run is a no-op
     seed_default_templates(db_conn)
     assert _names(db_conn) == SET_NAMES
-    assert len(SET_NAMES) == 6
+    assert len(SET_NAMES) == 10
 
     for t in get_all_templates(db_conn):
         # Seeded UNASSIGNED — the user scopes them
@@ -251,14 +251,17 @@ def test_prior_iteration_names_renamed_in_place(db_conn):
 
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
-    # Simulate the prior iteration: same specs, prior names
+    # Simulate the prior iteration: same specs, prior names (tvnk.8 members
+    # postdate the rename era and have no prior name)
     prior_ids = {}
     for spec in DEFAULT_TEMPLATE_SET:
         prior_name = next((p for p, c in PRIOR_NAME_UPGRADES.items() if c == spec["name"]), None)
-        assert prior_name is not None
+        if prior_name is None:
+            continue
         prior = dict(spec)
         prior["name"] = prior_name
         prior_ids[spec["name"]] = create_template(db_conn, **prior)
+    assert prior_ids, "no prior-iteration members simulated"
 
     seed_default_templates(db_conn)
 
@@ -266,6 +269,71 @@ def test_prior_iteration_names_renamed_in_place(db_conn):
     assert _names(db_conn) == SET_NAMES
     for current, tid in prior_ids.items():
         assert templates[current].id == tid  # renamed in place
+
+
+def test_prior_title_upgraded_in_place_when_unedited(db_conn):
+    """tvnk.8: unedited rows still carrying a prior-iteration title get the
+    current content on the same row id (year-composed tournament titles)."""
+    from teamarr.database.default_templates import PRIOR_TITLE_UPGRADES
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    old_ids = {}
+    for member, old_title in PRIOR_TITLE_UPGRADES.items():
+        old = dict(specs[member])
+        old["title_format"] = old_title
+        old_ids[member] = create_template(db_conn, **old)
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    for member, tid in old_ids.items():
+        assert templates[member].id == tid  # upgraded in place, not duplicated
+        assert templates[member].title_format == specs[member]["title_format"]
+    assert _names(db_conn) == SET_NAMES
+
+
+def test_prior_title_row_with_user_edit_left_alone(db_conn):
+    from teamarr.database.default_templates import PRIOR_TITLE_UPGRADES
+    from teamarr.database.templates import update_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    member, old_title = next(iter(PRIOR_TITLE_UPGRADES.items()))
+    old = dict(specs[member])
+    old["title_format"] = old_title
+    tid = create_template(db_conn, **old)
+    update_template(db_conn, tid, subtitle_template="My custom subtitle")
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    assert templates[member].id == tid
+    assert templates[member].title_format == old_title  # untouched
+    assert templates[member].subtitle_template == "My custom subtitle"
+
+
+def test_prior_name_with_prior_title_renamed_and_upgraded(db_conn):
+    """A pre-tvnk.8 install: 'International Event' (no Starter suffix) with
+    the old title renames AND upgrades on the same row id."""
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    old = dict(specs["International Event (Starter)"])
+    old["name"] = "International Event"
+    old["title_format"] = "{gracenote_category}"
+    tid = create_template(db_conn, **old)
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    assert "International Event" not in templates
+    upgraded = templates["International Event (Starter)"]
+    assert upgraded.id == tid
+    assert upgraded.title_format == "{gracenote_category} {year}"
+    assert _names(db_conn) == SET_NAMES
 
 
 def test_retired_no_abbrev_member_removed_when_unedited(db_conn):

@@ -26,6 +26,9 @@ class TestCuratedSeeds:
         [
             ("nfl", "NFL Football"),
             ("mlb", "MLB Baseball"),
+            # All MiLB levels share Gracenote's real title (tvnk.8)
+            ("milb-aaa", "Minor League Baseball"),
+            ("rookie", "Minor League Baseball"),
             ("mens-college-basketball", "College Basketball"),
             # Club soccer keeps the ' Soccer' suffix (captured: real Gracenote)
             ("eng.1", "Premier League Soccer"),

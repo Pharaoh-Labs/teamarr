@@ -24,12 +24,21 @@ same assignments, fixed art.
 
 | Template | Type | Designed for | Channel name style |
 |----------|------|--------------|--------------------|
-| **Default Team (Starter)** | team | Any team channel | `{team_name}` |
+| **Default Team (Starter)** | team | Any team channel (US-pro travel-line register) | `{team_name}` |
+| **Soccer Team (Starter)** | team | Soccer team channels, club or national — "face" match register, article-aware naming | `{team_name}` |
+| **College Team (Starter)** | team | NCAA team channels — home-led host framing with rank, record, and conference context | `{team_name}` |
 | **Default Event (Starter)** | event | Any matchup league — team abbreviations fall back to short/full names automatically | `NBA \| DET/LAL` |
+| **College Event (Starter)** | event | NCAA event channels — ranked matchups lead with `No. {rank}` | `NCAAB \| MIZ/ARK` |
+| **Soccer Club Event (Starter)** | event | Club soccer leagues | `EPL \| ARS v CHE` |
 | **Combat Event (Starter)** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` |
-| **International Event (Starter)** | event | National teams, international competitions | `NED v JPN` |
+| **International Event (Starter)** | event | National-team tournaments — year-composed title (`FIFA World Cup 2026`) | `NED v JPN` |
 | **MiLB Event (Starter)** | event | Minor-league baseball | `MiLB \| ABQ/SUG` |
-| **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) | `Alcaraz v Sinner` |
+| **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) — year-prefixed tournament title | `Alcaraz v Sinner` |
+
+Team starters exist only for sport families that support **team subscriptions**
+(persistent team channels): the universal default plus soccer and college.
+Combat, tennis, and racing have no meaningful team channels, so they get event
+starters only.
 
 Every starter template carries a **"(Starter)"** suffix so it's always clear
 which templates shipped with Teamarr; rename freely — a renamed or edited
@@ -65,9 +74,13 @@ description is used. Pregame fillers support the same pattern via the
 | Template | Assign to |
 |----------|-----------|
 | Default Team | Global team default |
+| Soccer Team | Soccer (covers club and national teams) |
+| College Team | NCAA sports |
 | Default Event | Global event default |
+| College Event | NCAA sports |
+| Soccer Club Event | Club soccer leagues (EPL, La Liga, MLS, …) |
 | Combat Event | UFC, PFL, boxing leagues |
-| International Event | Soccer + international competitions |
+| International Event | National-team tournaments (World Cup, Euro, Gold Cup, …) |
 | MiLB Event | MiLB levels (Triple-A … Rookie) |
 | Tennis Event | ATP, WTA |
 
