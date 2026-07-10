@@ -167,3 +167,47 @@ Caveats: ESPN-only (other providers may not populate); raw format differs from G
 Genuinely-missing NEW variables: (a) article-aware team name + club/national-team flag; (b) sport-aware matchup connector (perspective-free at/vs, also fixes channel-name `@`/`v`); (c) home/away prose verb; (d) fighter last-name. Optional thin formatters (not new data): stage-only extractor over `{soccer_match_note}`. Dropped from tvnk.7 — soccer stage prefix, college-round extension, and bowl title are already served by the existing note vars (template authoring in tvnk.8, not new vars). Plus the `gracenote_category` seed/fallback fixes (tvnk.12), which should cross-check against `{soccer_match_note}` for tournament branding.
 Caveat: `{league_abbrev}` quality depends on `league_alias` being set (else "UEFA Champions League"→"UEFACL");
 audit aliases for the subscribed leagues as part of tvnk.8.
+
+## Live tmsapi capture — 2026-07-09 (Wimbledon week)
+
+Full-region tmsapi build (`US.xml`, 2026-06-30, ~354k programmes) mined for
+per-sport conventions; complements the cable-lineup capture above.
+
+### The universal pattern
+
+| Field | Convention | Live examples |
+|-------|-----------|---------------|
+| Title | `{sport-branded category}` — identical to our `{gracenote_category}` model | `MLB Baseball` · `WNBA Basketball` · `NHL Hockey` · `NFL Football` · `Minor League Baseball` · `Canadian Premier League Soccer` |
+| Sub-title | `{Away} at {Home}` for hosted games; `{A} vs. {B}` for neutral-site (NFL classics) | `St. Louis Cardinals at Atlanta Braves` · `1994: San Francisco 49ers vs. Kansas City Chiefs` |
+| Description | `From {venue} in {city}[, {state abbr}].` — the canonical baseline; marquee games get a preview paragraph | `From Truist Park in Atlanta.` · `The Tigers continue their three-game series against the Yankees at Yankee Stadium. Right-hander Troy Melton is the expected starter…` |
+| Classics | Year-prefixed subtitles | `1986: Vancouver Canucks at Edmonton Oilers` |
+
+### Tennis (validates the Tennis Event starter, with one nuance)
+
+- Title: **`2026 Wimbledon Championships`** — year + tournament, NOT "ATP Tennis".
+  Confirms tournament-led titles; note Gracenote prepends the year.
+- Sub-title: **round only** (`First Round`, `Second Round`) — Gracenote's linear
+  channels cover a whole day's play, so they *can't* name players. Teamarr's
+  channels are per-match, so our `{tennis_round} - {player1} vs {player2}`
+  subtitle is a strict superset of the convention, not a violation.
+- Description: venue prose — `From the All England Lawn Tennis and Croquet
+  Club in Wimbledon, England.` (our venue-led descriptions match).
+
+### MiLB (settles the branding question)
+
+Gracenote titles it **`Minor League Baseball`** — not "MiLB", not the level
+(`Triple-A`). Sub-title/description follow the universal pattern
+(`South Bend Cubs at Beloit Sky Carp` / `From ABC Supply Stadium in Beloit,
+Wis.`). The MiLB starter template should adopt `Minor League Baseball`
+branding when tvnk.8 revisits it.
+
+### Historical windows: NOT available
+
+Empirical probes (2026-07-09, both sources, proxy egress, current-window
+control succeeded): a February 2026 `startDateTime` returns **empty** from the
+gracenote grid and **fails** on tmsapi. Winter-season conventions
+(NBA/NHL/NFL/EPL regular season) cannot be fetched retroactively —
+**capture forward**: re-run this extraction when those seasons start
+(October 2026); the pattern above predicts them (`NBA Basketball` /
+`{Away} at {Home}` / `From {venue} in {city}.`) and NFL/NHL classics already
+exhibit it.
