@@ -24,13 +24,16 @@ same assignments, fixed art.
 
 | Template | Type | Designed for | Channel name style |
 |----------|------|--------------|--------------------|
-| **Default Team** | team | Any team channel | `{team_name}` |
-| **Default Event** | event | US pro leagues with abbreviations (NBA, NFL, MLB, NHL…) | `NBA \| DET/LAL` |
-| **Combat Event** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` |
-| **International Event** | event | National teams, international competitions | `NED v JPN` |
-| **No-Abbrev Event** | event | Leagues without team abbreviations (niche soccer…) | `Full Name / Full Name` |
-| **MiLB Event** | event | Minor-league baseball | `MiLB \| ABQ/SUG` |
-| **Tennis Event** | event | ATP / WTA (per-match channels) | `Alcaraz v Sinner` |
+| **Default Team (Starter)** | team | Any team channel | `{team_name}` |
+| **Default Event (Starter)** | event | Any matchup league — team abbreviations fall back to short/full names automatically | `NBA \| DET/LAL` |
+| **Combat Event (Starter)** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` |
+| **International Event (Starter)** | event | National teams, international competitions | `NED v JPN` |
+| **MiLB Event (Starter)** | event | Minor-league baseball | `MiLB \| ABQ/SUG` |
+| **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) | `Alcaraz v Sinner` |
+
+Every starter template carries a **"(Starter)"** suffix so it's always clear
+which templates shipped with Teamarr; rename freely — a renamed or edited
+starter is yours and is never touched by upgrades.
 
 Channel names are deliberately **short**: TV guide grids truncate channel
 names aggressively (often ~15–20 visible characters), so the set leads with
@@ -44,7 +47,6 @@ abbreviations and surnames.
 | Default Event | Global event default |
 | Combat Event | UFC, PFL, boxing leagues |
 | International Event | Soccer + international competitions |
-| No-Abbrev Event | Leagues whose teams lack abbreviations |
 | MiLB Event | MiLB levels (Triple-A … Rookie) |
 | Tennis Event | ATP, WTA |
 

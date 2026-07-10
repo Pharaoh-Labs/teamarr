@@ -55,7 +55,19 @@ _LEGACY_STRIPPED_ART = "{league_id}/{away_team_pascal}/{home_team_pascal}/cover.
 
 # Legacy seed name → curated replacement name (upgrade-in-place keeps the row
 # id, so assignments and group references survive the rename).
-LEGACY_UPGRADES = {"Team": "Default Team", "Event": "Default Event"}
+LEGACY_UPGRADES = {"Team": "Default Team (Starter)", "Event": "Default Event (Starter)"}
+
+# Earlier curated-set iterations used these names / had these members. An
+# UNEDITED row under a prior name is renamed in place (same id); an unedited
+# retired member is removed. Edited rows are always left alone.
+PRIOR_NAME_UPGRADES = {
+    "Default Team": "Default Team (Starter)",
+    "Default Event": "Default Event (Starter)",
+    "Combat Event": "Combat Event (Starter)",
+    "International Event": "International Event (Starter)",
+    "MiLB Event": "MiLB Event (Starter)",
+    "Tennis Event": "Tennis Event (Starter)",
+}
 
 # Content fingerprint of the stock legacy seeds — a row is "pristine" (safe to
 # upgrade in place) only when title, subtitle, art AND the default description
@@ -120,7 +132,7 @@ def _is_unedited_curated(row, spec: dict) -> bool:
 def _team_default() -> dict:
     """Universal team-channel fallback (persistent team channels)."""
     return {
-        "name": "Default Team",
+        "name": "Default Team (Starter)",
         "template_type": "team",
         "title_format": "{gracenote_category}",
         "subtitle_template": "{away_team} at {home_team}",
@@ -292,10 +304,10 @@ def _event_base(**overrides) -> dict:
 DEFAULT_TEMPLATE_SET: list[dict] = [
     _team_default(),
     # Universal event fallback — US pro leagues with abbreviations.
-    _event_base(name="Default Event"),
+    _event_base(name="Default Event (Starter)"),
     # Combat (MMA/boxing): card-segment channels, event-number titles.
     _event_base(
-        name="Combat Event",
+        name="Combat Event (Starter)",
         title_format="{league} {event_number}: {card_segment_display}",
         subtitle_template="{away_team} vs {home_team}",
         pregame_fallback={
@@ -320,7 +332,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     ),
     # International (national teams / tournaments): category-led naming.
     _event_base(
-        name="International Event",
+        name="International Event (Starter)",
         title_format="{gracenote_category}",
         subtitle_template="{away_team} vs {home_team}",
         # "NED v JPN"
@@ -335,19 +347,14 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             }
         ],
     ),
-    # Leagues without abbreviations: full names everywhere.
-    _event_base(
-        name="No-Abbrev Event",
-        event_channel_name="{away_team} / {home_team}",
-    ),
     # Minor-league baseball: explicit MiLB branding (league var is the level).
     _event_base(
-        name="MiLB Event",
+        name="MiLB Event (Starter)",
         event_channel_name="MiLB | {away_team_abbrev}/{home_team_abbrev}",
     ),
     # Tennis (bead tvnk.13): tournament-led titles, player-surname channels.
     _event_base(
-        name="Tennis Event",
+        name="Tennis Event (Starter)",
         title_format="{tournament_name}",
         subtitle_template="{tennis_round} - {player1} vs {player2}",
         pregame_fallback={
@@ -390,6 +397,17 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
 ]
 
 
+def _retired_no_abbrev_spec() -> dict:
+    """The retired "No-Abbrev Event" member's content, for removal healing.
+
+    Retired because the *_team_abbrev variables now fall back to short/full
+    names when a league has none — Default Event covers the case (#329)."""
+    return _event_base(
+        name="No-Abbrev Event",
+        event_channel_name="{away_team} / {home_team}",
+    )
+
+
 def seed_default_templates(conn: Connection) -> None:
     """Seed the curated default set — idempotent, safe on every startup.
 
@@ -427,6 +445,25 @@ def seed_default_templates(conn: Connection) -> None:
         spec = dict(specs[curated_name])
         update_template(conn, row.id, **spec)
         existing[curated_name] = existing.pop(legacy_name)
+
+    # 1b. Rename unedited prior-iteration curated rows in place (same id).
+    for prior, current in PRIOR_NAME_UPGRADES.items():
+        row = existing.get(prior)
+        if row is None or current in existing or current not in specs:
+            continue
+        prior_spec = dict(specs[current])
+        prior_spec["name"] = prior
+        if not _is_unedited_curated(row, prior_spec):
+            continue
+        update_template(conn, row.id, **specs[current])
+        existing[current] = existing.pop(prior)
+
+    # 1c. Remove retired members that are still our unedited seed.
+    for retired_spec in [_retired_no_abbrev_spec()]:
+        row = existing.get(retired_spec["name"])
+        if row is not None and _is_unedited_curated(row, retired_spec):
+            delete_template(conn, row.id)
+            del existing[retired_spec["name"]]
 
     # 2. Add missing set members.
     for name, spec in specs.items():

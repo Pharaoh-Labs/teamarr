@@ -29,6 +29,10 @@ import {
   useDeleteTemplate,
 } from "@/hooks/useTemplates"
 import { getTemplate, type Template } from "@/api/templates"
+import { useQuery } from "@tanstack/react-query"
+import { getLeagues } from "@/api/teams"
+import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
+import { useSports } from "@/hooks/useSports"
 import { TemplateAssignmentManager } from "@/components/TemplateAssignmentModal"
 import { useSubscription } from "@/hooks/useSubscription"
 
@@ -39,6 +43,16 @@ export function Templates() {
   const subscribedLeagues = subscription?.leagues ?? []
   const createMutation = useCreateTemplate()
   const deleteMutation = useDeleteTemplate()
+
+  // Friendly names for the Usage chips (league slugs like "fifa.world" are
+  // not user-facing). Query is shared/cached with the assignment manager below.
+  const { data: leaguesResponse } = useQuery({ queryKey: ["leagues"], queryFn: () => getLeagues() })
+  const leagueName = (slug: string) => {
+    const lg = leaguesResponse?.leagues?.find((l) => l.slug === slug)
+    return lg ? getLeagueDisplayName(lg, true) : slug.toUpperCase()
+  }
+  const { data: sportsData } = useSports()
+  const sportName = (s: string) => getSportDisplayName(s, sportsData?.sports)
 
   const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
   const [isImporting, setIsImporting] = useState(false)
@@ -242,8 +256,8 @@ export function Templates() {
           (teamarr/database/default_templates.py). */}
       {(() => {
         const SEEDED_NAMES = new Set([
-          "Default Team", "Default Event", "Combat Event", "International Event",
-          "No-Abbrev Event", "MiLB Event", "Tennis Event",
+          "Default Team (Starter)", "Default Event (Starter)", "Combat Event (Starter)",
+          "International Event (Starter)", "MiLB Event (Starter)", "Tennis Event (Starter)",
         ])
         const unassignedSeeded = (templates ?? []).filter(
           (t) =>
@@ -255,17 +269,10 @@ export function Templates() {
         return (
           <Alert variant="info" className="mb-3">
             {unassignedSeeded.length} starter template{unassignedSeeded.length !== 1 ? "s are" : " is"} not
-            assigned yet. They're designed for specific scopes (e.g. Combat Event → UFC/boxing,
-            Tennis Event → ATP/WTA) — see the{" "}
-            <a
-              href="https://pharaoh-labs.github.io/teamarr/guide/templates/defaults"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              recommended scoping guide
-            </a>
-            .
+            assigned yet. Recommended scoping — Default Team/Event: global defaults ·
+            Combat: UFC/boxing · International: soccer & national teams ·
+            MiLB: minor-league baseball · Tennis: ATP/WTA. Assign below or via
+            Template Assignments.
           </Alert>
         )
       })()}
@@ -319,14 +326,14 @@ export function Templates() {
                               if (a.leagues?.length) {
                                 return (
                                   <Badge key={i} variant="outline" className="text-xs">
-                                    {a.leagues.join(", ")}
+                                    {a.leagues.map(leagueName).join(", ")}
                                   </Badge>
                                 )
                               }
                               if (a.sports?.length) {
                                 return (
                                   <Badge key={i} variant="outline" className="text-xs">
-                                    {a.sports.join(", ")}
+                                    {a.sports.map(sportName).join(", ")}
                                   </Badge>
                                 )
                               }

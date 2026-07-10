@@ -58,7 +58,7 @@ def test_fresh_install_seeds_full_set(db_conn):
     # init_db already seeded (the wiring under test); re-run is a no-op
     seed_default_templates(db_conn)
     assert _names(db_conn) == SET_NAMES
-    assert len(SET_NAMES) == 7
+    assert len(SET_NAMES) == 6
 
     for t in get_all_templates(db_conn):
         # Seeded UNASSIGNED — the user scopes them
@@ -88,7 +88,7 @@ def test_pristine_legacy_seed_upgraded_in_place(db_conn):
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
     assert "Event" not in templates  # renamed, not duplicated
-    upgraded = templates["Default Event"]
+    upgraded = templates["Default Event (Starter)"]
     assert upgraded.id == legacy_id  # same row → assignments survive
     assert (upgraded.program_art_url or "").startswith("{")
     assert _names(db_conn) == SET_NAMES
@@ -103,7 +103,7 @@ def test_pristine_legacy_with_localhost_art_also_upgrades(db_conn):
     )
     seed_default_templates(db_conn)
     templates = {t.name: t for t in get_all_templates(db_conn)}
-    assert templates["Default Team"].id == legacy_id
+    assert templates["Default Team (Starter)"].id == legacy_id
     assert _names(db_conn) == SET_NAMES
 
 
@@ -136,14 +136,14 @@ def test_upgrade_adds_missing_members_only(db_conn):
     templates = {t.name: t for t in get_all_templates(db_conn)}
     from teamarr.database.templates import delete_template, update_template
 
-    delete_template(db_conn, templates["MiLB Event"].id)
-    update_template(db_conn, templates["Tennis Event"].id, title_format="Custom Tennis")
+    delete_template(db_conn, templates["MiLB Event (Starter)"].id)
+    update_template(db_conn, templates["Tennis Event (Starter)"].id, title_format="Custom Tennis")
 
     seed_default_templates(db_conn)
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
-    assert "MiLB Event" in templates  # re-added (missing by name)
-    assert templates["Tennis Event"].title_format == "Custom Tennis"  # untouched
+    assert "MiLB Event (Starter)" in templates  # re-added (missing by name)
+    assert templates["Tennis Event (Starter)"].title_format == "Custom Tennis"  # untouched
 
 
 _VAR_TOKEN = re.compile(r"\{([a-z0-9_]+)(?:\.(?:next|last))?\}")
@@ -190,7 +190,7 @@ def test_parameterized_stock_art_counts_as_pristine(db_conn):
     )
     seed_default_templates(db_conn)
     templates = {t.name: t for t in get_all_templates(db_conn)}
-    assert templates["Default Event"].id == legacy_id
+    assert templates["Default Event (Starter)"].id == legacy_id
     assert _names(db_conn) == SET_NAMES
 
 
@@ -217,7 +217,7 @@ def test_healing_folds_unedited_curated_duplicate_into_legacy(db_conn):
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
     assert _names(db_conn) == SET_NAMES  # duplicate folded, 7 total
-    assert templates["Default Event"].id == legacy_id  # legacy row won
+    assert templates["Default Event (Starter)"].id == legacy_id  # legacy row won
 
 
 def test_edited_curated_duplicate_is_not_folded(db_conn):
@@ -234,11 +234,99 @@ def test_edited_curated_duplicate_is_not_folded(db_conn):
     from teamarr.database.templates import update_template
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
-    update_template(db_conn, templates["Default Event"].id, title_format="Edited")
+    update_template(db_conn, templates["Default Event (Starter)"].id, title_format="Edited")
 
     seed_default_templates(db_conn)
 
     templates = {t.name: t for t in get_all_templates(db_conn)}
     # Both survive: user's edit is sacred, legacy left alone
-    assert "Event" in templates and "Default Event" in templates
-    assert templates["Default Event"].title_format == "Edited"
+    assert "Event" in templates and "Default Event (Starter)" in templates
+    assert templates["Default Event (Starter)"].title_format == "Edited"
+
+
+def test_prior_iteration_names_renamed_in_place(db_conn):
+    """Rows seeded by the first curated iteration (no parenthetical) get the
+    (Starter) name on the same row id when unedited."""
+    from teamarr.database.default_templates import PRIOR_NAME_UPGRADES
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    # Simulate the prior iteration: same specs, prior names
+    prior_ids = {}
+    for spec in DEFAULT_TEMPLATE_SET:
+        prior_name = next((p for p, c in PRIOR_NAME_UPGRADES.items() if c == spec["name"]), None)
+        assert prior_name is not None
+        prior = dict(spec)
+        prior["name"] = prior_name
+        prior_ids[spec["name"]] = create_template(db_conn, **prior)
+
+    seed_default_templates(db_conn)
+
+    templates = {t.name: t for t in get_all_templates(db_conn)}
+    assert _names(db_conn) == SET_NAMES
+    for current, tid in prior_ids.items():
+        assert templates[current].id == tid  # renamed in place
+
+
+def test_retired_no_abbrev_member_removed_when_unedited(db_conn):
+    from teamarr.database.default_templates import _retired_no_abbrev_spec
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    create_template(db_conn, **_retired_no_abbrev_spec())
+
+    seed_default_templates(db_conn)
+    assert _names(db_conn) == SET_NAMES  # retired member gone, set complete
+
+
+def test_retired_member_kept_when_edited(db_conn):
+    from teamarr.database.default_templates import _retired_no_abbrev_spec
+    from teamarr.database.templates import update_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    tid = create_template(db_conn, **_retired_no_abbrev_spec())
+    update_template(db_conn, tid, title_format="I use this")
+
+    seed_default_templates(db_conn)
+    assert "No-Abbrev Event" in _names(db_conn)  # user's row survives
+
+
+def test_abbrev_variables_fall_back_without_abbreviation():
+    """*_team_abbrev render short/full names for leagues without abbrevs —
+    the reason the No-Abbrev variant could retire (#329)."""
+    from datetime import UTC, datetime
+
+    from teamarr.core import Event, EventStatus, Team
+    from teamarr.templates.context import GameContext, TemplateContext
+    from teamarr.templates.variables.home_away import (
+        extract_away_team_abbrev,
+        extract_home_team_abbrev,
+    )
+
+    def team(name, short, abbrev):
+        return Team(
+            id="t",
+            provider="espn",
+            name=name,
+            short_name=short,
+            abbreviation=abbrev,
+            league="epl",
+            sport="soccer",
+        )
+
+    e = Event(
+        id="e1",
+        provider="espn",
+        name="x",
+        short_name="x",
+        start_time=datetime(2026, 7, 9, tzinfo=UTC),
+        home_team=team("Manchester United", "Man United", ""),
+        away_team=team("Arsenal", "Arsenal", "ARS"),
+        status=EventStatus(state="scheduled"),
+        league="epl",
+        sport="soccer",
+    )
+    ctx = TemplateContext(game_context=GameContext(event=e), team_config=None, team_stats=None)
+    assert extract_home_team_abbrev(ctx, ctx.game_context) == "Man United"
+    assert extract_away_team_abbrev(ctx, ctx.game_context) == "ARS"
