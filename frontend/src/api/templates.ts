@@ -184,3 +184,44 @@ export async function updateTemplate(
 export async function deleteTemplate(templateId: number): Promise<void> {
   return api.delete(`/templates/${templateId}`)
 }
+
+// --- Server-side preview (#357) ---------------------------------------------
+
+export interface ConditionRowTrace {
+  index: number
+  condition: string | null
+  condition_value: string | null
+  priority: number
+  matched: boolean
+  selected: boolean
+  reason: string
+}
+
+export interface ConditionalPreview {
+  rendered: string
+  selected_index: number | null
+  rows: ConditionRowTrace[]
+}
+
+export interface TemplatePreviewRequest {
+  league?: string | null
+  live?: boolean
+  template_type?: string
+  // Opaque keys echoed back — keying by the template string itself lets the
+  // client cache rendered results per unique template text.
+  fields: Record<string, string>
+  conditional_descriptions?: ConditionalDescription[] | null
+}
+
+export interface TemplatePreviewResponse {
+  live: boolean
+  league: string | null
+  fields: Record<string, string>
+  conditional: ConditionalPreview | null
+}
+
+export async function previewTemplate(
+  body: TemplatePreviewRequest
+): Promise<TemplatePreviewResponse> {
+  return api.post("/templates/preview", body)
+}

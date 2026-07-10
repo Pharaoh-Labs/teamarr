@@ -1,16 +1,13 @@
 """Variables API endpoint for template variable picker."""
 
 import logging
-import time
 
 from fastapi import APIRouter
 
 from teamarr.database import get_db
-from teamarr.database.leagues import get_league
 from teamarr.database.subscription import get_subscribed_league_codes
 from teamarr.services.cache_service import create_cache_service
-from teamarr.services.sports_data import create_default_service
-from teamarr.templates.context_builder import ContextBuilder, find_adjacent_games
+from teamarr.templates.preview import build_live_context, lookup_league_fields
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.templates.sample_data import (
     AVAILABLE_SPORTS,
@@ -58,81 +55,20 @@ def _relevant_keys(keys, shape: str) -> list[str]:
             out.append(k)
     return out
 
-# Cache of live sample maps keyed by league, with a short TTL so the preview
-# stays responsive without hammering providers on every keystroke.
-_LIVE_CACHE: dict[str, tuple[float, dict[str, str]]] = {}
-_LIVE_CACHE_TTL = 300  # seconds
-
-
-def _lookup_league_fields(league_code: str) -> tuple[str | None, str | None]:
-    """Get (sport, provider) for a league from its record, or (None, None)."""
-    try:
-
-        with get_db() as conn:
-            rec = get_league(conn, league_code)
-        if rec:
-            return rec.get("sport"), rec.get("provider")
-    except Exception as e:
-        logger.debug("[SAMPLES] League lookup failed for %s: %s", league_code, e)
-    return None, None
-
-
 def _fetch_live_samples(league: str) -> dict[str, str] | None:
     """Resolve every variable against a real upcoming/recent event for a league.
 
     Returns a name -> value map for non-empty live values, or None if no usable
-    event could be found or the provider failed. Cached per league.
+    event could be found or the provider failed. Context building (and its
+    per-league cache) lives in templates/preview.py, shared with the
+    server-side preview endpoint (#357).
     """
-    now = time.time()
-    cached = _LIVE_CACHE.get(league)
-    if cached and now - cached[0] < _LIVE_CACHE_TTL:
-        return cached[1]
-
-    try:
-
-        service = create_default_service()
-
-        # Pick the best real event for the sample — prefers a just-completed game
-        # so postgame vars (recap/scores/outcome) populate. Provider-aware fetch
-        # keeps this to a couple of calls (TSDB uses a 2-call bulk path), so the
-        # preview can't hammer rate-limited providers. None → static fallback.
-        event = service.get_sample_event(league)
-        if not event:
-            return None
-
-        # The sample event comes from the scoreboard, which carries free fields
-        # (game_recap, etc.) but not the summary-only ones (game_preview,
-        # series_summary). Refresh through the summary endpoint so the preview
-        # shows exactly what generation produces. One cached call; the same
-        # refresh generation already makes.
-        event = service.refresh_event_status(event) or event
-
-        team_id = event.home_team.id
-
-        # Keep the chosen event (the best sample — ideally a just-completed game)
-        # as the base; use the team's schedule only to fill .next/.last with real
-        # adjacent games. (Previously this overwrote the base with the next
-        # scheduled game, blanking postgame vars like recap/score/winner.)
-        next_event = last_event = None
-        schedule = service.get_team_schedule(team_id, league)
-        if schedule:
-            next_event, last_event = find_adjacent_games(schedule, event)
-
-        ctx = ContextBuilder(service).build_for_event(
-            event=event,
-            team_id=team_id,
-            league=league,
-            next_event=next_event,
-            last_event=last_event,
-        )
-        variables = TemplateResolver().build_variable_map(ctx)
-        # Keep only non-empty live values; static samples fill the rest.
-        live = {k: v for k, v in variables.items() if v}
-        _LIVE_CACHE[league] = (now, live)
-        return live
-    except Exception as e:  # provider down, unsupported league, etc.
-        logger.info("[SAMPLES] Live sample fetch failed for %s: %s", league, e)
+    ctx = build_live_context(league)
+    if ctx is None:
         return None
+    variables = TemplateResolver().build_variable_map(ctx)
+    # Keep only non-empty live values; static samples fill the rest.
+    return {k: v for k, v in variables.items() if v}
 
 
 def _category_display_name(category: Category) -> str:
@@ -279,7 +215,7 @@ def get_sample_data(
     if league:
         # Resolve the profile from the league's own record (sport + provider)
         # so the mapping is data-driven and custom leagues work too.
-        league_sport, league_provider = _lookup_league_fields(league)
+        league_sport, league_provider = lookup_league_fields(league)
         samples = get_all_sample_data_for_league(league, league_sport, league_provider)
         profile = resolve_profile_for_league(league, league_sport, league_provider)
     else:
