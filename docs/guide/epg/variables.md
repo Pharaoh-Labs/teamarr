@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 255 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 259 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -94,12 +94,14 @@ Core identifiers for teams, leagues, and matchups.
 |----------|-------------|----------|--------|
 | `{team_name}` | Team display name | base | `Detroit Lions` |
 | `{team_name_the}` | Team name with Gracenote-convention article (clubs get 'the', national teams don't) | base | `the Detroit Lions` |
+| `{team_name_ranked_the}` | Team name with rank and article composed (article survives when unranked) | base | `the No. 7 Detroit Lions` |
 | `{team_abbrev}` | Team abbreviation uppercase | base | `DET` |
 | `{team_abbrev_lower}` | Team abbreviation lowercase | base | `det` |
 | `{team_name_pascal}` | Team name in PascalCase for channel IDs | base | `DetroitLions` |
 | `{team_short}` | Team short name | base | `Lions` |
 | `{opponent}` | Opponent team name | base, .next, .last | `Chicago Bears` |
 | `{opponent_the}` | Opponent name with Gracenote-convention article | base, .next, .last | `the Chicago Bears` |
+| `{opponent_ranked_the}` | Opponent with rank and article composed | base, .next, .last | `the No. 14 Chicago Bears` |
 | `{opponent_abbrev}` | Opponent team abbreviation uppercase | base, .next, .last | `CHI` |
 | `{opponent_abbrev_lower}` | Opponent abbreviation lowercase | base, .next, .last | `chi` |
 | `{opponent_short}` | Opponent short name | base, .next, .last | `Bears` |
@@ -157,6 +159,7 @@ Positional team references and home/away context.
 |----------|-------------|----------|--------|
 | `{home_team}` | Home team name (positional) | base, .next, .last | `Detroit Lions` |
 | `{home_team_the}` | Home team name with Gracenote-convention article | base, .next, .last | `the Detroit Lions` |
+| `{home_team_ranked_the}` | Home team with rank and article composed (rank slots after the article; article survives when unranked) | base, .next, .last | `the No. 20 Arkansas Razorbacks` |
 | `{home_team_abbrev}` | Home team abbreviation uppercase | base, .next, .last | `DET` |
 | `{home_team_abbrev_lower}` | Home team abbreviation lowercase | base, .next, .last | `det` |
 | `{home_team_pascal}` | Home team name in PascalCase | base, .next, .last | `DetroitLions` |
@@ -164,6 +167,7 @@ Positional team references and home/away context.
 | `{home_team_logo}` | Home team logo URL | base, .next, .last | ESPN logo URL |
 | `{away_team}` | Away team name (positional) | base, .next, .last | `Chicago Bears` |
 | `{away_team_the}` | Away team name with Gracenote-convention article | base, .next, .last | `the Chicago Bears` |
+| `{away_team_ranked_the}` | Away team with rank and article composed | base, .next, .last | `the No. 14 Texas A&M Aggies` |
 | `{away_team_abbrev}` | Away team abbreviation uppercase | base, .next, .last | `CHI` |
 | `{away_team_abbrev_lower}` | Away team abbreviation lowercase | base, .next, .last | `chi` |
 | `{away_team_pascal}` | Away team name in PascalCase | base, .next, .last | `ChicagoBears` |

@@ -4,7 +4,7 @@ These variables identify teams and the competition context.
 Most are BASE_ONLY since they don't change between games.
 """
 
-from teamarr.core.naming import team_with_article
+from teamarr.core.naming import ranked_with_article, team_with_article
 from teamarr.services.league_mappings import get_league_mapping_service
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
@@ -460,3 +460,33 @@ def extract_opponent_the(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     if not opponent:
         return ""
     return team_with_article(opponent.name, opponent.league, opponent.sport)
+
+
+@register_variable(
+    name="team_name_ranked_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Team name with rank and Gracenote article composed — "
+    "'the No. 7 Boston Celtics' ranked, 'the Boston Celtics' unranked",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_team_name_ranked_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    cfg = ctx.team_config
+    rank = ctx.team_stats.rank if ctx.team_stats else None
+    return ranked_with_article(cfg.team_name or "", cfg.league, cfg.sport, rank)
+
+
+@register_variable(
+    name="opponent_ranked_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.ALL,
+    description="Opponent with rank and Gracenote article composed — "
+    "'the No. 14 Green Bay Packers' ranked, 'the Green Bay Packers' unranked",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_opponent_ranked_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    opponent = _get_opponent(ctx, game_ctx)
+    if not opponent:
+        return ""
+    rank = game_ctx.opponent_stats.rank if game_ctx and game_ctx.opponent_stats else None
+    return ranked_with_article(opponent.name, opponent.league, opponent.sport, rank)

@@ -4,7 +4,7 @@ These variables provide home/away context, positional team references,
 and feed team data for streams broken out into home/away channels.
 """
 
-from teamarr.core.naming import matchup_connector, team_with_article
+from teamarr.core.naming import matchup_connector, ranked_with_article, team_with_article
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -450,6 +450,40 @@ def extract_away_team_the(ctx: TemplateContext, game_ctx: GameContext | None) ->
         return ""
     event = game_ctx.event
     return team_with_article(event.away_team.name, event.league, event.sport)
+
+
+@register_variable(
+    name="home_team_ranked_the",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.ALL,
+    description="Home team with rank and Gracenote article composed — "
+    "'the No. 16 Commodores' ranked, 'the Michigan Wolverines' unranked",
+)
+def extract_home_team_ranked_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    from teamarr.templates.variables.rankings import extract_home_team_rank
+
+    event = game_ctx.event
+    rank = extract_home_team_rank(ctx, game_ctx)
+    return ranked_with_article(event.home_team.name, event.league, event.sport, rank)
+
+
+@register_variable(
+    name="away_team_ranked_the",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.ALL,
+    description="Away team with rank and Gracenote article composed — "
+    "'the No. 14 Buckeyes' ranked, 'the Ohio State Buckeyes' unranked",
+)
+def extract_away_team_ranked_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not game_ctx or not game_ctx.event:
+        return ""
+    from teamarr.templates.variables.rankings import extract_away_team_rank
+
+    event = game_ctx.event
+    rank = extract_away_team_rank(ctx, game_ctx)
+    return ranked_with_article(event.away_team.name, event.league, event.sport, rank)
 
 
 @register_variable(

@@ -99,6 +99,27 @@ def team_with_article(name: str, league: str | None, sport: str | None) -> str:
     return f"the {name}" if team_takes_article(league, sport) else name
 
 
+def ranked_with_article(
+    name: str, league: str | None, sport: str | None, rank: str | int | None
+) -> str:
+    """Team name with rank and Gracenote article composed: 'the No. 16
+    Commodores' ranked club, 'the Michigan Wolverines' unranked club,
+    'No. 3 Spain' / 'Spain' for national teams.
+
+    Encapsulates the branching a flat template can't express (#359): the
+    article must survive when the rank is absent, and the rank slots between
+    article and name when present (Gracenote college register,
+    docs/reference/gracenote-categories.md).
+    """
+    named = team_with_article(name, league, sport)
+    if not named or not rank:
+        return named
+    if named.lower().startswith("the "):
+        # Preserve the original article's case ("the "/"The ")
+        return f"{named[:4]}No. {rank} {named[4:]}"
+    return f"No. {rank} {named}"
+
+
 def tournament_takes_article(name: str) -> bool:
     """'the US Open' / 'the French Open' but 'Wimbledon' / 'Roland Garros'."""
     words = {w.strip(".,'’") for w in (name or "").lower().split()}

@@ -253,7 +253,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
-- 255 variables in `variables/` (20 categories)
+- 259 variables in `variables/` (20 categories)
 - 26 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
