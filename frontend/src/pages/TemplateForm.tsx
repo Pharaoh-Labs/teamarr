@@ -305,8 +305,6 @@ export function TemplateForm() {
             onClick={() => {
               const nextIsTeam = !isTeamTemplate
               setFormData((prev) => ({ ...prev, template_type: nextIsTeam ? "team" : "event" }))
-              // Conditions tab is team-only; avoid landing on a hidden tab.
-              if (!nextIsTeam && activeTab === "conditions") setActiveTab("basic")
             }}
             className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >
@@ -321,13 +319,11 @@ export function TemplateForm() {
         className="mb-4"
         value={activeTab}
         onChange={(key) => setActiveTab(key as Tab)}
-        items={TABS
-          .filter((tab) => tab.id !== "conditions" || isTeamTemplate) // Hide conditions tab for event templates
-          .map((tab) => ({
-            key: tab.id,
-            label: tab.label,
-            icon: <tab.icon className="h-4 w-4" />,
-          }))}
+        items={TABS.map((tab) => ({
+          key: tab.id,
+          label: tab.label,
+          icon: <tab.icon className="h-4 w-4" />,
+        }))}
       />
 
       {/* Main content with sidebar */}
