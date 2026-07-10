@@ -242,8 +242,8 @@ export function Templates() {
           (teamarr/database/default_templates.py). */}
       {(() => {
         const SEEDED_NAMES = new Set([
-          "Default Team", "Default Event", "Combat Event", "International Event",
-          "No-Abbrev Event", "MiLB Event", "Tennis Event",
+          "Default Team (Starter)", "Default Event (Starter)", "Combat Event (Starter)",
+          "International Event (Starter)", "MiLB Event (Starter)", "Tennis Event (Starter)",
         ])
         const unassignedSeeded = (templates ?? []).filter(
           (t) =>
@@ -255,17 +255,10 @@ export function Templates() {
         return (
           <Alert variant="info" className="mb-3">
             {unassignedSeeded.length} starter template{unassignedSeeded.length !== 1 ? "s are" : " is"} not
-            assigned yet. They're designed for specific scopes (e.g. Combat Event → UFC/boxing,
-            Tennis Event → ATP/WTA) — see the{" "}
-            <a
-              href="https://pharaoh-labs.github.io/teamarr/guide/templates/defaults"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              recommended scoping guide
-            </a>
-            .
+            assigned yet. Recommended scoping — Default Team/Event: global defaults ·
+            Combat: UFC/boxing · International: soccer & national teams ·
+            MiLB: minor-league baseball · Tennis: ATP/WTA. Assign below or via
+            Template Assignments.
           </Alert>
         )
       })()}

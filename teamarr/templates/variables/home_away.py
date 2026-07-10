@@ -158,28 +158,44 @@ def extract_away_team_short(ctx: TemplateContext, game_ctx: GameContext | None) 
     return game_ctx.event.away_team.short_name
 
 
+def _abbrev_or_name(team) -> str:
+    """Abbreviation (uppercased) with a graceful fallback for leagues whose
+    teams have none: short_name, then full name — kept as-is (uppercasing a
+    full club name would shout). Retires the need for a separate "No-Abbrev"
+    template variant (#329)."""
+    if team.abbreviation:
+        return team.abbreviation.upper()
+    return team.short_name or team.name
+
+
 @register_variable(
     name="home_team_abbrev",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
-    description="Home team abbreviation uppercase",
+    description=(
+        "Home team abbreviation uppercase (falls back to short/full name "
+        "when the league has none)"
+    ),
 )
 def extract_home_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
-    return game_ctx.event.home_team.abbreviation.upper()
+    return _abbrev_or_name(game_ctx.event.home_team)
 
 
 @register_variable(
     name="away_team_abbrev",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
-    description="Away team abbreviation uppercase",
+    description=(
+        "Away team abbreviation uppercase (falls back to short/full name "
+        "when the league has none)"
+    ),
 )
 def extract_away_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
-    return game_ctx.event.away_team.abbreviation.upper()
+    return _abbrev_or_name(game_ctx.event.away_team)
 
 
 @register_variable(
@@ -191,7 +207,7 @@ def extract_away_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None)
 def extract_home_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
-    return game_ctx.event.home_team.abbreviation.lower()
+    return _abbrev_or_name(game_ctx.event.home_team).lower()
 
 
 @register_variable(
@@ -203,7 +219,7 @@ def extract_home_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext |
 def extract_away_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
-    return game_ctx.event.away_team.abbreviation.lower()
+    return _abbrev_or_name(game_ctx.event.away_team).lower()
 
 
 @register_variable(
@@ -334,10 +350,7 @@ def extract_feed_team_logo(ctx: TemplateContext, game_ctx: GameContext | None) -
 def extract_is_home_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team or not game_ctx or not game_ctx.event:
         return ""
-    is_home = (
-        game_ctx.event.home_team
-        and game_ctx.event.home_team.id == ctx.feed_team.id
-    )
+    is_home = game_ctx.event.home_team and game_ctx.event.home_team.id == ctx.feed_team.id
     return "true" if is_home else "false"
 
 
@@ -351,10 +364,7 @@ def extract_is_home_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> 
 def extract_is_away_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team or not game_ctx or not game_ctx.event:
         return ""
-    is_away = (
-        game_ctx.event.away_team
-        and game_ctx.event.away_team.id == ctx.feed_team.id
-    )
+    is_away = game_ctx.event.away_team and game_ctx.event.away_team.id == ctx.feed_team.id
     return "true" if is_away else "false"
 
 
@@ -368,10 +378,7 @@ def extract_is_away_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> 
 def extract_feed_home_away(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team or not game_ctx or not game_ctx.event:
         return ""
-    is_home = (
-        game_ctx.event.home_team
-        and game_ctx.event.home_team.id == ctx.feed_team.id
-    )
+    is_home = game_ctx.event.home_team and game_ctx.event.home_team.id == ctx.feed_team.id
     return "Home" if is_home else "Away"
 
 
@@ -393,10 +400,7 @@ def extract_feed_home_away(ctx: TemplateContext, game_ctx: GameContext | None) -
 def extract_broadcast_feed(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team or not game_ctx or not game_ctx.event:
         return ""
-    is_home = (
-        game_ctx.event.home_team
-        and game_ctx.event.home_team.id == ctx.feed_team.id
-    )
+    is_home = game_ctx.event.home_team and game_ctx.event.home_team.id == ctx.feed_team.id
     return "Home Team Feed" if is_home else "Away Team Feed"
 
 
@@ -407,9 +411,7 @@ def extract_broadcast_feed(ctx: TemplateContext, game_ctx: GameContext | None) -
     description="'{Team Name} Feed' (e.g., 'Seattle Mariners Feed') or '' if no feed",
     scope=TemplateScope.EVENT_ONLY,
 )
-def extract_broadcast_feed_team(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_broadcast_feed_team(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not ctx.feed_team:
         return ""
     return f"{ctx.feed_team.name} Feed"
