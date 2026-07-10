@@ -406,49 +406,104 @@ class ConditionalDescriptionSelector:
         Returns:
             Selected template string, or empty string if none match
         """
+        template, _ = self.select_with_trace(description_options, ctx, game_ctx)
+        return template
+
+    def select_with_trace(
+        self,
+        description_options: str | list[dict[str, Any]] | None,
+        ctx: TemplateContext | None,
+        game_ctx: GameContext | None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Select the best description template, with a per-row evaluation trace.
+
+        The trace answers "why did my template render THIS row?" (#357): one
+        entry per option, in input order, each carrying whether it matched,
+        whether it was the row ultimately selected, and a human-readable reason.
+
+        ``ctx`` may be None (preview without a live event): conditional rows
+        then can't be evaluated and only defaults match — which mirrors what
+        the engine does at generation time when an event lacks data.
+
+        Returns:
+            (selected template string or "", trace rows). Trace row keys:
+            index, condition, condition_value, priority, matched, selected,
+            reason.
+        """
         options = self._parse_options(description_options)
+        trace: list[dict[str, Any]] = []
         if not options:
-            return ""
+            return "", trace
 
-        # Group matching options by priority
-        priority_groups: dict[int, list[str]] = {}
+        has_event = bool(game_ctx and game_ctx.event)
 
-        for opt in options:
+        # Group matching options by priority (option index -> template)
+        priority_groups: dict[int, list[tuple[int, str]]] = {}
+
+        for i, opt in enumerate(options):
+            row: dict[str, Any] = {
+                "index": i,
+                "condition": opt.condition,
+                "condition_value": opt.condition_value,
+                "priority": opt.priority,
+                "matched": False,
+                "selected": False,
+                "reason": "",
+            }
+            trace.append(row)
+
             if not opt.template:
+                row["reason"] = "skipped — empty template"
                 continue
 
             # Default descriptions always match
             if opt.is_default:
-                if opt.priority not in priority_groups:
-                    priority_groups[opt.priority] = []
-                priority_groups[opt.priority].append(opt.template)
+                row["matched"] = True
+                row["reason"] = "default (priority 100) — always matches"
+            elif not opt.condition:
+                row["reason"] = "skipped — no condition set"
                 continue
-
-            # Conditionals need to be evaluated
-            if not opt.condition:
+            elif not has_event or ctx is None:
+                row["reason"] = f"'{opt.condition}' not evaluated — no event data"
                 continue
+            else:
+                matched = self._evaluator.evaluate(
+                    opt.condition, opt.condition_value, ctx, game_ctx
+                )
+                row["matched"] = matched
+                detail = f" (value: {opt.condition_value})" if opt.condition_value else ""
+                row["reason"] = (
+                    f"'{opt.condition}'{detail} evaluated {'true' if matched else 'false'}"
+                )
 
-            if self._evaluator.evaluate(opt.condition, opt.condition_value, ctx, game_ctx):
-                if opt.priority not in priority_groups:
-                    priority_groups[opt.priority] = []
-                priority_groups[opt.priority].append(opt.template)
+            if row["matched"]:
+                priority_groups.setdefault(opt.priority, []).append((i, opt.template))
 
         if not priority_groups:
             logger.debug("[CONDITION] No matching conditions found")
-            return ""
+            return "", trace
 
         # Get highest priority (lowest number)
         highest_priority = min(priority_groups.keys())
-        matching_templates = priority_groups[highest_priority]
+        matching = priority_groups[highest_priority]
 
         # Random selection from same-priority templates
-        selected = random.choice(matching_templates)
+        selected_index, selected = random.choice(matching)
+        trace[selected_index]["selected"] = True
+        if len(matching) > 1:
+            trace[selected_index]["reason"] += (
+                f" — chosen randomly among {len(matching)} matches at priority {highest_priority}"
+            )
+        for priority, group in priority_groups.items():
+            if priority > highest_priority:
+                for other_index, _ in group:
+                    trace[other_index]["reason"] += f" — outranked by priority {highest_priority}"
         logger.debug(
             "[CONDITION] Selected priority=%d from %d options",
             highest_priority,
-            len(matching_templates),
+            len(matching),
         )
-        return selected
+        return selected, trace
 
     def _parse_options(
         self, description_options: str | list[dict[str, Any]] | None

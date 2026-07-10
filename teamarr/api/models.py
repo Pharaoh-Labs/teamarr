@@ -348,6 +348,51 @@ class TemplateValidateResponse(BaseModel):
     warnings: dict[str, list[TemplateValidationWarning]]
 
 
+class TemplatePreviewRequest(BaseModel):
+    """Render arbitrary template strings through the real resolver (#357).
+
+    ``fields`` maps opaque caller-chosen keys to template strings; each is
+    rendered independently and echoed back under the same key. When ``live``
+    and a league are set, rendering uses a real event context (same machinery
+    as /variables/samples); otherwise static sample data.
+    """
+
+    league: str | None = None
+    live: bool = True
+    template_type: str = "team"
+    fields: dict[str, str | None] = {}
+    conditional_descriptions: list[dict] | None = None
+
+
+class ConditionRowTrace(BaseModel):
+    """Why a single conditional-description row did or didn't fire."""
+
+    index: int
+    condition: str | None = None
+    condition_value: str | None = None
+    priority: int
+    matched: bool
+    selected: bool
+    reason: str
+
+
+class TemplateConditionalPreview(BaseModel):
+    """Rendered conditional description plus the per-row selection trace."""
+
+    rendered: str
+    selected_index: int | None
+    rows: list[ConditionRowTrace]
+
+
+class TemplatePreviewResponse(BaseModel):
+    """Rendered surfaces; ``live`` reports whether a real event context was used."""
+
+    live: bool
+    league: str | None
+    fields: dict[str, str]
+    conditional: TemplateConditionalPreview | None = None
+
+
 # =============================================================================
 # EPG
 # =============================================================================

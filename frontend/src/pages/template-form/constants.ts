@@ -74,7 +74,8 @@ export const DEFAULT_SAMPLE_DATA: Record<string, string> = {
 // #354): empty-variable artifacts and the article-aware leading-"the"
 // capitalization must render in the preview exactly as the engine emits them.
 function cleanupResolved(text: string): string {
-  let out = text.replace(/\s*\(\s*\)/g, "").replace(/\s*\[\s*\]/g, "")
+  let out = text.replace(/ {2,}/g, " ")
+  out = out.replace(/ ?\( ?\)/g, "").replace(/ ?\[ ?\]/g, "")
   out = out.replace(/ {2,}/g, " ").trim()
   if (out.startsWith("the ")) out = "T" + out.slice(1)
   return out

@@ -8,6 +8,8 @@ from fastapi import APIRouter, HTTPException, status
 from teamarr.api.models import (
     TemplateCreate,
     TemplateFullResponse,
+    TemplatePreviewRequest,
+    TemplatePreviewResponse,
     TemplateResponse,
     TemplateUpdate,
     TemplateValidateRequest,
@@ -30,6 +32,9 @@ from teamarr.database.templates import (
 from teamarr.database.templates import (
     update_template as db_update,
 )
+from teamarr.templates.conditions import get_condition_selector
+from teamarr.templates.preview import build_live_context, build_static_samples
+from teamarr.templates.resolver import TemplateResolver
 from teamarr.templates.validation import (
     validate_conditional_descriptions,
     validate_fields,
@@ -133,6 +138,56 @@ def validate_template(req: TemplateValidateRequest):
         validate_conditional_descriptions(req.conditional_descriptions or [], is_event)
     )
     return {"valid": not results, "warnings": warnings_as_dicts(results)}
+
+
+@router.post("/templates/preview", response_model=TemplatePreviewResponse)
+def preview_template(req: TemplatePreviewRequest):
+    """Render template strings through the real resolver, with condition trace (#357).
+
+    The source of truth for the editor's preview: runs the SAME
+    TemplateResolver (substitution, cleanup, suffix handling) and conditional
+    selector that EPG generation uses, against a real live event for the
+    league when available (same cached machinery as /variables/samples),
+    falling back to static sample data otherwise.
+
+    ``fields`` keys are opaque to the server and echoed back — callers may key
+    by field name or by the template string itself. ``conditional`` reports
+    which description row fired and a per-row why (largely closing #355 item
+    12's silent-condition gap).
+    """
+
+    ctx = build_live_context(req.league) if (req.live and req.league) else None
+    resolver = TemplateResolver()
+
+    if ctx is not None:
+        rendered = {k: resolver.resolve(v or "", ctx) for k, v in req.fields.items()}
+    else:
+        samples = build_static_samples(req.league)
+        rendered = {k: resolver.resolve_with_map(v or "", samples) for k, v in req.fields.items()}
+
+    conditional = None
+    if req.conditional_descriptions is not None:
+        game_ctx = ctx.game_context if ctx else None
+        selected_tmpl, trace = get_condition_selector().select_with_trace(
+            req.conditional_descriptions, ctx, game_ctx
+        )
+        if ctx is not None:
+            rendered_desc = resolver.resolve(selected_tmpl, ctx)
+        else:
+            rendered_desc = resolver.resolve_with_map(selected_tmpl, samples)
+        selected_index = next((r["index"] for r in trace if r["selected"]), None)
+        conditional = {
+            "rendered": rendered_desc,
+            "selected_index": selected_index,
+            "rows": trace,
+        }
+
+    return {
+        "live": ctx is not None,
+        "league": req.league,
+        "fields": rendered,
+        "conditional": conditional,
+    }
 
 
 @router.post("/templates", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)

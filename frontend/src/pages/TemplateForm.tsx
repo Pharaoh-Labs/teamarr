@@ -26,6 +26,7 @@ import {
   DEFAULT_SAMPLE_DATA,
   createResolver,
 } from "./template-form/constants"
+import { useServerPreview, collectTemplateStrings } from "./template-form/useServerPreview"
 import { VariableSidebar } from "./template-form/VariableSidebar"
 import { BasicTab } from "./template-form/tabs/BasicTab"
 import { DefaultsTab } from "./template-form/tabs/DefaultsTab"
@@ -100,9 +101,22 @@ export function TemplateForm() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
-  // Create resolver with current sample data
+  // Create resolver with current sample data (instant optimistic layer)
   const sampleData = samplesData?.samples ?? DEFAULT_SAMPLE_DATA
-  const resolveTemplate = createResolver(sampleData)
+  const clientResolve = createResolver(sampleData)
+
+  // Server-side render (#357): the real resolver (cleanup, suffixes, condition
+  // selection) runs debounced on the backend and overrides the client
+  // substitution as truth once it lands.
+  const serverPreview = useServerPreview({
+    templates: collectTemplateStrings(formData),
+    conditionalDescriptions: formData.conditional_descriptions ?? [],
+    league: previewLeague,
+    live: liveRequested,
+    templateType: formData.template_type === "event" ? "event" : "team",
+  })
+  const resolveTemplate = (template: string): string =>
+    serverPreview.rendered[template] ?? clientResolve(template)
   const isLivePreview = samplesData?.live ?? false
 
   // Build validation set from variables data. The optional chain is hoisted
@@ -360,6 +374,7 @@ export function TemplateForm() {
               resolveTemplate={resolveTemplate}
               isTeamTemplate={isTeamTemplate}
               validationData={validationData}
+              conditionalPreview={serverPreview.conditional}
             />
           )}
           {activeTab === "fillers" && (

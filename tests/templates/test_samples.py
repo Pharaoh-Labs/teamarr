@@ -120,7 +120,7 @@ def test_live_preview_surfaces_gaps(monkeypatch):
     preview doesn't imply a variable populates when it won't."""
     from teamarr.api.routes import variables as v
 
-    monkeypatch.setattr(v, "_lookup_league_fields", lambda league: ("basketball", "espn"))
+    monkeypatch.setattr(v, "lookup_league_fields", lambda league: ("basketball", "espn"))
     monkeypatch.setattr(
         v, "_fetch_live_samples",
         lambda league: {"home_team": "Real Live Team", "score": "10-7"},

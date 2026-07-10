@@ -68,7 +68,19 @@ class TemplateResolver:
             return ""
 
         # Build all variables (base + suffixed)
-        variables = self._build_all_variables(context)
+        return self.resolve_with_map(template, self._build_all_variables(context))
+
+    def resolve_with_map(self, template: str, variables: dict[str, str]) -> str:
+        """Replace {variable} placeholders from a pre-built name -> value map.
+
+        The substitution/cleanup core of resolve(), exposed for callers that
+        have a variable map but no TemplateContext — e.g. the preview endpoint
+        rendering against static sample data (#357). Unknown variables stay
+        literal; known-but-empty values are replaced then cleaned up, exactly
+        as in context-based resolution.
+        """
+        if not template:
+            return ""
 
         unreplaced = []
 
@@ -99,11 +111,16 @@ class TemplateResolver:
         - Multiple consecutive spaces
         - Leading/trailing whitespace
         """
-        # Remove empty parentheses and brackets
-        text = re.sub(r"\s*\(\s*\)", "", text)
-        text = re.sub(r"\s*\[\s*\]", "", text)
+        # Collapse runs of spaces first so wrapper removal sees at most one
+        # space in any position — keeps the patterns below bounded (no adjacent
+        # unbounded quantifiers; CodeQL py/polynomial-redos).
+        text = re.sub(r" {2,}", " ", text)
 
-        # Collapse multiple spaces into one
+        # Remove empty parentheses and brackets
+        text = re.sub(r" ?\( ?\)", "", text)
+        text = re.sub(r" ?\[ ?\]", "", text)
+
+        # Wrapper removal can leave one double space behind ("a () b" -> "a  b")
         text = re.sub(r" {2,}", " ", text)
 
         text = text.strip()
