@@ -260,20 +260,22 @@ def test_college_ranked_matchup_leads_with_ranks(resolver):
 
 
 def test_college_unranked_never_shows_rank_prefix(resolver):
+    """{*_rank_display} is empty-safe (#354): no orphan 'No. ' ever renders."""
     spec = SPECS["College Event (Starter)"]
     ctx = _college_ctx()  # no ranks
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert "No." not in out
-    assert out.startswith("The Arkansas Razorbacks (20-7) host the Texas A&M Aggies (19-8)")
+    assert out.startswith("Arkansas Razorbacks (20-7) host Texas A&M Aggies (19-8)")
 
 
-def test_college_one_ranked_team_is_not_a_ranked_matchup(resolver):
-    """Gate hardening: the 'No. {rank}' row needs BOTH ranks (a bare rank var
-    is empty when unranked and would render 'No. ')."""
+def test_college_one_ranked_team_shows_only_that_rank(resolver):
+    """One-ranked matchups (the common case) show the one rank gracefully —
+    previously the both-ranked gate hid ranks entirely (#354)."""
     spec = SPECS["College Event (Starter)"]
     ctx = _college_ctx(home_rank=7)  # away unranked
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert "No." not in out
+    assert out.startswith("No. 7 Arkansas Razorbacks (20-7) host Texas A&M Aggies (19-8)")
+    assert out.count("No.") == 1
 
 
 def test_college_conference_game_names_the_conference(resolver):
