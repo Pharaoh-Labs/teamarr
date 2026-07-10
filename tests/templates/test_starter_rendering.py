@@ -175,7 +175,6 @@ _CTX_FOR_TEMPLATE = {
     "Soccer Club Event (Starter)": _soccer_club_ctx,
     "Combat Event (Starter)": _combat_ctx,
     "International Event (Starter)": _national_ctx,
-    "MiLB Event (Starter)": _milb_ctx,
     "Tennis Event (Starter)": _tennis_ctx,
 }
 
@@ -320,12 +319,17 @@ def test_tennis_year_prefixed_tournament_title(resolver):
     assert sub == "Final - Jannik Sinner vs Carlos Alcaraz"
 
 
-def test_milb_titles_as_minor_league_baseball(resolver):
-    """End-to-end of the tvnk.12 seed + tvnk.8 branding: every MiLB level
-    titles as Gracenote's real 'Minor League Baseball'."""
-    spec = SPECS["MiLB Event (Starter)"]
-    title = resolver.resolve(spec["title_format"], _milb_ctx())
+def test_milb_titles_as_minor_league_baseball_via_default_event(resolver):
+    """End-to-end of the tvnk.12 seed + tvnk.8 branding: MiLB needs no
+    dedicated starter (retired in tvnk.4) — Default Event titles every level
+    as Gracenote's real 'Minor League Baseball' straight from the seeds."""
+    spec = SPECS["Default Event (Starter)"]
+    ctx = _milb_ctx()
+    title = resolver.resolve(spec["title_format"], ctx)
     assert title == "Minor League Baseball"
+    # Channel prefix is the per-level alias ('AAA |'), the more informative form
+    channel = resolver.resolve(spec["event_channel_name"], ctx)
+    assert channel == "AAA | ABQ/SUG"
 
 
 def test_soccer_channel_name_uses_v_connector(resolver):

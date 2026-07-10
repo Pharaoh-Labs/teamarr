@@ -13,6 +13,11 @@ redirect_from:
 
 Templates define how your EPG content looks - the titles, descriptions, and artwork for programmes in your guide.
 
+**New install?** Teamarr ships with a curated set of
+[starter templates](../templates/defaults) modeled on
+professional (Gracenote) EPG conventions — you don't need to build templates
+from scratch. Assign the starters that match your setup and customize later.
+
 ## What Templates Do
 
 When Teamarr generates EPG, it uses templates to create programme entries. Templates contain:
@@ -102,6 +107,20 @@ Conditions have priorities - the first matching condition wins.
 See [Conditions](conditions) for available condition types.
 
 ## Getting Started
+
+The fastest path is the shipped starter set — every install seeds ten
+Gracenote-modeled templates covering team channels, US pro events, soccer
+(club and international), college, combat, minor-league baseball, and tennis.
+See [Default Templates](../templates/defaults) for the full
+set and recommended scoping.
+
+1. Go to **Templates** — the starter templates are already there, unassigned
+2. Assign the ones that match your setup (per sport/league, or as global
+   defaults) via **Template Assignments**
+3. Rename or edit freely — an edited starter is yours and never touched by
+   upgrades
+
+To build your own from scratch:
 
 1. Go to **Templates** and click **Create Template**
 2. Choose **Team** or **Event** type (this cannot be changed later)
