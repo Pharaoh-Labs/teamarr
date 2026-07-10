@@ -45,6 +45,8 @@ export function useCreateSubscriptionTemplate() {
     mutationFn: (data: SubscriptionTemplateCreate) => createSubscriptionTemplate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription-templates"] })
+      // Templates list renders per-template Usage from global_assignments
+      queryClient.invalidateQueries({ queryKey: ["templates"] })
     },
   })
 }
@@ -62,6 +64,8 @@ export function useUpdateSubscriptionTemplate() {
     }) => updateSubscriptionTemplate(assignmentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription-templates"] })
+      // Templates list renders per-template Usage from global_assignments
+      queryClient.invalidateQueries({ queryKey: ["templates"] })
     },
   })
 }
@@ -73,6 +77,8 @@ export function useDeleteSubscriptionTemplate() {
     mutationFn: (assignmentId: number) => deleteSubscriptionTemplate(assignmentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscription-templates"] })
+      // Templates list renders per-template Usage from global_assignments
+      queryClient.invalidateQueries({ queryKey: ["templates"] })
     },
   })
 }

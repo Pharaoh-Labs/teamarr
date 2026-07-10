@@ -29,6 +29,10 @@ import {
   useDeleteTemplate,
 } from "@/hooks/useTemplates"
 import { getTemplate, type Template } from "@/api/templates"
+import { useQuery } from "@tanstack/react-query"
+import { getLeagues } from "@/api/teams"
+import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
+import { useSports } from "@/hooks/useSports"
 import { TemplateAssignmentManager } from "@/components/TemplateAssignmentModal"
 import { useSubscription } from "@/hooks/useSubscription"
 
@@ -39,6 +43,16 @@ export function Templates() {
   const subscribedLeagues = subscription?.leagues ?? []
   const createMutation = useCreateTemplate()
   const deleteMutation = useDeleteTemplate()
+
+  // Friendly names for the Usage chips (league slugs like "fifa.world" are
+  // not user-facing). Query is shared/cached with the assignment manager below.
+  const { data: leaguesResponse } = useQuery({ queryKey: ["leagues"], queryFn: () => getLeagues() })
+  const leagueName = (slug: string) => {
+    const lg = leaguesResponse?.leagues?.find((l) => l.slug === slug)
+    return lg ? getLeagueDisplayName(lg, true) : slug.toUpperCase()
+  }
+  const { data: sportsData } = useSports()
+  const sportName = (s: string) => getSportDisplayName(s, sportsData?.sports)
 
   const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
   const [isImporting, setIsImporting] = useState(false)
@@ -312,14 +326,14 @@ export function Templates() {
                               if (a.leagues?.length) {
                                 return (
                                   <Badge key={i} variant="outline" className="text-xs">
-                                    {a.leagues.join(", ")}
+                                    {a.leagues.map(leagueName).join(", ")}
                                   </Badge>
                                 )
                               }
                               if (a.sports?.length) {
                                 return (
                                   <Badge key={i} variant="outline" className="text-xs">
-                                    {a.sports.join(", ")}
+                                    {a.sports.map(sportName).join(", ")}
                                   </Badge>
                                 )
                               }
