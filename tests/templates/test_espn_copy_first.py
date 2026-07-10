@@ -218,10 +218,14 @@ def test_starter_set_is_espn_copy_first():
         assert pregame["description_fallback"], spec["name"]
         assert "{game_preview" not in pregame["description_fallback"], spec["name"]
 
-        # Postgame: recap primary in the conditional; constructed fallback.
+        # Postgame: provider-copy primary in the conditional ({game_recap},
+        # or tennis's prose-shaped {tennis_result}); constructed fallback.
         cond = spec["postgame_conditional"]
         assert cond["enabled"] is True, spec["name"]
-        assert cond["description_final"].startswith("{game_recap"), spec["name"]
+        assert cond["description_final"].startswith(("{game_recap", "{tennis_result")), spec[
+            "name"
+        ]
         fallback = spec["postgame_fallback"]["description"]
         assert fallback, spec["name"]
         assert "{game_recap" not in fallback, spec["name"]
+        assert "{tennis_result" not in fallback, spec["name"]

@@ -4,6 +4,7 @@ These variables identify teams and the competition context.
 Most are BASE_ONLY since they don't change between games.
 """
 
+from teamarr.core.naming import team_with_article
 from teamarr.services.league_mappings import get_league_mapping_service
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
@@ -419,3 +420,34 @@ def extract_exception_keyword(ctx: TemplateContext, game_ctx: GameContext | None
     # Value is injected via extra_vars on TemplateContext
     # This extractor exists for validation, UI display, and as fallback
     return ""
+
+
+# --- Article-aware naming (tvnk.7, #329) ---
+
+
+@register_variable(
+    name="team_name_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Team name with Gracenote-convention article — 'the Detroit "
+    "Pistons' for clubs, 'Netherlands' for national teams",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_team_name_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    cfg = ctx.team_config
+    return team_with_article(cfg.team_name or "", cfg.league, cfg.sport)
+
+
+@register_variable(
+    name="opponent_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.ALL,
+    description="Opponent name with Gracenote-convention article — 'the Green "
+    "Bay Packers' for clubs, 'Japan' for national teams",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_opponent_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    opponent = _get_opponent(ctx, game_ctx)
+    if not opponent:
+        return ""
+    return team_with_article(opponent.name, opponent.league, opponent.sport)

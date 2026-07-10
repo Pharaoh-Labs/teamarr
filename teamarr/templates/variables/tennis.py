@@ -21,6 +21,9 @@ Usage example:
     "{tennis_round} - {tennis_court}" -> "Round 4 - No. 1 Court"
 """
 
+import re
+
+from teamarr.core.naming import tournament_with_article
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -167,3 +170,48 @@ def extract_tennis_draw(ctx: TemplateContext, game_ctx: GameContext | None) -> s
     if not event:
         return ""
     return event.draw_type or ""
+
+
+# --- Article-aware tournament + prose result (tvnk.7, #329) ---
+
+
+@register_variable(
+    name="tournament_name_the",
+    category=Category.TENNIS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Tournament name with its natural article — 'the US Open', "
+    "but 'Wimbledon' (no article for bare proper names)",
+    sample="Wimbledon",
+)
+def extract_tournament_name_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Tournament name with the article English usage expects."""
+    event = _tennis_event(game_ctx)
+    if not event:
+        return ""
+    return tournament_with_article(event.tournament_name or "")
+
+
+_RESULT_COUNTRY = re.compile(r"\s*\([A-Z]{2,3}\)")
+_RESULT_SET_GAP = re.compile(r"(\d\)?)\s+(?=\d+-\d)")
+
+
+@register_variable(
+    name="tennis_result",
+    category=Category.TENNIS,
+    scope=TemplateScope.EVENT_ONLY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Prose match result once final (e.g., 'Zverev defeats Fery "
+    "6-3, 6-4, 7-6') — reshaped from ESPN's result note; empty until the "
+    "match is final",
+    sample="Alcaraz defeats Sinner 6-4, 3-6, 6-3",
+)
+def extract_tennis_result(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """ESPN's result note ('Piros (HUN) bt Ivanov (BUL) 6-2 6-2') as prose."""
+    event = _tennis_event(game_ctx)
+    if not event or not event.game_recap:
+        return ""
+    text = _RESULT_COUNTRY.sub("", event.game_recap)
+    text = text.replace(" bt ", " defeats ")
+    text = _RESULT_SET_GAP.sub(r"\1, ", text)
+    return text.strip()
