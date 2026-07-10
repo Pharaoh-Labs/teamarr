@@ -248,13 +248,15 @@ class ConditionEvaluator:
         self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
     ) -> bool:
         """Check if the provider's postgame recap headline is available."""
-        return bool(game_ctx.event.game_recap)
+        event = game_ctx.event
+        return bool(event and event.game_recap)
 
     def _eval_has_preview(
         self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
     ) -> bool:
         """Check if the provider's pregame preview blurb is available."""
-        return bool(game_ctx.event.game_preview)
+        event = game_ctx.event
+        return bool(event and event.game_preview)
 
     # =========================================================================
     # Opponent conditions
