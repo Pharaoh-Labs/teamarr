@@ -70,3 +70,8 @@ bd.db
 # since no pattern above ignores them.
 .auto-import-issues.jsonl
 daemon-error
+
+# Added by bd (missing required patterns)
+last_pull
+proxieddb/
+proxied_server_client_info.json
