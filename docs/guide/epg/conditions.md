@@ -192,6 +192,20 @@ when it isn't published yet — the pattern the starter templates ship with:
 {"condition": "opponent_name_contains", "condition_value": "Rival", "priority": 20, "template": "🔥 Rivalry game! {team_name} vs {opponent}"}
 ```
 
+### League / Sport
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `league_is` | League code(s), comma-separated | Event's league matches one of the given codes (case-insensitive), e.g. `cfb` or `cfb,nfl` |
+| `sport_is` | Sport code(s), comma-separated | Event's sport matches one of the given codes (case-insensitive), e.g. `football,basketball` |
+
+Available to both team and event templates — one template can branch its description by league or sport instead of needing a separate template variant per league.
+
+**Example:**
+```json
+{"condition": "league_is", "condition_value": "cfb", "priority": 15, "template": "College football: {away_team} at {home_team}"}
+```
+
 ---
 
 ## Default Descriptions
@@ -255,3 +269,5 @@ Here's a complete set of conditions for a college football team template:
 | `is_national_broadcast` | No | National TV games |
 | `has_odds` | No | Including betting lines |
 | `opponent_name_contains` | Yes (search text) | Rivalry or specific opponent |
+| `league_is` | Yes (league codes) | Branching one template by league |
+| `sport_is` | Yes (sport codes) | Branching one template by sport |

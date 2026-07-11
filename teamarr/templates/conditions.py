@@ -19,6 +19,8 @@ Condition Types:
 - has_event_note: Marquee/playoff note available ('NBA Finals - Game 5')
 - has_match_note: Soccer competition note available ('FIFA World Cup, Group C')
 - opponent_name_contains: Opponent name contains string
+- league_is: Event's league is one of the given codes (value = "cfb" or "cfb,nfl")
+- sport_is: Event's sport is one of the given codes (value = "football,basketball")
 
 Priority:
 - 1-99: Conditional descriptions (lower = higher priority)
@@ -411,6 +413,39 @@ class ConditionEvaluator:
             if session.code == game_ctx.card_segment:
                 return any(r.position is not None for r in session.results)
         return False
+
+    # =========================================================================
+    # Event identity conditions (#370)
+    # =========================================================================
+
+    @staticmethod
+    def _matches_any(actual: str | None, value: str | None) -> bool:
+        """Case-insensitive membership of actual in a comma-separated value list."""
+        if not value or not actual:
+            return False
+        wanted = {v.strip().lower() for v in value.split(",") if v.strip()}
+        return actual.lower() in wanted
+
+    def _eval_league_is(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the event's league matches one of the given codes.
+
+        Value is a comma-separated list of canonical league codes
+        (e.g. "nfl" or "cfb,nfl"), case-insensitive. Lets one template
+        branch a register by league instead of needing per-league variants.
+        """
+        return self._matches_any(getattr(game_ctx.event, "league", None), value)
+
+    def _eval_sport_is(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the event's sport matches one of the given codes.
+
+        Value is a comma-separated list of sport codes
+        (e.g. "football" or "basketball,hockey"), case-insensitive.
+        """
+        return self._matches_any(getattr(game_ctx.event, "sport", None), value)
 
 
 class ConditionalDescriptionSelector:
