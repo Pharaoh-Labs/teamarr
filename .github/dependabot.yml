@@ -9,12 +9,11 @@ updates:
     schedule:
       interval: weekly
     # Same supply-chain aging as uv/npm below (#308) — actions have their own
-    # compromise history (e.g. tj-actions/changed-files).
+    # compromise history (e.g. tj-actions/changed-files). Only default-days:
+    # the semver-granular keys are unsupported for github-actions and fail
+    # Dependabot's config validation (red X on every commit).
     cooldown:
       default-days: 7
-      semver-major-days: 14
-      semver-minor-days: 7
-      semver-patch-days: 3
     groups:
       actions:
         patterns:
