@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from "react"
-import { Loader2, CheckCircle, AlertTriangle, Search, Terminal } from "lucide-react"
+import { LoaderCircle, CircleCheckBig, TriangleAlert, Search, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -158,13 +158,13 @@ export function EpgOutput() {
         {/* EPG analysis: issues or all-clear */}
         {analysisLoading ? (
           <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : analysis && hasIssues ? (
           <Alert
             variant="warning"
             className="space-y-2"
-            icon={<AlertTriangle className="h-4 w-4" />}
+            icon={<TriangleAlert className="h-4 w-4" />}
             title="Detected Issues"
           >
             {analysis.unreplaced_variables.length > 0 && (
@@ -229,7 +229,7 @@ export function EpgOutput() {
         ) : analysis ? (
           <Alert
             variant="success"
-            icon={<CheckCircle className="h-4 w-4" />}
+            icon={<CircleCheckBig className="h-4 w-4" />}
             title="No Issues Detected"
           >
             <p className="text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Loader2, AlertTriangle } from "lucide-react"
+import { Trash2, LoaderCircle, TriangleAlert } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
@@ -96,7 +96,7 @@ function ResetAllContent({
     <DialogContent onClose={onClose} className="max-w-2xl">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2 text-destructive">
-          <AlertTriangle className="h-5 w-5" />
+          <TriangleAlert className="h-5 w-5" />
           Reset All Teamarr Channels
         </DialogTitle>
         <DialogDescription>
@@ -156,7 +156,7 @@ function ResetAllContent({
             disabled={resetExecuting}
           >
             {resetExecuting ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              <LoaderCircle className="h-4 w-4 animate-spin mr-1" />
             ) : (
               <Trash2 className="h-4 w-4 mr-1" />
             )}

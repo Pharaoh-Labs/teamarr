@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { Plus, X, Loader2 } from "lucide-react"
+import { Plus, X, LoaderCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -149,7 +149,7 @@ export function ChannelProfileSelector({
   if (isLoading) {
     return (
       <div className={cn("flex items-center justify-center py-4", className)}>
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoaderCircle className="h-4 w-4 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -221,7 +221,7 @@ export function ChannelProfileSelector({
             disabled={creating || !newName.trim()}
             onClick={handleCreate}
           >
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+            {creating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Create"}
           </Button>
           <Button
             type="button"

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { Button } from "./button"
 import {
   Dialog,
@@ -53,7 +53,7 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button variant={confirmVariant} onClick={onConfirm} disabled={isPending}>
-            {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
             {confirmLabel}
           </Button>
         </DialogFooter>

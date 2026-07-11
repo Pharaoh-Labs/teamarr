@@ -5,8 +5,8 @@ import {
   Plus,
   Trash2,
   X,
-  Loader2,
-  AlertCircle,
+  LoaderCircle,
+  CircleAlert,
   ChevronDown,
   Info,
   Download,
@@ -183,7 +183,7 @@ function TeamMultiSelect({
           <div className="max-h-64 overflow-y-auto">
             {isLoading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <LoaderCircle className="h-3 w-3 animate-spin" />
                 Loading teams...
               </div>
             ) : filteredGroups.length === 0 ? (
@@ -1027,7 +1027,7 @@ export function StreamOrderingManager() {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     )
@@ -1037,7 +1037,7 @@ export function StreamOrderingManager() {
     return (
       <Card>
         <CardContent className="flex items-center gap-2 py-8 text-destructive">
-          <AlertCircle className="h-5 w-5" />
+          <CircleAlert className="h-5 w-5" />
           <span>Failed to load stream ordering settings</span>
         </CardContent>
       </Card>
@@ -1082,7 +1082,7 @@ export function StreamOrderingManager() {
             </Button>
             <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
               {isImporting ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <Upload className="h-4 w-4 mr-1" />
               )}

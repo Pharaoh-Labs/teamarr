@@ -7,7 +7,7 @@
 
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, XCircle, Search, Check } from "lucide-react"
+import { LoaderCircle, CircleX, Search, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -148,7 +148,7 @@ export function EventMatcherModal({
           <div className="flex gap-2">
             {leaguesLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoaderCircle className="h-4 w-4 animate-spin" />
                 Loading leagues...
               </div>
             ) : (
@@ -188,7 +188,7 @@ export function EventMatcherModal({
                   disabled={!league || loading}
                 >
                   {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
                   ) : (
                     <Search className="h-4 w-4" />
                   )}
@@ -262,9 +262,9 @@ export function EventMatcherModal({
             title="Mark this stream to be skipped (no event match)"
           >
             {submitting ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <XCircle className="h-4 w-4 mr-2" />
+              <CircleX className="h-4 w-4 mr-2" />
             )}
             Skip Stream
           </Button>
@@ -278,7 +278,7 @@ export function EventMatcherModal({
             >
               {submitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
                   Applying...
                 </>
               ) : (

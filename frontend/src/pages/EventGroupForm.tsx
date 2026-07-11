@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, FlaskConical } from "lucide-react"
+import { ArrowLeft, LoaderCircle, FlaskConical } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -552,7 +552,7 @@ export function EventGroupForm() {
                         onClick={matchGlobal}
                         disabled={matchingGlobal}
                       >
-                        {matchingGlobal ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                        {matchingGlobal ? <LoaderCircle className="h-3 w-3 mr-1 animate-spin" /> : null}
                         Match Global
                       </Button>
                     </div>

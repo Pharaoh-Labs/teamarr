@@ -5,7 +5,7 @@ import {
   Plus,
   Trash2,
   Pencil,
-  Loader2,
+  LoaderCircle,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -177,7 +177,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSaving}>
-            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isSaving && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
             Update
           </Button>
         </DialogFooter>
@@ -998,7 +998,7 @@ export function Teams() {
               Cancel
             </Button>
             <Button onClick={handleBulkAssignTemplate} disabled={updateMutation.isPending}>
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {updateMutation.isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Assign
             </Button>
           </DialogFooter>
@@ -1092,7 +1092,7 @@ export function Teams() {
               Cancel
             </Button>
             <Button onClick={handleBulkUpdateChannelIds} disabled={isUpdatingChannelIds}>
-              {isUpdatingChannelIds && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isUpdatingChannelIds && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Apply to {selectedIds.size} Team{selectedIds.size !== 1 && "s"}
             </Button>
           </DialogFooter>

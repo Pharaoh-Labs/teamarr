@@ -7,11 +7,11 @@ import { RichTooltip } from "@/components/ui/rich-tooltip"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Trash2,
-  Loader2,
+  LoaderCircle,
   Clock,
   Tv,
   Search,
-  AlertTriangle,
+  TriangleAlert,
   X,
   ChevronRight,
   ChevronDown,
@@ -225,7 +225,7 @@ function PriorityCell(
         }
       >
         {generating ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <LoaderCircle className="h-3 w-3 animate-spin" />
         ) : (
           <>
             <span>{band}{stale && "*"}</span>
@@ -544,7 +544,7 @@ const ChannelRow = React.memo(function ChannelRow({
             <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
             {loading ? (
               <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <LoaderCircle className="h-3 w-3 animate-spin" />
                 Loading streams…
               </div>
             ) : (streams ?? []).length === 0 ? (
@@ -866,7 +866,7 @@ export function ManagedChannelsTable() {
           size="sm"
           onClick={() => setResetModalOpen(true)}
         >
-          <AlertTriangle className="h-4 w-4 mr-1" />
+          <TriangleAlert className="h-4 w-4 mr-1" />
           Reset All
         </Button>
       </div>

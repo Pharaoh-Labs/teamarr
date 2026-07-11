@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { toast } from "sonner"
-import { BookOpen, Download, Upload, Trash2, Loader2, ChevronRight, Target } from "lucide-react"
+import { BookOpen, Download, Upload, Trash2, LoaderCircle, ChevronRight, Target } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -399,7 +399,7 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {presetsLoading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <LoaderCircle className="h-5 w-5 animate-spin" />
               </div>
             ) : !presets || presets.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">

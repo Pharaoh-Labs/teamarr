@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const SIZES = {
@@ -17,7 +17,7 @@ export function Spinner({
 }) {
   return (
     <div className={cn("flex items-center justify-center py-8", className)}>
-      <Loader2 className={cn(SIZES[size], "animate-spin text-muted-foreground")} />
+      <LoaderCircle className={cn(SIZES[size], "animate-spin text-muted-foreground")} />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2, TestTube, CheckCircle, XCircle } from "lucide-react"
+import { LoaderCircle, TestTube, CircleCheckBig, CircleX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -132,7 +132,7 @@ function MediaServerCard({
           <div className="flex items-center gap-2">
             <Button onClick={handleTest} variant="outline" size="sm" disabled={testing}>
               {testing ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <TestTube className="h-4 w-4 mr-1" />
               )}
@@ -141,11 +141,11 @@ function MediaServerCard({
             {testResult && (
               testResult.success ? (
                 <Badge variant="success" className="gap-1">
-                  <CheckCircle className="h-3 w-3" /> {testResult.message}
+                  <CircleCheckBig className="h-3 w-3" /> {testResult.message}
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="gap-1">
-                  <XCircle className="h-3 w-3" /> {testResult.message}
+                  <CircleX className="h-3 w-3" /> {testResult.message}
                 </Badge>
               )
             )}
@@ -329,7 +329,7 @@ function ChannelsDVRForm({ initial }: { initial: ChannelsDVRSettings }) {
           <div className="flex items-center gap-2">
             <Button onClick={handleTest} variant="outline" size="sm" disabled={testChannelsDVR.isPending}>
               {testChannelsDVR.isPending ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <TestTube className="h-4 w-4 mr-1" />
               )}
@@ -338,11 +338,11 @@ function ChannelsDVRForm({ initial }: { initial: ChannelsDVRSettings }) {
             {testResult && (
               testResult.success ? (
                 <Badge variant="success" className="gap-1">
-                  <CheckCircle className="h-3 w-3" /> {testResult.message}
+                  <CircleCheckBig className="h-3 w-3" /> {testResult.message}
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="gap-1">
-                  <XCircle className="h-3 w-3" /> {testResult.message}
+                  <CircleX className="h-3 w-3" /> {testResult.message}
                 </Badge>
               )
             )}

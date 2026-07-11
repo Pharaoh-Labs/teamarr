@@ -1,4 +1,4 @@
-import { Plus, Loader2, Upload, Download } from "lucide-react"
+import { Plus, LoaderCircle, Upload, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface SectionActionsProps {
@@ -25,7 +25,7 @@ export function SectionActions({
       </Button>
       <Button variant="outline" size="sm" onClick={onImport} disabled={isImporting} title="Import">
         {isImporting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <LoaderCircle className="h-4 w-4 animate-spin" />
         ) : (
           <Upload className="h-4 w-4" />
         )}
