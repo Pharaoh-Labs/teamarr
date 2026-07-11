@@ -260,6 +260,16 @@ class TestDetectTeamInStreamName:
         )
         assert result == away_team
 
+    def test_team_branded_channel_token_variants(self, home_team, away_team):
+        """Spaced and run-together forms count too: 'Yankees TV', 'YankeesTV'."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        for variant in ("yankees @ orioles yankees tv", "yankees @ orioles (yankeestv)"):
+            result = EventGroupProcessor._detect_team_in_stream_name(
+                variant, home_team, away_team
+            )
+            assert result == away_team, variant
+
 
 # ===========================================================================
 # Broadcast-market feed detection (#343)
@@ -323,6 +333,32 @@ class TestDetectFeedFromBroadcastMarkets:
         """Names under 3 chars are skipped (false-positive guard)."""
         event.broadcast_markets = {"TV": "away"}
         assert self._detect("some tv stream", event) is None
+
+    # -- fuzzy tiers (#343 follow-up): streams rarely quote the listing --
+
+    def test_punctuation_variant_matches(self, event):
+        """'Brewers.TV' listed, stream says 'BREWERS TV'."""
+        assert self._detect("MLB 04: MIL @ CHC BREWERS TV", event) == event.away_team
+
+    def test_run_together_variant_matches(self, event):
+        """'Brewers.TV' listed, stream says 'BrewersTV'."""
+        assert self._detect("MLB 04: MIL @ CHC (BrewersTV)", event) == event.away_team
+
+    def test_abbreviated_multiword_name_fuzzy_matches(self, event):
+        """'Bally Sports Wisconsin' listed, stream says 'Bally Sports WI'."""
+        event.broadcast_markets = {"Bally Sports Wisconsin": "away"}
+        assert self._detect("MIL @ CHC | Bally Sports WI", event) == event.away_team
+
+    def test_short_single_token_stays_exact(self, event):
+        """'YES' must not fuzzy-match into unrelated words."""
+        event.broadcast_markets = {"YES": "home"}
+        assert self._detect("yesterday replay: MIL @ CHC", event) is None
+        assert self._detect("MIL @ CHC on YES", event) == event.home_team
+
+    def test_matchup_team_name_alone_does_not_match(self, event):
+        """'Brewers.TV' listed: a plain matchup title mentioning the Brewers
+        (no channel token) must not become a team feed."""
+        assert self._detect("Milwaukee Brewers @ Chicago Cubs", event) is None
 
 
 # ===========================================================================

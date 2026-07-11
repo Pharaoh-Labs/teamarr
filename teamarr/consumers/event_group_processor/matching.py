@@ -437,23 +437,80 @@ class StreamMatching:
         return matched_streams
 
     @staticmethod
+    def _broadcast_name_in_stream(name_norm: str, stream_norm: str) -> bool:
+        """Fuzzy-tolerant presence check for a normalized broadcast name in
+        a normalized stream name (#343). Stream names rarely quote the ESPN
+        listing verbatim, so three tiers:
+
+        1. Exact normalized phrase (word-boundary) — punctuation/case
+           variants ('Brewers.TV' ↔ 'BREWERS TV'); the ONLY tier for short
+           single-token names ('YES'), which fuzzier tiers would over-match.
+        2. Collapsed substring (≥5 chars) — run-together forms ('BrewersTV').
+        3. Token window for multi-word names — each name token must match
+           the aligned stream token exactly, by prefix ('WI' ↔ 'Wisconsin'),
+           or fuzzily (rapidfuzz ratio ≥ 80 for tokens ≥ 4 chars): covers
+           abbreviated/near-miss forms ('Bally Sports WI').
+        """
+        import re
+
+        if not name_norm:
+            return False
+        if re.search(rf"\b{re.escape(name_norm)}\b", stream_norm):
+            return True
+        collapsed = name_norm.replace(" ", "")
+        if len(collapsed) >= 5 and collapsed in stream_norm.replace(" ", ""):
+            return True
+
+        name_tokens = name_norm.split()
+        if len(name_tokens) < 2:
+            return False
+        stream_tokens = stream_norm.split()
+        n = len(name_tokens)
+        return any(
+            all(
+                StreamMatching._broadcast_tokens_match(nt, st)
+                for nt, st in zip(name_tokens, stream_tokens[i : i + n], strict=True)
+            )
+            for i in range(len(stream_tokens) - n + 1)
+        )
+
+    @staticmethod
+    def _broadcast_tokens_match(a: str, b: str) -> bool:
+        """Single-token equivalence for the broadcast token window."""
+        from rapidfuzz import fuzz
+
+        if a == b:
+            return True
+        if len(a) >= 2 and len(b) >= 2 and (a.startswith(b) or b.startswith(a)):
+            return True
+        return len(a) >= 4 and len(b) >= 4 and fuzz.ratio(a, b) >= 80
+
+    @staticmethod
     def _detect_feed_from_broadcast_markets(stream_name_lower: str, event):
         """Match the stream name against the event's home/away-market
         broadcast names (ESPN broadcasts[].market, #343).
 
-        'national' names never make a team feed; a stream matching BOTH
-        sides' names is ambiguous and stays a normal channel. Names shorter
-        than 3 characters are skipped (false-positive guard, same threshold
-        as team abbreviations).
+        Matching is fuzzy-tolerant (see _broadcast_name_in_stream) since
+        stream names rarely quote the listing verbatim. 'national' names
+        never make a team feed; a stream matching BOTH sides' names is
+        ambiguous and stays a normal channel. Names shorter than 3
+        characters are skipped (false-positive guard, same threshold as
+        team abbreviations).
         """
-        import re
+        from teamarr.utilities.fuzzy_match import normalize_text
 
         markets = getattr(event, "broadcast_markets", None) or {}
+        if not markets:
+            return None
+        stream_norm = normalize_text(stream_name_lower)
         matched_sides: set[str] = set()
         for name, market in markets.items():
-            if market not in ("home", "away") or len(name) < 3:
+            if market not in ("home", "away"):
                 continue
-            if re.search(rf"\b{re.escape(name.lower())}\b", stream_name_lower):
+            name_norm = normalize_text(name)
+            if len(name_norm) < 3:
+                continue
+            if StreamMatching._broadcast_name_in_stream(name_norm, stream_norm):
                 matched_sides.add(market)
 
         if matched_sides == {"home"}:
@@ -506,8 +563,9 @@ class StreamMatching:
                     rf"\b(?:feed|broadcast)[:\s]+{esc}\b",
                     rf"\b{esc}\s+(?:home|away)\b",
                     rf"\b(?:home|away)\s+{esc}\b",
-                    # Team-branded channel token: "Brewers.TV" (#343)
-                    rf"\b{esc}\.tv\b",
+                    # Team-branded channel token: "Brewers.TV" / "Brewers TV"
+                    # / "BrewersTV" (#343)
+                    rf"\b{esc}[.\s]?tv\b",
                 ]
 
                 for pattern in patterns:
