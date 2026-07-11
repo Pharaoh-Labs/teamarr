@@ -319,11 +319,16 @@ def test_college_conference_game_names_the_conference(resolver):
 
 def test_marquee_note_leads_us_pro_description(resolver):
     """#355 item 2: an NBA Finals game must not describe like a random
-    February game — the has_event_note row prefixes the marquee designation."""
+    February game — the has_event_note row prefixes the marquee designation.
+    Framing-neutral 'meet at' prose (#355 item 3): marquee games are often
+    neutral-site, where host/travel framing lies."""
     spec = SPECS["Default Event (Starter)"]
     ctx = _nba_ctx(game_event_note="NBA Finals - Game 5")
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert out.startswith("NBA Finals - Game 5. The 8-4 Detroit Pistons travel to")
+    assert out == (
+        "NBA Finals - Game 5. The 8-4 Detroit Pistons and the "
+        "10-2 Boston Celtics meet at The Palace."
+    )
 
 
 def test_marquee_note_leads_college_description(resolver):
@@ -332,8 +337,40 @@ def test_marquee_note_leads_college_description(resolver):
     ctx = _college_ctx(home_rank=20, away_rank=15,
                        game_event_note="CFP Quarterfinal at the Cotton Bowl Classic")
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out == (
+        "CFP Quarterfinal at the Cotton Bowl Classic. No. 15 Texas A&M Aggies "
+        "(19-8) and No. 20 Arkansas Razorbacks (20-7) meet at Bud Walton Arena."
+    )
+
+
+def test_neutral_site_subtitle_flips_to_vs(resolver):
+    """#355 item 3: the {at_vs} connector reads 'vs.' at neutral sites,
+    'at' for ordinary hosted US-sport games."""
+    spec = SPECS["Default Event (Starter)"]
+    hosted = resolver.resolve(spec["subtitle_template"], _nba_ctx())
+    assert hosted == "Detroit Pistons at Boston Celtics"
+    neutral = resolver.resolve(spec["subtitle_template"], _nba_ctx(neutral_site=True))
+    assert neutral == "Detroit Pistons vs. Boston Celtics"
+
+
+def test_neutral_site_description_drops_host_framing(resolver):
+    """Unnoted neutral games get 'meet at' prose instead of the travel line."""
+    spec = SPECS["Default Event (Starter)"]
+    ctx = _nba_ctx(neutral_site=True)
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert out.startswith(
-        "CFP Quarterfinal at the Cotton Bowl Classic. No. 20 Arkansas Razorbacks"
+        "The 8-4 Detroit Pistons and the 10-2 Boston Celtics meet at The Palace."
+    )
+    assert "travel to" not in out and "host" not in out
+
+
+def test_neutral_site_college_keeps_ranks(resolver):
+    spec = SPECS["College Event (Starter)"]
+    ctx = _college_ctx(home_rank=7, neutral_site=True)
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out.startswith(
+        "Texas A&M Aggies (19-8) and No. 7 Arkansas Razorbacks (20-7) meet at "
+        "Bud Walton Arena."
     )
 
 

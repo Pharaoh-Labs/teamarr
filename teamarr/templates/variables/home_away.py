@@ -87,13 +87,16 @@ def extract_home_away_text(ctx: TemplateContext, game_ctx: GameContext | None) -
     name="vs_at",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
-    description="'vs' if home, 'at' if away",
+    description="'vs' if home, 'at' if away; neutral-site games read 'vs'",
     scope=TemplateScope.TEAM_ONLY,
 )
 def extract_vs_at(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     is_home = _is_home(ctx, game_ctx)
     if is_home is None:
         return ""
+    # Neutral site: "at Opponent" misframes a game nobody hosts (#355 item 3).
+    if game_ctx and game_ctx.event and game_ctx.event.neutral_site:
+        return "vs"
     return "vs" if is_home else "at"
 
 
@@ -101,13 +104,15 @@ def extract_vs_at(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     name="vs_@",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
-    description="'vs' if home, '@' if away",
+    description="'vs' if home, '@' if away; neutral-site games read 'vs'",
     scope=TemplateScope.TEAM_ONLY,
 )
 def extract_vs_symbol(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     is_home = _is_home(ctx, game_ctx)
     if is_home is None:
         return ""
+    if game_ctx and game_ctx.event and game_ctx.event.neutral_site:
+        return "vs"
     return "vs" if is_home else "@"
 
 
@@ -492,12 +497,12 @@ def extract_away_team_ranked_the(ctx: TemplateContext, game_ctx: GameContext | N
     suffix_rules=SuffixRules.ALL,
     description="Perspective-free matchup connector between away and home — "
     "'at' for US team sports ('Mystics at Liberty'), 'vs.' otherwise "
-    "('Scotland vs. Morocco')",
+    "('Scotland vs. Morocco'); neutral-site games always read 'vs.'",
 )
 def extract_at_vs(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
-    return matchup_connector(game_ctx.event.sport)
+    return matchup_connector(game_ctx.event.sport, game_ctx.event.neutral_site)
 
 
 @register_variable(

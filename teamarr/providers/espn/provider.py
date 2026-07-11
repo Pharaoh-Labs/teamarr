@@ -678,6 +678,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             notes = competition.get("notes") or []
             game_event_note = (notes[0].get("headline") if notes else "") or ""
             soccer_match_note = competition.get("altGameNote") or ""
+            neutral_site = bool(competition.get("neutralSite"))
 
             home_score = self._parse_score(home_data.get("score"))
             away_score = self._parse_score(away_data.get("score"))
@@ -708,6 +709,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 game_recap=game_recap,
                 game_event_note=game_event_note,
                 soccer_match_note=soccer_match_note,
+                neutral_site=neutral_site,
             )
         except Exception as e:
             logger.warning("[ESPN] Failed to parse event %s: %s", data.get("id", "unknown"), e)

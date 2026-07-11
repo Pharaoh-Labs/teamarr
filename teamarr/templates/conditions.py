@@ -10,6 +10,7 @@ Condition Types:
 - is_top_ten_matchup: Both teams in top 10
 - is_conference_game: Same conference (college)
 - is_playoff, is_preseason: Season type
+- is_neutral_site: Game is at a neutral site (bowls, CFP/NCAA tournament)
 - is_national_broadcast: National TV broadcast
 - has_odds: Betting odds available
 - has_recap: Provider recap headline available (postgame)
@@ -267,6 +268,15 @@ class ConditionEvaluator:
         """Check if structured preview data (recent form) is available."""
         event = game_ctx.event
         return bool(event and (event.home_last_five or event.away_last_five))
+
+    def _eval_is_neutral_site(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the game is at a neutral site (ESPN neutralSite: bowls,
+        CFP/NCAA tournament rounds, showcase games). Host framing ('X travel
+        to…', 'Y host X…') misrepresents these games (#355 item 3)."""
+        event = game_ctx.event
+        return bool(event and event.neutral_site)
 
     def _eval_has_event_note(
         self, value: str | None, ctx: TemplateContext, game_ctx: GameContext

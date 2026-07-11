@@ -356,6 +356,12 @@ def get_conditions(template_type: str = "team"):
             "requires_value": False,
             "providers": "espn",
         },
+        {
+            "name": "is_neutral_site",
+            "description": "Game is at a neutral site (bowls, CFP/NCAA tournament rounds)",
+            "requires_value": False,
+            "providers": "espn",
+        },
     ]
 
     # Team-only conditions (require "our team" perspective)

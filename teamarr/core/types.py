@@ -122,6 +122,11 @@ class Event:
     season_year: int | None = None
     season_type: str | None = None
 
+    # Neutral-site flag (ESPN competitions[].neutralSite): bowls, CFP/NCAA
+    # tournament rounds, showcase games. Flips matchup framing to 'vs.' and
+    # drops host framing (Gracenote convention, #355 item 3).
+    neutral_site: bool = False
+
     # Betting odds (from scoreboard API, usually same-day only)
     odds_data: dict | None = None
 

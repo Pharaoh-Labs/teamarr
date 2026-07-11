@@ -141,8 +141,14 @@ def tournament_with_article(name: str) -> str:
 _AT_SPORTS = frozenset({"football", "basketball", "baseball", "hockey"})
 
 
-def matchup_connector(sport: str | None) -> str:
-    """Perspective-free matchup connector: 'at' for US team sports, 'vs.' else."""
+def matchup_connector(sport: str | None, neutral_site: bool = False) -> str:
+    """Perspective-free matchup connector: 'at' for US team sports, 'vs.' else.
+
+    Neutral-site games read 'vs.' regardless of sport — Gracenote drops the
+    away-at-home framing when nobody hosts (#355 item 3).
+    """
+    if neutral_site:
+        return "vs."
     return "at" if (sport or "").lower() in _AT_SPORTS else "vs."
 
 

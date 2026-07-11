@@ -100,6 +100,13 @@ def test_matchup_connector():
     assert matchup_connector("mma") == "vs."
 
 
+def test_matchup_connector_neutral_site_always_vs():
+    """Neutral-site games read 'vs.' even for US at-sports (#355 item 3)."""
+    assert matchup_connector("basketball", neutral_site=True) == "vs."
+    assert matchup_connector("football", neutral_site=True) == "vs."
+    assert matchup_connector("soccer", neutral_site=True) == "vs."
+
+
 def test_surnames():
     assert surnames("Alex de Minaur") == "de Minaur"
     assert surnames("Camilo Ugo Carabelli") == "Ugo Carabelli"
