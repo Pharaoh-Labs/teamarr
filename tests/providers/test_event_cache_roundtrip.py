@@ -61,6 +61,40 @@ def test_broadcast_markets_survive_cache_roundtrip():
     assert dict_to_event(event_to_dict(_event())).broadcast_markets == {}
 
 
+def test_odds_data_survives_cache_roundtrip():
+    odds = {"spread": "BOS -6.5", "over_under": 224.5, "provider": "ESPN BET"}
+    back = dict_to_event(event_to_dict(_event(odds_data=odds)))
+    assert back.odds_data == odds
+    assert dict_to_event(event_to_dict(_event())).odds_data is None
+
+
+def test_combat_fields_survive_cache_roundtrip():
+    from teamarr.core.types import Bout
+
+    bouts = [
+        Bout(fighter1="A. Fighter", fighter2="B. Fighter", segment="prelims", order=0),
+        Bout(fighter1="C. Champ", fighter2="D. Challenger", segment="main_card", order=1),
+    ]
+    ev = _event(
+        league="ufc", sport="mma",
+        bouts=bouts,
+        fight_result_method="ko/tko",
+        finish_round=3,
+        finish_time="3:48",
+        weight_class="Bantamweight",
+        fighter1_scores=[48, 47, 48],
+        fighter2_scores=[47, 48, 47],
+    )
+    back = dict_to_event(event_to_dict(ev))
+    assert back.bouts == bouts
+    assert back.fight_result_method == "ko/tko"
+    assert back.finish_round == 3
+    assert back.finish_time == "3:48"
+    assert back.weight_class == "Bantamweight"
+    assert back.fighter1_scores == [48, 47, 48]
+    assert back.fighter2_scores == [47, 48, 47]
+
+
 def test_pre_upgrade_cache_entries_deserialize():
     """Entries written before these fields existed must still load."""
     data = event_to_dict(_event())
@@ -68,12 +102,18 @@ def test_pre_upgrade_cache_entries_deserialize():
         "neutral_site", "game_recap", "game_event_note", "soccer_match_note",
         "game_preview", "series_summary", "home_last_five", "away_last_five",
         "broadcast_markets",
+        "odds_data", "bouts", "fight_result_method", "finish_round",
+        "finish_time", "weight_class", "fighter1_scores", "fighter2_scores",
     ):
         data.pop(key)
     back = dict_to_event(data)
     assert back.neutral_site is False
     assert back.game_event_note == ""
     assert back.broadcast_markets == {}
+    assert back.odds_data is None
+    assert back.bouts == []
+    assert back.fight_result_method is None
+    assert back.fighter1_scores is None
 
 
 def test_parse_broadcast_markets_from_scoreboard_payload():

@@ -7,7 +7,7 @@ JSON for storage in PersistentTTLCache (SQLite-backed).
 from datetime import datetime
 
 from teamarr.core import Event, EventStatus, Team, TeamStats, Venue
-from teamarr.core.types import RacingResult, RacingSession
+from teamarr.core.types import Bout, RacingResult, RacingSession
 
 
 def event_to_dict(event: Event) -> dict:
@@ -51,9 +51,21 @@ def event_to_dict(event: Event) -> dict:
         "series_summary": event.series_summary,
         "home_last_five": event.home_last_five,
         "away_last_five": event.away_last_five,
+        # Betting odds — the has_odds condition and odds vars read this; a
+        # cache hit must not silently drop it (#366).
+        "odds_data": event.odds_data,
         # UFC-specific fields
         "segment_times": segment_times_dict,
         "main_card_start": event.main_card_start.isoformat() if event.main_card_start else None,
+        # Combat result fields — the is_knockout/is_submission/is_decision/
+        # is_finish/went_distance conditions and result vars read these (#366).
+        "bouts": [bout_to_dict(b) for b in event.bouts],
+        "fight_result_method": event.fight_result_method,
+        "finish_round": event.finish_round,
+        "finish_time": event.finish_time,
+        "weight_class": event.weight_class,
+        "fighter1_scores": event.fighter1_scores,
+        "fighter2_scores": event.fighter2_scores,
         # Racing-specific fields
         "circuit_name": event.circuit_name,
         "sessions": [racing_session_to_dict(s) for s in event.sessions],
@@ -67,6 +79,26 @@ def event_to_dict(event: Event) -> dict:
         "draw_type": event.draw_type,
         "is_major": event.is_major,
     }
+
+
+def bout_to_dict(bout: Bout) -> dict:
+    """Serialize Bout to dict."""
+    return {
+        "fighter1": bout.fighter1,
+        "fighter2": bout.fighter2,
+        "segment": bout.segment,
+        "order": bout.order,
+    }
+
+
+def dict_to_bout(data: dict) -> Bout:
+    """Deserialize dict to Bout."""
+    return Bout(
+        fighter1=data["fighter1"],
+        fighter2=data["fighter2"],
+        segment=data.get("segment", "main_card"),
+        order=data.get("order", 0),
+    )
 
 
 def racing_session_to_dict(session: RacingSession) -> dict:
@@ -164,9 +196,19 @@ def dict_to_event(data: dict) -> Event:
         series_summary=data.get("series_summary", ""),
         home_last_five=data.get("home_last_five", ""),
         away_last_five=data.get("away_last_five", ""),
+        # Betting odds (#366) — absent in pre-upgrade cache entries
+        odds_data=data.get("odds_data"),
         # UFC-specific fields
         segment_times=segment_times or {},
         main_card_start=main_card_start,
+        # Combat result fields (#366) — absent in pre-upgrade cache entries
+        bouts=[dict_to_bout(b) for b in data.get("bouts", [])],
+        fight_result_method=data.get("fight_result_method"),
+        finish_round=data.get("finish_round"),
+        finish_time=data.get("finish_time"),
+        weight_class=data.get("weight_class"),
+        fighter1_scores=data.get("fighter1_scores"),
+        fighter2_scores=data.get("fighter2_scores"),
         # Racing-specific fields
         circuit_name=data.get("circuit_name"),
         sessions=[dict_to_racing_session(s) for s in data.get("sessions", [])],
