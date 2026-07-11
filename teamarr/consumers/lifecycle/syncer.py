@@ -35,8 +35,14 @@ class ChannelSyncer(_LifecycleHost):
         group_config: dict,
         template: dict | None,
         segment: str | None = None,
+        stream_windowed: bool = False,
     ) -> StreamProcessResult:
         """Sync channel settings from group/template to Dispatcharr.
+
+        stream_windowed: True when the stream is time-windowed (EPG-matched,
+        attach_at set). Windowed membership is owned by the window sync in
+        stream ordering — the drift-add here must not fight it (an out-of-window
+        stream is correctly absent from Dispatcharr, not drift).
 
         V1 Parity: Syncs all 9 channel properties:
         | Source              | Dispatcharr Field    | Handling                    |
@@ -150,8 +156,12 @@ class ChannelSyncer(_LifecycleHost):
                 changes_made.append(f"channel_group_id: {old_group_id} → {new_group_id}")
 
             # 4. Check streams (M3U ID sync) - V1 parity
+            # Skipped for time-windowed streams: their membership flips with the
+            # attach/detach window (owned by the ordering-phase window sync), so
+            # "missing from Dispatcharr" is the CORRECT closed-window state — the
+            # old unconditional re-add fought the window sync every run.
             stream_id = stream.get("id") if stream else None
-            if stream_id:
+            if stream_id and not stream_windowed:
                 # streams is already tuple[int, ...] of stream IDs
                 ch_streams = current_channel.streams
                 current_stream_ids = list(ch_streams) if ch_streams else []
@@ -271,6 +281,27 @@ class ChannelSyncer(_LifecycleHost):
 
         return result
 
+    def _all_profile_ids(self) -> set[int] | None:
+        """Full channel-profile id catalog, fetched once per run.
+
+        Used to interpret Dispatcharr's ALL-profiles sentinel ([0]) against the
+        concrete id list its reads return. None = catalog unavailable (treat as
+        unverifiable rather than churning PATCHes).
+        """
+        if self._all_profile_ids_cache is not None:
+            return self._all_profile_ids_cache
+        if not self._channel_manager:
+            return None
+        try:
+            ids = {p.id for p in self._channel_manager.list_profiles()}
+        except Exception as e:
+            logger.debug("[LIFECYCLE] Profile catalog fetch failed: %s", e)
+            return None
+        if not ids:
+            return None
+        self._all_profile_ids_cache = ids
+        return self._all_profile_ids_cache
+
     def _sync_channel_profiles(
         self,
         conn: Connection,
@@ -335,6 +366,22 @@ class ChannelSyncer(_LifecycleHost):
             dispatcharr_profile_ids is None  # API didn't include field — can't check
             or sorted(effective_profile_ids) == sorted(dispatcharr_profile_ids)
         )
+        if (
+            not dispatcharr_in_sync
+            and effective_profile_ids == [0]
+            and dispatcharr_profile_ids
+        ):
+            # [0] is Dispatcharr's ALL-profiles sentinel on WRITE, but reads
+            # return the expanded concrete id list — a literal comparison always
+            # mismatches and re-PATCHed every channel every run (diff loop).
+            # In-sync for the sentinel means "member of every profile". An EMPTY
+            # Dispatcharr list stays drift (dropped from all profiles — the
+            # self-healing case) and is pushed without needing the catalog.
+            all_ids = self._all_profile_ids()
+            dispatcharr_in_sync = (
+                all_ids is None  # catalog unavailable — can't check, don't churn
+                or set(dispatcharr_profile_ids) >= all_ids
+            )
 
         if db_in_sync and dispatcharr_in_sync:
             return

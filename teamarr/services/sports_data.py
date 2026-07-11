@@ -30,6 +30,7 @@ from teamarr.database.provider_cache import (
 from teamarr.database.team_cache import get_team_identity
 from teamarr.providers import ProviderRegistry
 from teamarr.utilities.cache import (
+    CACHE_TTL_NEGATIVE,
     CACHE_TTL_SCHEDULE,
     CACHE_TTL_SINGLE_EVENT,
     CACHE_TTL_TEAM_INFO,
@@ -58,6 +59,13 @@ REFRESH_COALESCE_TTL = 300  # seconds
 # fails (e.g. ESPN 404) falls through to another serial provider call —
 # hundreds of live 404s per run for a single event.
 _EVENT_NOT_FOUND = {"__event_not_found__": True}
+
+# Negative-cache marker for get_team / get_team_stats. Lookups that return
+# nothing (off-season teams, leagues without records) were never cached, so
+# every generation run repeated the same failing provider calls — a steady
+# ~250+ `espn:teams` calls per hourly run. Cached with CACHE_TTL_NEGATIVE so
+# a team that comes back into season is picked up within a few hours.
+_NOT_FOUND = {"__not_found__": True}
 
 # Sentinel distinguishing "no usable cache entry" from a legitimately cached
 # empty result (e.g. a league with no games that day, cached as []). A distinct
@@ -426,6 +434,9 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
+            if cached == _NOT_FOUND:
+                logger.debug("[CACHE_HIT] %s (negative)", cache_key)
+                return None
             if _team_dict_is_stale(cached):
                 logger.debug(
                     "[CACHE_STALE] %s — team data missing short_name, re-fetching",
@@ -447,6 +458,7 @@ class SportsDataService:
                     # Serialize to dict before caching
                     self._cache.set(cache_key, team_to_dict(team), CACHE_TTL_TEAM_INFO)
                     return team
+        self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
         return None
 
     def get_event(self, event_id: str, league: str) -> Event | None:
@@ -672,6 +684,9 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
+            if cached == _NOT_FOUND:
+                logger.debug("[CACHE_HIT] %s (negative)", cache_key)
+                return None
             logger.debug("[CACHE_HIT] %s", cache_key)
             try:
                 return dict_to_stats(cached)
@@ -686,6 +701,7 @@ class SportsDataService:
                     # Serialize to dict before caching
                     self._cache.set(cache_key, stats_to_dict(stats), CACHE_TTL_TEAM_STATS)
                     return stats
+        self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
         return None
 
     # Cache management

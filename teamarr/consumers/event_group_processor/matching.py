@@ -645,26 +645,48 @@ class StreamMatching:
         if not matched_streams:
             return matched_streams
 
+        # Refresh each unique event once, in parallel. The service coalesces
+        # repeated refreshes of the same event within a run (single-flight in
+        # get_event), so this is safe across threads — the dedupe here just
+        # avoids queueing redundant no-op calls.
+        from concurrent.futures import ThreadPoolExecutor
+
+        unique_events = {}
+        for match in matched_streams:
+            event = match.get("event")
+            if event:
+                unique_events.setdefault((event.league, event.id), event)
+
+        refreshed_by_key = {}
+        if unique_events:
+            workers = min(10, len(unique_events))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                for key, refreshed in zip(
+                    unique_events.keys(),
+                    executor.map(
+                        self._service.refresh_event_status, unique_events.values()
+                    ),
+                    strict=True,
+                ):
+                    old = unique_events[key]
+                    old_status = old.status.state if old.status else "N/A"
+                    new_status = refreshed.status.state if refreshed.status else "N/A"
+                    if old_status != new_status:
+                        logger.debug(
+                            "[ENRICH] event=%s status changed: %s → %s",
+                            old.id,
+                            old_status,
+                            new_status,
+                        )
+                    refreshed_by_key[key] = refreshed
+
         enriched = []
         for match in matched_streams:
             event = match.get("event")
             if event:
-                old_status = event.status.state if event.status else "N/A"
-                # Refresh event status from provider. The service coalesces
-                # repeated refreshes of the same event within a run, so an event
-                # matched to many channels triggers a single provider fetch.
-                refreshed = self._service.refresh_event_status(event)
-                new_status = refreshed.status.state if refreshed.status else "N/A"
-                if old_status != new_status:
-                    logger.debug(
-                        "[ENRICH] event=%s status changed: %s → %s",
-                        event.id,
-                        old_status,
-                        new_status,
-                    )
                 # Preserve all keys (including segment info for UFC)
                 enriched_match = dict(match)
-                enriched_match["event"] = refreshed
+                enriched_match["event"] = refreshed_by_key[(event.league, event.id)]
                 enriched.append(enriched_match)
             else:
                 enriched.append(match)

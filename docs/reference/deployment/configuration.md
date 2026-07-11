@@ -19,6 +19,7 @@ Teamarr is configured via environment variables in your `docker-compose.yml` fil
 | `LOG_FORMAT` | `text` | Log format: `text` or `json` (for log aggregation systems like ELK, Loki, Splunk) |
 | `LOG_DIR` | auto-detected | Override log directory path. See [Log Directory Detection](#log-directory-detection). |
 | `SKIP_CACHE_REFRESH` | `false` | Skip team/league cache refresh on startup. Set to `true`, `yes`, or `1`. Useful for faster restarts during development. |
+| `EPG_INDEX_FETCH_WORKERS` | `10` | Parallel workers for fetching Dispatcharr EPG programs during EPG matching. Lower it if your Dispatcharr instance struggles with concurrent requests. |
 
 ## ESPN API Settings
 

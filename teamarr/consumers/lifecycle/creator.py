@@ -531,6 +531,7 @@ class ChannelCreator(_LifecycleHost):
                 group_config=group_config,
                 template=template,
                 segment=segment,
+                stream_windowed=attach_at is not None,
             )
             result.merge(settings_result)
             return result
@@ -687,6 +688,7 @@ class ChannelCreator(_LifecycleHost):
             group_config=group_config,
             template=template,
             segment=segment,
+            stream_windowed=attach_at is not None,
         )
         result.merge(settings_result)
 

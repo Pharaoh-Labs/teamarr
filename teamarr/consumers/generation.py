@@ -78,6 +78,23 @@ class GenerationResult:
     # For stats run tracking
     run_id: int | None = None
 
+    # Wall-clock seconds per generation phase (persisted to run stats so any
+    # two runs — local or live — can be compared phase-by-phase).
+    phase_timings: dict = field(default_factory=dict)
+
+
+class _PhaseTimer:
+    """Records elapsed wall time between phase marks."""
+
+    def __init__(self, timings: dict):
+        self._timings = timings
+        self._last = time.time()
+
+    def mark(self, phase: str) -> None:
+        now = time.time()
+        self._timings[phase] = round(self._timings.get(phase, 0.0) + (now - self._last), 2)
+        self._last = now
+
 
 # Type alias for progress callback
 # (phase: str, percent: int, message: str, current: int, total: int, item_name: str) -> None
@@ -245,11 +262,14 @@ def run_full_generation(
             dispatcharr_settings = get_dispatcharr_settings(conn)
             display_settings = get_display_settings(conn)
 
+        timer = _PhaseTimer(result.phase_timings)
+
         # Step 1: Refresh M3U accounts (0-5%)
         check_cancelled()
         update_progress("init", 3, "Refreshing M3U accounts...")
         if dispatcharr_client:
             result.m3u_refresh = _refresh_m3u_accounts(db_factory, dispatcharr_client)
+        timer.mark("m3u_refresh")
 
         # Step 2: Process all teams (5-50%) - 45% budget
         check_cancelled()
@@ -275,6 +295,7 @@ def run_full_generation(
         team_result = process_all_teams(db_factory=db_factory, progress_callback=team_progress)
         result.teams_processed = team_result.teams_processed
         result.teams_programmes = team_result.total_programmes
+        timer.mark("teams")
 
         # Transition message - teams done, starting groups
         logger.info("[GENERATION] Sending transition message: teams -> groups")
@@ -339,6 +360,7 @@ def run_full_generation(
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes
         result.programmes_total = result.teams_programmes + result.groups_programmes
+        timer.mark("groups")
 
         # Step 3b: Global channel reassignment (if enabled)
         check_cancelled()
@@ -346,6 +368,7 @@ def run_full_generation(
             db_factory, dispatcharr_client, update_progress,
             external_occupied=external_occupied,
         )
+        timer.mark("channel_reassign")
 
         # Step 3b: Apply stream ordering rules to all channels (93-95%)
         check_cancelled()
@@ -353,6 +376,7 @@ def run_full_generation(
         result.stream_ordering = _apply_stream_ordering(
             db_factory, dispatcharr_client, update_progress
         )
+        timer.mark("stream_ordering")
 
         # Step 4: Merge and save XMLTV (95-96%)
         check_cancelled()
@@ -381,6 +405,7 @@ def run_full_generation(
             logger.info(
                 "[GENERATION] EPG written to %s (%s bytes)", output_path, f"{result.file_size:,}"
             )
+        timer.mark("xmltv_save")
 
         # Create lifecycle service once for steps 5-6
         # Reuse shared_service to maintain cache warmth
@@ -418,6 +443,7 @@ def run_full_generation(
             result.epg_association = lifecycle_service.associate_epg_with_channels(
                 dispatcharr_settings.epg_id
             )
+        timer.mark("dispatcharr_epg_refresh")
 
         # Step 5b: Emby Live TV guide refresh
         check_cancelled()
@@ -606,6 +632,7 @@ def run_full_generation(
                 "[CHANNELSDVR] Refresh failed (non-blocking): %s", e
             )
             result.channelsdvr_refresh = {"success": False, "error": str(e)}
+        timer.mark("media_server_refresh")
 
         # Step 6: Process scheduled deletions (98-99%)
         check_cancelled()
@@ -623,6 +650,7 @@ def run_full_generation(
         except Exception as e:
             logger.warning("[GENERATION] Scheduled deletions failed: %s", e)
             result.deletions = {"error": str(e)}
+        timer.mark("deletions")
 
         # Step 7: Run reconciliation + cleanup (99-100%)
         check_cancelled()
@@ -639,6 +667,7 @@ def run_full_generation(
         except Exception as e:
             logger.warning("[RECONCILE] Failed: %s", e)
             result.reconciliation = {"error": str(e)}
+        timer.mark("reconciliation")
 
         # Step 7b: Stale source-group detection (lylt.1) — flag enabled groups
         # whose Dispatcharr M3U source channel-group no longer exists.
@@ -652,6 +681,7 @@ def run_full_generation(
             _run_stream_audit(db_factory, dispatcharr_client)
         except Exception as e:
             logger.warning("[STREAM_AUDIT] Post-generation audit failed: %s", e)
+        timer.mark("stream_audit")
 
         # Cleanup (history, old runs, unused logos — part of step 7)
         check_cancelled()
@@ -659,6 +689,8 @@ def run_full_generation(
         cleanup_results = _run_cleanup_tasks(db_factory, dispatcharr_client, update_progress)
         result.cleanup = cleanup_results["history"]
         result.logo_cleanup = cleanup_results["logos"]
+        timer.mark("cleanup")
+        logger.info("[GENERATION] Phase timings (s): %s", result.phase_timings)
 
         # Update and save stats run
         _finalize_stats_run(
@@ -1190,6 +1222,11 @@ def _finalize_stats_run(
 
     stats_run.extra_metrics["provider_calls"] = call_metrics.snapshot()
     stats_run.extra_metrics["provider_calls_total"] = call_metrics.total()
+
+    # Per-phase wall time so run-to-run comparisons (and perf regressions)
+    # are visible in the run summary instead of requiring log archaeology.
+    if result.phase_timings:
+        stats_run.extra_metrics["phase_timings"] = dict(result.phase_timings)
 
     with db_factory() as conn:
         active_channels = get_all_managed_channels(conn, include_deleted=False)

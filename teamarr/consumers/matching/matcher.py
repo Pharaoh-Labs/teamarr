@@ -367,6 +367,13 @@ class StreamMatcher:
         # for streams carrying a tvg_id. None = no EPG matching (default).
         self._epg_index = epg_index
 
+        # Per-run memo of EPG-title match plans keyed by tvg_id. Many streams
+        # share one guide channel (726 streams / 89 tvg_ids on a typical
+        # channel-source group), and the classify+route work depends only on
+        # the tvg_id's program timeline — not the stream — so compute it once
+        # and materialize per-stream results from the shared plan.
+        self._epg_plan_by_tvg: dict[str, list[tuple[MatchOutcome, ClassifiedStream]]] = {}
+
     def match_all(
         self,
         streams: list[dict],
@@ -722,24 +729,53 @@ class StreamMatcher:
     ) -> list[MatchedStreamResult]:
         """Match a stream to events via its EPG program titles (epic 183.4).
 
-        Walks every program on the stream's guide channel (from the injected
-        EPGProgramIndex), feeds each program's title+sub_title through the SAME
-        classify_stream -> TeamMatcher pipeline used for stream names, and emits
-        one matched result per program (a linear channel legitimately matches
-        MANY events/day). Each result carries the program's broadcast window for
+        The heavy classify+route work over the guide channel's program timeline
+        depends only on the tvg_id, so it is computed once per tvg_id per run
+        (_compute_epg_plan) and shared by every stream carrying that tvg_id —
+        mirrors of one linear channel would otherwise re-match the identical
+        program list once per stream. Per-stream results are materialized from
+        the shared plan. Only MATCHED outcomes are returned — non-games
+        self-reject in the pipeline.
+        """
+        plan = self._epg_plan_by_tvg.get(tvg_id)
+        if plan is None:
+            plan = self._compute_epg_plan(tvg_id, target_date, stream_id, stream_name)
+            self._epg_plan_by_tvg[tvg_id] = plan
+        return [
+            self._outcome_to_result(
+                outcome=outcome,
+                stream_id=stream_id,
+                stream_name=stream_name,
+                classified=classified,
+            )
+            for outcome, classified in plan
+        ]
+
+    def _compute_epg_plan(
+        self,
+        tvg_id: str,
+        target_date: date,
+        stream_id: int,
+        stream_name: str,
+    ) -> "list[tuple[MatchOutcome, ClassifiedStream]]":
+        """Match a guide channel's program timeline to events, once per tvg_id.
+
+        Walks every program on the tvg_id (from the injected EPGProgramIndex),
+        feeds each program's title+sub_title through the SAME classify_stream ->
+        TeamMatcher pipeline used for stream names, and keeps the best outcome
+        per matched event (a linear channel legitimately matches MANY
+        events/day). Each outcome carries the program's broadcast window for
         the lifecycle layer.
 
-        Cross-run caching comes for free: TeamMatcher caches on
-        (group_id, stream_id, input_string), so each distinct program title is
-        memoized without a separate fingerprint layer. Only MATCHED outcomes are
-        returned — non-games self-reject in the pipeline.
+        stream_id/stream_name are the first carrier of this tvg_id — used only
+        for the sub-matchers' cache keys and log context.
         """
         # Keyed by matched event id so that when several programs match the SAME
         # event (e.g. a pre-game block + the game itself both pass the anchor
         # gate), we keep only the one whose start is nearest the event — the live
         # broadcast — giving a deterministic, correctly-anchored window (bead
         # t5e). Different events on the same channel keep distinct keys.
-        best_by_event: dict[str | None, tuple[float, MatchedStreamResult]] = {}
+        best_by_event: dict[str | None, tuple[float, MatchOutcome, ClassifiedStream]] = {}
         league_event_type = self._get_dominant_event_type()
 
         # Full sorted timeline for this tvg_id. A linear channel legitimately
@@ -843,29 +879,21 @@ class StreamMatcher:
                 # Keep the nearest-to-event program per event (live over pre-game).
                 prev = best_by_event.get(ev_id)
                 if prev is None or skew_s < prev[0]:
-                    best_by_event[ev_id] = (
-                        skew_s,
-                        self._outcome_to_result(
-                            outcome=outcome,
-                            stream_id=stream_id,
-                            stream_name=stream_name,
-                            classified=eff_classified,
-                        ),
-                    )
+                    best_by_event[ev_id] = (skew_s, outcome, eff_classified)
 
-        results = [r for _, r in best_by_event.values()]
+        plan = [(o, c) for _, o, c in best_by_event.values()]
         if programs:
             logger.info(
-                "[EPG_MATCH] tvg=%s stream='%s': %d program(s), %d attempted, "
+                "[EPG_MATCH] tvg=%s (via stream '%s'): %d program(s), %d attempted, "
                 "%d non-event skipped, %d event(s) matched",
                 tvg_id,
                 stream_name[:32],
                 len(programs),
                 attempted,
                 skipped_non_event,
-                len(results),
+                len(plan),
             )
-        return results
+        return plan
 
     def _reconcile_epg(
         self,
