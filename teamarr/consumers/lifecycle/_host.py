@@ -42,6 +42,7 @@ class _LifecycleHost:
         _timezone: str
         _exception_keywords: list | None
         _pending_profile_changes: dict[int, dict[str, set[int]]]
+        _all_profile_ids_cache: set[int] | None
         _dispatcharr_failure_count: int
         _stream_drift_fix_count: int
 

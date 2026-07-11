@@ -294,10 +294,8 @@ class TestProfileSelfHealing:
     def test_no_false_positive_when_in_sync(self):
         """DB and Dispatcharr both match expected — no update needed.
 
-        Uses profile ID 1 (not 0) because _parse_profile_ids filters falsy
-        values with ``if x``, so 0 gets dropped.  Also sets a non-None
-        default_channel_profile_ids so the dynamic resolver runs
-        (None causes a [0] fallback, bypassing the resolver entirely).
+        Sets a non-None default_channel_profile_ids so the dynamic resolver
+        runs (None causes a [0] fallback, bypassing the resolver entirely).
         """
         cm = MagicMock()
         service = _make_service(channel_manager=cm)
@@ -331,6 +329,57 @@ class TestProfileSelfHealing:
         cm.update_channel.assert_not_called()
         mock_update_db.assert_not_called()
         assert len(changes_made) == 0
+
+    def test_all_profiles_sentinel_parses_stably(self):
+        """_parse_profile_ids must keep 0 (the ALL-profiles sentinel).
+
+        The old ``if x`` filter dropped 0, so a stored "[0]" read back as []
+        and every channel re-PATCHed "all profiles" on every run.
+        """
+        service = _make_service(channel_manager=MagicMock())
+        assert service._parse_profile_ids("[0]") == [0]
+        assert service._parse_profile_ids([0]) == [0]
+        assert service._parse_profile_ids(None) == []
+        assert service._parse_profile_ids("") == []
+
+    def test_all_profiles_sentinel_no_repatch_when_expanded(self):
+        """Dispatcharr expands [0] to the concrete profile list on read.
+
+        DB stores [0]; Dispatcharr returns [1] (member of the only profile).
+        That IS in sync for the sentinel — no PATCH, no history churn.
+        """
+        cm = MagicMock()
+        profile = MagicMock()
+        profile.id = 1
+        cm.list_profiles.return_value = [profile]
+        service = _make_service(channel_manager=cm)
+
+        existing = FakeManagedChannel(channel_profile_ids="[0]")
+        dispatcharr_ch = _make_dispatcharr_channel(channel_profile_ids=[1])
+
+        changes_made = []
+        mock_settings = MagicMock()
+        mock_settings.default_channel_profile_ids = None
+
+        with (
+            patch("teamarr.database.channels.update_managed_channel") as mock_update_db,
+            patch(
+                "teamarr.database.settings.get_dispatcharr_settings",
+                return_value=mock_settings,
+            ),
+        ):
+            service._sync_channel_profiles(
+                conn=MagicMock(),
+                existing=existing,
+                event_sport="football",
+                event_league="nfl",
+                changes_made=changes_made,
+                current_channel=dispatcharr_ch,
+            )
+
+        cm.update_channel.assert_not_called()
+        mock_update_db.assert_not_called()
+        assert changes_made == []
 
 
 # =============================================================================
