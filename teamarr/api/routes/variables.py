@@ -364,6 +364,26 @@ def get_conditions(template_type: str = "team"):
         },
     ]
 
+    # Event identity conditions (#370) — available to BOTH template types so
+    # one template can branch a register by league/sport instead of needing
+    # per-league template variants.
+    identity_conditions = [
+        {
+            "name": "league_is",
+            "description": "Event's league is one of the given codes (e.g. cfb,nfl)",
+            "requires_value": True,
+            "value_type": "string",
+            "providers": "all",
+        },
+        {
+            "name": "sport_is",
+            "description": "Event's sport is one of the given codes (e.g. football,basketball)",
+            "requires_value": True,
+            "value_type": "string",
+            "providers": "all",
+        },
+    ]
+
     # Team-only conditions (require "our team" perspective)
     team_only_conditions = [
         # Universal: works with all providers
@@ -474,11 +494,17 @@ def get_conditions(template_type: str = "team"):
 
     if template_type == "event":
         # Event templates get game-level + combat/motorsports conditions
-        conditions = summary_conditions + combat_conditions + motorsports_conditions
+        conditions = (
+            identity_conditions
+            + summary_conditions
+            + combat_conditions
+            + motorsports_conditions
+        )
     else:
         # Team templates get all conditions
         conditions = (
             team_only_conditions
+            + identity_conditions
             + common_conditions
             + summary_conditions
             + combat_conditions
