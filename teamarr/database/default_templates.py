@@ -31,7 +31,8 @@ decisions (bead tvnk.1, 2026-07-09):
   vars, 'v' channel connector), college (home-led host framing with rank +
   record + conference rows, per the captured Gracenote preview register), and
   year-composed tournament titles (International ``{gracenote_category}
-  {year}`` per the tvnk.12 decision; Tennis ``{year} {tournament_name}``).
+  {year}`` per the tvnk.12 decision; Tennis ``{year} {tournament_name}``;
+  Racing series-led titles with race + session subtitles, #355 item 1).
   Combat/tennis/racing get no team variants — no meaningful team channels
   (racing driver channels are epic hjzo).
 """
@@ -700,6 +701,58 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         ],
         # "Alcaraz v Sinner" — surnames only, super short.
         event_channel_name="{player1_last} v {player2_last}",
+    ),
+    # Racing (F1/NASCAR/IndyCar/IMSA/WEC, #355 item 1): weekends expand into
+    # one channel per session (racing_segments.py), and home/away are the SAME
+    # placeholder team — every matchup-shaped surface (subtitle, art paths,
+    # abbrev channel names) must be overridden or it renders "Navy 250 at
+    # Navy 250". Captured Gracenote shape: title 'NASCAR Cup Series', subtitle
+    # 'Navy 250, Practice 1' — series-led title, race + session subtitle.
+    _event_base(
+        name="Racing Event (Starter)",
+        title_format="{gracenote_category}",
+        subtitle_template="{race_name}, {session_name}",
+        # No matchup art: the pascal-var cover path would compose from the
+        # placeholder team and render broken.
+        program_art_url="",
+        event_channel_logo_url="",
+        pregame_fallback={
+            "title": "Coming up: {session_name} at {game_time}",
+            "subtitle": "{race_name}, {session_name}",
+            "description": "{game_preview}",
+            "description_fallback": (
+                "{race_name} {session_name} from {circuit_name} {today_tonight} at {game_time}."
+            ),
+            "art_url": "",
+        },
+        # "Postgame" reads wrong for racing ("Navy 250: Postgame" for a
+        # practice session) — session-complete register instead, mirroring
+        # the tennis starter's "Match Complete".
+        postgame_fallback={
+            "title": "{race_name}: {session_name} Complete",
+            "subtitle": "{race_name}, {session_name}",
+            "description": "{race_name} {session_name} has concluded at {circuit_name}.",
+            "art_url": "",
+        },
+        postgame_conditional={
+            "enabled": True,
+            "description_final": "{game_recap}",
+            "description_not_final": (
+                "{race_name} {session_name} has not yet ended as of the last update."
+            ),
+        },
+        conditional_descriptions=[
+            dict(_PREVIEW_ROW),
+            {
+                "condition": None,
+                "condition_value": None,
+                "template": "{race_name} {session_name} at {circuit_name}.",
+                "priority": 100,
+                "label": "Default",
+            },
+        ],
+        # "NASCAR Cup | Race", "F1 | Qualifying" — series alias + session.
+        event_channel_name="{league} | {session_name}",
     ),
 ]
 

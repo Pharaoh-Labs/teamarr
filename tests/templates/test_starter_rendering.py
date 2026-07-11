@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from teamarr.core.types import Event, EventStatus, Team, TeamStats, Venue
+from teamarr.core.types import Event, EventStatus, RacingSession, Team, TeamStats, Venue
 from teamarr.database.default_templates import DEFAULT_TEMPLATE_SET
 from teamarr.services import league_mappings as lm
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
@@ -158,6 +158,37 @@ def _tennis_ctx(**kw):
     return _ctx(ev)
 
 
+def _racing_ctx(**kw):
+    # Racing home/away are the SAME placeholder team (named after the race);
+    # the session code rides in card_segment, set per-channel by the
+    # racing_segments expansion.
+    car = _team("Navy 250", "N250", "nascar-cup", "racing", "1")
+    ev = Event(
+        id="e1", provider="nascar", name="Navy 250", short_name="Navy 250",
+        start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
+        home_team=car, away_team=car, status=EventStatus(state="pre"),
+        league="nascar-cup", sport="racing",
+        venue=Venue(name="Nashville Superspeedway", city="Lebanon", state="TN"),
+        circuit_name="Nashville Superspeedway",
+        sessions=[
+            RacingSession(code="fp1", name="Practice 1",
+                          start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC)),
+            RacingSession(code="qualifying", name="Qualifying",
+                          start_time=datetime(2026, 7, 11, 17, 0, tzinfo=UTC)),
+            RacingSession(code="race", name="Race",
+                          start_time=datetime(2026, 7, 12, 19, 0, tzinfo=UTC)),
+        ],
+    )
+    game_ctx = GameContext(event=ev, is_home=True, card_segment="fp1", **kw)
+    return TemplateContext(
+        game_context=game_ctx,
+        team_config=TeamChannelContext(
+            team_id="1", league="nascar-cup", sport="racing", team_name=car.name,
+        ),
+        team_stats=None, next_game=game_ctx, last_game=game_ctx,
+    )
+
+
 def _milb_ctx(**kw):
     home = _team("Sugar Land Space Cowboys", "SUG", "milb-aaa", "baseball", "1")
     away = _team("Albuquerque Isotopes", "ABQ", "milb-aaa", "baseball", "2")
@@ -176,6 +207,7 @@ _CTX_FOR_TEMPLATE = {
     "Combat Event (Starter)": _combat_ctx,
     "International Event (Starter)": _national_ctx,
     "Tennis Event (Starter)": _tennis_ctx,
+    "Racing Event (Starter)": _racing_ctx,
 }
 
 
@@ -319,6 +351,28 @@ def test_tennis_year_prefixed_tournament_title(resolver):
     # player1 mirrors fighter1 = the away slot (first in ESPN's event title)
     sub = resolver.resolve(spec["subtitle_template"], ctx)
     assert sub == "Final - Jannik Sinner vs Carlos Alcaraz"
+
+
+def test_racing_series_title_and_session_surfaces(resolver):
+    """Racing convention (#355 item 1, captured Gracenote shape): series-led
+    title ('NASCAR Cup Series'), 'race, session' subtitle, session-led channel
+    name — never the placeholder-team matchup ('Navy 250 at Navy 250')."""
+    spec = SPECS["Racing Event (Starter)"]
+    ctx = _racing_ctx()
+    title = resolver.resolve(spec["title_format"], ctx)
+    assert title == "NASCAR Cup Series"
+    sub = resolver.resolve(spec["subtitle_template"], ctx)
+    assert sub == "Navy 250, Practice 1"
+    channel = resolver.resolve(spec["event_channel_name"], ctx)
+    assert channel == "NASCAR Cup | Practice 1"
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out == "Navy 250 Practice 1 at Nashville Superspeedway."
+    # Racing home/away are the same placeholder team — no surface may use
+    # matchup vars, or it renders "Navy 250 at Navy 250".
+    for label, template in _text_surfaces(spec):
+        assert "{away_team" not in template and "{home_team" not in template, (
+            f"matchup var in racing surface {label}: {template!r}"
+        )
 
 
 def test_milb_titles_as_minor_league_baseball_via_default_event(resolver):

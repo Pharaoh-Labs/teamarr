@@ -33,6 +33,7 @@ same assignments, fixed art.
 | **Combat Event (Starter)** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` |
 | **International Event (Starter)** | event | National-team tournaments — year-composed title (`FIFA World Cup 2026`) | `NED v JPN` |
 | **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) — year-prefixed tournament title | `Alcaraz v Sinner` |
+| **Racing Event (Starter)** | event | NASCAR / F1 / IndyCar / IMSA / WEC (per-session channels) — series-led title, race + session subtitle (`Navy 250, Practice 1`) | `NASCAR Cup \| Race` |
 
 Minor-league baseball needs no dedicated starter: **Default Event** titles
 every MiLB level as Gracenote's real `Minor League Baseball` (from the league
@@ -87,6 +88,7 @@ description is used. Pregame fillers support the same pattern via the
 | Combat Event | UFC, PFL, boxing leagues |
 | International Event | National-team tournaments (World Cup, Euro, Gold Cup, …) |
 | Tennis Event | ATP, WTA |
+| Racing Event | Racing leagues (NASCAR, F1, IndyCar, IMSA, WEC) |
 
 MiLB levels (Triple-A … Rookie) are covered by **Default Event**.
 
@@ -97,3 +99,6 @@ Program art uses **relative paths** (e.g.
 the **art base URL** setting — point it at your image server and every
 template resolves against it. Absolute URLs in your own templates bypass the
 base URL.
+
+The racing starter ships without program art: race weekends have no home/away
+matchup for the cover path to compose from.
