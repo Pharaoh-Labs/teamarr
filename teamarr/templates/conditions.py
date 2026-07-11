@@ -15,6 +15,8 @@ Condition Types:
 - has_recap: Provider recap headline available (postgame)
 - has_preview: Provider preview blurb available (same-day pregame)
 - has_structured_preview: Recent-form data available (days-ahead)
+- has_event_note: Marquee/playoff note available ('NBA Finals - Game 5')
+- has_match_note: Soccer competition note available ('FIFA World Cup, Group C')
 - opponent_name_contains: Opponent name contains string
 
 Priority:
@@ -265,6 +267,23 @@ class ConditionEvaluator:
         """Check if structured preview data (recent form) is available."""
         event = game_ctx.event
         return bool(event and (event.home_last_five or event.away_last_five))
+
+    def _eval_has_event_note(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the provider's marquee/playoff note is available
+        ('NBA Finals - Game 5', 'CFP Quarterfinal at the Cotton Bowl Classic').
+        Empty for ordinary regular-season games."""
+        event = game_ctx.event
+        return bool(event and event.game_event_note)
+
+    def _eval_has_match_note(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Check if the provider's soccer competition note is available
+        ('FIFA World Cup, Group C'). Soccer-only; empty otherwise."""
+        event = game_ctx.event
+        return bool(event and event.soccer_match_note)
 
     # =========================================================================
     # Opponent conditions
