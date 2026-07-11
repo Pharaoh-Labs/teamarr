@@ -530,7 +530,7 @@ class StreamMatching:
         - With feed keyword: "Penguins Feed", "Penguins Broadcast"
         - After pipe/dash at end: "Game | Penguins", "Game - Penguins"
         - With home/away: "Penguins Home", "Home Penguins"
-        - Team-branded channel token: "Penguins.TV" (#343)
+        - Team-branded channel token: "Penguins.TV", "Penguins.US" (#343)
 
         Does NOT match team names that just appear in a matchup title like
         "Penguins vs Jets" — that's a shared feed, not team-specific.
@@ -566,6 +566,12 @@ class StreamMatching:
                     # Team-branded channel token: "Brewers.TV" / "Brewers TV"
                     # / "BrewersTV" (#343)
                     rf"\b{esc}[.\s]?tv\b",
+                    # Domain-style token: "Brewers.US", "Brewers.Live". DOT
+                    # form with whitelisted TLDs only — a spaced variant
+                    # would false-positive on matchup connectors ("Brewers
+                    # vs Cubs") and an open [a-z]+ suffix on dot-separated
+                    # stream names ("MLB.Brewers.Cubs.720p").
+                    rf"\b{esc}\.(?:us|com|net|org|live|io|app|stream)\b",
                 ]
 
                 for pattern in patterns:
