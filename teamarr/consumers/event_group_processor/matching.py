@@ -390,10 +390,14 @@ class StreamMatching:
     ) -> list[dict]:
         """Resolve feed hints to actual teams (Phase 2 feed separation).
 
-        For each matched stream:
-        - feed_hint="home" → feed_team = event.home_team
-        - feed_hint="away" → feed_team = event.away_team
-        - No hint + detect_team_names → scan stream name for team name/short_name
+        For each matched stream, in precedence order:
+        - feed_hint="home"/"away" (explicit HOME/AWAY term) → that side's team
+        - No hint → match the stream name against the event's home/away-market
+          broadcast names (ESPN broadcasts[].market: 'Brewers.TV' → away,
+          'YES' → home) — catches team-branded and regional channels no term
+          list or team name covers (#343)
+        - Still nothing + detect_team_names → scan stream name for team
+          name/short_name in a feed-specific context
         - No match → feed_team = None (normal channel)
 
         Args:
@@ -404,17 +408,21 @@ class StreamMatching:
             event = entry.get("event")
             feed_hint = entry.get("feed_hint")
             feed_team = None
+            source = feed_hint
 
             if event and feed_hint == "home":
                 feed_team = event.home_team
             elif event and feed_hint == "away":
                 feed_team = event.away_team
-            elif event and not feed_hint and detect_team_names:
-                # Scan stream name for team name/short_name
+            elif event and not feed_hint:
                 stream_name = entry["stream"]["name"].lower()
-                feed_team = self._detect_team_in_stream_name(
-                    stream_name, event.home_team, event.away_team
-                )
+                feed_team = self._detect_feed_from_broadcast_markets(stream_name, event)
+                source = "broadcast_market"
+                if feed_team is None and detect_team_names:
+                    feed_team = self._detect_team_in_stream_name(
+                        stream_name, event.home_team, event.away_team
+                    )
+                    source = "team_name_detect"
 
             entry["feed_team"] = feed_team
 
@@ -423,10 +431,36 @@ class StreamMatching:
                     "[FEED] Stream '%s' → feed_team=%s (hint=%s)",
                     entry["stream"]["name"][:50],
                     feed_team.name,
-                    feed_hint or "team_name_detect",
+                    source,
                 )
 
         return matched_streams
+
+    @staticmethod
+    def _detect_feed_from_broadcast_markets(stream_name_lower: str, event):
+        """Match the stream name against the event's home/away-market
+        broadcast names (ESPN broadcasts[].market, #343).
+
+        'national' names never make a team feed; a stream matching BOTH
+        sides' names is ambiguous and stays a normal channel. Names shorter
+        than 3 characters are skipped (false-positive guard, same threshold
+        as team abbreviations).
+        """
+        import re
+
+        markets = getattr(event, "broadcast_markets", None) or {}
+        matched_sides: set[str] = set()
+        for name, market in markets.items():
+            if market not in ("home", "away") or len(name) < 3:
+                continue
+            if re.search(rf"\b{re.escape(name.lower())}\b", stream_name_lower):
+                matched_sides.add(market)
+
+        if matched_sides == {"home"}:
+            return event.home_team
+        if matched_sides == {"away"}:
+            return event.away_team
+        return None
 
     @staticmethod
     def _detect_team_in_stream_name(
@@ -439,6 +473,7 @@ class StreamMatching:
         - With feed keyword: "Penguins Feed", "Penguins Broadcast"
         - After pipe/dash at end: "Game | Penguins", "Game - Penguins"
         - With home/away: "Penguins Home", "Home Penguins"
+        - Team-branded channel token: "Penguins.TV" (#343)
 
         Does NOT match team names that just appear in a matchup title like
         "Penguins vs Jets" — that's a shared feed, not team-specific.
@@ -471,6 +506,8 @@ class StreamMatching:
                     rf"\b(?:feed|broadcast)[:\s]+{esc}\b",
                     rf"\b{esc}\s+(?:home|away)\b",
                     rf"\b(?:home|away)\s+{esc}\b",
+                    # Team-branded channel token: "Brewers.TV" (#343)
+                    rf"\b{esc}\.tv\b",
                 ]
 
                 for pattern in patterns:

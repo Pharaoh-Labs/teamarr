@@ -251,6 +251,79 @@ class TestDetectTeamInStreamName:
         )
         assert result == home_team
 
+    def test_team_branded_channel_token(self, home_team, away_team):
+        """'Yankees.TV' is a team-specific feed even with no feed keyword (#343)."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        result = EventGroupProcessor._detect_team_in_stream_name(
+            "mlb 04: yankees @ orioles (yankees.tv)", home_team, away_team
+        )
+        assert result == away_team
+
+
+# ===========================================================================
+# Broadcast-market feed detection (#343)
+# ===========================================================================
+
+
+class TestDetectFeedFromBroadcastMarkets:
+    """_detect_feed_from_broadcast_markets() maps ESPN broadcasts[].market
+    names found in the stream name to that side's team."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        return MockEvent(
+            home_team=MockTeam(
+                id="1", provider="espn", name="Chicago Cubs", short_name="Cubs",
+                abbreviation="CHC", league="mlb", sport="baseball",
+            ),
+            away_team=MockTeam(
+                id="2", provider="espn", name="Milwaukee Brewers", short_name="Brewers",
+                abbreviation="MIL", league="mlb", sport="baseball",
+            ),
+            broadcast_markets={
+                "MLB.TV": "national",
+                "Brewers.TV": "away",
+                "Marquee Sports Network": "home",
+            },
+        )
+
+    def _detect(self, stream_name, event):
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        return EventGroupProcessor._detect_feed_from_broadcast_markets(
+            stream_name.lower(), event
+        )
+
+    def test_away_market_name_matches(self, event):
+        """The #343 report: 'Brewers.TV' resolves to the away feed."""
+        assert self._detect("MLB 04: MIL @ CHC (Brewers.TV)", event) == event.away_team
+
+    def test_home_market_name_matches(self, event):
+        """Regional networks with no team token resolve via market too."""
+        assert self._detect("MIL @ CHC Marquee Sports Network", event) == event.home_team
+
+    def test_national_market_never_makes_a_feed(self, event):
+        assert self._detect("MIL @ CHC MLB.TV", event) is None
+
+    def test_both_sides_matching_is_ambiguous(self, event):
+        assert self._detect("Brewers.TV / Marquee Sports Network combo", event) is None
+
+    def test_no_broadcast_data(self, event):
+        event.broadcast_markets = {}
+        assert self._detect("MIL @ CHC (Brewers.TV)", event) is None
+
+    def test_short_names_skipped(self, event):
+        """Names under 3 chars are skipped (false-positive guard)."""
+        event.broadcast_markets = {"TV": "away"}
+        assert self._detect("some tv stream", event) is None
+
 
 # ===========================================================================
 # Feed label generation

@@ -40,6 +40,7 @@ def event_to_dict(event: Event) -> dict:
         "season_year": event.season_year,
         "season_type": event.season_type,
         "neutral_site": event.neutral_site,
+        "broadcast_markets": event.broadcast_markets,
         # Editorial/context copy — the has_recap/has_preview/has_event_note/
         # has_match_note conditions and their template vars read these; a
         # cache hit must not silently drop them (#363, #365).
@@ -153,6 +154,7 @@ def dict_to_event(data: dict) -> Event:
         season_year=data.get("season_year"),
         season_type=data.get("season_type"),
         neutral_site=bool(data.get("neutral_site", False)),
+        broadcast_markets=data.get("broadcast_markets") or {},
         # Editorial/context copy (#363, #365) — absent in pre-upgrade cache
         # entries, so default to empty.
         game_recap=data.get("game_recap", ""),

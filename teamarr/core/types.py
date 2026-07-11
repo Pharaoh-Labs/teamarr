@@ -127,6 +127,12 @@ class Event:
     # drops host framing (Gracenote convention, #355 item 3).
     neutral_site: bool = False
 
+    # Broadcast name → market ('national'/'home'/'away') from ESPN
+    # broadcasts[] — data-driven feed discrimination for team-branded and
+    # regional channels ('Brewers.TV', 'YES') that carry no HOME/AWAY term
+    # (#343). broadcasts above keeps the flat name list for display.
+    broadcast_markets: dict[str, str] = field(default_factory=dict)
+
     # Betting odds (from scoreboard API, usually same-day only)
     odds_data: dict | None = None
 

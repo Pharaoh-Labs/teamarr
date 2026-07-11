@@ -671,6 +671,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             status = self._parse_status(competition.get("status", {}))
             venue = self._parse_venue(competition.get("venue"))
             broadcasts = self._parse_broadcasts(competition.get("broadcasts", []))
+            broadcast_markets = self._parse_broadcast_markets(competition.get("broadcasts", []))
             odds_data = self._parse_odds(competition.get("odds", []))
 
             # Editorial/context copy — straight from the scoreboard, no per-event call.
@@ -710,6 +711,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 game_event_note=game_event_note,
                 soccer_match_note=soccer_match_note,
                 neutral_site=neutral_site,
+                broadcast_markets=broadcast_markets,
             )
         except Exception as e:
             logger.warning("[ESPN] Failed to parse event %s: %s", data.get("id", "unknown"), e)
@@ -794,6 +796,23 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             state=address.get("state"),
             country=address.get("country"),
         )
+
+    @staticmethod
+    def _parse_broadcast_markets(broadcasts_data: list) -> dict[str, str]:
+        """Broadcast name → market ('national'/'home'/'away') from the
+        scoreboard payload — data-driven feed discrimination for
+        team-branded/regional channels ('Brewers.TV' → away, #343). The
+        summary format carries no market and is skipped.
+        """
+        markets: dict[str, str] = {}
+        for broadcast in broadcasts_data:
+            market = broadcast.get("market")
+            if not market or not isinstance(market, str):
+                continue
+            for name in broadcast.get("names") or []:
+                if name:
+                    markets[name] = market.lower()
+        return markets
 
     def _parse_broadcasts(self, broadcasts_data: list) -> list[str]:
         """Extract broadcast network names.
