@@ -1,8 +1,8 @@
 import { useState, useRef } from "react"
 import { toast } from "sonner"
 import {
-  Loader2,
-  AlertTriangle,
+  LoaderCircle,
+  TriangleAlert,
   Plus,
   Trash2,
   Download,
@@ -283,7 +283,7 @@ export function BackupRestoreCard() {
             disabled={createBackup.isPending}
           >
             {createBackup.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Plus className="h-4 w-4 mr-2" />
             )}
@@ -300,7 +300,7 @@ export function BackupRestoreCard() {
 
           {backupsLoading ? (
             <div className="flex justify-center py-3">
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <LoaderCircle className="h-5 w-5 animate-spin" />
             </div>
           ) : !files.length ? (
             <p className="text-sm text-muted-foreground">
@@ -341,7 +341,7 @@ export function BackupRestoreCard() {
                     title="Restore"
                   >
                     {restoringFile === selected?.filename ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
                     ) : (
                       <Upload className="h-4 w-4" />
                     )}
@@ -369,7 +369,7 @@ export function BackupRestoreCard() {
                     title={selected?.is_protected ? "Cannot delete protected backup" : "Delete"}
                   >
                     {deletingFile === selected?.filename ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="h-4 w-4" />
                     )}
@@ -414,7 +414,7 @@ export function BackupRestoreCard() {
                 disabled={isRestoring}
               >
                 {isRestoring ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Upload className="h-4 w-4 mr-2" />
                 )}
@@ -427,7 +427,7 @@ export function BackupRestoreCard() {
         {/* Warning */}
         <Alert
           variant="warning"
-          icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+          icon={<TriangleAlert className="h-4 w-4 text-amber-500" />}
           title="Important"
         >
           <p className="text-xs">

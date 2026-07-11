@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2, Play, ExternalLink, RefreshCw } from "lucide-react"
+import { LoaderCircle, Play, ExternalLink, RefreshCw } from "lucide-react"
 import { useGenerationProgress } from "@/hooks/useGenerationProgress"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -110,7 +110,7 @@ function UpdateNotificationsForm({ initial }: { initial: UpdateCheckSettings }) 
               disabled={forceCheckUpdates.isPending}
             >
               {forceCheckUpdates.isPending ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4 mr-1" />
               )}
@@ -373,7 +373,7 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
           <div className="flex gap-2">
             <Button onClick={() => startGeneration()} variant="outline" disabled={isGenerating}>
               {isGenerating ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <Play className="h-4 w-4 mr-1" />
               )}
@@ -436,7 +436,7 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
                   }
                 }}
               >
-                {tsdbValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Validate"}
+                {tsdbValidating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Validate"}
               </Button>
             </div>
             {tsdbValidation && (

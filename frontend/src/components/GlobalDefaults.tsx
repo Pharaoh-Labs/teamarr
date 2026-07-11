@@ -14,7 +14,7 @@
 import { useState, useMemo, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -218,7 +218,7 @@ export function GlobalDefaults({
       <Card>
         <CardContent>
           <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading subscriptions…
+            <LoaderCircle className="h-4 w-4 animate-spin" /> Loading subscriptions…
           </div>
         </CardContent>
       </Card>

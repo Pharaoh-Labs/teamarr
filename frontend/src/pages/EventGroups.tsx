@@ -6,11 +6,11 @@ import {
   Search,
   Trash2,
   Pencil,
-  Loader2,
+  LoaderCircle,
   Plus,
   X,
   Check,
-  AlertCircle,
+  CircleAlert,
   GripVertical,
   ArrowUp,
   ArrowDown,
@@ -375,7 +375,7 @@ export function EventGroups() {
       {staleGroups.length > 0 && (
         <Alert
           variant="warning"
-          icon={<AlertCircle />}
+          icon={<CircleAlert />}
           title={`${staleGroups.length} stream source${staleGroups.length === 1 ? "" : "s"} missing from Dispatcharr`}
         >
           <div className="space-y-2">
@@ -746,7 +746,7 @@ export function EventGroups() {
                         >
                           {previewMutation.isPending &&
                           previewMutation.variables === group.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
                           ) : (
                             <Search className="h-4 w-4" />
                           )}
@@ -761,7 +761,7 @@ export function EventGroups() {
                         >
                           {clearCacheMutation.isPending &&
                           clearCacheMutation.variables === group.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
                           ) : (
                             <RotateCcw className="h-4 w-4" />
                           )}
@@ -933,7 +933,7 @@ export function EventGroups() {
                           {stream.matched ? (
                             <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                           ) : (
-                            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                           )}
                         </TableCell>
                         <TableCell className="font-mono text-xs">

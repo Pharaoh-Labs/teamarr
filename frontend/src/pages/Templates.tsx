@@ -1,7 +1,7 @@
 import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, Loader2, Copy, Download, Upload, Tv, User } from "lucide-react"
+import { Plus, Trash2, Pencil, LoaderCircle, Copy, Download, Upload, Tv, User } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
@@ -231,7 +231,7 @@ export function Templates() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
             {isImporting ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <Upload className="h-4 w-4 mr-1" />
             )}
@@ -451,7 +451,7 @@ export function Templates() {
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {deleteMutation.isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Delete
             </Button>
           </DialogFooter>

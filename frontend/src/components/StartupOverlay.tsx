@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 
 interface StartupStatus {
@@ -83,7 +83,7 @@ export function StartupOverlay() {
 
         {/* Spinner */}
         <div className="flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
         </div>
 
         {/* Status Message */}

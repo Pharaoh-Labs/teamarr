@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
@@ -342,7 +342,7 @@ function BulkEditForm({
           onClick={handleApply}
           disabled={bulkUpdateMutation.isPending || !anyFieldEnabled}
         >
-          {bulkUpdateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          {bulkUpdateMutation.isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
           Apply to {selectedIds.size} groups
         </Button>
       </DialogFooter>

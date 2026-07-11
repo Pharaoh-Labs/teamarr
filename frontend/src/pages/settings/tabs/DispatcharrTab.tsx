@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { Loader2, TestTube, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
+import { LoaderCircle, TestTube, CircleCheckBig, CircleX, TriangleAlert } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -91,7 +91,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
             <div className="flex items-center gap-2">
               <Button onClick={handleTestConnection} variant="outline" size="sm" disabled={testConnection.isPending}>
                 {testConnection.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
                   <TestTube className="h-4 w-4 mr-1" />
                 )}
@@ -99,15 +99,15 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
               </Button>
               {dispatcharrStatus.data?.connected ? (
                 <Badge variant="success" className="gap-1">
-                  <CheckCircle className="h-3 w-3" /> Connected
+                  <CircleCheckBig className="h-3 w-3" /> Connected
                 </Badge>
               ) : dispatcharrStatus.data?.configured && dispatcharrStatus.data?.error ? (
                 <Badge variant="destructive" className="gap-1" title={dispatcharrStatus.data.error}>
-                  <AlertTriangle className="h-3 w-3" /> Error
+                  <TriangleAlert className="h-3 w-3" /> Error
                 </Badge>
               ) : dispatcharrStatus.data?.configured ? (
                 <Badge variant="warning" className="gap-1">
-                  <XCircle className="h-3 w-3" /> Disconnected
+                  <CircleX className="h-3 w-3" /> Disconnected
                 </Badge>
               ) : (
                 <Badge variant="secondary">Not Configured</Badge>
@@ -120,7 +120,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
           {dispatcharrStatus.data?.configured && dispatcharrStatus.data?.error && (
             <Alert
               variant="destructive"
-              icon={<AlertTriangle className="h-4 w-4 text-destructive" />}
+              icon={<TriangleAlert className="h-4 w-4 text-destructive" />}
               title="Connection Failed"
             >
               <p className="text-muted-foreground">{dispatcharrStatus.data.error}</p>
