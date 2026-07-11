@@ -54,14 +54,42 @@ def test_neutral_site_survives_cache_roundtrip():
     assert dict_to_event(event_to_dict(_event())).neutral_site is False
 
 
+def test_broadcast_markets_survive_cache_roundtrip():
+    markets = {"MLB.TV": "national", "Brewers.TV": "away", "Marquee Sports Network": "home"}
+    back = dict_to_event(event_to_dict(_event(broadcast_markets=markets)))
+    assert back.broadcast_markets == markets
+    assert dict_to_event(event_to_dict(_event())).broadcast_markets == {}
+
+
 def test_pre_upgrade_cache_entries_deserialize():
     """Entries written before these fields existed must still load."""
     data = event_to_dict(_event())
     for key in (
         "neutral_site", "game_recap", "game_event_note", "soccer_match_note",
         "game_preview", "series_summary", "home_last_five", "away_last_five",
+        "broadcast_markets",
     ):
         data.pop(key)
     back = dict_to_event(data)
     assert back.neutral_site is False
     assert back.game_event_note == ""
+    assert back.broadcast_markets == {}
+
+
+def test_parse_broadcast_markets_from_scoreboard_payload():
+    """ESPN scoreboard broadcasts[] → name→market mapping (#343). The
+    summary format (media.shortName, no market) contributes nothing."""
+    from teamarr.providers.espn.provider import ESPNProvider
+
+    payload = [
+        {"market": "national", "names": ["MLB.TV"]},
+        {"market": "away", "names": ["Brewers.TV"]},
+        {"market": "home", "names": ["Marquee Sports Network", "MARQ+"]},
+        {"media": {"shortName": "NBC"}},  # summary format: no market
+    ]
+    assert ESPNProvider._parse_broadcast_markets(payload) == {
+        "MLB.TV": "national",
+        "Brewers.TV": "away",
+        "Marquee Sports Network": "home",
+        "MARQ+": "home",
+    }
