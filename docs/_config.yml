@@ -1,6 +1,7 @@
 title: Teamarr
 description: Sports EPG Generator for Dispatcharr
 remote_theme: just-the-docs/just-the-docs
+favicon_ico: "/assets/images/favicon.ico"
 
 
 plugins:
