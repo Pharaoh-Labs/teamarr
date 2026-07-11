@@ -9,6 +9,7 @@ Provides functionality for:
 """
 
 import logging
+import os
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -113,15 +114,18 @@ class BackupService:
             not filename
             or filename in (".", "..")
             or "\x00" in filename
-            or filename != Path(filename).name
+            or filename != os.path.basename(filename)
         ):
             raise ValueError(f"Invalid backup filename: {filename!r}")
 
-        base = self._backup_path.resolve()
-        candidate = (base / filename).resolve()
-        if candidate != base and not candidate.is_relative_to(base):
+        # Normalise as a pure string operation (no filesystem access) and then
+        # confirm containment with commonpath. Both steps are recognised path
+        # sanitisers, so a hostile filename cannot escape the backup directory.
+        base = os.path.abspath(self._backup_path)
+        candidate = os.path.normpath(os.path.join(base, filename))
+        if candidate == base or os.path.commonpath((base, candidate)) != base:
             raise ValueError(f"Backup filename escapes backup directory: {filename!r}")
-        return candidate
+        return Path(candidate)
 
     def _generate_filename(self, backup_type: str) -> str:
         """Generate backup filename with timestamp.
