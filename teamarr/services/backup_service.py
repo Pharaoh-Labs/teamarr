@@ -9,6 +9,7 @@ Provides functionality for:
 """
 
 import logging
+import os
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -88,6 +89,43 @@ class BackupService:
         """Get the current database file path."""
 
         return resolve_db_path(None)
+
+    def _resolve_backup_file(self, filename: str) -> Path:
+        """Resolve a caller-supplied backup filename to a safe absolute path.
+
+        Defence-in-depth against path traversal: the returned path is
+        guaranteed to live directly inside ``self._backup_path`` regardless of
+        what the caller passes. Rejects anything that isn't a bare filename
+        (path separators, ``..``, absolute paths, NUL bytes) as well as names
+        that would escape the backup directory once normalised.
+
+        Args:
+            filename: Backup filename supplied by an API caller.
+
+        Returns:
+            Absolute, normalised path inside the backup directory.
+
+        Raises:
+            ValueError: If the filename is not a bare name within the backup
+                directory.
+        """
+        # A safe backup name is a single path component with no traversal.
+        if (
+            not filename
+            or filename in (".", "..")
+            or "\x00" in filename
+            or filename != os.path.basename(filename)
+        ):
+            raise ValueError(f"Invalid backup filename: {filename!r}")
+
+        # Normalise as a pure string operation (no filesystem access) and then
+        # confirm containment with commonpath. Both steps are recognised path
+        # sanitisers, so a hostile filename cannot escape the backup directory.
+        base = os.path.abspath(self._backup_path)
+        candidate = os.path.normpath(os.path.join(base, filename))
+        if candidate == base or os.path.commonpath((base, candidate)) != base:
+            raise ValueError(f"Backup filename escapes backup directory: {filename!r}")
+        return Path(candidate)
 
     def _generate_filename(self, backup_type: str) -> str:
         """Generate backup filename with timestamp.
@@ -257,7 +295,11 @@ class BackupService:
         Returns:
             True if deleted, False if not found or protected
         """
-        backup_path = self._backup_path / filename
+        try:
+            backup_path = self._resolve_backup_file(filename)
+        except ValueError:
+            logger.warning("[BACKUP] Rejected invalid backup filename: %s", filename)
+            return False
 
         if not backup_path.exists():
             logger.warning("[BACKUP] Backup not found: %s", filename)
@@ -292,7 +334,11 @@ class BackupService:
         Returns:
             True if protected, False if not found
         """
-        backup_path = self._backup_path / filename
+        try:
+            backup_path = self._resolve_backup_file(filename)
+        except ValueError:
+            logger.warning("[BACKUP] Rejected invalid backup filename: %s", filename)
+            return False
 
         if not backup_path.exists():
             logger.warning("[BACKUP] Backup not found: %s", filename)
@@ -317,7 +363,11 @@ class BackupService:
         Returns:
             True if unprotected, False if not found or not protected
         """
-        backup_path = self._backup_path / filename
+        try:
+            backup_path = self._resolve_backup_file(filename)
+        except ValueError:
+            logger.warning("[BACKUP] Rejected invalid backup filename: %s", filename)
+            return False
 
         if not backup_path.exists():
             logger.warning("[BACKUP] Backup not found: %s", filename)
@@ -391,7 +441,10 @@ class BackupService:
         Returns:
             Tuple of (success, message, pre_restore_backup_path)
         """
-        backup_path = self._backup_path / filename
+        try:
+            backup_path = self._resolve_backup_file(filename)
+        except ValueError:
+            return False, "Invalid backup filename", None
         if not backup_path.exists():
             return False, "Backup not found", None
 
@@ -447,7 +500,11 @@ class BackupService:
         Returns:
             Path if exists, None otherwise
         """
-        backup_path = self._backup_path / filename
+        try:
+            backup_path = self._resolve_backup_file(filename)
+        except ValueError:
+            logger.warning("[BACKUP] Rejected invalid backup filename: %s", filename)
+            return None
         if backup_path.exists():
             return backup_path
         return None
