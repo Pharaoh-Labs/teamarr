@@ -1,6 +1,8 @@
-# Teamarr
+<p align="center">
+  <img src="docs/assets/images/teamarr_electric_blue.png" alt="Teamarr — Sports Channel Management for Dispatcharr" width="420">
+</p>
 
-Dynamic EPG Generator for Sports Channels
+<p align="center"><strong>Dynamic EPG Generator for Sports Channels</strong></p>
 
 ## Quick Start
 

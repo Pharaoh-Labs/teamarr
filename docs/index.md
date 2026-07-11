@@ -6,9 +6,7 @@ docs_version: "2.3.0"
 ---
 
 <div style="text-align: center; margin-bottom: 2rem;">
-  <h1 style="margin-bottom: 0.5rem;">Teamarr</h1>
-  <img src="assets/images/logo.svg" alt="Teamarr" width="100" height="100" style="margin: 1rem 0;">
-  <p style="font-size: 1.25rem; color: #666;">Sports EPG Generator for Dispatcharr</p>
+  <img src="assets/images/teamarr_electric_blue.png" alt="Teamarr — Sports EPG Generator for Dispatcharr" width="340" style="margin: 1rem 0; border-radius: 12px;">
 </div>
 
 ## What is Teamarr?
