@@ -13,6 +13,7 @@ import {
   useMatchCacheStats,
   useClearAllMatchCache,
 } from "@/hooks/useEPG"
+import { GracenoteOverridesCard } from "@/components/GracenoteOverridesCard"
 import { BackupRestoreCard } from "../BackupRestoreCard"
 import { formatRelativeTime } from "../format"
 
@@ -212,6 +213,7 @@ export function AdvancedTab() {
 
       <BackupRestoreCard />
       <ScheduledChannelResetCard />
+      <GracenoteOverridesCard />
       <DataCachesCard />
     </>
   )

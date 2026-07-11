@@ -934,6 +934,16 @@ CREATE INDEX IF NOT EXISTS idx_leagues_provider ON leagues(provider);
 CREATE INDEX IF NOT EXISTS idx_leagues_sport ON leagues(sport);
 CREATE INDEX IF NOT EXISTS idx_leagues_import ON leagues(import_enabled);
 
+-- User overrides for built-in league display fields (#371). Lives OUTSIDE
+-- the leagues table: the seed below replaces whole rows (INSERT OR REPLACE)
+-- on every startup, so any user edit made directly to leagues would be wiped
+-- (the #194 lesson). Overrides here win over curated values at read time.
+CREATE TABLE IF NOT EXISTS league_overrides (
+    league_code TEXT PRIMARY KEY,
+    gracenote_category TEXT,                 -- overrides {gracenote_category}
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- =============================================================================
 -- SEED: Configured Leagues (SINGLE SOURCE OF TRUTH)

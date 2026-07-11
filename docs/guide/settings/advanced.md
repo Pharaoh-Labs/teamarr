@@ -40,6 +40,16 @@ For users experiencing stale channel logos in their media server (e.g. Jellyfin)
 {: .note }
 Set this to run shortly *before* your media server's scheduled guide refresh.
 
+## Gracenote Category Overrides
+
+Customize what the `{gracenote_category}` template variable renders for any
+league — the value professional guides use as the program title ("NFL
+Football", "NASCAR Cup Series"). Pick a league, enter your text, and it
+applies immediately to the next EPG generation. Overrides survive Teamarr
+updates (built-in league data is refreshed on every startup; overrides live
+separately and always win). Clear an override to restore the built-in value,
+which is shown alongside each entry.
+
 ## Data Caches
 
 Teamarr maintains several caches. Each tile shows live counts and a clear/refresh action.

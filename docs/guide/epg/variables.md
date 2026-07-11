@@ -114,7 +114,7 @@ Core identifiers for teams, leagues, and matchups.
 | `{league_code}` | Raw league code | base | `nfl` |
 | `{sport}` | Sport display name | base | `Football` |
 | `{sport_lower}` | Sport in lowercase | base | `football` |
-| `{gracenote_category}` | Gracenote category for EPG | base | `NFL Football` |
+| `{gracenote_category}` | Gracenote category for EPG; customizable per league (Settings → Advanced → Gracenote Category Overrides) | base | `NFL Football` |
 | `{exception_keyword}` | Exception keyword label (e.g., 'Spanish', '4K') | base | `4K` |
 
 ---
