@@ -15,6 +15,7 @@ Conventions under test (docs/reference/gracenote-categories.md):
 - MiLB titles as "Minor League Baseball" (via the seeded category)
 """
 
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -460,6 +461,21 @@ def test_milb_titles_as_minor_league_baseball_via_default_event(resolver):
     # Channel prefix is the per-level alias ('AAA |'), the more informative form
     channel = resolver.resolve(spec["event_channel_name"], ctx)
     assert channel == "AAA | ABQ/SUG"
+
+
+def test_soccer_idle_uses_match_register(resolver):
+    """#355 item 5: soccer filler says 'match', never 'game'."""
+    spec = SPECS["Soccer Team (Starter)"]
+    ctx = _soccer_club_ctx()
+    title = resolver.resolve(spec["idle_content"]["title"], ctx)
+    assert title == "No Chelsea Match Today"
+    for section in ("idle_content", "idle_conditional", "idle_offseason"):
+        for key, val in spec[section].items():
+            if isinstance(val, str):
+                prose = re.sub(r"\{[^}]+\}", "", val)  # 'game' inside {vars} is fine
+                assert "game" not in prose.lower(), (
+                    f"{section}.{key} uses the US 'game' register: {val!r}"
+                )
 
 
 def test_soccer_channel_name_uses_v_connector(resolver):

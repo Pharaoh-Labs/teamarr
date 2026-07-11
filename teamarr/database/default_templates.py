@@ -466,6 +466,36 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _team_base(
         name="Soccer Team (Starter)",
         subtitle_template="{away_team} vs {home_team}",
+        # Match register (#355 item 5): soccer filler says 'match', never
+        # 'game'. College keeps the base text — 'game' IS its register.
+        idle_content={
+            "title": "No {team_name} Match Today",
+            "subtitle": (
+                "Next match: {game_date.next} at {game_time.next} "
+                "{vs_at.next} {opponent_the.next}"
+            ),
+            "description": "Next match: {game_date.next} at {game_time.next} vs {opponent.next}",
+            "art_url": "",
+        },
+        idle_conditional={
+            "enabled": True,
+            "description_final": (
+                "{team_name_the} {result_text.last} {opponent_the.last} "
+                "{final_score.last} on {game_date.last}. "
+                "Next match is against {opponent_the.next} on {game_date.next}"
+            ),
+            "description_not_final": (
+                "{team_name_the} last played {opponent_the.last} on {game_date.last}."
+            ),
+        },
+        idle_offseason={
+            "title_enabled": False,
+            "title": None,
+            "subtitle_enabled": True,
+            "subtitle": "No upcoming match currently on schedule in next 30 days",
+            "description_enabled": True,
+            "description": "No upcoming {team_name} matches scheduled.",
+        },
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time.next}",
             "subtitle": "{away_team.next} vs {home_team.next}",

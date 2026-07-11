@@ -72,6 +72,9 @@ constructed prose when it isn't available:
 - **Subtitles** — the US-register starters connect matchups with the
   neutral-aware `{at_vs}` variable: "Pistons at Celtics" for hosted games,
   "Ohio State vs. Texas" at neutral sites (the Gracenote convention).
+- **Idle / offseason filler** — soccer team channels phrase filler in the
+  match register ("No Chelsea Match Today", "No upcoming Chelsea matches
+  scheduled."); other families keep the US "game" phrasing.
 - **Postgame** — once a game is final and ESPN publishes a recap headline,
   the filler shows `{game_recap}`; until then a constructed result line
   ("The X defeated the Y 4–2") renders instead.
