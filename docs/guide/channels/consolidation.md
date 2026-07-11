@@ -33,7 +33,7 @@ When multiple IPTV providers carry separate home and away broadcast feeds for th
 
 1. **Literal token detection** — stream names containing terms like "HOME" or "AWAY" are detected before team matching. The token is stripped so it doesn't interfere with team-name parsing.
 2. **Broadcast-market detection** — the stream name is matched against the event's actual broadcast listings from the provider (ESPN reports each network's market: national, home, or away). This is how team-branded channels ("Brewers.TV") and regional networks that don't carry the team's name at all ("YES", "Marquee Sports Network") resolve to the right feed. Matching tolerates the usual stream-name drift — punctuation and casing ("BREWERS TV"), run-together forms ("BrewersTV"), and abbreviated words ("Bally Sports WI" for "Bally Sports Wisconsin"). Always on; national networks never count as a team feed.
-3. **Team-name detection** — if enabled, stream names are scanned for team names in a feed context (e.g., "Orioles Feed", "Orioles.TV") and matched against the event's home and away teams.
+3. **Team-name detection** — if enabled, stream names are scanned for team names in a feed context (e.g., "Orioles Feed", "Orioles.TV", "Orioles.US") and matched against the event's home and away teams.
 4. **Channel discrimination** — streams resolved to different teams get separate channels, even for the same event. Unlabeled streams go to their own channel as usual.
 
 ### Settings

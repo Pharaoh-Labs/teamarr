@@ -270,6 +270,29 @@ class TestDetectTeamInStreamName:
             )
             assert result == away_team, variant
 
+    def test_team_branded_domain_suffix(self, home_team, away_team):
+        """Whitelisted domain-style tokens count: 'Yankees.US', 'Yankees.Live'."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        for variant in (
+            "yankees @ orioles (yankees.us)",
+            "yankees @ orioles yankees.live",
+        ):
+            result = EventGroupProcessor._detect_team_in_stream_name(
+                variant, home_team, away_team
+            )
+            assert result == away_team, variant
+
+    def test_dot_separated_stream_name_not_a_feed(self, home_team, away_team):
+        """Dot-separated provider naming ('MLB.Yankees.Orioles.720p') must not
+        read 'Yankees.Orioles' as a domain token — TLDs are whitelisted."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        result = EventGroupProcessor._detect_team_in_stream_name(
+            "mlb.yankees.orioles.720p", home_team, away_team
+        )
+        assert result is None
+
 
 # ===========================================================================
 # Broadcast-market feed detection (#343)
