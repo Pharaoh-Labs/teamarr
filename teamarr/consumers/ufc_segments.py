@@ -635,10 +635,14 @@ def expand_ufc_segments(
             # Get exact segment timing from ESPN data
             start_time, end_time = get_segment_times(event, segment, sport_durations)
 
-            # Create segment entry with metadata
+            # Create segment entry with metadata. Spread the original match so
+            # matcher fields survive expansion — match_method in particular
+            # drives the epg_match ordering rule and the attach/detach window;
+            # rebuilding the dict from scratch silently reverted EPG-matched
+            # streams to event-ordered, full-life membership (#344).
             for match in streams_for_segment:
                 segment_match = {
-                    "stream": match.get("stream"),
+                    **match,
                     "event": event,
                     "segment": segment,
                     "segment_display": SEGMENT_DISPLAY_NAMES.get(segment, ""),
