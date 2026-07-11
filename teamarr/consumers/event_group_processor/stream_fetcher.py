@@ -154,6 +154,16 @@ class StreamFetcher:
             logger.warning("[CHANNEL_SOURCE] Failed to list streams: %s", e)
             detail_by_id = {}
 
+        # DP channel group id -> name (#379). The channels API returns only
+        # channel_group_id; the name (which dispatcharr_group ordering rules
+        # match on, and which the rule-builder dropdown shows) lives in the
+        # groups endpoint.
+        try:
+            dp_group_names = {g.id: g.name for g in client.m3u.list_groups()}
+        except Exception as e:
+            logger.warning("[CHANNEL_SOURCE] Failed to list channel groups: %s", e)
+            dp_group_names = {}
+
         candidates: list[dict] = []
         seen: set[int] = set()
         skipped_teamarr = 0
@@ -204,7 +214,7 @@ class StreamFetcher:
                     # The DP CHANNEL's own group (channel organization), distinct from
                     # the M3U stream group above — drives scoping + the sorting rule.
                     "dp_channel_group_id": dp_group_id,
-                    "dp_channel_group": ch.get("channel_group_name"),
+                    "dp_channel_group": dp_group_names.get(dp_group_id),
                     "m3u_account_id": account_id,
                     "m3u_account_name": self._account_names().get(account_id)
                     if account_id is not None

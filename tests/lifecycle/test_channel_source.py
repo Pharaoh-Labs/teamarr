@@ -32,14 +32,21 @@ def _stream(sid, name, group_id=None):
     )
 
 
-def _make_processor(stream_channel_map, epg_data_list, streams, managed, epg_groups, monkeypatch):
+def _make_processor(
+    stream_channel_map, epg_data_list, streams, managed, epg_groups, monkeypatch,
+    dp_groups=None,
+):
     """Build a processor with mocked Dispatcharr client + DB lookups."""
     client = SimpleNamespace(
         channels=SimpleNamespace(
             get_stream_channel_map=lambda: stream_channel_map,
             get_epg_data_list=lambda: epg_data_list,
         ),
-        m3u=SimpleNamespace(list_streams=lambda: streams),
+        m3u=SimpleNamespace(
+            list_streams=lambda: streams,
+            # Real channels API has no channel_group_name; names come from here (#379).
+            list_groups=lambda: dp_groups or [],
+        ),
     )
 
     @contextmanager
@@ -145,18 +152,22 @@ def test_keeps_streams_in_non_epg_group(monkeypatch):
 
 def _two_group_processor(monkeypatch):
     # Channel 100 in DP group 7 (US Sports), channel 101 in group 9 (UK Sports).
+    # Channel dicts carry only channel_group_id — the real API sends no
+    # channel_group_name; names resolve via m3u.list_groups (#379).
     return _make_processor(
         stream_channel_map={
-            500: {"id": 100, "epg_data_id": 1, "name": "ESPN",
-                  "channel_group_id": 7, "channel_group_name": "US Sports"},
-            501: {"id": 101, "epg_data_id": 1, "name": "FS1",
-                  "channel_group_id": 9, "channel_group_name": "UK Sports"},
+            500: {"id": 100, "epg_data_id": 1, "name": "ESPN", "channel_group_id": 7},
+            501: {"id": 101, "epg_data_id": 1, "name": "FS1", "channel_group_id": 9},
         },
         epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
         streams=[_stream(500, "ESPN HD"), _stream(501, "FS1 HD")],
         managed=[],
         epg_groups=[],
         monkeypatch=monkeypatch,
+        dp_groups=[
+            SimpleNamespace(id=7, name="US Sports"),
+            SimpleNamespace(id=9, name="UK Sports"),
+        ],
     )
 
 
@@ -169,9 +180,23 @@ def test_scopes_candidates_to_selected_dp_groups(monkeypatch):
     )
     out = proc._fetch_channel_source_streams()
     assert [s["id"] for s in out] == [500]
-    # The DP channel group is stashed for the ordering rule (ybt.3).
+    # The DP channel group is stashed for the ordering rule (ybt.3), with the
+    # name resolved from the groups endpoint — not the channel dict (#379).
     assert out[0]["dp_channel_group_id"] == 7
     assert out[0]["dp_channel_group"] == "US Sports"
+
+
+def test_dp_group_name_resolves_from_groups_endpoint(monkeypatch):
+    # Even with no group scoping, every candidate gets its DP group NAME from
+    # m3u.list_groups — the channels API only provides the id (#379).
+    proc = _two_group_processor(monkeypatch)
+    monkeypatch.setattr(
+        "teamarr.database.settings.get_epg_settings",
+        lambda conn: SimpleNamespace(epg_channel_source_groups=[]),
+    )
+    out = {s["id"]: s for s in proc._fetch_channel_source_streams()}
+    assert out[500]["dp_channel_group"] == "US Sports"
+    assert out[501]["dp_channel_group"] == "UK Sports"
 
 
 def test_empty_selection_includes_all_groups(monkeypatch):
