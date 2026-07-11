@@ -223,7 +223,7 @@ def test_healing_folds_unedited_curated_duplicate_into_legacy(db_conn):
         "?style=6&logo=true&fallback=true",
     )
     # Simulate the earlier pass: full set seeded alongside (param-less art era
-    # is covered by _is_unedited_curated's bare-art acceptance).
+    # is covered by the deep fingerprint's bare-art acceptance).
     for spec in DEFAULT_TEMPLATE_SET:
         create_template(db_conn, **spec)
 
@@ -405,6 +405,114 @@ def test_retired_member_kept_when_assigned(db_conn):
 
     seed_default_templates(db_conn)
     assert "MiLB Event (Starter)" in _names(db_conn)  # assignment protected it
+
+
+def test_desc_only_edit_blocks_title_heal(db_conn):
+    """#373 (#355 item 14): before the deep fingerprint, a row that differed
+    ONLY in descriptions still counted 'unedited' — the prior-title heal
+    replaced the whole spec and clobbered the user's description edits."""
+    from teamarr.database.templates import update_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    specs = {s["name"]: s for s in DEFAULT_TEMPLATE_SET}
+    old = dict(specs["International Event (Starter)"])
+    old["title_format"] = "{gracenote_category}"  # prior-generation title
+    tid = create_template(db_conn, **old)
+    my_rows = [{"condition": None, "condition_value": None, "priority": 100,
+                "template": "My custom description", "label": "Mine"}]
+    update_template(db_conn, tid, conditional_descriptions=my_rows)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["International Event (Starter)"]
+    assert row.id == tid
+    assert row.title_format == "{gracenote_category}"  # NOT healed
+    assert row.conditional_descriptions[0]["template"] == "My custom description"
+
+
+def test_prior_generation_content_healed_to_current(db_conn):
+    """#373: an unedited row still carrying the tvnk.8 content generation
+    (no marquee/neutral rows, 'at' subtitles) upgrades in place — this is
+    how #363/#365 row additions reach existing installs."""
+    from teamarr.database.default_templates import _prior_generations
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Event (Starter)")
+    gens = _prior_generations("Default Event (Starter)", spec)
+    g0 = gens[-1]  # oldest: tvnk.8, pre-#364
+    labels = {r.get("label") for r in g0["conditional_descriptions"]}
+    assert "Marquee note" not in labels and "Neutral site" not in labels
+    assert g0["subtitle_template"] == "{away_team} at {home_team}"
+    tid = create_template(db_conn, **g0)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Default Event (Starter)"]
+    assert row.id == tid  # healed in place, not duplicated
+    labels = {r.get("label") for r in row.conditional_descriptions}
+    assert "Marquee note" in labels and "Neutral site" in labels
+    assert row.subtitle_template == "{away_team} {at_vs} {home_team}"
+
+
+def test_soccer_idle_generation_healed(db_conn):
+    """#373: a pre-#368 Soccer Team row (base 'game' idle text) heals to the
+    match-register idle content."""
+    from teamarr.database.default_templates import _prior_generations
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Soccer Team (Starter)")
+    g3 = _prior_generations("Soccer Team (Starter)", spec)[0]  # pre-#369 idle
+    assert "Game" in g3["idle_content"]["title"]
+    tid = create_template(db_conn, **g3)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Soccer Team (Starter)"]
+    assert row.id == tid
+    assert row.idle_content["title"] == "No {team_name} Match Today"
+
+
+def test_old_generation_retired_row_still_removed(db_conn):
+    """#373: real installs carry retired members in OLD-generation content
+    (no note rows, 'at' subtitles) — retirement healing must recognize them."""
+    from teamarr.database.default_templates import (
+        _prior_generations,
+        _retired_no_abbrev_spec,
+    )
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    retired = _retired_no_abbrev_spec()
+    g0 = _prior_generations(retired["name"], retired)[-1]
+    create_template(db_conn, **g0)
+
+    seed_default_templates(db_conn)
+    assert _names(db_conn) == SET_NAMES  # old-generation retired row removed
+
+
+def test_desc_edited_retired_row_not_deleted(db_conn):
+    """#373: retirement previously used the shallow fingerprint — a retired
+    row whose DESCRIPTIONS were edited would have been deleted (data loss)."""
+    from teamarr.database.default_templates import _retired_no_abbrev_spec
+    from teamarr.database.templates import update_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    tid = create_template(db_conn, **_retired_no_abbrev_spec())
+    update_template(
+        db_conn,
+        tid,
+        conditional_descriptions=[
+            {"condition": None, "condition_value": None, "priority": 100,
+             "template": "Mine", "label": "Mine"}
+        ],
+    )
+
+    seed_default_templates(db_conn)
+    assert "No-Abbrev Event" in _names(db_conn)  # edited row survives
 
 
 def test_abbrev_variables_fall_back_without_abbreviation():

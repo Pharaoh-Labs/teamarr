@@ -37,6 +37,7 @@ decisions (bead tvnk.1, 2026-07-09):
   (racing driver channels are epic hjzo).
 """
 
+import copy
 from sqlite3 import Connection
 
 # Relative art paths (z02s): prefixed with the art_base_url setting at render.
@@ -135,25 +136,158 @@ def _is_pristine_legacy(row, legacy_name: str) -> bool:
     return texts == [_LEGACY_STOCK_CONDITIONAL[legacy_name]]
 
 
-def _is_unedited_curated(row, spec: dict) -> bool:
-    """True when a curated-set row still matches its seeded content.
+# ---------------------------------------------------------------------------
+# Deep content fingerprint + generation healing (#373, #355 item 14)
+# ---------------------------------------------------------------------------
 
-    Used to heal the transitional state where an earlier seeding pass added a
-    curated row alongside a pristine legacy one (before parameterized art
-    counted as pristine): the untouched curated duplicate can be folded back
-    so the legacy row — which holds the references — upgrades in place.
-    Art matches the current spec or its bare (param-less) earlier form.
+# Every authored surface of a spec. A row counts as "our unedited seed" only
+# when ALL of these match a registered content generation — the shallow
+# title/subtitle/channel/art check used before #373 let description-only
+# edits count as unedited, so heals could clobber them and retirement could
+# even delete them.
+_CONTENT_FIELDS = (
+    "title_format",
+    "subtitle_template",
+    "event_channel_name",
+    "game_duration_mode",
+    "pregame_enabled",
+    "postgame_enabled",
+    "idle_enabled",
+    "xmltv_flags",
+    "xmltv_video",
+    "xmltv_categories",
+    "xmltv_filler_categories",
+    "pregame_periods",
+    "postgame_periods",
+    "pregame_fallback",
+    "postgame_fallback",
+    "postgame_conditional",
+    "idle_content",
+    "idle_conditional",
+    "idle_offseason",
+    "conditional_descriptions",
+)
+
+
+def _norm(value):
+    """Normalization for content comparison: None and '' are equivalent,
+    bools and 0/1 are equivalent, empty dict values drop, containers
+    recurse. Tolerates JSON round-trip and storage-default drift."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, dict):
+        return {k: _norm(v) for k, v in value.items() if _norm(v) != ""}
+    if isinstance(value, list):
+        return [_norm(v) for v in value]
+    return value
+
+
+def _art_matches(row_value, spec_value) -> bool:
+    """Art matches the spec value or its bare (param-less) earlier form."""
+    art = row_value or ""
+    spec_art = spec_value or ""
+    return art in (spec_art, spec_art.split("?")[0])
+
+
+def _content_matches(row, spec: dict) -> bool:
+    """True when the row still carries exactly the authored content of spec
+    — every text surface and filler block, not just title/subtitle/art."""
+    if not _art_matches(row.program_art_url, spec.get("program_art_url")):
+        return False
+    if not _art_matches(row.event_channel_logo_url, spec.get("event_channel_logo_url")):
+        return False
+    return all(_norm(getattr(row, f)) == _norm(spec.get(f)) for f in _CONTENT_FIELDS)
+
+
+# Marquee-row text as #364 first shipped it — #367 reframed it to 'meet at'
+# (host/travel framing lies at neutral sites). Needed to reconstruct the G2
+# generation for healing.
+_G2_MARQUEE_US = (
+    "{game_event_note}. The {away_team_record} {away_team} travel to "
+    "{venue_city}, {venue_state} to take on the {home_team_record} "
+    "{home_team} at {venue}."
+)
+_G2_MARQUEE_COLLEGE = (
+    "{game_event_note}. {home_team_rank_display} {home_team} "
+    "({home_team_record}) host {away_team_rank_display} {away_team} "
+    "({away_team_record}) at {venue}."
+)
+
+
+def _revert_at_vs(text: str | None) -> str | None:
+    """Undo the #367 neutral-aware connector: '{at_vs}' back to 'at'."""
+    if not text:
+        return text
+    for suffix in ("", ".next", ".last"):
+        text = text.replace(f" {{at_vs{suffix}}} ", " at ")
+    return text
+
+
+def _prior_generations(name: str, spec: dict) -> list[dict]:
+    """Registered prior content generations of a set member, newest first.
+
+    G3 (#367 era, pre-#369): current minus the soccer idle overrides.
+    G2 (#364 era, pre-#367): G3 minus neutral-site rows, marquee rows in
+        the original travel/host framing, hard-coded 'at' subtitles.
+    G0 (tvnk.8, pre-#364): G2 minus marquee/competition-note rows.
+
+    Generations identical to their successor are skipped (member untouched
+    by that change). Racing joined post-#364 and has no prior generations.
+    Prior TITLE variants (PRIOR_TITLE_UPGRADES) are crossed in by
+    _matches_any_generation, not here.
     """
-    if row.title_format != spec.get("title_format"):
-        return False
-    if (row.subtitle_template or "") != (spec.get("subtitle_template") or ""):
-        return False
-    if (row.event_channel_name or "") != (spec.get("event_channel_name") or ""):
-        return False
-    art = row.program_art_url or ""
-    spec_art = spec.get("program_art_url") or ""
-    bare = spec_art.split("?")[0]
-    return art in (spec_art, bare)
+    gens: list[dict] = []
+
+    g3 = copy.deepcopy(spec)
+    if name == "Soccer Team (Starter)":
+        base = _team_base()
+        for f in ("idle_content", "idle_conditional", "idle_offseason"):
+            g3[f] = base[f]  # #369 reverted: soccer idle was the base text
+    if g3 != spec:
+        gens.append(g3)
+
+    g2 = copy.deepcopy(g3)
+    g2["conditional_descriptions"] = [
+        r for r in g2["conditional_descriptions"] if r.get("label") != "Neutral site"
+    ]
+    for r in g2["conditional_descriptions"]:
+        if r.get("label") == "Marquee note":
+            r["template"] = _G2_MARQUEE_COLLEGE if "College" in name else _G2_MARQUEE_US
+    g2["subtitle_template"] = _revert_at_vs(g2.get("subtitle_template"))
+    for section in ("pregame_fallback", "postgame_fallback"):
+        block = g2.get(section) or {}
+        if block.get("subtitle"):
+            block["subtitle"] = _revert_at_vs(block["subtitle"])
+    if g2 != g3:
+        gens.append(g2)
+
+    g0 = copy.deepcopy(g2)
+    g0["conditional_descriptions"] = [
+        r
+        for r in g0["conditional_descriptions"]
+        if r.get("label") not in ("Marquee note", "Competition note")
+    ]
+    if g0 != g2:
+        gens.append(g0)
+
+    return gens
+
+
+def _matches_any_generation(row, name: str, spec: dict) -> bool:
+    """Row content equals the current spec or ANY registered prior content
+    generation (crossed with prior title variants) — i.e., it is provably
+    our unedited seed. Any user edit fails every candidate and the row is
+    left alone."""
+    candidates = [spec, *_prior_generations(name, spec)]
+    old_title = PRIOR_TITLE_UPGRADES.get(name)
+    if old_title:
+        for cand in list(candidates):
+            titled = copy.deepcopy(cand)
+            titled["title_format"] = old_title
+            candidates.append(titled)
+    return any(_content_matches(row, cand) for cand in candidates)
 
 
 def _team_base(**overrides) -> dict:
@@ -981,9 +1115,10 @@ def seed_default_templates(conn: Connection) -> None:
         if dup is not None:
             # Transitional healing: an earlier pass seeded the curated row
             # alongside this pristine legacy one. If that duplicate is still
-            # untouched, fold it back so the legacy row (which holds the
-            # references) becomes the curated one; otherwise leave both.
-            if not _is_unedited_curated(dup, specs[curated_name]):
+            # untouched (deep fingerprint, any generation), fold it back so
+            # the legacy row (which holds the references) becomes the curated
+            # one; otherwise leave both.
+            if not _matches_any_generation(dup, curated_name, specs[curated_name]):
                 continue
             delete_template(conn, dup.id)
             del existing[curated_name]
@@ -992,43 +1127,42 @@ def seed_default_templates(conn: Connection) -> None:
         existing[curated_name] = existing.pop(legacy_name)
 
     # 1b. Rename unedited prior-iteration curated rows in place (same id).
-    # A prior-name row may also carry a prior-iteration TITLE (a pre-tvnk.8
-    # "International Event" still titled '{gracenote_category}'), so the
-    # fingerprint accepts either title generation.
+    # The generation fingerprint covers prior titles and prior row content,
+    # so a pre-tvnk.8 "International Event" (old title) renames AND upgrades.
     for prior, current in PRIOR_NAME_UPGRADES.items():
         row = existing.get(prior)
         if row is None or current in existing or current not in specs:
             continue
-        prior_spec = dict(specs[current])
-        prior_spec["name"] = prior
-        unedited = _is_unedited_curated(row, prior_spec)
-        if not unedited and current in PRIOR_TITLE_UPGRADES:
-            prior_spec["title_format"] = PRIOR_TITLE_UPGRADES[current]
-            unedited = _is_unedited_curated(row, prior_spec)
-        if not unedited:
+        if not _matches_any_generation(row, current, specs[current]):
             continue
         update_template(conn, row.id, **specs[current])
         existing[current] = existing.pop(prior)
 
-    # 1c. Upgrade unedited prior-CONTENT rows in place (same id) — members
-    # whose seeded title changed across iterations (tvnk.8: year-composed
-    # International/Tennis titles). Edited rows are left alone.
-    for member, old_title in PRIOR_TITLE_UPGRADES.items():
+    # 1c. Content-generation healing (#373, #355 item 14): a row still
+    # exactly matching a registered PRIOR content generation — including
+    # prior title variants — is provably our unedited seed and upgrades in
+    # place (same id) to current content. Any user edit (title, subtitle,
+    # descriptions, fillers, anything) makes the row match no generation and
+    # it is left alone. This is how content changes (#363 marquee rows, #365
+    # neutral rows/subtitles, #368 soccer idle) reach existing installs.
+    for member, spec in specs.items():
         row = existing.get(member)
-        if row is None or member not in specs:
+        if row is None or _content_matches(row, spec):
             continue
-        old_spec = dict(specs[member])
-        old_spec["title_format"] = old_title
-        if not _is_unedited_curated(row, old_spec):
+        if not _matches_any_generation(row, member, spec):
             continue
-        update_template(conn, row.id, **specs[member])
+        update_template(conn, row.id, **spec)
 
-    # 1d. Remove retired members that are still our unedited seed — and are
-    # unreferenced: a retired starter someone assigned stays put (deleting it
-    # would silently unassign their channels).
+    # 1d. Remove retired members that are still our unedited seed (deep
+    # fingerprint, any generation — real installs carry the retired members
+    # in OLD-generation content) — and are unreferenced: a retired starter
+    # someone assigned stays put (deleting it would silently unassign their
+    # channels).
     for retired_spec in [_retired_no_abbrev_spec(), *_retired_milb_specs()]:
         row = existing.get(retired_spec["name"])
-        if row is None or not _is_unedited_curated(row, retired_spec):
+        if row is None:
+            continue
+        if not _matches_any_generation(row, retired_spec["name"], retired_spec):
             continue
         if _is_referenced(conn, row.id):
             continue

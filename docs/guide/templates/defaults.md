@@ -20,6 +20,12 @@ carry the original pristine `Team`/`Event` seeds (with the old
 `localhost:3000` placeholder art) have them upgraded in place — same template,
 same assignments, fixed art.
 
+Starters you've **never edited** stay current automatically: when a Teamarr
+update improves a starter's content, an untouched copy is upgraded in place
+(same template, same assignments). Editing any part of a starter — title,
+subtitle, descriptions, filler — makes it yours, and upgrades never touch it
+again.
+
 ## The Set
 
 | Template | Type | Designed for | Channel name style |
