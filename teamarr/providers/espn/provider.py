@@ -179,14 +179,23 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     def get_events(self, league: str, target_date: date) -> list[Event]:
         # UFC uses different API endpoint
         if league == "ufc":
-            # Provider handles: endpoint selection, parsing, date filtering
-            data = self._client.get_ufc_scoreboard()
+            # ESPN's default MMA scoreboard returns ONLY the current featured
+            # card, so any other card was invisible regardless of stream name
+            # or regex (#345). Query a ±1-day window around target_date: a
+            # PPV spans midnight (early prelims and main card land on adjacent
+            # days), so a single-date query can drop the card.
+            window = "{}-{}".format(
+                (target_date - timedelta(days=1)).strftime("%Y%m%d"),
+                (target_date + timedelta(days=1)).strftime("%Y%m%d"),
+            )
+            data = self._client.get_ufc_scoreboard(window)
             if not data:
                 return []
             # Mixin handles: pure parsing only
             events = self._parse_ufc_events(data)
-            # Provider handles: date filtering
-            return [e for e in events if to_user_tz(e.start_time).date() == target_date]
+            # Provider handles: date filtering — keep cards with ANY segment
+            # touching target_date, not just those starting on it.
+            return [e for e in events if self._ufc_card_covers_date(e, target_date)]
 
         # Get sport/league from database config
         sport_league = self._get_sport_league_from_db(league)
@@ -196,6 +205,32 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         if sport in TOURNAMENT_SPORTS:
             return self._get_tournament_events(league, target_date, sport, sport_league)
 
+        return self._get_scoreboard_events(league, target_date, sport_league)
+
+    @staticmethod
+    def _ufc_card_covers_date(event: Event, target_date: date) -> bool:
+        """True when any part of the card falls on target_date in user tz.
+
+        A PPV rolls past midnight: early prelims Saturday, main card early
+        Sunday (user tz). Filtering on start_time alone drops the card for
+        one of the days its segments span (#345).
+        """
+        times = list(event.segment_times.values())
+        if not times and event.start_time:
+            times = [event.start_time]
+        if not times:
+            return False
+        first = min(times)
+        last = max(times) + timedelta(hours=3)  # last segment runs ~3h
+        return to_user_tz(first).date() <= target_date <= to_user_tz(last).date()
+
+    def _get_scoreboard_events(
+        self,
+        league: str,
+        target_date: date,
+        sport_league: tuple[str, str] | None,
+    ) -> list[Event]:
+        """Standard per-date scoreboard fetch (non-UFC, non-tournament)."""
         date_str = target_date.strftime("%Y%m%d")
         data = self._client.get_scoreboard(league, date_str, sport_league)
         if not data:
@@ -225,10 +260,13 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         sport = self._get_sport(league)
         if league == "ufc" or sport in TOURNAMENT_SPORTS:
             # Special endpoints — reuse the per-date path over a few days.
-            out: list[Event] = []
+            # Dedupe by id: a UFC card spanning midnight is returned for
+            # every date it touches (#345).
+            by_event_id: dict[str, Event] = {}
             for d in (date.today(), date.today() - timedelta(days=1)):
-                out.extend(self.get_events(league, d))
-            return out
+                for e in self.get_events(league, d):
+                    by_event_id[e.id] = e
+            return list(by_event_id.values())
 
         sport_league = self._get_sport_league_from_db(league)
         yesterday = (date.today() - timedelta(days=1)).strftime("%Y%m%d")
