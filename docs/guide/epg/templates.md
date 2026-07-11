@@ -110,7 +110,7 @@ See [Conditions](conditions) for available condition types.
 
 The fastest path is the shipped starter set — every install seeds ten
 Gracenote-modeled templates covering team channels, US pro events, soccer
-(club and international), college, combat, minor-league baseball, and tennis.
+(club and international), college, combat, tennis, and racing.
 See [Default Templates](../templates/defaults) for the full
 set and recommended scoping.
 

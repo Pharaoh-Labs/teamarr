@@ -58,7 +58,7 @@ def test_fresh_install_seeds_full_set(db_conn):
     # init_db already seeded (the wiring under test); re-run is a no-op
     seed_default_templates(db_conn)
     assert _names(db_conn) == SET_NAMES
-    assert len(SET_NAMES) == 9
+    assert len(SET_NAMES) == 10
 
     for t in get_all_templates(db_conn):
         # Seeded UNASSIGNED — the user scopes them
