@@ -257,17 +257,23 @@ class ESPNClient(BaseHTTPClient):
 
     # UFC-specific endpoints
 
-    def get_ufc_scoreboard(self) -> dict | None:
+    def get_ufc_scoreboard(self, date_str: str | None = None) -> dict | None:
         """Fetch UFC scoreboard with correct bout times.
 
         The scoreboard endpoint returns accurate segment times, unlike the
         app API which is 3 hours off.
 
+        Args:
+            date_str: YYYYMMDD date or YYYYMMDD-YYYYMMDD range. When None,
+                ESPN returns ONLY its current featured card — any other card
+                is invisible without an explicit date (#345).
+
         Returns:
             Raw ESPN scoreboard response or None on error
         """
         url = f"{ESPN_BASE_URL}/mma/ufc/scoreboard"
-        return self._request(url)
+        params: dict = {"dates": date_str} if date_str else {}
+        return self._request(url, params)
 
     def get_fighter(self, fighter_id: str) -> dict | None:
         """Fetch UFC fighter profile.
