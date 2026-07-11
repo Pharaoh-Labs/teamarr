@@ -544,7 +544,13 @@ class ChannelCreator(_LifecycleHost):
                 )
                 source_group_id = group_config.get("id")
                 priority = compute_stream_priority_from_rules(
-                    conn, stream_name, m3u_account_name, source_group_id
+                    conn,
+                    stream_name,
+                    m3u_account_name,
+                    source_group_id,
+                    match_type=match_type,
+                    match_method=match_method,
+                    dispatcharr_channel_group=stream.get("dp_channel_group"),
                 )
                 if priority is None:
                     priority = get_next_stream_priority(conn, existing.id)

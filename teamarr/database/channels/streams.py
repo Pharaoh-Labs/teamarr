@@ -179,17 +179,29 @@ def compute_stream_priority_from_rules(
     stream_name: str | None = None,
     m3u_account_name: str | None = None,
     source_group_id: int | None = None,
+    match_type: str = "event",
+    match_method: str | None = None,
+    dispatcharr_channel_group: str | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
     If rules are defined, computes priority based on first matching rule.
     If no rules or no match, returns 999 (sort to end).
 
+    Callers should pass every field they have (#379): rule types match on
+    match_type (stream_type rules), match_method (epg_match rules), and
+    dispatcharr_channel_group (dispatcharr_group rules) — omitting them makes
+    those rules silently non-matching at attach time, so the order pushed to
+    Dispatcharr is wrong until the end-of-generation reorder pass corrects it.
+
     Args:
         conn: Database connection
         stream_name: Stream display name (for regex matching)
         m3u_account_name: M3U account name (for m3u type matching)
         source_group_id: Source group ID (for group type matching)
+        match_type: 'event' or 'team' (for stream_type rules)
+        match_method: 'epg', 'fuzzy', etc. (for epg_match rules)
+        dispatcharr_channel_group: DP channel group name (for dispatcharr_group rules)
 
     Returns:
         Computed priority (lower = higher priority)
@@ -210,6 +222,9 @@ def compute_stream_priority_from_rules(
         stream_name=stream_name,
         m3u_account_name=m3u_account_name,
         source_group_id=source_group_id,
+        match_type=match_type,
+        match_method=match_method,
+        dispatcharr_channel_group=dispatcharr_channel_group,
     )
 
     return ordering_service.compute_priority(temp_stream)

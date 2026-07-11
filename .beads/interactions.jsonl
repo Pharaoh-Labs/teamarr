@@ -552,3 +552,4 @@
 {"id":"int-f6d7740b7745f5b87a0e061f9e9c2d3d","kind":"field_change","created_at":"2026-07-11T03:24:44.375095971Z","actor":"egyptiangio","issue_id":"teamarrv2-x3rv","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-85b0840cce837a1f83ba8a590ae5d5fd","kind":"field_change","created_at":"2026-07-11T03:26:11.768141534Z","actor":"egyptiangio","issue_id":"teamarrv2-x3rv","extra":{"field":"status","new_value":"in_progress","old_value":"closed"}}
 {"id":"int-46e349360c92185a0eb3bf61a3f4843c","kind":"field_change","created_at":"2026-07-11T03:54:37.519702109Z","actor":"egyptiangio","issue_id":"teamarrv2-x3rv","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-eef50510","kind":"field_change","created_at":"2026-07-11T11:54:07.153071482Z","actor":"Luke Pukatch","issue_id":"teamarrv2-pba0","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}

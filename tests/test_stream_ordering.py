@@ -587,6 +587,44 @@ class TestAdditiveScoring:
         assert score_entries[0].points == 25
         assert score_entries[0].is_winner is False
 
+    def test_attach_time_compute_honors_epg_and_dp_group_fields(self, seeded_db):
+        """compute_stream_priority_from_rules must apply dispatcharr_group /
+        epg_match / stream_type rules at attach time (#379).
+
+        Before the fix the helper's stub stream carried only name/account/group,
+        so these rule types silently never matched and the order pushed to
+        Dispatcharr at attach was wrong until the end-of-run reorder pass.
+        """
+        from teamarr.database.channels import compute_stream_priority_from_rules
+        from teamarr.database.settings.update import update_stream_ordering_rules
+
+        update_stream_ordering_rules(
+            seeded_db,
+            [
+                {"type": "dispatcharr_group", "value": "Sports CA", "priority": 99,
+                 "mode": "score", "points": 800},
+                {"type": "epg_match", "value": "", "priority": 99,
+                 "mode": "score", "points": 10},
+                {"type": "stream_type", "value": "team", "priority": 99,
+                 "mode": "score", "points": -50},
+            ],
+        )
+        seeded_db.commit()
+
+        epg_in_group = compute_stream_priority_from_rules(
+            seeded_db, "TSN4", None, None,
+            match_method="epg", dispatcharr_channel_group="Sports CA",
+        )
+        assert epg_in_group == NO_MATCH_PRIORITY * BAND_STRIDE - 810
+
+        team_stream = compute_stream_priority_from_rules(
+            seeded_db, "Pirates 24/7", None, None, match_type="team",
+        )
+        assert team_stream == NO_MATCH_PRIORITY * BAND_STRIDE + 50
+
+        plain = compute_stream_priority_from_rules(seeded_db, "ESPN", None, None)
+        assert plain == NO_MATCH_PRIORITY * BAND_STRIDE
+
     def test_details_expose_band_and_score(self):
         rules = [
             StreamOrderingRule("m3u", "ProviderA", 3, mode="priority"),
