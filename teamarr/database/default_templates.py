@@ -166,7 +166,7 @@ def _team_base(**overrides) -> dict:
     base = {
         "template_type": "team",
         "title_format": "{gracenote_category}",
-        "subtitle_template": "{away_team} at {home_team}",
+        "subtitle_template": "{away_team} {at_vs} {home_team}",
         "program_art_url": _TEAM_ART,
         "game_duration_mode": "sport",
         "pregame_enabled": True,
@@ -181,7 +181,7 @@ def _team_base(**overrides) -> dict:
         # the constructed prose is the fallback when no preview exists yet.
         "pregame_fallback": {
             "title": "Coming up: {gracenote_category} at {game_time.next}",
-            "subtitle": "{away_team.next} at {home_team.next}",
+            "subtitle": "{away_team.next} {at_vs.next} {home_team.next}",
             "description": "{game_preview.next}",
             "description_fallback": (
                 "The {away_team_record.next} {away_team.next} travel to "
@@ -197,7 +197,7 @@ def _team_base(**overrides) -> dict:
         # constructed result line renders.
         "postgame_fallback": {
             "title": "{gracenote_category}: {team_name} Postgame",
-            "subtitle": "{away_team.last} at {home_team.last}",
+            "subtitle": "{away_team.last} {at_vs.last} {home_team.last}",
             "description": (
                 "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
             ),
@@ -248,16 +248,29 @@ def _team_base(**overrides) -> dict:
             },
             # Marquee/playoff note (#355 item 2): 'NBA Finals - Game 5. The…'
             # — fires only when ESPN attaches a note; ordinary games skip it.
+            # Framing-neutral 'meet at' prose (#355 item 3): marquee games are
+            # often neutral-site (bowls, CFP), where host/travel framing lies.
             {
                 "condition": "has_event_note",
                 "condition_value": None,
                 "template": (
-                    "{game_event_note}. The {away_team_record} {away_team} travel to "
-                    "{venue_city}, {venue_state} to take on the {home_team_record} "
-                    "{home_team} at {venue}."
+                    "{game_event_note}. The {away_team_record} {away_team} and the "
+                    "{home_team_record} {home_team} meet at {venue}."
                 ),
                 "priority": 15,
                 "label": "Marquee note",
+            },
+            # Neutral site without a note (#355 item 3): kickoff classics,
+            # unnoted tournament rounds — nobody hosts, so 'meet at' framing.
+            {
+                "condition": "is_neutral_site",
+                "condition_value": None,
+                "template": (
+                    "The {away_team_record} {away_team} and the {home_team_record} "
+                    "{home_team} meet at {venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 17,
+                "label": "Neutral site",
             },
             {
                 "condition": "has_structured_preview",
@@ -293,7 +306,7 @@ def _event_base(**overrides) -> dict:
     base = {
         "template_type": "event",
         "title_format": "{gracenote_category}",
-        "subtitle_template": "{away_team} at {home_team}",
+        "subtitle_template": "{away_team} {at_vs} {home_team}",
         "program_art_url": _EVENT_ART,
         "game_duration_mode": "sport",
         "pregame_enabled": True,
@@ -308,7 +321,7 @@ def _event_base(**overrides) -> dict:
         # the constructed prose is the fallback when no preview exists yet.
         "pregame_fallback": {
             "title": "Coming up: {gracenote_category} at {game_time}",
-            "subtitle": "{away_team} at {home_team}",
+            "subtitle": "{away_team} {at_vs} {home_team}",
             "description": "{game_preview}",
             "description_fallback": (
                 "The {away_team_record} {away_team} travel to {venue_city}, "
@@ -325,7 +338,7 @@ def _event_base(**overrides) -> dict:
         # {result_text}, which are TEAM_ONLY and fail builder validation, #354).
         "postgame_fallback": {
             "title": "{gracenote_category}: Postgame",
-            "subtitle": "{away_team} at {home_team}",
+            "subtitle": "{away_team} {at_vs} {home_team}",
             "description": "Final: {event_result}",
             "art_url": _EVENT_ART,
         },
@@ -368,16 +381,29 @@ def _event_base(**overrides) -> dict:
             },
             # Marquee/playoff note (#355 item 2): 'NBA Finals - Game 5. The…'
             # — fires only when ESPN attaches a note; ordinary games skip it.
+            # Framing-neutral 'meet at' prose (#355 item 3): marquee games are
+            # often neutral-site (bowls, CFP), where host/travel framing lies.
             {
                 "condition": "has_event_note",
                 "condition_value": None,
                 "template": (
-                    "{game_event_note}. The {away_team_record} {away_team} travel to "
-                    "{venue_city}, {venue_state} to take on the {home_team_record} "
-                    "{home_team} at {venue}."
+                    "{game_event_note}. The {away_team_record} {away_team} and the "
+                    "{home_team_record} {home_team} meet at {venue}."
                 ),
                 "priority": 15,
                 "label": "Marquee note",
+            },
+            # Neutral site without a note (#355 item 3): kickoff classics,
+            # unnoted tournament rounds — nobody hosts, so 'meet at' framing.
+            {
+                "condition": "is_neutral_site",
+                "condition_value": None,
+                "template": (
+                    "The {away_team_record} {away_team} and the {home_team_record} "
+                    "{home_team} meet at {venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 17,
+                "label": "Neutral site",
             },
             # Tier-2 (tvnk.15): constructed line enriched with recent form +
             # series state — populates days ahead, unlike preview prose.
@@ -484,16 +510,30 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
             # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
+            # 'Meet at' framing, not 'host' — these are mostly neutral-site
+            # games (#355 item 3).
             {
                 "condition": "has_event_note",
                 "condition_value": None,
                 "template": (
-                    "{game_event_note}. {home_team_rank_display} {home_team} "
-                    "({home_team_record}) host {away_team_rank_display} {away_team} "
-                    "({away_team_record}) at {venue}."
+                    "{game_event_note}. {away_team_rank_display} {away_team} "
+                    "({away_team_record}) and {home_team_rank_display} {home_team} "
+                    "({home_team_record}) meet at {venue}."
                 ),
                 "priority": 15,
                 "label": "Marquee note",
+            },
+            # Neutral site without a note (#355 item 3).
+            {
+                "condition": "is_neutral_site",
+                "condition_value": None,
+                "template": (
+                    "{away_team_rank_display} {away_team} ({away_team_record}) and "
+                    "{home_team_rank_display} {home_team} ({home_team_record}) meet "
+                    "at {venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 17,
+                "label": "Neutral site",
             },
             {
                 "condition": "is_conference_game",
@@ -542,16 +582,30 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
             # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
+            # 'Meet at' framing, not 'host' — these are mostly neutral-site
+            # games (#355 item 3).
             {
                 "condition": "has_event_note",
                 "condition_value": None,
                 "template": (
-                    "{game_event_note}. {home_team_rank_display} {home_team} "
-                    "({home_team_record}) host {away_team_rank_display} {away_team} "
-                    "({away_team_record}) at {venue}."
+                    "{game_event_note}. {away_team_rank_display} {away_team} "
+                    "({away_team_record}) and {home_team_rank_display} {home_team} "
+                    "({home_team_record}) meet at {venue}."
                 ),
                 "priority": 15,
                 "label": "Marquee note",
+            },
+            # Neutral site without a note (#355 item 3).
+            {
+                "condition": "is_neutral_site",
+                "condition_value": None,
+                "template": (
+                    "{away_team_rank_display} {away_team} ({away_team_record}) and "
+                    "{home_team_rank_display} {home_team} ({home_team_record}) meet "
+                    "at {venue}. {last_five_summary} {series_summary}"
+                ),
+                "priority": 17,
+                "label": "Neutral site",
             },
             {
                 "condition": "has_structured_preview",

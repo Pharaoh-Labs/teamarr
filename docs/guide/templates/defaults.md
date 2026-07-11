@@ -63,10 +63,15 @@ constructed prose when it isn't available:
   on game day), it's used verbatim via a `has_preview → {game_preview}`
   conditional row; marquee games lead with the provider's designation when
   one exists ("NBA Finals - Game 5. …", "FIFA World Cup, Group C. …" via
-  `has_event_note` / `has_match_note` rows); for games further out, a
-  structured-preview row enriches the constructed line with recent form and
-  series state ("The Rays have won 2 of their last five… BOS leads series
-  3-2"); otherwise the plain constructed "X travel to Y…" line renders.
+  `has_event_note` / `has_match_note` rows); neutral-site games (bowls,
+  CFP/NCAA tournament rounds) drop host framing for "X and Y meet at {venue}"
+  via an `is_neutral_site` row; for games further out, a structured-preview
+  row enriches the constructed line with recent form and series state ("The
+  Rays have won 2 of their last five… BOS leads series 3-2"); otherwise the
+  plain constructed "X travel to Y…" line renders.
+- **Subtitles** — the US-register starters connect matchups with the
+  neutral-aware `{at_vs}` variable: "Pistons at Celtics" for hosted games,
+  "Ohio State vs. Texas" at neutral sites (the Gracenote convention).
 - **Postgame** — once a game is final and ESPN publishes a recap headline,
   the filler shows `{game_recap}`; until then a constructed result line
   ("The X defeated the Y 4–2") renders instead.

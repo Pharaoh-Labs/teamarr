@@ -110,6 +110,15 @@ def test_has_event_note_condition():
     assert ev.evaluate("has_event_note", None, ctx, gc) is False
 
 
+def test_is_neutral_site_condition():
+    ev = ConditionEvaluator()
+    ctx, gc = _ctx(_event(neutral_site=True))
+    assert ev.evaluate("is_neutral_site", None, ctx, gc) is True
+
+    ctx, gc = _ctx(_event())
+    assert ev.evaluate("is_neutral_site", None, ctx, gc) is False
+
+
 def test_has_match_note_condition():
     ev = ConditionEvaluator()
     ctx, gc = _ctx(_event(soccer_match_note="FIFA World Cup, Group C"))

@@ -69,6 +69,12 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "at_vs": {
         "NBA": "at",
     },
+    "at_vs.next": {
+        "NBA": "at",
+    },
+    "at_vs.last": {
+        "NBA": "at",
+    },
     "home_away_verb": {
         "NBA": "host",
     },

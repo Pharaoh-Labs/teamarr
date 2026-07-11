@@ -176,10 +176,10 @@ Positional team references and home/away context.
 | `{is_home}` | 'true' if team is home, 'false' if away | base, .next, .last | `true` |
 | `{is_away}` | 'true' if team is away, 'false' if home | base, .next, .last | `false` |
 | `{home_away_text}` | 'at home' or 'on the road' | base, .next, .last | `at home` |
-| `{vs_at}` | 'vs' if home, 'at' if away | base, .next, .last | `vs` |
-| `{at_vs}` | Perspective-free connector: 'at' for US team sports, 'vs.' otherwise | base, .next, .last | `at` |
+| `{vs_at}` | 'vs' if home, 'at' if away; neutral-site games read 'vs' | base, .next, .last | `vs` |
+| `{at_vs}` | Perspective-free connector: 'at' for US team sports, 'vs.' otherwise; neutral-site games always read 'vs.' | base, .next, .last | `at` |
 | `{home_away_verb}` | 'host' at home, 'visit' away | base, .next, .last | `host` |
-| `{vs_@}` | 'vs' if home, '@' if away | base, .next, .last | `vs` |
+| `{vs_@}` | 'vs' if home, '@' if away; neutral-site games read 'vs' | base, .next, .last | `vs` |
 
 {: .note }
 The `_the` variables emit a lowercase `the` for mid-sentence use ("take on

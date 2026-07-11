@@ -100,6 +100,24 @@ When generating EPG, Teamarr evaluates all conditions and selects the highest-pr
 
 ---
 
+### Neutral Site
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `is_neutral_site` | - | Game is at a neutral site (bowls, CFP/NCAA tournament rounds, showcase games) |
+
+Host framing ("X travel to…", "Y host X…") misrepresents a game nobody
+hosts — branch to neutral prose instead. The `{at_vs}` / `{vs_at}` / `{vs_@}`
+connector variables also read `vs` automatically at neutral sites, so
+subtitles flip without a condition.
+
+**Example:**
+```json
+{"condition": "is_neutral_site", "priority": 17, "template": "{away_team} and {home_team} meet at {venue}."}
+```
+
+---
+
 ### Conference (College)
 
 | Condition | Value | Description |

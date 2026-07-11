@@ -39,6 +39,17 @@ def event_to_dict(event: Event) -> dict:
         "broadcasts": event.broadcasts,
         "season_year": event.season_year,
         "season_type": event.season_type,
+        "neutral_site": event.neutral_site,
+        # Editorial/context copy — the has_recap/has_preview/has_event_note/
+        # has_match_note conditions and their template vars read these; a
+        # cache hit must not silently drop them (#363, #365).
+        "game_recap": event.game_recap,
+        "game_event_note": event.game_event_note,
+        "soccer_match_note": event.soccer_match_note,
+        "game_preview": event.game_preview,
+        "series_summary": event.series_summary,
+        "home_last_five": event.home_last_five,
+        "away_last_five": event.away_last_five,
         # UFC-specific fields
         "segment_times": segment_times_dict,
         "main_card_start": event.main_card_start.isoformat() if event.main_card_start else None,
@@ -141,6 +152,16 @@ def dict_to_event(data: dict) -> Event:
         broadcasts=data.get("broadcasts", []),
         season_year=data.get("season_year"),
         season_type=data.get("season_type"),
+        neutral_site=bool(data.get("neutral_site", False)),
+        # Editorial/context copy (#363, #365) — absent in pre-upgrade cache
+        # entries, so default to empty.
+        game_recap=data.get("game_recap", ""),
+        game_event_note=data.get("game_event_note", ""),
+        soccer_match_note=data.get("soccer_match_note", ""),
+        game_preview=data.get("game_preview", ""),
+        series_summary=data.get("series_summary", ""),
+        home_last_five=data.get("home_last_five", ""),
+        away_last_five=data.get("away_last_five", ""),
         # UFC-specific fields
         segment_times=segment_times or {},
         main_card_start=main_card_start,
