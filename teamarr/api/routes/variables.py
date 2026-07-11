@@ -344,6 +344,18 @@ def get_conditions(template_type: str = "team"):
             "requires_value": False,
             "providers": "espn",
         },
+        {
+            "name": "has_event_note",
+            "description": "Marquee/playoff note is available ('NBA Finals - Game 5')",
+            "requires_value": False,
+            "providers": "espn",
+        },
+        {
+            "name": "has_match_note",
+            "description": "Soccer competition note is available ('FIFA World Cup, Group C')",
+            "requires_value": False,
+            "providers": "espn",
+        },
     ]
 
     # Team-only conditions (require "our team" perspective)

@@ -317,6 +317,43 @@ def test_college_conference_game_names_the_conference(resolver):
     assert "in Southeastern Conference play" in out
 
 
+def test_marquee_note_leads_us_pro_description(resolver):
+    """#355 item 2: an NBA Finals game must not describe like a random
+    February game — the has_event_note row prefixes the marquee designation."""
+    spec = SPECS["Default Event (Starter)"]
+    ctx = _nba_ctx(game_event_note="NBA Finals - Game 5")
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out.startswith("NBA Finals - Game 5. The 8-4 Detroit Pistons travel to")
+
+
+def test_marquee_note_leads_college_description(resolver):
+    """Bowls/CFP rounds lead the college register when the note exists."""
+    spec = SPECS["College Event (Starter)"]
+    ctx = _college_ctx(home_rank=20, away_rank=15,
+                       game_event_note="CFP Quarterfinal at the Cotton Bowl Classic")
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out.startswith(
+        "CFP Quarterfinal at the Cotton Bowl Classic. No. 20 Arkansas Razorbacks"
+    )
+
+
+def test_match_note_leads_soccer_description(resolver):
+    """Competition + group/stage lead the soccer register when present."""
+    spec = SPECS["International Event (Starter)"]
+    ctx = _national_ctx(soccer_match_note="FIFA World Cup, Group C")
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out == "FIFA World Cup, Group C. Belgium face Spain at MetLife Stadium."
+
+
+def test_provider_preview_still_beats_marquee_note(resolver):
+    """ESPN-copy-first holds: the preview blurb outranks the note row."""
+    spec = SPECS["Default Event (Starter)"]
+    ctx = _nba_ctx(game_event_note="NBA Finals - Game 5",
+                   game_preview="Pistons look to even the series in Boston.")
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert out == "Pistons look to even the series in Boston."
+
+
 def test_provider_preview_short_circuits_construction(resolver):
     """has_preview beats every constructed row (ESPN-copy-first, tvnk.14)."""
     spec = SPECS["Default Event (Starter)"]

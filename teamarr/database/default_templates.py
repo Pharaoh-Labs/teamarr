@@ -246,6 +246,19 @@ def _team_base(**overrides) -> dict:
                 "priority": 10,
                 "label": "Preview (provider)",
             },
+            # Marquee/playoff note (#355 item 2): 'NBA Finals - Game 5. The…'
+            # — fires only when ESPN attaches a note; ordinary games skip it.
+            {
+                "condition": "has_event_note",
+                "condition_value": None,
+                "template": (
+                    "{game_event_note}. The {away_team_record} {away_team} travel to "
+                    "{venue_city}, {venue_state} to take on the {home_team_record} "
+                    "{home_team} at {venue}."
+                ),
+                "priority": 15,
+                "label": "Marquee note",
+            },
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
@@ -353,6 +366,19 @@ def _event_base(**overrides) -> dict:
                 "priority": 10,
                 "label": "Preview (provider)",
             },
+            # Marquee/playoff note (#355 item 2): 'NBA Finals - Game 5. The…'
+            # — fires only when ESPN attaches a note; ordinary games skip it.
+            {
+                "condition": "has_event_note",
+                "condition_value": None,
+                "template": (
+                    "{game_event_note}. The {away_team_record} {away_team} travel to "
+                    "{venue_city}, {venue_state} to take on the {home_team_record} "
+                    "{home_team} at {venue}."
+                ),
+                "priority": 15,
+                "label": "Marquee note",
+            },
             # Tier-2 (tvnk.15): constructed line enriched with recent form +
             # series state — populates days ahead, unlike preview prose.
             {
@@ -394,6 +420,17 @@ _PREVIEW_ROW = {
     "label": "Preview (provider)",
 }
 
+# Competition/stage note for the soccer-register starters (#355 item 2):
+# 'FIFA World Cup, Group C. Belgium face Spain at MetLife Stadium.' — fires
+# only when the provider attaches a note.
+_MATCH_NOTE_ROW = {
+    "condition": "has_match_note",
+    "condition_value": None,
+    "template": "{soccer_match_note}. {away_team_the} face {home_team_the} at {venue}.",
+    "priority": 15,
+    "label": "Competition note",
+}
+
 
 DEFAULT_TEMPLATE_SET: list[dict] = [
     _team_base(name="Default Team (Starter)"),
@@ -415,6 +452,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         },
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
+            dict(_MATCH_NOTE_ROW),
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
@@ -444,6 +482,19 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         name="College Team (Starter)",
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
+            # Marquee note: bowls, CFP rounds, tournament designations
+            # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
+            {
+                "condition": "has_event_note",
+                "condition_value": None,
+                "template": (
+                    "{game_event_note}. {home_team_rank_display} {home_team} "
+                    "({home_team_record}) host {away_team_rank_display} {away_team} "
+                    "({away_team_record}) at {venue}."
+                ),
+                "priority": 15,
+                "label": "Marquee note",
+            },
             {
                 "condition": "is_conference_game",
                 "condition_value": None,
@@ -489,6 +540,19 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         name="College Event (Starter)",
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
+            # Marquee note: bowls, CFP rounds, tournament designations
+            # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
+            {
+                "condition": "has_event_note",
+                "condition_value": None,
+                "template": (
+                    "{game_event_note}. {home_team_rank_display} {home_team} "
+                    "({home_team_record}) host {away_team_rank_display} {away_team} "
+                    "({away_team_record}) at {venue}."
+                ),
+                "priority": 15,
+                "label": "Marquee note",
+            },
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
@@ -536,6 +600,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         },
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
+            dict(_MATCH_NOTE_ROW),
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
@@ -625,6 +690,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         },
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
+            dict(_MATCH_NOTE_ROW),
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,

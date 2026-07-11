@@ -146,6 +146,8 @@ When generating EPG, Teamarr evaluates all conditions and selects the highest-pr
 | `has_preview` | - | Provider preview blurb is available (populates same-day pregame) |
 | `has_recap` | - | Provider recap headline is available (populates once the game is final) |
 | `has_structured_preview` | - | Recent-form data is available (populates days ahead) |
+| `has_event_note` | - | Marquee/playoff note is available (`NBA Finals - Game 5`, `CFP Quarterfinal at the Cotton Bowl Classic`); empty for ordinary games |
+| `has_match_note` | - | Soccer competition note is available (`FIFA World Cup, Group C`); soccer only |
 
 Use these to prefer ESPN's editorial copy and fall back to constructed prose
 when it isn't published yet — the pattern the starter templates ship with:
@@ -154,6 +156,7 @@ when it isn't published yet — the pattern the starter templates ship with:
 ```json
 [
   {"condition": "has_preview", "priority": 10, "template": "{game_preview}"},
+  {"condition": "has_event_note", "priority": 15, "template": "{game_event_note}. {team_name} vs {opponent} at {venue}"},
   {"priority": 100, "template": "{team_name} vs {opponent} at {venue}"}
 ]
 ```

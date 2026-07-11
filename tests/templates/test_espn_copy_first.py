@@ -101,6 +101,24 @@ def test_has_preview_condition():
     assert ev.evaluate("has_preview", None, ctx, gc) is False
 
 
+def test_has_event_note_condition():
+    ev = ConditionEvaluator()
+    ctx, gc = _ctx(_event(game_event_note="NBA Finals - Game 5"))
+    assert ev.evaluate("has_event_note", None, ctx, gc) is True
+
+    ctx, gc = _ctx(_event())
+    assert ev.evaluate("has_event_note", None, ctx, gc) is False
+
+
+def test_has_match_note_condition():
+    ev = ConditionEvaluator()
+    ctx, gc = _ctx(_event(soccer_match_note="FIFA World Cup, Group C"))
+    assert ev.evaluate("has_match_note", None, ctx, gc) is True
+
+    ctx, gc = _ctx(_event())
+    assert ev.evaluate("has_match_note", None, ctx, gc) is False
+
+
 def test_selector_prefers_preview_row_then_constructed_default():
     options = [
         {"condition": "has_preview", "priority": 10, "template": "{game_preview}"},
