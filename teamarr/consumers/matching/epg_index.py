@@ -16,12 +16,19 @@ and categories is the matcher's job (teamarrv2-183.4).
 """
 
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 from teamarr.dispatcharr.managers.epg import EPGManager
 from teamarr.dispatcharr.types import DispatcharrProgram
 
 logger = logging.getLogger(__name__)
+
+# Parallel workers for the per-tvg_id program fetch. Dispatcharr is local and
+# httpx.Client is thread-safe (M3UManager.refresh_multiple already fans out
+# over the same client), so a moderate fan-out is safe.
+FETCH_WORKERS = int(os.environ.get("EPG_INDEX_FETCH_WORKERS", 10))
 
 
 def _iso_z(dt: datetime) -> str:
@@ -89,16 +96,22 @@ class EPGProgramIndex:
             )
             return cls({})
 
+        fetch_started = datetime.now(UTC)
         start_iso = _iso_z(window_start)
         end_iso = _iso_z(window_end)
 
-        by_tvg: dict[str, list[DispatcharrProgram]] = {}
-        total = 0
+        # Invert the resolution map: several stream tvg_ids can resolve to the
+        # same EPG-source tvg_id (mirrors of one linear channel), so fetch each
+        # distinct program tvg_id once and fan the result back out.
+        streams_by_program: dict[str, list[str]] = {}
         for stream_tvg, program_tvg in tvg_id_resolution.items():
             if not stream_tvg or not program_tvg:
                 continue
+            streams_by_program.setdefault(program_tvg, []).append(stream_tvg)
+
+        def fetch(program_tvg: str) -> tuple[str, list[DispatcharrProgram]]:
             # One call per resolved EPG-source tvg_id (the endpoint does not
-            # support multi-value tvg_id). Key the result by the stream tvg_id.
+            # support multi-value tvg_id).
             programs = epg_manager.search_programs(
                 tvg_id=program_tvg,
                 start_before=end_iso,
@@ -107,17 +120,32 @@ class EPGProgramIndex:
             )
             if exclude_teamarr:
                 programs = [p for p in programs if not p.is_teamarr]
-            if not programs:
-                continue
             programs.sort(key=lambda p: p.start_time or "")
-            by_tvg[stream_tvg] = programs
-            total += len(programs)
+            return program_tvg, programs
+
+        by_tvg: dict[str, list[DispatcharrProgram]] = {}
+        total = 0
+        if streams_by_program:
+            workers = min(FETCH_WORKERS, len(streams_by_program))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                for program_tvg, programs in executor.map(
+                    fetch, streams_by_program.keys()
+                ):
+                    if not programs:
+                        continue
+                    # Key the result by the stream tvg_id(s) for matcher lookup.
+                    for stream_tvg in streams_by_program[program_tvg]:
+                        by_tvg[stream_tvg] = programs
+                        total += len(programs)
 
         logger.info(
-            "[EPG-INDEX] Indexed %d programs across %d/%d tvg_ids (window %s..%s)",
+            "[EPG-INDEX] Indexed %d programs across %d/%d tvg_ids "
+            "(%d fetches in %.1fs, window %s..%s)",
             total,
             len(by_tvg),
             len(tvg_id_resolution),
+            len(streams_by_program),
+            (datetime.now(UTC) - fetch_started).total_seconds(),
             start_iso,
             end_iso,
         )

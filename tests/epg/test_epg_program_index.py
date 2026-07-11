@@ -64,6 +64,36 @@ def test_build_fetches_by_resolved_tvg_and_keys_by_stream_tvg():
     assert set(idx.tvg_ids()) == {"FoxSports1.us", "ESPN.us"}
 
 
+def test_build_dedupes_fetches_for_shared_program_tvg():
+    """Streams resolving to the SAME EPG-source tvg_id share one fetch."""
+    mgr = _epg_mgr()
+    base = datetime(2026, 6, 1, 18, tzinfo=UTC)
+    mgr.search_programs.side_effect = lambda tvg_id, **kw: [
+        _prog(1, tvg_id, base, base + timedelta(hours=3))
+    ]
+
+    idx = EPGProgramIndex.build(
+        mgr,
+        # Two mirror streams of one linear channel + one distinct channel.
+        tvg_id_resolution={
+            "FS1-East.us": "82547",
+            "FS1-West.us": "82547",
+            "ESPN.us": "12345",
+        },
+        window_start=base,
+        window_end=base + timedelta(days=1),
+    )
+
+    # One call per DISTINCT resolved id, not per stream tvg_id.
+    assert mgr.search_programs.call_count == 2
+    called = {c.kwargs["tvg_id"] for c in mgr.search_programs.call_args_list}
+    assert called == {"82547", "12345"}
+    # But the index still answers for every stream tvg_id.
+    assert set(idx.tvg_ids()) == {"FS1-East.us", "FS1-West.us", "ESPN.us"}
+    assert len(idx.programs_for("FS1-East.us")) == 1
+    assert len(idx.programs_for("FS1-West.us")) == 1
+
+
 def test_build_excludes_teamarr_programs():
     mgr = _epg_mgr()
     base = datetime(2026, 6, 1, 18, tzinfo=UTC)
