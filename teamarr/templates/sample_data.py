@@ -113,15 +113,18 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     },
     "matchup": {
         "NBA": "Chicago Bulls @ Detroit Pistons",
-        "UFC": "Alex Volkanovski vs Diego Lopes",
+        "UFC": "Diego Lopes @ Alex Volkanovski",
     },
     "matchup.next": {
         "NBA": "Detroit Pistons @ Milwaukee Bucks",
-        "UFC": "Islam Makhachev vs Arman Tsarukyan",
+        "UFC": "Arman Tsarukyan @ Islam Makhachev",
     },
     "matchup.last": {
         "NBA": "Detroit Pistons @ Cleveland Cavaliers",
-        "UFC": "Jon Jones vs Stipe Miocic",
+        "UFC": "Stipe Miocic @ Jon Jones",
+    },
+    "matchup_combat": {
+        "UFC": "Alex Volkanovski vs Diego Lopes",
     },
     "matchup_abbrev": {
         "NBA": "CHI @ DET",
@@ -1793,9 +1796,10 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "fighter2_record": "27-1-0",
         "event_title": "WVBA Title Night",
         "event_number": "1",
-        "matchup": "Little Mac vs Super Macho Man",
-        "matchup.next": "King Hippo vs Bald Bull",
-        "matchup.last": "Soda Popinski vs Glass Joe",
+        "matchup": "Super Macho Man @ Little Mac",
+        "matchup.next": "Bald Bull @ King Hippo",
+        "matchup.last": "Glass Joe @ Soda Popinski",
+        "matchup_combat": "Little Mac vs Super Macho Man",
         "weight_class": "Heavyweight",
         "weight_class_short": "HW",
         "fight_result": "KO",
