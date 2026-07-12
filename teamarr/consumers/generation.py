@@ -105,6 +105,7 @@ def run_full_generation(
     db_factory: Callable[[], Any],
     dispatcharr_client: Any | None = None,
     progress_callback: ProgressCallback | None = None,
+    manual: bool = False,
 ) -> GenerationResult:
     """Run the complete EPG generation workflow.
 
@@ -124,6 +125,9 @@ def run_full_generation(
         db_factory: Factory function returning database connection context manager
         dispatcharr_client: Optional DispatcharrClient for Dispatcharr operations
         progress_callback: Optional callback for progress updates
+        manual: True for user-triggered runs (API endpoints); bypasses the
+            live-event #1 stream pin (#232) so a wrong pin can be corrected.
+            Scheduled runs leave this False.
 
     Returns:
         GenerationResult with all stats and sub-task results
@@ -374,7 +378,7 @@ def run_full_generation(
         check_cancelled()
         update_progress("ordering", 93, "Applying stream ordering rules...")
         result.stream_ordering = _apply_stream_ordering(
-            db_factory, dispatcharr_client, update_progress
+            db_factory, dispatcharr_client, update_progress, manual=manual
         )
         timer.mark("stream_ordering")
 
@@ -925,8 +929,17 @@ def _apply_stream_ordering(
     db_factory: Callable[[], Any],
     dispatcharr_client: Any | None,
     update_progress: Callable,
+    manual: bool = False,
 ) -> dict:
-    """Apply stream ordering rules to all managed channels."""
+    """Apply stream ordering rules to all managed channels.
+
+    ``manual`` (#232): a user-triggered run bypasses the live-event #1 pin —
+    the escape hatch when the pinned stream is wrong. Scheduled runs keep the
+    top slot of an in-window event's channel stable so a re-gen can't displace
+    the stream a viewer is currently watching; rule-truth priorities are still
+    persisted, so normal ordering resumes on the first post-event push.
+    """
+    from teamarr.consumers.lifecycle import is_channel_event_live
     from teamarr.database.channels import (
         get_all_managed_channels,
         get_channel_streams,
@@ -979,6 +992,16 @@ def _apply_stream_ordering(
                 if not streams:
                     continue
 
+                # Live-event #1 pin (#232): capture the currently-pushed top
+                # stream BEFORE priorities are recomputed, so the push below
+                # can keep it in the top slot mid-broadcast.
+                pinned_top: int | None = None
+                if not manual and is_channel_event_live(
+                    channel.event_date, channel.scheduled_delete_at
+                ):
+                    pre_order = get_ordered_stream_ids(conn, channel.id)
+                    pinned_top = pre_order[0] if pre_order else None
+
                 reordered_count = 0
                 if ordering_service:
                     for stream in streams:
@@ -1001,6 +1024,24 @@ def _apply_stream_ordering(
                     channel_mgr and channel.dispatcharr_channel_id
                 ):
                     ordered_ids = get_ordered_stream_ids(conn, channel.id)
+                    if (
+                        pinned_top is not None
+                        and ordered_ids
+                        and ordered_ids[0] != pinned_top
+                        and pinned_top in ordered_ids
+                    ):
+                        # Event is live: rule-truth priorities are in the DB,
+                        # but the push keeps the current #1 on top so the
+                        # stream being watched isn't displaced mid-broadcast.
+                        ordered_ids.remove(pinned_top)
+                        ordered_ids.insert(0, pinned_top)
+                        logger.info(
+                            "[STREAM_AUDIT] pin: ch='%s' (d_id=%s) live event — "
+                            "kept stream %d at #1 (#232)",
+                            channel.channel_name,
+                            channel.dispatcharr_channel_id,
+                            pinned_top,
+                        )
                     if has_windowed:
                         reorder_result["windows_synced"] += 1
                     logger.info(

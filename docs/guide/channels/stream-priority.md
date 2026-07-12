@@ -69,6 +69,12 @@ Both **Stream Type** (team streams) and **Home/Away Feed** rules let you pick sp
 
 Teamarr builds a name-matching pattern from your selected teams' names and abbreviations, then looks for feed indicators in the stream name — a matchup (`vs`, `at`, `@`), a side (`home`/`away`), a camera label (`cam 01`/`cam 02`), or a `(Team feed)` marker. A stream like `Cubs vs Pirates (Home)` is recognized as the Pirates' home feed. Generic streams with no feed markers (for example a plain `Pirates vs Cubs` with no side) are left for other rules to handle. Because detection relies on the stream name, results depend on your provider's naming conventions.
 
+## Live events keep their #1 stream
+
+While an event is airing, scheduled generation runs won't displace the channel's top stream — the one a viewer is most likely watching. Rule changes still take effect in the background (priorities are recomputed and stored), and new streams that match mid-event are added **below** the current #1, but the top slot itself stays put until the event ends. The first run after the event restores full rule ordering.
+
+A **manually triggered** generation run bypasses this pin — that's your escape hatch if the pinned stream is the wrong one: fix your rules (or remove the bad stream) and hit Generate.
+
 ## Why is a stream ordered this way?
 
 On the **Channels** page, click a stream's priority number to open a popover that explains its ordering against your current rules: the hard **band** it landed in (and which Priority rule, if any, set it), plus each **Scoring** contribution with its points. If the stored number was computed under rules you've since changed, the popover marks it stale so you know a regeneration will re-rank it.
