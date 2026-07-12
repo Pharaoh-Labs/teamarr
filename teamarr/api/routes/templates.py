@@ -168,17 +168,29 @@ def preview_template(req: TemplatePreviewRequest):
     conditional = None
     if req.conditional_descriptions is not None:
         game_ctx = ctx.game_context if ctx else None
-        selected_tmpl, trace = get_condition_selector().select_with_trace(
+        selected_fields, trace = get_condition_selector().select_fields_with_trace(
             req.conditional_descriptions, ctx, game_ctx
         )
-        if ctx is not None:
-            rendered_desc = resolver.resolve(selected_tmpl, ctx)
-        else:
-            rendered_desc = resolver.resolve_with_map(selected_tmpl, samples)
-        selected_index = next((r["index"] for r in trace if r["selected"]), None)
+
+        def _render(tmpl: str) -> str:
+            if ctx is not None:
+                return resolver.resolve(tmpl, ctx)
+            return resolver.resolve_with_map(tmpl, samples)
+
+        def _index_for(field: str) -> int | None:
+            return next((r["index"] for r in trace if field in r["selected_for"]), None)
+
         conditional = {
-            "rendered": rendered_desc,
-            "selected_index": selected_index,
+            "rendered": _render(selected_fields.get("description", "")),
+            "selected_index": _index_for("description"),
+            "rendered_title": (
+                _render(selected_fields["title"]) if "title" in selected_fields else None
+            ),
+            "selected_title_index": _index_for("title"),
+            "rendered_subtitle": (
+                _render(selected_fields["subtitle"]) if "subtitle" in selected_fields else None
+            ),
+            "selected_subtitle_index": _index_for("subtitle"),
             "rows": trace,
         }
 

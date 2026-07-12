@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Conditions
 
-Conditions let you show different descriptions based on game context. Instead of a single static description, you can have multiple options that trigger based on specific situations.
+Conditions let you show different programme content based on game context. Instead of a single static description, you can have multiple options that trigger based on specific situations — and each option can also override the programme **title** and **subtitle**.
 
 ## How Conditions Work
 
@@ -20,8 +20,21 @@ Each condition option has:
 - **Value**: For numeric conditions, the threshold (e.g., `5` for a 5-game streak)
 - **Priority**: Lower numbers = higher priority (1-99 for conditionals, 100 for defaults)
 - **Template**: The description to use if the condition matches
+- **Title / Subtitle Override** *(optional)*: replace the programme title and/or subtitle when this condition matches — e.g. put a bowl name or `{game_event_note}` in the title for marquee games
 
 When generating EPG, Teamarr evaluates all conditions and selects the highest-priority (lowest number) match. If multiple conditions match at the same priority, one is chosen randomly.
+
+### Title and subtitle selection
+
+Titles and subtitles are selected **per field, independently**: for each field, the highest-priority matching row *that defines that field* wins. A row that only sets a title leaves the description to lower-priority rows (and vice versa), and any field with no matching override falls back to the template's plain title/subtitle/description. Unlike descriptions, ties at the same priority resolve **deterministically** (first row wins) for titles and subtitles, so guide titles don't change between EPG runs.
+
+**Example** — a marquee-game row that rewrites the whole guide entry:
+```json
+{"condition": "has_event_note", "priority": 15,
+ "title": "{game_event_note}: {away_team} at {home_team}",
+ "subtitle": "{venue_name} · {venue_city}",
+ "template": "{game_event_note}. {away_team} take on {home_team} at {venue_name}."}
+```
 
 ## Priority System
 
