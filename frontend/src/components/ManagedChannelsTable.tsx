@@ -76,6 +76,39 @@ function formatRelativeTime(dateStr: string | null): string {
   return formatDateTime(dateStr)
 }
 
+// Sports whose events aren't a team-vs-team matchup — the event NAME is the
+// event (fight card, race weekend, tournament), not the participant pair.
+// Mirrors the matcher's EVENT_CARD/RACING categories (classifier.py).
+const NON_MATCHUP_SPORTS = new Set(["mma", "boxing", "wrestling", "racing", "golf"])
+
+/**
+ * Compact event line (#403): "MLB | LAA/MIN". Team abbreviations when the row
+ * has them (rows created before they were populated fall back to full names);
+ * card/racing sports show the event name ("UFC 329: McGregor vs. Holloway 2").
+ * No feed label here — the feed is a stream variant of the event, and lives in
+ * the channel name. Title carries the full matchup.
+ */
+function eventSummary(
+  channel: ManagedChannel,
+  leagueLabel: string | null
+): { text: string; title: string } {
+  const fullMatchup =
+    channel.home_team || channel.away_team
+      ? `${channel.away_team ?? ""} / ${channel.home_team ?? ""}`
+      : null
+  const matchup =
+    channel.sport && NON_MATCHUP_SPORTS.has(channel.sport)
+      ? (channel.event_name ?? fullMatchup ?? "-")
+      : channel.away_team_abbrev && channel.home_team_abbrev
+        ? `${channel.away_team_abbrev}/${channel.home_team_abbrev}`
+        : (fullMatchup ?? channel.event_name ?? "-")
+  const prefix = leagueLabel && leagueLabel !== "-" ? `${leagueLabel} | ` : ""
+  return {
+    text: `${prefix}${matchup}`,
+    title: channel.event_name ?? fullMatchup ?? "",
+  }
+}
+
 function StreamStatsBadges({ stats }: { stats: Record<string, unknown> | null }) {
   if (!stats) return <span className="text-muted-foreground">—</span>
 
@@ -496,22 +529,26 @@ const ChannelRow = React.memo(function ChannelRow({
         </TableCell>
         <TableCell>
           <div className="max-w-xs">
-            <div className="truncate text-sm">
-              {channel.home_team || channel.away_team
-                ? `${channel.away_team ?? ""} @ ${channel.home_team ?? ""}`
-                : channel.event_name ?? "-"}
+            <div className="truncate text-sm" title={eventSummary(channel, leagueLabel).title}>
+              {eventSummary(channel, leagueLabel).text}
             </div>
-            {channel.event_date && (
-              <div className="text-xs text-muted-foreground">
-                {new Date(channel.event_date).toLocaleString(undefined, {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </div>
-            )}
+            <div className="truncate text-xs text-muted-foreground">
+              {channel.event_date && (
+                <>
+                  {new Date(channel.event_date).toLocaleString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                  {" · "}
+                </>
+              )}
+              <span className="font-mono" title={`${channel.event_provider} event id`}>
+                {channel.event_provider}:{channel.event_id}
+              </span>
+            </div>
           </div>
         </TableCell>
         <TableCell className="text-sm truncate" title={groupTitle}>
@@ -1073,10 +1110,11 @@ export function ManagedChannelsTable() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-xs truncate text-sm">
-                        {channel.home_team || channel.away_team
-                          ? `${channel.away_team ?? ""} @ ${channel.home_team ?? ""}`
-                          : channel.event_name ?? "-"}
+                      <div
+                        className="max-w-xs truncate text-sm"
+                        title={eventSummary(channel, getLeagueDisplay(channel.league)).title}
+                      >
+                        {eventSummary(channel, getLeagueDisplay(channel.league)).text}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">

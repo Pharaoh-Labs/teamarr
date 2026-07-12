@@ -236,6 +236,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 78
 
+    if current_version < 79:
+        _apply_migration(
+            conn, 79,
+            "backfill managed_channels team abbrevs + feed_team_name from team_cache (#403)",
+            _migrate_v79_backfill_channel_team_display,
+        )
+        current_version = 79
+
 
 # =============================================================================
 # Migration helpers
@@ -1501,6 +1509,48 @@ def _migrate_v78_strip_slash_before_art_variable(conn: sqlite3.Connection) -> No
             "[MIGRATE] v78: stripped corrupting leading slash from variable-led "
             "art values in %d template(s) (#275)",
             changed,
+        )
+
+
+def _migrate_v79_backfill_channel_team_display(conn: sqlite3.Connection) -> None:
+    """v79: backfill managed_channels team abbrevs from team_cache (#403).
+
+    home/away_team_abbrev columns existed but the lifecycle creator never
+    wrote them. New channels get them at creation; this fills existing
+    non-deleted rows so the compact event format ("MLB | LAA/MIN") renders
+    immediately instead of waiting for channel churn. Best-effort: rows
+    without a team_cache match stay NULL and the UI falls back to full team
+    names.
+    """
+    if not _table_exists(conn, "managed_channels") or not _table_exists(conn, "team_cache"):
+        return
+    # Old fixture/backup DBs may carry a pre-abbrev team_cache shape — nothing
+    # to backfill from, so skip (columns still arrive via reconciliation).
+    if not _column_exists(conn, "team_cache", "team_abbrev"):
+        return
+    for col in ("home_team_abbrev", "away_team_abbrev"):
+        _add_column_if_not_exists(conn, "managed_channels", col, "TEXT")
+    for required_col in ("league", "event_provider", "deleted_at"):
+        if not _column_exists(conn, "managed_channels", required_col):
+            return
+
+    for abbrev_col, name_col in (
+        ("home_team_abbrev", "home_team"),
+        ("away_team_abbrev", "away_team"),
+    ):
+        conn.execute(
+            f"""
+            UPDATE managed_channels SET {abbrev_col} = (
+                SELECT tc.team_abbrev FROM team_cache tc
+                WHERE tc.team_name = managed_channels.{name_col}
+                  AND tc.league = managed_channels.league
+                  AND tc.provider = managed_channels.event_provider
+                LIMIT 1
+            )
+            WHERE deleted_at IS NULL
+              AND {abbrev_col} IS NULL
+              AND {name_col} IS NOT NULL
+            """
         )
 
 
