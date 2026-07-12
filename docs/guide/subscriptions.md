@@ -35,6 +35,10 @@ Subscribe to as many or as few leagues as you like — there is no cost to a bro
 {: .note }
 > **Unsubscribing cleans up after itself.** When you uncheck a league, the next generation run deletes the channels it created for that league — you no longer have to wipe all channels to apply the change. The source group can stay enabled; only the dropped league's channels are removed.
 
+### Stale leagues
+
+Provider discovery lists change over time, so a subscribed league can disappear from Teamarr's league cache while still sitting in your subscription. These show up in an amber **Stale leagues** box on the Sports tile — remove them with the × and save, or just save: unrecognized codes are dropped automatically (and logged) whenever the subscription is saved, so they can't silently waste provider calls on every generation run.
+
 ## Soccer modes
 
 Soccer is special because there are hundreds of leagues. Rather than checking each one, you choose a **mode**:
