@@ -249,7 +249,10 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                 const idx = cond.originalIndex
                 const isExpanded = expandedConditions.has(idx)
                 const condInfo = getConditionInfo(cond.condition)
-                const isFallback = cond.priority >= 100 || cond.condition === "always"
+                // priority>=100 rows are filtered out of this tab entirely
+                // (managed on Defaults) — only a legacy explicit "always"
+                // condition can still mark a row as fallback-styled here.
+                const isFallback = cond.condition === "always"
                 const trace = traceFor(idx)
 
                 return (

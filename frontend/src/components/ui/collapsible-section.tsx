@@ -18,6 +18,11 @@ interface CollapsibleSectionProps {
   /** If set, collapse state persists across visits under this key. */
   persistKey?: string
   defaultCollapsed?: boolean
+  /** Controlled collapse state — for accordion (single-open) or search-forced
+   *  patterns where the parent owns the state. When provided, internal state
+   *  and persistKey are ignored; pair with onCollapsedChange. */
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
   /** Extra classes for the outer wrapper. */
   className?: string
   children: ReactNode
@@ -30,7 +35,8 @@ interface CollapsibleSectionProps {
  * Low chrome so it nests cleanly inside cards and stands alone at top level.
  *
  * Use ONLY for disclosing a content section. Dropdown/picker chevrons are a
- * different concept and are not this component.
+ * different concept and are not this component; per-item accordion rows
+ * (bordered cards with their own header chrome) are not either.
  */
 export function CollapsibleSection({
   title,
@@ -40,18 +46,30 @@ export function CollapsibleSection({
   variant = "section",
   persistKey,
   defaultCollapsed = true,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
   className,
   children,
 }: CollapsibleSectionProps) {
-  const [collapsed, setCollapsed] = usePersistentCollapse(persistKey, defaultCollapsed)
+  const [internalCollapsed, setInternalCollapsed] = usePersistentCollapse(
+    persistKey,
+    defaultCollapsed,
+  )
+  const isControlled = controlledCollapsed !== undefined
+  const collapsed = isControlled ? controlledCollapsed : internalCollapsed
   const Chevron = collapsed ? ChevronRight : ChevronDown
+
+  const handleToggle = () => {
+    if (!isControlled) setInternalCollapsed(!collapsed)
+    onCollapsedChange?.(!collapsed)
+  }
 
   return (
     <div className={cn("space-y-2", className)}>
       <div className="flex items-center justify-between gap-2 border-b pb-2">
         <button
           type="button"
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={handleToggle}
           className="flex min-w-0 cursor-pointer items-center gap-2 text-left hover:opacity-80"
         >
           <Chevron className="h-4 w-4 shrink-0 text-muted-foreground" />
