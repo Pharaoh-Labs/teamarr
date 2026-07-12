@@ -342,6 +342,49 @@ def test_stream_name_racing_fallback_gated_by_name_match(monkeypatch):
     assert not out[0].is_matched
 
 
+def test_stream_name_racing_fallback_on_placeholder_gate(monkeypatch):
+    # A timestamped racing stream with no separator ("US (Peacock 031) | IMSA
+    # CTMP Grand Prix (2026-07-12 14:00:00)") classifies PLACEHOLDER in a
+    # team-dominant group: the date/time extraction disqualifies TEAM_ONLY
+    # and nothing else fits. It must reach the racing fallback instead of
+    # being dropped as "unclassifiable".
+    m = _mixed_matcher()
+    monkeypatch.setattr(m, "_match_racing_event", lambda classified, sid, td: _racing_outcome())
+    captured = {}
+
+    def capture(outcome, *, stream_id, stream_name, classified):
+        captured["classified"] = classified
+        return outcome
+
+    monkeypatch.setattr(m, "_outcome_to_result", capture)
+
+    out = m._match_single(
+        1, "US (Peacock 031) | IMSA CTMP Grand Prix (2026-07-12 14:00:00)", date(2026, 7, 12)
+    )
+    assert len(out) == 1
+    assert out[0].is_matched
+    assert captured["classified"].category == StreamCategory.RACING_EVENT
+
+
+def test_placeholder_without_racing_evidence_stays_unclassifiable(monkeypatch):
+    # A timestamped stream with NO racing series name still short-circuits as
+    # unclassifiable — the fallback must not turn every dated filler stream
+    # into a racing-match attempt.
+    m = _mixed_matcher()
+    racing_called = []
+    monkeypatch.setattr(
+        m, "_match_racing_event",
+        lambda *a, **kw: racing_called.append(1) or _racing_outcome(),
+    )
+
+    out = m._match_single(
+        1, "US (Peacock 054) | Premier League Darts (2026-07-12 19:00:00)", date(2026, 7, 12)
+    )
+    assert not racing_called
+    assert not out[0].matched
+    assert out[0].exclusion_reason == "unclassifiable"
+
+
 def test_stream_name_racing_fallback_on_team_only_gate(monkeypatch):
     # Team matching OFF: a TEAM_ONLY-classified racing stream ("F1 | Monaco
     # Grand Prix") must reach the fallback instead of being dropped with

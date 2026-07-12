@@ -597,6 +597,22 @@ class StreamMatcher:
         # This handles streams that passed filtering but still can't be classified
         # (e.g., no separator found, no custom regex match).
         if classified.category == StreamCategory.PLACEHOLDER:
+            # A racing stream with a timestamp but no separator ("US (Peacock
+            # 031) | IMSA CTMP Grand Prix (2026-07-12 14:00:00)") classifies
+            # PLACEHOLDER — a date/time was extracted, so _classify_team_only
+            # refuses it and nothing else fits. Give the racing fallback a
+            # chance before writing it off as unclassifiable (same gate as
+            # the TEAM_ONLY path below).
+            if self._name_match_enabled:
+                fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+                if fallback is not None:
+                    outcome, racing_classified = fallback
+                    return [self._outcome_to_result(
+                        outcome=outcome,
+                        stream_id=stream_id,
+                        stream_name=stream_name,
+                        classified=racing_classified,
+                    )]
             return [MatchedStreamResult(
                 stream_name=stream_name,
                 stream_id=stream_id,
