@@ -34,11 +34,14 @@ export interface IdleOffseasonSettings {
   description: string | null
 }
 
-// Conditional description entry
+// Conditional row: description, plus optional title/subtitle overrides (#370p2).
+// `template` is the description string (historical name — it is the stored key).
 export interface ConditionalDescription {
   condition: string
   condition_value?: string
   template: string
+  title?: string | null
+  subtitle?: string | null
   priority: number
   label?: string  // Optional label for fallback descriptions
 }
@@ -193,13 +196,18 @@ export interface ConditionRowTrace {
   condition_value: string | null
   priority: number
   matched: boolean
-  selected: boolean
+  selected: boolean  // selected for DESCRIPTION (historical meaning)
+  selected_for: string[]  // fields this row won: title/subtitle/description
   reason: string
 }
 
 export interface ConditionalPreview {
   rendered: string
   selected_index: number | null
+  rendered_title: string | null
+  selected_title_index: number | null
+  rendered_subtitle: string | null
+  selected_subtitle_index: number | null
   rows: ConditionRowTrace[]
 }
 

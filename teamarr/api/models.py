@@ -184,11 +184,18 @@ class IdleOffseasonContent(BaseModel):
 
 
 class ConditionalDescriptionEntry(BaseModel):
-    """A conditional description entry."""
+    """A conditional row: description, plus optional title/subtitle overrides.
+
+    ``template`` is the description string (historical name — it is the
+    stored JSON key). ``title``/``subtitle`` (#370 part 2) are optional
+    per-field overrides selected independently by the same condition.
+    """
 
     condition: str | None = None  # None for default descriptions (priority=100)
     condition_value: str | None = None
-    template: str
+    template: str = ""  # description; may be empty when the row only overrides title/subtitle
+    title: str | None = None
+    subtitle: str | None = None
     priority: int = 50
     label: str | None = None  # Optional label for default descriptions
 
@@ -372,15 +379,25 @@ class ConditionRowTrace(BaseModel):
     condition_value: str | None = None
     priority: int
     matched: bool
-    selected: bool
+    selected: bool  # selected for DESCRIPTION (historical meaning)
+    selected_for: list[str] = []  # fields this row won: title/subtitle/description
     reason: str
 
 
 class TemplateConditionalPreview(BaseModel):
-    """Rendered conditional description plus the per-row selection trace."""
+    """Rendered conditional fields plus the per-row selection trace.
+
+    ``rendered``/``selected_index`` keep their historical description-only
+    meaning; the title/subtitle pairs (#370 part 2) are None when no matching
+    row defines that field.
+    """
 
     rendered: str
     selected_index: int | None
+    rendered_title: str | None = None
+    selected_title_index: int | None = None
+    rendered_subtitle: str | None = None
+    selected_subtitle_index: int | None = None
     rows: list[ConditionRowTrace]
 
 

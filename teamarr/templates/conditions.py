@@ -3,6 +3,15 @@
 Allows templates to have multiple description options with conditions.
 The best matching description is selected based on priority and conditions.
 
+Rows may also carry optional ``title`` and ``subtitle`` overrides (#370
+part 2): selection then runs PER FIELD — for each of title/subtitle/
+description, the highest-priority matching row that DEFINES that field wins;
+fields a row omits fall through to lower rows, then to the template's plain
+title/subtitle/description format strings. Ties at the winning priority are
+resolved randomly for descriptions (a deliberate variety feature) but
+deterministically (first row in input order) for titles and subtitles, so
+guide titles don't change between generation runs.
+
 Condition Types:
 - is_home, is_away: Home/away game
 - win_streak, loss_streak: Team streak (value = minimum streak length)
@@ -32,6 +41,9 @@ Example JSON format for description_options:
      "template": "On fire! {win_streak}-game win streak!"},
     {"condition": "is_home", "priority": 50,
      "template": "{team_name} hosts {opponent}"},
+    {"condition": "has_event_note", "priority": 40,
+     "title": "{game_event_note}: {matchup}", "subtitle": "{venue_city}",
+     "template": "{game_event_note} clash..."},
     {"priority": 100, "label": "Generic", "template": "{team_name} vs {opponent}"}
 ]
 """
@@ -50,17 +62,34 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ConditionOption:
-    """A single conditional description option."""
+    """A single conditional row (description, plus optional title/subtitle).
+
+    ``template`` keeps its historical meaning of "the description string" —
+    renaming the JSON key would break every stored template.
+    """
 
     template: str
     priority: int = 50
     condition: str | None = None
     condition_value: str | None = None
+    title: str | None = None
+    subtitle: str | None = None
 
     @property
     def is_default(self) -> bool:
         """Priority 100 = default description (always matches)."""
         return self.priority == 100
+
+    def field_text(self, field: str) -> str:
+        """The row's text for a selectable field ('' when not defined)."""
+        if field == "description":
+            return self.template or ""
+        return getattr(self, field, None) or ""
+
+
+# Fields the selector can pick per row. Order matters only for trace-reason
+# readability; each field's selection is independent.
+SELECTABLE_FIELDS = ("description", "title", "subtitle")
 
 
 class ConditionEvaluator:
@@ -481,28 +510,58 @@ class ConditionalDescriptionSelector:
     ) -> tuple[str, list[dict[str, Any]]]:
         """Select the best description template, with a per-row evaluation trace.
 
-        The trace answers "why did my template render THIS row?" (#357): one
-        entry per option, in input order, each carrying whether it matched,
-        whether it was the row ultimately selected, and a human-readable reason.
+        Description-only view of select_fields_with_trace — kept because most
+        callers (and the filler paths) only care about descriptions.
+        """
+        fields, trace = self.select_fields_with_trace(description_options, ctx, game_ctx)
+        return fields.get("description", ""), trace
+
+    def select_fields(
+        self,
+        description_options: str | list[dict[str, Any]] | None,
+        ctx: TemplateContext | None,
+        game_ctx: GameContext | None,
+    ) -> dict[str, str]:
+        """Per-field selection without the trace (generation-time convenience)."""
+        fields, _ = self.select_fields_with_trace(description_options, ctx, game_ctx)
+        return fields
+
+    def select_fields_with_trace(
+        self,
+        description_options: str | list[dict[str, Any]] | None,
+        ctx: TemplateContext | None,
+        game_ctx: GameContext | None,
+    ) -> tuple[dict[str, str], list[dict[str, Any]]]:
+        """Select the winning template string PER FIELD, with an evaluation trace.
+
+        Each row is condition-evaluated once; then title, subtitle and
+        description are selected independently among the matching rows that
+        define that field (#370 part 2). The trace answers "why did my
+        template render THIS row?" (#357): one entry per option, in input
+        order, carrying whether it matched, which fields it was selected for,
+        and a human-readable reason.
 
         ``ctx`` may be None (preview without a live event): conditional rows
         then can't be evaluated and only defaults match — which mirrors what
         the engine does at generation time when an event lacks data.
 
         Returns:
-            (selected template string or "", trace rows). Trace row keys:
-            index, condition, condition_value, priority, matched, selected,
-            reason.
+            ({field: selected template string} — absent when no row defines
+            the field, and trace rows with keys: index, condition,
+            condition_value, priority, matched, selected (description),
+            selected_for (list of fields), reason).
         """
         options = self._parse_options(description_options)
         trace: list[dict[str, Any]] = []
         if not options:
-            return "", trace
+            return {}, trace
 
         has_event = bool(game_ctx and game_ctx.event)
 
-        # Group matching options by priority (option index -> template)
-        priority_groups: dict[int, list[tuple[int, str]]] = {}
+        # Per-field priority groups: field -> priority -> [(option index, text)]
+        field_groups: dict[str, dict[int, list[tuple[int, str]]]] = {
+            f: {} for f in SELECTABLE_FIELDS
+        }
 
         for i, opt in enumerate(options):
             row: dict[str, Any] = {
@@ -512,15 +571,18 @@ class ConditionalDescriptionSelector:
                 "priority": opt.priority,
                 "matched": False,
                 "selected": False,
+                "selected_for": [],
                 "reason": "",
             }
             trace.append(row)
 
-            if not opt.template:
+            defined = {f: opt.field_text(f) for f in SELECTABLE_FIELDS}
+            if not any(defined.values()):
+                # Historical wording — asserted by tests and shown in the UI.
                 row["reason"] = "skipped — empty template"
                 continue
 
-            # Default descriptions always match
+            # Default rows always match
             if opt.is_default:
                 row["matched"] = True
                 row["reason"] = "default (priority 100) — always matches"
@@ -541,33 +603,49 @@ class ConditionalDescriptionSelector:
                 )
 
             if row["matched"]:
-                priority_groups.setdefault(opt.priority, []).append((i, opt.template))
+                for field, text in defined.items():
+                    if text:
+                        field_groups[field].setdefault(opt.priority, []).append((i, text))
 
-        if not priority_groups:
+        selected_fields: dict[str, str] = {}
+        for field in SELECTABLE_FIELDS:
+            groups = field_groups[field]
+            if not groups:
+                continue
+            winning_priority = min(groups.keys())
+            matching = groups[winning_priority]
+
+            if field == "description":
+                # Random among ties — a deliberate variety feature for
+                # descriptions only.
+                selected_index, selected = random.choice(matching)
+                if len(matching) > 1:
+                    trace[selected_index]["reason"] += (
+                        f" — chosen randomly among {len(matching)} matches"
+                        f" at priority {winning_priority}"
+                    )
+                # Description keeps the historical outranked annotation.
+                for priority, group in groups.items():
+                    if priority > winning_priority:
+                        for other_index, _ in group:
+                            trace[other_index]["reason"] += (
+                                f" — outranked by priority {winning_priority}"
+                            )
+                trace[selected_index]["selected"] = True
+            else:
+                # Deterministic for title/subtitle: first row in input order
+                # at the winning priority, so guide titles are stable
+                # run-to-run.
+                selected_index, selected = matching[0]
+
+            selected_fields[field] = selected
+            trace[selected_index]["selected_for"].append(field)
+
+        if not selected_fields:
             logger.debug("[CONDITION] No matching conditions found")
-            return "", trace
-
-        # Get highest priority (lowest number)
-        highest_priority = min(priority_groups.keys())
-        matching = priority_groups[highest_priority]
-
-        # Random selection from same-priority templates
-        selected_index, selected = random.choice(matching)
-        trace[selected_index]["selected"] = True
-        if len(matching) > 1:
-            trace[selected_index]["reason"] += (
-                f" — chosen randomly among {len(matching)} matches at priority {highest_priority}"
-            )
-        for priority, group in priority_groups.items():
-            if priority > highest_priority:
-                for other_index, _ in group:
-                    trace[other_index]["reason"] += f" — outranked by priority {highest_priority}"
-        logger.debug(
-            "[CONDITION] Selected priority=%d from %d options",
-            highest_priority,
-            len(matching),
-        )
-        return selected, trace
+        else:
+            logger.debug("[CONDITION] Selected fields: %s", sorted(selected_fields))
+        return selected_fields, trace
 
     def _parse_options(
         self, description_options: str | list[dict[str, Any]] | None
@@ -598,6 +676,8 @@ class ConditionalDescriptionSelector:
                     priority=item.get("priority", 50),
                     condition=item.get("condition"),
                     condition_value=item.get("condition_value"),
+                    title=item.get("title"),
+                    subtitle=item.get("subtitle"),
                 )
             )
 
