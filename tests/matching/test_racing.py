@@ -427,6 +427,17 @@ class TestDetectRacingSeriesLeagues:
         assert detect_racing_series_leagues("FIA WEC | ROUND 5") == ("wec",)
         assert detect_racing_series_leagues("World Endurance Championship") == ("wec",)
 
+    def test_formula_feeder_series_block_and_do_not_scope_to_f1(self):
+        # F2/F3/Formula E have no league in schema.sql but run on F1 weekends
+        # at the same venue — they must map to the blocking sentinel, and the
+        # F1 pattern must not also fire on the same text.
+        assert detect_racing_series_leagues("Formula 2 - Monaco - Sprint Race") == (
+            "formula-feeder",
+        )
+        assert detect_racing_series_leagues("F3: Feature Race") == ("formula-feeder",)
+        assert detect_racing_series_leagues("Formula E - Berlin ePrix") == ("formula-feeder",)
+        assert detect_racing_series_leagues("F1 | Monaco Grand Prix") == ("f1",)
+
     def test_generic_grand_prix_is_unscoped(self):
         # "grand prix" is racing evidence but names no series — must stay
         # unscoped so a bare "Monaco Grand Prix" stream can still match F1.
@@ -455,6 +466,26 @@ def test_racing_series_scoping_blocks_unconfigured_series(monkeypatch):
     out = m._match_single(
         1, "CA (SN+ 017) | MotoGP _ Grand Prix of Germany (2026-07-12 07:15:00)",
         date(2026, 7, 12),
+    )
+    assert not racing_called  # f1 must never be attempted
+    assert not out[0].matched
+
+
+def test_racing_series_scoping_blocks_f2_from_binding_to_f1(monkeypatch):
+    # F2 races on the F1 weekend at the same venue: an "F2 Sprint Race"
+    # stream must not bind to the configured F1 event via shared venue
+    # tokens and date coverage.
+    m = _mixed_matcher()  # racing league available: f1 only
+    _failed_route(monkeypatch, m)
+    racing_called = []
+    monkeypatch.setattr(
+        m._racing_matcher, "match",
+        lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
+    )
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_single(
+        1, "Formula 2 | Monaco | Sprint Race (2026-06-01 09:30:00)", date(2026, 6, 1)
     )
     assert not racing_called  # f1 must never be attempted
     assert not out[0].matched

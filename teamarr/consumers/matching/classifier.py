@@ -1116,6 +1116,13 @@ def has_racing_text_evidence(text: str) -> bool:
 # naming them blocks cross-series binding entirely.
 _RACING_SERIES_SIGNATURES: "tuple[tuple[Pattern[str], tuple[str, ...]], ...]" = (
     (re.compile(r"\b(?:formula\s*1|f1)\b", re.IGNORECASE), ("f1",)),
+    # F2/F3/Formula E run as support series on F1 weekends at the SAME venue,
+    # so an unscoped "Formula 2 - Monaco - Sprint Race" stream shares venue
+    # tokens with the one configured F1 event covering that date — the exact
+    # cross-series shape this table exists to block, at a much higher
+    # collision rate (every F1 weekend). No corresponding league exists in
+    # schema.sql, so like supercross below this maps to a blocking sentinel.
+    (re.compile(r"\b(?:formula\s*[23e]|f[23])\b", re.IGNORECASE), ("formula-feeder",)),
     (
         re.compile(r"\bnascar\b", re.IGNORECASE),
         ("nascar-cup", "nascar-xfinity", "nascar-truck"),
