@@ -211,6 +211,71 @@ def test_single_event_country_passes_sanity_check():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# RacingMatcher anchor-time gating (EPG path)
+#
+# The EPG text-evidence gate only proves a programme NAMES racing — it says
+# nothing about whether the programme is actually airing it. The animated
+# movie "Grand Prix of Europe" on a kids' channel (fuzzy 75 vs "Chevrolet
+# Grand Prix") or a filler/stub "Coming up:" blurb passes that gate yet has
+# no real broadcast tied to the event. _covers_instant closes the gap by
+# requiring a session to actually be airing (within tolerance) at the
+# programme's own broadcast instant, not just somewhere in the race
+# weekend's calendar span. Stream-NAME matching passes anchor_dt=None and is
+# untouched — the whole weekend stays a legitimate match target there.
+# ---------------------------------------------------------------------------
+
+
+def _racing_session(code, start_time):
+    return SimpleNamespace(code=code, start_time=start_time)
+
+
+def _sessions_event(sessions, league="imsa", name="Chevrolet Grand Prix"):
+    return SimpleNamespace(
+        id="tsdb_imsa_2026_7",
+        name=name,
+        short_name=name,
+        circuit_name="Canadian Tire Motorsport Park",
+        venue=SimpleNamespace(country="Canada"),
+        league=league,
+        sessions=sessions,
+        start_time=sessions[0].start_time,
+    )
+
+
+def test_covers_instant_true_near_a_real_session():
+    race_start = datetime(2026, 7, 12, 18, 0, tzinfo=UTC)
+    event = _sessions_event([_racing_session("race", race_start)])
+    matcher = _matcher()
+    assert matcher._covers_instant(event, race_start, None)
+    assert matcher._covers_instant(event, race_start - timedelta(minutes=30), None)
+
+
+def test_covers_instant_false_for_programme_hours_away():
+    # Live false positive: "Grand Prix of Europe" (animated movie) airing at
+    # 03:15 on Disney Junior matched the IMSA race starting at 18:00, every
+    # hourly run, because date coverage alone was the only time check.
+    race_start = datetime(2026, 7, 12, 18, 0, tzinfo=UTC)
+    event = _sessions_event([_racing_session("race", race_start)])
+    movie_showing = datetime(2026, 7, 12, 3, 15, tzinfo=UTC)
+    matcher = _matcher()
+    assert not matcher._covers_instant(event, movie_showing, None)
+
+
+def test_covers_instant_checks_every_session_in_the_weekend():
+    # A multi-session weekend: an instant near ANY session (not just the
+    # first) counts as covered.
+    fp1 = datetime(2026, 7, 10, 9, 0, tzinfo=UTC)
+    race = datetime(2026, 7, 12, 18, 0, tzinfo=UTC)
+    event = _sessions_event(
+        [_racing_session("fp1", fp1), _racing_session("race", race)]
+    )
+    matcher = _matcher()
+    assert matcher._covers_instant(event, fp1, None)
+    assert matcher._covers_instant(event, race, None)
+    assert not matcher._covers_instant(event, fp1 + timedelta(hours=6), None)
+
+
 class TestParseDurationFromName:
     def test_digit_hours(self):
         assert _parse_duration_from_name("24 Hours of Le Mans") == 24.0
@@ -292,7 +357,10 @@ def test_stream_name_racing_fallback_in_mixed_group(monkeypatch):
     # the result carries the RACING_EVENT classification.
     m = _mixed_matcher()
     _failed_route(monkeypatch, m)
-    monkeypatch.setattr(m, "_match_racing_event", lambda classified, sid, td: _racing_outcome())
+    monkeypatch.setattr(
+        m, "_match_racing_event",
+        lambda classified, sid, td, anchor_dt=None: _racing_outcome(),
+    )
     captured = {}
 
     def capture(outcome, *, stream_id, stream_name, classified):
@@ -350,7 +418,10 @@ def test_stream_name_racing_fallback_on_placeholder_gate(monkeypatch):
     # and nothing else fits. It must reach the racing fallback instead of
     # being dropped as "unclassifiable".
     m = _mixed_matcher()
-    monkeypatch.setattr(m, "_match_racing_event", lambda classified, sid, td: _racing_outcome())
+    monkeypatch.setattr(
+        m, "_match_racing_event",
+        lambda classified, sid, td, anchor_dt=None: _racing_outcome(),
+    )
     captured = {}
 
     def capture(outcome, *, stream_id, stream_name, classified):
@@ -391,7 +462,10 @@ def test_stream_name_racing_fallback_on_team_only_gate(monkeypatch):
     # Grand Prix") must reach the fallback instead of being dropped with
     # team_streams_disabled (mirrors the EPG path's TEAM_ONLY bypass).
     m = _mixed_matcher(team_streams_enabled=False)
-    monkeypatch.setattr(m, "_match_racing_event", lambda classified, sid, td: _racing_outcome())
+    monkeypatch.setattr(
+        m, "_match_racing_event",
+        lambda classified, sid, td, anchor_dt=None: _racing_outcome(),
+    )
     captured = {}
 
     def capture(outcome, *, stream_id, stream_name, classified):

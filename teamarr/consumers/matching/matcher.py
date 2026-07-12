@@ -727,7 +727,9 @@ class StreamMatcher:
         if classified.category == StreamCategory.EVENT_CARD:
             return [self._match_event_card(classified, stream_id, target_date)]
         if classified.category == StreamCategory.RACING_EVENT:
-            return [self._match_racing_event(classified, stream_id, target_date)]
+            return [self._match_racing_event(
+                classified, stream_id, target_date, anchor_dt=anchor_dt
+            )]
         if classified.category == StreamCategory.TENNIS_MATCH:
             return self._match_tennis_event(classified, stream_id, target_date)
         if classified.category == StreamCategory.TEAM_ONLY:
@@ -830,6 +832,25 @@ class StreamMatcher:
                 )
                 continue
 
+            # Same text-evidence gate as the racing fallback, applied to the
+            # PRIMARY classification too: in a racing-dominant group
+            # _get_dominant_event_type() returns "event" directly, so this
+            # classify_stream call already defaults arbitrary EPG titles
+            # (documentaries, movies) to RACING_EVENT with no series name in
+            # the text — the fallback's gate never even runs for these groups
+            # since primary_outcomes already "succeeds". Without this check,
+            # any program on any linear channel resolved into a racing-only
+            # group can bind to "the one race happening this weekend" by date
+            # coverage alone.
+            if classified.category == StreamCategory.RACING_EVENT and not (
+                has_racing_text_evidence(epg_input)
+            ):
+                logger.debug(
+                    "[EPG_MATCH] racing programme skipped, no series name in text: %s",
+                    epg_input[:60],
+                )
+                continue
+
             # TEAM_ONLY gate: skip team routing when disabled, but allow the
             # racing fallback to run if racing leagues are present. A race title
             # like "F1 | Monaco Grand Prix" classifies TEAM_ONLY in a mixed
@@ -862,7 +883,9 @@ class StreamMatcher:
 
             # Racing fallback for mixed groups (see _try_racing_fallback).
             if not matched_pairs and classified.category != StreamCategory.RACING_EVENT:
-                fallback = self._try_racing_fallback(epg_input, stream_id, target_date)
+                fallback = self._try_racing_fallback(
+                    epg_input, stream_id, target_date, anchor_dt=program.start_dt
+                )
                 if fallback is not None:
                     matched_pairs.append(fallback)
 
@@ -1058,8 +1081,13 @@ class StreamMatcher:
         classified: ClassifiedStream,
         stream_id: int,
         target_date: date,
+        anchor_dt: "datetime | None" = None,
     ) -> MatchOutcome:
-        """Match a racing stream (F1, NASCAR, IndyCar, MotoGP, ...)."""
+        """Match a racing stream (F1, NASCAR, IndyCar, MotoGP, ...).
+
+        anchor_dt (EPG path only): the program's broadcast instant — candidate
+        events are gated to those with a session actually airing near it.
+        """
         # Find the racing leagues in our search leagues. The "event" type is
         # shared with tennis/golf, so exclude leagues whose sport is known to
         # be something else (unknown sport = legacy racing behavior).
@@ -1112,6 +1140,8 @@ class StreamMatcher:
                 stream_id=stream_id,
                 generation=self._generation,
                 user_tz=self._user_tz,
+                anchor_dt=anchor_dt,
+                sport_durations=self._sport_durations,
             )
             if outcome.is_matched:
                 return outcome
@@ -1129,6 +1159,7 @@ class StreamMatcher:
         text: str,
         stream_id: int,
         target_date: date,
+        anchor_dt: "datetime | None" = None,
     ) -> "tuple[MatchOutcome, ClassifiedStream] | None":
         """Racing fallback for mixed groups (#349): re-classify as racing and retry.
 
@@ -1167,7 +1198,9 @@ class StreamMatcher:
         if racing_classified.category != StreamCategory.RACING_EVENT:
             return None
 
-        outcome = self._match_racing_event(racing_classified, stream_id, target_date)
+        outcome = self._match_racing_event(
+            racing_classified, stream_id, target_date, anchor_dt=anchor_dt
+        )
         if not outcome.is_matched:
             return None
         return outcome, racing_classified

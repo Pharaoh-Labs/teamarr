@@ -16,7 +16,7 @@ Matching strategy:
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from rapidfuzz import fuzz
@@ -28,6 +28,7 @@ from teamarr.consumers.matching.result import (
     MatchMethod,
     MatchOutcome,
 )
+from teamarr.consumers.racing_segments import get_session_times
 from teamarr.consumers.stream_match_cache import StreamMatchCache, event_to_cache_data
 from teamarr.core.types import Event
 from teamarr.services.sports_data import SportsDataService
@@ -43,6 +44,16 @@ RACING_MATCH_THRESHOLD = 70
 # (e.g. cycling/other-sport streams misclassified as racing events).
 SINGLE_EVENT_SANITY_THRESHOLD = 50
 
+# EPG path only: how far a program's broadcast instant may sit from a
+# session's [start, end] window and still count as covering that session.
+# Date coverage alone is not enough for EPG titles: a program whose text
+# merely NAMES racing (e.g. the animated movie "Grand Prix of Europe" airing
+# on a kids' channel, or a filler/stub "Coming up:" blurb) can otherwise bind
+# to "the one race covering this date" regardless of what hour it airs — a
+# program landing hours away from every real session is not a broadcast of
+# that event.
+RACING_ANCHOR_TOLERANCE_SECONDS = 90 * 60
+
 
 @dataclass
 class RacingMatchContext:
@@ -55,6 +66,8 @@ class RacingMatchContext:
     generation: int
     user_tz: ZoneInfo
     classified: ClassifiedStream
+    anchor_dt: "datetime | None" = None
+    sport_durations: "dict[str, float] | None" = None
 
 
 class RacingMatcher:
@@ -83,6 +96,8 @@ class RacingMatcher:
         stream_id: int,
         generation: int,
         user_tz: ZoneInfo,
+        anchor_dt: "datetime | None" = None,
+        sport_durations: "dict[str, float] | None" = None,
     ) -> MatchOutcome:
         """Match a racing stream to a provider event.
 
@@ -119,6 +134,8 @@ class RacingMatcher:
             generation=generation,
             user_tz=user_tz,
             classified=classified,
+            anchor_dt=anchor_dt,
+            sport_durations=sport_durations,
         )
 
         # Check cache first
@@ -153,6 +170,21 @@ class RacingMatcher:
                 detail=f"No {league} events covering {ctx.target_date}",
             )
 
+        # EPG path only: further gate to events with a session actually airing
+        # near the program's broadcast instant, not just sharing a date.
+        if anchor_dt is not None:
+            window_events = [
+                e for e in window_events
+                if self._covers_instant(e, anchor_dt, sport_durations)
+            ]
+            if not window_events:
+                return MatchOutcome.failed(
+                    FailedReason.NO_RACING_MATCH,
+                    stream_name=ctx.stream_name,
+                    stream_id=stream_id,
+                    detail=f"No {league} session airing near {anchor_dt.isoformat()}",
+                )
+
         result = self._match_to_event(ctx, window_events, league)
 
         # Cache successful matches
@@ -173,6 +205,35 @@ class RacingMatcher:
         session_dates = {s.start_time.astimezone(user_tz).date() for s in event.sessions}
         session_dates.add(event.start_time.astimezone(user_tz).date())
         return target_date in session_dates
+
+    def _covers_instant(
+        self,
+        event: Event,
+        anchor_dt: "datetime",
+        sport_durations: "dict[str, float] | None",
+    ) -> bool:
+        """True if some session of ``event`` is actually airing near ``anchor_dt``.
+
+        Unlike `_covers_date` (calendar-date granularity, used for the plain
+        stream-name path where the whole weekend is a legitimate match target),
+        this checks each session's real [start, end] window (padded by
+        RACING_ANCHOR_TOLERANCE_SECONDS) — the EPG path needs this tighter
+        bound because a program merely NAMING racing (a movie with "Grand
+        Prix" in the title, a filler/stub blurb) would otherwise bind to any
+        session of the week's only covering event regardless of how many
+        hours away it actually airs.
+        """
+        if not event.sessions:
+            return abs((event.start_time - anchor_dt).total_seconds()) <= (
+                RACING_ANCHOR_TOLERANCE_SECONDS
+            )
+
+        tolerance = timedelta(seconds=RACING_ANCHOR_TOLERANCE_SECONDS)
+        for session in event.sessions:
+            start, end = get_session_times(event, session.code, sport_durations)
+            if start - tolerance <= anchor_dt <= end + tolerance:
+                return True
+        return False
 
     def _check_cache(self, ctx: RacingMatchContext) -> MatchOutcome | None:
         """Check cache for existing match."""
@@ -196,6 +257,13 @@ class RacingMatcher:
 
         # Validate date - cached event's window must still cover target date
         if not self._covers_date(event, ctx.target_date, ctx.user_tz):
+            return None
+
+        # EPG path only: cached match must still have a session airing near
+        # this program's instant (see match()'s anchor_dt gate above).
+        if ctx.anchor_dt is not None and not self._covers_instant(
+            event, ctx.anchor_dt, ctx.sport_durations
+        ):
             return None
 
         return MatchOutcome.matched(
