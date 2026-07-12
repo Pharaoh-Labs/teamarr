@@ -122,6 +122,7 @@ def generate_epg(
             db_factory=get_db,
             dispatcharr_client=dispatcharr_client,
             progress_callback=progress_callback,
+            manual=True,
         )
 
         if not result.success:
@@ -294,6 +295,7 @@ def generate_epg_stream():
                 db_factory=get_db,
                 dispatcharr_client=dispatcharr_client,
                 progress_callback=progress_callback,
+                manual=True,
             )
 
             if result.success:

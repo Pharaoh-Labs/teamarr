@@ -14,7 +14,7 @@ from typing import Any
 from teamarr.core import Event
 
 from ._host import _LifecycleHost
-from .timing import compute_stream_window, is_stream_in_window
+from .timing import compute_stream_window, is_channel_event_live, is_stream_in_window
 from .types import (
     ChannelCreationResult,
     StreamProcessResult,
@@ -597,6 +597,30 @@ class ChannelCreator(_LifecycleHost):
                                 existing.id, phantoms,
                             )
                             ordered_streams = [s for s in ordered_streams if s not in phantoms]
+
+                    # Live-event #1 pin (#232): a stream that arrives while the
+                    # event is airing may out-prioritize the current top slot —
+                    # the one a viewer is watching. Slot it in right below #1
+                    # instead; rule-truth priorities stay in the DB, so normal
+                    # order resumes on the first post-event push.
+                    if (
+                        len(ordered_streams) > 1
+                        and ordered_streams[0] == stream_id
+                        and is_channel_event_live(
+                            existing.event_date, existing.scheduled_delete_at
+                        )
+                    ):
+                        ordered_streams[0], ordered_streams[1] = (
+                            ordered_streams[1],
+                            ordered_streams[0],
+                        )
+                        logger.info(
+                            "[STREAM_AUDIT] pin: ch='%s' live event — new stream %d "
+                            "slotted below current #1 %d (#232)",
+                            existing.channel_name,
+                            stream_id,
+                            ordered_streams[0],
+                        )
 
                     logger.info(
                         "[STREAM_AUDIT] consolidate add: ch='%s' (db_id=%d, d_id=%s) "
