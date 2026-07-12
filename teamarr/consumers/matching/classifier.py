@@ -1096,7 +1096,7 @@ def is_racing(
 RACING_TEXT_EVIDENCE: Pattern[str] = re.compile(
     r"\b(?:"
     r"formula\s*[123e]|f1|nascar|indycar|indy\s*(?:500|nxt)|"
-    r"motogp|moto\s*[23]|grand\s+prix|imsa|supercross|motocross"
+    r"motogp|moto\s*[23]|grand\s+prix|imsa|supercross|motocross|wec|world\s+endurance"
     r")\b",
     re.IGNORECASE,
 )
@@ -1105,6 +1105,52 @@ RACING_TEXT_EVIDENCE: Pattern[str] = re.compile(
 def has_racing_text_evidence(text: str) -> bool:
     """True when the text names a motorsports series (or 'grand prix')."""
     return bool(text) and RACING_TEXT_EVIDENCE.search(text) is not None
+
+
+# Per-series text signatures, for scoping a racing stream to the league(s)
+# whose series it explicitly names. Values are the league codes the series
+# can belong to (NASCAR is an umbrella over three leagues). Deliberately a
+# subset of RACING_TEXT_EVIDENCE: generic evidence like "grand prix" names
+# racing but not a series, and stays unscoped. Series with no corresponding
+# league (supercross/motocross) map to a code no group will ever include, so
+# naming them blocks cross-series binding entirely.
+_RACING_SERIES_SIGNATURES: "tuple[tuple[Pattern[str], tuple[str, ...]], ...]" = (
+    (re.compile(r"\b(?:formula\s*1|f1)\b", re.IGNORECASE), ("f1",)),
+    # F2/F3/Formula E run as support series on F1 weekends at the SAME venue,
+    # so an unscoped "Formula 2 - Monaco - Sprint Race" stream shares venue
+    # tokens with the one configured F1 event covering that date — the exact
+    # cross-series shape this table exists to block, at a much higher
+    # collision rate (every F1 weekend). No corresponding league exists in
+    # schema.sql, so like supercross below this maps to a blocking sentinel.
+    (re.compile(r"\b(?:formula\s*[23e]|f[23])\b", re.IGNORECASE), ("formula-feeder",)),
+    (
+        re.compile(r"\bnascar\b", re.IGNORECASE),
+        ("nascar-cup", "nascar-xfinity", "nascar-truck"),
+    ),
+    (re.compile(r"\b(?:indycar|indy\s*(?:500|nxt))\b", re.IGNORECASE), ("indycar",)),
+    (re.compile(r"\b(?:motogp|moto\s*[23])\b", re.IGNORECASE), ("motogp",)),
+    (re.compile(r"\bimsa\b", re.IGNORECASE), ("imsa",)),
+    (re.compile(r"\b(?:wec|world\s+endurance)\b", re.IGNORECASE), ("wec",)),
+    (re.compile(r"\b(?:supercross|motocross)\b", re.IGNORECASE), ("supercross",)),
+)
+
+
+def detect_racing_series_leagues(text: str) -> "tuple[str, ...] | None":
+    """League codes for the racing series the text explicitly names.
+
+    Returns None when no specific series is named (e.g. a bare "Monaco
+    Grand Prix") — callers must treat that as "unscoped", not "not racing".
+    A stream naming a specific series must only match events from that
+    series' league(s): a MotoGP stream must not date-bind to the one IMSA
+    event covering the weekend just because motogp isn't configured.
+    """
+    if not text:
+        return None
+    hits: list[str] = []
+    for pattern, leagues in _RACING_SERIES_SIGNATURES:
+        if pattern.search(text):
+            hits.extend(leagues)
+    return tuple(hits) or None
 
 
 # Known tennis league codes — mirror of the sport='tennis' leagues in
