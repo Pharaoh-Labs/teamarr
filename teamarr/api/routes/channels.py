@@ -74,7 +74,9 @@ class ManagedChannelModel(BaseModel):
     dispatcharr_uuid: str | None = None
 
     home_team: str | None = None
+    home_team_abbrev: str | None = None
     away_team: str | None = None
+    away_team_abbrev: str | None = None
     event_date: str | None = None
     event_name: str | None = None
     league: str | None = None
@@ -253,7 +255,9 @@ def list_managed_channels(
                 dispatcharr_channel_id=c.dispatcharr_channel_id,
                 dispatcharr_uuid=c.dispatcharr_uuid,
                 home_team=c.home_team,
+                home_team_abbrev=c.home_team_abbrev,
                 away_team=c.away_team,
+                away_team_abbrev=c.away_team_abbrev,
                 event_date=_safe_isoformat(c.event_date),
                 event_name=c.event_name,
                 league=c.league,
@@ -296,7 +300,9 @@ def get_managed_channel(channel_id: int):
         dispatcharr_channel_id=channel.dispatcharr_channel_id,
         dispatcharr_uuid=channel.dispatcharr_uuid,
         home_team=channel.home_team,
+        home_team_abbrev=channel.home_team_abbrev,
         away_team=channel.away_team,
+        away_team_abbrev=channel.away_team_abbrev,
         event_date=_safe_isoformat(channel.event_date),
         event_name=channel.event_name,
         league=channel.league,

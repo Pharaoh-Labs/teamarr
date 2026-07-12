@@ -218,7 +218,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 79
 
 
 class TestV73CleansTeamCache:
@@ -412,7 +412,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 79
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 79
 
 
 # ===========================================================================
@@ -799,6 +799,76 @@ def test_v78_idempotent_and_leaves_clean_values():
     row = conn.execute("SELECT * FROM templates WHERE id = 1").fetchone()
     assert row["program_art_url"] == "{feed_team_logo}"
     assert row["event_channel_logo_url"] == "https://espn.com/logo.png"
+
+
+# --- v79: backfill managed_channels team abbrevs (#403) ---------------------
+
+
+def _v79_make_db():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE managed_channels (
+            id INTEGER PRIMARY KEY, event_provider TEXT, league TEXT,
+            home_team TEXT, home_team_abbrev TEXT,
+            away_team TEXT, away_team_abbrev TEXT, deleted_at TIMESTAMP
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE team_cache (
+            id INTEGER PRIMARY KEY, team_name TEXT, team_abbrev TEXT,
+            provider TEXT, league TEXT
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO team_cache (team_name, team_abbrev, provider, league) VALUES "
+        "('Minnesota Twins', 'MIN', 'espn', 'mlb'), "
+        "('Los Angeles Angels', 'LAA', 'espn', 'mlb')"
+    )
+    return conn
+
+
+def test_v79_backfills_abbrevs():
+    from teamarr.database.migrations import _migrate_v79_backfill_channel_team_display
+
+    conn = _v79_make_db()
+    conn.execute(
+        "INSERT INTO managed_channels (id, event_provider, league, home_team, away_team) "
+        "VALUES (1, 'espn', 'mlb', 'Minnesota Twins', 'Los Angeles Angels')"
+    )
+    # Deleted row and unmatched team must stay untouched/NULL
+    conn.execute(
+        "INSERT INTO managed_channels (id, event_provider, league, home_team, away_team, "
+        "deleted_at) VALUES (2, 'espn', 'mlb', 'Minnesota Twins', 'Los Angeles Angels', "
+        "'2026-01-01')"
+    )
+    conn.execute(
+        "INSERT INTO managed_channels (id, event_provider, league, home_team) "
+        "VALUES (3, 'espn', 'mlb', 'Unknown Club')"
+    )
+
+    _migrate_v79_backfill_channel_team_display(conn)
+
+    row = conn.execute("SELECT * FROM managed_channels WHERE id = 1").fetchone()
+    assert row["home_team_abbrev"] == "MIN"
+    assert row["away_team_abbrev"] == "LAA"
+
+    deleted = conn.execute("SELECT * FROM managed_channels WHERE id = 2").fetchone()
+    assert deleted["home_team_abbrev"] is None
+
+    unmatched = conn.execute("SELECT * FROM managed_channels WHERE id = 3").fetchone()
+    assert unmatched["home_team_abbrev"] is None
+
+
+def test_v79_skips_gracefully_on_old_team_cache_shape():
+    from teamarr.database.migrations import _migrate_v79_backfill_channel_team_display
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE managed_channels (id INTEGER PRIMARY KEY, home_team TEXT)")
+    conn.execute("CREATE TABLE team_cache (id INTEGER PRIMARY KEY, team_name TEXT)")
+    # Pre-abbrev team_cache shape: nothing to backfill from — must not raise
+    _migrate_v79_backfill_channel_team_display(conn)
 
 
 # ===========================================================================

@@ -44,7 +44,7 @@ From a run's failed/unmatched rows, use **Fix** to open the Event Matcher and ma
 
 ## Managed Channels
 
-A collapsible **Managed Channels** table lists the channels Teamarr currently maintains in Dispatcharr, with the channel name, the event it's tied to, sport, league, status, and scheduled delete time. You can delete individual channels here, and there are reset/cleanup actions for bulk operations.
+A collapsible **Managed Channels** table lists the channels Teamarr currently maintains in Dispatcharr, with the channel name, the event it's tied to, sport, league, status, and scheduled delete time. The Event column shows a compact matchup (league, then away/home team abbreviations — e.g. `MLB | LAA/MIN`; card and racing events show the event name) plus the start time and the provider's native event id (`espn:401816119`), which works for every provider. You can delete individual channels here, and there are reset/cleanup actions for bulk operations.
 
 A separate **Recently Deleted** section lists channels removed by event cleanup (channel, event, sport, league, and when they were deleted).
 

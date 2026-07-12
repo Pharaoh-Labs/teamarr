@@ -39,7 +39,9 @@ class ManagedChannel:
 
     # Event context
     home_team: str | None = None
+    home_team_abbrev: str | None = None
     away_team: str | None = None
+    away_team_abbrev: str | None = None
     event_date: datetime | None = None
     event_name: str | None = None
     league: str | None = None
@@ -87,7 +89,9 @@ class ManagedChannel:
             exception_keyword=row.get("exception_keyword"),
             feed_team_id=row.get("feed_team_id"),
             home_team=row.get("home_team"),
+            home_team_abbrev=row.get("home_team_abbrev"),
             away_team=row.get("away_team"),
+            away_team_abbrev=row.get("away_team_abbrev"),
             event_date=row.get("event_date"),
             event_name=row.get("event_name"),
             league=row.get("league"),

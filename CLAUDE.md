@@ -225,7 +225,7 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v78) |
+| Schema version | `teamarr/database/schema.sql` (v79) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 

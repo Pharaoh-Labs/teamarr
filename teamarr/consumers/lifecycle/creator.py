@@ -897,7 +897,9 @@ class ChannelCreator(_LifecycleHost):
                 exception_keyword=matched_keyword,
                 feed_team_id=feed_team_id,
                 home_team=event.home_team.name if event.home_team else None,
+                home_team_abbrev=event.home_team.abbreviation if event.home_team else None,
                 away_team=event.away_team.name if event.away_team else None,
+                away_team_abbrev=event.away_team.abbreviation if event.away_team else None,
                 # Use segment-specific start time for UFC segments, otherwise event start
                 event_date=(segment_start or event.start_time).isoformat()
                 if (segment_start or event.start_time)
