@@ -72,6 +72,7 @@ When on, Teamarr adds a second, **additive** source that:
 
 - Enumerates the Dispatcharr **channels** you've mapped that carry an active, non-`_Teamarr` EPG link.
 - Takes the **streams assigned to each channel** as candidates, tagged with that **channel's own EPG** (strategy 1 — the most authoritative mapping).
+- Matches those candidates by **EPG program data only** — not by stream name or single-team fan-out — so a regional/branded stream (e.g. an RSN) is matched to the events its guide actually lists, never inferred from its name.
 - Runs them through the same matching → channel-creation → time-window pipeline.
 
 It runs **alongside** your per-source M3U matching (not instead of it); matches are consolidated onto the same event channels by event identity. Teamarr's **own generated channels are excluded** — they're output, not input. The source is managed for you as a hidden system group ("Dispatcharr Channels") that appears in stats but not in the Sources list; created channels use your global/per-league channel-group, profile, and template defaults.
