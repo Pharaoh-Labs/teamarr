@@ -373,7 +373,7 @@ def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
         group_id = row["id"]
         conn.execute(
             "UPDATE event_epg_groups SET enabled = ?, epg_match_enabled = 1, "
-            "skip_builtin_filter = 1, team_streams_enabled = 1, name_match_enabled = 0 "
+            "skip_builtin_filter = 1, team_streams_enabled = 0, name_match_enabled = 0 "
             "WHERE id = ?",
             (int(enabled), group_id),
         )
@@ -386,9 +386,9 @@ def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
         display_name="Dispatcharr Channels (EPG source)",
         leagues=[],
         duplicate_event_handling="consolidate",
-        name_match_enabled=False,  # (ahow.7) EPG-source group: matched via EPG/team, not name
+        name_match_enabled=False,  # (ahow.7, #406) EPG-source group: matched via EPG only
         epg_match_enabled=True,
-        team_streams_enabled=True,
+        team_streams_enabled=False,
         skip_builtin_filter=True,
         is_channel_source=True,
         enabled=enabled,

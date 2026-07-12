@@ -218,13 +218,21 @@ def test_ensure_channel_source_group_idempotent_and_synced(db_conn):
     assert g.epg_match_enabled is True
     assert g.skip_builtin_filter is True
     assert g.enabled is True
+    # EPG-only (#406): channel source matches via EPG program data, not name/team.
+    assert g.team_streams_enabled is False
+    assert g.name_match_enabled is False
 
-    # Second call must not create a duplicate; it syncs the enabled flag.
+    # Second call must not create a duplicate; it syncs the enabled flag and
+    # re-asserts the EPG-only matching flags on every run.
     gid2 = ensure_channel_source_group(db_conn, enabled=False)
     assert gid2 == gid
     sources = [g for g in get_all_groups(db_conn, include_disabled=True) if g.is_channel_source]
     assert len(sources) == 1
-    assert get_group(db_conn, gid).enabled is False
+    resynced = get_group(db_conn, gid)
+    assert resynced.enabled is False
+    assert resynced.team_streams_enabled is False
+    assert resynced.name_match_enabled is False
+    assert resynced.epg_match_enabled is True
 
 
 def test_channel_source_group_hidden_from_ui_list(db_conn):
