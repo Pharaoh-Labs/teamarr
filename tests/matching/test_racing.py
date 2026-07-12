@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from teamarr.consumers.matching.classifier import (
     StreamCategory,
     classify_stream,
+    detect_racing_series_leagues,
     has_racing_text_evidence,
 )
 from teamarr.consumers.matching.racing_matcher import RacingMatchContext, RacingMatcher
@@ -403,6 +404,103 @@ def test_stream_name_racing_fallback_on_team_only_gate(monkeypatch):
     assert len(out) == 1
     assert out[0].is_matched
     assert captured["classified"].category == StreamCategory.RACING_EVENT
+
+
+# ---------------------------------------------------------------------------
+# Series scoping: a stream naming a specific series must only match that
+# series' league(s) — and match nothing when that series isn't configured.
+# ---------------------------------------------------------------------------
+
+
+class TestDetectRacingSeriesLeagues:
+    def test_motogp(self):
+        assert detect_racing_series_leagues(
+            "CA (SN+ 017) | MotoGP _ Grand Prix of Germany (2026-07-12 07:15:00)"
+        ) == ("motogp",)
+
+    def test_nascar_umbrella(self):
+        assert detect_racing_series_leagues("NASCAR Cup Series at San Diego") == (
+            "nascar-cup", "nascar-xfinity", "nascar-truck",
+        )
+
+    def test_wec(self):
+        assert detect_racing_series_leagues("FIA WEC | ROUND 5") == ("wec",)
+        assert detect_racing_series_leagues("World Endurance Championship") == ("wec",)
+
+    def test_generic_grand_prix_is_unscoped(self):
+        # "grand prix" is racing evidence but names no series — must stay
+        # unscoped so a bare "Monaco Grand Prix" stream can still match F1.
+        assert detect_racing_series_leagues("Monaco Grand Prix") is None
+
+    def test_empty(self):
+        assert detect_racing_series_leagues("") is None
+        assert detect_racing_series_leagues("ESPN 2 (US)") is None
+
+
+def test_racing_series_scoping_blocks_unconfigured_series(monkeypatch):
+    # Live false-match regression: two "MotoGP - Grand Prix of Germany"
+    # streams direct-matched IMSA's "Chevrolet Grand Prix" — the only racing
+    # event covering the date — because motogp isn't a configured league and
+    # the shared "Grand Prix" tokens cleared the single-event sanity bar. A
+    # stream naming an unconfigured series must match nothing.
+    m = _mixed_matcher()  # racing league available: f1 only
+    _failed_route(monkeypatch, m)
+    racing_called = []
+    monkeypatch.setattr(
+        m._racing_matcher, "match",
+        lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
+    )
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_single(
+        1, "CA (SN+ 017) | MotoGP _ Grand Prix of Germany (2026-07-12 07:15:00)",
+        date(2026, 7, 12),
+    )
+    assert not racing_called  # f1 must never be attempted
+    assert not out[0].matched
+
+
+def test_racing_series_scoping_restricts_to_named_league(monkeypatch):
+    # A stream naming IMSA in a group with several racing leagues must only
+    # try imsa — not fan out across f1 too. (Racing dominates this group, so
+    # the stream classifies RACING_EVENT on the primary pass and reaches
+    # _match_racing_event through the real route.)
+    from tests.fakes import make_stream_matcher
+
+    m = make_stream_matcher(
+        leagues=("nfl", "f1", "imsa"),
+        league_event_types={"nfl": "team_vs_team", "f1": "event", "imsa": "event"},
+        league_sports={"nfl": "football", "f1": "racing", "imsa": "racing"},
+    )
+    racing_called = []
+    monkeypatch.setattr(
+        m._racing_matcher, "match",
+        lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
+    )
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_single(
+        1, "US (Peacock 031) | IMSA CTMP Grand Prix (2026-07-12 14:00:00)", date(2026, 7, 12)
+    )
+    assert racing_called == ["imsa"]
+    assert out[0].is_matched
+
+
+def test_racing_generic_name_stays_unscoped(monkeypatch):
+    # No series named ("Monaco Grand Prix") → all racing leagues remain
+    # eligible, preserving pre-scoping behavior.
+    m = _mixed_matcher()
+    _failed_route(monkeypatch, m)
+    racing_called = []
+    monkeypatch.setattr(
+        m._racing_matcher, "match",
+        lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
+    )
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_single(1, "Monaco Grand Prix (2026-06-01 13:00:00)", date(2026, 6, 1))
+    assert racing_called == ["f1"]
+    assert out[0].is_matched
 
 
 # ---------------------------------------------------------------------------

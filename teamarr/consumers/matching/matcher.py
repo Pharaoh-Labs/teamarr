@@ -32,6 +32,7 @@ from teamarr.consumers.matching.classifier import (
     CustomRegexConfig,
     StreamCategory,
     classify_stream,
+    detect_racing_series_leagues,
     has_racing_text_evidence,
 )
 from teamarr.consumers.matching.constants import MATCH_WINDOW_DAYS
@@ -1048,6 +1049,29 @@ class StreamMatcher:
                 stream_id=stream_id,
                 detail="No racing leagues configured",
             )
+
+        # Series scoping: when the stream text explicitly names a series
+        # (MotoGP, NASCAR, ...), only that series' league(s) are eligible.
+        # Without this, a stream for an unconfigured series carries racing
+        # text evidence, reaches the racing matcher, and date-binds to
+        # whatever configured series races that weekend ("MotoGP - Grand
+        # Prix of Germany" direct-matched IMSA's Chevrolet Grand Prix via
+        # the shared "Grand Prix" tokens). Generic racing text (a bare
+        # "Monaco Grand Prix") names no series and stays unscoped.
+        named_leagues = detect_racing_series_leagues(classified.normalized.original)
+        if named_leagues:
+            scoped = [lg for lg in racing_leagues if lg in named_leagues]
+            if not scoped:
+                return MatchOutcome.failed(
+                    reason=FailedReason.NO_RACING_MATCH,
+                    stream_name=classified.normalized.original,
+                    stream_id=stream_id,
+                    detail=(
+                        "Stream names a racing series with no configured league "
+                        f"({', '.join(named_leagues)})"
+                    ),
+                )
+            racing_leagues = scoped
 
         # Try each racing league
         outcome = None

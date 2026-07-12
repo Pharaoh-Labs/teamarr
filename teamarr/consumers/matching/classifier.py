@@ -1107,6 +1107,45 @@ def has_racing_text_evidence(text: str) -> bool:
     return bool(text) and RACING_TEXT_EVIDENCE.search(text) is not None
 
 
+# Per-series text signatures, for scoping a racing stream to the league(s)
+# whose series it explicitly names. Values are the league codes the series
+# can belong to (NASCAR is an umbrella over three leagues). Deliberately a
+# subset of RACING_TEXT_EVIDENCE: generic evidence like "grand prix" names
+# racing but not a series, and stays unscoped. Series with no corresponding
+# league (supercross/motocross) map to a code no group will ever include, so
+# naming them blocks cross-series binding entirely.
+_RACING_SERIES_SIGNATURES: "tuple[tuple[Pattern[str], tuple[str, ...]], ...]" = (
+    (re.compile(r"\b(?:formula\s*1|f1)\b", re.IGNORECASE), ("f1",)),
+    (
+        re.compile(r"\bnascar\b", re.IGNORECASE),
+        ("nascar-cup", "nascar-xfinity", "nascar-truck"),
+    ),
+    (re.compile(r"\b(?:indycar|indy\s*(?:500|nxt))\b", re.IGNORECASE), ("indycar",)),
+    (re.compile(r"\b(?:motogp|moto\s*[23])\b", re.IGNORECASE), ("motogp",)),
+    (re.compile(r"\bimsa\b", re.IGNORECASE), ("imsa",)),
+    (re.compile(r"\b(?:wec|world\s+endurance)\b", re.IGNORECASE), ("wec",)),
+    (re.compile(r"\b(?:supercross|motocross)\b", re.IGNORECASE), ("supercross",)),
+)
+
+
+def detect_racing_series_leagues(text: str) -> "tuple[str, ...] | None":
+    """League codes for the racing series the text explicitly names.
+
+    Returns None when no specific series is named (e.g. a bare "Monaco
+    Grand Prix") — callers must treat that as "unscoped", not "not racing".
+    A stream naming a specific series must only match events from that
+    series' league(s): a MotoGP stream must not date-bind to the one IMSA
+    event covering the weekend just because motogp isn't configured.
+    """
+    if not text:
+        return None
+    hits: list[str] = []
+    for pattern, leagues in _RACING_SERIES_SIGNATURES:
+        if pattern.search(text):
+            hits.extend(leagues)
+    return tuple(hits) or None
+
+
 # Known tennis league codes — mirror of the sport='tennis' leagues in
 # schema.sql (this module is pure text classification, no DB access).
 _TENNIS_LEAGUE_HINTS: frozenset[str] = frozenset({"atp", "wta"})
