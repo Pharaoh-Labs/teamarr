@@ -4,7 +4,8 @@ Variables for UFC card segments, fighter names, matchup formatting, and fight re
 
 Fighter Identity:
     fighter1, fighter2: Headline bout fighter names
-    matchup: "Fighter1 vs Fighter2"
+    matchup_combat: "Fighter1 vs Fighter2" (the generic {matchup} is identity's
+        "{away} @ {home}"; this is the fight-conventional form, #411)
     fighter1_record, fighter2_record: W-L-D records (e.g., "28-4-0")
 
 Event Info:
@@ -121,12 +122,13 @@ def extract_fighter2_last(ctx: TemplateContext, game_ctx: GameContext | None) ->
 
 
 @register_variable(
-    name="matchup",
+    name="matchup_combat",
     category=Category.COMBAT,
     suffix_rules=SuffixRules.BASE_ONLY,  # Event EPG only
-    description="Full matchup (Fighter1 vs Fighter2)",
+    description="Fight matchup (e.g., 'Volkanovski vs Lopes') — headline fighter "
+    "first with 'vs'; the generic {matchup} renders '{away} @ {home}'",
 )
-def extract_matchup(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+def extract_matchup_combat(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract full matchup string from UFC event."""
     if not game_ctx or not game_ctx.event:
         return ""

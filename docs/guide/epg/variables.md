@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 259 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 260 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -492,7 +492,7 @@ UFC and MMA-specific variables for event templates. These are **event-only** (no
 | `{fighter2}` | Second fighter name (headline bout) | `Diego Lopes` |
 | `{fighter1_last}` | First fighter surname | `Volkanovski` |
 | `{fighter2_last}` | Second fighter surname | `Lopes` |
-| `{matchup}` | Full matchup string | `Alex Volkanovski vs Diego Lopes` |
+| `{matchup_combat}` | Fight matchup — headline fighter first with 'vs' | `Alex Volkanovski vs Diego Lopes` |
 | `{event_number}` | UFC event number (e.g., '314' from 'UFC 314') | `314` |
 | `{event_title}` | Full event title | `UFC 314: Volkanovski vs Lopes` |
 
@@ -517,7 +517,7 @@ UFC and MMA-specific variables for event templates. These are **event-only** (no
 | `{early_prelims_bouts}` | Early prelims bouts only | `Mauricio Ruffy vs Jamie Mullarkey` |
 
 {: .note }
-UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout.
+UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout. Use `{matchup_combat}` for the fight-conventional "Volkanovski vs Lopes" form — the generic `{matchup}` renders `{away} @ {home}` ("Lopes @ Volkanovski") for every sport, combat included.
 
 ---
 

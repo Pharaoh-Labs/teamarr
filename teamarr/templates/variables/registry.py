@@ -119,7 +119,21 @@ class VariableRegistry:
         scope: TemplateScope = TemplateScope.ALL,
         sample: str | None = None,
     ) -> None:
-        """Register a variable definition."""
+        """Register a variable definition.
+
+        Raises:
+            ValueError: if ``name`` is already registered. Duplicate names
+                silently shadowed each other for months (combat's ``matchup``
+                vs identity's, #411) — import order decided the winner. Any
+                module-level registration collision now fails at import time,
+                which the test suite catches immediately.
+        """
+        if name in self._variables:
+            raise ValueError(
+                f"Template variable {name!r} is already registered "
+                f"(category={self._variables[name].category}); "
+                f"duplicate registration from category={category}"
+            )
         self._variables[name] = VariableDefinition(
             name=name,
             category=category,
