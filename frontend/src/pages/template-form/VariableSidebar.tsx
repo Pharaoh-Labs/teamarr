@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react"
-import { ChevronDown, Search, X, FileText, User, Tv, Clock } from "lucide-react"
+import { Search, X, FileText, User, Tv, Clock } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
 import type { VariableSidebarProps, Variable } from "./types"
 
@@ -187,12 +188,14 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
 
         {/* Recently Used */}
         {recentlyUsed.length > 0 && !search && (
-          <details className="group" open>
-            <summary className="cursor-pointer text-xs font-medium text-foreground hover:text-primary flex items-center gap-1">
-              <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
-              <Clock className="h-3 w-3" /> Recently Used
-            </summary>
-            <div className="flex flex-wrap gap-1 mt-2">
+          <CollapsibleSection
+            variant="subsection"
+            title="Recently Used"
+            icon={<Clock className="h-3 w-3" />}
+            persistKey="template-builder.recently-used"
+            defaultCollapsed={false}
+          >
+            <div className="flex flex-wrap gap-1">
               {recentlyUsed.slice(0, 8).map((varName) => {
                 const baseVar = varName.replace(/\.(next|last)$/, "")
                 const v = variableMap[baseVar]
@@ -211,28 +214,24 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
                 )
               })}
             </div>
-          </details>
+          </CollapsibleSection>
         )}
 
-        {/* Categories */}
-        <div className="space-y-1">
+        {/* Categories — controlled CollapsibleSections: single-open accordion,
+            with an active search forcing every matching category open. */}
+        <div className="space-y-2">
           {filteredCategories.map((cat) => (
-            <details
+            <CollapsibleSection
               key={cat.name}
-              className="group border-b border-border last:border-0"
-              open={expandedCat === cat.name || !!search}
+              variant="subsection"
+              title={cat.name}
+              count={cat.variables.length}
+              collapsed={!(expandedCat === cat.name || !!search)}
+              onCollapsedChange={(collapsed) =>
+                setExpandedCat(collapsed ? null : cat.name)
+              }
             >
-              <summary
-                onClick={(e) => {
-                  e.preventDefault()
-                  setExpandedCat(expandedCat === cat.name ? null : cat.name)
-                }}
-                className="cursor-pointer px-1 py-1.5 flex items-center justify-between text-xs font-medium hover:bg-accent/50 transition-colors"
-              >
-                <span>{cat.name}</span>
-                <span className="text-[10px] text-muted-foreground">{cat.variables.length}</span>
-              </summary>
-              <div className="flex flex-wrap gap-1 pb-2 pt-1">
+              <div className="flex flex-wrap gap-1 pb-1">
                 {cat.variables.map((v) => {
                   const suffixClass = isTeamTemplate ? getSuffixClass(v.suffixes) : "var-base"
                   const displayName = !isTeamTemplate || v.suffixes.length <= 1
@@ -262,7 +261,7 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
                   )
                 })}
               </div>
-            </details>
+            </CollapsibleSection>
           ))}
 
           {filteredCategories.length === 0 && (
