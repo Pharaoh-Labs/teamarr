@@ -154,10 +154,10 @@ _EXACT_SESSION_LABELS = {
 # streams named "NASCAR Cup Series Qualifying" or "2026 NASCAR ORAP Series
 # Qualifying", where the tsdb-style anchored regexes above (which require
 # the label to BE the session type) don't match. Anchored at the end of the
-# label (not a bare substring search), so "Pre-Race Show" still counts as
-# naming the race but "Racecourse Network" or similar would not accidentally
-# trail-match "race" mid-word.
-_TRAILING_FP_RE = re.compile(r"(?:free\s*practice|practice|fp)\s*(\d)\s*$", re.IGNORECASE)
+# label (not a bare substring search), so "Pre-Race" still counts as naming
+# the race, while "Pre-Race Show" (doesn't end in the keyword) and
+# "Racecourse Network" (keyword mid-word, not at the end) do not.
+_TRAILING_FP_RE = re.compile(r"\b(?:free\s*practice|practice|fp)\s*(\d?)\s*$", re.IGNORECASE)
 _TRAILING_SPRINT_QUALIFYING_RE = re.compile(r"\bsprint\s*qualifying\s*$", re.IGNORECASE)
 _TRAILING_HYPERPOLE_RE = re.compile(r"\bhyperpole\s*$", re.IGNORECASE)
 _TRAILING_WARMUP_RE = re.compile(r"\bwarm[\s-]?up\s*$", re.IGNORECASE)
@@ -174,7 +174,10 @@ def _session_category_from_trailing_keyword(label: str) -> str | None:
     sprint_qualifying rather than the bare "qualifying" suffix match.
     """
     if m := _TRAILING_FP_RE.search(label):
-        return f"fp{m.group(1)}"
+        # NASCAR emits an unnumbered "practice" session code, and TSN+ labels
+        # the feed "<Series> Practice" with no digit — same mapping as
+        # _FREE_PRACTICE_RE's bare-"Practice" case.
+        return f"fp{m.group(1)}" if m.group(1) else "practice"
     if _TRAILING_SPRINT_QUALIFYING_RE.search(label):
         return "sprint_qualifying"
     if _TRAILING_HYPERPOLE_RE.search(label):

@@ -513,6 +513,22 @@ class TestSessionCategoryFromStreamName:
             "CA (TSN+ 015) | 2026 NASCAR ORAP Series Qualifying: Focused Health 250 (2026-07-11 11:00:00)"  # noqa: E501
         ) == "qualifying"
 
+    def test_trailing_unnumbered_practice_keyword(self):
+        # NASCAR emits an unnumbered "practice" session code and TSN+ labels
+        # the feed "<Series> Practice" (no digit) — this must scope to the
+        # practice category, not fall into the generic fan-out where the
+        # practice exclusion would drop it (the exact inversion: a dedicated
+        # practice feed landing on Qualifying/Race but not Practice).
+        assert _session_category_from_stream_name(
+            "CA (TSN+ 021) | NASCAR Cup Series Practice: Quaker State 400 (2026-07-11 14:30:00)"
+        ) == "practice"
+
+    def test_trailing_practice_requires_word_boundary(self):
+        # "...practice" as a word-suffix must not match ("Malpractice").
+        assert _session_category_from_stream_name(
+            "US | Malpractice: Medical Drama Marathon (2026-07-11 20:00:00)"
+        ) is None
+
     def test_no_trailing_keyword_has_no_hint(self):
         # A label ending in descriptive text (not a session word) must not
         # trip the trailing fallback.
@@ -601,6 +617,24 @@ def test_expand_racing_segments_still_scopes_dedicated_practice_stream():
                 "event": _wec_event()}]
     out = expand_racing_segments(matched)
     assert [m["segment"] for m in out] == ["fp2"]
+
+
+def test_expand_racing_segments_scopes_unnumbered_trailing_practice_stream():
+    # NASCAR-style weekend: an unnumbered "practice" session plus qualifying
+    # and race. A TSN+ "<Series> Practice" feed must land on the practice
+    # channel only.
+    base = datetime(2026, 7, 11, 9, tzinfo=UTC)
+    sessions = [
+        SimpleNamespace(code="practice", name="Practice", start_time=base),
+        SimpleNamespace(code="qualifying", name="Qualifying", start_time=base + timedelta(hours=3)),
+        SimpleNamespace(code="race", name="Race", start_time=base + timedelta(days=1)),
+    ]
+    matched = [{
+        "stream": {"id": 1, "name": "CA (TSN+ 021) | NASCAR Cup Series Practice: Quaker State 400"},
+        "event": _wec_event(sessions),
+    }]
+    out = expand_racing_segments(matched)
+    assert [m["segment"] for m in out] == ["practice"]
 
 
 def test_expand_racing_segments_falls_back_when_no_session_of_the_category_exists():
