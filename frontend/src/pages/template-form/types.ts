@@ -9,6 +9,10 @@ export interface VariableSidebarProps {
   onInsert: (varName: string) => void
   lastFocusedField: string | null
   isTeamTemplate: boolean
+}
+
+/** Preview-context bar above the tabs (yk4j.10): league + live/sample. */
+export interface PreviewControlsProps {
   leagues: CachedLeague[]
   subscribedSlugs: string[]
   previewLeague: string

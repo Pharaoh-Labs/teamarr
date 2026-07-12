@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { AutoGrowTextarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import {
@@ -381,7 +382,7 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                         </div>
                         <div>
                           <Label className="text-xs">Description Template</Label>
-                          <Input
+                          <AutoGrowTextarea
                             value={cond.template}
                             onChange={(e) => updateCondition(idx, "template", e.target.value)}
                             placeholder="{team_name} plays {opponent} at {venue}"

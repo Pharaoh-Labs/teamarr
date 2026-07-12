@@ -62,6 +62,10 @@ The template editor has five tabs:
 | **Fillers** | Pregame, postgame, and idle content with optional conditional logic |
 | **Other EPG Options** | XMLTV categories, tags (new/live/date), and video quality |
 
+When **creating** a template, every tab is pre-filled with working defaults: a **Next** button below each tab walks you through them in order, and each tab in the strip carries a small hint — a check once you've reviewed it, an amber dot if something required (the template name) is still missing. Tabs stay freely clickable, and editing an existing template shows no stepper at all.
+
+The **Previewing as** bar above the tabs selects the league (and live vs. sample data) for every preview on the page, and the **Guide Preview** card in the right rail renders the title, subtitle, and description as a viewer's guide would show them — see [Previewing Templates](variables.md#previewing-templates).
+
 ## Variables
 
 Templates use variables enclosed in curly braces that get replaced with real data:
