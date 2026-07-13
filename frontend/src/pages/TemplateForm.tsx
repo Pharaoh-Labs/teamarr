@@ -572,6 +572,7 @@ export function TemplateForm() {
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
               validationData={validationData}
+              fillerConditionalPreview={serverPreview.fillerConditional}
             />
           )}
           {activeTab === "xmltv" && (

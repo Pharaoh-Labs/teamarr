@@ -137,11 +137,12 @@ def test_select_filler_fields_returns_runner_up_descriptions():
         {"condition": "is_not_final", "priority": 10, "template": "never matches"},
         {"priority": 100, "template": "default row"},
     ]
-    fields, runners_up = get_condition_selector().select_filler_fields(
+    fields, runners_up, trace = get_condition_selector().select_filler_fields(
         rows, ctx, ctx.last_game
     )
     assert fields["description"] == "primary"
     assert runners_up == ["second", "default row"]
+    assert [r["matched"] for r in trace] == [True, True, False, True]
 
 
 # --- team generator: reference game per register ---

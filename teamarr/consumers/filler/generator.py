@@ -585,7 +585,7 @@ class FillerGenerator:
                 game_ctx, event=self._service.refresh_event_status(game_ctx.event)
             )
 
-        fields, runner_up_descriptions = get_condition_selector().select_filler_fields(
+        fields, runner_up_descriptions, _ = get_condition_selector().select_filler_fields(
             rows, context, game_ctx
         )
         if not fields:

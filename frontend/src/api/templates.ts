@@ -243,6 +243,7 @@ export interface FillerRegisterPreview {
   rendered_title: string | null
   rendered_subtitle: string | null
   fired: string[]
+  rows: ConditionRowTrace[]
 }
 
 export interface TemplatePreviewResponse {

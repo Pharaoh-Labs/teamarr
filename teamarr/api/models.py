@@ -436,6 +436,7 @@ class TemplateFillerRegisterPreview(BaseModel):
     rendered_title: str | None = None
     rendered_subtitle: str | None = None
     fired: list[str] = []
+    rows: list[ConditionRowTrace] = []
 
 
 class TemplatePreviewResponse(BaseModel):
