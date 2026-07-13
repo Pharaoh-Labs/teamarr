@@ -4,12 +4,15 @@ import { CollapsibleSection } from "@/components/ui/collapsible-section"
 interface FillerBlock {
   enabled: boolean
   title: string
+  description: string
 }
 
 interface TimelinePreviewProps {
   isTeamTemplate: boolean
+  /** Resolved channel name — the guide's left-hand channel cell. */
+  channelName: string
   pregame: FillerBlock
-  event: { title: string; subtitle: string }
+  event: { title: string; subtitle: string; description: string }
   postgame: FillerBlock
   /** Team templates only — the between-game-days row. */
   idle: FillerBlock | null
@@ -30,6 +33,7 @@ interface TimelinePreviewProps {
  */
 export function TimelinePreview({
   isTeamTemplate,
+  channelName,
   pregame,
   event,
   postgame,
@@ -46,36 +50,56 @@ export function TimelinePreview({
       defaultCollapsed={false}
       className="mb-4"
     >
-      <div className="space-y-1.5">
-        {/* Event-day row */}
-        <div className="flex gap-1 items-stretch">
-          <FillerCell block={pregame} label="Pre-game" className="flex-[1.2]" />
-          <div className="flex-[3] min-w-0 rounded-md border border-border bg-secondary/40 border-l-4 border-l-primary px-3 py-1.5">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center justify-between gap-2">
-              <span>{eventTimeLabel || "Event"}</span>
-              <span className="normal-case tracking-normal">{durationLabel}</span>
-            </div>
-            <div
-              className={`text-sm font-semibold leading-snug truncate ${event.title ? "" : "text-muted-foreground italic font-normal"}`}
-            >
-              {event.title || "(no title)"}
-            </div>
-            <div className="text-xs text-muted-foreground leading-snug truncate">
-              {event.subtitle}
-            </div>
+      <div className="flex gap-1 items-stretch">
+        {/* Channel cell — spans both rows, like a real guide's left column.
+            Distinct treatment: it's the channel's identity, not a programme. */}
+        <div className="w-36 shrink-0 rounded-md border border-primary/50 bg-primary/10 px-3 py-1.5 flex flex-col justify-center">
+          <div className="text-[10px] uppercase tracking-wide text-primary/70">
+            Channel
           </div>
-          <FillerCell block={postgame} label="Post-game" className="flex-[1.2]" />
+          <div
+            className={`text-xs font-semibold leading-snug line-clamp-3 ${channelName ? "text-primary" : "text-muted-foreground/60 italic font-normal"}`}
+          >
+            {channelName || "(unnamed)"}
+          </div>
         </div>
 
-        {/* Team channels live on between game days — show the idle register */}
-        {isTeamTemplate && idle && (
-          <FillerCell
-            block={idle}
-            label="Idle · between game days"
-            className="w-full"
-            tall
-          />
-        )}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          {/* Event-day row */}
+          <div className="flex gap-1 items-stretch">
+            <FillerCell block={pregame} label="Pre-game" className="flex-[1.2]" />
+            <div className="flex-[3] min-w-0 rounded-md border border-border bg-secondary/40 border-l-4 border-l-primary px-3 py-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center justify-between gap-2">
+                <span>{eventTimeLabel || "Event"}</span>
+                <span className="normal-case tracking-normal">{durationLabel}</span>
+              </div>
+              <div
+                className={`text-sm font-semibold leading-snug truncate ${event.title ? "" : "text-muted-foreground italic font-normal"}`}
+              >
+                {event.title || "(no title)"}
+              </div>
+              <div className="text-xs text-muted-foreground leading-snug truncate">
+                {event.subtitle}
+              </div>
+              {event.description && (
+                <div className="text-[11px] text-foreground/70 leading-snug line-clamp-2 pt-0.5 border-t border-border/60 mt-0.5">
+                  {event.description}
+                </div>
+              )}
+            </div>
+            <FillerCell block={postgame} label="Post-game" className="flex-[1.2]" />
+          </div>
+
+          {/* Team channels live on between game days — show the idle register */}
+          {isTeamTemplate && idle && (
+            <FillerCell
+              block={idle}
+              label="Idle · between game days"
+              className="w-full"
+              tall
+            />
+          )}
+        </div>
       </div>
     </CollapsibleSection>
   )
@@ -107,6 +131,7 @@ function FillerCell({
   return (
     <div
       className={`min-w-0 rounded-md border border-border bg-secondary/20 px-3 py-1.5 ${className ?? ""}`}
+      title={tall ? undefined : block.description || undefined}
     >
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div
@@ -114,6 +139,11 @@ function FillerCell({
       >
         {block.title || "(no title)"}
       </div>
+      {tall && block.description && (
+        <div className="text-[11px] text-foreground/60 leading-snug line-clamp-2 pt-0.5">
+          {block.description}
+        </div>
+      )}
     </div>
   )
 }
