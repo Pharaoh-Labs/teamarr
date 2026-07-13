@@ -67,7 +67,11 @@ CREATE TABLE IF NOT EXISTS templates (
     idle_enabled BOOLEAN DEFAULT 1,
     idle_content JSON DEFAULT '{"title": "{team_name} Programming", "subtitle": null, "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}", "art_url": null}',
     idle_conditional JSON DEFAULT '{"enabled": false, "description_final": null, "description_not_final": null}',
-    idle_offseason JSON DEFAULT '{"title_enabled": false, "title": null, "subtitle_enabled": false, "subtitle": null, "description_enabled": false, "description": "No upcoming {team_name} games scheduled."}',
+    -- Offseason register seeded enabled (#418): with it off, idle content
+    -- renders {*.next} literals into real guides once a team has no next game.
+    -- description_enabled is the master toggle; title stays unset so it falls
+    -- back to the idle title (which carries no .next).
+    idle_offseason JSON DEFAULT '{"title_enabled": false, "title": null, "subtitle_enabled": true, "subtitle": "No upcoming game currently on schedule", "description_enabled": true, "description": "No upcoming {team_name} games scheduled."}',
 
     -- Conditional Descriptions (advanced)
     conditional_descriptions JSON DEFAULT '[]',
