@@ -244,6 +244,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 79
 
+    if current_version < 80:
+        _apply_migration(
+            conn, 80,
+            "convert filler final/not-final conditionals to condition rows (#420)",
+            _migrate_v80_filler_conditionals_to_rows,
+        )
+        current_version = 80
+
 
 # =============================================================================
 # Migration helpers
@@ -1801,3 +1809,96 @@ def _add_column_if_not_exists(
 
 
 
+
+
+def _migrate_v80_filler_conditionals_to_rows(conn: sqlite3.Connection) -> None:
+    """v80: convert filler final/not-final conditionals to condition rows (#420).
+
+    Faithful conversion, never invention: each ENABLED legacy conditional
+    (postgame_conditional / idle_conditional) becomes up to two DISJOINT rows —
+    ``is_final`` carrying the *_final fields, ``is_not_final`` carrying the
+    *_not_final fields — in the hehg.2 row shape (description under the legacy
+    key ``template``). Disjointness is the fidelity-critical property: on a
+    final game the is_not_final row matches nothing, so fields the is_final
+    row doesn't set fall through to the base register, exactly like today's
+    ``cond.title_final or base.title`` per-field selection. Falsy legacy
+    values (None/"") count as unset, matching the generator's ``or`` chain.
+
+    The legacy columns are left in place untouched (rollback safety; never
+    read again after cajd.3). Skips any template whose rows column is already
+    non-empty, so the transform is idempotent beyond the schema_version guard.
+    """
+    for col in (
+        "pregame_conditional_rows",
+        "postgame_conditional_rows",
+        "idle_conditional_rows",
+    ):
+        _add_column_if_not_exists(conn, "templates", col, "JSON DEFAULT '[]'")
+
+    conversions = (
+        ("postgame_conditional", "postgame_conditional_rows"),
+        ("idle_conditional", "idle_conditional_rows"),
+    )
+    try:
+        templates = conn.execute(
+            "SELECT id, postgame_conditional, idle_conditional, "
+            "postgame_conditional_rows, idle_conditional_rows FROM templates"
+        ).fetchall()
+    except sqlite3.OperationalError as e:
+        # Minimal/legacy templates table without the filler columns (test
+        # fixtures, pre-conditional-era DBs) — nothing to convert.
+        logger.warning("[MIGRATE v80] filler conversion skipped: %s", e)
+        return
+
+    converted = 0
+    for row in templates:
+        for legacy_col, rows_col in conversions:
+            try:
+                existing_rows = json.loads(row[rows_col] or "[]")
+            except (json.JSONDecodeError, TypeError):
+                existing_rows = []
+            if existing_rows:
+                continue  # already converted (idempotence)
+
+            try:
+                legacy = json.loads(row[legacy_col] or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(legacy, dict) or not legacy.get("enabled"):
+                continue
+
+            rows: list[dict] = []
+            for condition, suffix, label in (
+                ("is_final", "_final", "Final (migrated)"),
+                ("is_not_final", "_not_final", "In progress (migrated)"),
+            ):
+                fields: dict = {}
+                if legacy.get(f"title{suffix}"):
+                    fields["title"] = legacy[f"title{suffix}"]
+                if legacy.get(f"subtitle{suffix}"):
+                    fields["subtitle"] = legacy[f"subtitle{suffix}"]
+                if legacy.get(f"description{suffix}"):
+                    fields["template"] = legacy[f"description{suffix}"]
+                if fields:
+                    rows.append(
+                        {
+                            "condition": condition,
+                            "condition_value": None,
+                            "priority": 50,
+                            "label": label,
+                            **fields,
+                        }
+                    )
+
+            if rows:
+                conn.execute(
+                    f"UPDATE templates SET {rows_col} = ? WHERE id = ?",
+                    (json.dumps(rows), row["id"]),
+                )
+                converted += 1
+
+    if converted:
+        logger.info(
+            "[MIGRATE v80] Converted %d filler conditional(s) to condition rows",
+            converted,
+        )
