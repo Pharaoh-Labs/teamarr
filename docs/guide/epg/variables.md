@@ -402,7 +402,7 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | `{last_five_summary}` | Recent-form prose for both teams; empty without data — pair with `has_structured_preview` | base, .next, .last | `The Rays have won 2 of their last five; the Red Sox have won 4 of their last five.` |
 
 {: .note }
-Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).
+Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. In main descriptions, gate them with condition rows (`has_preview`, `has_recap`, …); in filler registers, use [filler condition rows](conditions#filler-condition-rows) — the starter set's postgame `has_recap → {game_recap.last}` row is the canonical example. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).
 
 ---
 
