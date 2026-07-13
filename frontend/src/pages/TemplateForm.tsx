@@ -30,6 +30,7 @@ import { useServerPreview, collectTemplateStrings } from "./template-form/useSer
 import { VariableSidebar } from "./template-form/VariableSidebar"
 import { PreviewControls } from "./template-form/PreviewControls"
 import { GuideCardPreview } from "./template-form/GuideCardPreview"
+import { TimelinePreview } from "./template-form/TimelinePreview"
 import { BasicTab } from "./template-form/tabs/BasicTab"
 import { DefaultsTab } from "./template-form/tabs/DefaultsTab"
 import { ConditionsTab } from "./template-form/tabs/ConditionsTab"
@@ -114,7 +115,10 @@ export function TemplateForm() {
   // selection) runs debounced on the backend and overrides the client
   // substitution as truth once it lands.
   const serverPreview = useServerPreview({
-    templates: collectTemplateStrings(formData),
+    // "{game_time}" (event-start label) and "{team_name}" (team channel-cell
+    // name) ride along for the timeline preview (#416) — they aren't form
+    // fields, so collectTemplateStrings can't see them.
+    templates: [...collectTemplateStrings(formData), "{game_time}", "{team_name}"],
     conditionalDescriptions: formData.conditional_descriptions ?? [],
     league: previewLeague,
     live: liveRequested,
@@ -147,6 +151,38 @@ export function TemplateForm() {
       ? "description"
       : null,
   ].filter((f): f is string => f !== null)
+
+  // Timeline preview values (#416): register titles as the guide would show
+  // them, plus a human label for the event block's duration source.
+  const timelineDurationLabel =
+    formData.game_duration_mode === "custom" && formData.game_duration_override
+      ? `${formData.game_duration_override}h custom`
+      : formData.game_duration_mode === "default"
+        ? "global default duration"
+        : "per-sport duration"
+  const timelinePregame = {
+    enabled: formData.pregame_enabled ?? true,
+    title: resolveTemplate(formData.pregame_fallback?.title || ""),
+    description: resolveTemplate(formData.pregame_fallback?.description || ""),
+  }
+  const timelinePostgame = {
+    enabled: formData.postgame_enabled ?? true,
+    title: resolveTemplate(formData.postgame_fallback?.title || ""),
+    description: resolveTemplate(formData.postgame_fallback?.description || ""),
+  }
+  const timelineIdle = formData.template_type === "team"
+    ? {
+        enabled: formData.idle_enabled ?? true,
+        title: resolveTemplate(formData.idle_content?.title || ""),
+        description: resolveTemplate(formData.idle_content?.description || ""),
+      }
+    : null
+  // Channel cell: event channels are named by the template's own field; team
+  // channels carry the team's name.
+  const timelineChannelName =
+    formData.template_type === "team"
+      ? resolveTemplate("{team_name}")
+      : resolveTemplate(formData.event_channel_name || "")
 
   // Build validation set from variables data. The optional chain is hoisted
   // out of the memo so the manual dependency matches what the React Compiler
@@ -401,6 +437,19 @@ export function TemplateForm() {
               }
             : null
         }
+      />
+
+      {/* EPG timeline (#416): the registers as a guide row — pre/event/post,
+          plus the idle row for team templates. */}
+      <TimelinePreview
+        isTeamTemplate={isTeamTemplate}
+        channelName={timelineChannelName}
+        pregame={timelinePregame}
+        event={{ title: guideTitle, subtitle: guideSubtitle, description: guideDescription }}
+        postgame={timelinePostgame}
+        idle={timelineIdle}
+        eventTimeLabel={resolveTemplate("{game_time}")}
+        durationLabel={timelineDurationLabel}
       />
 
       {/* Tabs - outside grid so picker aligns with content */}
