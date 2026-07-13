@@ -685,14 +685,15 @@ class ConditionalDescriptionSelector:
         rows: str | list[dict[str, Any]] | None,
         ctx: TemplateContext | None,
         game_ctx: GameContext | None,
-    ) -> tuple[dict[str, str], list[str]]:
+    ) -> tuple[dict[str, str], list[str], list[dict[str, Any]]]:
         """Per-field selection for filler condition rows (#420).
 
         Same semantics as select_fields, plus the ordered runner-up
         description texts among the OTHER matching rows (priority order,
-        then input order). The filler generator chains them for the
-        cascade-on-empty: winning description resolves empty at render
-        time → next matching candidate → base register.
+        then input order) and the per-row trace. The filler generator chains
+        the runner-ups for the cascade-on-empty (winning description
+        resolves empty at render time → next matching candidate → base
+        register); the preview endpoint surfaces the trace (#428).
         """
         fields, trace = self.select_fields_with_trace(rows, ctx, game_ctx)
         winner_index = next(
@@ -703,7 +704,7 @@ class ConditionalDescriptionSelector:
             for i, opt in enumerate(self._parse_options(rows))
             if i != winner_index and trace[i]["matched"] and opt.field_text("description")
         )
-        return fields, [text for _, _, text in runners_up]
+        return fields, [text for _, _, text in runners_up], trace
 
     def _parse_options(
         self, description_options: str | list[dict[str, Any]] | None

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { AutoGrowTextarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
-import type { ConditionalDescription } from "@/api/templates"
+import type { ConditionalDescription, ConditionRowTrace } from "@/api/templates"
 import { fetchConditions } from "@/api/variables"
 
 interface FillerConditionRowsProps {
@@ -16,6 +16,8 @@ interface FillerConditionRowsProps {
   resolveTemplate: (template: string) => string
   /** Which game the register's rows evaluate against ("next game" / "last game"). */
   referenceLabel: string
+  /** Server preview trace for these rows (#428): which fired for the preview event. */
+  trace?: ConditionRowTrace[]
 }
 
 /**
@@ -33,6 +35,7 @@ export function FillerConditionRows({
   isTeamTemplate,
   resolveTemplate,
   referenceLabel,
+  trace,
 }: FillerConditionRowsProps) {
   const rows = value || []
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
@@ -136,6 +139,33 @@ export function FillerConditionRows({
                       {[row.title && "T", row.subtitle && "S"].filter(Boolean).join("·")}
                     </span>
                   )}
+                  {(() => {
+                    const rowTrace = trace?.find((t) => t.index === idx)
+                    const fired = rowTrace?.selected_for?.length
+                      ? rowTrace.selected_for
+                      : rowTrace?.selected
+                        ? ["description"]
+                        : []
+                    if (fired.length > 0)
+                      return (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400"
+                          title={rowTrace?.reason}
+                        >
+                          fires
+                        </span>
+                      )
+                    if (rowTrace?.matched)
+                      return (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400"
+                          title={rowTrace.reason}
+                        >
+                          outranked
+                        </span>
+                      )
+                    return null
+                  })()}
                   {row.template && (
                     <span className="text-xs text-muted-foreground truncate max-w-[200px]">
                       {row.template.substring(0, 40)}

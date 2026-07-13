@@ -224,7 +224,7 @@ def preview_template(req: TemplatePreviewRequest):
         for register, rows in req.filler_conditional_rows.items():
             if not rows:
                 continue
-            fields, runner_ups = get_condition_selector().select_filler_fields(
+            fields, runner_ups, trace = get_condition_selector().select_filler_fields(
                 rows, ctx, game_ctx
             )
             rendered_desc = None
@@ -244,6 +244,7 @@ def preview_template(req: TemplatePreviewRequest):
                     _render(fields["subtitle"]) if "subtitle" in fields else None
                 ),
                 "fired": fired,
+                "rows": trace,
             }
 
     return {

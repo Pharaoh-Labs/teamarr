@@ -497,7 +497,12 @@ export function TemplateForm() {
         isTeamTemplate={isTeamTemplate}
         channelName={timelineChannelName}
         pregame={timelinePregame}
-        event={{ title: guideTitle, subtitle: guideSubtitle, description: guideDescription }}
+        event={{
+          title: guideTitle,
+          subtitle: guideSubtitle,
+          description: guideDescription,
+          conditionalFields: guideConditionalFields,
+        }}
         postgame={timelinePostgame}
         idle={timelineIdle}
         eventTimeLabel={resolveTemplate("{game_time}")}
@@ -567,6 +572,7 @@ export function TemplateForm() {
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
               validationData={validationData}
+              fillerConditionalPreview={serverPreview.fillerConditional}
             />
           )}
           {activeTab === "xmltv" && (

@@ -8,7 +8,7 @@ import { FillerConditionRows } from "../FillerConditionRows"
 import { DEFAULT_PREGAME, DEFAULT_POSTGAME, DEFAULT_IDLE } from "../constants"
 import type { TabProps } from "../types"
 
-export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate, validationData }: TabProps) {
+export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, setLastFocusedField, resolveTemplate, validationData, fillerConditionalPreview }: TabProps) {
   const isEventTemplate = !isTeamTemplate
   const pregame = formData.pregame_fallback || DEFAULT_PREGAME
   const postgame = formData.postgame_fallback || DEFAULT_POSTGAME
@@ -112,6 +112,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
             <FillerConditionRows
               value={formData.pregame_conditional_rows || []}
               onChange={(rows) => updateRows("pregame_conditional_rows", rows)}
+              trace={fillerConditionalPreview?.pregame?.rows}
               isTeamTemplate={!isEventTemplate}
               resolveTemplate={resolveTemplate}
               referenceLabel={isEventTemplate ? "channel's event" : "next game"}
@@ -182,6 +183,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
             <FillerConditionRows
               value={formData.postgame_conditional_rows || []}
               onChange={(rows) => updateRows("postgame_conditional_rows", rows)}
+              trace={fillerConditionalPreview?.postgame?.rows}
               isTeamTemplate={!isEventTemplate}
               resolveTemplate={resolveTemplate}
               referenceLabel={isEventTemplate ? "channel's event (status refreshed)" : "last game (status refreshed)"}
@@ -316,6 +318,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
               <FillerConditionRows
                 value={formData.idle_conditional_rows || []}
                 onChange={(rows) => updateRows("idle_conditional_rows", rows)}
+              trace={fillerConditionalPreview?.idle?.rows}
                 isTeamTemplate={!isEventTemplate}
                 resolveTemplate={resolveTemplate}
                 referenceLabel="last game (status refreshed)"
