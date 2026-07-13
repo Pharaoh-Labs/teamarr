@@ -218,7 +218,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 80
+        assert row["schema_version"] == 81
 
 
 class TestV73CleansTeamCache:
@@ -412,7 +412,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 80
+        assert row["schema_version"] == 81
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 80
+        assert row["schema_version"] == 81
 
 
 # ===========================================================================
@@ -1100,3 +1100,77 @@ def test_v80_legacy_columns_untouched():
         conn.execute("SELECT postgame_conditional FROM templates WHERE id=1").fetchone()[0]
     )
     assert stored == legacy
+
+
+# ---------------------------------------------------------------------------
+# v81: seed 'Sports event' into template event categories (#423)
+# ---------------------------------------------------------------------------
+
+
+def _v81_make_db(cats_json):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE templates (id INTEGER PRIMARY KEY, xmltv_categories JSON)")
+    conn.execute("INSERT INTO templates (id, xmltv_categories) VALUES (1, ?)", (cats_json,))
+    return conn
+
+
+def _v81_cats(conn):
+    return json.loads(
+        conn.execute("SELECT xmltv_categories FROM templates WHERE id=1").fetchone()[0]
+    )
+
+
+def test_v81_appends_sports_event_when_missing():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sports"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+
+def test_v81_preserves_custom_categories_and_order():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Basketball", "Sports", "My Custom"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Basketball", "Sports", "My Custom", "Sports event"]
+
+
+def test_v81_idempotent_when_already_present():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sports", "Sports event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+
+def test_v81_skips_malformed_json():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db("not json")
+    _migrate_v81_seed_sports_event_category(conn)  # must not raise
+    row = conn.execute("SELECT xmltv_categories FROM templates WHERE id=1").fetchone()
+    assert row[0] == "not json"
+
+
+def test_v81_normalizes_our_starter_variants_in_place():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    # "Sports Event" (team starters) and "Sporting Event" (event starters)
+    # were OUR seeded strings — normalize to canonical, preserving position.
+    conn = _v81_make_db('["Sports", "Sports Event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+    conn = _v81_make_db('["Sports", "Sporting Event", "My Custom"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event", "My Custom"]
+
+
+def test_v81_collapses_duplicate_variants():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sporting Event", "Sports Event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports event"]

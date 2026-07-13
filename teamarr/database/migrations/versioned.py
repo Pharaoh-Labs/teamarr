@@ -252,6 +252,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 80
 
+    if current_version < 81:
+        _apply_migration(
+            conn, 81,
+            "seed 'Sports event' into template event categories (#423)",
+            _migrate_v81_seed_sports_event_category,
+        )
+        current_version = 81
+
 
 # =============================================================================
 # Migration helpers
@@ -1902,3 +1910,61 @@ def _migrate_v80_filler_conditionals_to_rows(conn: sqlite3.Connection) -> None:
             "[MIGRATE v80] Converted %d filler conditional(s) to condition rows",
             converted,
         )
+
+
+def _migrate_v81_seed_sports_event_category(conn: sqlite3.Connection) -> None:
+    """v81: append 'Sports event' to every template's event categories (#423).
+
+    'Sports event' is the Gracenote-standard genre string guide clients key
+    on; it becomes a seeded default alongside 'Sports' (user decision,
+    2026-07-13). Normalizes our own historical starter variants ('Sports
+    Event', 'Sporting Event') to the canonical string in place, appends
+    when absent, and never removes or reorders anything else — idempotent
+    and safe on user lists. Filler categories (#199, independent) untouched.
+    """
+    try:
+        rows = conn.execute("SELECT id, xmltv_categories FROM templates").fetchall()
+    except sqlite3.OperationalError as e:
+        logger.warning("[MIGRATE v81] category seed skipped: %s", e)
+        return
+
+    # Our own historical starter seeds used two variants of the same intent
+    # ("Sports Event" on team starters, "Sporting Event" on event starters).
+    # Normalize those to the canonical Gracenote string in place — they're
+    # our strings, not user data. Anything else is left untouched.
+    _OUR_VARIANTS = {"sports event", "sporting event"}
+
+    seeded = 0
+    for row in rows:
+        try:
+            cats = json.loads(row["xmltv_categories"] or "[]")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(cats, list):
+            continue
+
+        changed = False
+        normalized: list = []
+        for c in cats:
+            if isinstance(c, str) and c.strip().lower() in _OUR_VARIANTS:
+                if "Sports event" not in normalized:
+                    if c != "Sports event":
+                        changed = True
+                    normalized.append("Sports event")
+                else:
+                    changed = True  # collapse duplicate variants
+            else:
+                normalized.append(c)
+        if "Sports event" not in normalized:
+            normalized.append("Sports event")
+            changed = True
+
+        if changed:
+            conn.execute(
+                "UPDATE templates SET xmltv_categories = ? WHERE id = ?",
+                (json.dumps(normalized), row["id"]),
+            )
+            seeded += 1
+
+    if seeded:
+        logger.info("[MIGRATE v81] Seeded 'Sports event' into %d template(s)", seeded)
