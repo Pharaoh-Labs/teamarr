@@ -241,6 +241,14 @@ class TemplateCreate(BaseModel):
     idle_conditional: ConditionalContent | None = None
     idle_offseason: IdleOffseasonContent | None = None
 
+    # Filler condition rows (#420, epic cajd) — same row shape as
+    # conditional_descriptions, evaluated against the register's reference
+    # game (pregame → next, postgame/idle → last). Replace the legacy
+    # *_conditional dicts above (still accepted until the cajd.4 UI lands).
+    pregame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    postgame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    idle_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+
     # Conditional descriptions
     conditional_descriptions: list[ConditionalDescriptionEntry] | None = None
 
@@ -278,6 +286,14 @@ class TemplateUpdate(BaseModel):
     idle_content: FillerFallback | None = None
     idle_conditional: ConditionalContent | None = None
     idle_offseason: IdleOffseasonContent | None = None
+
+    # Filler condition rows (#420, epic cajd) — same row shape as
+    # conditional_descriptions, evaluated against the register's reference
+    # game (pregame → next, postgame/idle → last). Replace the legacy
+    # *_conditional dicts above (still accepted until the cajd.4 UI lands).
+    pregame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    postgame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    idle_conditional_rows: list[ConditionalDescriptionEntry] | None = None
 
     # Conditional descriptions
     conditional_descriptions: list[ConditionalDescriptionEntry] | None = None
@@ -327,6 +343,9 @@ class TemplateFullResponse(TemplateResponse):
     idle_content: dict | None = None
     idle_conditional: dict | None = None
     idle_offseason: dict | None = None
+    pregame_conditional_rows: list[dict] | None = None
+    postgame_conditional_rows: list[dict] | None = None
+    idle_conditional_rows: list[dict] | None = None
     conditional_descriptions: list[dict] | None = None
     event_channel_name: str | None = None
     event_channel_logo_url: str | None = None

@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING, Any
 
 from teamarr.core import TemplateConfig
 from teamarr.core.filler_types import (
-    ConditionalFillerTemplate,
     FillerConfig,
     FillerTemplate,
     OffseasonFillerTemplate,
+    legacy_conditional_to_rows,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,6 +134,14 @@ class Template:
         default_factory=lambda: {"enabled": False, "subtitle": None, "description": None}
     )
 
+    # Filler condition rows (#420, epic cajd) — hehg.2 row shape, evaluated
+    # against the register's reference game. Replace the legacy *_conditional
+    # dicts above (kept for rollback/UI until cajd.4; no longer read by
+    # generation except as a config-build fallback when rows are empty).
+    pregame_conditional_rows: list[dict] = field(default_factory=list)
+    postgame_conditional_rows: list[dict] = field(default_factory=list)
+    idle_conditional_rows: list[dict] = field(default_factory=list)
+
     # Conditional descriptions
     conditional_descriptions: list[dict] = field(default_factory=list)
 
@@ -223,6 +231,9 @@ def _row_to_template(row: Row) -> Template:
         idle_offseason=_parse_json(
             row["idle_offseason"], {"enabled": False, "subtitle": None, "description": None}
         ),
+        pregame_conditional_rows=_parse_json(row["pregame_conditional_rows"], []),
+        postgame_conditional_rows=_parse_json(row["postgame_conditional_rows"], []),
+        idle_conditional_rows=_parse_json(row["idle_conditional_rows"], []),
         conditional_descriptions=_parse_json(row["conditional_descriptions"], []),
         event_channel_name=row["event_channel_name"],
         event_channel_logo_url=row["event_channel_logo_url"],
@@ -435,6 +446,9 @@ def create_template(
         "idle_content",
         "idle_conditional",
         "idle_offseason",
+        "pregame_conditional_rows",
+        "postgame_conditional_rows",
+        "idle_conditional_rows",
         "conditional_descriptions",
     }
 
@@ -493,6 +507,9 @@ def update_template(conn: Connection, template_id: int, **kwargs) -> bool:
         "idle_content",
         "idle_conditional",
         "idle_offseason",
+        "pregame_conditional_rows",
+        "postgame_conditional_rows",
+        "idle_conditional_rows",
         "conditional_descriptions",
     }
 
@@ -559,12 +576,13 @@ def template_to_filler_config(template: Template) -> FillerConfig:
 
     # Build pregame template from fallback (no hardcoded defaults - schema provides them)
     pregame_fb = template.pregame_fallback or {}
+    pregame_fallback_desc = pregame_fb.get("description_fallback")
     pregame_template = FillerTemplate(
         title=pregame_fb.get("title", ""),
         subtitle=pregame_fb.get("subtitle"),
         description=pregame_fb.get("description", ""),
         art_url=pregame_fb.get("art_url"),
-        description_fallback=pregame_fb.get("description_fallback"),
+        description_fallbacks=[pregame_fallback_desc] if pregame_fallback_desc else [],
     )
 
     # Build postgame template from fallback (no hardcoded defaults - schema provides them)
@@ -576,18 +594,6 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         art_url=postgame_fb.get("art_url"),
     )
 
-    # Postgame conditional
-    pg_cond = template.postgame_conditional or {}
-    postgame_conditional = ConditionalFillerTemplate(
-        enabled=pg_cond.get("enabled", False),
-        title_final=pg_cond.get("title_final"),
-        title_not_final=pg_cond.get("title_not_final"),
-        subtitle_final=pg_cond.get("subtitle_final"),
-        subtitle_not_final=pg_cond.get("subtitle_not_final"),
-        description_final=pg_cond.get("description_final"),
-        description_not_final=pg_cond.get("description_not_final"),
-    )
-
     # Build idle template (no hardcoded defaults - schema provides them)
     idle_ct = template.idle_content or {}
     idle_template = FillerTemplate(
@@ -597,16 +603,14 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         art_url=idle_ct.get("art_url"),
     )
 
-    # Idle conditional
-    idle_cond = template.idle_conditional or {}
-    idle_conditional = ConditionalFillerTemplate(
-        enabled=idle_cond.get("enabled", False),
-        title_final=idle_cond.get("title_final"),
-        title_not_final=idle_cond.get("title_not_final"),
-        subtitle_final=idle_cond.get("subtitle_final"),
-        subtitle_not_final=idle_cond.get("subtitle_not_final"),
-        description_final=idle_cond.get("description_final"),
-        description_not_final=idle_cond.get("description_not_final"),
+    # Condition rows per register (#420). Empty rows fall back to converting
+    # the legacy final/not-final conditional in memory, so conditionals
+    # authored through the pre-cajd.4 UI (after v80 already ran) still work.
+    postgame_rows = template.postgame_conditional_rows or legacy_conditional_to_rows(
+        template.postgame_conditional
+    )
+    idle_rows = template.idle_conditional_rows or legacy_conditional_to_rows(
+        template.idle_conditional
     )
 
     # Idle offseason
@@ -628,12 +632,13 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         pregame_template=pregame_template,
         postgame_enabled=template.postgame_enabled,
         postgame_template=postgame_template,
-        postgame_conditional=postgame_conditional,
         idle_enabled=template.idle_enabled,
         idle_template=idle_template,
-        idle_conditional=idle_conditional,
         idle_offseason=idle_offseason,
         xmltv_categories=filler_categories,
+        pregame_rows=template.pregame_conditional_rows or [],
+        postgame_rows=postgame_rows,
+        idle_rows=idle_rows,
     )
 
 

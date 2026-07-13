@@ -15,16 +15,17 @@ Design principles:
 """
 
 import logging
+from dataclasses import replace as dc_replace
 from datetime import date as date_type
 from datetime import datetime, timedelta
 
 from teamarr.consumers.event_epg import POSTPONED_LABEL, is_event_postponed
 from teamarr.core import Event, Programme, TeamStats
 from teamarr.services import SportsDataService
+from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.event_status import is_event_final
 from teamarr.utilities.sports import get_sport_duration, get_sport_from_league
 from teamarr.utilities.time_blocks import create_filler_chunks, crosses_midnight
 from teamarr.utilities.tz import now_user, to_user_tz
@@ -457,12 +458,12 @@ class FillerGenerator:
         if not chunks:
             return []
 
-        # Get template for this filler type
-        template = self._get_filler_template(
+        # Get template for this filler type (condition rows evaluated here)
+        template = self._select_register_template(
             filler_type=filler_type,
             config=config,
+            context=context,
             is_offseason=is_offseason,
-            last_event=last_event,
         )
 
         # Determine if we should prepend "Postponed: " label
@@ -479,13 +480,16 @@ class FillerGenerator:
         for chunk_start, chunk_end in chunks:
             # Resolve templates
             title = self._resolver.resolve(template.title, context)
-            description = ""
-            if template.description:
-                description = self._resolver.resolve(template.description, context)
             # Provider-copy primaries (e.g. {game_recap.last}) may resolve
-            # empty before the copy exists — fall through to constructed text.
-            if not description.strip() and template.description_fallback:
-                description = self._resolver.resolve(template.description_fallback, context)
+            # empty before the copy exists — walk the cascade until one
+            # renders non-empty (winning row → other matching rows → base).
+            description = ""
+            for candidate in (template.description, *template.description_fallbacks):
+                if not candidate:
+                    continue
+                description = self._resolver.resolve(candidate, context)
+                if description.strip():
+                    break
             subtitle = None
             if template.subtitle:
                 subtitle = self._resolver.resolve(template.subtitle, context)
@@ -533,52 +537,33 @@ class FillerGenerator:
 
         return programmes
 
-    def _get_filler_template(
+    def _select_register_template(
         self,
         filler_type: FillerType,
         config: FillerConfig,
+        context: TemplateContext,
         is_offseason: bool = False,
-        last_event: Event | None = None,
     ) -> FillerTemplate:
-        """Get appropriate template based on filler type and conditions."""
+        """Select the register's template, applying condition rows (#420).
+
+        Rows evaluate against the register's reference game — pregame →
+        ``context.next_game``, postgame/idle → ``context.last_game`` — with
+        per-field highest-priority-match-wins semantics (hehg.2). Fields no
+        matching row sets fall to the base register. The description keeps
+        its cascade-on-empty (tvnk.14, #329): winning row → other matching
+        rows by priority → base register text.
+        """
         if filler_type == FillerType.PREGAME:
-            return config.pregame_template
-
+            base, rows, game_ctx = config.pregame_template, config.pregame_rows, context.next_game
         elif filler_type == FillerType.POSTGAME:
-            # Check for conditional postgame template. Precedence (tvnk.14,
-            # #329): the enabled conditional's status-matched text wins over
-            # the postgame fallback, but a description that resolves empty at
-            # render time falls through to the fallback description.
-            if config.postgame_conditional.enabled and last_event:
-                is_final = self._check_event_final(last_event)
-                cond = config.postgame_conditional
-                base = config.postgame_template
-
-                # Select conditional values based on game final status
-                # Fall back to base template if conditional not set
-                if is_final:
-                    title = cond.title_final or base.title
-                    subtitle = cond.subtitle_final or base.subtitle
-                    description = cond.description_final or base.description
-                else:
-                    title = cond.title_not_final or base.title
-                    subtitle = cond.subtitle_not_final or base.subtitle
-                    description = cond.description_not_final or base.description
-
-                # Only return conditional template if at least one field differs
-                if (title != base.title or subtitle != base.subtitle
-                        or description != base.description):
-                    return FillerTemplate(
-                        title=title,
-                        subtitle=subtitle,
-                        description=description,
-                        art_url=base.art_url,
-                        description_fallback=base.description,
-                    )
-            return config.postgame_template
-
+            base, rows, game_ctx = (
+                config.postgame_template,
+                config.postgame_rows,
+                context.last_game,
+            )
         else:  # IDLE
-            # Check for offseason template (no games in schedule_days_ahead lookahead)
+            # Offseason register stays separate — it's a no-game state;
+            # condition rows need a reference game to evaluate.
             if is_offseason and config.idle_offseason.enabled:
                 return FillerTemplate(
                     title=config.idle_offseason.title or config.idle_template.title,
@@ -586,51 +571,39 @@ class FillerGenerator:
                     description=config.idle_offseason.description,
                     art_url=config.idle_template.art_url,
                 )
+            base, rows, game_ctx = config.idle_template, config.idle_rows, context.last_game
 
-            # Check for conditional idle template
-            if config.idle_conditional.enabled and last_event:
-                is_final = self._check_event_final(last_event)
-                cond = config.idle_conditional
-                base = config.idle_template
+        if not rows:
+            return base
 
-                # Select conditional values based on game final status
-                # Fall back to base template if conditional not set
-                if is_final:
-                    title = cond.title_final or base.title
-                    subtitle = cond.subtitle_final or base.subtitle
-                    description = cond.description_final or base.description
-                else:
-                    title = cond.title_not_final or base.title
-                    subtitle = cond.subtitle_not_final or base.subtitle
-                    description = cond.description_not_final or base.description
+        # Finality must use refreshed status: postgame/idle overlay a fresh
+        # provider fetch onto the reference game before evaluation (matches
+        # the legacy _check_event_final behavior). Pregame's reference is the
+        # upcoming game — never final, not worth a summary call per filler run.
+        if filler_type != FillerType.PREGAME and game_ctx and game_ctx.event:
+            game_ctx = dc_replace(
+                game_ctx, event=self._service.refresh_event_status(game_ctx.event)
+            )
 
-                # Only return conditional template if at least one field differs
-                if (title != base.title or subtitle != base.subtitle
-                        or description != base.description):
-                    return FillerTemplate(
-                        title=title,
-                        subtitle=subtitle,
-                        description=description,
-                        art_url=base.art_url,
-                        description_fallback=base.description,
-                    )
+        fields, runner_up_descriptions = get_condition_selector().select_filler_fields(
+            rows, context, game_ctx
+        )
+        if not fields:
+            return base
 
-            return config.idle_template
+        description = fields.get("description") or base.description
+        fallbacks = list(runner_up_descriptions) if "description" in fields else []
+        if "description" in fields and base.description:
+            fallbacks.append(base.description)
+        fallbacks.extend(base.description_fallbacks)
 
-    def _check_event_final(self, event: Event) -> bool:
-        """Check if event is final, refreshing status from provider if needed.
-
-        Fetches fresh status via summary endpoint to get accurate final detection.
-        """
-        if not event:
-            return False
-
-        # Refresh event status from provider for accurate final detection
-        refreshed = self._service.refresh_event_status(event)
-
-        # Use unified final status check
-
-        return is_event_final(refreshed)
+        return FillerTemplate(
+            title=fields.get("title") or base.title,
+            subtitle=fields.get("subtitle") or base.subtitle,
+            description=description,
+            art_url=base.art_url,
+            description_fallbacks=fallbacks,
+        )
 
     def _build_filler_context(
         self,

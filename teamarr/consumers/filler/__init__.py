@@ -18,7 +18,6 @@ from .event_filler import (
 )
 from .generator import FillerGenerator
 from .types import (
-    ConditionalFillerTemplate,
     FillerConfig,
     FillerOptions,
     FillerTemplate,
@@ -40,6 +39,5 @@ __all__ = [
     # Shared types
     "FillerTemplate",
     "FillerType",
-    "ConditionalFillerTemplate",
     "OffseasonFillerTemplate",
 ]
