@@ -22,6 +22,8 @@ Condition Types:
 - is_neutral_site: Game is at a neutral site (bowls, CFP/NCAA tournament)
 - is_national_broadcast: National TV broadcast
 - has_odds: Betting odds available
+- is_final, is_not_final: Reference game's final status (#420 filler rows;
+  the disjoint pair keeps migrated final/not-final per-field semantics exact)
 - has_recap: Provider recap headline available (postgame)
 - has_preview: Provider preview blurb available (same-day pregame)
 - has_structured_preview: Recent-form data available (days-ahead)
@@ -56,6 +58,7 @@ from typing import Any
 
 from teamarr.core import SEASON_POSTSEASON, SEASON_PRESEASON
 from teamarr.templates.context import GameContext, TemplateContext
+from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +277,36 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if betting odds are available."""
         return game_ctx.odds is not None
+
+    # =========================================================================
+    # Game state (#420 — filler condition rows)
+    # =========================================================================
+
+    def _eval_is_final(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Reference game exists and is final.
+
+        On the filler path the reference game is the register's game (pregame
+        -> next, postgame/idle -> last), status-refreshed by the generator
+        before evaluation.
+        """
+        event = game_ctx.event
+        return bool(event) and is_event_final(event)
+
+    def _eval_is_not_final(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """Reference game exists and is NOT final.
+
+        Deliberately a separate evaluator rather than negation-of-is_final:
+        both return False when there is no reference game, and the disjoint
+        pair lets migrated final/not-final variants keep exact per-field
+        fall-to-base semantics (#420) — an `always` row would wrongly donate
+        its fields to final games.
+        """
+        event = game_ctx.event
+        return bool(event) and not is_event_final(event)
 
     # =========================================================================
     # Provider copy availability (ESPN recaps/previews, epic tvnk #329)
