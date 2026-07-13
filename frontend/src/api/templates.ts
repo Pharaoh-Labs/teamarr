@@ -231,6 +231,18 @@ export interface TemplatePreviewRequest {
   // client cache rendered results per unique template text.
   fields: Record<string, string>
   conditional_descriptions?: ConditionalDescription[] | null
+  // Filler condition rows keyed by register (pregame/postgame/idle), #428.
+  filler_conditional_rows?: Record<string, ConditionalDescription[]> | null
+}
+
+// What a filler register's condition rows produce for the preview event
+// (#428). rendered_description already walks the row cascade; null means the
+// register's base description renders. `fired` lists row-won fields.
+export interface FillerRegisterPreview {
+  rendered_description: string | null
+  rendered_title: string | null
+  rendered_subtitle: string | null
+  fired: string[]
 }
 
 export interface TemplatePreviewResponse {
@@ -238,6 +250,7 @@ export interface TemplatePreviewResponse {
   league: string | null
   fields: Record<string, string>
   conditional: ConditionalPreview | null
+  filler_conditional?: Record<string, FillerRegisterPreview> | null
 }
 
 export async function previewTemplate(

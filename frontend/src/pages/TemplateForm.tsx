@@ -123,6 +123,12 @@ export function TemplateForm() {
     // fields, so collectTemplateStrings can't see them.
     templates: [...collectTemplateStrings(formData), "{game_time}", "{team_name}"],
     conditionalDescriptions: formData.conditional_descriptions ?? [],
+    // Filler rows per register (#428) — the timeline shows the winning row.
+    fillerRows: {
+      pregame: formData.pregame_conditional_rows ?? [],
+      postgame: formData.postgame_conditional_rows ?? [],
+      idle: formData.idle_conditional_rows ?? [],
+    },
     league: previewLeague,
     live: liveRequested,
     templateType: formData.template_type === "event" ? "event" : "team",
@@ -163,22 +169,44 @@ export function TemplateForm() {
       : formData.game_duration_mode === "default"
         ? "global default duration"
         : "per-sport duration"
-  const timelinePregame = {
-    enabled: formData.pregame_enabled ?? true,
-    title: resolveTemplate(formData.pregame_fallback?.title || ""),
-    description: resolveTemplate(formData.pregame_fallback?.description || ""),
+  // Filler blocks mirror generation's row precedence (#428): a register's
+  // winning condition row beats the base content per field; the server's
+  // rendered_description already walked the cascade (row → next matching row),
+  // so null means the base description renders.
+  const fillerCond = serverPreview.fillerConditional
+  const fillerBlock = (
+    register: "pregame" | "postgame" | "idle",
+    enabled: boolean,
+    baseTitle: string,
+    baseDescription: string,
+  ) => {
+    const won = fillerCond?.[register]
+    return {
+      enabled,
+      title: won?.rendered_title ?? resolveTemplate(baseTitle),
+      description: won?.rendered_description ?? resolveTemplate(baseDescription),
+      conditional: (won?.fired.length ?? 0) > 0,
+    }
   }
-  const timelinePostgame = {
-    enabled: formData.postgame_enabled ?? true,
-    title: resolveTemplate(formData.postgame_fallback?.title || ""),
-    description: resolveTemplate(formData.postgame_fallback?.description || ""),
-  }
+  const timelinePregame = fillerBlock(
+    "pregame",
+    formData.pregame_enabled ?? true,
+    formData.pregame_fallback?.title || "",
+    formData.pregame_fallback?.description || "",
+  )
+  const timelinePostgame = fillerBlock(
+    "postgame",
+    formData.postgame_enabled ?? true,
+    formData.postgame_fallback?.title || "",
+    formData.postgame_fallback?.description || "",
+  )
   const timelineIdle = formData.template_type === "team"
-    ? {
-        enabled: formData.idle_enabled ?? true,
-        title: resolveTemplate(formData.idle_content?.title || ""),
-        description: resolveTemplate(formData.idle_content?.description || ""),
-      }
+    ? fillerBlock(
+        "idle",
+        formData.idle_enabled ?? true,
+        formData.idle_content?.title || "",
+        formData.idle_content?.description || "",
+      )
     : null
   // Channel cell: event channels are named by the template's own field; team
   // channels carry the team's name.

@@ -38,16 +38,17 @@ def _team(name, abbrev, id_="1"):
     )
 
 
-def _ctx(is_home=True):
+def _ctx(is_home=True, **event_kw):
     home = _team("Boston Celtics", "BOS", "1")
     away = _team("Detroit Pistons", "DET", "2")
     event = Event(
         id="e1", provider="espn", name="Detroit Pistons at Boston Celtics",
         short_name="DET @ BOS",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=home, away_team=away, status=EventStatus(state="pre"),
+        home_team=home, away_team=away,
         league="nba", sport="basketball",
         venue=Venue(name="TD Garden", city="Boston", state="MA"),
+        **{"status": EventStatus(state="pre"), **event_kw},
     )
     team = home if is_home else away
     game_ctx = GameContext(event=event, is_home=is_home)
@@ -241,3 +242,88 @@ class TestPreviewEndpoint:
         assert data["fields"]["subtitle"]
         assert "{away_team}" not in data["fields"]["subtitle"]
         assert data["conditional"] is None  # none requested
+
+
+# --- filler condition rows in the preview (#428) ------------------------------
+
+
+FILLER_ROWS = {
+    "postgame": [
+        {"condition": "has_recap", "priority": 10, "template": "{game_recap}"},
+        {"condition": "is_not_final", "priority": 50, "template": "Still going."},
+    ],
+}
+
+
+class TestFillerPreview:
+    def test_recap_row_wins_for_final_game_with_recap(self, monkeypatch):
+        from teamarr.api.routes import templates as t
+
+        ctx = _ctx(status=EventStatus(state="post"), game_recap="Celtics hold off Pistons")
+        monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
+        resp = client.post(
+            "/api/v1/templates/preview",
+            json={"league": "nba", "live": True, "fields": {},
+                  "filler_conditional_rows": FILLER_ROWS},
+        )
+        assert resp.status_code == 200
+        reg = resp.json()["filler_conditional"]["postgame"]
+        assert reg["rendered_description"] == "Celtics hold off Pistons"
+        assert "description" in reg["fired"]
+
+    def test_final_without_recap_falls_to_base(self, monkeypatch):
+        """No recap and game final: neither disjoint row produces text —
+        rendered_description is null so the base register renders."""
+        from teamarr.api.routes import templates as t
+
+        ctx = _ctx(status=EventStatus(state="post"))
+        monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
+        resp = client.post(
+            "/api/v1/templates/preview",
+            json={"league": "nba", "live": True, "fields": {},
+                  "filler_conditional_rows": FILLER_ROWS},
+        )
+        reg = resp.json()["filler_conditional"]["postgame"]
+        assert reg["rendered_description"] is None
+        assert reg["fired"] == []
+
+    def test_in_progress_row_wins_while_running(self, monkeypatch):
+        from teamarr.api.routes import templates as t
+
+        ctx = _ctx(status=EventStatus(state="in"))
+        monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
+        resp = client.post(
+            "/api/v1/templates/preview",
+            json={"league": "nba", "live": True, "fields": {},
+                  "filler_conditional_rows": FILLER_ROWS},
+        )
+        reg = resp.json()["filler_conditional"]["postgame"]
+        assert reg["rendered_description"] == "Still going."
+
+    def test_title_override_reported(self, monkeypatch):
+        from teamarr.api.routes import templates as t
+
+        ctx = _ctx(status=EventStatus(state="post"))
+        monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
+        rows = {"idle": [
+            {"condition": "is_final", "priority": 50,
+             "template": "Final recap line", "title": "After: {home_team}"},
+        ]}
+        resp = client.post(
+            "/api/v1/templates/preview",
+            json={"league": "nba", "live": True, "fields": {},
+                  "filler_conditional_rows": rows},
+        )
+        reg = resp.json()["filler_conditional"]["idle"]
+        assert reg["rendered_title"] == "After: Boston Celtics"
+        assert reg["rendered_description"] == "Final recap line"
+        assert set(reg["fired"]) == {"title", "description"}
+
+    def test_empty_rows_register_omitted(self):
+        resp = client.post(
+            "/api/v1/templates/preview",
+            json={"live": False, "fields": {},
+                  "filler_conditional_rows": {"pregame": [], "postgame": []}},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["filler_conditional"] == {}
