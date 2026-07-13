@@ -25,6 +25,9 @@ import {
   DEFAULT_FORM,
   DEFAULT_SAMPLE_DATA,
   createResolver,
+  seedPostgameRows,
+  isUntouchedPostgameSeed,
+  legacyConditionalToRows,
 } from "./template-form/constants"
 import { useServerPreview, collectTemplateStrings } from "./template-form/useServerPreview"
 import { VariableSidebar } from "./template-form/VariableSidebar"
@@ -233,11 +236,24 @@ export function TemplateForm() {
       pregame_fallback: mergeFillerContent(template.pregame_fallback, DEFAULT_PREGAME),
       postgame_enabled: template.postgame_enabled ?? true,
       postgame_fallback: mergeFillerContent(template.postgame_fallback, DEFAULT_POSTGAME),
-      postgame_conditional: template.postgame_conditional || { enabled: true, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
+      // Legacy final/not-final dicts are display-converted to condition rows
+      // below (#420) and always saved back neutralized — rows are the
+      // mechanism the generator reads.
+      postgame_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
       idle_enabled: template.idle_enabled ?? true,
       idle_content: mergeFillerContent(template.idle_content, DEFAULT_IDLE),
-      idle_conditional: template.idle_conditional || { enabled: true, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
+      idle_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
       idle_offseason: template.idle_offseason || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
+      // Empty rows + an enabled legacy dict = a template authored in the
+      // pre-#420 UI: show (and on save persist) the converted rows the
+      // generator's legacy shim already uses.
+      pregame_conditional_rows: template.pregame_conditional_rows || [],
+      postgame_conditional_rows: template.postgame_conditional_rows?.length
+        ? template.postgame_conditional_rows
+        : legacyConditionalToRows(template.postgame_conditional),
+      idle_conditional_rows: template.idle_conditional_rows?.length
+        ? template.idle_conditional_rows
+        : legacyConditionalToRows(template.idle_conditional),
       conditional_descriptions: template.conditional_descriptions || [],
       event_channel_name: template.event_channel_name,
       event_channel_logo_url: template.event_channel_logo_url,
@@ -408,7 +424,15 @@ export function TemplateForm() {
             type="button"
             onClick={() => {
               const nextIsTeam = !isTeamTemplate
-              setFormData((prev) => ({ ...prev, template_type: nextIsTeam ? "team" : "event" }))
+              setFormData((prev) => ({
+                ...prev,
+                template_type: nextIsTeam ? "team" : "event",
+                // Re-seed the recap row's suffix flavor (team reads the last
+                // game via .last) — only while it's still the untouched seed.
+                postgame_conditional_rows: isUntouchedPostgameSeed(prev.postgame_conditional_rows)
+                  ? seedPostgameRows(nextIsTeam)
+                  : prev.postgame_conditional_rows,
+              }))
             }}
             className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >

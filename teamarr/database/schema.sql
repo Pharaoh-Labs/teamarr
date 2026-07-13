@@ -71,8 +71,12 @@ CREATE TABLE IF NOT EXISTS templates (
     -- the hehg.2 shape ({condition, condition_value, template, title?, subtitle?,
     -- priority, label}). Replace the legacy final/not-final switch columns above,
     -- which stay in place unread (v80 migration converts; rollback-safe).
+    -- Postgame default mirrors the new-template form seed (cajd.4/cajd.6):
+    -- recap-when-published over the constructed base. Existing DBs keep their
+    -- '[]' default (reconciliation never alters existing columns) — the form
+    -- always sends the fields, so the default only covers column-less INSERTs.
     pregame_conditional_rows JSON DEFAULT '[]',
-    postgame_conditional_rows JSON DEFAULT '[]',
+    postgame_conditional_rows JSON DEFAULT '[{"condition": "has_recap", "template": "{game_recap.last}", "priority": 10, "label": "Recap (provider)"}]',
     idle_conditional_rows JSON DEFAULT '[]',
     -- Offseason register seeded enabled (#418): with it off, idle content
     -- renders {*.next} literals into real guides once a team has no next game.

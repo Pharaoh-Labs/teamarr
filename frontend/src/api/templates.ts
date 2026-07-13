@@ -103,6 +103,13 @@ export interface Template {
   idle_conditional: ConditionalSettings | null
   idle_offseason: IdleOffseasonSettings | null
 
+  // Filler condition rows (#420) — same shape as conditional_descriptions,
+  // evaluated against the register's reference game (pregame → next game,
+  // postgame/idle → last game). Replace the legacy *_conditional dicts.
+  pregame_conditional_rows: ConditionalDescription[] | null
+  postgame_conditional_rows: ConditionalDescription[] | null
+  idle_conditional_rows: ConditionalDescription[] | null
+
   // Conditional descriptions
   conditional_descriptions: ConditionalDescription[] | null
 
@@ -154,6 +161,11 @@ export interface TemplateCreate {
   idle_content?: FillerContent | null
   idle_conditional?: ConditionalSettings | null
   idle_offseason?: IdleOffseasonSettings | null
+
+  // Filler condition rows (#420)
+  pregame_conditional_rows?: ConditionalDescription[] | null
+  postgame_conditional_rows?: ConditionalDescription[] | null
+  idle_conditional_rows?: ConditionalDescription[] | null
 
   // Conditional descriptions
   conditional_descriptions?: ConditionalDescription[] | null
