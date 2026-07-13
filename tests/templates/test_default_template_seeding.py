@@ -464,8 +464,8 @@ def test_soccer_idle_generation_healed(db_conn):
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
     spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Soccer Team (Starter)")
-    g3 = _prior_generations("Soccer Team (Starter)", spec)[0]  # pre-#369 idle
-    assert "Game" in g3["idle_content"]["title"]
+    gens = _prior_generations("Soccer Team (Starter)", spec)
+    g3 = next(g for g in gens if "Game" in g["idle_content"]["title"])  # pre-#369 idle
     tid = create_template(db_conn, **g3)
 
     seed_default_templates(db_conn)
@@ -513,6 +513,77 @@ def test_desc_edited_retired_row_not_deleted(db_conn):
 
     seed_default_templates(db_conn)
     assert "No-Abbrev Event" in _names(db_conn)  # edited row survives
+
+
+def test_pre_420_row_with_v80_migrated_rows_heals_to_native_rows(db_conn):
+    """#420 cajd.6: an unedited starter as UPGRADED installs carry it —
+    enabled legacy conditionals plus the v80-converted rows — heals in
+    place to the native rows spec (legacy neutralized)."""
+    from teamarr.database.default_templates import _prior_generations
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Team (Starter)")
+    g4_migrated = _prior_generations("Default Team (Starter)", spec)[0]
+    assert g4_migrated["postgame_conditional"]["enabled"] is True
+    assert g4_migrated["postgame_conditional_rows"][0]["label"] == "Final (migrated)"
+    tid = create_template(db_conn, **g4_migrated)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Default Team (Starter)"]
+    assert row.id == tid  # healed in place
+    assert row.postgame_conditional["enabled"] is False
+    assert row.postgame_conditional_rows[0]["condition"] == "has_recap"
+    assert {r["condition"] for r in row.idle_conditional_rows} == {"is_final", "is_not_final"}
+
+
+def test_pre_420_row_with_empty_rows_heals_to_native_rows(db_conn):
+    """#420 cajd.6: a starter created in the post-v80/pre-#420 window
+    (enabled legacy conditionals, empty rows columns) also heals."""
+    from teamarr.database.default_templates import _revert_filler_rows
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Event (Starter)")
+    g4_empty = _revert_filler_rows(spec)
+    assert g4_empty["postgame_conditional_rows"] == []
+    tid = create_template(db_conn, **g4_empty)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Default Event (Starter)"]
+    assert row.id == tid
+    assert row.postgame_conditional_rows[0]["condition"] == "has_recap"
+    assert row.postgame_conditional["enabled"] is False
+
+
+def test_user_edited_filler_rows_block_healing(db_conn):
+    """#420 cajd.6: rows columns are part of the deep fingerprint — a user
+    edit to a filler condition row makes the template no generation's and
+    healing leaves it alone."""
+    from teamarr.database.default_templates import _prior_generations
+    from teamarr.database.templates import update_template
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Team (Starter)")
+    g4_migrated = _prior_generations("Default Team (Starter)", spec)[0]
+    tid = create_template(db_conn, **g4_migrated)
+    update_template(
+        db_conn,
+        tid,
+        postgame_conditional_rows=[
+            {"condition": "is_final", "condition_value": None, "priority": 50,
+             "template": "My custom final text", "label": "Mine"}
+        ],
+    )
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Default Team (Starter)"]
+    assert row.id == tid
+    assert row.postgame_conditional_rows[0]["template"] == "My custom final text"
 
 
 def test_abbrev_variables_fall_back_without_abbreviation():

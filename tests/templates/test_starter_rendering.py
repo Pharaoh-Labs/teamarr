@@ -223,12 +223,14 @@ def _text_surfaces(spec):
         for key, val in (spec.get(section) or {}).items():
             if key != "art_url" and isinstance(val, str) and val:
                 yield f"{section}.{key}", val
-    for section in ("postgame_conditional", "idle_conditional"):
-        block = spec.get(section) or {}
-        if block.get("enabled"):
-            for key in ("description_final", "description_not_final"):
-                if block.get(key):
-                    yield f"{section}.{key}", block[key]
+    for section in (
+        "pregame_conditional_rows",
+        "postgame_conditional_rows",
+        "idle_conditional_rows",
+    ):
+        for i, row in enumerate(spec.get(section) or []):
+            if row.get("template"):
+                yield f"{section}[{i}] ({row.get('label')})", row["template"]
 
 
 # --- every surface of every starter renders clean --------------------------
@@ -404,7 +406,10 @@ def test_postgame_not_final_reads_coherently(resolver):
     """Postponed/suspended hardening: the not-final line names both sides."""
     spec = SPECS["Default Team (Starter)"]
     ctx = _nba_ctx()
-    out = resolver.resolve(spec["postgame_conditional"]["description_not_final"], ctx)
+    not_final = next(
+        r for r in spec["postgame_conditional_rows"] if r["condition"] == "is_not_final"
+    )
+    out = resolver.resolve(not_final["template"], ctx)
     assert out.startswith("The game between the Boston Celtics and the Detroit Pistons")
 
 
@@ -469,13 +474,20 @@ def test_soccer_idle_uses_match_register(resolver):
     ctx = _soccer_club_ctx()
     title = resolver.resolve(spec["idle_content"]["title"], ctx)
     assert title == "No Chelsea Match Today"
-    for section in ("idle_content", "idle_conditional", "idle_offseason"):
-        for key, val in spec[section].items():
-            if isinstance(val, str):
-                prose = re.sub(r"\{[^}]+\}", "", val)  # 'game' inside {vars} is fine
-                assert "game" not in prose.lower(), (
-                    f"{section}.{key} uses the US 'game' register: {val!r}"
-                )
+    surfaces = [
+        (f"{section}.{key}", val)
+        for section in ("idle_content", "idle_offseason")
+        for key, val in spec[section].items()
+        if isinstance(val, str)
+    ] + [
+        (f"idle_conditional_rows[{i}]", row["template"])
+        for i, row in enumerate(spec["idle_conditional_rows"])
+    ]
+    for label, val in surfaces:
+        prose = re.sub(r"\{[^}]+\}", "", val)  # 'game' inside {vars} is fine
+        assert "game" not in prose.lower(), (
+            f"{label} uses the US 'game' register: {val!r}"
+        )
 
 
 def test_soccer_channel_name_uses_v_connector(resolver):
