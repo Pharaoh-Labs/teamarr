@@ -254,13 +254,15 @@ def test_starter_set_is_espn_copy_first():
         assert pregame["description_fallback"], spec["name"]
         assert "{game_preview" not in pregame["description_fallback"], spec["name"]
 
-        # Postgame: provider-copy primary in the conditional ({game_recap},
-        # or tennis's prose-shaped {tennis_result}); constructed fallback.
-        cond = spec["postgame_conditional"]
-        assert cond["enabled"] is True, spec["name"]
-        assert cond["description_final"].startswith(("{game_recap", "{tennis_result")), spec[
-            "name"
-        ]
+        # Postgame: provider-copy primary as a condition row (#420 —
+        # has_recap → {game_recap}, or tennis's is_final → {tennis_result});
+        # constructed base register as the fallback. Legacy columns disabled.
+        rows = spec["postgame_conditional_rows"]
+        primary = rows[0]
+        assert primary["condition"] in ("has_recap", "is_final"), spec["name"]
+        assert primary["template"].startswith(("{game_recap", "{tennis_result")), spec["name"]
+        assert any(r["condition"] == "is_not_final" for r in rows), spec["name"]
+        assert spec["postgame_conditional"]["enabled"] is False, spec["name"]
         fallback = spec["postgame_fallback"]["description"]
         assert fallback, spec["name"]
         assert "{game_recap" not in fallback, spec["name"]

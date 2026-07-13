@@ -23,9 +23,11 @@ decisions (bead tvnk.1, 2026-07-09):
   row (constructed line + recent form + series state, populates days ahead —
   tvnk.15) above the constructed default; pregame
   fillers pair a ``{game_preview}`` primary with a ``description_fallback``;
-  postgame conditionals put ``{game_recap}`` in ``description_final`` and the
-  filler render falls through to the fallback's constructed result line when
-  the recap hasn't been published.
+  postgame registers carry a ``has_recap → {game_recap}`` condition row
+  (#420, cajd.6 — fires only when the provider published one; tennis gates
+  its constructed ``{tennis_result}`` on ``is_final`` instead) over the
+  base register's constructed result line, with an ``is_not_final`` row
+  for still-running games. Legacy final/not-final columns ship disabled.
 - Per-sport-family registers (tvnk.8 synthesis): the base US-pro travel-line
   register is joined by soccer ("face" match register, article-aware _the
   vars, 'v' channel connector), college (home-led host framing with rank +
@@ -39,6 +41,18 @@ decisions (bead tvnk.1, 2026-07-09):
 
 import copy
 from sqlite3 import Connection
+
+from teamarr.core.filler_types import legacy_conditional_to_rows
+
+# Neutralized legacy filler conditional (#420, cajd.6): starters author
+# condition rows natively; the legacy columns ship disabled so the v80
+# migration (skips disabled) and the read path's legacy shim (skips when
+# rows are non-empty) can never fight the authored rows.
+_LEGACY_CONDITIONAL_OFF = {
+    "enabled": False,
+    "description_final": None,
+    "description_not_final": None,
+}
 
 # Relative art paths (z02s): prefixed with the art_base_url setting at render.
 # Variable-led values stay slash-less — a leading variable may resolve to an
@@ -165,6 +179,9 @@ _CONTENT_FIELDS = (
     "idle_content",
     "idle_conditional",
     "idle_offseason",
+    "pregame_conditional_rows",
+    "postgame_conditional_rows",
+    "idle_conditional_rows",
     "conditional_descriptions",
 )
 
@@ -225,28 +242,87 @@ def _revert_at_vs(text: str | None) -> str | None:
     return text
 
 
+# --- pre-#420 filler representation (cajd.6) -------------------------------
+
+_ROWS_TO_LEGACY = (
+    ("postgame_conditional_rows", "postgame_conditional"),
+    ("idle_conditional_rows", "idle_conditional"),
+)
+
+# v80 stamped these labels when converting enabled legacy conditionals; the
+# in-memory twin uses "(legacy)". Reconstructed generations must match what
+# real upgraded installs carry.
+_V80_LABELS = {
+    "Final (legacy)": "Final (migrated)",
+    "In progress (legacy)": "In progress (migrated)",
+}
+
+
+def _revert_filler_rows(spec: dict) -> dict:
+    """The spec's content in its pre-#420 shape: native condition rows
+    reverted to the enabled legacy final/not-final dicts those generations
+    shipped. The primary row (has_recap, or is_final for constructed-result
+    registers like tennis) maps to description_final; is_not_final maps to
+    description_not_final. Rows columns are emptied (they postdate #420)."""
+    g = copy.deepcopy(spec)
+    for rows_field, legacy_field in _ROWS_TO_LEGACY:
+        rows = {r.get("condition"): r for r in (g.get(rows_field) or [])}
+        primary = rows.get("has_recap") or rows.get("is_final")
+        not_final = rows.get("is_not_final")
+        if primary or not_final:
+            g[legacy_field] = {
+                "enabled": True,
+                "description_final": (primary or {}).get("template"),
+                "description_not_final": (not_final or {}).get("template"),
+            }
+    for f in ("pregame_conditional_rows", "postgame_conditional_rows", "idle_conditional_rows"):
+        g[f] = []
+    return g
+
+
+def _with_v80_rows(gen: dict) -> dict:
+    """A pre-#420 generation as an UPGRADED install carries it: the enabled
+    legacy conditionals plus the v80 migration's converted rows."""
+    g = copy.deepcopy(gen)
+    for rows_field, legacy_field in _ROWS_TO_LEGACY:
+        rows = legacy_conditional_to_rows(g.get(legacy_field))
+        g[rows_field] = [{**r, "label": _V80_LABELS.get(r["label"], r["label"])} for r in rows]
+    return g
+
+
 def _prior_generations(name: str, spec: dict) -> list[dict]:
     """Registered prior content generations of a set member, newest first.
 
-    G3 (#367 era, pre-#369): current minus the soccer idle overrides.
+    G4 (pre-#420 cajd.6): current content with the filler condition rows
+        reverted to the enabled legacy final/not-final conditionals.
+    G3 (#367 era, pre-#369): G4 minus the soccer idle overrides.
     G2 (#364 era, pre-#367): G3 minus neutral-site rows, marquee rows in
         the original travel/host framing, hard-coded 'at' subtitles.
     G0 (tvnk.8, pre-#364): G2 minus marquee/competition-note rows.
 
-    Generations identical to their successor are skipped (member untouched
-    by that change). Racing joined post-#364 and has no prior generations.
-    Prior TITLE variants (PRIOR_TITLE_UPGRADES) are crossed in by
-    _matches_any_generation, not here.
-    """
-    gens: list[dict] = []
+    Every pre-#420 generation is emitted in TWO rows-column variants —
+    with the v80 migration's converted rows (upgraded installs) and with
+    empty rows (rows created in the post-v80/pre-#420 window) — since real
+    rows carry one or the other.
 
-    g3 = copy.deepcopy(spec)
+    Generations identical to their predecessor are skipped (member
+    untouched by that change). Racing joined post-#364 and has no pre-G4
+    generations. Prior TITLE variants (PRIOR_TITLE_UPGRADES) are crossed
+    in by _matches_any_generation, not here.
+    """
+    legacy_chain: list[dict] = []
+
+    g4 = _revert_filler_rows(spec)
+    if g4 != spec:
+        legacy_chain.append(g4)
+
+    g3 = copy.deepcopy(g4)
     if name == "Soccer Team (Starter)":
-        base = _team_base()
+        base = _revert_filler_rows(_team_base())
         for f in ("idle_content", "idle_conditional", "idle_offseason"):
             g3[f] = base[f]  # #369 reverted: soccer idle was the base text
-    if g3 != spec:
-        gens.append(g3)
+    if g3 != g4:
+        legacy_chain.append(g3)
 
     g2 = copy.deepcopy(g3)
     g2["conditional_descriptions"] = [
@@ -261,7 +337,7 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
         if block.get("subtitle"):
             block["subtitle"] = _revert_at_vs(block["subtitle"])
     if g2 != g3:
-        gens.append(g2)
+        legacy_chain.append(g2)
 
     g0 = copy.deepcopy(g2)
     g0["conditional_descriptions"] = [
@@ -270,8 +346,12 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
         if r.get("label") not in ("Marquee note", "Competition note")
     ]
     if g0 != g2:
-        gens.append(g0)
+        legacy_chain.append(g0)
 
+    gens: list[dict] = []
+    for g in legacy_chain:
+        gens.append(_with_v80_rows(g))
+        gens.append(g)  # empty-rows variant (post-v80 window)
     return gens
 
 
@@ -337,14 +417,30 @@ def _team_base(**overrides) -> dict:
             ),
             "art_url": _ART_LAST,
         },
-        "postgame_conditional": {
-            "enabled": True,
-            "description_final": "{game_recap.last}",
-            "description_not_final": (
-                "The game between {team_name_the} and {opponent_the.last} on "
-                "{game_date.last} has not yet ended as of the last update."
-            ),
-        },
+        "postgame_conditional": dict(_LEGACY_CONDITIONAL_OFF),
+        # Native condition rows (#420, cajd.6): has_recap replaces the old
+        # is_final+{game_recap} pairing as the primary mechanism — it fires
+        # only when the provider actually published a recap (a final game
+        # without one falls straight to the constructed result line).
+        "postgame_conditional_rows": [
+            {
+                "condition": "has_recap",
+                "condition_value": None,
+                "template": "{game_recap.last}",
+                "priority": 10,
+                "label": "Recap (provider)",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "The game between {team_name_the} and {opponent_the.last} on "
+                    "{game_date.last} has not yet ended as of the last update."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
         "idle_content": {
             "title": "No {team_name} Game Today",
             "subtitle": (
@@ -353,17 +449,30 @@ def _team_base(**overrides) -> dict:
             "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}",
             "art_url": "",
         },
-        "idle_conditional": {
-            "enabled": True,
-            "description_final": (
-                "{team_name_the} {result_text.last} {opponent_the.last} "
-                "{final_score.last} {overtime_text.last} on {game_date.last}. "
-                "Next game will be with {opponent_the.next} on {game_date.next}"
-            ),
-            "description_not_final": (
-                "{team_name_the} last played against {opponent_the.last} on {game_date.last}."
-            ),
-        },
+        "idle_conditional": dict(_LEGACY_CONDITIONAL_OFF),
+        "idle_conditional_rows": [
+            {
+                "condition": "is_final",
+                "condition_value": None,
+                "template": (
+                    "{team_name_the} {result_text.last} {opponent_the.last} "
+                    "{final_score.last} {overtime_text.last} on {game_date.last}. "
+                    "Next game will be with {opponent_the.next} on {game_date.next}"
+                ),
+                "priority": 50,
+                "label": "Final",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "{team_name_the} last played against {opponent_the.last} on {game_date.last}."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
+        "pregame_conditional_rows": [],
         "idle_offseason": {
             "title_enabled": False,
             "title": None,
@@ -476,14 +585,29 @@ def _event_base(**overrides) -> dict:
             "description": "Final: {event_result}",
             "art_url": _EVENT_ART,
         },
-        "postgame_conditional": {
-            "enabled": True,
-            "description_final": "{game_recap}",
-            "description_not_final": (
-                "The game between {away_team_the} and {home_team_the} has not yet "
-                "ended as of the last update."
-            ),
-        },
+        "postgame_conditional": dict(_LEGACY_CONDITIONAL_OFF),
+        # Native condition rows (#420, cajd.6) — recap-when-published wins;
+        # a still-running game gets the in-progress line; a final game with
+        # no recap falls to the base "Final: {event_result}".
+        "postgame_conditional_rows": [
+            {
+                "condition": "has_recap",
+                "condition_value": None,
+                "template": "{game_recap}",
+                "priority": 10,
+                "label": "Recap (provider)",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "The game between {away_team_the} and {home_team_the} has not yet "
+                    "ended as of the last update."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
         "idle_content": {
             # {league}, not {team_name} — event templates have no "our team"
             # and TEAM_ONLY vars fail the event editor's validation (#354).
@@ -492,11 +616,9 @@ def _event_base(**overrides) -> dict:
             "description": "",
             "art_url": "",
         },
-        "idle_conditional": {
-            "enabled": False,
-            "description_final": "",
-            "description_not_final": "",
-        },
+        "idle_conditional": dict(_LEGACY_CONDITIONAL_OFF),
+        "idle_conditional_rows": [],
+        "pregame_conditional_rows": [],
         "idle_offseason": {
             "title_enabled": False,
             "title": None,
@@ -611,17 +733,28 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "description": "Next match: {game_date.next} at {game_time.next} vs {opponent.next}",
             "art_url": "",
         },
-        idle_conditional={
-            "enabled": True,
-            "description_final": (
-                "{team_name_the} {result_text.last} {opponent_the.last} "
-                "{final_score.last} on {game_date.last}. "
-                "Next match is against {opponent_the.next} on {game_date.next}"
-            ),
-            "description_not_final": (
-                "{team_name_the} last played {opponent_the.last} on {game_date.last}."
-            ),
-        },
+        idle_conditional_rows=[
+            {
+                "condition": "is_final",
+                "condition_value": None,
+                "template": (
+                    "{team_name_the} {result_text.last} {opponent_the.last} "
+                    "{final_score.last} on {game_date.last}. "
+                    "Next match is against {opponent_the.next} on {game_date.next}"
+                ),
+                "priority": 50,
+                "label": "Final",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "{team_name_the} last played {opponent_the.last} on {game_date.last}."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
         idle_offseason={
             "title_enabled": False,
             "title": None,
@@ -862,14 +995,25 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "description": "{away_team} vs {home_team} has concluded at {venue}.",
             "art_url": _EVENT_ART,
         },
-        postgame_conditional={
-            "enabled": True,
-            "description_final": "{game_recap}",
-            "description_not_final": (
-                "The bout between {away_team} and {home_team} has not yet ended "
-                "as of the last update."
-            ),
-        },
+        postgame_conditional_rows=[
+            {
+                "condition": "has_recap",
+                "condition_value": None,
+                "template": "{game_recap}",
+                "priority": 10,
+                "label": "Recap (provider)",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "The bout between {away_team} and {home_team} has not yet ended "
+                    "as of the last update."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
         conditional_descriptions=[
             {
                 "condition": "has_preview",
@@ -957,13 +1101,27 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             ),
             "art_url": _EVENT_ART,
         },
-        postgame_conditional={
-            "enabled": True,
-            "description_final": "{tennis_result}",
-            "description_not_final": (
-                "The match between {player1} and {player2} has not yet ended as of the last update."
-            ),
-        },
+        # {tennis_result} is constructed from score data, not provider copy —
+        # is_final (not has_recap) is its correct gate.
+        postgame_conditional_rows=[
+            {
+                "condition": "is_final",
+                "condition_value": None,
+                "template": "{tennis_result}",
+                "priority": 50,
+                "label": "Final",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "The match between {player1} and {player2} has not yet ended "
+                    "as of the last update."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
         conditional_descriptions=[
             {
                 "condition": "has_preview",
@@ -1018,13 +1176,24 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "description": "{race_name} {session_name} has concluded at {circuit_name}.",
             "art_url": "",
         },
-        postgame_conditional={
-            "enabled": True,
-            "description_final": "{game_recap}",
-            "description_not_final": (
-                "{race_name} {session_name} has not yet ended as of the last update."
-            ),
-        },
+        postgame_conditional_rows=[
+            {
+                "condition": "has_recap",
+                "condition_value": None,
+                "template": "{game_recap}",
+                "priority": 10,
+                "label": "Recap (provider)",
+            },
+            {
+                "condition": "is_not_final",
+                "condition_value": None,
+                "template": (
+                    "{race_name} {session_name} has not yet ended as of the last update."
+                ),
+                "priority": 50,
+                "label": "In progress",
+            },
+        ],
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
             {
