@@ -176,21 +176,23 @@ def preview_template(req: TemplatePreviewRequest):
 
     if ctx is not None:
         rendered = {k: resolver.resolve(v or "", ctx) for k, v in req.fields.items()}
+        samples = None
     else:
         samples = build_static_samples(req.league)
         rendered = {k: resolver.resolve_with_map(v or "", samples) for k, v in req.fields.items()}
 
+    def _render(tmpl: str) -> str:
+        if ctx is not None:
+            return resolver.resolve(tmpl, ctx)
+        return resolver.resolve_with_map(tmpl, samples or {})
+
+    game_ctx = ctx.game_context if ctx else None
+
     conditional = None
     if req.conditional_descriptions is not None:
-        game_ctx = ctx.game_context if ctx else None
         selected_fields, trace = get_condition_selector().select_fields_with_trace(
             req.conditional_descriptions, ctx, game_ctx
         )
-
-        def _render(tmpl: str) -> str:
-            if ctx is not None:
-                return resolver.resolve(tmpl, ctx)
-            return resolver.resolve_with_map(tmpl, samples)
 
         def _index_for(field: str) -> int | None:
             return next((r["index"] for r in trace if field in r["selected_for"]), None)
@@ -209,11 +211,47 @@ def preview_template(req: TemplatePreviewRequest):
             "rows": trace,
         }
 
+    # Filler condition rows per register (#428). Rows evaluate against the
+    # preview event's game context — an approximation of generation's
+    # reference game (pregame → next, postgame/idle → last), which is exactly
+    # right for event channels and close for team channels since the sample
+    # picker prefers a just-completed game. The description walks the same
+    # cascade generation uses: winning row → other matching rows; None means
+    # the register's base description renders.
+    filler_conditional = None
+    if req.filler_conditional_rows:
+        filler_conditional = {}
+        for register, rows in req.filler_conditional_rows.items():
+            if not rows:
+                continue
+            fields, runner_ups = get_condition_selector().select_filler_fields(
+                rows, ctx, game_ctx
+            )
+            rendered_desc = None
+            if "description" in fields:
+                for candidate in (fields["description"], *runner_ups):
+                    text = _render(candidate)
+                    if text.strip():
+                        rendered_desc = text
+                        break
+            fired = sorted(f for f in fields if f != "description")
+            if rendered_desc is not None:
+                fired.append("description")
+            filler_conditional[register] = {
+                "rendered_description": rendered_desc,
+                "rendered_title": _render(fields["title"]) if "title" in fields else None,
+                "rendered_subtitle": (
+                    _render(fields["subtitle"]) if "subtitle" in fields else None
+                ),
+                "fired": fired,
+            }
+
     return {
         "live": ctx is not None,
         "league": req.league,
         "fields": rendered,
         "conditional": conditional,
+        "filler_conditional": filler_conditional,
     }
 
 

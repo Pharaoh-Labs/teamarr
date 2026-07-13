@@ -388,6 +388,10 @@ class TemplatePreviewRequest(BaseModel):
     template_type: str = "team"
     fields: dict[str, str | None] = {}
     conditional_descriptions: list[dict] | None = None
+    # Filler condition rows keyed by register (pregame/postgame/idle), #428:
+    # each list is evaluated like conditional_descriptions and reported per
+    # register so the timeline preview can show the winning row.
+    filler_conditional_rows: dict[str, list[dict]] | None = None
 
 
 class ConditionRowTrace(BaseModel):
@@ -420,6 +424,20 @@ class TemplateConditionalPreview(BaseModel):
     rows: list[ConditionRowTrace]
 
 
+class TemplateFillerRegisterPreview(BaseModel):
+    """What a filler register's condition rows produce for the preview event (#428).
+
+    ``rendered_description`` already walks the row cascade (winning row →
+    other matching rows); None means no row produced text and the register's
+    base description renders. ``fired`` lists the fields a matching row won.
+    """
+
+    rendered_description: str | None = None
+    rendered_title: str | None = None
+    rendered_subtitle: str | None = None
+    fired: list[str] = []
+
+
 class TemplatePreviewResponse(BaseModel):
     """Rendered surfaces; ``live`` reports whether a real event context was used."""
 
@@ -427,6 +445,8 @@ class TemplatePreviewResponse(BaseModel):
     league: str | None
     fields: dict[str, str]
     conditional: TemplateConditionalPreview | None = None
+    # Per-register filler row results (#428); absent registers had no rows.
+    filler_conditional: dict[str, TemplateFillerRegisterPreview] | None = None
 
 
 # =============================================================================

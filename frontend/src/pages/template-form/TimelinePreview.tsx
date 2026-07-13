@@ -1,10 +1,12 @@
-import { CalendarClock } from "lucide-react"
+import { CalendarClock, Target } from "lucide-react"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 
 interface FillerBlock {
   enabled: boolean
   title: string
   description: string
+  /** True when a filler condition row won a field for the preview event (#428). */
+  conditional?: boolean
 }
 
 interface TimelinePreviewProps {
@@ -133,7 +135,15 @@ function FillerCell({
       className={`min-w-0 rounded-md border border-border bg-secondary/20 px-3 py-1.5 ${className ?? ""}`}
       title={tall ? undefined : block.description || undefined}
     >
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <span>{label}</span>
+        {block.conditional && (
+          <Target
+            className="inline h-3 w-3 text-emerald-400 shrink-0"
+            aria-label={`${label} content set by a condition row`}
+          />
+        )}
+      </div>
       <div
         className={`text-xs leading-snug ${tall ? "" : "line-clamp-2"} ${block.title ? "text-foreground/80" : "text-muted-foreground/60 italic"}`}
       >
