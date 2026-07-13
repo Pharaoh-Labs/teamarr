@@ -71,6 +71,18 @@ def _log_validation_warnings(template_type: str | None, data: dict) -> None:
     for field, warnings in results.items():
         for w in warnings:
             logger.warning("[template-validation] %s: %s", field, w.message)
+    # Filler condition rows (#420) — same row shape, validated per register.
+    for rows_field in (
+        "pregame_conditional_rows",
+        "postgame_conditional_rows",
+        "idle_conditional_rows",
+    ):
+        rows = data.get(rows_field)
+        if not rows:
+            continue
+        for field, warnings in validate_conditional_descriptions(rows, is_event).items():
+            for w in warnings:
+                logger.warning("[template-validation] %s.%s: %s", rows_field, field, w.message)
 
 # JSON fields that need serialization from Pydantic models to strings
 _JSON_FIELDS = {
@@ -85,6 +97,9 @@ _JSON_FIELDS = {
     "idle_content",
     "idle_conditional",
     "idle_offseason",
+    "pregame_conditional_rows",
+    "postgame_conditional_rows",
+    "idle_conditional_rows",
     "conditional_descriptions",
 }
 

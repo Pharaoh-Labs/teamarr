@@ -40,7 +40,6 @@ from teamarr.consumers.event_group_processor import (
 )
 from teamarr.consumers.event_matcher import EventMatcher
 from teamarr.consumers.filler import (
-    ConditionalFillerTemplate,
     FillerConfig,
     FillerGenerator,
     FillerOptions,
@@ -130,7 +129,6 @@ __all__ = [
     "refresh_cache",
     "refresh_cache_if_needed",
     # Filler generation
-    "ConditionalFillerTemplate",
     "FillerConfig",
     "FillerGenerator",
     "FillerOptions",

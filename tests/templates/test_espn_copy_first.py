@@ -16,7 +16,7 @@ from teamarr.consumers.filler.event_filler import (
     EventFillerGenerator,
     template_to_event_filler_config,
 )
-from teamarr.core.filler_types import ConditionalFillerTemplate, FillerTemplate
+from teamarr.core.filler_types import FillerTemplate
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.database.default_templates import DEFAULT_TEMPLATE_SET
 from teamarr.templates.conditions import ConditionEvaluator, get_condition_selector
@@ -151,27 +151,33 @@ def _postgame_config() -> EventFillerConfig:
             title="Postgame",
             description="The {team_name} {result_text} the {opponent} {final_score}",
         ),
-        postgame_conditional=ConditionalFillerTemplate(
-            enabled=True,
-            description_final="{game_recap}",
-            description_not_final="Not over yet.",
-        ),
+        # Rows equivalent of the old final/not-final conditional (#420)
+        postgame_rows=[
+            {"condition": "is_final", "priority": 50, "template": "{game_recap}"},
+            {"condition": "is_not_final", "priority": 50, "template": "Not over yet."},
+        ],
     )
 
 
-def test_postgame_conditional_carries_fallback_description():
+def test_postgame_rows_carry_fallback_description():
     gen = EventFillerGenerator(service=None)
     config = _postgame_config()
-    selected = gen._select_postgame_template(_event(), config)
+    ctx, _ = _ctx(_event())  # status=post → is_final row wins
+    selected = gen._select_register_template(
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx, refresh=True
+    )
     assert selected.description == "{game_recap}"
-    assert selected.description_fallback == config.postgame_template.description
+    assert selected.description_fallbacks == [config.postgame_template.description]
 
 
 def test_filler_render_uses_recap_when_present():
     gen = EventFillerGenerator(service=None)
     event = _event(game_recap="Heat top Aces for the title")
     ctx, _ = _ctx(event)
-    template = gen._select_postgame_template(event, _postgame_config())
+    config = _postgame_config()
+    template = gen._select_register_template(
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx, refresh=True
+    )
     programmes = gen._generate_filler(
         start_dt=datetime(2026, 6, 17, 22, 0, tzinfo=UTC),
         end_dt=datetime(2026, 6, 18, 2, 0, tzinfo=UTC),
@@ -191,7 +197,10 @@ def test_filler_render_falls_through_to_constructed_when_no_recap():
     gen = EventFillerGenerator(service=None)
     event = _event()  # final, but no recap published
     ctx, _ = _ctx(event)
-    template = gen._select_postgame_template(event, _postgame_config())
+    config = _postgame_config()
+    template = gen._select_register_template(
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx, refresh=True
+    )
     programmes = gen._generate_filler(
         start_dt=datetime(2026, 6, 17, 22, 0, tzinfo=UTC),
         end_dt=datetime(2026, 6, 18, 2, 0, tzinfo=UTC),
@@ -224,7 +233,7 @@ def test_event_config_conversion_passes_pregame_fallback():
 
     config = template_to_event_filler_config(T())
     assert config.pregame_template.description == "{game_preview}"
-    assert config.pregame_template.description_fallback == "constructed pregame"
+    assert config.pregame_template.description_fallbacks == ["constructed pregame"]
 
 
 # --- starter set wiring ---
