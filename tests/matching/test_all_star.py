@@ -7,14 +7,17 @@ All-Stars"). Generically-named streams ("MLB All-Star Game") must route to the
 name-agnostic All-Star matcher rather than falling through to TEAM_ONLY.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from teamarr.consumers.matching.classifier import StreamCategory, classify_stream
 from teamarr.consumers.matching.result import MatchMethod
 from teamarr.consumers.matching.team_matcher import _is_all_star_event
 from teamarr.core.types import Event, EventStatus, Team
-from tests.fakes import make_team_matcher
+from tests.fakes import make_stream_matcher, make_team_matcher
+
+# ESPN lists the MLB All-Star Game at 23:00 UTC on 2026-07-14.
+_ASG_START = datetime(2026, 7, 14, 23, 0, tzinfo=UTC)
 
 
 def _team(name: str, league: str = "mlb", sport: str = "baseball") -> Team:
@@ -42,7 +45,7 @@ def _event(
         provider="espn",
         name=f"{away} at {home}",
         short_name="",
-        start_time=datetime(2026, 7, 14, 23, 0, tzinfo=UTC),
+        start_time=_ASG_START,
         home_team=_team(home, league, sport),
         away_team=_team(away, league, sport),
         status=EventStatus(state="scheduled"),
@@ -157,3 +160,68 @@ def test_match_all_star_filters_when_league_not_enabled():
     )
     assert len(outcomes) == 1
     assert not outcomes[0].is_matched
+
+
+# --- EPG program-matching path (anchored) ---------------------------------
+#
+# The EPG path (_compute_epg_plan) feeds each program title through the same
+# _route_to_outcomes with anchor_dt = the program's broadcast instant. An
+# All-Star program title ("MLB All-Star Game" on FOX) must reach _match_all_star
+# and bind only to the occurrence airing near that instant.
+
+
+def _kwargs():
+    return dict(
+        enabled_leagues=["mlb"],
+        target_date=date(2026, 7, 14),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=ZoneInfo("UTC"),
+    )
+
+
+def test_match_all_star_binds_within_anchor_window():
+    matcher = make_team_matcher()
+    event = _event("National All-Stars", "American All-Stars", event_id="as")
+    outcomes = matcher.match_all_star(
+        classified=classify_stream("MLB All-Star Game"),
+        prefetched_events={"mlb": [event]},
+        # Program slot 30 min after event start — inside the 90-min window.
+        anchor_dt=_ASG_START + timedelta(minutes=30),
+        **_kwargs(),
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].is_matched
+    assert outcomes[0].event.id == "as"
+
+
+def test_match_all_star_rejects_outside_anchor_window():
+    matcher = make_team_matcher()
+    event = _event("National All-Stars", "American All-Stars", event_id="as")
+    outcomes = matcher.match_all_star(
+        classified=classify_stream("MLB All-Star Game"),
+        prefetched_events={"mlb": [event]},
+        # Program slot 4 hours off (e.g. a next-day encore) — no live bind.
+        anchor_dt=_ASG_START + timedelta(hours=4),
+        **_kwargs(),
+    )
+    assert len(outcomes) == 1
+    assert not outcomes[0].is_matched
+
+
+def test_epg_route_reaches_all_star_matcher():
+    # Drive the real StreamMatcher routing (what the EPG plan uses) end-to-end.
+    matcher = make_stream_matcher(leagues=["mlb"])
+    matcher._prefetched_events = {
+        "mlb": [_event("National All-Stars", "American All-Stars", event_id="as")]
+    }
+    outcomes = matcher._route_to_outcomes(
+        classify_stream("MLB All-Star Game"),
+        stream_id=1,
+        target_date=date(2026, 7, 14),
+        anchor_dt=_ASG_START,
+    )
+    assert len(outcomes) == 1
+    assert outcomes[0].is_matched
+    assert outcomes[0].event.id == "as"
