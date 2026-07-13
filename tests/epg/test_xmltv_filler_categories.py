@@ -68,7 +68,8 @@ class TestV72Migration:
             "SELECT xmltv_categories, xmltv_filler_categories FROM templates "
             "WHERE name = 'EmbyShared'"
         ).fetchone()
-        assert json.loads(row["xmltv_categories"]) == ["Sports", "Sports Event"]
+        # v81 (later in the chain) normalizes our "Sports Event" variant
+        assert json.loads(row["xmltv_categories"]) == ["Sports", "Sports event"]
         assert json.loads(row["xmltv_filler_categories"]) == ["Sports", "Sports Event"]
 
     def test_apply_to_events_leaves_filler_empty(self, tmp_path):

@@ -1154,9 +1154,23 @@ def test_v81_skips_malformed_json():
     assert row[0] == "not json"
 
 
-def test_v81_case_variant_counts_as_present():
+def test_v81_normalizes_our_starter_variants_in_place():
     from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
 
+    # "Sports Event" (team starters) and "Sporting Event" (event starters)
+    # were OUR seeded strings — normalize to canonical, preserving position.
     conn = _v81_make_db('["Sports", "Sports Event"]')
     _migrate_v81_seed_sports_event_category(conn)
-    assert _v81_cats(conn) == ["Sports", "Sports Event"]  # untouched
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+    conn = _v81_make_db('["Sports", "Sporting Event", "My Custom"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event", "My Custom"]
+
+
+def test_v81_collapses_duplicate_variants():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sporting Event", "Sports Event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports event"]

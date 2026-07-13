@@ -308,7 +308,7 @@ def _team_base(**overrides) -> dict:
         "idle_enabled": True,
         "xmltv_flags": _XMLTV_FLAGS,
         "xmltv_video": _XMLTV_VIDEO,
-        "xmltv_categories": ["Sports", "{sport}", "Sports Event"],
+        "xmltv_categories": ["Sports", "{sport}", "Sports event"],
         "xmltv_filler_categories": [],
         "pregame_periods": [],
         # ESPN-copy-first (tvnk.14): provider preview is the primary text;
@@ -448,7 +448,7 @@ def _event_base(**overrides) -> dict:
         "idle_enabled": False,
         "xmltv_flags": _XMLTV_FLAGS,
         "xmltv_video": _XMLTV_VIDEO,
-        "xmltv_categories": ["Sports", "{sport}", "Sporting Event"],
+        "xmltv_categories": ["Sports", "{sport}", "Sports event"],
         "xmltv_filler_categories": [],
         "pregame_periods": [],
         # ESPN-copy-first (tvnk.14): provider preview is the primary text;
