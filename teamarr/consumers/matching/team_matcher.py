@@ -58,6 +58,23 @@ logger = logging.getLogger(__name__)
 # no EPG stream (safe no-match) rather than a wrong-occurrence bind.
 ANCHOR_MATCH_TOLERANCE_SECONDS = 90 * 60
 
+# "All-Star(s)" token used to recognise All-Star pseudo-teams in event names.
+_ALL_STAR_TEAM_RE = re.compile(r"all[\s\-]?stars?", re.IGNORECASE)
+
+
+def _is_all_star_event(event: Event) -> bool:
+    """True when both competitors are All-Star squads.
+
+    ESPN names both sides of an All-Star game with an "All-Star(s)" token
+    ("American All-Stars"/"National All-Stars" for MLB, "MLS All-Stars"/"Liga MX
+    All-Stars" for MLS). Requiring the token on *both* sides is a precise,
+    name-agnostic signal that survives the yearly change of opponents and does
+    not misfire on a regular game against an all-star-branded club.
+    """
+    home = event.home_team.name if event.home_team else ""
+    away = event.away_team.name if event.away_team else ""
+    return bool(_ALL_STAR_TEAM_RE.search(home)) and bool(_ALL_STAR_TEAM_RE.search(away))
+
 
 def _sport_hint_matches(sport_hint: str | list[str], event_sport: str) -> bool:
     """Check if a sport hint matches an event's sport.
@@ -558,6 +575,132 @@ class TeamMatcher:
             stream_id=stream_id,
             detail=f"No event found for team '{classified.team1}'",
             parsed_team1=classified.team1,
+        )]
+
+    def match_all_star(
+        self,
+        classified: ClassifiedStream,
+        enabled_leagues: list[str],
+        target_date: date,
+        group_id: int,
+        stream_id: int,
+        generation: int,
+        user_tz: ZoneInfo,
+        sport_durations: dict[str, float] | None = None,
+        prefetched_events: dict[str, list[Event]] | None = None,
+        stream_tz: ZoneInfo | None = None,
+        anchor_dt: "datetime | None" = None,
+    ) -> list[MatchOutcome]:
+        """Match an All-Star stream (ALL_STAR) to the league's All-Star event.
+
+        ESPN serves All-Star games inside the normal league scoreboard as two
+        pseudo-teams whose names both carry an "All-Star(s)" token. We resolve
+        the classified stream to the event in the hinted league(s) whose
+        competitors are both All-Star squads (see ``_is_all_star_event``) —
+        name-agnostic, so the yearly-varying opponent needs no hardcoding.
+        There is one All-Star event per league per season, so this normally
+        returns a single outcome.
+
+        Args:
+            classified: Pre-classified stream (category must be ALL_STAR)
+            enabled_leagues: League codes subscribed for this group
+            target_date: Date to anchor the search window
+            group_id: Event group ID (unused; kept for call-site symmetry)
+            stream_id: Stream ID (for logging/outcomes)
+            generation: Cache generation counter (unused; symmetry)
+            user_tz: User timezone for the date window
+            sport_durations: Sport duration settings (unused; symmetry)
+            prefetched_events: Optional pre-fetched events by league
+            stream_tz: Timezone for interpreting stream dates (unused; symmetry)
+            anchor_dt: EPG path — gate to the live occurrence near this instant
+
+        Returns:
+            List of MatchOutcome — one per matched All-Star event, or a single
+            filtered/failed outcome if nothing matched.
+        """
+        if classified.category != StreamCategory.ALL_STAR:
+            return [MatchOutcome.filtered(
+                FilteredReason.NOT_EVENT,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+            )]
+
+        stream_name = classified.normalized.original
+
+        # An ALL_STAR classification always carries a league hint (enforced by
+        # the classifier); narrow to the hinted leagues this group subscribes to.
+        league_hint = classified.league_hint
+        hint_leagues = (
+            [league_hint] if isinstance(league_hint, str) else list(league_hint or [])
+        )
+        leagues_to_search = [lg for lg in hint_leagues if lg in enabled_leagues]
+        if not leagues_to_search:
+            hint_display = ", ".join(hint_leagues) if hint_leagues else "?"
+            return [MatchOutcome.filtered(
+                FilteredReason.LEAGUE_NOT_INCLUDED,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail=f"League '{hint_display}' not in enabled leagues",
+            )]
+
+        # Narrow date window to ±2 days to minimise false positives.
+        window_days = 2
+        all_events: list[tuple[str, Event]] = []
+        if prefetched_events:
+            for league in leagues_to_search:
+                for event in prefetched_events.get(league, []):
+                    event_date = event.start_time.astimezone(user_tz).date()
+                    if abs((event_date - target_date).days) <= window_days:
+                        all_events.append((league, event))
+        else:
+            for league in leagues_to_search:
+                is_tsdb = self._service.get_provider_name(league) == "tsdb"
+                for offset in range(-window_days, window_days + 1):
+                    fetch_date = target_date + timedelta(days=offset)
+                    cache_only = is_tsdb or offset < 0
+                    events = self._service.get_events(league, fetch_date, cache_only=cache_only)
+                    for event in events:
+                        all_events.append((league, event))
+
+        matched_outcomes: list[MatchOutcome] = []
+        seen_event_ids: set[str] = set()
+        for league, event in all_events:
+            if event.id in seen_event_ids:
+                continue
+            if not _is_all_star_event(event):
+                continue
+            # EPG anchored matching (bead t5e): gate to the live occurrence near
+            # the program's broadcast instant.
+            if anchor_dt is not None:
+                anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
+                if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
+                    continue
+            seen_event_ids.add(event.id)
+            logger.debug(
+                "[ALL_STAR] Matched: stream_id=%d league=%s event=%s (%s vs %s)",
+                stream_id,
+                league,
+                event.id,
+                event.away_team.name,
+                event.home_team.name,
+            )
+            matched_outcomes.append(MatchOutcome.matched(
+                MatchMethod.FUZZY,
+                event,
+                detected_league=league,
+                confidence=1.0,
+                stream_name=stream_name,
+                stream_id=stream_id,
+            ))
+
+        if matched_outcomes:
+            return matched_outcomes
+
+        return [MatchOutcome.failed(
+            FailedReason.NO_EVENT_FOUND,
+            stream_name=stream_name,
+            stream_id=stream_id,
+            detail=f"No All-Star event in window ±{window_days}d for {target_date}",
         )]
 
     # =========================================================================

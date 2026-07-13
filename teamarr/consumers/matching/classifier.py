@@ -29,6 +29,7 @@ class StreamCategory(Enum):
     RACING_EVENT = "racing_event"  # Racing race weekends (F1, NASCAR, etc.)
     TENNIS_MATCH = "tennis_match"  # Tennis matches ("Wimbledon: Zheng vs Norrie")
     TEAM_ONLY = "team_only"  # Single-team branded stream (e.g., "NHL | Toronto Maple Leafs")
+    ALL_STAR = "all_star"  # League All-Star exhibition (e.g., "MLB All-Star Game")
     PLACEHOLDER = "placeholder"  # No event info, skip
 
 
@@ -1697,6 +1698,36 @@ def _classify_team_vs_team(ctx: _ClassifyContext) -> ClassifiedStream | None:
     )
 
 
+# Word-bounded "All-Star" / "All Star" / "Allstar" (singular or plural) token.
+_ALL_STAR_RE = re.compile(r"\ball[\s\-]?stars?\b", re.IGNORECASE)
+
+
+def _classify_all_star(ctx: _ClassifyContext) -> ClassifiedStream | None:
+    """Step 3.5: League All-Star exhibition games (MLB, MLS, ...).
+
+    ESPN carries All-Star games inside the normal league scoreboard as two
+    pseudo-teams (e.g. "American All-Stars"/"National All-Stars" for MLB,
+    "MLS All-Stars"/"Liga MX All-Stars" for MLS). Streams that carry them are
+    named generically ("MLB All-Star Game") and would otherwise fall through to
+    TEAM_ONLY with a nonsense team ("All-Star Game"), never matching the event.
+
+    When an "All-Star" token is present *and* a league hint pins the league,
+    route to the All-Star matcher, which resolves the stream to the single
+    All-Star event in that league — name-agnostic, so the yearly-varying
+    opponent (Liga MX this year, someone else next) needs no hardcoding.
+
+    Ordered before TEAM_VS_TEAM so a hinted "MLS All-Stars vs Liga MX
+    All-Stars" routes here rather than yielding a partial team extraction.
+    A league hint is required, so an unhinted "American All-Stars vs National
+    All-Stars" still falls through to the normal team-vs-team path.
+    """
+    if not ctx.league_hint:
+        return None
+    if not _ALL_STAR_RE.search(ctx.text):
+        return None
+    return ctx.make(StreamCategory.ALL_STAR)
+
+
 def _classify_team_only(ctx: _ClassifyContext) -> ClassifiedStream | None:
     """Step 4.5: Check for single-team stream (TEAM_ONLY).
 
@@ -1722,6 +1753,7 @@ _CLASSIFY_STEPS = (
     _classify_racing_event,
     _classify_tennis_match,
     _classify_teams_custom_regex,
+    _classify_all_star,
     _classify_team_vs_team,
     _classify_team_only,
 )
