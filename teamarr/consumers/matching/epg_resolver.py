@@ -7,14 +7,16 @@ must be queried by the EPG-source channel id. This module bridges the two
 namespaces WITHOUT requiring the stream to be pre-built into a Dispatcharr
 channel, using a precedence cascade:
 
-Precedence is by confidence, most authoritative first:
+Precedence is by confidence, most authoritative first (this matches
+``resolve_program_tvg_ids``; the Xtream provider-guide fallback in
+``epg_xtream.py`` sits below all three):
 
-1. Direct  — the stream ``tvg_id`` already IS an EPGData ``tvg_id`` (the user's
-   M3U is namespace-aligned with their EPG source). Same id, zero cost.
-2. Channel — the stream is assigned to a Dispatcharr channel whose
+1. Channel — the stream is assigned to a Dispatcharr channel whose
    ``epg_data_id`` points at an EPGData row. This is a CURATED mapping (a user
    or Dispatcharr's auto-matcher explicitly linked the channel to its guide),
-   so it outranks the name heuristic when both are available.
+   so it is trusted unconditionally.
+2. Direct  — the stream ``tvg_id`` already IS an EPGData ``tvg_id`` (the user's
+   M3U is namespace-aligned with their EPG source). Same id, zero cost.
 3. Name    — the stream NAME maps to exactly one EPGData ``name`` after strict
    normalization (drop quality suffixes / parentheticals / punctuation). A
    heuristic fallback for streams NOT on a channel. Skipped when ambiguous (a
