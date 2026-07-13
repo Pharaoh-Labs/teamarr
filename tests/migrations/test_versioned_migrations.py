@@ -218,7 +218,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 79
+        assert row["schema_version"] == 80
 
 
 class TestV73CleansTeamCache:
@@ -412,7 +412,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 79
+        assert row["schema_version"] == 80
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 79
+        assert row["schema_version"] == 80
 
 
 # ===========================================================================
@@ -971,3 +971,132 @@ def test_rebuild_skipped_when_check_current():
     _migrate_stream_match_cache_check(conn)
     # Table untouched
     assert conn.execute("SELECT COUNT(*) FROM stream_match_cache").fetchone()[0] == 2
+
+
+# ---------------------------------------------------------------------------
+# v80: filler final/not-final conditionals -> condition rows (#420)
+# ---------------------------------------------------------------------------
+
+
+def _v80_make_db(postgame_cond=None, idle_cond=None, rows_precontent=None):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE templates (
+            id INTEGER PRIMARY KEY,
+            postgame_conditional JSON,
+            idle_conditional JSON,
+            pregame_conditional_rows JSON DEFAULT '[]',
+            postgame_conditional_rows JSON DEFAULT '[]',
+            idle_conditional_rows JSON DEFAULT '[]'
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO templates (id, postgame_conditional, idle_conditional, "
+        "postgame_conditional_rows) VALUES (1, ?, ?, ?)",
+        (
+            json.dumps(postgame_cond) if postgame_cond else None,
+            json.dumps(idle_cond) if idle_cond else None,
+            json.dumps(rows_precontent) if rows_precontent else "[]",
+        ),
+    )
+    return conn
+
+
+def _v80_rows(conn, col="postgame_conditional_rows"):
+    return json.loads(conn.execute(f"SELECT {col} FROM templates WHERE id=1").fetchone()[0])
+
+
+def test_v80_converts_enabled_pair_to_disjoint_rows():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    conn = _v80_make_db(
+        postgame_cond={
+            "enabled": True,
+            "title_final": "Recap",
+            "description_final": "{game_recap.last}",
+            "title_not_final": None,
+            "description_not_final": "Still going",
+        }
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+
+    rows = _v80_rows(conn)
+    assert [r["condition"] for r in rows] == ["is_final", "is_not_final"]
+    final, not_final = rows
+    # Only SET fields ride each row — unset fields must fall to base at
+    # render time, so they must NOT appear here.
+    assert final["title"] == "Recap"
+    assert final["template"] == "{game_recap.last}"
+    assert "subtitle" not in final
+    assert not_final["template"] == "Still going"
+    assert "title" not in not_final
+
+
+def test_v80_disabled_and_empty_produce_no_rows():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    # Disabled with content: today the switch never fires -> no rows.
+    conn = _v80_make_db(postgame_cond={"enabled": False, "title_final": "X"})
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == []
+
+    # Enabled but all fields falsy (None/""): today falls to base -> no rows.
+    conn = _v80_make_db(
+        postgame_cond={
+            "enabled": True,
+            "title_final": None,
+            "description_final": "",
+            "description_not_final": None,
+        }
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == []
+
+
+def test_v80_idle_converts_independently():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    conn = _v80_make_db(
+        idle_cond={"enabled": True, "description_final": "Last game recap line"}
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == []  # postgame untouched
+    idle_rows = _v80_rows(conn, "idle_conditional_rows")
+    assert len(idle_rows) == 1
+    assert idle_rows[0]["condition"] == "is_final"
+    assert idle_rows[0]["template"] == "Last game recap line"
+
+
+def test_v80_skips_templates_with_existing_rows():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    user_rows = [{"condition": "has_recap", "template": "custom", "priority": 5}]
+    conn = _v80_make_db(
+        postgame_cond={"enabled": True, "title_final": "X"},
+        rows_precontent=user_rows,
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == user_rows  # never clobbered
+
+
+def test_v80_idempotent_second_run_is_noop():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    conn = _v80_make_db(postgame_cond={"enabled": True, "title_final": "X"})
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    first = _v80_rows(conn)
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == first
+
+
+def test_v80_legacy_columns_untouched():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    legacy = {"enabled": True, "title_final": "X", "description_not_final": "Y"}
+    conn = _v80_make_db(postgame_cond=legacy)
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    stored = json.loads(
+        conn.execute("SELECT postgame_conditional FROM templates WHERE id=1").fetchone()[0]
+    )
+    assert stored == legacy

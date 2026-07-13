@@ -67,6 +67,13 @@ CREATE TABLE IF NOT EXISTS templates (
     idle_enabled BOOLEAN DEFAULT 1,
     idle_content JSON DEFAULT '{"title": "{team_name} Programming", "subtitle": null, "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}", "art_url": null}',
     idle_conditional JSON DEFAULT '{"enabled": false, "description_final": null, "description_not_final": null}',
+    -- Conditional filler rows (#420, epic cajd): per-register condition rows in
+    -- the hehg.2 shape ({condition, condition_value, template, title?, subtitle?,
+    -- priority, label}). Replace the legacy final/not-final switch columns above,
+    -- which stay in place unread (v80 migration converts; rollback-safe).
+    pregame_conditional_rows JSON DEFAULT '[]',
+    postgame_conditional_rows JSON DEFAULT '[]',
+    idle_conditional_rows JSON DEFAULT '[]',
     -- Offseason register seeded enabled (#418): with it off, idle content
     -- renders {*.next} literals into real guides once a team has no next game.
     -- description_enabled is the master toggle; title stays unset so it falls
@@ -451,7 +458,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_lineup_id TEXT,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 79
+    schema_version INTEGER DEFAULT 80
 );
 
 -- Insert default settings
