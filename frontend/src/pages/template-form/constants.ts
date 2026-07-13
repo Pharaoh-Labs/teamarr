@@ -46,7 +46,7 @@ export const DEFAULT_FORM: TemplateCreate = {
   game_duration_override: null,
   xmltv_flags: { new: true, live: false, date: false },
   xmltv_video: { enabled: false, quality: "HDTV" },
-  xmltv_categories: ["Sports"],
+  xmltv_categories: ["Sports", "Sports event"],
   xmltv_filler_categories: [],
   pregame_enabled: true,
   pregame_fallback: DEFAULT_PREGAME,

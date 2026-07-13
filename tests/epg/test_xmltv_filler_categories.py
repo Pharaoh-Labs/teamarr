@@ -85,7 +85,8 @@ class TestV72Migration:
             "SELECT xmltv_categories, xmltv_filler_categories FROM templates "
             "WHERE name = 'DefaultEvents'"
         ).fetchone()
-        assert json.loads(row["xmltv_categories"]) == ["Sports"]
+        # v81 (later in the chain) seeds "Sports event" into event categories
+        assert json.loads(row["xmltv_categories"]) == ["Sports", "Sports event"]
         assert json.loads(row["xmltv_filler_categories"]) == []
 
     def test_categories_apply_to_column_dropped(self, tmp_path):
