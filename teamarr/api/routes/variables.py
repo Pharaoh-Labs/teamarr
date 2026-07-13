@@ -320,6 +320,20 @@ def get_conditions(template_type: str = "team"):
             "requires_value": False,
             "providers": "espn",
         },
+        # Game state (#420): finality of the reference game — works with any
+        # provider that reports event status.
+        {
+            "name": "is_final",
+            "description": "Reference game is final",
+            "requires_value": False,
+            "providers": "all",
+        },
+        {
+            "name": "is_not_final",
+            "description": "Reference game exists but is not final yet",
+            "requires_value": False,
+            "providers": "all",
+        },
     ]
 
     # Provider editorial copy — available to BOTH template types (epic tvnk,

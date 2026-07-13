@@ -170,6 +170,17 @@ subtitles flip without a condition.
 
 ---
 
+### Game State
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `is_final` | - | The reference game is final |
+| `is_not_final` | - | The reference game exists but is not final yet |
+
+Both return false when there is no reference game at all. They're a deliberate pair rather than one condition and its negation: rows for "game over" and "game still going" stay independent, so a field one row doesn't set falls through to your defaults instead of leaking from the other state.
+
+---
+
 ### Provider Copy (ESPN)
 
 | Condition | Value | Description |
