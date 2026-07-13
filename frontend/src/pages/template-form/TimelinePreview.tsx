@@ -14,7 +14,13 @@ interface TimelinePreviewProps {
   /** Resolved channel name — the guide's left-hand channel cell. */
   channelName: string
   pregame: FillerBlock
-  event: { title: string; subtitle: string; description: string }
+  event: {
+    title: string
+    subtitle: string
+    description: string
+    /** Fields a conditional row won for the preview event (badge parity, #428). */
+    conditionalFields?: string[]
+  }
   postgame: FillerBlock
   /** Team templates only — the between-game-days row. */
   idle: FillerBlock | null
@@ -72,7 +78,15 @@ export function TimelinePreview({
             <FillerCell block={pregame} label="Pre-game" className="flex-[1.2]" />
             <div className="flex-[3] min-w-0 rounded-md border border-border bg-secondary/40 border-l-4 border-l-primary px-3 py-1.5">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center justify-between gap-2">
-                <span>{eventTimeLabel || "Event"}</span>
+                <span className="flex items-center gap-1">
+                  <span>{eventTimeLabel || "Event"}</span>
+                  {(event.conditionalFields?.length ?? 0) > 0 && (
+                    <Target
+                      className="inline h-3 w-3 text-emerald-400 shrink-0"
+                      aria-label={`Event ${event.conditionalFields!.join("/")} set by a conditional rule`}
+                    />
+                  )}
+                </span>
                 <span className="normal-case tracking-normal">{durationLabel}</span>
               </div>
               <div
