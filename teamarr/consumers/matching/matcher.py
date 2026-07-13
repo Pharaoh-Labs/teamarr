@@ -664,6 +664,7 @@ class StreamMatcher:
             StreamCategory.EVENT_CARD,
             StreamCategory.RACING_EVENT,
             StreamCategory.TENNIS_MATCH,
+            StreamCategory.ALL_STAR,
         ):
             return [MatchedStreamResult(
                 stream_name=stream_name,
@@ -734,6 +735,8 @@ class StreamMatcher:
             return self._match_tennis_event(classified, stream_id, target_date)
         if classified.category == StreamCategory.TEAM_ONLY:
             return self._match_team_only(classified, stream_id, target_date, anchor_dt=anchor_dt)
+        if classified.category == StreamCategory.ALL_STAR:
+            return self._match_all_star(classified, stream_id, target_date, anchor_dt=anchor_dt)
         # TEAM_VS_TEAM
         return [
             self._match_team_vs_team(classified, stream_id, target_date, anchor_dt=anchor_dt)
@@ -1021,6 +1024,35 @@ class StreamMatcher:
                 pass
 
         return self._team_matcher.match_team_only(
+            classified=classified,
+            enabled_leagues=list(self._include_leagues),
+            target_date=target_date,
+            group_id=self._group_id,
+            stream_id=stream_id,
+            generation=self._generation,
+            user_tz=self._user_tz,
+            sport_durations=self._sport_durations,
+            prefetched_events=self._prefetched_events,
+            stream_tz=stream_tz,
+            anchor_dt=anchor_dt,
+        )
+
+    def _match_all_star(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        target_date: date,
+        anchor_dt: "datetime | None" = None,
+    ) -> list[MatchOutcome]:
+        """Match a league All-Star stream to that league's All-Star event."""
+        stream_tz = self._stream_tz
+        if classified.normalized.extracted_tz:
+            try:
+                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
+            except (KeyError, ValueError):
+                pass
+
+        return self._team_matcher.match_all_star(
             classified=classified,
             enabled_leagues=list(self._include_leagues),
             target_date=target_date,
