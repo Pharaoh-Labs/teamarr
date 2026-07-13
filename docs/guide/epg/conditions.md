@@ -46,6 +46,44 @@ Titles and subtitles are selected **per field, independently**: for each field, 
 
 **Lower numbers win.** A priority 10 condition beats priority 50, which beats priority 100.
 
+## Filler Condition Rows
+
+The same row mechanism drives the **filler registers** (pregame, postgame, and
+idle) on the Fillers tab. Filler rows use the identical shape and per-field
+selection rules as the main condition rows, with two filler-specific twists:
+
+**Reference game.** Fillers have no "current game", so each register's rows
+evaluate against its natural reference: **pregame → the next game**,
+**postgame and idle → the last game**. Postgame and idle refresh the game's
+status from the provider before evaluating, so `is_final` reflects reality
+even when the cached schedule is stale. On event channels, both registers
+evaluate against the channel's event. Remember the variable suffix that goes
+with the reference: a team-template postgame row reads the last game via
+`.last` (`{game_recap.last}`), while event-template rows use the bare form
+(`{game_recap}`).
+
+**Description cascade.** A winning row's description that resolves to an
+empty string — the classic case is `{game_recap}` for a game that just ended,
+before the provider publishes a recap — falls through to the next matching
+row by priority, and finally to the register's base description. Fields no
+matching row sets always fall back to the register's base content.
+
+**The recap-first pattern** (what new templates and the starter set ship):
+
+```json
+[{"condition": "has_recap", "priority": 10, "template": "{game_recap.last}"},
+ {"condition": "is_not_final", "priority": 50,
+  "template": "The game between {team_name_the} and {opponent_the.last} has not yet ended."}]
+```
+
+Recap published → it renders verbatim. Game still running → the in-progress
+line. Final but no recap → neither row fires and the base register's
+constructed result line renders.
+
+The idle register's **offseason override** (no upcoming game in the
+lookahead) stays separate from condition rows — it's a no-game state, and
+condition rows need a reference game to evaluate.
+
 ---
 
 ## Available Conditions
@@ -178,6 +216,8 @@ subtitles flip without a condition.
 | `is_not_final` | - | The reference game exists but is not final yet |
 
 Both return false when there is no reference game at all. They're a deliberate pair rather than one condition and its negation: rows for "game over" and "game still going" stay independent, so a field one row doesn't set falls through to your defaults instead of leaking from the other state.
+
+These shine in [filler condition rows](#filler-condition-rows), where the reference game is the register's next/last game with freshly-checked status.
 
 ---
 

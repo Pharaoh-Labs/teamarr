@@ -81,15 +81,20 @@ constructed prose when it isn't available:
 - **Idle / offseason filler** — soccer team channels phrase filler in the
   match register ("No Chelsea Match Today", "No upcoming Chelsea matches
   scheduled."); other families keep the US "game" phrasing.
-- **Postgame** — once a game is final and ESPN publishes a recap headline,
-  the filler shows `{game_recap}`; until then a constructed result line
-  ("The X defeated the Y 4–2") renders instead.
+- **Postgame** — when ESPN publishes a recap headline, the filler shows it
+  via a `has_recap → {game_recap}` condition row; a game that's still
+  running gets an `is_not_final` in-progress line; a final game with no
+  recap falls to the constructed result line ("The X defeated the Y 4–2").
+  Tennis gates its constructed `{tennis_result}` on `is_final` instead —
+  it's built from score data, not provider copy.
 
-The underlying precedence (for your own templates): an enabled **postgame
-conditional** beats the postgame fallback, but if its text resolves to an
-empty string — e.g. `{game_recap}` before a recap exists — the fallback
-description is used. Pregame fillers support the same pattern via the
-`description_fallback` field.
+The underlying mechanism (for your own templates): each filler register
+carries **condition rows** evaluated against its reference game — see
+[Filler condition rows](../epg/conditions#filler-condition-rows). A winning
+row's description that resolves empty — e.g. `{game_recap}` before a recap
+exists — cascades to the next matching row, then the register's base
+description. Pregame fillers also support a simple `description_fallback`
+field for the preview-first pattern without any rows.
 
 ## Recommended scoping
 

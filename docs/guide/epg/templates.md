@@ -59,7 +59,7 @@ The template editor has five tabs:
 | **Basic Info** | Template name and event duration settings |
 | **Defaults** | Title, subtitle, description(s), artwork URL, and channel name/logo (event templates) |
 | **Conditions** | Rules that show different descriptions based on game context (team templates only) |
-| **Fillers** | Pregame, postgame, and idle content with optional conditional logic |
+| **Fillers** | Pregame, postgame, and idle content, each with optional condition rows |
 | **Other EPG Options** | XMLTV categories, tags (new/live/date), and video quality |
 
 When **creating** a template, every tab is pre-filled with working defaults: a **Next** button below each tab walks you through them in order, and each tab in the strip carries a small hint — a check once you've reviewed it, an amber dot if something required (the template name) is still missing. Tabs stay freely clickable, and editing an existing template shows no stepper at all.
@@ -96,7 +96,12 @@ Team templates support filler programmes for non-game periods:
 | **Postgame** | After game ends until midnight or next programme |
 | **Idle** | Days with no games scheduled |
 
-Each filler has its own title, subtitle, description, and artwork URL.
+Each filler has its own title, subtitle, description, and artwork URL — plus
+optional **condition rows** that override those fields based on the register's
+reference game (pregame → next game, postgame/idle → last game). The starter
+set uses this to show ESPN's recap headline once it's published and an
+in-progress line while a game is still running. See
+[Filler condition rows](conditions#filler-condition-rows).
 
 ## Conditions
 
