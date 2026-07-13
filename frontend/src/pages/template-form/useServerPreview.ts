@@ -94,13 +94,23 @@ export function collectTemplateStrings(form: TemplateCreate): string[] {
     form.pregame_fallback,
     form.postgame_fallback,
     form.idle_content,
-    form.postgame_conditional,
-    form.idle_conditional,
     form.idle_offseason,
   ]
   for (const group of groups) {
     if (group) Object.values(group).forEach(push)
   }
-  for (const cond of form.conditional_descriptions ?? []) push(cond.template)
+  const rowLists = [
+    form.conditional_descriptions,
+    form.pregame_conditional_rows,
+    form.postgame_conditional_rows,
+    form.idle_conditional_rows,
+  ]
+  for (const rows of rowLists) {
+    for (const row of rows ?? []) {
+      push(row.template)
+      push(row.title)
+      push(row.subtitle)
+    }
+  }
   return out
 }
