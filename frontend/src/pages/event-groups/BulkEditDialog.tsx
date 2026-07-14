@@ -263,7 +263,7 @@ function BulkEditForm({
                       checked={bypassPlayoffs}
                       onCheckedChange={(checked) => setBypassPlayoffs(!!checked)}
                     />
-                    <span className="text-sm">Include all playoff games</span>
+                    <span className="text-sm">Include all playoff &amp; All-Star games</span>
                   </label>
                 </div>
               )}

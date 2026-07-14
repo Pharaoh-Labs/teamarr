@@ -396,7 +396,7 @@ export function GlobalDefaults({
                   }
                 />
                 <span className="text-sm">
-                  Include all playoff games (bypass team filter for postseason events)
+                  Include all playoff &amp; All-Star games (bypass team filter for postseason and All-Star events)
                 </span>
               </label>
 

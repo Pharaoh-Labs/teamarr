@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from teamarr.consumers.matching.classifier import StreamCategory, classify_stream
 from teamarr.consumers.matching.result import MatchMethod
-from teamarr.consumers.matching.team_matcher import _is_all_star_event
+from teamarr.consumers.matching.team_matcher import is_all_star_event
 from teamarr.core.types import Event, EventStatus, Team
 from tests.fakes import make_stream_matcher, make_team_matcher
 
@@ -90,18 +90,18 @@ def test_regular_game_is_not_all_star():
 
 
 def test_is_all_star_event_true_when_both_sides_are_all_stars():
-    assert _is_all_star_event(_event("National All-Stars", "American All-Stars"))
-    assert _is_all_star_event(
+    assert is_all_star_event(_event("National All-Stars", "American All-Stars"))
+    assert is_all_star_event(
         _event("MLS All-Stars", "Liga MX All-Stars", league="usa.1", sport="soccer")
     )
 
 
 def test_is_all_star_event_false_for_regular_game():
-    assert not _is_all_star_event(_event("New York Yankees", "Boston Red Sox"))
+    assert not is_all_star_event(_event("New York Yankees", "Boston Red Sox"))
 
 
 def test_is_all_star_event_false_when_only_one_side_all_star():
-    assert not _is_all_star_event(
+    assert not is_all_star_event(
         _event("MLS All-Stars", "LA Galaxy", league="usa.1", sport="soccer")
     )
 

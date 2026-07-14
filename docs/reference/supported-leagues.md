@@ -7,7 +7,7 @@ docs_version: "2.3.1"
 
 # Supported Sports & Leagues
 
-Teamarr supports **142 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **169 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -209,6 +209,40 @@ Teamarr automatically discovers **~250 soccer leagues** from ESPN's API during c
 | Copa Libertadores | `libertadores` | ESPN |
 | Copa Sudamericana | `sudamericana` | ESPN |
 | Venezuelan Segunda División | `ven.2` | TSDB **P** |
+
+#### Brazilian state championships
+
+All 27 Brazilian state championships (*campeonatos estaduais*) are supported. ESPN covers four (free, with richer match data); the remaining 23 come from TheSportsDB and require a premium key (**P**). State championships run roughly January–April.
+
+| League | ID | Provider |
+|--------|-----|----------|
+| Campeonato Carioca (Rio de Janeiro) | `bra.camp.carioca` | ESPN |
+| Campeonato Paulista (São Paulo) | `bra.camp.paulista` | ESPN |
+| Campeonato Gaúcho (Rio Grande do Sul) | `bra.camp.gaucho` | ESPN |
+| Campeonato Mineiro (Minas Gerais) | `bra.camp.mineiro` | ESPN |
+| Campeonato Acreano (Acre) | `bra.camp.acreano` | TSDB **P** |
+| Campeonato Alagoano (Alagoas) | `bra.camp.alagoano` | TSDB **P** |
+| Campeonato Amapaense (Amapá) | `bra.camp.amapaense` | TSDB **P** |
+| Campeonato Amazonense (Amazonas) | `bra.camp.amazonense` | TSDB **P** |
+| Campeonato Baiano (Bahia) | `bra.camp.baiano` | TSDB **P** |
+| Campeonato Brasiliense (Distrito Federal) | `bra.camp.brasiliense` | TSDB **P** |
+| Campeonato Capixaba (Espírito Santo) | `bra.camp.capixaba` | TSDB **P** |
+| Campeonato Catarinense (Santa Catarina) | `bra.camp.catarinense` | TSDB **P** |
+| Campeonato Cearense (Ceará) | `bra.camp.cearense` | TSDB **P** |
+| Campeonato Goiano (Goiás) | `bra.camp.goiano` | TSDB **P** |
+| Campeonato Maranhense (Maranhão) | `bra.camp.maranhense` | TSDB **P** |
+| Campeonato Mato-Grossense (Mato Grosso) | `bra.camp.matogrossense` | TSDB **P** |
+| Campeonato Paraense (Pará) | `bra.camp.paraense` | TSDB **P** |
+| Campeonato Paraibano (Paraíba) | `bra.camp.paraibano` | TSDB **P** |
+| Campeonato Paranaense (Paraná) | `bra.camp.paranaense` | TSDB **P** |
+| Campeonato Pernambucano (Pernambuco) | `bra.camp.pernambucano` | TSDB **P** |
+| Campeonato Piauiense (Piauí) | `bra.camp.piauiense` | TSDB **P** |
+| Campeonato Potiguar (Rio Grande do Norte) | `bra.camp.potiguar` | TSDB **P** |
+| Campeonato Rondoniense (Rondônia) | `bra.camp.rondoniense` | TSDB **P** |
+| Campeonato Roraimense (Roraima) | `bra.camp.roraimense` | TSDB **P** |
+| Campeonato Sergipano (Sergipe) | `bra.camp.sergipano` | TSDB **P** |
+| Campeonato Sul-Mato-Grossense (Mato Grosso do Sul) | `bra.camp.sulmatogrossense` | TSDB **P** |
+| Campeonato Tocantinense (Tocantins) | `bra.camp.tocantinense` | TSDB **P** |
 
 ### International
 
