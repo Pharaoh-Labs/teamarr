@@ -1,0 +1,60 @@
+<tv generator-info-name="Teamarr">
+  <channel id="teamarr-event-e1">
+    <display-name>EPL | ARS v CHE</display-name>
+    <icon src="epl/Arsenal/Chelsea/logo.png?style=1&amp;logo=true&amp;fallback=true&amp;badge=%20" />
+  </channel>
+  <programme start="20260710090000 +0000" stop="20260710120000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710120000 +0000" stop="20260710180000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710180000 +0000" stop="20260710190000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710190000 +0000" stop="20260710213000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Premier League Soccer</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">Arsenal face Chelsea at Stamford Bridge. Arsenal have won 4 of their last five; Chelsea have won 3 of their last five.</desc>
+    <date>20260710</date>
+    <category lang="en">Sports</category>
+    <category lang="en">Soccer</category>
+    <category lang="en">Sports event</category>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+    <new />
+    <live />
+  </programme>
+  <programme start="20260710213000 +0000" stop="20260711000000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Premier League Soccer: Full Time</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">The game between Arsenal and Chelsea has not yet ended as of the last update.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260711000000 +0000" stop="20260711060000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Premier League Soccer: Full Time</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">The game between Arsenal and Chelsea has not yet ended as of the last update.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260711060000 +0000" stop="20260711120000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Premier League Soccer: Full Time</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">The game between Arsenal and Chelsea has not yet ended as of the last update.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260711120000 +0000" stop="20260711150000 +0000" channel="teamarr-event-e1">
+    <title lang="en">Premier League Soccer: Full Time</title>
+    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <desc lang="en">The game between Arsenal and Chelsea has not yet ended as of the last update.</desc>
+    <icon src="epl/Arsenal/Chelsea/cover.png?style=6&amp;logo=true&amp;fallback=true" />
+  </programme>
+</tv>
