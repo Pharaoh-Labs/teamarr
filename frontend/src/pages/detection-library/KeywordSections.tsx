@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Pencil, Loader2, ToggleLeft, ToggleRight } from "lucide-react"
+import { Trash2, Pencil, LoaderCircle, ToggleLeft, ToggleRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -397,7 +397,7 @@ export function KeywordSections() {
               }
             >
               {(createMutation.isPending || updateMutation.isPending) && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               )}
               {editingKeyword ? "Save" : "Create"}
             </Button>
@@ -471,7 +471,7 @@ function KeywordSection({
       )}
       {query.isLoading ? (
         <div className="flex items-center justify-center rounded-lg border border-border py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <ResponsiveTable

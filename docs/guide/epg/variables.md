@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 259 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 260 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -25,7 +25,7 @@ If you hand-type a scope-restricted variable into a template where it doesn't be
 
 ## Previewing Templates
 
-The template editor renders a live preview of every field as you type. The **Preview** selector in the variable sidebar lets you choose which league to preview against — the leagues you've subscribed to (from the [Subscriptions](../subscriptions) tab, plus the leagues of teams you follow) are listed with their logos, grouped by sport and searchable. Before you've subscribed to anything, all available leagues are shown.
+The template editor renders a live preview of every field as you type. The **Previewing as** bar above the tabs picks which league to preview against — the leagues you've subscribed to (from the [Subscriptions](../subscriptions) tab, plus the leagues of teams you follow) are listed with their logos, grouped by sport and searchable. Before you've subscribed to anything, all available leagues are shown. It drives every preview on the page: the inline per-field previews, the condition trace on the Conditions tab, and the **Guide Preview** card in the right rail — an EPG-style card showing the title, subtitle, and description exactly as a viewer's guide would, including any [conditional rows](conditions.md) that win a field for the preview event (marked with a green target).
 
 **Live by default.** The preview tries to render **real data** for a recent or upcoming event in the selected league, and the badge turns green **Live** with a coverage count (e.g. `137/181 variables live · 44 gaps`) — how many of the variables that apply to this kind of event the real event actually populated. A "gap" is a variable that *could* apply but the event didn't provide (variables for other sports aren't counted). If no event is available or the provider can't be reached, it falls back automatically to sample data and the badge reads **No event**.
 
@@ -42,6 +42,9 @@ Click the badge to toggle to **Sample** mode, which uses generic, intentionally-
 | `.last` | Most recent game | `{opponent.last}` |
 
 **Event templates** don't need suffixes - each channel exists for a single game, so there's no "next" or "last" to reference.
+
+{: .note }
+> **When there's no next (or last) game** — offseason, end of a season — suffixed variables resolve to empty and the usual cleanup removes leftover wrappers, so raw `{…}` braces never reach your guide. A misspelled variable name, or a suffix the variable doesn't support, still renders literally so you can spot the mistake. For a proper offseason message, use the **Offseason** idle register on the Fillers tab (enabled with generic content by default on new templates).
 
 In the tables below, the **Suffixes** column indicates which suffixes are available:
 - **base** = no suffix (current game)
@@ -399,7 +402,7 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | `{last_five_summary}` | Recent-form prose for both teams; empty without data — pair with `has_structured_preview` | base, .next, .last | `The Rays have won 2 of their last five; the Red Sox have won 4 of their last five.` |
 
 {: .note }
-Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).
+Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. In main descriptions, gate them with condition rows (`has_preview`, `has_recap`, …); in filler registers, use [filler condition rows](conditions#filler-condition-rows) — the starter set's postgame `has_recap → {game_recap.last}` row is the canonical example. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).
 
 ---
 
@@ -492,7 +495,7 @@ UFC and MMA-specific variables for event templates. These are **event-only** (no
 | `{fighter2}` | Second fighter name (headline bout) | `Diego Lopes` |
 | `{fighter1_last}` | First fighter surname | `Volkanovski` |
 | `{fighter2_last}` | Second fighter surname | `Lopes` |
-| `{matchup}` | Full matchup string | `Alex Volkanovski vs Diego Lopes` |
+| `{matchup_combat}` | Fight matchup — headline fighter first with 'vs' | `Alex Volkanovski vs Diego Lopes` |
 | `{event_number}` | UFC event number (e.g., '314' from 'UFC 314') | `314` |
 | `{event_title}` | Full event title | `UFC 314: Volkanovski vs Lopes` |
 
@@ -517,7 +520,7 @@ UFC and MMA-specific variables for event templates. These are **event-only** (no
 | `{early_prelims_bouts}` | Early prelims bouts only | `Mauricio Ruffy vs Jamie Mullarkey` |
 
 {: .note }
-UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout.
+UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout. Use `{matchup_combat}` for the fight-conventional "Volkanovski vs Lopes" form — the generic `{matchup}` renders `{away} @ {home}` ("Lopes @ Volkanovski") for every sport, combat included.
 
 ---
 

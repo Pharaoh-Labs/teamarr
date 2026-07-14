@@ -626,7 +626,7 @@ class TestFullMigrationPath:
 
         # Should now be at latest schema version (v43 checkpoint + v44-v74 migrations)
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 81
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ import { useTemplates } from "@/hooks/useTemplates"
 import { useSports } from "@/hooks/useSports"
 import { getLeagues } from "@/api/teams"
 import { getSportDisplayName } from "@/lib/utils"
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+import { LoaderCircle, Plus, Pencil, Trash2 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -382,7 +382,7 @@ export function TemplateAssignmentManager({
                   disabled={!editing.template_id || createMutation.isPending || updateMutation.isPending}
                 >
                   {createMutation.isPending || updateMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    <LoaderCircle className="h-4 w-4 animate-spin mr-1" />
                   ) : null}
                   {editing.id ? "Update" : "Add"}
                 </Button>

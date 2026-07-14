@@ -184,11 +184,18 @@ class IdleOffseasonContent(BaseModel):
 
 
 class ConditionalDescriptionEntry(BaseModel):
-    """A conditional description entry."""
+    """A conditional row: description, plus optional title/subtitle overrides.
+
+    ``template`` is the description string (historical name — it is the
+    stored JSON key). ``title``/``subtitle`` (#370 part 2) are optional
+    per-field overrides selected independently by the same condition.
+    """
 
     condition: str | None = None  # None for default descriptions (priority=100)
     condition_value: str | None = None
-    template: str
+    template: str = ""  # description; may be empty when the row only overrides title/subtitle
+    title: str | None = None
+    subtitle: str | None = None
     priority: int = 50
     label: str | None = None  # Optional label for default descriptions
 
@@ -234,6 +241,14 @@ class TemplateCreate(BaseModel):
     idle_conditional: ConditionalContent | None = None
     idle_offseason: IdleOffseasonContent | None = None
 
+    # Filler condition rows (#420, epic cajd) — same row shape as
+    # conditional_descriptions, evaluated against the register's reference
+    # game (pregame → next, postgame/idle → last). Replace the legacy
+    # *_conditional dicts above (still accepted until the cajd.4 UI lands).
+    pregame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    postgame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    idle_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+
     # Conditional descriptions
     conditional_descriptions: list[ConditionalDescriptionEntry] | None = None
 
@@ -271,6 +286,14 @@ class TemplateUpdate(BaseModel):
     idle_content: FillerFallback | None = None
     idle_conditional: ConditionalContent | None = None
     idle_offseason: IdleOffseasonContent | None = None
+
+    # Filler condition rows (#420, epic cajd) — same row shape as
+    # conditional_descriptions, evaluated against the register's reference
+    # game (pregame → next, postgame/idle → last). Replace the legacy
+    # *_conditional dicts above (still accepted until the cajd.4 UI lands).
+    pregame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    postgame_conditional_rows: list[ConditionalDescriptionEntry] | None = None
+    idle_conditional_rows: list[ConditionalDescriptionEntry] | None = None
 
     # Conditional descriptions
     conditional_descriptions: list[ConditionalDescriptionEntry] | None = None
@@ -320,6 +343,9 @@ class TemplateFullResponse(TemplateResponse):
     idle_content: dict | None = None
     idle_conditional: dict | None = None
     idle_offseason: dict | None = None
+    pregame_conditional_rows: list[dict] | None = None
+    postgame_conditional_rows: list[dict] | None = None
+    idle_conditional_rows: list[dict] | None = None
     conditional_descriptions: list[dict] | None = None
     event_channel_name: str | None = None
     event_channel_logo_url: str | None = None
@@ -362,6 +388,10 @@ class TemplatePreviewRequest(BaseModel):
     template_type: str = "team"
     fields: dict[str, str | None] = {}
     conditional_descriptions: list[dict] | None = None
+    # Filler condition rows keyed by register (pregame/postgame/idle), #428:
+    # each list is evaluated like conditional_descriptions and reported per
+    # register so the timeline preview can show the winning row.
+    filler_conditional_rows: dict[str, list[dict]] | None = None
 
 
 class ConditionRowTrace(BaseModel):
@@ -372,16 +402,41 @@ class ConditionRowTrace(BaseModel):
     condition_value: str | None = None
     priority: int
     matched: bool
-    selected: bool
+    selected: bool  # selected for DESCRIPTION (historical meaning)
+    selected_for: list[str] = []  # fields this row won: title/subtitle/description
     reason: str
 
 
 class TemplateConditionalPreview(BaseModel):
-    """Rendered conditional description plus the per-row selection trace."""
+    """Rendered conditional fields plus the per-row selection trace.
+
+    ``rendered``/``selected_index`` keep their historical description-only
+    meaning; the title/subtitle pairs (#370 part 2) are None when no matching
+    row defines that field.
+    """
 
     rendered: str
     selected_index: int | None
+    rendered_title: str | None = None
+    selected_title_index: int | None = None
+    rendered_subtitle: str | None = None
+    selected_subtitle_index: int | None = None
     rows: list[ConditionRowTrace]
+
+
+class TemplateFillerRegisterPreview(BaseModel):
+    """What a filler register's condition rows produce for the preview event (#428).
+
+    ``rendered_description`` already walks the row cascade (winning row →
+    other matching rows); None means no row produced text and the register's
+    base description renders. ``fired`` lists the fields a matching row won.
+    """
+
+    rendered_description: str | None = None
+    rendered_title: str | None = None
+    rendered_subtitle: str | None = None
+    fired: list[str] = []
+    rows: list[ConditionRowTrace] = []
 
 
 class TemplatePreviewResponse(BaseModel):
@@ -391,6 +446,8 @@ class TemplatePreviewResponse(BaseModel):
     league: str | None
     fields: dict[str, str]
     conditional: TemplateConditionalPreview | None = None
+    # Per-register filler row results (#428); absent registers had no rows.
+    filler_conditional: dict[str, TemplateFillerRegisterPreview] | None = None
 
 
 # =============================================================================

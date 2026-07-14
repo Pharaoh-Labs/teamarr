@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { useStreamProfiles } from "@/hooks/useDispatcharr"
@@ -37,7 +37,7 @@ export function StreamProfileSelector({
   if (isLoading) {
     return (
       <div className={cn("flex items-center gap-2 h-10", className)}>
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoaderCircle className="h-4 w-4 animate-spin text-muted-foreground" />
         <span className="text-sm text-muted-foreground">Loading profiles...</span>
       </div>
     )

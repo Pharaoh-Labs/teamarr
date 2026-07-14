@@ -218,7 +218,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 81
 
 
 class TestV73CleansTeamCache:
@@ -412,7 +412,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 81
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 78
+        assert row["schema_version"] == 81
 
 
 # ===========================================================================
@@ -801,6 +801,76 @@ def test_v78_idempotent_and_leaves_clean_values():
     assert row["event_channel_logo_url"] == "https://espn.com/logo.png"
 
 
+# --- v79: backfill managed_channels team abbrevs (#403) ---------------------
+
+
+def _v79_make_db():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE managed_channels (
+            id INTEGER PRIMARY KEY, event_provider TEXT, league TEXT,
+            home_team TEXT, home_team_abbrev TEXT,
+            away_team TEXT, away_team_abbrev TEXT, deleted_at TIMESTAMP
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE team_cache (
+            id INTEGER PRIMARY KEY, team_name TEXT, team_abbrev TEXT,
+            provider TEXT, league TEXT
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO team_cache (team_name, team_abbrev, provider, league) VALUES "
+        "('Minnesota Twins', 'MIN', 'espn', 'mlb'), "
+        "('Los Angeles Angels', 'LAA', 'espn', 'mlb')"
+    )
+    return conn
+
+
+def test_v79_backfills_abbrevs():
+    from teamarr.database.migrations import _migrate_v79_backfill_channel_team_display
+
+    conn = _v79_make_db()
+    conn.execute(
+        "INSERT INTO managed_channels (id, event_provider, league, home_team, away_team) "
+        "VALUES (1, 'espn', 'mlb', 'Minnesota Twins', 'Los Angeles Angels')"
+    )
+    # Deleted row and unmatched team must stay untouched/NULL
+    conn.execute(
+        "INSERT INTO managed_channels (id, event_provider, league, home_team, away_team, "
+        "deleted_at) VALUES (2, 'espn', 'mlb', 'Minnesota Twins', 'Los Angeles Angels', "
+        "'2026-01-01')"
+    )
+    conn.execute(
+        "INSERT INTO managed_channels (id, event_provider, league, home_team) "
+        "VALUES (3, 'espn', 'mlb', 'Unknown Club')"
+    )
+
+    _migrate_v79_backfill_channel_team_display(conn)
+
+    row = conn.execute("SELECT * FROM managed_channels WHERE id = 1").fetchone()
+    assert row["home_team_abbrev"] == "MIN"
+    assert row["away_team_abbrev"] == "LAA"
+
+    deleted = conn.execute("SELECT * FROM managed_channels WHERE id = 2").fetchone()
+    assert deleted["home_team_abbrev"] is None
+
+    unmatched = conn.execute("SELECT * FROM managed_channels WHERE id = 3").fetchone()
+    assert unmatched["home_team_abbrev"] is None
+
+
+def test_v79_skips_gracefully_on_old_team_cache_shape():
+    from teamarr.database.migrations import _migrate_v79_backfill_channel_team_display
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE managed_channels (id INTEGER PRIMARY KEY, home_team TEXT)")
+    conn.execute("CREATE TABLE team_cache (id INTEGER PRIMARY KEY, team_name TEXT)")
+    # Pre-abbrev team_cache shape: nothing to backfill from — must not raise
+    _migrate_v79_backfill_channel_team_display(conn)
+
+
 # ===========================================================================
 # v77 — stream_match_cache CHECK rebuild
 # ===========================================================================
@@ -901,3 +971,206 @@ def test_rebuild_skipped_when_check_current():
     _migrate_stream_match_cache_check(conn)
     # Table untouched
     assert conn.execute("SELECT COUNT(*) FROM stream_match_cache").fetchone()[0] == 2
+
+
+# ---------------------------------------------------------------------------
+# v80: filler final/not-final conditionals -> condition rows (#420)
+# ---------------------------------------------------------------------------
+
+
+def _v80_make_db(postgame_cond=None, idle_cond=None, rows_precontent=None):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE templates (
+            id INTEGER PRIMARY KEY,
+            postgame_conditional JSON,
+            idle_conditional JSON,
+            pregame_conditional_rows JSON DEFAULT '[]',
+            postgame_conditional_rows JSON DEFAULT '[]',
+            idle_conditional_rows JSON DEFAULT '[]'
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO templates (id, postgame_conditional, idle_conditional, "
+        "postgame_conditional_rows) VALUES (1, ?, ?, ?)",
+        (
+            json.dumps(postgame_cond) if postgame_cond else None,
+            json.dumps(idle_cond) if idle_cond else None,
+            json.dumps(rows_precontent) if rows_precontent else "[]",
+        ),
+    )
+    return conn
+
+
+def _v80_rows(conn, col="postgame_conditional_rows"):
+    return json.loads(conn.execute(f"SELECT {col} FROM templates WHERE id=1").fetchone()[0])
+
+
+def test_v80_converts_enabled_pair_to_disjoint_rows():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    conn = _v80_make_db(
+        postgame_cond={
+            "enabled": True,
+            "title_final": "Recap",
+            "description_final": "{game_recap.last}",
+            "title_not_final": None,
+            "description_not_final": "Still going",
+        }
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+
+    rows = _v80_rows(conn)
+    assert [r["condition"] for r in rows] == ["is_final", "is_not_final"]
+    final, not_final = rows
+    # Only SET fields ride each row — unset fields must fall to base at
+    # render time, so they must NOT appear here.
+    assert final["title"] == "Recap"
+    assert final["template"] == "{game_recap.last}"
+    assert "subtitle" not in final
+    assert not_final["template"] == "Still going"
+    assert "title" not in not_final
+
+
+def test_v80_disabled_and_empty_produce_no_rows():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    # Disabled with content: today the switch never fires -> no rows.
+    conn = _v80_make_db(postgame_cond={"enabled": False, "title_final": "X"})
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == []
+
+    # Enabled but all fields falsy (None/""): today falls to base -> no rows.
+    conn = _v80_make_db(
+        postgame_cond={
+            "enabled": True,
+            "title_final": None,
+            "description_final": "",
+            "description_not_final": None,
+        }
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == []
+
+
+def test_v80_idle_converts_independently():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    conn = _v80_make_db(
+        idle_cond={"enabled": True, "description_final": "Last game recap line"}
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == []  # postgame untouched
+    idle_rows = _v80_rows(conn, "idle_conditional_rows")
+    assert len(idle_rows) == 1
+    assert idle_rows[0]["condition"] == "is_final"
+    assert idle_rows[0]["template"] == "Last game recap line"
+
+
+def test_v80_skips_templates_with_existing_rows():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    user_rows = [{"condition": "has_recap", "template": "custom", "priority": 5}]
+    conn = _v80_make_db(
+        postgame_cond={"enabled": True, "title_final": "X"},
+        rows_precontent=user_rows,
+    )
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == user_rows  # never clobbered
+
+
+def test_v80_idempotent_second_run_is_noop():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    conn = _v80_make_db(postgame_cond={"enabled": True, "title_final": "X"})
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    first = _v80_rows(conn)
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    assert _v80_rows(conn) == first
+
+
+def test_v80_legacy_columns_untouched():
+    from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
+
+    legacy = {"enabled": True, "title_final": "X", "description_not_final": "Y"}
+    conn = _v80_make_db(postgame_cond=legacy)
+    _migrate_v80_filler_conditionals_to_rows(conn)
+    stored = json.loads(
+        conn.execute("SELECT postgame_conditional FROM templates WHERE id=1").fetchone()[0]
+    )
+    assert stored == legacy
+
+
+# ---------------------------------------------------------------------------
+# v81: seed 'Sports event' into template event categories (#423)
+# ---------------------------------------------------------------------------
+
+
+def _v81_make_db(cats_json):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE templates (id INTEGER PRIMARY KEY, xmltv_categories JSON)")
+    conn.execute("INSERT INTO templates (id, xmltv_categories) VALUES (1, ?)", (cats_json,))
+    return conn
+
+
+def _v81_cats(conn):
+    return json.loads(
+        conn.execute("SELECT xmltv_categories FROM templates WHERE id=1").fetchone()[0]
+    )
+
+
+def test_v81_appends_sports_event_when_missing():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sports"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+
+def test_v81_preserves_custom_categories_and_order():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Basketball", "Sports", "My Custom"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Basketball", "Sports", "My Custom", "Sports event"]
+
+
+def test_v81_idempotent_when_already_present():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sports", "Sports event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+
+def test_v81_skips_malformed_json():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db("not json")
+    _migrate_v81_seed_sports_event_category(conn)  # must not raise
+    row = conn.execute("SELECT xmltv_categories FROM templates WHERE id=1").fetchone()
+    assert row[0] == "not json"
+
+
+def test_v81_normalizes_our_starter_variants_in_place():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    # "Sports Event" (team starters) and "Sporting Event" (event starters)
+    # were OUR seeded strings — normalize to canonical, preserving position.
+    conn = _v81_make_db('["Sports", "Sports Event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event"]
+
+    conn = _v81_make_db('["Sports", "Sporting Event", "My Custom"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports", "Sports event", "My Custom"]
+
+
+def test_v81_collapses_duplicate_variants():
+    from teamarr.database.migrations import _migrate_v81_seed_sports_event_category
+
+    conn = _v81_make_db('["Sporting Event", "Sports Event"]')
+    _migrate_v81_seed_sports_event_category(conn)
+    assert _v81_cats(conn) == ["Sports event"]

@@ -32,6 +32,7 @@ from teamarr.consumers.matching.classifier import (
     CustomRegexConfig,
     StreamCategory,
     classify_stream,
+    detect_racing_series_leagues,
     has_racing_text_evidence,
 )
 from teamarr.consumers.matching.constants import MATCH_WINDOW_DAYS
@@ -367,6 +368,13 @@ class StreamMatcher:
         # for streams carrying a tvg_id. None = no EPG matching (default).
         self._epg_index = epg_index
 
+        # Per-run memo of EPG-title match plans keyed by tvg_id. Many streams
+        # share one guide channel (726 streams / 89 tvg_ids on a typical
+        # channel-source group), and the classify+route work depends only on
+        # the tvg_id's program timeline — not the stream — so compute it once
+        # and materialize per-stream results from the shared plan.
+        self._epg_plan_by_tvg: dict[str, list[tuple[MatchOutcome, ClassifiedStream]]] = {}
+
     def match_all(
         self,
         streams: list[dict],
@@ -597,6 +605,22 @@ class StreamMatcher:
         # This handles streams that passed filtering but still can't be classified
         # (e.g., no separator found, no custom regex match).
         if classified.category == StreamCategory.PLACEHOLDER:
+            # A racing stream with a timestamp but no separator ("US (Peacock
+            # 031) | IMSA CTMP Grand Prix (2026-07-12 14:00:00)") classifies
+            # PLACEHOLDER — a date/time was extracted, so _classify_team_only
+            # refuses it and nothing else fits. Give the racing fallback a
+            # chance before writing it off as unclassifiable (same gate as
+            # the TEAM_ONLY path below).
+            if self._name_match_enabled:
+                fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+                if fallback is not None:
+                    outcome, racing_classified = fallback
+                    return [self._outcome_to_result(
+                        outcome=outcome,
+                        stream_id=stream_id,
+                        stream_name=stream_name,
+                        classified=racing_classified,
+                    )]
             return [MatchedStreamResult(
                 stream_name=stream_name,
                 stream_id=stream_id,
@@ -640,6 +664,7 @@ class StreamMatcher:
             StreamCategory.EVENT_CARD,
             StreamCategory.RACING_EVENT,
             StreamCategory.TENNIS_MATCH,
+            StreamCategory.ALL_STAR,
         ):
             return [MatchedStreamResult(
                 stream_name=stream_name,
@@ -703,11 +728,15 @@ class StreamMatcher:
         if classified.category == StreamCategory.EVENT_CARD:
             return [self._match_event_card(classified, stream_id, target_date)]
         if classified.category == StreamCategory.RACING_EVENT:
-            return [self._match_racing_event(classified, stream_id, target_date)]
+            return [self._match_racing_event(
+                classified, stream_id, target_date, anchor_dt=anchor_dt
+            )]
         if classified.category == StreamCategory.TENNIS_MATCH:
             return self._match_tennis_event(classified, stream_id, target_date)
         if classified.category == StreamCategory.TEAM_ONLY:
             return self._match_team_only(classified, stream_id, target_date, anchor_dt=anchor_dt)
+        if classified.category == StreamCategory.ALL_STAR:
+            return self._match_all_star(classified, stream_id, target_date, anchor_dt=anchor_dt)
         # TEAM_VS_TEAM
         return [
             self._match_team_vs_team(classified, stream_id, target_date, anchor_dt=anchor_dt)
@@ -722,24 +751,53 @@ class StreamMatcher:
     ) -> list[MatchedStreamResult]:
         """Match a stream to events via its EPG program titles (epic 183.4).
 
-        Walks every program on the stream's guide channel (from the injected
-        EPGProgramIndex), feeds each program's title+sub_title through the SAME
-        classify_stream -> TeamMatcher pipeline used for stream names, and emits
-        one matched result per program (a linear channel legitimately matches
-        MANY events/day). Each result carries the program's broadcast window for
+        The heavy classify+route work over the guide channel's program timeline
+        depends only on the tvg_id, so it is computed once per tvg_id per run
+        (_compute_epg_plan) and shared by every stream carrying that tvg_id —
+        mirrors of one linear channel would otherwise re-match the identical
+        program list once per stream. Per-stream results are materialized from
+        the shared plan. Only MATCHED outcomes are returned — non-games
+        self-reject in the pipeline.
+        """
+        plan = self._epg_plan_by_tvg.get(tvg_id)
+        if plan is None:
+            plan = self._compute_epg_plan(tvg_id, target_date, stream_id, stream_name)
+            self._epg_plan_by_tvg[tvg_id] = plan
+        return [
+            self._outcome_to_result(
+                outcome=outcome,
+                stream_id=stream_id,
+                stream_name=stream_name,
+                classified=classified,
+            )
+            for outcome, classified in plan
+        ]
+
+    def _compute_epg_plan(
+        self,
+        tvg_id: str,
+        target_date: date,
+        stream_id: int,
+        stream_name: str,
+    ) -> "list[tuple[MatchOutcome, ClassifiedStream]]":
+        """Match a guide channel's program timeline to events, once per tvg_id.
+
+        Walks every program on the tvg_id (from the injected EPGProgramIndex),
+        feeds each program's title+sub_title through the SAME classify_stream ->
+        TeamMatcher pipeline used for stream names, and keeps the best outcome
+        per matched event (a linear channel legitimately matches MANY
+        events/day). Each outcome carries the program's broadcast window for
         the lifecycle layer.
 
-        Cross-run caching comes for free: TeamMatcher caches on
-        (group_id, stream_id, input_string), so each distinct program title is
-        memoized without a separate fingerprint layer. Only MATCHED outcomes are
-        returned — non-games self-reject in the pipeline.
+        stream_id/stream_name are the first carrier of this tvg_id — used only
+        for the sub-matchers' cache keys and log context.
         """
         # Keyed by matched event id so that when several programs match the SAME
         # event (e.g. a pre-game block + the game itself both pass the anchor
         # gate), we keep only the one whose start is nearest the event — the live
         # broadcast — giving a deterministic, correctly-anchored window (bead
         # t5e). Different events on the same channel keep distinct keys.
-        best_by_event: dict[str | None, tuple[float, MatchedStreamResult]] = {}
+        best_by_event: dict[str | None, tuple[float, MatchOutcome, ClassifiedStream]] = {}
         league_event_type = self._get_dominant_event_type()
 
         # Full sorted timeline for this tvg_id. A linear channel legitimately
@@ -777,6 +835,25 @@ class StreamMatcher:
                 )
                 continue
 
+            # Same text-evidence gate as the racing fallback, applied to the
+            # PRIMARY classification too: in a racing-dominant group
+            # _get_dominant_event_type() returns "event" directly, so this
+            # classify_stream call already defaults arbitrary EPG titles
+            # (documentaries, movies) to RACING_EVENT with no series name in
+            # the text — the fallback's gate never even runs for these groups
+            # since primary_outcomes already "succeeds". Without this check,
+            # any program on any linear channel resolved into a racing-only
+            # group can bind to "the one race happening this weekend" by date
+            # coverage alone.
+            if classified.category == StreamCategory.RACING_EVENT and not (
+                has_racing_text_evidence(epg_input)
+            ):
+                logger.debug(
+                    "[EPG_MATCH] racing programme skipped, no series name in text: %s",
+                    epg_input[:60],
+                )
+                continue
+
             # TEAM_ONLY gate: skip team routing when disabled, but allow the
             # racing fallback to run if racing leagues are present. A race title
             # like "F1 | Monaco Grand Prix" classifies TEAM_ONLY in a mixed
@@ -809,7 +886,9 @@ class StreamMatcher:
 
             # Racing fallback for mixed groups (see _try_racing_fallback).
             if not matched_pairs and classified.category != StreamCategory.RACING_EVENT:
-                fallback = self._try_racing_fallback(epg_input, stream_id, target_date)
+                fallback = self._try_racing_fallback(
+                    epg_input, stream_id, target_date, anchor_dt=program.start_dt
+                )
                 if fallback is not None:
                     matched_pairs.append(fallback)
 
@@ -843,29 +922,21 @@ class StreamMatcher:
                 # Keep the nearest-to-event program per event (live over pre-game).
                 prev = best_by_event.get(ev_id)
                 if prev is None or skew_s < prev[0]:
-                    best_by_event[ev_id] = (
-                        skew_s,
-                        self._outcome_to_result(
-                            outcome=outcome,
-                            stream_id=stream_id,
-                            stream_name=stream_name,
-                            classified=eff_classified,
-                        ),
-                    )
+                    best_by_event[ev_id] = (skew_s, outcome, eff_classified)
 
-        results = [r for _, r in best_by_event.values()]
+        plan = [(o, c) for _, o, c in best_by_event.values()]
         if programs:
             logger.info(
-                "[EPG_MATCH] tvg=%s stream='%s': %d program(s), %d attempted, "
+                "[EPG_MATCH] tvg=%s (via stream '%s'): %d program(s), %d attempted, "
                 "%d non-event skipped, %d event(s) matched",
                 tvg_id,
                 stream_name[:32],
                 len(programs),
                 attempted,
                 skipped_non_event,
-                len(results),
+                len(plan),
             )
-        return results
+        return plan
 
     def _reconcile_epg(
         self,
@@ -966,6 +1037,35 @@ class StreamMatcher:
             anchor_dt=anchor_dt,
         )
 
+    def _match_all_star(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        target_date: date,
+        anchor_dt: "datetime | None" = None,
+    ) -> list[MatchOutcome]:
+        """Match a league All-Star stream to that league's All-Star event."""
+        stream_tz = self._stream_tz
+        if classified.normalized.extracted_tz:
+            try:
+                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
+            except (KeyError, ValueError):
+                pass
+
+        return self._team_matcher.match_all_star(
+            classified=classified,
+            enabled_leagues=list(self._include_leagues),
+            target_date=target_date,
+            group_id=self._group_id,
+            stream_id=stream_id,
+            generation=self._generation,
+            user_tz=self._user_tz,
+            sport_durations=self._sport_durations,
+            prefetched_events=self._prefetched_events,
+            stream_tz=stream_tz,
+            anchor_dt=anchor_dt,
+        )
+
     def _match_event_card(
         self,
         classified: ClassifiedStream,
@@ -1013,8 +1113,13 @@ class StreamMatcher:
         classified: ClassifiedStream,
         stream_id: int,
         target_date: date,
+        anchor_dt: "datetime | None" = None,
     ) -> MatchOutcome:
-        """Match a racing stream (F1, NASCAR, IndyCar, MotoGP, ...)."""
+        """Match a racing stream (F1, NASCAR, IndyCar, MotoGP, ...).
+
+        anchor_dt (EPG path only): the program's broadcast instant — candidate
+        events are gated to those with a session actually airing near it.
+        """
         # Find the racing leagues in our search leagues. The "event" type is
         # shared with tennis/golf, so exclude leagues whose sport is known to
         # be something else (unknown sport = legacy racing behavior).
@@ -1033,6 +1138,29 @@ class StreamMatcher:
                 detail="No racing leagues configured",
             )
 
+        # Series scoping: when the stream text explicitly names a series
+        # (MotoGP, NASCAR, ...), only that series' league(s) are eligible.
+        # Without this, a stream for an unconfigured series carries racing
+        # text evidence, reaches the racing matcher, and date-binds to
+        # whatever configured series races that weekend ("MotoGP - Grand
+        # Prix of Germany" direct-matched IMSA's Chevrolet Grand Prix via
+        # the shared "Grand Prix" tokens). Generic racing text (a bare
+        # "Monaco Grand Prix") names no series and stays unscoped.
+        named_leagues = detect_racing_series_leagues(classified.normalized.original)
+        if named_leagues:
+            scoped = [lg for lg in racing_leagues if lg in named_leagues]
+            if not scoped:
+                return MatchOutcome.failed(
+                    reason=FailedReason.NO_RACING_MATCH,
+                    stream_name=classified.normalized.original,
+                    stream_id=stream_id,
+                    detail=(
+                        "Stream names a racing series with no configured league "
+                        f"({', '.join(named_leagues)})"
+                    ),
+                )
+            racing_leagues = scoped
+
         # Try each racing league
         outcome = None
         for league in racing_leagues:
@@ -1044,6 +1172,8 @@ class StreamMatcher:
                 stream_id=stream_id,
                 generation=self._generation,
                 user_tz=self._user_tz,
+                anchor_dt=anchor_dt,
+                sport_durations=self._sport_durations,
             )
             if outcome.is_matched:
                 return outcome
@@ -1061,6 +1191,7 @@ class StreamMatcher:
         text: str,
         stream_id: int,
         target_date: date,
+        anchor_dt: "datetime | None" = None,
     ) -> "tuple[MatchOutcome, ClassifiedStream] | None":
         """Racing fallback for mixed groups (#349): re-classify as racing and retry.
 
@@ -1099,7 +1230,9 @@ class StreamMatcher:
         if racing_classified.category != StreamCategory.RACING_EVENT:
             return None
 
-        outcome = self._match_racing_event(racing_classified, stream_id, target_date)
+        outcome = self._match_racing_event(
+            racing_classified, stream_id, target_date, anchor_dt=anchor_dt
+        )
         if not outcome.is_matched:
             return None
         return outcome, racing_classified

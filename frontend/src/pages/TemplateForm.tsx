@@ -1,7 +1,7 @@
-import { useState, useRef, useMemo } from "react"
+import { useState, useRef, useMemo, type ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, User, Tv, ArrowRight } from "lucide-react"
+import { ArrowLeft, User, Tv, ArrowRight, Check } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -25,9 +25,15 @@ import {
   DEFAULT_FORM,
   DEFAULT_SAMPLE_DATA,
   createResolver,
+  seedPostgameRows,
+  isUntouchedPostgameSeed,
+  legacyConditionalToRows,
 } from "./template-form/constants"
 import { useServerPreview, collectTemplateStrings } from "./template-form/useServerPreview"
 import { VariableSidebar } from "./template-form/VariableSidebar"
+import { PreviewControls } from "./template-form/PreviewControls"
+import { GuideCardPreview } from "./template-form/GuideCardPreview"
+import { TimelinePreview } from "./template-form/TimelinePreview"
 import { BasicTab } from "./template-form/tabs/BasicTab"
 import { DefaultsTab } from "./template-form/tabs/DefaultsTab"
 import { ConditionsTab } from "./template-form/tabs/ConditionsTab"
@@ -41,6 +47,9 @@ export function TemplateForm() {
   const isEdit = !!templateId
 
   const [activeTab, setActiveTab] = useState<Tab>("basic")
+  // Guided create flow (yk4j.10): tabs stay freely clickable, but create mode
+  // tracks which tabs the author has looked at and hints at the rest.
+  const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set<Tab>(["basic"]))
   const [formData, setFormData] = useState<TemplateCreate>(DEFAULT_FORM)
   const [lastFocusedField, setLastFocusedField] = useState<string | null>(null)
   const [previewLeague, setPreviewLeague] = useState("nba")
@@ -109,8 +118,17 @@ export function TemplateForm() {
   // selection) runs debounced on the backend and overrides the client
   // substitution as truth once it lands.
   const serverPreview = useServerPreview({
-    templates: collectTemplateStrings(formData),
+    // "{game_time}" (event-start label) and "{team_name}" (team channel-cell
+    // name) ride along for the timeline preview (#416) — they aren't form
+    // fields, so collectTemplateStrings can't see them.
+    templates: [...collectTemplateStrings(formData), "{game_time}", "{team_name}"],
     conditionalDescriptions: formData.conditional_descriptions ?? [],
+    // Filler rows per register (#428) — the timeline shows the winning row.
+    fillerRows: {
+      pregame: formData.pregame_conditional_rows ?? [],
+      postgame: formData.postgame_conditional_rows ?? [],
+      idle: formData.idle_conditional_rows ?? [],
+    },
     league: previewLeague,
     live: liveRequested,
     templateType: formData.template_type === "event" ? "event" : "team",
@@ -118,6 +136,84 @@ export function TemplateForm() {
   const resolveTemplate = (template: string): string =>
     serverPreview.rendered[template] ?? clientResolve(template)
   const isLivePreview = samplesData?.live ?? false
+
+  // Guide-card values (yk4j.10): what the viewer's EPG would show for the
+  // preview event, mirroring generation's precedence — a conditional row that
+  // wins a field beats that field's default template. Fallback rows (priority
+  // 100) winning the description is the normal no-condition-matched path, so
+  // they don't get the "won by a conditional rule" marker.
+  const conditional = serverPreview.conditional
+  const allConditionalRows = formData.conditional_descriptions ?? []
+  const guideTitle =
+    conditional?.rendered_title ?? resolveTemplate(formData.title_format || "")
+  const guideSubtitle =
+    conditional?.rendered_subtitle ?? resolveTemplate(formData.subtitle_template || "")
+  const guideDescription =
+    conditional?.selected_index != null
+      ? conditional.rendered
+      : resolveTemplate(formData.description_template || "")
+  const guideConditionalFields = [
+    conditional?.selected_title_index != null ? "title" : null,
+    conditional?.selected_subtitle_index != null ? "subtitle" : null,
+    conditional?.selected_index != null &&
+    allConditionalRows[conditional.selected_index]?.priority !== 100
+      ? "description"
+      : null,
+  ].filter((f): f is string => f !== null)
+
+  // Timeline preview values (#416): register titles as the guide would show
+  // them, plus a human label for the event block's duration source.
+  const timelineDurationLabel =
+    formData.game_duration_mode === "custom" && formData.game_duration_override
+      ? `${formData.game_duration_override}h custom`
+      : formData.game_duration_mode === "default"
+        ? "global default duration"
+        : "per-sport duration"
+  // Filler blocks mirror generation's row precedence (#428): a register's
+  // winning condition row beats the base content per field; the server's
+  // rendered_description already walked the cascade (row → next matching row),
+  // so null means the base description renders.
+  const fillerCond = serverPreview.fillerConditional
+  const fillerBlock = (
+    register: "pregame" | "postgame" | "idle",
+    enabled: boolean,
+    baseTitle: string,
+    baseDescription: string,
+  ) => {
+    const won = fillerCond?.[register]
+    return {
+      enabled,
+      title: won?.rendered_title ?? resolveTemplate(baseTitle),
+      description: won?.rendered_description ?? resolveTemplate(baseDescription),
+      conditional: (won?.fired.length ?? 0) > 0,
+    }
+  }
+  const timelinePregame = fillerBlock(
+    "pregame",
+    formData.pregame_enabled ?? true,
+    formData.pregame_fallback?.title || "",
+    formData.pregame_fallback?.description || "",
+  )
+  const timelinePostgame = fillerBlock(
+    "postgame",
+    formData.postgame_enabled ?? true,
+    formData.postgame_fallback?.title || "",
+    formData.postgame_fallback?.description || "",
+  )
+  const timelineIdle = formData.template_type === "team"
+    ? fillerBlock(
+        "idle",
+        formData.idle_enabled ?? true,
+        formData.idle_content?.title || "",
+        formData.idle_content?.description || "",
+      )
+    : null
+  // Channel cell: event channels are named by the template's own field; team
+  // channels carry the team's name.
+  const timelineChannelName =
+    formData.template_type === "team"
+      ? resolveTemplate("{team_name}")
+      : resolveTemplate(formData.event_channel_name || "")
 
   // Build validation set from variables data. The optional chain is hoisted
   // out of the memo so the manual dependency matches what the React Compiler
@@ -168,11 +264,24 @@ export function TemplateForm() {
       pregame_fallback: mergeFillerContent(template.pregame_fallback, DEFAULT_PREGAME),
       postgame_enabled: template.postgame_enabled ?? true,
       postgame_fallback: mergeFillerContent(template.postgame_fallback, DEFAULT_POSTGAME),
-      postgame_conditional: template.postgame_conditional || { enabled: true, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
+      // Legacy final/not-final dicts are display-converted to condition rows
+      // below (#420) and always saved back neutralized — rows are the
+      // mechanism the generator reads.
+      postgame_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
       idle_enabled: template.idle_enabled ?? true,
       idle_content: mergeFillerContent(template.idle_content, DEFAULT_IDLE),
-      idle_conditional: template.idle_conditional || { enabled: true, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
+      idle_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
       idle_offseason: template.idle_offseason || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
+      // Empty rows + an enabled legacy dict = a template authored in the
+      // pre-#420 UI: show (and on save persist) the converted rows the
+      // generator's legacy shim already uses.
+      pregame_conditional_rows: template.pregame_conditional_rows || [],
+      postgame_conditional_rows: template.postgame_conditional_rows?.length
+        ? template.postgame_conditional_rows
+        : legacyConditionalToRows(template.postgame_conditional),
+      idle_conditional_rows: template.idle_conditional_rows?.length
+        ? template.idle_conditional_rows
+        : legacyConditionalToRows(template.idle_conditional),
       conditional_descriptions: template.conditional_descriptions || [],
       event_channel_name: template.event_channel_name,
       event_channel_logo_url: template.event_channel_logo_url,
@@ -262,6 +371,31 @@ export function TemplateForm() {
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
+  const goToTab = (tab: Tab) => {
+    setActiveTab(tab)
+    setVisitedTabs((prev) => new Set(prev).add(tab))
+  }
+  const nextTab = TABS[TABS.findIndex((t) => t.id === activeTab) + 1]
+
+  // Per-tab completion hint (create mode only): amber dot = something required
+  // is missing, check = reviewed, muted dot = not looked at yet. Every tab is
+  // pre-filled with working defaults, so "reviewed" is the honest signal.
+  const tabHint = (tab: Tab): { badge: ReactNode; title?: string } => {
+    if (tab === "basic" && !formData.name.trim()) {
+      return {
+        badge: <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />,
+        title: "Template name is required",
+      }
+    }
+    if (visitedTabs.has(tab)) {
+      return { badge: <Check className="h-3 w-3 text-emerald-500" /> }
+    }
+    return {
+      badge: <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />,
+      title: "Not reviewed yet — pre-filled with working defaults",
+    }
+  }
+
   if (isEdit && isLoadingTemplate) {
     return (
       <Spinner size="lg" className="py-12" />
@@ -318,7 +452,15 @@ export function TemplateForm() {
             type="button"
             onClick={() => {
               const nextIsTeam = !isTeamTemplate
-              setFormData((prev) => ({ ...prev, template_type: nextIsTeam ? "team" : "event" }))
+              setFormData((prev) => ({
+                ...prev,
+                template_type: nextIsTeam ? "team" : "event",
+                // Re-seed the recap row's suffix flavor (team reads the last
+                // game via .last) — only while it's still the untouched seed.
+                postgame_conditional_rows: isUntouchedPostgameSeed(prev.postgame_conditional_rows)
+                  ? seedPostgameRows(nextIsTeam)
+                  : prev.postgame_conditional_rows,
+              }))
             }}
             className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
           >
@@ -328,16 +470,60 @@ export function TemplateForm() {
         </div>
       )}
 
+      {/* Preview context (yk4j.10): league + live/sample for every preview on
+          the page — guide card, inline field previews, condition trace. */}
+      <PreviewControls
+        leagues={previewLeagues}
+        subscribedSlugs={subscribedSlugs}
+        previewLeague={previewLeague}
+        onLeagueChange={setPreviewLeague}
+        liveRequested={liveRequested}
+        isLive={isLivePreview}
+        onToggleLive={() => setLiveRequested((v) => !v)}
+        liveCoverage={
+          isLivePreview && samplesData?.live_total != null
+            ? {
+                populated: samplesData.live_populated ?? 0,
+                total: samplesData.live_total,
+                gaps: samplesData.gaps ?? [],
+              }
+            : null
+        }
+      />
+
+      {/* EPG timeline (#416): the registers as a guide row — pre/event/post,
+          plus the idle row for team templates. */}
+      <TimelinePreview
+        isTeamTemplate={isTeamTemplate}
+        channelName={timelineChannelName}
+        pregame={timelinePregame}
+        event={{
+          title: guideTitle,
+          subtitle: guideSubtitle,
+          description: guideDescription,
+          conditionalFields: guideConditionalFields,
+        }}
+        postgame={timelinePostgame}
+        idle={timelineIdle}
+        eventTimeLabel={resolveTemplate("{game_time}")}
+        durationLabel={timelineDurationLabel}
+      />
+
       {/* Tabs - outside grid so picker aligns with content */}
       <SubNav
         className="mb-4"
         value={activeTab}
-        onChange={(key) => setActiveTab(key as Tab)}
-        items={TABS.map((tab) => ({
-          key: tab.id,
-          label: tab.label,
-          icon: <tab.icon className="h-4 w-4" />,
-        }))}
+        onChange={(key) => goToTab(key as Tab)}
+        items={TABS.map((tab) => {
+          const hint = isEdit ? null : tabHint(tab.id)
+          return {
+            key: tab.id,
+            label: tab.label,
+            icon: <tab.icon className="h-4 w-4" />,
+            badge: hint?.badge,
+            title: hint?.title,
+          }
+        })}
       />
 
       {/* Main content with sidebar */}
@@ -386,37 +572,51 @@ export function TemplateForm() {
               setLastFocusedField={setLastFocusedField}
               resolveTemplate={resolveTemplate}
               validationData={validationData}
+              fillerConditionalPreview={serverPreview.fillerConditional}
             />
           )}
           {activeTab === "xmltv" && (
             <XmltvTab formData={formData} setFormData={setFormData} resolveTemplate={resolveTemplate} validationData={validationData} isTeamTemplate={isTeamTemplate} />
           )}
+
+          {/* Guided create flow (yk4j.10): a low-friction "keep going" path.
+              Edit mode gets no stepper — authors jump straight to what they
+              came to change. */}
+          {!isEdit && (
+            <div className="mt-4 flex justify-end">
+              {nextTab ? (
+                <Button variant="outline" onClick={() => goToTab(nextTab.id)}>
+                  Next: {nextTab.label}
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              ) : (
+                <SaveButton onClick={handleSubmit} pending={isPending}>
+                  Save Template
+                </SaveButton>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Variable picker sidebar */}
-        <div className="lg:col-span-1 sticky top-[4rem]" style={{ height: 'calc(100vh - 4.5rem)' }}>
-          <VariableSidebar
-            categories={variablesData?.categories || []}
-            onInsert={insertVariable}
-            lastFocusedField={lastFocusedField}
-            isTeamTemplate={isTeamTemplate}
-            leagues={previewLeagues}
-            subscribedSlugs={subscribedSlugs}
-            previewLeague={previewLeague}
-            onLeagueChange={setPreviewLeague}
-            liveRequested={liveRequested}
-            isLive={isLivePreview}
-            onToggleLive={() => setLiveRequested((v) => !v)}
-            liveCoverage={
-              isLivePreview && samplesData?.live_total != null
-                ? {
-                    populated: samplesData.live_populated ?? 0,
-                    total: samplesData.live_total,
-                    gaps: samplesData.gaps ?? [],
-                  }
-                : null
-            }
+        {/* Right rail: guide-card preview above the variable picker */}
+        <div
+          className="lg:col-span-1 sticky top-[4rem] flex flex-col gap-3"
+          style={{ height: 'calc(100vh - 4.5rem)' }}
+        >
+          <GuideCardPreview
+            title={guideTitle}
+            subtitle={guideSubtitle}
+            description={guideDescription}
+            conditionalFields={guideConditionalFields}
           />
+          <div className="flex-1 min-h-0">
+            <VariableSidebar
+              categories={variablesData?.categories || []}
+              onInsert={insertVariable}
+              lastFocusedField={lastFocusedField}
+              isTeamTemplate={isTeamTemplate}
+            />
+          </div>
         </div>
       </div>
     </div>

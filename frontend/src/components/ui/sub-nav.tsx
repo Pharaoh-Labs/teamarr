@@ -11,6 +11,8 @@ export interface SubNavItem {
   end?: boolean
   /** Optional leading icon. */
   icon?: ReactNode
+  /** Optional trailing indicator (e.g. a completion-hint dot/check). */
+  badge?: ReactNode
   disabled?: boolean
   /** Tooltip (e.g. why an item is disabled). */
   title?: string
@@ -51,6 +53,7 @@ export function SubNav({ items, value, onChange, className }: SubNavProps) {
           <>
             {item.icon}
             {item.label}
+            {item.badge}
           </>
         )
 

@@ -91,6 +91,13 @@ Override how Teamarr parses stream names. By default, the built-in classifier ha
 
 Each extractor has an enable toggle. Leave disabled to use the built-in parser.
 
+Named groups accept both `(?<name>...)` and Python's `(?P<name>...)` syntax.
+
+**Tennis groups** use the **Teams** extractor for player pairs — the two named
+groups become player 1 and player 2 (surname-based matching handles tournament
+prefixes and extra tokens). The built-in parser also recognizes the
+`Surname, First - Surname, First` provider format without any configuration.
+
 ## Team Filter
 
 Override the global default team filter for this source:

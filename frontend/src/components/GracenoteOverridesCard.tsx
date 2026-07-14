@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Tag, Trash2, Loader2 } from "lucide-react"
+import { Tag, Trash2, LoaderCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -107,7 +107,7 @@ export function GracenoteOverridesCard() {
                 disabled={!league}
               />
               <Button onClick={handleSave} disabled={!league || !value.trim() || saveMutation.isPending}>
-                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                {saveMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Save"}
               </Button>
             </div>
           </div>

@@ -1,0 +1,117 @@
+<tv generator-info-name="Teamarr">
+  <channel id="teamarr-team-1">
+    <display-name>Arkansas Razorbacks</display-name>
+  </channel>
+  <programme start="20260710090000 +0000" stop="20260710100000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Texas A&amp;M Aggies at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The 19-8 Texas A&amp;M Aggies travel to Fayetteville, AR to play the 20-7 Arkansas Razorbacks today at 3:00 PM EDT.</desc>
+    <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710100000 +0000" stop="20260710160000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Texas A&amp;M Aggies at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The 19-8 Texas A&amp;M Aggies travel to Fayetteville, AR to play the 20-7 Arkansas Razorbacks today at 3:00 PM EDT.</desc>
+    <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710160000 +0000" stop="20260710190000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Texas A&amp;M Aggies at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The 19-8 Texas A&amp;M Aggies travel to Fayetteville, AR to play the 20-7 Arkansas Razorbacks today at 3:00 PM EDT.</desc>
+    <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710190000 +0000" stop="20260710220000 +0000" channel="teamarr-team-1">
+    <title lang="en">College Basketball</title>
+    <sub-title lang="en">Texas A&amp;M Aggies at Arkansas Razorbacks</sub-title>
+    <desc lang="en">No. 20 Arkansas Razorbacks (20-7) host No. 15 Texas A&amp;M Aggies (19-8) in Southeastern Conference play at Bud Walton Arena. the Texas A&amp;M Aggies have won 3 of their last five; the Arkansas Razorbacks have won 4 of their last five.</desc>
+    <date>20260710</date>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <category lang="en">Sports event</category>
+    <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+    <new />
+    <live />
+  </programme>
+  <programme start="20260710220000 +0000" stop="20260711040000 +0000" channel="teamarr-team-1">
+    <title lang="en">College Basketball: Arkansas Razorbacks Postgame</title>
+    <sub-title lang="en">Texas A&amp;M Aggies at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The game between the Arkansas Razorbacks and the Texas A&amp;M Aggies on Friday, July 10, 2026 has not yet ended as of the last update.</desc>
+    <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260711040000 +0000" stop="20260711100000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Kentucky Wildcats</sub-title>
+    <desc lang="en">The Arkansas Razorbacks last played against the Texas A&amp;M Aggies on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260711100000 +0000" stop="20260711160000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Kentucky Wildcats</sub-title>
+    <desc lang="en">The Arkansas Razorbacks last played against the Texas A&amp;M Aggies on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260711160000 +0000" stop="20260711220000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Kentucky Wildcats</sub-title>
+    <desc lang="en">The Arkansas Razorbacks last played against the Texas A&amp;M Aggies on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260711220000 +0000" stop="20260712040000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Kentucky Wildcats</sub-title>
+    <desc lang="en">The Arkansas Razorbacks last played against the Texas A&amp;M Aggies on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260712040000 +0000" stop="20260712100000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Kentucky Wildcats at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The 21-6 Kentucky Wildcats travel to Auburn Hills, MI to play the 20-7 Arkansas Razorbacks today at 3:00 PM EDT.</desc>
+    <icon src="ncaam/KentuckyWildcats/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260712100000 +0000" stop="20260712160000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Kentucky Wildcats at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The 21-6 Kentucky Wildcats travel to Auburn Hills, MI to play the 20-7 Arkansas Razorbacks today at 3:00 PM EDT.</desc>
+    <icon src="ncaam/KentuckyWildcats/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260712160000 +0000" stop="20260712190000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Kentucky Wildcats at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The 21-6 Kentucky Wildcats travel to Auburn Hills, MI to play the 20-7 Arkansas Razorbacks today at 3:00 PM EDT.</desc>
+    <icon src="ncaam/KentuckyWildcats/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260712190000 +0000" stop="20260712220000 +0000" channel="teamarr-team-1">
+    <title lang="en">College Basketball</title>
+    <sub-title lang="en">Kentucky Wildcats at Arkansas Razorbacks</sub-title>
+    <desc lang="en">No. 20 Arkansas Razorbacks (20-7) host No. 8 Kentucky Wildcats (21-6) in Southeastern Conference play at The Palace.</desc>
+    <date>20260712</date>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <category lang="en">Sports event</category>
+    <icon src="ncaam/KentuckyWildcats/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+    <new />
+    <live />
+  </programme>
+  <programme start="20260712220000 +0000" stop="20260713040000 +0000" channel="teamarr-team-1">
+    <title lang="en">College Basketball: Arkansas Razorbacks Postgame</title>
+    <sub-title lang="en">Kentucky Wildcats at Arkansas Razorbacks</sub-title>
+    <desc lang="en">The game between the Arkansas Razorbacks and the Kentucky Wildcats on Sunday, July 12, 2026 has not yet ended as of the last update.</desc>
+    <icon src="ncaam/KentuckyWildcats/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260713040000 +0000" stop="20260713100000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Arkansas Razorbacks games scheduled.</desc>
+  </programme>
+  <programme start="20260713100000 +0000" stop="20260713160000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Arkansas Razorbacks games scheduled.</desc>
+  </programme>
+  <programme start="20260713160000 +0000" stop="20260713220000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Arkansas Razorbacks games scheduled.</desc>
+  </programme>
+  <programme start="20260713220000 +0000" stop="20260714040000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Arkansas Razorbacks Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Arkansas Razorbacks games scheduled.</desc>
+  </programme>
+</tv>

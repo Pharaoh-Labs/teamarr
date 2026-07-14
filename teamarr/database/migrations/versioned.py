@@ -236,6 +236,30 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 78
 
+    if current_version < 79:
+        _apply_migration(
+            conn, 79,
+            "backfill managed_channels team abbrevs + feed_team_name from team_cache (#403)",
+            _migrate_v79_backfill_channel_team_display,
+        )
+        current_version = 79
+
+    if current_version < 80:
+        _apply_migration(
+            conn, 80,
+            "convert filler final/not-final conditionals to condition rows (#420)",
+            _migrate_v80_filler_conditionals_to_rows,
+        )
+        current_version = 80
+
+    if current_version < 81:
+        _apply_migration(
+            conn, 81,
+            "seed 'Sports event' into template event categories (#423)",
+            _migrate_v81_seed_sports_event_category,
+        )
+        current_version = 81
+
 
 # =============================================================================
 # Migration helpers
@@ -1504,6 +1528,48 @@ def _migrate_v78_strip_slash_before_art_variable(conn: sqlite3.Connection) -> No
         )
 
 
+def _migrate_v79_backfill_channel_team_display(conn: sqlite3.Connection) -> None:
+    """v79: backfill managed_channels team abbrevs from team_cache (#403).
+
+    home/away_team_abbrev columns existed but the lifecycle creator never
+    wrote them. New channels get them at creation; this fills existing
+    non-deleted rows so the compact event format ("MLB | LAA/MIN") renders
+    immediately instead of waiting for channel churn. Best-effort: rows
+    without a team_cache match stay NULL and the UI falls back to full team
+    names.
+    """
+    if not _table_exists(conn, "managed_channels") or not _table_exists(conn, "team_cache"):
+        return
+    # Old fixture/backup DBs may carry a pre-abbrev team_cache shape — nothing
+    # to backfill from, so skip (columns still arrive via reconciliation).
+    if not _column_exists(conn, "team_cache", "team_abbrev"):
+        return
+    for col in ("home_team_abbrev", "away_team_abbrev"):
+        _add_column_if_not_exists(conn, "managed_channels", col, "TEXT")
+    for required_col in ("league", "event_provider", "deleted_at"):
+        if not _column_exists(conn, "managed_channels", required_col):
+            return
+
+    for abbrev_col, name_col in (
+        ("home_team_abbrev", "home_team"),
+        ("away_team_abbrev", "away_team"),
+    ):
+        conn.execute(
+            f"""
+            UPDATE managed_channels SET {abbrev_col} = (
+                SELECT tc.team_abbrev FROM team_cache tc
+                WHERE tc.team_name = managed_channels.{name_col}
+                  AND tc.league = managed_channels.league
+                  AND tc.provider = managed_channels.event_provider
+                LIMIT 1
+            )
+            WHERE deleted_at IS NULL
+              AND {abbrev_col} IS NULL
+              AND {name_col} IS NOT NULL
+            """
+        )
+
+
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
@@ -1751,3 +1817,154 @@ def _add_column_if_not_exists(
 
 
 
+
+
+def _migrate_v80_filler_conditionals_to_rows(conn: sqlite3.Connection) -> None:
+    """v80: convert filler final/not-final conditionals to condition rows (#420).
+
+    Faithful conversion, never invention: each ENABLED legacy conditional
+    (postgame_conditional / idle_conditional) becomes up to two DISJOINT rows —
+    ``is_final`` carrying the *_final fields, ``is_not_final`` carrying the
+    *_not_final fields — in the hehg.2 row shape (description under the legacy
+    key ``template``). Disjointness is the fidelity-critical property: on a
+    final game the is_not_final row matches nothing, so fields the is_final
+    row doesn't set fall through to the base register, exactly like today's
+    ``cond.title_final or base.title`` per-field selection. Falsy legacy
+    values (None/"") count as unset, matching the generator's ``or`` chain.
+
+    The legacy columns are left in place untouched (rollback safety; never
+    read again after cajd.3). Skips any template whose rows column is already
+    non-empty, so the transform is idempotent beyond the schema_version guard.
+    """
+    for col in (
+        "pregame_conditional_rows",
+        "postgame_conditional_rows",
+        "idle_conditional_rows",
+    ):
+        _add_column_if_not_exists(conn, "templates", col, "JSON DEFAULT '[]'")
+
+    conversions = (
+        ("postgame_conditional", "postgame_conditional_rows"),
+        ("idle_conditional", "idle_conditional_rows"),
+    )
+    try:
+        templates = conn.execute(
+            "SELECT id, postgame_conditional, idle_conditional, "
+            "postgame_conditional_rows, idle_conditional_rows FROM templates"
+        ).fetchall()
+    except sqlite3.OperationalError as e:
+        # Minimal/legacy templates table without the filler columns (test
+        # fixtures, pre-conditional-era DBs) — nothing to convert.
+        logger.warning("[MIGRATE v80] filler conversion skipped: %s", e)
+        return
+
+    converted = 0
+    for row in templates:
+        for legacy_col, rows_col in conversions:
+            try:
+                existing_rows = json.loads(row[rows_col] or "[]")
+            except (json.JSONDecodeError, TypeError):
+                existing_rows = []
+            if existing_rows:
+                continue  # already converted (idempotence)
+
+            try:
+                legacy = json.loads(row[legacy_col] or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(legacy, dict) or not legacy.get("enabled"):
+                continue
+
+            rows: list[dict] = []
+            for condition, suffix, label in (
+                ("is_final", "_final", "Final (migrated)"),
+                ("is_not_final", "_not_final", "In progress (migrated)"),
+            ):
+                fields: dict = {}
+                if legacy.get(f"title{suffix}"):
+                    fields["title"] = legacy[f"title{suffix}"]
+                if legacy.get(f"subtitle{suffix}"):
+                    fields["subtitle"] = legacy[f"subtitle{suffix}"]
+                if legacy.get(f"description{suffix}"):
+                    fields["template"] = legacy[f"description{suffix}"]
+                if fields:
+                    rows.append(
+                        {
+                            "condition": condition,
+                            "condition_value": None,
+                            "priority": 50,
+                            "label": label,
+                            **fields,
+                        }
+                    )
+
+            if rows:
+                conn.execute(
+                    f"UPDATE templates SET {rows_col} = ? WHERE id = ?",
+                    (json.dumps(rows), row["id"]),
+                )
+                converted += 1
+
+    if converted:
+        logger.info(
+            "[MIGRATE v80] Converted %d filler conditional(s) to condition rows",
+            converted,
+        )
+
+
+def _migrate_v81_seed_sports_event_category(conn: sqlite3.Connection) -> None:
+    """v81: append 'Sports event' to every template's event categories (#423).
+
+    'Sports event' is the Gracenote-standard genre string guide clients key
+    on; it becomes a seeded default alongside 'Sports' (user decision,
+    2026-07-13). Normalizes our own historical starter variants ('Sports
+    Event', 'Sporting Event') to the canonical string in place, appends
+    when absent, and never removes or reorders anything else — idempotent
+    and safe on user lists. Filler categories (#199, independent) untouched.
+    """
+    try:
+        rows = conn.execute("SELECT id, xmltv_categories FROM templates").fetchall()
+    except sqlite3.OperationalError as e:
+        logger.warning("[MIGRATE v81] category seed skipped: %s", e)
+        return
+
+    # Our own historical starter seeds used two variants of the same intent
+    # ("Sports Event" on team starters, "Sporting Event" on event starters).
+    # Normalize those to the canonical Gracenote string in place — they're
+    # our strings, not user data. Anything else is left untouched.
+    _OUR_VARIANTS = {"sports event", "sporting event"}
+
+    seeded = 0
+    for row in rows:
+        try:
+            cats = json.loads(row["xmltv_categories"] or "[]")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(cats, list):
+            continue
+
+        changed = False
+        normalized: list = []
+        for c in cats:
+            if isinstance(c, str) and c.strip().lower() in _OUR_VARIANTS:
+                if "Sports event" not in normalized:
+                    if c != "Sports event":
+                        changed = True
+                    normalized.append("Sports event")
+                else:
+                    changed = True  # collapse duplicate variants
+            else:
+                normalized.append(c)
+        if "Sports event" not in normalized:
+            normalized.append("Sports event")
+            changed = True
+
+        if changed:
+            conn.execute(
+                "UPDATE templates SET xmltv_categories = ? WHERE id = ?",
+                (json.dumps(normalized), row["id"]),
+            )
+            seeded += 1
+
+    if seeded:
+        logger.info("[MIGRATE v81] Seeded 'Sports event' into %d template(s)", seeded)

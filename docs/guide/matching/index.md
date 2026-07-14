@@ -110,6 +110,15 @@ Separators have no **Target Value** — the field is hidden on this tab.
 {: .note }
 Live-broadcast prefixes such as `DIRECTO`, `EN DIRECTO`, `EN VIVO`, `AO VIVO`, `DIRETTA`, and `DIREKT` are stripped automatically during matching, so a stream like `DIRECTO España - Inglaterra` is read as `España - Inglaterra`. You don't need to configure these.
 
+## All-Star Games
+
+League All-Star exhibitions (the MLB All-Star Game, the MLS All-Star Game, and others) are matched automatically — there's nothing to configure. Providers name these streams generically, like `MLB All-Star Game`, which carries no real matchup. Teamarr recognizes the **"All-Star"** keyword together with a **league hint** and resolves the stream to that league's single All-Star event for the day.
+
+This works without hardcoding the teams, so it keeps working as the yearly opponent changes (for example, the MLS All-Stars face a different side each summer). It relies on the data provider listing both sides of the game as All-Star squads — the case for MLB and MLS. Leagues whose provider names the sides differently (divisions or captain-picked teams) aren't recognized this way.
+
+{: .note }
+An All-Star stream still needs **Stream Name** matching enabled on its source, and the league must be one the event group subscribes to.
+
 ## Keyword Fields
 
 All keyword tabs (Event Type, League Hints, Sport Hints, Separators) share the same create/edit form:

@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from teamarr.consumers.matching.classifier import (
+    CustomRegexConfig,
     StreamCategory,
     classify_stream,
     is_racing,
@@ -19,6 +20,7 @@ from teamarr.consumers.matching.tennis_matcher import TennisMatcher
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.providers.espn.tennis import TennisParserMixin, _tennis_surnames
 from teamarr.services.detection_keywords import DetectionKeywordService
+from teamarr.utilities.fuzzy_match import normalize_text
 
 
 def setup_function():
@@ -283,6 +285,81 @@ def test_court_day_feed_classifies_tennis_without_players():
     assert c.category == StreamCategory.TENNIS_MATCH
     assert not (c.team1 and c.team2)
     assert c.event_hint
+
+
+def test_comma_form_player_pair_classifies():
+    """'Surname, First - Surname, First' provider format (#439)."""
+    c = classify_stream(
+        "Tennis 06: Live & Upcoming: Stefanini, Lucrezia - Maria, Tatjana 07-10 13:20",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    assert c.category == StreamCategory.TENNIS_MATCH
+    assert c.team1 and "stefanini" in c.team1.lower()
+    assert c.team2 and "maria" in c.team2.lower()
+    assert c.separator_found == " - "
+
+
+def test_comma_form_requires_commas_on_both_sides():
+    """Hyphenated schedule labels must stay court/round feeds (#439 guard)."""
+    for name in (
+        "ATP 250 - Day 3, Court 2",  # comma only on the right side
+        "Roland Garros - Second Round",  # no commas at all
+    ):
+        c = classify_stream(name, league_event_type="event", event_league_sport="tennis")
+        assert c.category == StreamCategory.TENNIS_MATCH
+        assert not (c.team1 and c.team2), name
+
+
+def test_custom_teams_regex_reachable_on_tennis_path():
+    """The tennis step claims streams before the cascade's custom-regex step,
+    so it must consult the custom teams pattern itself (#439)."""
+    cfg = CustomRegexConfig(
+        teams_pattern=(r"Upcoming:\s*(?P<team1>[^-]+?)\s*-\s*(?P<team2>.+?)\s*\d{2}-\d{2}"),
+        teams_enabled=True,
+    )
+    c = classify_stream(
+        "Tennis 06: Live & Upcoming: Stefanini, Lucrezia - Maria, Tatjana 07-10 13:20",
+        league_event_type="event",
+        event_league_sport="tennis",
+        custom_regex=cfg,
+    )
+    assert c.category == StreamCategory.TENNIS_MATCH
+    assert c.custom_regex_used
+    assert c.team1 and "stefanini" in c.team1.lower()
+    assert c.team2 and "maria" in c.team2.lower()
+
+
+def test_custom_teams_regex_miss_falls_through_to_builtin():
+    """A non-matching custom pattern must not block builtin extraction."""
+    cfg = CustomRegexConfig(
+        teams_pattern=r"NEVER (?P<team1>x) MATCHES (?P<team2>y)",
+        teams_enabled=True,
+    )
+    c = classify_stream(
+        "Wimbledon: Zheng vs Norrie",
+        league_event_type="event",
+        event_league_sport="tennis",
+        custom_regex=cfg,
+    )
+    assert c.category == StreamCategory.TENNIS_MATCH
+    assert not c.custom_regex_used
+    assert c.team1 and "zheng" in c.team1.lower()
+    assert c.team2 and "norrie" in c.team2.lower()
+
+
+def test_comma_form_names_score_against_players():
+    """Extracted comma-form sides keep the comma; surname scoring must not
+    care ('Maria, Tatjana' still surname-subset-hits 'Maria')."""
+    stefanini = _player("Lucrezia Stefanini", "Stefanini")
+    maria = _player("Tatjana Maria", "Maria")
+    score = _TM._pair_score(
+        normalize_text("Stefanini, Lucrezia"),
+        normalize_text("Maria, Tatjana"),
+        maria,
+        stefanini,
+    )
+    assert score == 100
 
 
 def test_tennis_group_does_not_classify_racing():

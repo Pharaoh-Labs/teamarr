@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react"
 import { toast } from "sonner"
-import { BookOpen, Download, Upload, Trash2, Loader2, ChevronRight, Target } from "lucide-react"
+import { BookOpen, Download, Upload, Trash2, LoaderCircle, ChevronRight, Target } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { AutoGrowTextarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import {
@@ -15,11 +16,25 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import type { ConditionalDescription } from "@/api/templates"
+import type { ConditionalDescription, ConditionRowTrace } from "@/api/templates"
 import { fetchConditions } from "@/api/variables"
 import { usePresets, useCreatePreset, useDeletePreset } from "@/hooks/usePresets"
 import type { ConditionPreset } from "@/api/presets"
 import type { TabProps } from "../types"
+
+// Fields a row won in the server preview (#370p2). Older trace payloads lack
+// selected_for; fall back to the description-only `selected` flag.
+function firedFields(trace?: ConditionRowTrace): string[] {
+  if (!trace) return []
+  if (trace.selected_for?.length) return trace.selected_for
+  return trace.selected ? ["description"] : []
+}
+
+function firesLabel(fields: string[]): string {
+  if (fields.length === 1 && fields[0] === "description") return "fires"
+  const short = fields.map((f) => (f === "description" ? "desc" : f === "subtitle" ? "sub" : "title"))
+  return `fires: ${short.join("+")}`
+}
 
 export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTemplate, conditionalPreview }: TabProps) {
   // Filter out fallback descriptions (priority=100) - they're managed on Defaults tab
@@ -234,7 +249,10 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                 const idx = cond.originalIndex
                 const isExpanded = expandedConditions.has(idx)
                 const condInfo = getConditionInfo(cond.condition)
-                const isFallback = cond.priority >= 100 || cond.condition === "always"
+                // priority>=100 rows are filtered out of this tab entirely
+                // (managed on Defaults) — only a legacy explicit "always"
+                // condition can still mark a row as fallback-styled here.
+                const isFallback = cond.condition === "always"
                 const trace = traceFor(idx)
 
                 return (
@@ -262,12 +280,20 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                           <span className="ml-1 text-[10px] text-amber-500">(ESPN)</span>
                         )}
                       </span>
-                      {trace?.selected ? (
+                      {(cond.title || cond.subtitle) && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-500/20 text-violet-400"
+                          title={`Also overrides ${[cond.title && "title", cond.subtitle && "subtitle"].filter(Boolean).join(" + ")}`}
+                        >
+                          {[cond.title && "T", cond.subtitle && "S"].filter(Boolean).join("·")}
+                        </span>
+                      )}
+                      {firedFields(trace).length > 0 ? (
                         <span
                           className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400"
-                          title={trace.reason}
+                          title={trace?.reason}
                         >
-                          fires
+                          {firesLabel(firedFields(trace))}
                         </span>
                       ) : trace?.matched ? (
                         <span
@@ -359,7 +385,7 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                         </div>
                         <div>
                           <Label className="text-xs">Description Template</Label>
-                          <Input
+                          <AutoGrowTextarea
                             value={cond.template}
                             onChange={(e) => updateCondition(idx, "template", e.target.value)}
                             placeholder="{team_name} plays {opponent} at {venue}"
@@ -371,15 +397,51 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                               <span className="text-sm italic">{resolveTemplate(cond.template)}</span>
                             </div>
                           )}
-                          {trace && (
-                            <p className={`mt-1 text-[11px] ${
-                              trace.selected ? "text-emerald-400" : trace.matched ? "text-amber-400" : "text-muted-foreground"
-                            }`}>
-                              {trace.selected ? "▶ " : ""}{trace.reason}
-                              {trace.selected ? " — this row fires for the preview event" : ""}
-                            </p>
-                          )}
                         </div>
+                        {/* Optional per-field overrides (#370p2): when set, this
+                            row can also win the programme title/subtitle. */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Title Override <span className="text-muted-foreground">(optional)</span></Label>
+                            <Input
+                              value={cond.title || ""}
+                              onChange={(e) => updateCondition(idx, "title", e.target.value)}
+                              placeholder="{game_event_note}: {matchup}"
+                              className="font-mono text-sm"
+                            />
+                            {cond.title && (
+                              <div className="mt-1 px-2 py-1 bg-secondary/50 border-l-2 border-violet-500 rounded-sm">
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-2">Preview:</span>
+                                <span className="text-sm italic">{resolveTemplate(cond.title)}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="text-xs">Subtitle Override <span className="text-muted-foreground">(optional)</span></Label>
+                            <Input
+                              value={cond.subtitle || ""}
+                              onChange={(e) => updateCondition(idx, "subtitle", e.target.value)}
+                              placeholder="{venue_city}"
+                              className="font-mono text-sm"
+                            />
+                            {cond.subtitle && (
+                              <div className="mt-1 px-2 py-1 bg-secondary/50 border-l-2 border-violet-500 rounded-sm">
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-2">Preview:</span>
+                                <span className="text-sm italic">{resolveTemplate(cond.subtitle)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {trace && (
+                          <p className={`text-[11px] ${
+                            firedFields(trace).length > 0 ? "text-emerald-400" : trace.matched ? "text-amber-400" : "text-muted-foreground"
+                          }`}>
+                            {firedFields(trace).length > 0 ? "▶ " : ""}{trace.reason}
+                            {firedFields(trace).length > 0
+                              ? ` — this row fires for the preview event (${firedFields(trace).join(", ")})`
+                              : ""}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -399,7 +461,7 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {presetsLoading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <LoaderCircle className="h-5 w-5 animate-spin" />
               </div>
             ) : !presets || presets.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">

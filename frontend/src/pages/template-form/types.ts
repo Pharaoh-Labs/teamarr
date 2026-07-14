@@ -1,4 +1,4 @@
-import type { ConditionalPreview, TemplateCreate } from "@/api/templates"
+import type { ConditionalPreview, FillerRegisterPreview, TemplateCreate } from "@/api/templates"
 import type { VariableCategory } from "@/api/variables"
 import type { CachedLeague } from "@/api/teams"
 
@@ -9,6 +9,10 @@ export interface VariableSidebarProps {
   onInsert: (varName: string) => void
   lastFocusedField: string | null
   isTeamTemplate: boolean
+}
+
+/** Preview-context bar above the tabs (yk4j.10): league + live/sample. */
+export interface PreviewControlsProps {
   leagues: CachedLeague[]
   subscribedSlugs: string[]
   previewLeague: string
@@ -40,6 +44,8 @@ export interface TabProps {
    *  evaluated against the current preview event. Null until the first render
    *  lands or when the server preview is unavailable. */
   conditionalPreview?: ConditionalPreview | null
+  /** Per-register filler row results for the preview event (#428). */
+  fillerConditionalPreview?: Record<string, FillerRegisterPreview> | null
 }
 
 // Template field with inline preview and validation

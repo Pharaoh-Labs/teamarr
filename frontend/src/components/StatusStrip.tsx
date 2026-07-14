@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { CheckCircle, XCircle, AlertTriangle, Clock, Tv, Target, Copy, Check, Loader2 } from "lucide-react"
+import { CircleCheckBig, CircleX, TriangleAlert, Clock, Tv, Target, Copy, Check, LoaderCircle } from "lucide-react"
 import { useDispatcharrStatus } from "@/hooks/useSettings"
 import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
 import { useDateFormat } from "@/hooks/useDateFormat"
@@ -12,7 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 // While a run is active the strip's values are mid-recompute — this spinner
 // renders in their place until the run finishes and the fresh numbers land.
-const Spinner = () => <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+const Spinner = () => <LoaderCircle className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 
 function formatDuration(ms: number | null | undefined): string | null {
   if (!ms) return null
@@ -99,16 +99,16 @@ export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
     GenIcon = Clock
   } else if (failed) {
     genColor = "text-red-500"
-    GenIcon = XCircle
+    GenIcon = CircleX
   } else if (ageMs != null && ageMs > 3 * DAY_MS) {
     genColor = "text-red-500"
-    GenIcon = AlertTriangle
+    GenIcon = TriangleAlert
   } else if (ageMs != null && ageMs > DAY_MS) {
     genColor = "text-amber-500"
-    GenIcon = AlertTriangle
+    GenIcon = TriangleAlert
   } else {
     genColor = "text-green-600"
-    GenIcon = CheckCircle
+    GenIcon = CircleCheckBig
   }
 
   const genWhen = finishedAt ? formatRelativeTime(finishedAt) : "Never generated"
@@ -129,7 +129,7 @@ export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
       {/* Last generated */}
       <div className="flex items-center gap-2">
         {isGenerating ? (
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
         ) : (
           <GenIcon className={`h-4 w-4 ${genColor}`} />
         )}

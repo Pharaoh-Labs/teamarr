@@ -258,10 +258,21 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         schedules (NBA Finals, weekly NFL).
         """
         sport = self._get_sport(league)
-        if league == "ufc" or sport in TOURNAMENT_SPORTS:
+        if league == "ufc":
+            # Cards run ~weekly, so a today/yesterday scan is empty most of the
+            # week and combat previews always fell back to static samples
+            # (#260). One ±7-day range call captures both the last finished
+            # card and the next scheduled one; no per-date coverage filter —
+            # every card in the window is a candidate.
+            today = date.today()
+            window = "{}-{}".format(
+                (today - timedelta(days=7)).strftime("%Y%m%d"),
+                (today + timedelta(days=7)).strftime("%Y%m%d"),
+            )
+            data = self._client.get_ufc_scoreboard(window)
+            return self._parse_ufc_events(data) if data else []
+        if sport in TOURNAMENT_SPORTS:
             # Special endpoints — reuse the per-date path over a few days.
-            # Dedupe by id: a UFC card spanning midnight is returned for
-            # every date it touches (#345).
             by_event_id: dict[str, Event] = {}
             for d in (date.today(), date.today() - timedelta(days=1)):
                 for e in self.get_events(league, d):
@@ -292,7 +303,27 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         then returns the most recent one — e.g. NFL in June → the Super Bowl.
         Best sample, since a finished game populates every postgame variable.
         """
-        if league == "ufc" or self._get_sport(league) in TOURNAMENT_SPORTS:
+        if self._get_sport(league) in TOURNAMENT_SPORTS:
+            return None
+        if league == "ufc":
+            # Cards are ~weekly; the longest dark stretches (holidays) are a
+            # few weeks, so one 35-day window nearly always hits. Finished-
+            # first matters for combat: a final card is the only sample that
+            # populates fight_result/finish_* variables (#260).
+            end = date.today()
+            for _ in range(3):
+                start = end - timedelta(days=35)
+                data = self._client.get_ufc_scoreboard(
+                    f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+                )
+                finals = [
+                    e
+                    for e in (self._parse_ufc_events(data) if data else [])
+                    if e.home_team and e.away_team and is_event_final(e)
+                ]
+                if finals:
+                    return max(finals, key=lambda e: e.start_time)
+                end = start
             return None
         sport_league = self._get_sport_league_from_db(league)
         window = timedelta(days=35)

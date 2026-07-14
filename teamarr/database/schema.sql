@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS templates (
     -- XMLTV Metadata
     xmltv_flags JSON DEFAULT '{"new": true, "live": false, "date": false}',
     xmltv_video JSON DEFAULT '{"enabled": false, "quality": "HDTV"}',
-    xmltv_categories JSON DEFAULT '["Sports"]',
+    xmltv_categories JSON DEFAULT '["Sports", "Sports event"]',
     -- Independent category list applied only to filler programmes (pregame/postgame/idle).
     -- Empty list = no <category> tags on filler. Replaced the old `categories_apply_to`
     -- gate in v72: previously 'all' duplicated xmltv_categories onto filler; now you set
@@ -67,7 +67,22 @@ CREATE TABLE IF NOT EXISTS templates (
     idle_enabled BOOLEAN DEFAULT 1,
     idle_content JSON DEFAULT '{"title": "{team_name} Programming", "subtitle": null, "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}", "art_url": null}',
     idle_conditional JSON DEFAULT '{"enabled": false, "description_final": null, "description_not_final": null}',
-    idle_offseason JSON DEFAULT '{"title_enabled": false, "title": null, "subtitle_enabled": false, "subtitle": null, "description_enabled": false, "description": "No upcoming {team_name} games scheduled."}',
+    -- Conditional filler rows (#420, epic cajd): per-register condition rows in
+    -- the hehg.2 shape ({condition, condition_value, template, title?, subtitle?,
+    -- priority, label}). Replace the legacy final/not-final switch columns above,
+    -- which stay in place unread (v80 migration converts; rollback-safe).
+    -- Postgame default mirrors the new-template form seed (cajd.4/cajd.6):
+    -- recap-when-published over the constructed base. Existing DBs keep their
+    -- '[]' default (reconciliation never alters existing columns) — the form
+    -- always sends the fields, so the default only covers column-less INSERTs.
+    pregame_conditional_rows JSON DEFAULT '[]',
+    postgame_conditional_rows JSON DEFAULT '[{"condition": "has_recap", "template": "{game_recap.last}", "priority": 10, "label": "Recap (provider)"}]',
+    idle_conditional_rows JSON DEFAULT '[]',
+    -- Offseason register seeded enabled (#418): with it off, idle content
+    -- renders {*.next} literals into real guides once a team has no next game.
+    -- description_enabled is the master toggle; title stays unset so it falls
+    -- back to the idle title (which carries no .next).
+    idle_offseason JSON DEFAULT '{"title_enabled": false, "title": null, "subtitle_enabled": true, "subtitle": "No upcoming game currently on schedule", "description_enabled": true, "description": "No upcoming {team_name} games scheduled."}',
 
     -- Conditional Descriptions (advanced)
     conditional_descriptions JSON DEFAULT '[]',
@@ -447,7 +462,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_lineup_id TEXT,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 78
+    schema_version INTEGER DEFAULT 81
 );
 
 -- Insert default settings

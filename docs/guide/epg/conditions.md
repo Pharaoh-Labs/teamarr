@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Conditions
 
-Conditions let you show different descriptions based on game context. Instead of a single static description, you can have multiple options that trigger based on specific situations.
+Conditions let you show different programme content based on game context. Instead of a single static description, you can have multiple options that trigger based on specific situations — and each option can also override the programme **title** and **subtitle**.
 
 ## How Conditions Work
 
@@ -20,8 +20,21 @@ Each condition option has:
 - **Value**: For numeric conditions, the threshold (e.g., `5` for a 5-game streak)
 - **Priority**: Lower numbers = higher priority (1-99 for conditionals, 100 for defaults)
 - **Template**: The description to use if the condition matches
+- **Title / Subtitle Override** *(optional)*: replace the programme title and/or subtitle when this condition matches — e.g. put a bowl name or `{game_event_note}` in the title for marquee games
 
 When generating EPG, Teamarr evaluates all conditions and selects the highest-priority (lowest number) match. If multiple conditions match at the same priority, one is chosen randomly.
+
+### Title and subtitle selection
+
+Titles and subtitles are selected **per field, independently**: for each field, the highest-priority matching row *that defines that field* wins. A row that only sets a title leaves the description to lower-priority rows (and vice versa), and any field with no matching override falls back to the template's plain title/subtitle/description. Unlike descriptions, ties at the same priority resolve **deterministically** (first row wins) for titles and subtitles, so guide titles don't change between EPG runs.
+
+**Example** — a marquee-game row that rewrites the whole guide entry:
+```json
+{"condition": "has_event_note", "priority": 15,
+ "title": "{game_event_note}: {away_team} at {home_team}",
+ "subtitle": "{venue_name} · {venue_city}",
+ "template": "{game_event_note}. {away_team} take on {home_team} at {venue_name}."}
+```
 
 ## Priority System
 
@@ -32,6 +45,44 @@ When generating EPG, Teamarr evaluates all conditions and selects the highest-pr
 | 100 | Default fallback (always matches) |
 
 **Lower numbers win.** A priority 10 condition beats priority 50, which beats priority 100.
+
+## Filler Condition Rows
+
+The same row mechanism drives the **filler registers** (pregame, postgame, and
+idle) on the Fillers tab. Filler rows use the identical shape and per-field
+selection rules as the main condition rows, with two filler-specific twists:
+
+**Reference game.** Fillers have no "current game", so each register's rows
+evaluate against its natural reference: **pregame → the next game**,
+**postgame and idle → the last game**. Postgame and idle refresh the game's
+status from the provider before evaluating, so `is_final` reflects reality
+even when the cached schedule is stale. On event channels, both registers
+evaluate against the channel's event. Remember the variable suffix that goes
+with the reference: a team-template postgame row reads the last game via
+`.last` (`{game_recap.last}`), while event-template rows use the bare form
+(`{game_recap}`).
+
+**Description cascade.** A winning row's description that resolves to an
+empty string — the classic case is `{game_recap}` for a game that just ended,
+before the provider publishes a recap — falls through to the next matching
+row by priority, and finally to the register's base description. Fields no
+matching row sets always fall back to the register's base content.
+
+**The recap-first pattern** (what new templates and the starter set ship):
+
+```json
+[{"condition": "has_recap", "priority": 10, "template": "{game_recap.last}"},
+ {"condition": "is_not_final", "priority": 50,
+  "template": "The game between {team_name_the} and {opponent_the.last} has not yet ended."}]
+```
+
+Recap published → it renders verbatim. Game still running → the in-progress
+line. Final but no recap → neither row fires and the base register's
+constructed result line renders.
+
+The idle register's **offseason override** (no upcoming game in the
+lookahead) stays separate from condition rows — it's a no-game state, and
+condition rows need a reference game to evaluate.
 
 ---
 
@@ -154,6 +205,19 @@ subtitles flip without a condition.
 ```json
 {"condition": "has_odds", "priority": 70, "template": "{team_name} ({odds_spread}) vs {opponent}. O/U: {odds_over_under}"}
 ```
+
+---
+
+### Game State
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `is_final` | - | The reference game is final |
+| `is_not_final` | - | The reference game exists but is not final yet |
+
+Both return false when there is no reference game at all. They're a deliberate pair rather than one condition and its negation: rows for "game over" and "game still going" stay independent, so a field one row doesn't set falls through to your defaults instead of leaking from the other state.
+
+These shine in [filler condition rows](#filler-condition-rows), where the reference game is the register's next/last game with freshly-checked status.
 
 ---
 

@@ -12,7 +12,9 @@ export interface ManagedChannel {
   dispatcharr_channel_id: number | null
   dispatcharr_uuid: string | null
   home_team: string | null
+  home_team_abbrev: string | null
   away_team: string | null
+  away_team_abbrev: string | null
   event_date: string | null
   event_name: string | null
   league: string | null

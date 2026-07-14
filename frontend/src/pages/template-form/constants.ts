@@ -1,6 +1,11 @@
 import type { LucideIcon } from "lucide-react"
 import { ClipboardList, Pencil, Target, Calendar, Settings } from "lucide-react"
-import type { TemplateCreate, FillerContent } from "@/api/templates"
+import type {
+  TemplateCreate,
+  FillerContent,
+  ConditionalDescription,
+  ConditionalSettings,
+} from "@/api/templates"
 import type { Tab } from "./types"
 
 export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
@@ -33,6 +38,71 @@ export const DEFAULT_IDLE: FillerContent = {
   art_url: null,
 }
 
+// Recap-first postgame condition-row seed (#420, cajd.6): has_recap fires
+// only when the provider published a recap. Team fillers read the LAST game
+// via the .last suffix; event fillers read the channel's event directly.
+export function seedPostgameRows(isTeamTemplate: boolean): ConditionalDescription[] {
+  return [
+    {
+      condition: "has_recap",
+      template: isTeamTemplate ? "{game_recap.last}" : "{game_recap}",
+      priority: 10,
+      label: "Recap (provider)",
+    },
+  ]
+}
+
+// Frontend twin of the backend's legacy_conditional_to_rows (#420): an
+// ENABLED legacy final/not-final conditional becomes up to two disjoint
+// is_final/is_not_final rows. Used when loading a template whose rows column
+// is still empty, so the editor shows the rows generation actually uses;
+// saving then persists the rows and the neutralized legacy dict.
+export function legacyConditionalToRows(
+  cond: ConditionalSettings | null | undefined,
+): ConditionalDescription[] {
+  if (!cond?.enabled) return []
+  const rows: ConditionalDescription[] = []
+  const push = (
+    condition: string,
+    title: string | null,
+    subtitle: string | null,
+    description: string | null,
+    label: string,
+  ) => {
+    if (!title && !subtitle && !description) return
+    rows.push({
+      condition,
+      priority: 50,
+      label,
+      template: description || "",
+      ...(title ? { title } : {}),
+      ...(subtitle ? { subtitle } : {}),
+    })
+  }
+  push("is_final", cond.title_final, cond.subtitle_final, cond.description_final, "Final (legacy)")
+  push(
+    "is_not_final",
+    cond.title_not_final,
+    cond.subtitle_not_final,
+    cond.description_not_final,
+    "In progress (legacy)",
+  )
+  return rows
+}
+
+/** True when rows are still exactly a seedPostgameRows() output (either flavor). */
+export function isUntouchedPostgameSeed(rows: ConditionalDescription[] | null | undefined): boolean {
+  if (!rows || rows.length !== 1) return false
+  const [row] = rows
+  return (
+    row.condition === "has_recap" &&
+    row.priority === 10 &&
+    (row.template === "{game_recap.last}" || row.template === "{game_recap}") &&
+    !row.title &&
+    !row.subtitle
+  )
+}
+
 export const DEFAULT_FORM: TemplateCreate = {
   name: "",
   // Event templates are the primary focus, so new templates default to "event"
@@ -46,17 +116,29 @@ export const DEFAULT_FORM: TemplateCreate = {
   game_duration_override: null,
   xmltv_flags: { new: true, live: false, date: false },
   xmltv_video: { enabled: false, quality: "HDTV" },
-  xmltv_categories: ["Sports"],
+  xmltv_categories: ["Sports", "Sports event"],
   xmltv_filler_categories: [],
   pregame_enabled: true,
   pregame_fallback: DEFAULT_PREGAME,
   postgame_enabled: true,
   postgame_fallback: DEFAULT_POSTGAME,
-  postgame_conditional: { enabled: true, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
+  // Legacy final/not-final conditionals ship disabled (#420): condition rows
+  // are the mechanism; non-empty rows shadow the legacy dicts entirely.
+  postgame_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
   idle_enabled: true,
   idle_content: DEFAULT_IDLE,
-  idle_conditional: { enabled: true, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
-  idle_offseason: { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
+  idle_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
+  // Recap-first postgame (#420, cajd.6): fires only when the provider
+  // published a recap; otherwise the base constructed result line renders.
+  // DEFAULT_FORM is event-typed; the type switch re-seeds the suffix flavor.
+  pregame_conditional_rows: [],
+  postgame_conditional_rows: seedPostgameRows(false),
+  idle_conditional_rows: [],
+  // Offseason register seeded enabled (#418): with it off, idle content
+  // renders {*.next} literals once a team has no next scheduled game.
+  // description_enabled is the master toggle; title unset falls back to the
+  // idle title (no .next in it).
+  idle_offseason: { title_enabled: false, title: null, subtitle_enabled: true, subtitle: "No upcoming game currently on schedule", description_enabled: true, description: "No upcoming {team_name} games scheduled." },
   conditional_descriptions: [],
   event_channel_name: "{away_team} @ {home_team}",
   event_channel_logo_url: null,

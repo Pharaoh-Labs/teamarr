@@ -89,6 +89,14 @@ class TemplateResolver:
             # Keep unknown variables literal (helps users identify typos)
             # Known variables with empty values still get replaced with ""
             if var_name not in variables:
+                # A VALID registry variable with a LEGAL suffix that's simply
+                # missing its game context (no next/last game — offseason,
+                # season end) resolves to empty like any known-but-empty value
+                # (#418) — raw {game_time.next} braces must never reach a real
+                # guide. Typos and illegal suffix usage (e.g. .next on a
+                # BASE_ONLY variable) still stay literal.
+                if self._is_contextless_suffix(var_name):
+                    return ""
                 unreplaced.append(var_name)
                 return match.group(0)  # Return original {variable} unchanged
             return variables[var_name]
@@ -102,6 +110,24 @@ class TemplateResolver:
         result = self._cleanup_result(result)
 
         return result
+
+    def _is_contextless_suffix(self, var_name: str) -> bool:
+        """True for a valid variable + legal suffix that lacks game context.
+
+        ``{game_time.next}`` when there is no next game is valid authoring —
+        the context is missing, not the variable. Anything else absent from
+        the map (unknown base name, illegal suffix for the variable's rules)
+        is a template error and must stay literal so the author can see it.
+        """
+        base, sep, suffix = var_name.partition(".")
+        if not sep or suffix not in ("next", "last"):
+            return False
+        var_def = self._registry.get(base)
+        if var_def is None:
+            return False
+        if suffix == "next":
+            return var_def.suffix_rules in (SuffixRules.ALL, SuffixRules.BASE_NEXT_ONLY)
+        return var_def.suffix_rules in (SuffixRules.ALL, SuffixRules.LAST_ONLY)
 
     def _cleanup_result(self, text: str) -> str:
         """Clean up artifacts left when variables resolve to empty strings.

@@ -14,13 +14,14 @@
 import { useState, useMemo, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { LeaguePicker } from "@/components/LeaguePicker"
+import { SelectedBadges } from "@/components/ui/selected-badges"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { TeamPicker } from "@/components/TeamPicker"
 import { useSubscription, useUpdateSubscription } from "@/hooks/useSubscription"
@@ -35,26 +36,36 @@ import type { SoccerFollowedTeam } from "@/api/types"
 import type { TeamFilterSettings } from "@/api/settings"
 
 /**
- * Split subscribed league slugs into soccer vs non-soccer. Module-level so the
- * render-time seeding block below stays simple enough for the React Compiler
- * (a .find() lambda combined with a method call inside that block defeats its
- * memoization analysis).
+ * Split subscribed league slugs into soccer / non-soccer / stale. Module-level
+ * so the render-time seeding block below stays simple enough for the React
+ * Compiler (a .find() lambda combined with a method call inside that block
+ * defeats its memoization analysis).
+ *
+ * Stale (#408): a slug the league cache no longer knows. Provider discovery
+ * lists churn, so subscribed slugs can outlive the cache — the cache-driven
+ * pickers never render them, making them undeselectable "zombies" that still
+ * cost provider calls every generation run. They're surfaced as removable
+ * badges instead. When the league list hasn't loaded yet there's no basis to
+ * judge, so everything unknown stays in the non-soccer bucket as before.
  */
 function splitSubscribedLeagues(
   slugs: string[],
   allLeagues: { slug: string; sport?: string | null }[],
-): { soccer: string[]; nonSoccer: string[] } {
+): { soccer: string[]; nonSoccer: string[]; stale: string[] } {
   const soccer: string[] = []
   const nonSoccer: string[] = []
+  const stale: string[] = []
   for (const slug of slugs) {
     const league = allLeagues.find((l) => l.slug === slug)
-    if (league?.sport?.toLowerCase() === "soccer") {
+    if (!league && allLeagues.length > 0) {
+      stale.push(slug)
+    } else if (league?.sport?.toLowerCase() === "soccer") {
       soccer.push(slug)
     } else {
       nonSoccer.push(slug)
     }
   }
-  return { soccer, nonSoccer }
+  return { soccer, nonSoccer, stale }
 }
 
 export function GlobalDefaults({
@@ -93,6 +104,7 @@ export function GlobalDefaults({
   const [nonSoccerLeagues, setNonSoccerLeagues] = useState<string[]>([])
   const [soccerMode, setSoccerMode] = useState<SoccerMode>(null)
   const [soccerLeagues, setSoccerLeagues] = useState<string[]>([])
+  const [staleLeagues, setStaleLeagues] = useState<string[]>([])
   const [followedTeams, setFollowedTeams] = useState<SoccerFollowedTeam[]>([])
   const [hasLocalChanges, setHasLocalChanges] = useState(false)
 
@@ -120,11 +132,12 @@ export function GlobalDefaults({
   ) {
     setSyncedSubscription({ subscription, leaguesData })
 
-    // Split leagues into soccer vs non-soccer
-    const { soccer, nonSoccer } = splitSubscribedLeagues(subscription.leagues, allLeagues)
+    // Split leagues into soccer vs non-soccer vs stale
+    const { soccer, nonSoccer, stale } = splitSubscribedLeagues(subscription.leagues, allLeagues)
 
     setNonSoccerLeagues(nonSoccer)
     setSoccerLeagues(soccer)
+    setStaleLeagues(stale)
     setSoccerMode(subscription.soccer_mode as SoccerMode)
     setFollowedTeams(subscription.soccer_followed_teams || [])
     setHasLocalChanges(false)
@@ -143,6 +156,12 @@ export function GlobalDefaults({
     () => [...nonSoccerLeagues, ...soccerLeagues],
     [nonSoccerLeagues, soccerLeagues]
   )
+
+  // Remove a stale (cache-unknown) slug from the pending subscription
+  const handleRemoveStale = useCallback((slug: string) => {
+    setStaleLeagues((prev) => prev.filter((s) => s !== slug))
+    setHasLocalChanges(true)
+  }, [])
 
   // Handle non-soccer league change
   const handleNonSoccerChange = useCallback((leagues: string[]) => {
@@ -168,9 +187,12 @@ export function GlobalDefaults({
     setHasLocalChanges(true)
   }, [])
 
-  // Save subscription to server
+  // Save subscription to server. Stale slugs the user hasn't removed ride
+  // along unchanged — the backend validates against its league universe and
+  // logs+drops anything unknown (#408), so a save from here never silently
+  // grows the list back.
   const handleSave = useCallback(() => {
-    const combinedLeagues = [...nonSoccerLeagues, ...soccerLeagues]
+    const combinedLeagues = [...nonSoccerLeagues, ...soccerLeagues, ...staleLeagues]
     updateMutation.mutate(
       {
         leagues: combinedLeagues,
@@ -187,7 +209,7 @@ export function GlobalDefaults({
         },
       }
     )
-  }, [nonSoccerLeagues, soccerLeagues, soccerMode, followedTeams, updateMutation])
+  }, [nonSoccerLeagues, soccerLeagues, staleLeagues, soccerMode, followedTeams, updateMutation])
 
   // Save team filter
   const handleSaveTeamFilter = useCallback(() => {
@@ -218,7 +240,7 @@ export function GlobalDefaults({
       <Card>
         <CardContent>
           <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading subscriptions…
+            <LoaderCircle className="h-4 w-4 animate-spin" /> Loading subscriptions…
           </div>
         </CardContent>
       </Card>
@@ -245,6 +267,23 @@ export function GlobalDefaults({
             showSelectedBadges={true}
             maxBadges={10}
           />
+          {staleLeagues.length > 0 && (
+            <div className="space-y-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+              <Label className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                Stale leagues
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                These subscribed leagues are no longer recognized (removed from
+                provider discovery). They can't be shown in the pickers and are
+                dropped on save.
+              </p>
+              <SelectedBadges
+                items={staleLeagues.map((slug) => ({ key: slug, label: slug }))}
+                maxBadges={20}
+                onRemove={handleRemoveStale}
+              />
+            </div>
+          )}
           <div className="flex justify-end pt-2">
             <SaveButton
               onClick={handleSave}

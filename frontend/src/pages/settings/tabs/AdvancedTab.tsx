@@ -1,5 +1,5 @@
 import { toast } from "sonner"
-import { Loader2, Database, Trash2 } from "lucide-react"
+import { LoaderCircle, Database, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -90,7 +90,7 @@ function DataCachesCard() {
               size="sm"
             >
               {(refreshCacheMutation.isPending || cacheStatus?.refresh_in_progress) && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               )}
               {cacheStatus?.refresh_in_progress ? "Refreshing..." : "Refresh Directory"}
             </Button>
@@ -126,7 +126,7 @@ function DataCachesCard() {
               className="w-full mt-auto"
             >
               {clearGameDataCacheMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
@@ -158,7 +158,7 @@ function DataCachesCard() {
               className="w-full mt-auto"
             >
               {clearAllMatchCacheMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}
@@ -191,7 +191,7 @@ function DataCachesCard() {
               className="w-full mt-auto"
             >
               {clearAllRunsMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />
               )}

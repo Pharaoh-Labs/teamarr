@@ -34,11 +34,14 @@ export interface IdleOffseasonSettings {
   description: string | null
 }
 
-// Conditional description entry
+// Conditional row: description, plus optional title/subtitle overrides (#370p2).
+// `template` is the description string (historical name — it is the stored key).
 export interface ConditionalDescription {
   condition: string
   condition_value?: string
   template: string
+  title?: string | null
+  subtitle?: string | null
   priority: number
   label?: string  // Optional label for fallback descriptions
 }
@@ -100,6 +103,13 @@ export interface Template {
   idle_conditional: ConditionalSettings | null
   idle_offseason: IdleOffseasonSettings | null
 
+  // Filler condition rows (#420) — same shape as conditional_descriptions,
+  // evaluated against the register's reference game (pregame → next game,
+  // postgame/idle → last game). Replace the legacy *_conditional dicts.
+  pregame_conditional_rows: ConditionalDescription[] | null
+  postgame_conditional_rows: ConditionalDescription[] | null
+  idle_conditional_rows: ConditionalDescription[] | null
+
   // Conditional descriptions
   conditional_descriptions: ConditionalDescription[] | null
 
@@ -152,6 +162,11 @@ export interface TemplateCreate {
   idle_conditional?: ConditionalSettings | null
   idle_offseason?: IdleOffseasonSettings | null
 
+  // Filler condition rows (#420)
+  pregame_conditional_rows?: ConditionalDescription[] | null
+  postgame_conditional_rows?: ConditionalDescription[] | null
+  idle_conditional_rows?: ConditionalDescription[] | null
+
   // Conditional descriptions
   conditional_descriptions?: ConditionalDescription[] | null
 
@@ -193,13 +208,18 @@ export interface ConditionRowTrace {
   condition_value: string | null
   priority: number
   matched: boolean
-  selected: boolean
+  selected: boolean  // selected for DESCRIPTION (historical meaning)
+  selected_for: string[]  // fields this row won: title/subtitle/description
   reason: string
 }
 
 export interface ConditionalPreview {
   rendered: string
   selected_index: number | null
+  rendered_title: string | null
+  selected_title_index: number | null
+  rendered_subtitle: string | null
+  selected_subtitle_index: number | null
   rows: ConditionRowTrace[]
 }
 
@@ -211,6 +231,19 @@ export interface TemplatePreviewRequest {
   // client cache rendered results per unique template text.
   fields: Record<string, string>
   conditional_descriptions?: ConditionalDescription[] | null
+  // Filler condition rows keyed by register (pregame/postgame/idle), #428.
+  filler_conditional_rows?: Record<string, ConditionalDescription[]> | null
+}
+
+// What a filler register's condition rows produce for the preview event
+// (#428). rendered_description already walks the row cascade; null means the
+// register's base description renders. `fired` lists row-won fields.
+export interface FillerRegisterPreview {
+  rendered_description: string | null
+  rendered_title: string | null
+  rendered_subtitle: string | null
+  fired: string[]
+  rows: ConditionRowTrace[]
 }
 
 export interface TemplatePreviewResponse {
@@ -218,6 +251,7 @@ export interface TemplatePreviewResponse {
   league: string | null
   fields: Record<string, string>
   conditional: ConditionalPreview | null
+  filler_conditional?: Record<string, FillerRegisterPreview> | null
 }
 
 export async function previewTemplate(

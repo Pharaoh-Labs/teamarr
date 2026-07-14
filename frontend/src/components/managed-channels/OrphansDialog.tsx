@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Trash2, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
+import { Trash2, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import {
@@ -114,7 +114,7 @@ function OrphansContent({ onClose }: { onClose: () => void }) {
     <DialogContent onClose={onClose} className="max-w-2xl">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-warning" />
+          <TriangleAlert className="h-5 w-5 text-warning" />
           Orphan Channels
         </DialogTitle>
         <DialogDescription>
@@ -168,7 +168,7 @@ function OrphansContent({ onClose }: { onClose: () => void }) {
                         }
                       >
                         {deletingOrphanId === orphan.dispatcharr_channel_id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
                         ) : (
                           <Trash2 className="h-4 w-4" />
                         )}
@@ -202,7 +202,7 @@ function OrphansContent({ onClose }: { onClose: () => void }) {
             disabled={deletingAllOrphans}
           >
             {deletingAllOrphans ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              <LoaderCircle className="h-4 w-4 animate-spin mr-1" />
             ) : (
               <Trash2 className="h-4 w-4 mr-1" />
             )}

@@ -33,6 +33,19 @@ def _create_subscription_schema(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL
         );
+
+        -- Known-league universe for save-time validation (#408). league_cache
+        -- left empty by default so validation is skipped unless a test seeds it.
+        CREATE TABLE IF NOT EXISTS leagues (
+            league_code TEXT PRIMARY KEY
+        );
+
+        CREATE TABLE IF NOT EXISTS league_cache (
+            league_slug TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            sport TEXT NOT NULL,
+            PRIMARY KEY (league_slug, provider)
+        );
     """)
     conn.commit()
 
@@ -71,6 +84,44 @@ class TestSubscriptionCRUD:
         update_subscription(db, leagues=["nhl", "nba", "nfl"])
         sub = get_subscription(db)
         assert sorted(sub.leagues) == ["nba", "nfl", "nhl"]
+
+    def test_update_leagues_drops_unknown_codes(self, db):
+        """Zombie slugs absent from leagues ∪ league_cache are dropped on save (#408)."""
+        from teamarr.database.subscription import get_subscription, update_subscription
+
+        db.execute(
+            "INSERT INTO league_cache (league_slug, provider, sport) VALUES "
+            "('nhl', 'espn', 'hockey'), ('eng.1', 'espn', 'soccer')"
+        )
+        db.execute("INSERT INTO leagues (league_code) VALUES ('sui.1')")
+        db.commit()
+
+        update_subscription(
+            db, leagues=["nhl", "eng.1", "sui.1", "bra.carioca.groupa", "afc.challenge_cup"]
+        )
+        sub = get_subscription(db)
+        assert sorted(sub.leagues) == ["eng.1", "nhl", "sui.1"]
+
+    def test_update_leagues_validation_is_case_insensitive(self, db):
+        from teamarr.database.subscription import get_subscription, update_subscription
+
+        db.execute(
+            "INSERT INTO league_cache (league_slug, provider, sport) "
+            "VALUES ('nhl', 'espn', 'hockey')"
+        )
+        db.commit()
+
+        update_subscription(db, leagues=["NHL"])
+        sub = get_subscription(db)
+        assert sub.leagues == ["NHL"]
+
+    def test_update_leagues_skips_validation_when_cache_empty(self, db):
+        """Empty league_cache (fresh install / mid-refresh) must not purge the list."""
+        from teamarr.database.subscription import get_subscription, update_subscription
+
+        update_subscription(db, leagues=["nhl", "bra.carioca.groupa"])
+        sub = get_subscription(db)
+        assert sorted(sub.leagues) == ["bra.carioca.groupa", "nhl"]
 
     def test_update_soccer_mode(self, db):
         from teamarr.database.subscription import get_subscription, update_subscription

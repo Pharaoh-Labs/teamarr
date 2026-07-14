@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { toast } from "sonner"
-import { Trash2, Loader2 } from "lucide-react"
+import { Trash2, LoaderCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -172,7 +172,7 @@ export function AliasesSection() {
         </p>
         {aliasesQuery.isLoading ? (
           <div className="flex items-center justify-center rounded-lg border border-border py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <ResponsiveTable
@@ -292,7 +292,7 @@ export function AliasesSection() {
               }
             >
               {createAliasMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               )}
               Create
             </Button>

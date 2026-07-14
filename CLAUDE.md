@@ -225,7 +225,7 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v78) |
+| Schema version | `teamarr/database/schema.sql` (v81) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 
@@ -253,8 +253,8 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
-- 259 variables in `variables/` (20 categories)
-- 31 condition evaluators in `conditions.py`
+- 260 variables in `variables/` (20 categories)
+- 33 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
 
@@ -279,7 +279,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - `epg_resolver.py` bridges the stream `tvg_id` → program `tvg_id` namespace gap via a cascade: direct tvg_id → curated channel `epg_data_id` → strict name match (does NOT require an EPG-linked channel). `_Teamarr` source excluded.
 - `epg_index.py` fetches by resolved tvg_id, keys by stream tvg_id; `epg_matcher.py` routes program title+sub_title (pipe-joined) through `classify_stream → TeamMatcher`.
 - `MatchMethod.EPG` persisted to `managed_channel_streams.match_method` → drives the `epg_match` stream-ordering rule. EPG-matched groups show an "EPG Matched" badge.
-- Docs: `docs/guide/epg-matching.md`.
+- Docs: `docs/guide/matching/program-matching.md`.
 
 ## Plans & Roadmap
 

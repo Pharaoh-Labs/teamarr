@@ -197,6 +197,10 @@ class ChannelLifecycleService(
         # Computed lazily via compute_external_occupied() and cached for the run
         self._external_occupied: set[int] | None = None
 
+        # Full channel-profile id catalog, fetched lazily once per run for the
+        # ALL-profiles ([0]) sentinel comparison in _sync_channel_profiles.
+        self._all_profile_ids_cache: set[int] | None = None
+
         # Dynamic group/profile resolver
         self._dynamic_resolver = DynamicResolver()
 
@@ -298,6 +302,7 @@ class ChannelLifecycleService(
             self._logo_manager.clear_cache()
         self._exception_keywords = None
         self._pending_profile_changes = {}
+        self._all_profile_ids_cache = None
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
 
@@ -466,8 +471,14 @@ class ChannelLifecycleService(
         return fallback_template
 
     def _parse_profile_ids(self, raw: Any) -> list[int]:
-        """Parse channel profile IDs from various formats."""
-        if not raw:
+        """Parse channel profile IDs from various formats.
+
+        0 is a meaningful value (Dispatcharr's ALL-profiles sentinel), so the
+        filter must be None/empty-aware, not truthiness — `if x` dropped the
+        stored [0], making the DB read back as [] and re-PATCHing every channel
+        every run (perpetual "profiles: all profiles" sync).
+        """
+        if raw is None or raw == "":
             return []
         if isinstance(raw, str):
             try:
@@ -475,5 +486,5 @@ class ChannelLifecycleService(
             except json.JSONDecodeError:
                 return []
         if isinstance(raw, list):
-            return [int(x) for x in raw if x]
+            return [int(x) for x in raw if x is not None and x != ""]
         return []

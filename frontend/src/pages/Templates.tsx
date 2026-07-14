@@ -1,7 +1,7 @@
 import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, Loader2, Copy, Download, Upload, Tv, User } from "lucide-react"
+import { Plus, Trash2, Pencil, LoaderCircle, Copy, Download, Upload, Tv, User } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
@@ -120,6 +120,12 @@ export function Templates() {
             idle_content: template.idle_content,
             idle_conditional: template.idle_conditional,
             idle_offseason: template.idle_offseason,
+            // Explicit [] when absent (pre-#420 exports): the schema's seeded
+            // postgame default would otherwise shadow an imported legacy
+            // conditional (non-empty rows win over the legacy shim).
+            pregame_conditional_rows: template.pregame_conditional_rows ?? [],
+            postgame_conditional_rows: template.postgame_conditional_rows ?? [],
+            idle_conditional_rows: template.idle_conditional_rows ?? [],
             conditional_descriptions: template.conditional_descriptions,
             event_channel_name: template.event_channel_name,
             event_channel_logo_url: template.event_channel_logo_url,
@@ -174,6 +180,9 @@ export function Templates() {
         idle_content: fullTemplate.idle_content,
         idle_conditional: fullTemplate.idle_conditional,
         idle_offseason: fullTemplate.idle_offseason,
+        pregame_conditional_rows: fullTemplate.pregame_conditional_rows ?? [],
+        postgame_conditional_rows: fullTemplate.postgame_conditional_rows ?? [],
+        idle_conditional_rows: fullTemplate.idle_conditional_rows ?? [],
         conditional_descriptions: fullTemplate.conditional_descriptions,
         event_channel_name: fullTemplate.event_channel_name,
         event_channel_logo_url: fullTemplate.event_channel_logo_url,
@@ -231,7 +240,7 @@ export function Templates() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
             {isImporting ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <Upload className="h-4 w-4 mr-1" />
             )}
@@ -451,7 +460,7 @@ export function Templates() {
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {deleteMutation.isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Delete
             </Button>
           </DialogFooter>

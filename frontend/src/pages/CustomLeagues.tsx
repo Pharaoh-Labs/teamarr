@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { AlertTriangle, FlaskConical, Loader2, Pencil, Plus, Trash2 } from "lucide-react"
+import { TriangleAlert, FlaskConical, LoaderCircle, Pencil, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -137,7 +137,7 @@ export function CustomLeaguesManager({
                             variant="warning"
                             title="This league isn't in your subscription, so its games won't appear. Add it under Subscriptions."
                           >
-                            <AlertTriangle className="h-3 w-3" /> Not subscribed
+                            <TriangleAlert className="h-3 w-3" /> Not subscribed
                           </Badge>
                         )}
                       </div>
@@ -372,7 +372,7 @@ function CustomLeagueDialog({
               disabled={!canTest || testMutation.isPending}
             >
               {testMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoaderCircle className="h-4 w-4 animate-spin" />
               ) : (
                 <FlaskConical className="h-4 w-4" />
               )}
@@ -402,7 +402,7 @@ function CustomLeagueDialog({
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={!requiredFilled || saving}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
               {isEdit ? "Save Changes" : "Create League"}
             </Button>
           </div>

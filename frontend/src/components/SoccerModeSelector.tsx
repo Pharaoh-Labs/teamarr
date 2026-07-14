@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ListChecks, Users, Info, Search, Loader2 } from "lucide-react"
+import { ListChecks, Users, Info, Search, LoaderCircle } from "lucide-react"
 import { LeaguePicker } from "@/components/LeaguePicker"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -147,7 +147,7 @@ export function SoccerModeSelector({
               className="pl-9"
             />
             {isSearching && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              <LoaderCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
             )}
           </div>
 

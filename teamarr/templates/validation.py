@@ -177,6 +177,17 @@ def validate_conditional_descriptions(
             )
         if warnings:
             results[f"conditional_descriptions[{i}]"] = warnings
+        # Optional per-row title/subtitle overrides (#370 part 2) are template
+        # strings too — validate each under its own key.
+        for field in ("title", "subtitle"):
+            text = _get(entry, field)
+            if not text:
+                continue
+            field_warnings = validate_template(
+                text, valid_names, base_names, is_event_template
+            )
+            if field_warnings:
+                results[f"conditional_descriptions[{i}].{field}"] = field_warnings
 
     return results
 
