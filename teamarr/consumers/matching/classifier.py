@@ -944,9 +944,7 @@ _WOMENS_LEAGUE_RE = re.compile(r"\bwomens?\b", re.IGNORECASE)
 _MENS_LEAGUE_RE = re.compile(r"\bmens?\b", re.IGNORECASE)
 
 
-def _narrow_by_gender(
-    leagues: list[str], stream_name: str
-) -> str | list[str]:
+def _narrow_by_gender(leagues: list[str], stream_name: str) -> str | list[str]:
     """Narrow an umbrella league hint using gender markers in the stream name.
 
     If the stream contains a women's marker ((W), Women, (F), femenino/femenina),
@@ -1501,9 +1499,7 @@ def _classify_event_card(ctx: _ClassifyContext) -> ClassifiedStream | None:
     sport_blocks_keywords = False
     if ctx.sport_hint is not None and ctx.league_event_type != "event_card":
         if isinstance(ctx.sport_hint, list):
-            sport_blocks_keywords = not any(
-                s.lower() in _event_card_sports for s in ctx.sport_hint
-            )
+            sport_blocks_keywords = not any(s.lower() in _event_card_sports for s in ctx.sport_hint)
         else:
             sport_blocks_keywords = ctx.sport_hint.lower() not in _event_card_sports
         if sport_blocks_keywords:
@@ -1542,15 +1538,11 @@ def _classify_event_card(ctx: _ClassifyContext) -> ClassifiedStream | None:
 
     # Try custom regex for event name (if configured)
     if ctx.custom_regex and ctx.custom_regex.event_name_enabled:
-        custom_event_name = extract_event_name_with_custom_regex(
-            ctx.stream_name, ctx.custom_regex
-        )
+        custom_event_name = extract_event_name_with_custom_regex(ctx.stream_name, ctx.custom_regex)
         if custom_event_name:
             event_hint = custom_event_name
             custom_regex_used = True
-            logger.debug(
-                "[CLASSIFY] Custom event_name regex matched: %s", custom_event_name
-            )
+            logger.debug("[CLASSIFY] Custom event_name regex matched: %s", custom_event_name)
 
     return ctx.make(
         StreamCategory.EVENT_CARD,
@@ -1596,8 +1588,7 @@ def _classify_racing_event(ctx: _ClassifyContext) -> ClassifiedStream | None:
             # comes back as None.
             left_raw = ctx.text[:sep_position].strip()
             if sep.strip() in ("at", "@") and (
-                (sep_team1 and len(sep_team1.split()) > 1)
-                or has_racing_text_evidence(left_raw)
+                (sep_team1 and len(sep_team1.split()) > 1) or has_racing_text_evidence(left_raw)
             ):
                 has_team_pattern = False
             else:
@@ -1619,6 +1610,34 @@ def _classify_racing_event(ctx: _ClassifyContext) -> ClassifiedStream | None:
     return ctx.make(StreamCategory.RACING_EVENT, event_hint=ctx.text)
 
 
+# "Last, First" comma-form name shape ("Stefanini, Lucrezia") — used to
+# recognize the "Surname, First - Surname, First" provider format (#439).
+_COMMA_NAME = re.compile(r"[^\W\d_][\w'.-]*\s*,\s*[^\W\d_]")
+
+
+def _extract_comma_form_players(text: str) -> tuple[str, str] | None:
+    """Extract a player pair from "Surname, First - Surname, First" names.
+
+    " - " is deliberately NOT a global game separator (hyphens appear inside
+    team names and schedule labels), so these streams never yield a player
+    pair from the separator logic. Only when BOTH sides of the " - " carry a
+    comma-form name does it read as a player pair — and this only runs for
+    tennis groups, so team sports are unaffected (#439).
+    """
+    if " - " not in text:
+        return None
+    left, _, right = text.partition(" - ")
+    # Drop provider prefixes ("Tennis 06: Live & Upcoming:") from the left side
+    left = left.rsplit(":", 1)[-1]
+    if not (_COMMA_NAME.search(left) and _COMMA_NAME.search(right)):
+        return None
+    team1 = _clean_team_name(left)
+    team2 = _clean_team_name(right)
+    if not team1 or not team2:
+        return None
+    return team1, team2
+
+
 def _classify_tennis_match(ctx: _ClassifyContext) -> ClassifiedStream | None:
     """Step 2.6: Check for tennis matches ("Wimbledon: Zheng vs Norrie").
 
@@ -1637,22 +1656,44 @@ def _classify_tennis_match(ctx: _ClassifyContext) -> ClassifiedStream | None:
     ):
         return None
 
+    # Custom teams regex first (#439): this step claims every stream in a
+    # tennis group before the cascade's custom-regex step can run, and the
+    # event-card step's fighter patterns are blocked for tennis by the sport
+    # hint — so without this hook, no custom extraction is reachable on the
+    # tennis path at all.
+    if ctx.custom_regex and ctx.custom_regex.teams_enabled:
+        team1, team2, success = extract_teams_with_custom_regex(ctx.stream_name, ctx.custom_regex)
+        if success:
+            return ctx.make(
+                StreamCategory.TENNIS_MATCH,
+                team1=team1,
+                team2=team2,
+                separator_found="custom_regex",
+                custom_regex_used=True,
+            )
+
     separator, sep_position = find_game_separator(ctx.text)
     if separator:
         team1, team2 = extract_teams_from_separator(ctx.text, separator, sep_position)
         # "at"/"@" with a multi-word left part is a tournament/day
         # label ("Wimbledon Second Round @ Jul 2"), not a player pair.
-        if (
-            team1
-            and team2
-            and not (separator.strip() in ("at", "@") and len(team1.split()) > 1)
-        ):
+        if team1 and team2 and not (separator.strip() in ("at", "@") and len(team1.split()) > 1):
             return ctx.make(
                 StreamCategory.TENNIS_MATCH,
                 team1=team1,
                 team2=team2,
                 separator_found=separator,
             )
+
+    # "Surname, First - Surname, First" provider format (#439)
+    pair = _extract_comma_form_players(ctx.text)
+    if pair:
+        return ctx.make(
+            StreamCategory.TENNIS_MATCH,
+            team1=pair[0],
+            team2=pair[1],
+            separator_found=" - ",
+        )
 
     return ctx.make(StreamCategory.TENNIS_MATCH, event_hint=ctx.text)
 
