@@ -5,6 +5,7 @@ from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
 
 from teamarr.consumers.channel_lifecycle import create_lifecycle_service
+from teamarr.consumers.matching.team_matcher import is_all_star_event
 from teamarr.core import SEASON_POSTSEASON, Event
 from teamarr.database.groups import EventEPGGroup
 
@@ -36,7 +37,7 @@ class TeamFiltering:
         Uses canonical team selection (provider, team_id) for unambiguous matching.
 
         When bypass_filter_for_playoffs is enabled, playoff games (season_type='postseason')
-        bypass the team filter entirely.
+        and All-Star games (detected via is_all_star_event) bypass the team filter entirely.
 
         Args:
             matched_streams: List of {'stream': ..., 'event': ...} dicts
@@ -61,7 +62,7 @@ class TeamFiltering:
         assert filter_list is not None
         filtered = []
         filtered_count = 0
-        playoff_bypass_count = 0
+        bypass_count = 0
 
         # Extract leagues that have teams in the filter
         # Only filter events from leagues with explicit selections
@@ -74,10 +75,12 @@ class TeamFiltering:
                 filtered.append(match)
                 continue
 
-            # Bypass filter for playoff games if setting is enabled
-            if bypass_playoffs and event.season_type == SEASON_POSTSEASON:
+            # Bypass filter for playoff and All-Star games if setting is enabled
+            if bypass_playoffs and (
+                event.season_type == SEASON_POSTSEASON or is_all_star_event(event)
+            ):
                 filtered.append(match)
-                playoff_bypass_count += 1
+                bypass_count += 1
                 continue
 
             # Get event's league
@@ -112,10 +115,10 @@ class TeamFiltering:
                     filtered_count += 1
                     logger.debug(f"Team filter excluded: {event.name} - team in exclude list")
 
-        if playoff_bypass_count > 0:
+        if bypass_count > 0:
             logger.info(
-                "Playoff bypass: %d playoff game(s) included despite team filter",
-                playoff_bypass_count,
+                "Playoff/All-Star bypass: %d game(s) included despite team filter",
+                bypass_count,
             )
 
         if filtered_count > 0:
@@ -135,7 +138,7 @@ class TeamFiltering:
         """Get team filter with settings fallback.
 
         Priority chain:
-        1. Master toggle off (settings.enabled=False) → no filtering, no playoff bypass
+        1. Master toggle off (settings.enabled=False) → no filtering, no playoff/All-Star bypass
         2. Group's own filter (if configured)
         3. Global settings default (if configured)
         4. No filtering (default)
@@ -148,7 +151,7 @@ class TeamFiltering:
         settings = get_team_filter_settings(conn)
 
         # Master toggle: when disabled, skip filtering entirely (group filters
-        # included). Playoff bypass is moot when nothing is being filtered.
+        # included). Playoff/All-Star bypass is moot when nothing is being filtered.
         if not settings.enabled:
             return None, None, "include", False
 

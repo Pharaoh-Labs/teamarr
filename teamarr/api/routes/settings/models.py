@@ -284,7 +284,7 @@ class TeamFilterSettingsModel(BaseModel):
     include_teams: list[dict] | None = None
     exclude_teams: list[dict] | None = None
     mode: str = "include"
-    bypass_filter_for_playoffs: bool = False  # Include all playoff games
+    bypass_filter_for_playoffs: bool = False  # Include all playoff and All-Star games
 
 
 class TeamFilterSettingsUpdate(BaseModel):

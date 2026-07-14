@@ -62,7 +62,7 @@ The **Teams** tab adds an optional filter that narrows matched events down to sp
 - **Filter mode** — *Include only selected teams* (keep just these) or *Exclude selected teams* (drop these).
 - **Team selection** — search and pick teams, grouped by sport.
 
-The filter is **league-scoped**: it only affects leagues where you've selected at least one team. A league with no selections passes through untouched. So you can follow Barcelona, Liverpool, and AC Milan, select exactly those three here in *Include* mode, and get only their matches from La Liga, the Premier League, and Serie A — while other subscribed leagues (where you've picked no teams) stay fully covered. Playoff games can optionally bypass the filter so you never miss postseason coverage.
+The filter is **league-scoped**: it only affects leagues where you've selected at least one team. A league with no selections passes through untouched. So you can follow Barcelona, Liverpool, and AC Milan, select exactly those three here in *Include* mode, and get only their matches from La Liga, the Premier League, and Serie A — while other subscribed leagues (where you've picked no teams) stay fully covered. Playoff and All-Star games can optionally bypass the filter so you never miss postseason or All-Star coverage.
 
 ## Custom Leagues
 

@@ -62,7 +62,7 @@ ANCHOR_MATCH_TOLERANCE_SECONDS = 90 * 60
 _ALL_STAR_TEAM_RE = re.compile(r"all[\s\-]?stars?", re.IGNORECASE)
 
 
-def _is_all_star_event(event: Event) -> bool:
+def is_all_star_event(event: Event) -> bool:
     """True when both competitors are All-Star squads.
 
     ESPN names both sides of an All-Star game with an "All-Star(s)" token
@@ -596,7 +596,7 @@ class TeamMatcher:
         ESPN serves All-Star games inside the normal league scoreboard as two
         pseudo-teams whose names both carry an "All-Star(s)" token. We resolve
         the classified stream to the event in the hinted league(s) whose
-        competitors are both All-Star squads (see ``_is_all_star_event``) —
+        competitors are both All-Star squads (see ``is_all_star_event``) —
         name-agnostic, so the yearly-varying opponent needs no hardcoding.
         There is one All-Star event per league per season, so this normally
         returns a single outcome.
@@ -667,7 +667,7 @@ class TeamMatcher:
         for league, event in all_events:
             if event.id in seen_event_ids:
                 continue
-            if not _is_all_star_event(event):
+            if not is_all_star_event(event):
                 continue
             # EPG anchored matching (bead t5e): gate to the live occurrence near
             # the program's broadcast instant.

@@ -268,7 +268,7 @@ CREATE TABLE IF NOT EXISTS settings (
     default_exclude_teams JSON,                  -- Global exclude filter (same format)
     default_team_filter_mode TEXT DEFAULT 'include' CHECK(default_team_filter_mode IN ('include', 'exclude')),
     team_filter_enabled BOOLEAN DEFAULT 1,       -- Master toggle to enable/disable team filtering
-    default_bypass_filter_for_playoffs BOOLEAN DEFAULT 0, -- Include all playoff games regardless of team filter
+    default_bypass_filter_for_playoffs BOOLEAN DEFAULT 0, -- Include all playoff and All-Star games regardless of team filter
 
     -- Scheduled Generation
     cron_expression TEXT DEFAULT '0 * * * *',    -- Cron for auto EPG generation
@@ -576,7 +576,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     exclude_teams JSON,                          -- Teams to exclude: same format
     team_filter_mode TEXT DEFAULT 'include'      -- 'include' (whitelist) or 'exclude' (blacklist)
         CHECK(team_filter_mode IN ('include', 'exclude')),
-    bypass_filter_for_playoffs BOOLEAN,          -- NULL=use default, 0=disabled, 1=enabled (include all playoff games)
+    bypass_filter_for_playoffs BOOLEAN,          -- NULL=use default, 0=disabled, 1=enabled (include all playoff and All-Star games)
     name_match_enabled BOOLEAN DEFAULT 1,        -- (ahow) Match streams whose name identifies a specific event (TEAM_VS_TEAM/EVENT_CARD/RACING) — the default matching type. DEFAULT 1 backfills existing sources on upgrade. One of three declared matching types alongside team_streams_enabled (Team) and epg_match_enabled (EPG).
     team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
     epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires a Dispatcharr build with /api/epg/programs/search/ (0.24.0+). No global switch — per-source opt-in (3lp1).
