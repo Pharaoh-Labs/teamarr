@@ -167,7 +167,7 @@ class TeamFilterSettings:
     include_teams: list[dict] | None = None
     exclude_teams: list[dict] | None = None
     mode: str = "include"  # 'include' or 'exclude'
-    bypass_filter_for_playoffs: bool = False  # Include all playoff games regardless of filter
+    bypass_filter_for_playoffs: bool = False  # Include all playoff/All-Star games regardless
 
 
 @dataclass

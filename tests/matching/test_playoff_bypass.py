@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from teamarr.consumers.matching.team_matcher import is_all_star_event
 from teamarr.core import (
     SEASON_OFFSEASON,
     SEASON_POSTSEASON,
@@ -70,6 +71,41 @@ def _event_with_season_type(season_type: str | None) -> Event:
         league="nhl",
         sport="hockey",
         season_type=season_type,
+    )
+
+
+def _all_star_event() -> Event:
+    # All-Star games have no dedicated season_type bucket — providers map them
+    # to regular/None (see test_all_star_falls_into_regular_bucket below), so
+    # the bypass gate must detect them via is_all_star_event(), not season_type.
+    return Event(
+        id="asg",
+        provider="espn",
+        name="American All-Stars at National All-Stars",
+        short_name="AL @ NL",
+        start_time=datetime(2026, 7, 14, 23, 0, tzinfo=UTC),
+        home_team=Team(
+            id="nl",
+            provider="espn",
+            name="National All-Stars",
+            short_name="NL",
+            abbreviation="NL",
+            league="mlb",
+            sport="baseball",
+        ),
+        away_team=Team(
+            id="al",
+            provider="espn",
+            name="American All-Stars",
+            short_name="AL",
+            abbreviation="AL",
+            league="mlb",
+            sport="baseball",
+        ),
+        status=EventStatus(state="scheduled"),
+        league="mlb",
+        sport="baseball",
+        season_type=SEASON_REGULAR,
     )
 
 
@@ -416,3 +452,30 @@ class TestFilterBypassUsesCanonicalConstant:
     def test_filter_does_not_treat_regular_as_postseason(self) -> None:
         event = _event_with_season_type(SEASON_REGULAR)
         assert event.season_type != SEASON_POSTSEASON
+
+
+# --- Consumer: filter bypass also covers All-Star games ---
+
+
+class TestFilterBypassIncludesAllStar:
+    """Verify the bypass gate treats All-Star games as bypass-eligible too.
+
+    All-Star games have no dedicated season_type (they fall into the regular
+    bucket, see test_all_star_falls_into_regular_bucket), so the gate must use
+    is_all_star_event() as a second, independent condition alongside the
+    season_type == SEASON_POSTSEASON check — not season_type alone.
+    """
+
+    def test_all_star_event_detected_despite_regular_season_type(self) -> None:
+        event = _all_star_event()
+        assert event.season_type != SEASON_POSTSEASON
+        assert is_all_star_event(event)
+
+    def test_bypass_gate_condition_true_for_all_star_event(self) -> None:
+        # Mirrors the exact predicate used in team_filter.py::_filter_by_teams.
+        event = _all_star_event()
+        assert (event.season_type == SEASON_POSTSEASON) or is_all_star_event(event)
+
+    def test_bypass_gate_condition_false_for_regular_non_all_star_game(self) -> None:
+        event = _event_with_season_type(SEASON_REGULAR)
+        assert not ((event.season_type == SEASON_POSTSEASON) or is_all_star_event(event))

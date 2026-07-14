@@ -116,7 +116,7 @@ class EventEPGGroup:
     include_teams: list[dict] | None = None
     exclude_teams: list[dict] | None = None
     team_filter_mode: str = "include"
-    bypass_filter_for_playoffs: bool | None = None  # NULL=use default, True/False=override
+    bypass_filter_for_playoffs: bool | None = None  # NULL=default (playoff + All-Star bypass)
     name_match_enabled: bool = True  # (ahow) match streams that name a specific event
     team_streams_enabled: bool = False
     epg_match_enabled: bool = False  # (183.6) opt this group into EPG program-data matching
