@@ -202,6 +202,8 @@ Each shape is a kitchen-sink: every variable that applies to it is filled (the `
 
 **Live preview.** When live is on, the picker fetches a real recent/upcoming event (`get_sample_event`, provider-aware, cached) and shows its actual values. A variable the real event can't fill is **surfaced as a gap** — left empty and counted — rather than masked with the fictitious sample, so users don't get a false sense of availability. Gaps are scoped to **categories relevant to the event's shape** (a basketball preview doesn't flag empty combat/racing variables), and the picker shows live coverage (`live_populated`/`live_total`). Any failure (no event, provider down) falls back silently to the static sample.
 
+Combat leagues follow the same finished-first cascade (#260): candidates come from a ±7-day UFC scoreboard range (cards are ~weekly, so a today-only scan is empty most of the week), and when no card is in range a deep lookback walks 35-day windows for the last finished card — the only sample that fills `fight_result`/`finish_*`. Failing all of that, the static WVBA shape renders, so game-thumbs URL slugs stay testable year-round.
+
 See `GET /variables/samples` (`live`, `gaps`, `live_populated`, `live_total`).
 
 **Server-side render (`POST /templates/preview`, #357).** The editor's rendered
