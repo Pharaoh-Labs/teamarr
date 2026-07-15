@@ -527,6 +527,14 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     m3u_account_id INTEGER,                  -- Dispatcharr M3U account ID
     m3u_account_name TEXT,                   -- M3U account name for display
 
+    -- Group-name pattern binding (#450): when enabled, the source is bound to a
+    -- regex over live M3U group NAMES instead of the pinned m3u_group_id. The
+    -- pattern re-resolves to live group ids at stream-fetch time, so provider
+    -- renames (which always spawn a NEW Dispatcharr group id) re-bind
+    -- automatically. Scope: M3U-provided groups only.
+    m3u_group_name_pattern TEXT,
+    m3u_group_name_pattern_enabled BOOLEAN DEFAULT 0,
+
     -- Stale-source detection (lylt): a group is "stale" when its M3U source
     -- channel-group no longer exists in Dispatcharr (deleted/renamed). Distinct
     -- from off-season (group exists, zero current streams). Updated during the
