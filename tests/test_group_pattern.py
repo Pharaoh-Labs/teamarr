@@ -257,3 +257,114 @@ class TestCrudRoundtrip:
         group = get_group(conn, gid)
         assert group.m3u_group_name_pattern is None
         assert group.m3u_group_name_pattern_enabled is False
+
+
+# ---------------------------------------------------------------------------
+# API layer (bpqb.6)
+# ---------------------------------------------------------------------------
+
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from teamarr.api.app import app  # noqa: E402
+from teamarr.database import init_db  # noqa: E402
+
+client = TestClient(app)
+
+
+@pytest.fixture()
+def isolated_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
+
+
+class TestGroupsApi:
+    def test_pattern_fields_round_trip(self, isolated_db):
+        resp = client.post(
+            "/api/v1/groups",
+            json={
+                "name": "EPL",
+                "leagues": ["eng.1"],
+                "m3u_group_name_pattern": r"EPL \(MW\d+\)",
+                "m3u_group_name_pattern_enabled": True,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        gid = resp.json()["id"]
+
+        got = client.get(f"/api/v1/groups/{gid}").json()
+        assert got["m3u_group_name_pattern"] == r"EPL \(MW\d+\)"
+        assert got["m3u_group_name_pattern_enabled"] is True
+
+    def test_update_and_clear_pattern_fields(self, isolated_db):
+        gid = client.post(
+            "/api/v1/groups", json={"name": "EPL", "leagues": ["eng.1"]}
+        ).json()["id"]
+
+        resp = client.put(
+            f"/api/v1/groups/{gid}",
+            json={"m3u_group_name_pattern": "EPL", "m3u_group_name_pattern_enabled": True},
+        )
+        assert resp.status_code == 200, resp.text
+        got = client.get(f"/api/v1/groups/{gid}").json()
+        assert got["m3u_group_name_pattern"] == "EPL"
+        assert got["m3u_group_name_pattern_enabled"] is True
+
+        resp = client.put(
+            f"/api/v1/groups/{gid}",
+            json={
+                "clear_m3u_group_name_pattern": True,
+                "m3u_group_name_pattern_enabled": False,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        got = client.get(f"/api/v1/groups/{gid}").json()
+        assert got["m3u_group_name_pattern"] is None
+        assert got["m3u_group_name_pattern_enabled"] is False
+
+
+class TestPatternPreviewApi:
+    def _patch_dispatcharr(self, monkeypatch, groups):
+        import teamarr.api.routes.groups as groups_routes
+
+        fake = SimpleNamespace(m3u=SimpleNamespace(list_groups=lambda: groups))
+        monkeypatch.setattr(
+            groups_routes, "get_dispatcharr_connection", lambda db_factory=None: fake
+        )
+
+    def test_preview_returns_matches(self, isolated_db, monkeypatch):
+        self._patch_dispatcharr(
+            monkeypatch, [_grp(1, "EPL (MW1)"), _grp(2, "EPL (MW2)"), _grp(3, "USA | MLB")]
+        )
+        resp = client.post(
+            "/api/v1/groups/dispatcharr/group-pattern-preview",
+            json={"pattern": r"EPL \(MW\d+\)"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["valid"] is True
+        assert body["total"] == 2
+        assert [m["name"] for m in body["matches"]] == ["EPL (MW1)", "EPL (MW2)"]
+
+    def test_preview_invalid_regex_is_soft_error(self, isolated_db, monkeypatch):
+        self._patch_dispatcharr(monkeypatch, [_grp(1, "EPL (MW1)")])
+        resp = client.post(
+            "/api/v1/groups/dispatcharr/group-pattern-preview",
+            json={"pattern": "EPL ("},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["valid"] is False
+        assert body["total"] == 0
+
+    def test_preview_unconfigured_dispatcharr_is_400(self, isolated_db, monkeypatch):
+        import teamarr.api.routes.groups as groups_routes
+
+        monkeypatch.setattr(
+            groups_routes, "get_dispatcharr_connection", lambda db_factory=None: None
+        )
+        resp = client.post(
+            "/api/v1/groups/dispatcharr/group-pattern-preview", json={"pattern": "EPL"}
+        )
+        assert resp.status_code == 400
