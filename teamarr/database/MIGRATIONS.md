@@ -6,7 +6,7 @@ How database schema changes work in Teamarr v2.
 
 ```
 Startup (init_db):
-  1. Verify integrity (corrupt files raise, V1 databases raise — no longer supported)
+  1. Verify integrity (corrupt files raise)
   2. Structural pre-migrations (column renames, table rebuilds) — migrations/pre.py
   3. Schema reconciliation ← compares real DB against schema.sql
   4. conn.executescript(schema.sql) ← creates missing tables, seeds data
