@@ -491,6 +491,12 @@ class StreamOrderingService:
 
     def _match_stream_type(self, stream: ManagedChannelStream, rule_value: str) -> bool:
         """Match stream by type, with optional team filter (value may be 'team|key1,key2')."""
+        # The UI offers event / team / EPG as one mutually-exclusive Stream Type
+        # select (EPG stores as rule type epg_match). EPG-matched streams also
+        # carry match_type event/team, so without this gate an event/team rule
+        # listed above the EPG rule captures them first (#448).
+        if stream.match_method == "epg":
+            return False
         if "|" not in rule_value:
             return stream.match_type == rule_value
         stream_type, team_keys_str = rule_value.split("|", 1)
