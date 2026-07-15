@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import { ArrowLeft, LoaderCircle, FlaskConical } from "lucide-react"
@@ -26,6 +26,7 @@ import { LeaguePicker } from "@/components/LeaguePicker"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { getLeagues } from "@/api/teams"
 import { getSubscription } from "@/api/subscription"
+import { previewGroupPattern, type GroupPatternPreview } from "@/api/groups"
 import type { SoccerFollowedTeam } from "@/api/types"
 
 export function EventGroupForm() {
@@ -166,6 +167,11 @@ export function EventGroupForm() {
         m3u_group_name: group.m3u_group_name,
         m3u_account_id: group.m3u_account_id,
         m3u_account_name: group.m3u_account_name,
+        // Group-name pattern binding (#450)
+        m3u_group_name_pattern: group.m3u_group_name_pattern
+          ? pythonToJs(group.m3u_group_name_pattern)
+          : null,
+        m3u_group_name_pattern_enabled: group.m3u_group_name_pattern_enabled,
         // Stream filtering
         stream_include_regex: group.stream_include_regex ? pythonToJs(group.stream_include_regex) : null,
         stream_include_regex_enabled: group.stream_include_regex_enabled,
@@ -250,6 +256,7 @@ export function EventGroupForm() {
     try {
       const submitData = {
         ...data,
+        m3u_group_name_pattern: data.m3u_group_name_pattern ? jsToPython(data.m3u_group_name_pattern) : null,
         stream_include_regex: data.stream_include_regex ? jsToPython(data.stream_include_regex) : null,
         stream_exclude_regex: data.stream_exclude_regex ? jsToPython(data.stream_exclude_regex) : null,
         custom_regex_teams: data.custom_regex_teams ? jsToPython(data.custom_regex_teams) : null,
@@ -284,6 +291,9 @@ export function EventGroupForm() {
           }
           if (shouldClear(group.stream_timezone, data.stream_timezone)) {
             updateData.clear_stream_timezone = true
+          }
+          if (shouldClear(group.m3u_group_name_pattern, data.m3u_group_name_pattern)) {
+            updateData.clear_m3u_group_name_pattern = true
           }
           // Clear subscription override when switching back to global
           if (useGlobalSubscription && group.subscription_leagues !== null) {
@@ -456,6 +466,8 @@ export function EventGroupForm() {
                   <div>Group: {formData.m3u_group_name} (#{formData.m3u_group_id})</div>
                 </div>
               )}
+
+              <PatternBindingFields formData={formData} setFormData={setFormData} />
 
               <div className="flex items-center gap-2">
                 <Switch
@@ -1203,6 +1215,93 @@ export function EventGroupForm() {
         initialPatterns={currentPatterns}
         onApply={handlePatternsApply}
       />
+    </div>
+  )
+}
+
+/** Group-name pattern binding (#450): opt-in regex binding to live M3U group
+ * names so provider renames (which spawn a new Dispatcharr group id) re-bind
+ * automatically. Shows a debounced live "matches N groups" preview. */
+function PatternBindingFields({
+  formData,
+  setFormData,
+}: {
+  formData: EventGroupCreate
+  setFormData: React.Dispatch<React.SetStateAction<EventGroupCreate>>
+}) {
+  const enabled = formData.m3u_group_name_pattern_enabled || false
+  const pattern = formData.m3u_group_name_pattern || ""
+  // Result keyed by the pattern it was computed for: staleness and "checking"
+  // are derived at render time, so the effect never calls setState
+  // synchronously (react-hooks/set-state-in-effect).
+  const [result, setResult] = useState<{
+    forPattern: string
+    data: GroupPatternPreview | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (!enabled || !pattern.trim()) return
+    const handle = setTimeout(async () => {
+      try {
+        setResult({ forPattern: pattern, data: await previewGroupPattern(jsToPython(pattern)) })
+      } catch {
+        setResult({ forPattern: pattern, data: null })
+      }
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [enabled, pattern])
+
+  const preview = result?.forPattern === pattern ? result.data : undefined
+  const previewLoading = enabled && !!pattern.trim() && preview === undefined
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={enabled}
+          onCheckedChange={(checked) =>
+            setFormData((prev) => ({ ...prev, m3u_group_name_pattern_enabled: checked }))
+          }
+        />
+        <div>
+          <Label className="font-normal">Bind by name pattern</Label>
+          <p className="text-xs text-muted-foreground">
+            Match M3U groups by a name regex instead of the pinned group above —
+            survives provider renames like "EPL (MW1)" → "EPL (MW2)".
+          </p>
+        </div>
+      </div>
+      {enabled && (
+        <div className="space-y-1 pl-10">
+          <Input
+            value={pattern}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                m3u_group_name_pattern: e.target.value || null,
+              }))
+            }
+            placeholder={String.raw`e.g. EPL \(MW\d+\)`}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            {!pattern.trim()
+              ? "Enter a pattern to see which live M3U groups it matches."
+              : previewLoading || preview === undefined
+                ? "Checking…"
+                : preview === null
+                  ? "Preview unavailable (Dispatcharr not reachable)."
+                  : !preview.valid
+                    ? "Invalid regular expression."
+                    : preview.total === 0
+                      ? "Matches no live M3U groups — the source would be treated as stale."
+                      : `Matches ${preview.total} group${preview.total === 1 ? "" : "s"}: ${preview.matches
+                          .slice(0, 5)
+                          .map((m) => m.name)
+                          .join(", ")}${preview.total > 5 ? ", …" : ""}`}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

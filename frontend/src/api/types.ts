@@ -30,6 +30,9 @@ export interface EventGroup {
   m3u_group_name: string | null
   m3u_account_id: number | null
   m3u_account_name: string | null
+  // Group-name pattern binding (#450)
+  m3u_group_name_pattern: string | null
+  m3u_group_name_pattern_enabled: boolean
   // Stream filtering
   stream_include_regex: string | null
   stream_include_regex_enabled: boolean
@@ -103,6 +106,9 @@ export interface EventGroupCreate {
   m3u_group_name?: string | null
   m3u_account_id?: number | null
   m3u_account_name?: string | null
+  // Group-name pattern binding (#450)
+  m3u_group_name_pattern?: string | null
+  m3u_group_name_pattern_enabled?: boolean
   // Stream filtering
   stream_include_regex?: string | null
   stream_include_regex_enabled?: boolean
@@ -148,6 +154,7 @@ export interface EventGroupUpdate extends Partial<EventGroupCreate> {
   clear_m3u_group_name?: boolean
   clear_m3u_account_id?: boolean
   clear_m3u_account_name?: boolean
+  clear_m3u_group_name_pattern?: boolean
   clear_stream_include_regex?: boolean
   clear_stream_exclude_regex?: boolean
   clear_custom_regex_teams?: boolean

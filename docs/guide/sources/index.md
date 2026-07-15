@@ -58,6 +58,14 @@ Click **Matched** numbers to see which streams matched to which events. Click th
 
 Click **Import** to pull stream groups from your Dispatcharr M3U accounts. Teamarr shows available groups with stream counts. Select the groups you want and they'll be created as sources with default settings.
 
+## Binding by Name Pattern
+
+Some IPTV providers rotate group names — `EPL (MW1)` becomes `EPL (MW2)`, dated tournament groups come and go. Dispatcharr matches M3U groups by exact name, so a provider rename always creates a **new** group and a source pinned to the old one silently stops finding streams.
+
+**Bind by name pattern** (in the source's Basic Settings) makes the source rename-proof: instead of the pinned group, the source binds to a regular expression over live M3U group names, re-resolved on every generation run. A pattern like `EPL \(MW\d+\)` keeps matching no matter which matchweek the provider is on. If the pattern matches several groups at once, the source scans all of them (scoped to its M3U account), and while a renamed group's old and new versions briefly coexist, stale streams from the old one are filtered out automatically.
+
+The editor shows a live **"Matches N groups"** preview as you type. A pattern that matches nothing means the source is treated as stale — same as a missing pinned group.
+
 ## Stream Matching Pipeline
 
 When EPG generation runs, each stream goes through:
