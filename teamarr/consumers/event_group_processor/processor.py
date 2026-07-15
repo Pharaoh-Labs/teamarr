@@ -8,7 +8,7 @@ the sibling mixin modules; this module owns orchestration and shared state.
 import logging
 import time
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date
 from sqlite3 import Connection
 from typing import Any
 
@@ -39,6 +39,7 @@ from teamarr.database.subscription import (
 )
 from teamarr.services import SportsDataService, create_default_service
 from teamarr.utilities.art_url import read_art_base_url
+from teamarr.utilities.tz import now_utc
 from teamarr.utilities.xmltv import merge_xmltv_content
 
 from .matching import StreamMatching
@@ -179,9 +180,7 @@ class EventGroupProcessor(
         if soccer_mode == "all":
             # Replace any manually-selected soccer leagues with ALL enabled
             soccer_leagues = get_enabled_soccer_leagues(conn)
-            non_soccer = [
-                lg for lg in base_leagues if lg not in soccer_leagues
-            ]
+            non_soccer = [lg for lg in base_leagues if lg not in soccer_leagues]
             return non_soccer + soccer_leagues
 
         if soccer_mode == "teams" and soccer_followed_teams:
@@ -193,9 +192,7 @@ class EventGroupProcessor(
                 provider = team.get("provider", "espn")
                 team_id = team.get("team_id")
                 if team_id:
-                    team_leagues = cache.get_team_leagues(
-                        team_id, provider, sport="soccer"
-                    )
+                    team_leagues = cache.get_team_leagues(team_id, provider, sport="soccer")
                     discovered.update(team_leagues)
             return list(set(base_leagues) | discovered)
 
@@ -214,14 +211,12 @@ class EventGroupProcessor(
             self._subscription_leagues_cache: dict[int, list[str]] = {}
 
         # Key: 0 for global, group.id for overridden groups
-        has_override = (
-            group is not None and group.subscription_leagues is not None
-        )
+        has_override = group is not None and group.subscription_leagues is not None
         cache_key = group.id if group is not None and has_override else 0
 
         if cache_key not in self._subscription_leagues_cache:
-            self._subscription_leagues_cache[cache_key] = (
-                self._resolve_subscription_leagues(conn, group)
+            self._subscription_leagues_cache[cache_key] = self._resolve_subscription_leagues(
+                conn, group
             )
         return self._subscription_leagues_cache[cache_key]
 
@@ -246,7 +241,7 @@ class EventGroupProcessor(
             if not group:
                 result = ProcessingResult(group_id=group_id, group_name="Unknown")
                 result.errors.append(f"Group {group_id} not found")
-                result.completed_at = datetime.now()
+                result.completed_at = now_utc()
                 return result
 
             return self._process_group_internal(conn, group, target_date)
@@ -299,9 +294,7 @@ class EventGroupProcessor(
                 _cs_row = conn.execute(
                     "SELECT epg_channel_source_enabled FROM settings WHERE id = 1"
                 ).fetchone()
-                _channel_source_on = bool(
-                    _cs_row and _cs_row["epg_channel_source_enabled"]
-                )
+                _channel_source_on = bool(_cs_row and _cs_row["epg_channel_source_enabled"])
                 ensure_channel_source_group(conn, _channel_source_on)
             except Exception as e:
                 logger.warning("[CHANNEL_SOURCE] Failed to sync source group: %s", e)
@@ -313,7 +306,8 @@ class EventGroupProcessor(
             if progress_callback:
                 if total_groups > 0:
                     progress_callback(
-                        0, total_groups,
+                        0,
+                        total_groups,
                         f"Found {total_groups} groups to process",
                     )
                 else:
@@ -340,17 +334,12 @@ class EventGroupProcessor(
                             matched: bool,
                         ):
                             icon = "✓" if matched else "✗"
-                            msg = (
-                                f"{icon} {current}/{total}"
-                                f" — {grp_name}: {stream_name}"
-                            )
+                            msg = f"{icon} {current}/{total} — {grp_name}: {stream_name}"
                             progress_callback(grp_idx, total_groups, msg)
 
                         return cb
 
-                    stream_cb = make_stream_cb(
-                        group.name, processed_count + 1
-                    )
+                    stream_cb = make_stream_cb(group.name, processed_count + 1)
 
                 status_cb = None
                 if progress_callback:
@@ -358,9 +347,7 @@ class EventGroupProcessor(
 
                     def make_status_cb(grp_name: str, idx: int):
                         def cb(msg: str):
-                            progress_callback(
-                                idx, total_groups, f"{grp_name}: {msg}"
-                            )
+                            progress_callback(idx, total_groups, f"{grp_name}: {msg}")
 
                         return cb
 
@@ -377,12 +364,10 @@ class EventGroupProcessor(
                 processed_group_ids.append(group.id)
                 processed_count += 1
                 if progress_callback:
-                    stats = (
-                        f"({result.streams_matched}/"
-                        f"{result.streams_fetched} matched)"
-                    )
+                    stats = f"({result.streams_matched}/{result.streams_fetched} matched)"
                     progress_callback(
-                        processed_count, total_groups,
+                        processed_count,
+                        total_groups,
                         f"{group.name} {stats}",
                     )
 
@@ -400,9 +385,7 @@ class EventGroupProcessor(
 
             # Aggregate XMLTV from all processed groups
             if processed_group_ids:
-                xmltv_contents = get_all_group_xmltv(
-                    conn, processed_group_ids
-                )
+                xmltv_contents = get_all_group_xmltv(conn, processed_group_ids)
                 if xmltv_contents:
                     from teamarr.database.settings import get_display_settings
 
@@ -417,7 +400,7 @@ class EventGroupProcessor(
                         f", {len(batch_result.total_xmltv)} bytes"
                     )
 
-        batch_result.completed_at = datetime.now()
+        batch_result.completed_at = now_utc()
         return batch_result
 
     def _run_enforcement(
@@ -478,9 +461,7 @@ class EventGroupProcessor(
                 cross_group_enforcer = CrossGroupEnforcer(self._db_factory, channel_manager)
                 deleted = cross_group_enforcer.enforce(multi_league_ids).deleted_count
                 if deleted > 0:
-                    logger.info(
-                        f"Cross-group consolidation: {deleted} channels merged"
-                    )
+                    logger.info(f"Cross-group consolidation: {deleted} channels merged")
                 return deleted
 
             run_step("cross_group", cross_group_step)
@@ -490,9 +471,7 @@ class EventGroupProcessor(
             ordering_enforcer = KeywordOrderingEnforcer(self._db_factory, channel_manager)
             reordered = ordering_enforcer.enforce().reordered_count
             if reordered > 0:
-                logger.info(
-                    f"Keyword ordering: reordered {reordered} channel pair(s)"
-                )
+                logger.info(f"Keyword ordering: reordered {reordered} channel pair(s)")
             return reordered
 
         run_step("ordering", ordering_step)
@@ -502,9 +481,7 @@ class EventGroupProcessor(
             def orphan_step() -> int:
                 deleted = lifecycle_service.cleanup_orphan_dispatcharr_channels().get("deleted", 0)
                 if deleted > 0:
-                    logger.info(
-                        f"Orphan cleanup: deleted {deleted} Dispatcharr channels"
-                    )
+                    logger.info(f"Orphan cleanup: deleted {deleted} Dispatcharr channels")
                 return deleted
 
             run_step("orphan_cleanup", orphan_step)
@@ -513,9 +490,7 @@ class EventGroupProcessor(
             def disabled_step() -> int:
                 deleted = lifecycle_service.cleanup_disabled_groups().get("deleted") or []
                 if deleted:
-                    logger.info(
-                        f"Disabled group cleanup: deleted {len(deleted)} channels"
-                    )
+                    logger.info(f"Disabled group cleanup: deleted {len(deleted)} channels")
                 return len(deleted)
 
             run_step("disabled_groups", disabled_step)
@@ -553,8 +528,7 @@ class EventGroupProcessor(
 
         all_groups = get_all_groups(conn, include_disabled=True)
         enabled_real_groups = [
-            g for g in all_groups
-            if g.enabled and not getattr(g, "is_channel_source", False)
+            g for g in all_groups if g.enabled and not getattr(g, "is_channel_source", False)
         ]
         subscribed: set[str] = set()
         for g in enabled_real_groups:
@@ -567,9 +541,7 @@ class EventGroupProcessor(
 
         # Channels owned by channel-source/system groups are exempt (their leagues
         # aren't driven by the subscription).
-        system_group_ids = {
-            g.id for g in all_groups if getattr(g, "is_channel_source", False)
-        }
+        system_group_ids = {g.id for g in all_groups if getattr(g, "is_channel_source", False)}
 
         deleted = 0
         for ch in get_all_managed_channels(conn, include_deleted=False):
@@ -578,15 +550,12 @@ class EventGroupProcessor(
                 continue
             if ch.event_epg_group_id in system_group_ids:
                 continue
-            if lifecycle_service.delete_managed_channel(
-                conn, ch.id, reason="unsubscribed_league"
-            ):
+            if lifecycle_service.delete_managed_channel(conn, ch.id, reason="unsubscribed_league"):
                 deleted += 1
 
         if deleted:
             logger.info(
-                "[EVENT_EPG] Subscription cleanup: deleted %d channel(s) for "
-                "unsubscribed leagues",
+                "[EVENT_EPG] Subscription cleanup: deleted %d channel(s) for unsubscribed leagues",
                 deleted,
             )
         return deleted
@@ -622,7 +591,7 @@ class EventGroupProcessor(
                 group.id,
             )
             result.errors.append("No template assigned - template is required for channel naming")
-            result.completed_at = datetime.now()
+            result.completed_at = now_utc()
             return result
 
         # Create stats run for tracking
@@ -655,7 +624,7 @@ class EventGroupProcessor(
 
             if not streams:
                 result.errors.append("No streams found for group")
-                result.completed_at = datetime.now()
+                result.completed_at = now_utc()
                 stats_run.complete(status="completed", error="No streams found")
                 save_run(conn, stats_run)
                 return result
@@ -676,7 +645,7 @@ class EventGroupProcessor(
 
             if not streams:
                 result.errors.append("All streams filtered out by regex patterns")
-                result.completed_at = datetime.now()
+                result.completed_at = now_utc()
                 stats_run.complete(status="completed", error="All streams filtered")
                 save_run(conn, stats_run)
                 # Still update stats even if all filtered
@@ -781,9 +750,7 @@ class EventGroupProcessor(
             result.filtered_team = filtered_team_count
 
             # Build set of event IDs that passed the filter (segment-aware)
-            passed_event_ids = {
-                eid for m in matched_streams if (eid := _effective_event_id(m))
-            }
+            passed_event_ids = {eid for m in matched_streams if (eid := _effective_event_id(m))}
 
             # Cleanup existing channels that no longer pass team filter
             # (handles both include and exclude modes, global and per-group)
@@ -902,7 +869,7 @@ class EventGroupProcessor(
         # Save stats run
         save_run(conn, stats_run)
 
-        result.completed_at = datetime.now()
+        result.completed_at = now_utc()
         return result
 
     def _process_channels(

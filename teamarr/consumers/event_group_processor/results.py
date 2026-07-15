@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from teamarr.utilities.tz import now_utc
+
 
 @dataclass
 class ProcessingResult:
@@ -10,7 +12,7 @@ class ProcessingResult:
 
     group_id: int
     group_name: str
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=now_utc)
     completed_at: datetime | None = None
 
     # Stream fetching and filtering
@@ -114,7 +116,7 @@ class EnforcementStepResult:
 class BatchProcessingResult:
     """Result of processing multiple groups."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=now_utc)
     completed_at: datetime | None = None
     results: list[ProcessingResult] = field(default_factory=list)
     total_xmltv: str = ""

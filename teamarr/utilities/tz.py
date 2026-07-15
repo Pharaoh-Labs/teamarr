@@ -24,6 +24,8 @@ __all__ = [
     "get_user_timezone_str",
     "now_user",
     "now_utc",
+    "parse_db_timestamp",
+    "to_db_utc",
     "utcnow_iso",
     "to_user_tz",
     "to_utc",
@@ -75,6 +77,39 @@ def utcnow_iso() -> str:
     would emit.
     """
     return datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
+
+
+def to_db_utc(dt: datetime | None) -> str | None:
+    """Serialize a datetime for TEXT timestamp columns as SQLite-canonical UTC.
+
+    Format: ``YYYY-MM-DD HH:MM:SS`` (space separator, second precision, no
+    offset) — byte-compatible with ``CURRENT_TIMESTAMP`` and ``datetime('now')``,
+    so plain string comparisons against those stay correct. Naive input is
+    assumed to be server-local wall time.
+    """
+    if dt is None:
+        return None
+    return dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def parse_db_timestamp(value: str | None) -> datetime | None:
+    """Parse a DB TEXT timestamp into an aware UTC datetime.
+
+    Handles the three formats that coexist in timestamp columns:
+    - aware ISO-8601 with any offset
+    - SQLite-canonical naive with a space separator (``CURRENT_TIMESTAMP``,
+      ``datetime('now')``, :func:`to_db_utc`) — these are UTC
+    - legacy naive Python ``isoformat()`` with a ``T`` separator — these were
+      written as server-local wall time (pre-#444)
+    """
+    if not value:
+        return None
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is not None:
+        return dt.astimezone(UTC)
+    if "T" in value:
+        return dt.astimezone(UTC)
+    return dt.replace(tzinfo=UTC)
 
 
 def to_user_tz(dt: datetime) -> datetime:

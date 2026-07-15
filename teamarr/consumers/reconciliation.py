@@ -24,6 +24,7 @@ from typing import Any
 
 from teamarr.dispatcharr import ChannelManager
 from teamarr.dispatcharr.factory import DispatcharrConnection, get_dispatcharr_connection
+from teamarr.utilities.tz import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class ReconciliationIssue:
 class ReconciliationResult:
     """Results from a reconciliation run."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=now_utc)
     completed_at: datetime | None = None
     issues_found: list[ReconciliationIssue] = field(default_factory=list)
     issues_fixed: list[dict] = field(default_factory=list)
@@ -174,7 +175,7 @@ class ChannelReconciler:
 
         if not self.dispatcharr_enabled:
             result.errors.append("Dispatcharr not configured")
-            result.completed_at = datetime.now()
+            result.completed_at = now_utc()
             return result
 
         # Clear channel cache to ensure fresh data from Dispatcharr
@@ -212,7 +213,7 @@ class ChannelReconciler:
             result.errors.append(f"Reconciliation error: {e}")
             logger.exception("Reconciliation failed")
 
-        result.completed_at = datetime.now()
+        result.completed_at = now_utc()
         return result
 
     def _detect_orphan_teamarr(
@@ -240,10 +241,8 @@ class ChannelReconciler:
             # real orphan; a transient failure must not mark a live channel
             # deleted (that recreates a duplicate next run).
             with self._dispatcharr_lock:
-                dispatcharr_channel, confirmed_absent = (
-                    self._channel_manager.get_channel_existence(
-                        channel.dispatcharr_channel_id
-                    )
+                dispatcharr_channel, confirmed_absent = self._channel_manager.get_channel_existence(
+                    channel.dispatcharr_channel_id
                 )
 
             if dispatcharr_channel is None and not confirmed_absent:
@@ -399,9 +398,7 @@ class ChannelReconciler:
                     details={
                         "channel_count": dup["channel_count"],
                         "channel_ids": (
-                            dup.get("channel_ids", "").split(",")
-                            if dup.get("channel_ids")
-                            else []
+                            dup.get("channel_ids", "").split(",") if dup.get("channel_ids") else []
                         ),
                         "channel_names": (
                             dup.get("channel_names", "").split(",")
@@ -411,9 +408,7 @@ class ChannelReconciler:
                         "consolidation_mode": consolidation_mode,
                     },
                     suggested_action="merge",
-                    auto_fixable=self._settings.get(
-                        "auto_fix_duplicates", False
-                    ),
+                    auto_fixable=self._settings.get("auto_fix_duplicates", False),
                 )
             )
 
@@ -641,9 +636,7 @@ class ChannelReconciler:
                                 )
                                 logger.info("[FIXED] Synced drift: %s", issue.channel_name)
                             else:
-                                error_msg = (
-                                    update_result.error if update_result else "no response"
-                                )
+                                error_msg = update_result.error if update_result else "no response"
                                 result.errors.append(
                                     f"Drift fix failed for {issue.channel_name}: {error_msg}"
                                 )
@@ -700,10 +693,8 @@ class ChannelReconciler:
             # Check if exists in Dispatcharr. Only a confirmed 404 is a real
             # orphan; an inconclusive result is re-verified on a later run.
             with self._dispatcharr_lock:
-                dispatcharr_channel, confirmed_absent = (
-                    self._channel_manager.get_channel_existence(
-                        channel.dispatcharr_channel_id
-                    )
+                dispatcharr_channel, confirmed_absent = self._channel_manager.get_channel_existence(
+                    channel.dispatcharr_channel_id
                 )
 
             if dispatcharr_channel is None:
@@ -771,7 +762,6 @@ def create_reconciler(
     channel_manager = None
 
     if dispatcharr_client and dispatcharr_settings.get("enabled"):
-
         # Extract raw client if we received a DispatcharrConnection
         raw_client = (
             dispatcharr_client.client
