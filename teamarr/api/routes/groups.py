@@ -98,6 +98,9 @@ class GroupCreate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450)
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool = False
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -155,6 +158,9 @@ class GroupUpdate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450)
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool | None = None
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool | None = None
@@ -201,6 +207,7 @@ class GroupUpdate(BaseModel):
     clear_m3u_group_name: bool = False
     clear_m3u_account_id: bool = False
     clear_m3u_account_name: bool = False
+    clear_m3u_group_name_pattern: bool = False
     clear_stream_include_regex: bool = False
     clear_stream_exclude_regex: bool = False
     clear_custom_regex_teams: bool = False
@@ -240,6 +247,9 @@ class GroupResponse(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450)
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool = False
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -614,6 +624,8 @@ def list_groups(
                 m3u_group_name=g.m3u_group_name,
                 m3u_account_id=g.m3u_account_id,
                 m3u_account_name=get_account_name(g),
+                m3u_group_name_pattern=g.m3u_group_name_pattern,
+                m3u_group_name_pattern_enabled=g.m3u_group_name_pattern_enabled,
                 stream_include_regex=g.stream_include_regex,
                 stream_include_regex_enabled=g.stream_include_regex_enabled,
                 stream_exclude_regex=g.stream_exclude_regex,
@@ -726,6 +738,8 @@ def create_group(request: GroupCreate):
             m3u_group_name=request.m3u_group_name,
             m3u_account_id=request.m3u_account_id,
             m3u_account_name=request.m3u_account_name,
+            m3u_group_name_pattern=request.m3u_group_name_pattern,
+            m3u_group_name_pattern_enabled=request.m3u_group_name_pattern_enabled,
             stream_include_regex=request.stream_include_regex,
             stream_include_regex_enabled=request.stream_include_regex_enabled,
             stream_exclude_regex=request.stream_exclude_regex,
@@ -797,6 +811,8 @@ def create_group(request: GroupCreate):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=group.m3u_account_name,
+        m3u_group_name_pattern=group.m3u_group_name_pattern,
+        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1182,6 +1198,8 @@ def get_group_by_id(group_id: int):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=m3u_account_name,
+        m3u_group_name_pattern=group.m3u_group_name_pattern,
+        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1303,6 +1321,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 m3u_group_name=request.m3u_group_name,
                 m3u_account_id=request.m3u_account_id,
                 m3u_account_name=request.m3u_account_name,
+                m3u_group_name_pattern=request.m3u_group_name_pattern,
+                m3u_group_name_pattern_enabled=request.m3u_group_name_pattern_enabled,
                 stream_include_regex=request.stream_include_regex,
                 stream_include_regex_enabled=request.stream_include_regex_enabled,
                 stream_exclude_regex=request.stream_exclude_regex,
@@ -1344,6 +1364,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 clear_m3u_group_name=request.clear_m3u_group_name,
                 clear_m3u_account_id=request.clear_m3u_account_id,
                 clear_m3u_account_name=request.clear_m3u_account_name,
+                clear_m3u_group_name_pattern=request.clear_m3u_group_name_pattern,
                 clear_stream_include_regex=request.clear_stream_include_regex,
                 clear_stream_exclude_regex=request.clear_stream_exclude_regex,
                 clear_custom_regex_teams=request.clear_custom_regex_teams,
@@ -1409,6 +1430,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=group.m3u_account_name,
+        m3u_group_name_pattern=group.m3u_group_name_pattern,
+        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1701,6 +1724,51 @@ def list_dispatcharr_channel_groups() -> dict:
     return {
         "groups": [{"id": g.id, "name": g.name} for g in groups],
         "total": len(groups),
+    }
+
+
+class GroupPatternPreviewRequest(BaseModel):
+    """Preview which live M3U groups a name pattern resolves to (#450)."""
+
+    pattern: str
+
+
+@router.post("/dispatcharr/group-pattern-preview")
+def preview_group_name_pattern(request: GroupPatternPreviewRequest) -> dict:
+    """Resolve a group-name pattern against live Dispatcharr M3U groups.
+
+    Powers the live "matches N groups" preview in the source editor. Only
+    M3U-provided groups are considered (same rule as generation-time
+    resolution). An invalid regex returns ``valid: false`` rather than an
+    error so the UI can show inline feedback while the user types.
+    """
+    from teamarr.services.group_pattern import (
+        compile_group_pattern,
+        resolve_group_name_pattern,
+    )
+
+    conn = get_dispatcharr_connection(get_db)
+    if not conn:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dispatcharr not configured or not connected",
+        )
+
+    valid = compile_group_pattern(request.pattern) is not None
+
+    try:
+        live_groups = conn.m3u.list_groups()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch channel groups: {e}",
+        ) from e
+
+    matched = resolve_group_name_pattern(live_groups, request.pattern) if valid else []
+    return {
+        "valid": valid,
+        "total": len(matched),
+        "matches": [{"id": g.id, "name": g.name} for g in matched[:50]],
     }
 
 
