@@ -43,6 +43,19 @@ export async function createGroup(data: EventGroupCreate): Promise<EventGroup> {
   return api.post("/groups", data)
 }
 
+/** Live resolution of a group-name pattern against Dispatcharr M3U groups (#450). */
+export interface GroupPatternPreview {
+  valid: boolean
+  total: number
+  matches: { id: number; name: string }[]
+}
+
+export async function previewGroupPattern(
+  pattern: string
+): Promise<GroupPatternPreview> {
+  return api.post("/groups/dispatcharr/group-pattern-preview", { pattern })
+}
+
 export async function updateGroup(
   groupId: number,
   data: EventGroupUpdate
