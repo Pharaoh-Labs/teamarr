@@ -102,8 +102,8 @@ def init_db(db_path: Path | str | None = None) -> None:
 
     try:
         with get_db(db_path) as conn:
-            # First, verify this is a valid V2-compatible database by checking integrity
-            # and querying a core table. This catches both corruption AND V1 databases.
+            # Probe the database before touching it so corrupt files fail
+            # with a clear error instead of mid-migration.
             _verify_database_integrity(conn, path)
 
             # Structural pre-migrations (renames, table rebuilds) — these
@@ -146,55 +146,23 @@ def init_db(db_path: Path | str | None = None) -> None:
     except sqlite3.DatabaseError as e:
         if "file is not a database" in str(e):
             logger.error(
-                f"Database file '{path}' exists but is not compatible with Teamarr V2. "
-                "This usually means you're trying to use a V1 database. "
-                "V2 requires a fresh database - please either:\n"
-                "  1. Use a different data directory for V2, or\n"
-                "  2. Backup and delete the existing database file"
+                f"Database file '{path}' exists but is not a valid SQLite database. "
+                "Move or delete the file and restart Teamarr to initialize a fresh database."
             )
             raise RuntimeError(
-                f"Incompatible database file at '{path}'. "
-                "V2 is not compatible with V1 databases. "
-                "Please use a fresh data directory or delete the existing database."
+                f"Invalid database file at '{path}'. "
+                "Move or delete the file and restart Teamarr."
             ) from e
         raise
 
 
 def _verify_database_integrity(conn: sqlite3.Connection, path: Path) -> None:
-    """Verify database is valid and compatible with V2.
-
-    Catches:
-    1. Corrupt database files ("file is not a database")
-    2. V1 databases — V1 is no longer supported. The presence of V1-specific
-       tables raises immediately with instructions to delete or relocate.
+    """Probe the database so corrupt files raise a clear error up front.
 
     Raises:
-        RuntimeError: If database is a V1 database
         sqlite3.DatabaseError: If database file is corrupt
     """
-    try:
-        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 100")
-        existing_tables = {row["name"] for row in cursor.fetchall()}
-    except sqlite3.DatabaseError:
-        raise
-
-    v1_indicators = {
-        "schedule_cache",
-        "league_config",
-        "h2h_cache",
-        "error_log",
-        "soccer_cache_meta",
-        "team_stats_cache",
-    }
-    v1_tables_found = v1_indicators & existing_tables
-
-    if v1_tables_found:
-        raise RuntimeError(
-            f"Database file '{path}' is a V1 (Teamarr 1.x) database "
-            f"(found V1-specific tables: {sorted(v1_tables_found)}). "
-            "V1 is no longer supported. Move or delete the database file and "
-            "restart Teamarr to initialize a fresh V2 database."
-        )
+    conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
 
 
 def _seed_tsdb_cache_if_needed(conn: sqlite3.Connection) -> None:

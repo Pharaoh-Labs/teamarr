@@ -45,10 +45,6 @@ The lifespan handler in `app.py` orchestrates startup in phases:
 5. **STARTING_SCHEDULER** — Background EPG cron scheduler
 6. **READY** — Fully operational
 
-V1 (Teamarr 1.x) databases are no longer supported. If a V1 database is detected on
-startup the application refuses to start with a clear error pointing the user to
-move or delete the file before retrying.
-
 ## Generation Status
 
 `generation_status.py` provides a global thread-safe state machine for EPG generation progress:
