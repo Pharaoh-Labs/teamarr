@@ -831,14 +831,27 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
     with db_factory() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, m3u_group_id, m3u_group_name
+            SELECT id, name, m3u_group_id, m3u_group_name,
+                   m3u_group_name_pattern, m3u_group_name_pattern_enabled
             FROM event_epg_groups
             WHERE enabled = 1
-              AND m3u_group_id IS NOT NULL
+              AND (m3u_group_id IS NOT NULL
+                   OR COALESCE(m3u_group_name_pattern_enabled, 0) = 1)
               AND COALESCE(is_channel_source, 0) = 0
             """
         ).fetchall()
         for row in rows:
+            # Pattern-bound sources (#450) are judged by pattern resolution,
+            # not by the pinned id: present iff the pattern matches at least
+            # one live M3U-provided group.
+            if row["m3u_group_name_pattern_enabled"] and row["m3u_group_name_pattern"]:
+                from teamarr.services.group_pattern import resolve_group_name_pattern
+
+                if resolve_group_name_pattern(live_groups, row["m3u_group_name_pattern"]):
+                    mark_group_source_seen(conn, row["id"])
+                else:
+                    mark_group_source_missing(conn, row["id"])
+                continue
             if row["m3u_group_id"] in existing_ids:
                 mark_group_source_seen(conn, row["id"])
                 continue

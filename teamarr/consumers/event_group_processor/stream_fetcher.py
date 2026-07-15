@@ -62,7 +62,11 @@ class StreamFetcher:
             m3u_manager = self._dispatcharr_client.m3u
 
             # Fetch streams filtered by M3U group if configured
-            if group.m3u_group_id:
+            if getattr(group, "m3u_group_name_pattern_enabled", False) and getattr(
+                group, "m3u_group_name_pattern", None
+            ):
+                streams = self._fetch_pattern_streams(group, m3u_manager)
+            elif group.m3u_group_id:
                 streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
             else:
                 # Fetch all streams if no group filter
@@ -91,6 +95,48 @@ class StreamFetcher:
         except Exception as e:
             logger.error("[EVENT_EPG] Failed to fetch streams: %s", e)
             return []
+
+    def _fetch_pattern_streams(self, group: EventEPGGroup, m3u_manager: Any) -> list:
+        """Fetch streams via group-name pattern binding (#450).
+
+        Re-resolves the group's name pattern against live Dispatcharr M3U
+        groups and unions the streams of every match, scoped to the source's
+        M3U account. Provider renames spawn a NEW group id, so re-resolving by
+        name at fetch time re-binds automatically; during the provider's
+        transition window old+new groups both resolve and the stale-stream
+        filter drops the old group's streams.
+        """
+        from teamarr.services.group_pattern import resolve_group_name_pattern
+
+        live_groups = m3u_manager.list_groups()
+        matched = resolve_group_name_pattern(live_groups, group.m3u_group_name_pattern)
+        if not matched:
+            logger.warning(
+                "[EVENT_EPG] Group '%s': pattern %r matched no live M3U groups "
+                "— source is effectively stale",
+                group.name,
+                group.m3u_group_name_pattern,
+            )
+            return []
+
+        logger.info(
+            "[EVENT_EPG] Group '%s': pattern %r resolved to %d live group(s): %s",
+            group.name,
+            group.m3u_group_name_pattern,
+            len(matched),
+            ", ".join(g.name for g in matched[:5]) + ("…" if len(matched) > 5 else ""),
+        )
+
+        streams: list = []
+        seen_ids: set[int] = set()
+        for g in matched:
+            for s in m3u_manager.list_streams(
+                group_name=g.name, account_id=group.m3u_account_id
+            ):
+                if s.id not in seen_ids:
+                    seen_ids.add(s.id)
+                    streams.append(s)
+        return streams
 
     def _fetch_channel_source_streams(self) -> list[dict]:
         """Build EPG-match candidates from streams curated onto Dispatcharr channels.
