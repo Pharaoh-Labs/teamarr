@@ -2,7 +2,7 @@ import type { ConditionalPreview, FillerRegisterPreview, TemplateCreate } from "
 import type { VariableCategory } from "@/api/variables"
 import type { CachedLeague } from "@/api/teams"
 
-export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv"
+export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv" | "assignments"
 
 export interface VariableSidebarProps {
   categories: VariableCategory[]

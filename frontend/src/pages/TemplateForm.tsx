@@ -19,6 +19,7 @@ import { buildValidVariableSet } from "@/utils/templateValidation"
 import type { Tab } from "./template-form/types"
 import {
   TABS,
+  ASSIGNMENTS_TAB,
   DEFAULT_PREGAME,
   DEFAULT_POSTGAME,
   DEFAULT_IDLE,
@@ -39,6 +40,7 @@ import { DefaultsTab } from "./template-form/tabs/DefaultsTab"
 import { ConditionsTab } from "./template-form/tabs/ConditionsTab"
 import { FillersTab } from "./template-form/tabs/FillersTab"
 import { XmltvTab } from "./template-form/tabs/XmltvTab"
+import { AssignmentsTab } from "./template-form/tabs/AssignmentsTab"
 
 export function TemplateForm() {
   const { templateId } = useParams<{ templateId: string }>()
@@ -514,7 +516,7 @@ export function TemplateForm() {
         className="mb-4"
         value={activeTab}
         onChange={(key) => goToTab(key as Tab)}
-        items={TABS.map((tab) => {
+        items={(isEdit ? [...TABS, ASSIGNMENTS_TAB] : TABS).map((tab) => {
           const hint = isEdit ? null : tabHint(tab.id)
           return {
             key: tab.id,
@@ -577,6 +579,9 @@ export function TemplateForm() {
           )}
           {activeTab === "xmltv" && (
             <XmltvTab formData={formData} setFormData={setFormData} resolveTemplate={resolveTemplate} validationData={validationData} isTeamTemplate={isTeamTemplate} />
+          )}
+          {activeTab === "assignments" && isEdit && (
+            <AssignmentsTab templateId={Number(templateId)} isTeamTemplate={isTeamTemplate} />
           )}
 
           {/* Guided create flow (yk4j.10): a low-friction "keep going" path.
