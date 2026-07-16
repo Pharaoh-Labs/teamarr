@@ -499,8 +499,10 @@ def _parse_date_string(date_str: str) -> date | None:
         "%d.%m",  # 15.07
     ]
 
-    # Clean up ordinal suffixes (1st, 2nd, 3rd, 4th)
-    date_str = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", date_str, flags=re.IGNORECASE)
+    # Clean up ordinal suffixes (1st, 2nd, 3rd, 4th). Day ordinals are 1-2
+    # digits; the bound also keeps backtracking linear on adversarial input
+    # (py/polynomial-redos — this runs on user-captured text via #458).
+    date_str = re.sub(r"(\d{1,2})(st|nd|rd|th)", r"\1", date_str, flags=re.IGNORECASE)
 
     for fmt in formats:
         try:
@@ -596,8 +598,12 @@ def _parse_time_string(time_str: str) -> time | None:
         "%H%M",  # 1845
     ]
 
-    # Normalize: remove spaces between number and am/pm
-    time_str_normalized = re.sub(r"(\d+)\s*(am|pm)", r"\1\2", time_str, flags=re.IGNORECASE)
+    # Normalize: remove spaces between number and am/pm. Times are at most
+    # 4 digits; the bounds also keep backtracking linear on adversarial input
+    # (py/polynomial-redos — this runs on user-captured text via #458).
+    time_str_normalized = re.sub(
+        r"(\d{1,4})\s{0,3}(am|pm)", r"\1\2", time_str, flags=re.IGNORECASE
+    )
 
     for fmt in formats:
         try:
