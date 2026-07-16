@@ -2292,13 +2292,13 @@ def test_extraction(request: TestExtractionRequest):
         if p.teams_enabled and p.teams_pattern:
             t1, t2, ok = extract_teams_with_custom_regex(name, config)
             r.teams = ExtractionFieldResult(
-                matched=ok, values=[t1, t2] if ok else []
+                matched=ok, values=[v for v in (t1, t2) if v] if ok else []
             )
 
         if p.fighters_enabled and p.fighters_pattern:
             f1, f2, ok = extract_fighters_with_custom_regex(name, config)
             r.fighters = ExtractionFieldResult(
-                matched=ok, values=[f1, f2] if ok else []
+                matched=ok, values=[v for v in (f1, f2) if v] if ok else []
             )
 
         if p.event_name_enabled and p.event_name_pattern:
