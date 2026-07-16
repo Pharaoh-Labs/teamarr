@@ -9,6 +9,8 @@ export interface VariableSidebarProps {
   onInsert: (varName: string) => void
   lastFocusedField: string | null
   isTeamTemplate: boolean
+  /** Variable name → sample value (from /variables/samples) for inline examples. */
+  samples?: Record<string, string>
 }
 
 /** Preview-context bar above the tabs (yk4j.10): league + live/sample. */
