@@ -615,6 +615,7 @@ export function TemplateForm() {
               onInsert={insertVariable}
               lastFocusedField={lastFocusedField}
               isTeamTemplate={isTeamTemplate}
+              samples={sampleData}
             />
           </div>
         </div>
