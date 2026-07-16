@@ -30,6 +30,7 @@ export interface StaleGroup {
   display_name: string | null
   m3u_group_id: number | null
   m3u_group_name: string | null
+  m3u_account_id: number | null
   m3u_account_name: string | null
   source_last_seen: string | null
   total_stream_count: number
@@ -37,6 +38,35 @@ export interface StaleGroup {
 
 export async function getStaleGroups(): Promise<StaleGroup[]> {
   return api.get("/groups/stale")
+}
+
+/** Re-bind suggestion for a stale source — a likely-renamed live group (#450). */
+export interface StaleRebindSuggestion {
+  group_id: number
+  group_name: string
+  old_group_name: string
+  candidate_group_id: number
+  candidate_group_name: string
+  similarity: number
+  suggested_pattern: string | null
+}
+
+export async function getStaleRebindSuggestions(): Promise<StaleRebindSuggestion[]> {
+  return api.get("/groups/stale/suggestions")
+}
+
+export interface GroupRebindRequest {
+  m3u_group_id: number
+  m3u_group_name: string
+  /** Adopt this name pattern in the same click (rename-proofing). */
+  pattern?: string | null
+}
+
+export async function rebindGroup(
+  groupId: number,
+  data: GroupRebindRequest
+): Promise<{ id: number }> {
+  return api.post(`/groups/${groupId}/rebind`, data)
 }
 
 export async function createGroup(data: EventGroupCreate): Promise<EventGroup> {

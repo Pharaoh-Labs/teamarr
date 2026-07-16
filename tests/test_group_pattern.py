@@ -14,7 +14,9 @@ from teamarr.consumers.reconciliation import detect_stale_groups
 from teamarr.database.groups import EventEPGGroup, create_group, get_group, update_group
 from teamarr.services.group_pattern import (
     compile_group_pattern,
+    find_rebind_suggestions,
     resolve_group_name_pattern,
+    suggest_pattern,
 )
 from tests.helpers import SCHEMA_PATH
 
@@ -260,6 +262,137 @@ class TestCrudRoundtrip:
 
 
 # ---------------------------------------------------------------------------
+# Pattern suggestion generator (bpqb.5)
+# ---------------------------------------------------------------------------
+
+
+def _matches(pattern: str, name: str) -> bool:
+    rx = compile_group_pattern(pattern)
+    return rx is not None and rx.search(name) is not None
+
+
+class TestSuggestPattern:
+    def test_numeric_token_becomes_digit_class(self):
+        pattern = suggest_pattern("EPL (MW1)", "EPL (MW2)")
+        assert pattern is not None
+        assert r"\d+" in pattern
+        for name in ("EPL (MW1)", "EPL (MW2)", "EPL (MW14)"):
+            assert _matches(pattern, name)
+        assert not _matches(pattern, "EPL classics")
+        assert not _matches(pattern, "LIVE EPL (MW1) HD")  # anchored
+
+    def test_non_numeric_token_becomes_wildcard(self):
+        pattern = suggest_pattern("NFL - Week One", "NFL - Week Two")
+        assert pattern is not None
+        assert _matches(pattern, "NFL - Week Fifteen")
+
+    def test_containment_rename_uses_optional_wildcard(self):
+        pattern = suggest_pattern("LIVE EPL", "LIVE EPL (MW2)")
+        assert pattern is not None
+        assert _matches(pattern, "LIVE EPL")
+        assert _matches(pattern, "LIVE EPL (MW9)")
+
+    def test_regex_metachars_are_escaped(self):
+        pattern = suggest_pattern("USA | MLB ⚾ (1)", "USA | MLB ⚾ (2)")
+        assert pattern is not None
+        assert _matches(pattern, "USA | MLB ⚾ (7)")
+        assert not _matches(pattern, "USA x MLB ⚾ (7)")  # '|' must not be an alternation
+
+    def test_unrelated_names_yield_nothing(self):
+        assert suggest_pattern("EPL (MW1)", "USA | MLB") is None
+
+    def test_too_little_stable_text_yields_nothing(self):
+        # Common prefix "EPL" is only 3 chars — "^EPL.*$"-style patterns are
+        # rejected outright when below the literal minimum.
+        assert suggest_pattern("EPL", "EPL2") is None
+
+    def test_identical_or_empty_names_yield_nothing(self):
+        assert suggest_pattern("EPL (MW1)", "EPL (MW1)") is None
+        assert suggest_pattern("", "EPL (MW1)") is None
+        assert suggest_pattern("EPL (MW1)", "") is None
+
+
+# ---------------------------------------------------------------------------
+# Stale-source rebind suggestions (bpqb.4)
+# ---------------------------------------------------------------------------
+
+
+def _stale_row(gid=5, name="EPL", old="EPL (MW1)"):
+    return {"id": gid, "name": name, "display_name": None, "m3u_group_name": old}
+
+
+class TestFindRebindSuggestions:
+    def test_suggests_closest_unbound_m3u_group(self):
+        live = [_grp(42, "EPL (MW2)"), _grp(43, "USA | MLB")]
+        got = find_rebind_suggestions([_stale_row()], live, bound_group_ids=set())
+        assert len(got) == 1
+        s = got[0]
+        assert s["group_id"] == 5
+        assert s["candidate_group_id"] == 42
+        assert s["candidate_group_name"] == "EPL (MW2)"
+        assert s["similarity"] >= 0.6
+        assert s["suggested_pattern"] is not None
+
+    def test_bound_groups_are_not_candidates(self):
+        live = [_grp(42, "EPL (MW2)")]
+        got = find_rebind_suggestions([_stale_row()], live, bound_group_ids={42})
+        assert got == []
+
+    def test_non_m3u_groups_are_not_candidates(self):
+        live = [_grp(42, "EPL (MW2)", m3u=False)]
+        got = find_rebind_suggestions([_stale_row()], live, bound_group_ids=set())
+        assert got == []
+
+    def test_dissimilar_names_are_not_suggested(self):
+        live = [_grp(43, "USA | MLB")]
+        got = find_rebind_suggestions([_stale_row()], live, bound_group_ids=set())
+        assert got == []
+
+    def test_picks_best_of_several_candidates(self):
+        live = [_grp(41, "EPL 4K (MW2)"), _grp(42, "EPL (MW2)")]
+        got = find_rebind_suggestions([_stale_row()], live, bound_group_ids=set())
+        assert [s["candidate_group_id"] for s in got] == [42]
+
+    def test_stale_source_without_group_name_is_skipped(self):
+        live = [_grp(42, "EPL (MW2)")]
+        got = find_rebind_suggestions(
+            [_stale_row(old=None)], live, bound_group_ids=set()
+        )
+        assert got == []
+
+    def test_candidates_scoped_to_source_account(self):
+        # A near-identical group exists on ANOTHER account (id 99) — a rename
+        # happens within one playlist, so only the source's own account may
+        # match, whichever side of the fence the account map puts each group.
+        row = {**_stale_row(), "m3u_account_id": 7}
+        live = [_grp(42, "EPL (MW2)"), _grp(99, "EPL (MW3)")]
+        got = find_rebind_suggestions(
+            [row], live, bound_group_ids=set(), account_group_ids={7: {42}}
+        )
+        assert [s["candidate_group_id"] for s in got] == [42]
+
+        got = find_rebind_suggestions(
+            [row], live, bound_group_ids=set(), account_group_ids={7: {99}}
+        )
+        assert [s["candidate_group_id"] for s in got] == [99]
+
+    def test_account_bound_source_without_attribution_gets_no_suggestion(self):
+        # Account detail fetch failed → never risk a cross-account suggestion.
+        row = {**_stale_row(), "m3u_account_id": 7}
+        live = [_grp(42, "EPL (MW2)")]
+        got = find_rebind_suggestions(
+            [row], live, bound_group_ids=set(), account_group_ids={}
+        )
+        assert got == []
+
+    def test_source_without_account_scans_all_m3u_groups(self):
+        row = {**_stale_row(), "m3u_account_id": None}
+        live = [_grp(42, "EPL (MW2)")]
+        got = find_rebind_suggestions([row], live, bound_group_ids=set())
+        assert [s["candidate_group_id"] for s in got] == [42]
+
+
+# ---------------------------------------------------------------------------
 # Cleanup safety (bpqb.8)
 #
 # A pattern that stops matching (provider rename escaping the regex, M3U
@@ -481,3 +614,122 @@ class TestPatternPreviewApi:
             "/api/v1/groups/dispatcharr/group-pattern-preview", json={"pattern": "EPL"}
         )
         assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Rebind flywheel API (bpqb.4/.5)
+# ---------------------------------------------------------------------------
+
+
+def _patch_routes_dispatcharr(monkeypatch, groups, account_groups=None):
+    import teamarr.api.routes.groups as groups_routes
+
+    fake = SimpleNamespace(
+        m3u=SimpleNamespace(
+            list_groups=lambda: groups,
+            get_account_group_counts=lambda aid: dict.fromkeys(account_groups or (), 1),
+        )
+    )
+    monkeypatch.setattr(groups_routes, "get_dispatcharr_connection", lambda db_factory=None: fake)
+
+
+def _create_stale_group(old_name="EPL (MW1)", account_id=None, **extra):
+    from teamarr.database import get_db
+
+    gid = client.post(
+        "/api/v1/groups", json={"name": "EPL", "leagues": ["eng.1"], **extra}
+    ).json()["id"]
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE event_epg_groups "
+            "SET source_missing = 1, m3u_group_name = ?, m3u_group_id = 999, "
+            "    m3u_account_id = ? WHERE id = ?",
+            (old_name, account_id, gid),
+        )
+        conn.commit()
+    return gid
+
+
+class TestRebindApi:
+    def test_suggestions_surface_near_match(self, isolated_db, monkeypatch):
+        gid = _create_stale_group(account_id=7)
+        _patch_routes_dispatcharr(
+            monkeypatch,
+            [_grp(42, "EPL (MW2)"), _grp(43, "USA | MLB")],
+            account_groups={42, 43},
+        )
+
+        got = client.get("/api/v1/groups/stale/suggestions").json()
+        assert len(got) == 1
+        assert got[0]["group_id"] == gid
+        assert got[0]["candidate_group_id"] == 42
+        assert got[0]["suggested_pattern"] is not None
+
+    def test_suggestions_exclude_other_accounts_groups(self, isolated_db, monkeypatch):
+        _create_stale_group(account_id=7)
+        # The near-match group exists but belongs to a DIFFERENT account.
+        _patch_routes_dispatcharr(
+            monkeypatch, [_grp(42, "EPL (MW2)")], account_groups={43}
+        )
+        assert client.get("/api/v1/groups/stale/suggestions").json() == []
+
+    def test_suggestions_soft_empty_without_dispatcharr(self, isolated_db, monkeypatch):
+        import teamarr.api.routes.groups as groups_routes
+
+        _create_stale_group()
+        monkeypatch.setattr(
+            groups_routes, "get_dispatcharr_connection", lambda db_factory=None: None
+        )
+        resp = client.get("/api/v1/groups/stale/suggestions")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_rebind_pins_group_and_clears_stale(self, isolated_db):
+        # Pattern-bound source gone stale: a plain re-bind must also disable
+        # the dead pattern, or stream fetch would keep using it over the pin.
+        gid = _create_stale_group(
+            m3u_group_name_pattern=r"DEAD \(\d+\)", m3u_group_name_pattern_enabled=True
+        )
+        resp = client.post(
+            f"/api/v1/groups/{gid}/rebind",
+            json={"m3u_group_id": 42, "m3u_group_name": "EPL (MW2)"},
+        )
+        assert resp.status_code == 200, resp.text
+
+        got = client.get(f"/api/v1/groups/{gid}").json()
+        assert got["m3u_group_id"] == 42
+        assert got["m3u_group_name"] == "EPL (MW2)"
+        assert got["m3u_group_name_pattern_enabled"] is False
+        assert client.get("/api/v1/groups/stale").json() == []
+
+    def test_rebind_with_pattern_enables_it(self, isolated_db):
+        gid = _create_stale_group()
+        resp = client.post(
+            f"/api/v1/groups/{gid}/rebind",
+            json={
+                "m3u_group_id": 42,
+                "m3u_group_name": "EPL (MW2)",
+                "pattern": r"^EPL \(MW\d+\)$",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        got = client.get(f"/api/v1/groups/{gid}").json()
+        assert got["m3u_group_id"] == 42
+        assert got["m3u_group_name_pattern"] == r"^EPL \(MW\d+\)$"
+        assert got["m3u_group_name_pattern_enabled"] is True
+        assert client.get("/api/v1/groups/stale").json() == []
+
+    def test_rebind_rejects_invalid_pattern(self, isolated_db):
+        gid = _create_stale_group()
+        resp = client.post(
+            f"/api/v1/groups/{gid}/rebind",
+            json={"m3u_group_id": 42, "m3u_group_name": "EPL (MW2)", "pattern": "EPL ("},
+        )
+        assert resp.status_code == 400
+
+    def test_rebind_unknown_group_is_404(self, isolated_db):
+        resp = client.post(
+            "/api/v1/groups/999999/rebind",
+            json={"m3u_group_id": 42, "m3u_group_name": "EPL (MW2)"},
+        )
+        assert resp.status_code == 404

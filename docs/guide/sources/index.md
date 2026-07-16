@@ -68,6 +68,15 @@ The editor shows a live **"Matches N groups"** preview as you type. A pattern th
 
 A stale pattern never deletes your channels: when it matches nothing, the source simply skips the run and existing channels stay until their normal post-event expiry. If the pattern still matches *some* groups but misses one (say a rename escaped your regex), streams from the missed group are treated like streams removed from the M3U — they're detached on the next run, and a channel is removed only once no streams are left on it.
 
+### Re-bind Suggestions
+
+When a source goes stale, Teamarr scans the live M3U groups for a likely rename — an unused group whose name closely matches the old one — and offers it right in the stale-sources banner:
+
+- **Re-bind** — one click pins the source to the new group (and turns pattern binding off, so the pin is what's actually used).
+- **Re-bind + pattern** — also derives a pattern from the old/new name difference (`EPL (MW1)` → `EPL (MW2)` suggests `^EPL \(MW\d+\)$`) and enables pattern binding with it, so the *next* rename re-binds automatically.
+
+Suggestions are never applied silently — the suggested pattern is shown before you click, and you can always fine-tune it later in the source editor with the live match preview. Re-binding only updates the source's binding; existing channels are untouched.
+
 ## Stream Matching Pipeline
 
 When EPG generation runs, each stream goes through:

@@ -1061,7 +1061,7 @@ def get_stale_groups(conn: Connection) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, name, display_name, m3u_group_id, m3u_group_name,
-               m3u_account_name, source_last_seen, total_stream_count
+               m3u_account_id, m3u_account_name, source_last_seen, total_stream_count
         FROM event_epg_groups
         WHERE enabled = 1 AND source_missing = 1 AND COALESCE(is_channel_source, 0) = 0
         ORDER BY name

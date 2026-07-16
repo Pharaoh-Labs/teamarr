@@ -29,6 +29,7 @@ from teamarr.database.groups import (
     get_group_channel_count,
     get_group_xmltv_with_metadata,
     get_stale_groups,
+    mark_group_source_seen,
     reorder_groups,
     set_group_enabled,
     update_group,
@@ -1149,6 +1150,121 @@ def list_stale_groups() -> list[dict]:
 
     with get_db() as conn:
         return get_stale_groups(conn)
+
+
+@router.get("/stale/suggestions")
+def list_stale_rebind_suggestions() -> list[dict]:
+    """Re-bind suggestions for stale sources (#450, the rename flywheel).
+
+    For each stale source, scans live M3U-provided Dispatcharr groups that no
+    source is bound to — scoped to the stale source's own M3U account (a
+    rename happens within one playlist) — and returns the closest name match
+    above the similarity threshold, plus a synthesized name pattern when the
+    old/new diff yields a safe one. Soft-empty when Dispatcharr is
+    unconfigured or unreachable — the stale banner must degrade, not error.
+    """
+    from teamarr.services.group_pattern import find_rebind_suggestions
+
+    conn_dc = get_dispatcharr_connection(get_db)
+    if not conn_dc:
+        return []
+    try:
+        live_groups = conn_dc.m3u.list_groups()
+    except Exception as e:
+        logger.warning("[REBIND] Could not list Dispatcharr groups: %s", e)
+        return []
+
+    with get_db() as conn:
+        stale = get_stale_groups(conn)
+        if not stale:
+            return []
+        bound = {
+            row[0]
+            for row in conn.execute(
+                "SELECT m3u_group_id FROM event_epg_groups WHERE m3u_group_id IS NOT NULL"
+            )
+        }
+
+    # Account attribution for candidate scoping: list_groups' nested account
+    # payload is version-dependent, so use the account detail endpoint per
+    # distinct stale-source account. Failed fetches stay absent from the map
+    # (those sources then get no suggestion rather than a cross-account one).
+    account_group_ids: dict[int, set[int]] = {}
+    for account_id in {
+        aid for row in stale if (aid := row.get("m3u_account_id")) is not None
+    }:
+        try:
+            counts = conn_dc.m3u.get_account_group_counts(account_id)
+        except Exception as e:
+            logger.warning("[REBIND] Could not fetch account %d groups: %s", account_id, e)
+            continue
+        if counts:
+            account_group_ids[account_id] = set(counts)
+
+    return find_rebind_suggestions(stale, live_groups, bound, account_group_ids)
+
+
+class GroupRebindRequest(BaseModel):
+    """One-click re-bind of a stale source to its renamed Dispatcharr group (#450)."""
+
+    m3u_group_id: int
+    m3u_group_name: str
+    # Optionally adopt a name pattern in the same click (rename-proofing).
+    pattern: str | None = None
+
+
+@router.post("/{group_id}/rebind")
+def rebind_group(group_id: int, request: GroupRebindRequest) -> dict:
+    """Re-bind a stale source to a new Dispatcharr group in one call.
+
+    Updates the pinned group id/name, then clears the stale flag so the
+    banner resolves immediately instead of waiting for the next generation
+    run. The resulting binding mode is deterministic: with ``pattern``,
+    pattern binding is enabled with it; without, pattern binding is turned
+    OFF — stream fetch gives an enabled pattern precedence over the pinned
+    id, so leaving a dead pattern active would keep the source broken.
+    Never touches channels — re-binding is a pure binding update (bpqb.8).
+    """
+    from teamarr.services.group_pattern import compile_group_pattern
+
+    if request.pattern is not None and compile_group_pattern(request.pattern) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid pattern: {request.pattern!r}",
+        )
+
+    with get_db() as conn:
+        if get_group(conn, group_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Group {group_id} not found",
+            )
+        update_group(
+            conn,
+            group_id,
+            m3u_group_id=request.m3u_group_id,
+            m3u_group_name=request.m3u_group_name,
+            m3u_group_name_pattern=request.pattern,
+            m3u_group_name_pattern_enabled=bool(request.pattern),
+        )
+        mark_group_source_seen(conn, group_id)
+        group = get_group(conn, group_id)
+
+    logger.info(
+        "[REBIND] Source %d re-bound to group %d ('%s')%s",
+        group_id,
+        request.m3u_group_id,
+        request.m3u_group_name,
+        f" with pattern {request.pattern!r}" if request.pattern else "",
+    )
+    assert group is not None
+    return {
+        "id": group.id,
+        "m3u_group_id": group.m3u_group_id,
+        "m3u_group_name": group.m3u_group_name,
+        "m3u_group_name_pattern": group.m3u_group_name_pattern,
+        "m3u_group_name_pattern_enabled": group.m3u_group_name_pattern_enabled,
+    }
 
 
 @router.get("/{group_id}", response_model=GroupResponse)
