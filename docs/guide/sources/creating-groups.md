@@ -82,7 +82,7 @@ Override how Teamarr parses stream names. By default, the built-in classifier ha
 
 | Extractor | Purpose | Example Pattern |
 |-----------|---------|-----------------|
-| Teams | Extract team names | `(?P<home>.*)\s*vs\s*(?P<away>.*)` |
+| Teams | Extract team names | `(?P<team1>.*)\s*vs\s*(?P<team2>.*)` |
 | Date | Extract date | `\d{1,2}/\d{1,2}/\d{4}` |
 | Time | Extract time | `\d{1,2}:\d{2}\s*(?:AM\|PM)?` |
 | League | Extract league hint | `(?:NFL\|NBA\|NHL):` |
@@ -91,7 +91,7 @@ Override how Teamarr parses stream names. By default, the built-in classifier ha
 
 Each extractor has an enable toggle. Leave disabled to use the built-in parser.
 
-Named groups accept both `(?<name>...)` and Python's `(?P<name>...)` syntax.
+Named groups accept both `(?<name>...)` and Python's `(?P<name>...)` syntax. The recognized names are `team1`/`team2` (Teams), `fighter1`/`fighter2` (Fighters), `date` or `month`/`day`/`year` (Date), `time` or `hour`/`minute`/`ampm` (Time), `league` (League), and `event_name` (Event name). When the recognized named groups are present they take precedence, so extra unnamed groups — like a `(vs|v)` separator — are safe. Without named groups, the first capture group is used (first two for Teams/Fighters).
 
 **Tennis groups** use the **Teams** extractor for player pairs — the two named
 groups become player 1 and player 2 (surname-based matching handles tournament
