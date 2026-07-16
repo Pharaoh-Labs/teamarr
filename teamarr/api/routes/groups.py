@@ -2151,3 +2151,186 @@ def get_combined_xmltv() -> Response:
         media_type="application/xml",
         headers={"Content-Disposition": "inline; filename=teamarr-events.xml"},
     )
+
+
+# =============================================================================
+# Custom regex extraction tester (#458)
+# =============================================================================
+
+
+class ExtractionPatterns(BaseModel):
+    """Custom regex patterns to test — mirrors CustomRegexConfig fields."""
+
+    teams_pattern: str | None = None
+    teams_enabled: bool = False
+    date_pattern: str | None = None
+    date_enabled: bool = False
+    month_pattern: str | None = None
+    month_enabled: bool = False
+    day_pattern: str | None = None
+    day_enabled: bool = False
+    time_pattern: str | None = None
+    time_enabled: bool = False
+    league_pattern: str | None = None
+    league_enabled: bool = False
+    fighters_pattern: str | None = None
+    fighters_enabled: bool = False
+    event_name_pattern: str | None = None
+    event_name_enabled: bool = False
+
+
+class ExtractionFieldResult(BaseModel):
+    """Pipeline extraction outcome for one field on one stream."""
+
+    matched: bool
+    values: list[str] = []
+
+
+class StreamExtractionResult(BaseModel):
+    """Per-stream pipeline extraction results (None = pattern not enabled)."""
+
+    stream_name: str
+    teams: ExtractionFieldResult | None = None
+    fighters: ExtractionFieldResult | None = None
+    event_name: ExtractionFieldResult | None = None
+    date: ExtractionFieldResult | None = None
+    time: ExtractionFieldResult | None = None
+    league: ExtractionFieldResult | None = None
+
+
+class TestExtractionRequest(BaseModel):
+    """Request to run the real extraction pipeline against stream names."""
+
+    stream_names: list[str] = Field(..., max_length=20000)
+    patterns: ExtractionPatterns
+
+
+class TestExtractionResponse(BaseModel):
+    """Pipeline-truth extraction results for the Pattern Tester."""
+
+    results: list[StreamExtractionResult]
+    # field -> compile error message (invalid Python regex)
+    pattern_errors: dict[str, str] = {}
+    warnings: list[str] = []
+
+
+@router.post("/test-extraction", response_model=TestExtractionResponse)
+def test_extraction(request: TestExtractionRequest):
+    """Run the REAL custom-regex extraction functions against stream names.
+
+    The Pattern Tester's client-side JS highlighting can diverge from the
+    pipeline (Python `re` dialect, two-required-groups rule for teams and
+    fighters, date/time parseability). This endpoint is the single source
+    of truth: it calls the same `extract_*_with_custom_regex` functions the
+    matcher uses, on the original stream names, and returns per-stream
+    per-field results.
+    """
+    import re as _re
+
+    from teamarr.consumers.matching.classifier import (
+        CustomRegexConfig,
+        extract_date_with_custom_regex,
+        extract_event_name_with_custom_regex,
+        extract_fighters_with_custom_regex,
+        extract_league_with_custom_regex,
+        extract_teams_with_custom_regex,
+        extract_time_with_custom_regex,
+    )
+
+    p = request.patterns
+    config = CustomRegexConfig(
+        teams_pattern=p.teams_pattern,
+        teams_enabled=p.teams_enabled,
+        date_pattern=p.date_pattern,
+        date_enabled=p.date_enabled,
+        month_pattern=p.month_pattern,
+        month_enabled=p.month_enabled,
+        day_pattern=p.day_pattern,
+        day_enabled=p.day_enabled,
+        time_pattern=p.time_pattern,
+        time_enabled=p.time_enabled,
+        league_pattern=p.league_pattern,
+        league_enabled=p.league_enabled,
+        fighters_pattern=p.fighters_pattern,
+        fighters_enabled=p.fighters_enabled,
+        event_name_pattern=p.event_name_pattern,
+        event_name_enabled=p.event_name_enabled,
+    )
+
+    # Surface compile errors explicitly — the pipeline logs-and-ignores an
+    # invalid pattern, which the tester must report instead of showing
+    # "no match" with no explanation.
+    pattern_errors: dict[str, str] = {}
+    for fname, pat, enabled in (
+        ("teams", p.teams_pattern, p.teams_enabled),
+        ("date", p.date_pattern, p.date_enabled),
+        ("month", p.month_pattern, p.month_enabled),
+        ("day", p.day_pattern, p.day_enabled),
+        ("time", p.time_pattern, p.time_enabled),
+        ("league", p.league_pattern, p.league_enabled),
+        ("fighters", p.fighters_pattern, p.fighters_enabled),
+        ("event_name", p.event_name_pattern, p.event_name_enabled),
+    ):
+        if enabled and pat:
+            try:
+                _re.compile(pat, _re.IGNORECASE)
+            except _re.error as e:
+                pattern_errors[fname] = str(e)
+
+    warnings: list[str] = []
+    if (p.month_enabled or p.day_enabled) and not p.date_enabled:
+        warnings.append(
+            "Month/day patterns only apply when the date pattern toggle is "
+            "enabled — the pipeline gates all date extraction on it."
+        )
+
+    date_attempted = p.date_enabled  # mirror _apply_custom_datetime_regex gate
+    results: list[StreamExtractionResult] = []
+    for name in request.stream_names:
+        r = StreamExtractionResult(stream_name=name)
+
+        if p.teams_enabled and p.teams_pattern:
+            t1, t2, ok = extract_teams_with_custom_regex(name, config)
+            r.teams = ExtractionFieldResult(
+                matched=ok, values=[v for v in (t1, t2) if v] if ok else []
+            )
+
+        if p.fighters_enabled and p.fighters_pattern:
+            f1, f2, ok = extract_fighters_with_custom_regex(name, config)
+            r.fighters = ExtractionFieldResult(
+                matched=ok, values=[v for v in (f1, f2) if v] if ok else []
+            )
+
+        if p.event_name_enabled and p.event_name_pattern:
+            event_name = extract_event_name_with_custom_regex(name, config)
+            r.event_name = ExtractionFieldResult(
+                matched=event_name is not None,
+                values=[event_name] if event_name else [],
+            )
+
+        if date_attempted:
+            extracted_date = extract_date_with_custom_regex(name, config)
+            r.date = ExtractionFieldResult(
+                matched=extracted_date is not None,
+                values=[extracted_date.isoformat()] if extracted_date else [],
+            )
+
+        if p.time_enabled and p.time_pattern:
+            extracted_time = extract_time_with_custom_regex(name, config)
+            r.time = ExtractionFieldResult(
+                matched=extracted_time is not None,
+                values=[extracted_time.strftime("%H:%M")] if extracted_time else [],
+            )
+
+        if p.league_enabled and p.league_pattern:
+            league = extract_league_with_custom_regex(name, config)
+            r.league = ExtractionFieldResult(
+                matched=league is not None,
+                values=[league] if league else [],
+            )
+
+        results.append(r)
+
+    return TestExtractionResponse(
+        results=results, pattern_errors=pattern_errors, warnings=warnings
+    )

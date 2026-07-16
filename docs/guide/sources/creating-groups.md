@@ -93,6 +93,8 @@ Each extractor has an enable toggle. Leave disabled to use the built-in parser.
 
 Named groups accept both `(?<name>...)` and Python's `(?P<name>...)` syntax. The recognized names are `team1`/`team2` (Teams), `fighter1`/`fighter2` (Fighters), `date` or `month`/`day`/`year` (Date), `time` or `hour`/`minute`/`ampm` (Time), `league` (League), and `event_name` (Event name). When the recognized named groups are present they take precedence, so extra unnamed groups — like a `(vs|v)` separator — are safe. Without named groups, the first capture group is used (first two for Teams/Fighters).
 
+**Pattern Tester** — the *Open Pattern Tester* button opens a workspace that runs your patterns against the group's real stream names. Highlighting is instant client-side JavaScript regex, and each stream also gets a **pipeline verdict badge** computed by the real Python extraction functions: green `✓ pipeline` means the pattern fully extracts (both teams captured, date/time actually parseable), amber `✗` lists the fields the pipeline would reject even if the regex visually matches. Invalid Python patterns and configuration pitfalls (e.g. month/day patterns without the date toggle) are called out in a banner. Hover a badge to see the extracted values.
+
 **Tennis groups** use the **Teams** extractor for player pairs — the two named
 groups become player 1 and player 2 (surname-based matching handles tournament
 prefixes and extra tokens). The built-in parser also recognizes the

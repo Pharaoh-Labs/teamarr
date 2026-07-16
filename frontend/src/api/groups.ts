@@ -137,6 +137,59 @@ export async function getRawStreams(
   return api.get(`/groups/${groupId}/streams/raw`)
 }
 
+// Pipeline-truth extraction tester (#458) — runs the REAL Python extraction
+// functions server-side; the client-side JS highlighting is only approximate.
+
+export interface ExtractionPatterns {
+  teams_pattern?: string | null
+  teams_enabled?: boolean
+  date_pattern?: string | null
+  date_enabled?: boolean
+  month_pattern?: string | null
+  month_enabled?: boolean
+  day_pattern?: string | null
+  day_enabled?: boolean
+  time_pattern?: string | null
+  time_enabled?: boolean
+  league_pattern?: string | null
+  league_enabled?: boolean
+  fighters_pattern?: string | null
+  fighters_enabled?: boolean
+  event_name_pattern?: string | null
+  event_name_enabled?: boolean
+}
+
+export interface ExtractionFieldResult {
+  matched: boolean
+  values: string[]
+}
+
+export interface StreamExtractionResult {
+  stream_name: string
+  teams: ExtractionFieldResult | null
+  fighters: ExtractionFieldResult | null
+  event_name: ExtractionFieldResult | null
+  date: ExtractionFieldResult | null
+  time: ExtractionFieldResult | null
+  league: ExtractionFieldResult | null
+}
+
+export interface TestExtractionResponse {
+  results: StreamExtractionResult[]
+  pattern_errors: Record<string, string>
+  warnings: string[]
+}
+
+export async function testExtraction(
+  streamNames: string[],
+  patterns: ExtractionPatterns
+): Promise<TestExtractionResponse> {
+  return api.post("/groups/test-extraction", {
+    stream_names: streamNames,
+    patterns,
+  })
+}
+
 export async function bulkUpdateGroups(
   data: BulkGroupUpdateRequest
 ): Promise<BulkGroupUpdateResponse> {
