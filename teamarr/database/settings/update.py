@@ -539,18 +539,17 @@ def update_jellyfin_settings(
 def update_channelsdvr_settings(
     conn: Connection,
     enabled: bool | None = None,
-    url: str | None = None,
-    source_name: str | None = None,
-    lineup_id: str | None = None,
+    servers: list[dict] | None = None,
 ) -> bool:
     """Update Channels DVR integration settings (only provided fields).
+
+    `servers` replaces the whole list (full-replace semantics, like
+    stream-ordering rules): pass every server entry, not a delta.
 
     Returns:
         True if updated
     """
-    provided = _skip_none(
-        enabled=enabled, url=url, source_name=source_name, lineup_id=lineup_id
-    )
+    provided = _skip_none(enabled=enabled, servers=servers)
     return _apply(conn, "channelsdvr", provided)
 
 

@@ -454,15 +454,16 @@ CREATE TABLE IF NOT EXISTS settings (
 
     -- Channels DVR Integration (M3U Source + XMLTV Lineup Refresh)
     -- Local API is unauthenticated by Channels DVR design; no credentials stored.
-    -- channelsdvr_lineup_id refreshes the XMLTV guide; without it CDVR
-    -- updates channels but leaves the EPG stale.
+    -- channelsdvr_servers is a JSON list of {name, url, source_name, lineup_id}
+    -- entries (#381 multi-server fan-out); each lineup_id refreshes that
+    -- server's XMLTV guide — without it CDVR updates channels but leaves the
+    -- EPG stale. Pre-v82 scalar columns (channelsdvr_url/source_name/lineup_id)
+    -- may linger in upgraded databases; they are unread.
     channelsdvr_enabled BOOLEAN DEFAULT 0,
-    channelsdvr_url TEXT,
-    channelsdvr_source_name TEXT,
-    channelsdvr_lineup_id TEXT,
+    channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 81
+    schema_version INTEGER DEFAULT 82
 );
 
 -- Insert default settings

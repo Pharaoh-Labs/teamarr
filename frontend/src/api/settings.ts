@@ -259,11 +259,17 @@ export interface JellyfinTestResponse {
   error?: string | null
 }
 
-export interface ChannelsDVRSettings {
-  enabled: boolean
+export interface ChannelsDVRServer {
+  name: string
   url: string | null
   source_name: string | null
   lineup_id: string | null
+}
+
+export interface ChannelsDVRSettings {
+  enabled: boolean
+  // Full-replace on update: send the complete list
+  servers: ChannelsDVRServer[]
 }
 
 export interface ChannelsDVRTestResponse {

@@ -555,22 +555,30 @@ class JellyfinConnectionTestResponse(BaseModel):
 # =============================================================================
 
 
+class ChannelsDVRServerModel(BaseModel):
+    """One Channels DVR server target (#381)."""
+
+    name: str = ""
+    url: str | None = None
+    source_name: str | None = None
+    lineup_id: str | None = None
+
+
 class ChannelsDVRSettingsModel(BaseModel):
     """Channels DVR integration settings."""
 
     enabled: bool = False
-    url: str | None = None
-    source_name: str | None = None
-    lineup_id: str | None = None
+    servers: list[ChannelsDVRServerModel] = []
 
 
 class ChannelsDVRSettingsUpdate(BaseModel):
-    """Update model for Channels DVR settings (all fields optional)."""
+    """Update model for Channels DVR settings (all fields optional).
+
+    `servers` is full-replace: send the complete list.
+    """
 
     enabled: bool | None = None
-    url: str | None = None
-    source_name: str | None = None
-    lineup_id: str | None = None
+    servers: list[ChannelsDVRServerModel] | None = None
 
 
 class ChannelsDVRConnectionTestRequest(BaseModel):

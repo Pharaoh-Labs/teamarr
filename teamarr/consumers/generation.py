@@ -538,6 +538,8 @@ def run_full_generation(
         # Step 5d: Channels DVR M3U source + XMLTV lineup refresh
         # CDVR splits channel-list and EPG into two providers — without the
         # lineup PUT the channels are fresh but the guide is stale.
+        # Multi-server (#381): fan out over every configured server; one
+        # server failing never blocks the others.
         check_cancelled()
         try:
             from teamarr.database.settings import get_channelsdvr_settings
@@ -545,92 +547,47 @@ def run_full_generation(
             with db_factory() as conn:
                 channelsdvr_settings = get_channelsdvr_settings(conn)
 
-            if not (channelsdvr_settings.enabled and channelsdvr_settings.url):
+            servers = [s for s in channelsdvr_settings.servers if s.url]
+            if not (channelsdvr_settings.enabled and servers):
                 pass  # integration off or unconfigured — nothing to do
             else:
-
-                # The client derives lineup_id as "XMLTV-<source_name>" when no
-                # lineup is explicitly configured, so the guide refresh fires
-                # even if the user only set the M3U source.
-                client = ChannelsDVRClient(
-                    base_url=channelsdvr_settings.url,
-                    source_name=channelsdvr_settings.source_name or "",
-                    lineup_id=channelsdvr_settings.lineup_id or "",
-                )
-
-                if not (client.source_name or client.lineup_id):
-                    logger.warning(
-                        "[CHANNELSDVR] Enabled but no source name or XMLTV lineup "
-                        "configured — nothing to refresh. Set a source name "
-                        "(and optionally a lineup) in Settings."
-                    )
-                else:
-                    # Sequence the two refreshes on real evidence: wait for the
-                    # M3U channel-list refresh to actually finish before firing
-                    # the guide PUT, so the guide doesn't index against a stale
-                    # channel list. Both waits poll CDVR /log (see client docs).
-                    if client.source_name:
-                        update_progress(
-                            "channelsdvr", 97, "Refreshing Channels DVR channels..."
+                m3u_results: list[dict] = []
+                epg_results: list[dict] = []
+                server_count = len(servers)
+                for i, server in enumerate(servers, 1):
+                    check_cancelled()
+                    label = server.name or server.url or ""
+                    try:
+                        m3u_res, epg_res = _refresh_channelsdvr_server(
+                            server,
+                            label,
+                            lambda msg, i=i, n=server_count: update_progress(
+                                "channelsdvr", 97, f"{msg} ({i}/{n})"
+                            ),
                         )
-                        m3u_result = client.trigger_m3u_refresh(
-                            timeout=60, wait_for_completion=bool(client.lineup_id)
-                        )
-                        result.channelsdvr_refresh = m3u_result
-                        if m3u_result.get("success"):
-                            logger.info(
-                                "[CHANNELSDVR] M3U refresh triggered in %.1fs (completion: %s)",
-                                m3u_result.get("duration", 0),
-                                m3u_result.get("completed", "not awaited"),
-                            )
-                        else:
-                            logger.warning(
-                                "[CHANNELSDVR] M3U refresh failed: %s",
-                                m3u_result.get("message"),
-                            )
-
-                    if client.lineup_id:
-                        if client.lineup_derived:
-                            logger.info(
-                                "[CHANNELSDVR] No XMLTV lineup configured; "
-                                "derived '%s' from source '%s'",
-                                client.lineup_id,
-                                client.source_name,
-                            )
-                        update_progress(
-                            "channelsdvr", 97, "Refreshing Channels DVR guide..."
-                        )
-                        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
-                        result.channelsdvr_epg_refresh = epg_result
-                        if not epg_result.get("success"):
-                            logger.warning(
-                                "[CHANNELSDVR] EPG refresh failed: %s",
-                                epg_result.get("message"),
-                            )
-                        else:
-                            verification = epg_result.get("verification") or {}
-                            status = verification.get("status")
-                            if status == "no_fetch":
-                                logger.warning(
-                                    "[CHANNELSDVR] EPG refresh accepted but guide "
-                                    "'%s' was not re-fetched — guide may be stale",
-                                    client.lineup_id,
-                                )
-                            else:
-                                logger.info(
-                                    "[CHANNELSDVR] EPG refresh for lineup '%s' in "
-                                    "%.1fs (verification: %s)",
-                                    client.lineup_id,
-                                    epg_result.get("duration", 0),
-                                    status or "not verified",
-                                )
-                    else:
+                    except Exception as e:  # noqa: BLE001 — per-server isolation
                         logger.warning(
-                            "[CHANNELSDVR] Skipping EPG/guide refresh: no XMLTV "
-                            "lineup configured and none could be derived (set a "
-                            "source name so the lineup can be inferred). The "
-                            "guide will stay stale until refreshed manually."
+                            "[CHANNELSDVR] %s: refresh failed (non-blocking): %s",
+                            label,
+                            e,
                         )
+                        m3u_res = {"success": False, "error": str(e)}
+                        epg_res = None
+                    if m3u_res is not None:
+                        m3u_results.append({"server": label, **m3u_res})
+                    if epg_res is not None:
+                        epg_results.append({"server": label, **epg_res})
+
+                if m3u_results:
+                    result.channelsdvr_refresh = {
+                        "success": all(r.get("success") for r in m3u_results),
+                        "servers": m3u_results,
+                    }
+                if epg_results:
+                    result.channelsdvr_epg_refresh = {
+                        "success": all(r.get("success") for r in epg_results),
+                        "servers": epg_results,
+                    }
         except Exception as e:
             logger.warning(
                 "[CHANNELSDVR] Refresh failed (non-blocking): %s", e
@@ -756,6 +713,106 @@ def run_full_generation(
         _generation_lock.release()
 
     return result
+
+
+def _refresh_channelsdvr_server(
+    server: Any,
+    label: str,
+    progress: Callable[[str], None],
+) -> tuple[dict | None, dict | None]:
+    """Refresh one Channels DVR server's M3U source, then its XMLTV lineup.
+
+    Sequences the two refreshes on real evidence: waits for the M3U
+    channel-list refresh to actually finish before firing the guide PUT,
+    so the guide doesn't index against a stale channel list. Both waits
+    poll CDVR /log (see client docs).
+
+    Returns (m3u_result, epg_result); either is None when that phase
+    didn't run (no source / no lineup configured).
+    """
+    # The client derives lineup_id as "XMLTV-<source_name>" when no lineup
+    # is explicitly configured, so the guide refresh fires even if the
+    # user only set the M3U source.
+    client = ChannelsDVRClient(
+        base_url=server.url,
+        source_name=server.source_name or "",
+        lineup_id=server.lineup_id or "",
+    )
+
+    if not (client.source_name or client.lineup_id):
+        logger.warning(
+            "[CHANNELSDVR] %s: enabled but no source name or XMLTV lineup "
+            "configured — nothing to refresh. Set a source name "
+            "(and optionally a lineup) in Settings.",
+            label,
+        )
+        return None, None
+
+    m3u_result: dict | None = None
+    if client.source_name:
+        progress("Refreshing Channels DVR channels...")
+        m3u_result = client.trigger_m3u_refresh(
+            timeout=60, wait_for_completion=bool(client.lineup_id)
+        )
+        if m3u_result.get("success"):
+            logger.info(
+                "[CHANNELSDVR] %s: M3U refresh triggered in %.1fs (completion: %s)",
+                label,
+                m3u_result.get("duration", 0),
+                m3u_result.get("completed", "not awaited"),
+            )
+        else:
+            logger.warning(
+                "[CHANNELSDVR] %s: M3U refresh failed: %s",
+                label,
+                m3u_result.get("message"),
+            )
+
+    epg_result: dict | None = None
+    if client.lineup_id:
+        if client.lineup_derived:
+            logger.info(
+                "[CHANNELSDVR] %s: no XMLTV lineup configured; derived '%s' from source '%s'",
+                label,
+                client.lineup_id,
+                client.source_name,
+            )
+        progress("Refreshing Channels DVR guide...")
+        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
+        if not epg_result.get("success"):
+            logger.warning(
+                "[CHANNELSDVR] %s: EPG refresh failed: %s",
+                label,
+                epg_result.get("message"),
+            )
+        else:
+            verification = epg_result.get("verification") or {}
+            status = verification.get("status")
+            if status == "no_fetch":
+                logger.warning(
+                    "[CHANNELSDVR] %s: EPG refresh accepted but guide '%s' "
+                    "was not re-fetched — guide may be stale",
+                    label,
+                    client.lineup_id,
+                )
+            else:
+                logger.info(
+                    "[CHANNELSDVR] %s: EPG refresh for lineup '%s' in %.1fs (verification: %s)",
+                    label,
+                    client.lineup_id,
+                    epg_result.get("duration", 0),
+                    status or "not verified",
+                )
+    else:
+        logger.warning(
+            "[CHANNELSDVR] %s: skipping EPG/guide refresh: no XMLTV lineup "
+            "configured and none could be derived (set a source name so the "
+            "lineup can be inferred). The guide will stay stale until "
+            "refreshed manually.",
+            label,
+        )
+
+    return m3u_result, epg_result
 
 
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:
