@@ -25,7 +25,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 | `channels.py` | 11 | Channel management, numbering, search, reconciliation |
 | `dispatcharr.py` | 8 | Dispatcharr settings, connection test, sync status |
 | `cache.py` | 10 | Cache refresh, stats, clearing, game data cache |
-| `stats.py` | 8 | Generation run stats, processing history, cleanup |
+| `stats.py` | 5 | Generation run stats, live game stats, homepage widget KPIs, processing history, cleanup |
 | `sort_priorities.py` | 7 | Stream ordering rules (m3u, group, regex-based priority) |
 | `aliases.py` | 7 | Team alias CRUD for stream matching |
 | `keywords.py` | 7 | Game event keywords (pregame, postgame, filler) |
