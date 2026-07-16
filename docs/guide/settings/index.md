@@ -22,7 +22,7 @@ What remains under Settings:
 
 - **[General](general)** — timezone, time format, scheduled generation, TheSportsDB API key, and update notifications
 - **[Dispatcharr](dispatcharr)** — connection, EPG source, default profiles/groups, and logo cleanup
-- **Media Servers** — Emby, Jellyfin, and Channels DVR integration
+- **[Media Servers](media-servers)** — Emby, Jellyfin, and Channels DVR integration (multiple Channels DVR servers supported)
 - **[Advanced](advanced)** — backup/restore and the data caches (directory, game data, match cache, run history)
 
 {: .note }

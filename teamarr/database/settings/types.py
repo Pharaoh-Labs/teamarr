@@ -324,13 +324,25 @@ class JellyfinSettings:
 
 
 @dataclass
-class ChannelsDVRSettings:
-    """Channels DVR integration settings for M3U + XMLTV refresh."""
+class ChannelsDVRServer:
+    """One Channels DVR server target for post-generation refresh (#381)."""
 
-    enabled: bool = False
+    name: str = ""
     url: str | None = None
     source_name: str | None = None
     lineup_id: str | None = None
+
+
+@dataclass
+class ChannelsDVRSettings:
+    """Channels DVR integration settings for M3U + XMLTV refresh.
+
+    Multi-server (#381): refresh fans out over every entry in `servers`.
+    All servers receive the same channel set/EPG from one Dispatcharr.
+    """
+
+    enabled: bool = False
+    servers: list[ChannelsDVRServer] = field(default_factory=list)
 
 
 @dataclass

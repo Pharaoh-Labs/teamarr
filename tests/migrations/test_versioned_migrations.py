@@ -218,7 +218,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 81
+        assert row["schema_version"] == 82
 
 
 class TestV73CleansTeamCache:
@@ -412,7 +412,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 81
+        assert row["schema_version"] == 82
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 81
+        assert row["schema_version"] == 82
 
 
 # ===========================================================================
@@ -1174,3 +1174,96 @@ def test_v81_collapses_duplicate_variants():
     conn = _v81_make_db('["Sporting Event", "Sports Event"]')
     _migrate_v81_seed_sports_event_category(conn)
     assert _v81_cats(conn) == ["Sports event"]
+
+
+# ---------------------------------------------------------------------------
+# v82: fold scalar Channels DVR settings into channelsdvr_servers list (#381)
+# ---------------------------------------------------------------------------
+
+
+def _make_v81_cdvr_db(tmp_path: Path, url, source, lineup) -> sqlite3.Connection:
+    """Minimal v81 settings table with the pre-#381 scalar CDVR columns."""
+    db_path = tmp_path / "cdvr.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            schema_version INTEGER DEFAULT 81,
+            channelsdvr_enabled BOOLEAN DEFAULT 0,
+            channelsdvr_url TEXT,
+            channelsdvr_source_name TEXT,
+            channelsdvr_lineup_id TEXT,
+            channelsdvr_servers JSON
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO settings
+            (id, schema_version, channelsdvr_enabled, channelsdvr_url,
+             channelsdvr_source_name, channelsdvr_lineup_id)
+        VALUES (1, 81, 1, ?, ?, ?)
+        """,
+        (url, source, lineup),
+    )
+    return conn
+
+
+class TestV82ChannelsDVRServersList:
+    def test_scalar_settings_fold_into_servers_list(self, tmp_path):
+        conn = _make_v81_cdvr_db(
+            tmp_path, "http://cdvr:8089/", "Teamarr", "XMLTV-Teamarr"
+        )
+
+        _run_migrations(conn)
+
+        row = conn.execute(
+            "SELECT schema_version, channelsdvr_servers FROM settings WHERE id = 1"
+        ).fetchone()
+        assert row["schema_version"] == 82
+        servers = json.loads(row["channelsdvr_servers"])
+        assert servers == [
+            {
+                "name": "Channels DVR",
+                "url": "http://cdvr:8089",  # trailing slash stripped
+                "source_name": "Teamarr",
+                "lineup_id": "XMLTV-Teamarr",
+            }
+        ]
+
+    def test_unconfigured_scalar_leaves_servers_null(self, tmp_path):
+        conn = _make_v81_cdvr_db(tmp_path, None, None, None)
+
+        _run_migrations(conn)
+
+        row = conn.execute(
+            "SELECT schema_version, channelsdvr_servers FROM settings WHERE id = 1"
+        ).fetchone()
+        assert row["schema_version"] == 82
+        assert row["channelsdvr_servers"] is None
+
+    def test_settings_roundtrip_servers_list(self, db_conn):
+        from teamarr.database.settings import (
+            get_channelsdvr_settings,
+            update_channelsdvr_settings,
+        )
+
+        update_channelsdvr_settings(
+            db_conn,
+            enabled=True,
+            servers=[
+                {"name": "East", "url": "http://east:8089/", "source_name": "Teamarr",
+                 "lineup_id": "XMLTV-Teamarr"},
+                {"name": "West", "url": "http://west:8089", "source_name": "Teamarr",
+                 "lineup_id": None},
+            ],
+        )
+
+        settings = get_channelsdvr_settings(db_conn)
+        assert settings.enabled is True
+        assert len(settings.servers) == 2
+        assert settings.servers[0].name == "East"
+        assert settings.servers[0].url == "http://east:8089"  # slash stripped
+        assert settings.servers[1].lineup_id is None

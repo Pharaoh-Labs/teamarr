@@ -260,6 +260,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 81
 
+    if current_version < 82:
+        _apply_migration(
+            conn, 82,
+            "fold scalar Channels DVR settings into channelsdvr_servers list (#381)",
+            _migrate_v82_channelsdvr_servers_list,
+        )
+        current_version = 82
+
 
 # =============================================================================
 # Migration helpers
@@ -1968,3 +1976,41 @@ def _migrate_v81_seed_sports_event_category(conn: sqlite3.Connection) -> None:
 
     if seeded:
         logger.info("[MIGRATE v81] Seeded 'Sports event' into %d template(s)", seeded)
+
+
+def _migrate_v82_channelsdvr_servers_list(conn: sqlite3.Connection) -> None:
+    """v82: fold scalar Channels DVR settings into channelsdvr_servers (#381).
+
+    Multi-server fan-out replaces the single url/source_name/lineup_id
+    columns with a JSON list. An existing configured server becomes the
+    list's only entry; the scalar columns are left in place (unread) —
+    reconciliation never drops columns, and keeping them makes the
+    migration trivially reversible.
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
+    if "channelsdvr_url" not in cols:
+        return  # fresh database — scalar columns never existed
+
+    row = conn.execute(
+        """
+        SELECT channelsdvr_url, channelsdvr_source_name, channelsdvr_lineup_id,
+               channelsdvr_servers
+        FROM settings WHERE id = 1
+        """
+    ).fetchone()
+    if not row or not row["channelsdvr_url"] or row["channelsdvr_servers"]:
+        return  # nothing configured, or servers list already populated
+
+    servers = [
+        {
+            "name": "Channels DVR",
+            "url": row["channelsdvr_url"].rstrip("/"),
+            "source_name": row["channelsdvr_source_name"],
+            "lineup_id": row["channelsdvr_lineup_id"],
+        }
+    ]
+    conn.execute(
+        "UPDATE settings SET channelsdvr_servers = ? WHERE id = 1",
+        (json.dumps(servers),),
+    )
+    logger.info("[MIGRATE v82] Folded Channels DVR scalar settings into servers list")

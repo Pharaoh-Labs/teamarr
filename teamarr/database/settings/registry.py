@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import types as _types
 from collections.abc import Callable
-from dataclasses import MISSING
+from dataclasses import MISSING, asdict, is_dataclass
 from dataclasses import dataclass as _dataclass
 from dataclasses import fields as _dc_fields
 from typing import Any, Union, get_args, get_origin
@@ -285,6 +285,38 @@ def _dump_url(value: Any) -> Any:
     return value.rstrip("/") if value else value
 
 
+def _parse_channelsdvr_servers(raw: Any) -> list:
+    from .types import ChannelsDVRServer
+
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        ChannelsDVRServer(
+            name=entry.get("name", ""),
+            url=entry.get("url"),
+            source_name=entry.get("source_name"),
+            lineup_id=entry.get("lineup_id"),
+        )
+        for entry in data
+        if isinstance(entry, dict)
+    ]
+
+
+def _dump_channelsdvr_servers(value: Any) -> str:
+    # Accepts dataclass instances (internal callers) or dicts (API updates)
+    entries = [asdict(v) if is_dataclass(v) else v for v in (value or [])]
+    for entry in entries:
+        if entry.get("url"):
+            entry["url"] = entry["url"].rstrip("/")
+    return json.dumps(entries)
+
+
 _URL_HOOK = {"url": {"dump": _dump_url}}
 
 
@@ -450,7 +482,16 @@ GROUPS: dict[str, GroupSpec] = {
         GroupSpec(
             "channelsdvr",
             ChannelsDVRSettings,
-            _specs(ChannelsDVRSettings, prefix="channelsdvr_", hooks=_URL_HOOK),
+            _specs(
+                ChannelsDVRSettings,
+                prefix="channelsdvr_",
+                hooks={
+                    "servers": {
+                        "parse": _parse_channelsdvr_servers,
+                        "dump": _dump_channelsdvr_servers,
+                    },
+                },
+            ),
             "Channels DVR",
         ),
     )
