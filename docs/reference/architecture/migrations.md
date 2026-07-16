@@ -205,14 +205,14 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 82** (39 incremental migrations since checkpoint)
+**Current schema version: 83** (40 incremental migrations since checkpoint)
 
 | Version | Type | Description |
 |---------|------|-------------|
 | 2 | Base | Initial V2 schema |
 | 3-42 | Consolidated | Merged into checkpoint_v43 |
 | 43 | Checkpoint | Checkpoint baseline |
-| 44-82 | Incremental | Individual migrations in `migrations/versioned.py` |
+| 44-83 | Incremental | Individual migrations in `migrations/versioned.py` |
 
 ## Troubleshooting
 

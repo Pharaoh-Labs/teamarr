@@ -22,7 +22,7 @@ import {
   useChannelsDVRSources,
   useChannelsDVRLineups,
 } from "@/hooks/useSettings"
-import type { ChannelsDVRServer, ChannelsDVRSettings, EmbySettings, JellyfinSettings } from "@/api/settings"
+import type { ChannelsDVRServer, ChannelsDVRSettings, EmbySettings, JellyfinSettings, MediaServerEntry } from "@/api/settings"
 
 interface TestResult {
   success: boolean
@@ -39,69 +39,57 @@ interface MediaServerTestResponse {
   error?: string | null
 }
 
-interface MediaServerCardProps {
-  title: string
-  urlPlaceholder: string
-  initial: MediaServerSettings
-  saving: boolean
-  testing: boolean
-  onSave: (data: Partial<MediaServerSettings>) => Promise<unknown>
-  onTest: (data: {
-    url?: string
-    username?: string
-    password?: string
-    api_key?: string
-  }) => Promise<MediaServerTestResponse>
+type MediaServerTestInput = {
+  url?: string
+  username?: string
+  password?: string
+  api_key?: string
 }
 
-function MediaServerCard({
+const EMPTY_MEDIA_SERVER: MediaServerEntry = {
+  name: "",
+  url: null,
+  username: null,
+  password: null,
+  api_key: null,
+}
+
+interface MediaServerRowProps {
+  title: string
+  urlPlaceholder: string
+  index: number
+  server: MediaServerEntry
+  testing: boolean
+  onChange: (server: MediaServerEntry) => void
+  onRemove: () => void
+  removable: boolean
+  onTest: (data: MediaServerTestInput) => Promise<MediaServerTestResponse>
+}
+
+function MediaServerRow({
   title,
   urlPlaceholder,
-  initial,
-  saving,
+  index,
+  server,
   testing,
-  onSave,
+  onChange,
+  onRemove,
+  removable,
   onTest,
-}: MediaServerCardProps) {
-  const [form, setForm] = useState<Partial<MediaServerSettings>>({
-    enabled: initial.enabled,
-    url: initial.url,
-    username: initial.username,
-    password: "", // Don't show masked password
-    api_key: "", // Don't show masked API key
-  })
+}: MediaServerRowProps) {
   const [testResult, setTestResult] = useState<TestResult | null>(null)
-
-  const idPrefix = title.toLowerCase()
-
-  const handleSave = async () => {
-    try {
-      const data: Partial<MediaServerSettings> = {
-        enabled: form.enabled,
-        url: form.url,
-        username: form.username,
-      }
-      if (form.password) {
-        data.password = form.password
-      }
-      if (form.api_key) {
-        data.api_key = form.api_key
-      }
-      await onSave(data)
-      toast.success(`${title} settings saved`)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save")
-    }
-  }
+  const idPrefix = `${title.toLowerCase()}-${index}`
 
   const handleTest = async () => {
     try {
       setTestResult(null)
+      // Masked secrets ("********") pass through — the backend resolves
+      // them against the saved server matching this URL.
       const result = await onTest({
-        url: form.url || undefined,
-        username: form.username || undefined,
-        password: form.password || undefined,
-        api_key: form.api_key || undefined,
+        url: server.url || undefined,
+        username: server.username || undefined,
+        password: server.password || undefined,
+        api_key: server.api_key || undefined,
       })
       if (result.success) {
         setTestResult({
@@ -123,94 +111,165 @@ function MediaServerCard({
   }
 
   return (
+    <div className="rounded-lg border p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <Input
+          className="max-w-56"
+          value={server.name ?? ""}
+          onChange={(e) => onChange({ ...server, name: e.target.value })}
+          placeholder={`Server ${index + 1} name (optional)`}
+        />
+        <div className="flex items-center gap-2">
+          <Button onClick={handleTest} variant="outline" size="sm" disabled={testing || !server.url}>
+            {testing ? (
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <TestTube className="h-4 w-4 mr-1" />
+            )}
+            Test
+          </Button>
+          {removable && (
+            <Button onClick={onRemove} variant="outline" size="sm">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+      {testResult && (
+        testResult.success ? (
+          <Badge variant="success" className="gap-1">
+            <CircleCheckBig className="h-3 w-3" /> {testResult.message}
+          </Badge>
+        ) : (
+          <Badge variant="destructive" className="gap-1">
+            <CircleX className="h-3 w-3" /> {testResult.message}
+          </Badge>
+        )
+      )}
+
+      {/* URL */}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-url`}>URL</Label>
+        <Input
+          id={`${idPrefix}-url`}
+          value={server.url ?? ""}
+          onChange={(e) => onChange({ ...server, url: e.target.value })}
+          placeholder={urlPlaceholder}
+        />
+      </div>
+
+      {/* API Key (preferred) */}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-api-key`}>API Key</Label>
+        <Input
+          id={`${idPrefix}-api-key`}
+          type="password"
+          value={server.api_key ?? ""}
+          onChange={(e) => onChange({ ...server, api_key: e.target.value })}
+          placeholder="Leave as-is to keep current"
+        />
+        <p className="text-xs text-muted-foreground">
+          Recommended. Generate in {title} Dashboard &rarr; API Keys. If set, username/password are ignored.
+        </p>
+      </div>
+
+      {/* Username/Password (fallback) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}-username`}>Username</Label>
+          <Input
+            id={`${idPrefix}-username`}
+            value={server.username ?? ""}
+            onChange={(e) => onChange({ ...server, username: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}-password`}>Password</Label>
+          <Input
+            id={`${idPrefix}-password`}
+            type="password"
+            value={server.password ?? ""}
+            onChange={(e) => onChange({ ...server, password: e.target.value })}
+            placeholder="Leave as-is to keep current"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface MediaServerCardProps {
+  title: string
+  urlPlaceholder: string
+  initial: MediaServerSettings
+  saving: boolean
+  testing: boolean
+  onSave: (data: Partial<MediaServerSettings>) => Promise<unknown>
+  onTest: (data: MediaServerTestInput) => Promise<MediaServerTestResponse>
+}
+
+function MediaServerCard({
+  title,
+  urlPlaceholder,
+  initial,
+  saving,
+  testing,
+  onSave,
+  onTest,
+}: MediaServerCardProps) {
+  const [enabled, setEnabled] = useState(initial.enabled)
+  const [servers, setServers] = useState<MediaServerEntry[]>(
+    initial.servers.length > 0 ? initial.servers : [{ ...EMPTY_MEDIA_SERVER }]
+  )
+
+  const handleSave = async () => {
+    try {
+      // Drop rows the user added but never filled in
+      await onSave({ enabled, servers: servers.filter((s) => s.url) })
+      toast.success(`${title} settings saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{title}</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={handleTest} variant="outline" size="sm" disabled={testing}>
-              {testing ? (
-                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <TestTube className="h-4 w-4 mr-1" />
-              )}
-              Test
-            </Button>
-            {testResult && (
-              testResult.success ? (
-                <Badge variant="success" className="gap-1">
-                  <CircleCheckBig className="h-3 w-3" /> {testResult.message}
-                </Badge>
-              ) : (
-                <Badge variant="destructive" className="gap-1">
-                  <CircleX className="h-3 w-3" /> {testResult.message}
-                </Badge>
-              )
-            )}
-          </div>
+          <CardTitle>{title}</CardTitle>
+          <Button
+            onClick={() => setServers([...servers, { ...EMPTY_MEDIA_SERVER }])}
+            variant="outline"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-1" /> Add Server
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Enable */}
         <div className="flex items-center gap-2">
-          <Switch
-            checked={form.enabled ?? false}
-            onCheckedChange={(checked) => setForm({ ...form, enabled: checked })}
-          />
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
           <Label>Enable {title} Integration</Label>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Every server listed below gets its guide refreshed after each generation.
+        </p>
 
-        {/* URL */}
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}-url`}>URL</Label>
-          <Input
-            id={`${idPrefix}-url`}
-            value={form.url ?? ""}
-            onChange={(e) => setForm({ ...form, url: e.target.value })}
-            placeholder={urlPlaceholder}
+        {servers.map((server, i) => (
+          <MediaServerRow
+            key={i}
+            title={title}
+            urlPlaceholder={urlPlaceholder}
+            index={i}
+            server={server}
+            testing={testing}
+            onChange={(updated) => setServers(servers.map((s, j) => (j === i ? updated : s)))}
+            onRemove={() => setServers(servers.filter((_, j) => j !== i))}
+            removable={servers.length > 1}
+            onTest={onTest}
           />
-        </div>
-
-        {/* API Key (preferred) */}
-        <div className="space-y-2">
-          <Label htmlFor={`${idPrefix}-api-key`}>API Key</Label>
-          <Input
-            id={`${idPrefix}-api-key`}
-            type="password"
-            value={form.api_key ?? ""}
-            onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-            placeholder="Leave blank to keep current"
-          />
-          <p className="text-xs text-muted-foreground">
-            Recommended. Generate in {title} Dashboard &rarr; API Keys. If set, username/password are ignored.
-          </p>
-        </div>
-
-        {/* Username/Password (fallback) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}-username`}>Username</Label>
-            <Input
-              id={`${idPrefix}-username`}
-              value={form.username ?? ""}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              disabled={!!form.api_key}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}-password`}>Password</Label>
-            <Input
-              id={`${idPrefix}-password`}
-              type="password"
-              value={form.password ?? ""}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="Leave blank to keep current"
-              disabled={!!form.api_key}
-            />
-          </div>
-        </div>
+        ))}
 
         {/* Save button */}
         <SaveButton onClick={handleSave} pending={saving} />

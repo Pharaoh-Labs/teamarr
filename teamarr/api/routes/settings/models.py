@@ -29,6 +29,26 @@ def unmask_or_skip(value: str | None) -> str | None:
     return None if value == MASKED_SECRET else value
 
 
+def merge_masked_servers(incoming: list[dict], stored: list[Any]) -> list[dict]:
+    """Resolve MASKED_SECRET password/api_key values from stored entries (#471).
+
+    Server lists are full-replace on update, and the UI round-trips the
+    masked sentinel for secrets the user didn't touch. Each incoming entry
+    is matched to a stored entry by URL first (rows can be reordered), then
+    by position, and masked secrets are swapped for the stored values.
+    """
+    by_url = {s.url: s for s in stored if getattr(s, "url", None)}
+    merged: list[dict] = []
+    for i, entry in enumerate(incoming):
+        e = dict(entry)
+        match = by_url.get(e.get("url")) or (stored[i] if i < len(stored) else None)
+        for secret in ("password", "api_key"):
+            if e.get(secret) == MASKED_SECRET:
+                e[secret] = getattr(match, secret, None) if match else None
+        merged.append(e)
+    return merged
+
+
 def _validate_profile_ids(v: Any) -> list[str | int] | None:
     """Validate channel_profile_ids accepts mixed int/str types.
 
@@ -445,10 +465,10 @@ class FeedSeparationSettingsUpdate(BaseModel):
 # =============================================================================
 
 
-class EmbySettingsModel(BaseModel):
-    """Emby integration settings."""
+class MediaServerEntryModel(BaseModel):
+    """One Emby/Jellyfin server target (#471). Secrets are masked per entry."""
 
-    enabled: bool = False
+    name: str = ""
     url: str | None = None
     username: str | None = None
     password: str | None = None
@@ -465,14 +485,20 @@ class EmbySettingsModel(BaseModel):
         return MASKED_SECRET if v else None
 
 
+class EmbySettingsModel(BaseModel):
+    """Emby integration settings."""
+
+    enabled: bool = False
+    servers: list[MediaServerEntryModel] = []
+
+
 class EmbySettingsUpdate(BaseModel):
     """Update model for Emby settings (all fields optional)."""
 
     enabled: bool | None = None
-    url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
+    # Full-replace: send the complete list. Untouched secrets may be sent as
+    # the masked sentinel; the route merges stored values back per entry.
+    servers: list[MediaServerEntryModel] | None = None
 
 
 class EmbyConnectionTestRequest(BaseModel):
@@ -504,30 +530,16 @@ class JellyfinSettingsModel(BaseModel):
     """Jellyfin integration settings."""
 
     enabled: bool = False
-    url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
-
-    @field_serializer("password")
-    @classmethod
-    def _mask_password(cls, v: str | None) -> str | None:
-        return MASKED_SECRET if v else None
-
-    @field_serializer("api_key")
-    @classmethod
-    def _mask_api_key(cls, v: str | None) -> str | None:
-        return MASKED_SECRET if v else None
+    servers: list[MediaServerEntryModel] = []
 
 
 class JellyfinSettingsUpdate(BaseModel):
     """Update model for Jellyfin settings (all fields optional)."""
 
     enabled: bool | None = None
-    url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
+    # Full-replace: send the complete list. Untouched secrets may be sent as
+    # the masked sentinel; the route merges stored values back per entry.
+    servers: list[MediaServerEntryModel] | None = None
 
 
 class JellyfinConnectionTestRequest(BaseModel):
