@@ -310,7 +310,10 @@ def _parse_channelsdvr_servers(raw: Any) -> list:
 
 def _dump_channelsdvr_servers(value: Any) -> str:
     # Accepts dataclass instances (internal callers) or dicts (API updates)
-    entries = [asdict(v) if is_dataclass(v) else v for v in (value or [])]
+    entries = [
+        asdict(v) if is_dataclass(v) and not isinstance(v, type) else v
+        for v in (value or [])
+    ]
     for entry in entries:
         if entry.get("url"):
             entry["url"] = entry["url"].rstrip("/")

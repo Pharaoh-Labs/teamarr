@@ -556,7 +556,7 @@ def run_full_generation(
                 server_count = len(servers)
                 for i, server in enumerate(servers, 1):
                     check_cancelled()
-                    label = server.name or server.url
+                    label = server.name or server.url or ""
                     try:
                         m3u_res, epg_res = _refresh_channelsdvr_server(
                             server,
