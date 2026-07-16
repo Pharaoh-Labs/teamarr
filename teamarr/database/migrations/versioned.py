@@ -268,6 +268,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 82
 
+    if current_version < 83:
+        _apply_migration(
+            conn, 83,
+            "fold scalar Emby/Jellyfin settings into server lists (#471)",
+            _migrate_v83_media_server_lists,
+        )
+        current_version = 83
+
 
 # =============================================================================
 # Migration helpers
@@ -2014,3 +2022,43 @@ def _migrate_v82_channelsdvr_servers_list(conn: sqlite3.Connection) -> None:
         (json.dumps(servers),),
     )
     logger.info("[MIGRATE v82] Folded Channels DVR scalar settings into servers list")
+
+
+def _migrate_v83_media_server_lists(conn: sqlite3.Connection) -> None:
+    """v83: fold scalar Emby/Jellyfin settings into servers lists (#471).
+
+    Same pattern as v82 (Channels DVR): an existing configured server
+    becomes the list's only entry; the scalar columns are left in place
+    (unread) — reconciliation never drops columns.
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
+
+    for kind in ("emby", "jellyfin"):
+        if f"{kind}_url" not in cols:
+            continue  # fresh database — scalar columns never existed
+
+        row = conn.execute(
+            f"""
+            SELECT {kind}_url AS url, {kind}_username AS username,
+                   {kind}_password AS password, {kind}_api_key AS api_key,
+                   {kind}_servers AS servers
+            FROM settings WHERE id = 1
+            """
+        ).fetchone()
+        if not row or not row["url"] or row["servers"]:
+            continue  # nothing configured, or servers list already populated
+
+        servers = [
+            {
+                "name": kind.capitalize(),
+                "url": row["url"].rstrip("/"),
+                "username": row["username"],
+                "password": row["password"],
+                "api_key": row["api_key"],
+            }
+        ]
+        conn.execute(
+            f"UPDATE settings SET {kind}_servers = ? WHERE id = 1",
+            (json.dumps(servers),),
+        )
+        logger.info("[MIGRATE v83] Folded %s scalar settings into servers list", kind)

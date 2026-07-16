@@ -501,38 +501,34 @@ def update_feed_separation_settings(
 def update_emby_settings(
     conn: Connection,
     enabled: bool | None = None,
-    url: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    api_key: str | None = None,
+    servers: list[dict] | None = None,
 ) -> bool:
     """Update Emby integration settings (only provided fields).
+
+    `servers` replaces the whole list (full-replace semantics). Masked
+    secrets must be resolved by the caller (API route) before this point.
 
     Returns:
         True if updated
     """
-    provided = _skip_none(
-        enabled=enabled, url=url, username=username, password=password, api_key=api_key
-    )
+    provided = _skip_none(enabled=enabled, servers=servers)
     return _apply(conn, "emby", provided)
 
 
 def update_jellyfin_settings(
     conn: Connection,
     enabled: bool | None = None,
-    url: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
-    api_key: str | None = None,
+    servers: list[dict] | None = None,
 ) -> bool:
     """Update Jellyfin integration settings (only provided fields).
+
+    `servers` replaces the whole list (full-replace semantics). Masked
+    secrets must be resolved by the caller (API route) before this point.
 
     Returns:
         True if updated
     """
-    provided = _skip_none(
-        enabled=enabled, url=url, username=username, password=password, api_key=api_key
-    )
+    provided = _skip_none(enabled=enabled, servers=servers)
     return _apply(conn, "jellyfin", provided)
 
 

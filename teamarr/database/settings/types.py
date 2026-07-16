@@ -302,10 +302,10 @@ class FeedSeparationSettings:
 
 
 @dataclass
-class EmbySettings:
-    """Emby integration settings for Live TV guide refresh."""
+class MediaServerEntry:
+    """One Emby/Jellyfin server target for post-generation guide refresh (#471)."""
 
-    enabled: bool = False
+    name: str = ""
     url: str | None = None
     username: str | None = None
     password: str | None = None
@@ -313,14 +313,25 @@ class EmbySettings:
 
 
 @dataclass
-class JellyfinSettings:
-    """Jellyfin integration settings for Live TV guide refresh."""
+class EmbySettings:
+    """Emby integration settings for Live TV guide refresh.
+
+    Multi-server (#471): refresh fans out over every entry in `servers`.
+    """
 
     enabled: bool = False
-    url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
+    servers: list[MediaServerEntry] = field(default_factory=list)
+
+
+@dataclass
+class JellyfinSettings:
+    """Jellyfin integration settings for Live TV guide refresh.
+
+    Multi-server (#471): refresh fans out over every entry in `servers`.
+    """
+
+    enabled: bool = False
+    servers: list[MediaServerEntry] = field(default_factory=list)
 
 
 @dataclass

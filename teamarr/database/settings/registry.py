@@ -308,9 +308,34 @@ def _parse_channelsdvr_servers(raw: Any) -> list:
     ]
 
 
-def _dump_channelsdvr_servers(value: Any) -> str:
-    # Accepts dataclass instances (internal callers) or dicts (API updates);
-    # copies either way so callers' objects aren't mutated by the URL rstrip.
+def _parse_media_servers(raw: Any) -> list:
+    from .types import MediaServerEntry
+
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        MediaServerEntry(
+            name=entry.get("name", ""),
+            url=entry.get("url"),
+            username=entry.get("username"),
+            password=entry.get("password"),
+            api_key=entry.get("api_key"),
+        )
+        for entry in data
+        if isinstance(entry, dict)
+    ]
+
+
+def _dump_server_list(value: Any) -> str:
+    # Shared by the channelsdvr/emby/jellyfin server-list fields. Accepts
+    # dataclass instances (internal callers) or dicts (API updates); copies
+    # either way so callers' objects aren't mutated by the URL rstrip.
     entries: list[dict] = []
     for v in value or []:
         if is_dataclass(v) and not isinstance(v, type):
@@ -325,6 +350,9 @@ def _dump_channelsdvr_servers(value: Any) -> str:
 
 
 _URL_HOOK = {"url": {"dump": _dump_url}}
+_MEDIA_SERVERS_HOOK = {
+    "servers": {"parse": _parse_media_servers, "dump": _dump_server_list}
+}
 
 
 # ---------------------------------------------------------------------------
@@ -478,12 +506,15 @@ GROUPS: dict[str, GroupSpec] = {
             "Feed separation",
         ),
         GroupSpec(
-            "emby", EmbySettings, _specs(EmbySettings, prefix="emby_", hooks=_URL_HOOK), "Emby"
+            "emby",
+            EmbySettings,
+            _specs(EmbySettings, prefix="emby_", hooks=_MEDIA_SERVERS_HOOK),
+            "Emby",
         ),
         GroupSpec(
             "jellyfin",
             JellyfinSettings,
-            _specs(JellyfinSettings, prefix="jellyfin_", hooks=_URL_HOOK),
+            _specs(JellyfinSettings, prefix="jellyfin_", hooks=_MEDIA_SERVERS_HOOK),
             "Jellyfin",
         ),
         GroupSpec(
@@ -495,7 +526,7 @@ GROUPS: dict[str, GroupSpec] = {
                 hooks={
                     "servers": {
                         "parse": _parse_channelsdvr_servers,
-                        "dump": _dump_channelsdvr_servers,
+                        "dump": _dump_server_list,
                     },
                 },
             ),

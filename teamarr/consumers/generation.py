@@ -449,150 +449,84 @@ def run_full_generation(
             )
         timer.mark("dispatcharr_epg_refresh")
 
-        # Step 5b: Emby Live TV guide refresh
+        # Steps 5b-5d: media-server guide refreshes — Emby, Jellyfin, and
+        # Channels DVR servers ALL refresh in parallel (#471). They are
+        # independent HTTP targets; per-server failures are isolated and
+        # non-blocking, and one slow/offline server never delays the rest.
         check_cancelled()
         try:
-            from teamarr.database.settings import get_emby_settings
+            from teamarr.database.settings import (
+                get_channelsdvr_settings,
+                get_emby_settings,
+                get_jellyfin_settings,
+            )
 
             with db_factory() as conn:
                 emby_settings = get_emby_settings(conn)
-
-            if emby_settings.enabled and emby_settings.url:
-                update_progress("emby", 97, "Refreshing Emby guide...")
-
-                client = EmbyClient(
-                    base_url=emby_settings.url,
-                    username=emby_settings.username or "",
-                    password=emby_settings.password or "",
-                    api_key=emby_settings.api_key,
-                )
-
-                def on_emby_progress(pct):
-                    update_progress(
-                        "emby", 97, f"Refreshing Emby guide... {pct:.0f}%"
-                    )
-
-                emby_result = client.trigger_guide_refresh(
-                    timeout=300,
-                    on_progress=on_emby_progress,
-                    cancellation_check=is_cancellation_requested,
-                )
-                result.emby_refresh = emby_result
-                if emby_result.get("success"):
-                    logger.info(
-                        "[EMBY] Guide refresh completed in %.1fs",
-                        emby_result.get("duration", 0),
-                    )
-                else:
-                    logger.warning(
-                        "[EMBY] Guide refresh failed: %s",
-                        emby_result.get("message"),
-                    )
-        except Exception as e:
-            logger.warning("[EMBY] Guide refresh failed (non-blocking): %s", e)
-            result.emby_refresh = {"success": False, "error": str(e)}
-
-        # Step 5c: Jellyfin Live TV guide refresh
-        check_cancelled()
-        try:
-            from teamarr.database.settings import get_jellyfin_settings
-
-            with db_factory() as conn:
                 jellyfin_settings = get_jellyfin_settings(conn)
-
-            if jellyfin_settings.enabled and jellyfin_settings.url:
-                update_progress("jellyfin", 97, "Refreshing Jellyfin guide...")
-
-                client = JellyfinClient(
-                    base_url=jellyfin_settings.url,
-                    username=jellyfin_settings.username or "",
-                    password=jellyfin_settings.password or "",
-                    api_key=jellyfin_settings.api_key,
-                )
-
-                def on_jellyfin_progress(pct):
-                    update_progress(
-                        "jellyfin", 97, f"Refreshing Jellyfin guide... {pct:.0f}%"
-                    )
-
-                jellyfin_result = client.trigger_guide_refresh(
-                    timeout=300,
-                    on_progress=on_jellyfin_progress,
-                    cancellation_check=is_cancellation_requested,
-                )
-                result.jellyfin_refresh = jellyfin_result
-                if jellyfin_result.get("success"):
-                    logger.info(
-                        "[JELLYFIN] Guide refresh completed in %.1fs",
-                        jellyfin_result.get("duration", 0),
-                    )
-                else:
-                    logger.warning(
-                        "[JELLYFIN] Guide refresh failed: %s",
-                        jellyfin_result.get("message"),
-                    )
-        except Exception as e:
-            logger.warning("[JELLYFIN] Guide refresh failed (non-blocking): %s", e)
-            result.jellyfin_refresh = {"success": False, "error": str(e)}
-
-        # Step 5d: Channels DVR M3U source + XMLTV lineup refresh
-        # CDVR splits channel-list and EPG into two providers — without the
-        # lineup PUT the channels are fresh but the guide is stale.
-        # Multi-server (#381): fan out over every configured server; one
-        # server failing never blocks the others.
-        check_cancelled()
-        try:
-            from teamarr.database.settings import get_channelsdvr_settings
-
-            with db_factory() as conn:
                 channelsdvr_settings = get_channelsdvr_settings(conn)
 
-            servers = [s for s in channelsdvr_settings.servers if s.url]
-            if not (channelsdvr_settings.enabled and servers):
-                pass  # integration off or unconfigured — nothing to do
-            else:
-                m3u_results: list[dict] = []
-                epg_results: list[dict] = []
-                server_count = len(servers)
-                for i, server in enumerate(servers, 1):
-                    check_cancelled()
-                    label = server.name or server.url or ""
-                    try:
-                        m3u_res, epg_res = _refresh_channelsdvr_server(
-                            server,
-                            label,
-                            lambda msg, i=i, n=server_count: update_progress(
-                                "channelsdvr", 97, f"{msg} ({i}/{n})"
-                            ),
-                        )
-                    except Exception as e:  # noqa: BLE001 — per-server isolation
-                        logger.warning(
-                            "[CHANNELSDVR] %s: refresh failed (non-blocking): %s",
-                            label,
-                            e,
-                        )
-                        m3u_res = {"success": False, "error": str(e)}
-                        epg_res = None
-                    if m3u_res is not None:
-                        m3u_results.append({"server": label, **m3u_res})
-                    if epg_res is not None:
-                        epg_results.append({"server": label, **epg_res})
+            jobs: list[tuple[str, Any]] = []
+            if emby_settings.enabled:
+                jobs += [("emby", s) for s in emby_settings.servers if s.url]
+            if jellyfin_settings.enabled:
+                jobs += [("jellyfin", s) for s in jellyfin_settings.servers if s.url]
+            if channelsdvr_settings.enabled:
+                jobs += [("channelsdvr", s) for s in channelsdvr_settings.servers if s.url]
 
-                if m3u_results:
-                    result.channelsdvr_refresh = {
-                        "success": all(r.get("success") for r in m3u_results),
-                        "servers": m3u_results,
+            if jobs:
+                update_progress(
+                    "media_servers", 97,
+                    f"Refreshing {len(jobs)} media server(s) in parallel...",
+                )
+                outcomes = _run_media_server_refreshes(
+                    jobs, update_progress, is_cancellation_requested
+                )
+
+                emby_results = [
+                    {"server": label, **o["guide"]}
+                    for kind, label, o in outcomes
+                    if kind == "emby" and o.get("guide") is not None
+                ]
+                if emby_results:
+                    result.emby_refresh = {
+                        "success": all(r.get("success") for r in emby_results),
+                        "servers": emby_results,
                     }
-                if epg_results:
+
+                jellyfin_results = [
+                    {"server": label, **o["guide"]}
+                    for kind, label, o in outcomes
+                    if kind == "jellyfin" and o.get("guide") is not None
+                ]
+                if jellyfin_results:
+                    result.jellyfin_refresh = {
+                        "success": all(r.get("success") for r in jellyfin_results),
+                        "servers": jellyfin_results,
+                    }
+
+                cdvr_m3u = [
+                    {"server": label, **o["m3u"]}
+                    for kind, label, o in outcomes
+                    if kind == "channelsdvr" and o.get("m3u") is not None
+                ]
+                if cdvr_m3u:
+                    result.channelsdvr_refresh = {
+                        "success": all(r.get("success") for r in cdvr_m3u),
+                        "servers": cdvr_m3u,
+                    }
+                cdvr_epg = [
+                    {"server": label, **o["epg"]}
+                    for kind, label, o in outcomes
+                    if kind == "channelsdvr" and o.get("epg") is not None
+                ]
+                if cdvr_epg:
                     result.channelsdvr_epg_refresh = {
-                        "success": all(r.get("success") for r in epg_results),
-                        "servers": epg_results,
+                        "success": all(r.get("success") for r in cdvr_epg),
+                        "servers": cdvr_epg,
                     }
         except Exception as e:
-            logger.warning(
-                "[CHANNELSDVR] Refresh failed (non-blocking): %s", e
-            )
-            result.channelsdvr_refresh = {"success": False, "error": str(e)}
+            logger.warning("[MEDIA_SERVERS] Refresh failed (non-blocking): %s", e)
         timer.mark("media_server_refresh")
 
         # Step 6: Process scheduled deletions (98-99%)
@@ -713,6 +647,104 @@ def run_full_generation(
         _generation_lock.release()
 
     return result
+
+
+def _run_media_server_refreshes(
+    jobs: list[tuple[str, Any]],
+    update_progress: Callable[..., None],
+    is_cancellation_requested: Callable[[], bool],
+) -> list[tuple[str, str, dict]]:
+    """Run every media-server refresh job concurrently (#471).
+
+    Each job is (kind, server) with kind in emby/jellyfin/channelsdvr.
+    Returns (kind, label, outcome) triples where outcome carries "guide"
+    (Emby/Jellyfin) or "m3u"/"epg" (Channels DVR) result dicts. A job that
+    raises yields a failed "guide" outcome — never an exception.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    results: list[tuple[str, str, dict]] = []
+    with ThreadPoolExecutor(
+        max_workers=min(8, len(jobs)), thread_name_prefix="media-refresh"
+    ) as pool:
+        futures = {
+            pool.submit(
+                _refresh_one_media_server,
+                kind,
+                server,
+                update_progress,
+                is_cancellation_requested,
+            ): (kind, server)
+            for kind, server in jobs
+        }
+        for future, (kind, server) in futures.items():
+            label = server.name or server.url or ""
+            try:
+                results.append((kind, label, future.result()))
+            except Exception as e:  # noqa: BLE001 — per-server isolation
+                logger.warning(
+                    "[%s] %s: refresh failed (non-blocking): %s",
+                    kind.upper(),
+                    label,
+                    e,
+                )
+                results.append(
+                    (kind, label, {"guide": {"success": False, "error": str(e)}})
+                )
+    return results
+
+
+def _refresh_one_media_server(
+    kind: str,
+    server: Any,
+    update_progress: Callable[..., None],
+    is_cancellation_requested: Callable[[], bool],
+) -> dict:
+    """Refresh a single media server (runs on a worker thread)."""
+    label = server.name or server.url or ""
+
+    if kind == "channelsdvr":
+        m3u_res, epg_res = _refresh_channelsdvr_server(
+            server,
+            label,
+            lambda msg: update_progress("channelsdvr", 97, f"{msg} ({label})"),
+        )
+        return {"m3u": m3u_res, "epg": epg_res}
+
+    title = "Emby" if kind == "emby" else "Jellyfin"
+    client_cls = EmbyClient if kind == "emby" else JellyfinClient
+    client = client_cls(
+        base_url=server.url,
+        username=server.username or "",
+        password=server.password or "",
+        api_key=server.api_key,
+    )
+
+    update_progress(kind, 97, f"Refreshing {title} guide... ({label})")
+
+    def on_progress(pct):
+        update_progress(kind, 97, f"Refreshing {title} guide... ({label}) {pct:.0f}%")
+
+    guide_result = client.trigger_guide_refresh(
+        timeout=300,
+        on_progress=on_progress,
+        cancellation_check=is_cancellation_requested,
+    )
+    if guide_result.get("success"):
+        logger.info(
+            "[%s] %s: guide refresh completed in %.1fs",
+            kind.upper(),
+            label,
+            guide_result.get("duration", 0),
+        )
+    else:
+        logger.warning(
+            "[%s] %s: guide refresh failed: %s",
+            kind.upper(),
+            label,
+            guide_result.get("message"),
+        )
+    return {"guide": guide_result}
 
 
 def _refresh_channelsdvr_server(

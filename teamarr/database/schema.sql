@@ -439,18 +439,16 @@ CREATE TABLE IF NOT EXISTS settings (
         CHECK(feed_label_style IN ('team_name', 'short_name', 'home_away')),
 
     -- Emby Integration (Live TV Guide Refresh)
+    -- emby_servers is a JSON list of {name, url, username, password, api_key}
+    -- entries (#471 multi-server fan-out). Pre-v83 scalar columns may linger
+    -- in upgraded databases; they are unread.
     emby_enabled BOOLEAN DEFAULT 0,
-    emby_url TEXT,
-    emby_username TEXT,
-    emby_password TEXT,
-    emby_api_key TEXT,
+    emby_servers JSON,
 
     -- Jellyfin Integration (Live TV Guide Refresh)
+    -- jellyfin_servers: same shape as emby_servers (#471)
     jellyfin_enabled BOOLEAN DEFAULT 0,
-    jellyfin_url TEXT,
-    jellyfin_username TEXT,
-    jellyfin_password TEXT,
-    jellyfin_api_key TEXT,
+    jellyfin_servers JSON,
 
     -- Channels DVR Integration (M3U Source + XMLTV Lineup Refresh)
     -- Local API is unauthenticated by Channels DVR design; no credentials stored.
@@ -463,7 +461,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 82
+    schema_version INTEGER DEFAULT 83
 );
 
 -- Insert default settings
