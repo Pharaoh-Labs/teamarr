@@ -295,9 +295,14 @@ def _seeded_group_db():
 
 class TestCleanupSafety:
     def _processor(self, conn):
+        from unittest.mock import MagicMock
+
         from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-        return EventGroupProcessor(db_factory=_factory(conn))
+        # Inject a stub service: the default one loads league mappings from the
+        # global DB path, which doesn't exist in CI (and none of these paths
+        # reach the provider layer anyway).
+        return EventGroupProcessor(db_factory=_factory(conn), service=MagicMock())
 
     def test_empty_fetch_short_circuits_before_any_cleanup(self, monkeypatch):
         from datetime import date
