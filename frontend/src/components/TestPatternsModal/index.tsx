@@ -9,7 +9,7 @@
  * 5. Syncs patterns bidirectionally with the form (reads on open, writes on Apply)
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Dialog,
@@ -20,11 +20,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { getRawStreams } from "@/api/groups"
+import { getRawStreams, testExtraction } from "@/api/groups"
+import type { ExtractionPatterns, StreamExtractionResult } from "@/api/groups"
 import { StreamList } from "./StreamList"
 import { PatternPanel } from "./PatternPanel"
 import { InteractiveSelector } from "./InteractiveSelector"
-import { FlaskConical, LoaderCircle } from "lucide-react"
+import { FlaskConical, LoaderCircle, TriangleAlert } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types — shared across child components
@@ -145,6 +146,76 @@ export function TestPatternsModal({
 
   const streams = streamsData?.streams ?? []
 
+  // ------------------------------------------------------------------
+  // Pipeline-truth extraction (#458): debounce the pattern state, then
+  // run the REAL Python extraction functions server-side. JS highlighting
+  // stays instant; the backend verdict arrives ~half a second later.
+  // ------------------------------------------------------------------
+  const [debouncedPatterns, setDebouncedPatterns] = useState(patterns)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPatterns(patterns), 500)
+    return () => clearTimeout(t)
+  }, [patterns])
+
+  const extractionRequest: ExtractionPatterns | null = useMemo(() => {
+    const p = debouncedPatterns
+    const anyEnabled =
+      (p.custom_regex_teams_enabled && p.custom_regex_teams) ||
+      (p.custom_regex_date_enabled && p.custom_regex_date) ||
+      (p.custom_regex_month_enabled && p.custom_regex_month) ||
+      (p.custom_regex_day_enabled && p.custom_regex_day) ||
+      (p.custom_regex_time_enabled && p.custom_regex_time) ||
+      (p.custom_regex_league_enabled && p.custom_regex_league) ||
+      (p.custom_regex_fighters_enabled && p.custom_regex_fighters) ||
+      (p.custom_regex_event_name_enabled && p.custom_regex_event_name)
+    if (!anyEnabled) return null
+    return {
+      teams_pattern: p.custom_regex_teams,
+      teams_enabled: p.custom_regex_teams_enabled,
+      date_pattern: p.custom_regex_date,
+      date_enabled: p.custom_regex_date_enabled,
+      month_pattern: p.custom_regex_month,
+      month_enabled: p.custom_regex_month_enabled,
+      day_pattern: p.custom_regex_day,
+      day_enabled: p.custom_regex_day_enabled,
+      time_pattern: p.custom_regex_time,
+      time_enabled: p.custom_regex_time_enabled,
+      league_pattern: p.custom_regex_league,
+      league_enabled: p.custom_regex_league_enabled,
+      fighters_pattern: p.custom_regex_fighters,
+      fighters_enabled: p.custom_regex_fighters_enabled,
+      event_name_pattern: p.custom_regex_event_name,
+      event_name_enabled: p.custom_regex_event_name_enabled,
+    }
+  }, [debouncedPatterns])
+
+  const { data: extractionData, isFetching: extractionLoading } = useQuery({
+    queryKey: ["testExtraction", groupId, extractionRequest],
+    queryFn: () =>
+      testExtraction(
+        streams.map((s) => s.stream_name),
+        extractionRequest!
+      ),
+    enabled: open && extractionRequest !== null && streams.length > 0,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev, // keep old verdicts while retesting
+  })
+
+  const pipelineResults = useMemo(() => {
+    const map = new Map<string, StreamExtractionResult>()
+    if (extractionRequest !== null && extractionData) {
+      for (const r of extractionData.results) map.set(r.stream_name, r)
+    }
+    return map
+  }, [extractionData, extractionRequest])
+
+  const patternErrors = extractionRequest !== null
+    ? extractionData?.pattern_errors ?? {}
+    : {}
+  const pipelineWarnings = extractionRequest !== null
+    ? extractionData?.warnings ?? []
+    : []
+
   const handlePatternChange = useCallback((update: Partial<PatternState>) => {
     setPatterns((prev) => ({ ...prev, ...update }))
   }, [])
@@ -217,10 +288,29 @@ export function TestPatternsModal({
               </div>
             )}
 
+            {(Object.keys(patternErrors).length > 0 || pipelineWarnings.length > 0) && (
+              <div className="px-3 py-1.5 text-xs border-b border-border bg-yellow-500/10 space-y-0.5">
+                {Object.entries(patternErrors).map(([field, err]) => (
+                  <div key={field} className="text-destructive flex items-center gap-1.5">
+                    <TriangleAlert className="h-3 w-3 shrink-0" />
+                    <span><span className="font-semibold">{field}</span> pattern is invalid in Python: {err}</span>
+                  </div>
+                ))}
+                {pipelineWarnings.map((w, i) => (
+                  <div key={i} className="text-yellow-500 flex items-center gap-1.5">
+                    <TriangleAlert className="h-3 w-3 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {!isLoading && !error && streams.length > 0 && (
               <StreamList
                 streams={streams}
                 patterns={patterns}
+                pipelineResults={pipelineResults}
+                pipelineLoading={extractionLoading}
                 onTextSelect={handleTextSelect}
               />
             )}
@@ -237,9 +327,9 @@ export function TestPatternsModal({
         <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
           <div className="flex items-center justify-between w-full">
             <span className="text-xs text-muted-foreground">
-              Patterns are tested client-side using JavaScript regex.
-              Named groups accept both (?&lt;name&gt;...) and Python&apos;s
-              (?P&lt;name&gt;...) — they are converted automatically.
+              Highlighting is client-side JavaScript regex; the ✓/✗ badges are
+              the real Python extraction pipeline. Named groups accept both
+              (?&lt;name&gt;...) and Python&apos;s (?P&lt;name&gt;...).
             </span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleClose}>
