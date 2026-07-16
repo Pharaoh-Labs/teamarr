@@ -260,6 +260,114 @@ class TestCrudRoundtrip:
 
 
 # ---------------------------------------------------------------------------
+# Cleanup safety (bpqb.8)
+#
+# A pattern that stops matching (provider rename escaping the regex, M3U
+# outage) must NEVER cascade into channel deletion. The guarantee lives in
+# _process_group_internal's short-circuits: an empty fetch — and an
+# all-filtered / zero-match run — returns before cleanup_deleted_streams or
+# any lifecycle call, so existing channels are retained untouched.
+# ---------------------------------------------------------------------------
+
+
+def _tripwire(name):
+    def _fail(*args, **kwargs):
+        raise AssertionError(f"{name} must not be called on this path")
+
+    return _fail
+
+
+def _seeded_group_db():
+    """Schema DB with the template requirement satisfied and one real group."""
+    conn = _db()
+    cur = conn.execute("INSERT INTO templates (name, template_type) VALUES ('T', 'event')")
+    conn.execute("INSERT INTO subscription_templates (template_id) VALUES (?)", (cur.lastrowid,))
+    gid = create_group(
+        conn,
+        name="EPL",
+        leagues=["eng.1"],
+        m3u_group_name_pattern=r"EPL \(MW\d+\)",
+        m3u_group_name_pattern_enabled=True,
+    )
+    conn.commit()
+    return conn, get_group(conn, gid)
+
+
+class TestCleanupSafety:
+    def _processor(self, conn):
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        return EventGroupProcessor(db_factory=_factory(conn))
+
+    def test_empty_fetch_short_circuits_before_any_cleanup(self, monkeypatch):
+        from datetime import date
+
+        conn, group = _seeded_group_db()
+        proc = self._processor(conn)
+        monkeypatch.setattr(proc, "_fetch_streams", lambda g: [])
+        for name in (
+            "_filter_streams",
+            "_match_streams",
+            "_process_channels",
+            "_get_lifecycle_service",
+        ):
+            monkeypatch.setattr(proc, name, _tripwire(name))
+
+        result = proc._process_group_internal(conn, group, date.today())
+
+        assert result.errors == ["No streams found for group"]
+        assert result.channels_deleted == 0
+
+    def test_all_filtered_short_circuits_before_matching(self, monkeypatch):
+        from datetime import date
+
+        from teamarr.services.stream_filter import FilterResult
+
+        conn, group = _seeded_group_db()
+        proc = self._processor(conn)
+        monkeypatch.setattr(
+            proc, "_fetch_streams", lambda g: [{"id": 11, "name": "Arsenal vs Spurs"}]
+        )
+        monkeypatch.setattr(
+            proc,
+            "_filter_streams",
+            lambda streams, g: ([], FilterResult(total_input=1, filtered_exclude=1)),
+        )
+        for name in ("_match_streams", "_process_channels", "_get_lifecycle_service"):
+            monkeypatch.setattr(proc, name, _tripwire(name))
+
+        result = proc._process_group_internal(conn, group, date.today())
+
+        assert result.errors == ["All streams filtered out by regex patterns"]
+        assert result.channels_deleted == 0
+
+    def test_zero_matches_never_reaches_lifecycle(self, monkeypatch):
+        from datetime import date
+
+        from teamarr.consumers.matching.matcher import BatchMatchResult
+        from teamarr.services.stream_filter import FilterResult
+
+        conn, group = _seeded_group_db()
+        proc = self._processor(conn)
+        streams = [{"id": 11, "name": "Arsenal vs Spurs"}]
+        monkeypatch.setattr(proc, "_fetch_streams", lambda g: list(streams))
+        monkeypatch.setattr(
+            proc,
+            "_filter_streams",
+            lambda s, g: (list(streams), FilterResult(total_input=1, passed_count=1)),
+        )
+        monkeypatch.setattr(proc, "_match_streams", lambda *a, **k: BatchMatchResult())
+        monkeypatch.setattr(proc, "_process_channels", _tripwire("_process_channels"))
+        monkeypatch.setattr(proc, "_get_lifecycle_service", _tripwire("_get_lifecycle_service"))
+
+        result = proc._process_group_internal(conn, group, date.today())
+
+        assert result.errors == []
+        assert result.channels_deleted == 0
+        assert result.streams_matched == 0
+
+
+# ---------------------------------------------------------------------------
 # API layer (bpqb.6)
 # ---------------------------------------------------------------------------
 
