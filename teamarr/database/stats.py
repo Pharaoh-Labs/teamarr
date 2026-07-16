@@ -1031,6 +1031,39 @@ def get_live_xmltv_content(conn: Connection) -> dict[str, list[str]]:
     return {"team": team_content, "event": event_content}
 
 
+def get_last_run_kpis(conn: Connection) -> dict | None:
+    """Get headline figures from the latest full_epg run (any status).
+
+    Used by the homepage widget KPI payload (#463). Latest run regardless of
+    status so a failed generation surfaces as last_run_status=failed instead
+    of silently showing the previous success.
+
+    Returns:
+        Dict with status, completed_at (aware datetime or None),
+        streams_matched, streams_unmatched, programmes_total —
+        or None if no full_epg run exists.
+    """
+    row = conn.execute(
+        """
+        SELECT status, completed_at, streams_matched, streams_unmatched,
+               programmes_total
+        FROM processing_runs
+        WHERE run_type = 'full_epg'
+        ORDER BY id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "status": row["status"],
+        "completed_at": parse_db_timestamp(row["completed_at"]),
+        "streams_matched": row["streams_matched"],
+        "streams_unmatched": row["streams_unmatched"],
+        "programmes_total": row["programmes_total"],
+    }
+
+
 def get_epg_analysis_stats(conn: Connection) -> dict | None:
     """Get programme counts from the latest full_epg run.
 
