@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Search,
   Trash2,
@@ -58,7 +58,12 @@ import {
 } from "@/hooks/useGroups"
 import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
 import type { EventGroup, PreviewGroupResponse } from "@/api/types"
-import { getStaleGroups } from "@/api/groups"
+import {
+  getStaleGroups,
+  getStaleRebindSuggestions,
+  rebindGroup,
+  type StaleRebindSuggestion,
+} from "@/api/groups"
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { BulkEditDialog } from "./event-groups/BulkEditDialog"
@@ -92,6 +97,18 @@ export function EventGroups() {
   const [showStaleDelete, setShowStaleDelete] = useState(false)
   const [deletingStale, setDeletingStale] = useState(false)
   const staleIds = useMemo(() => new Set(staleGroups.map((g) => g.id)), [staleGroups])
+  // Re-bind suggestions (#450): likely-renamed live groups for the stale sources.
+  const queryClient = useQueryClient()
+  const { data: rebindSuggestions = [] } = useQuery({
+    queryKey: ["groups", "stale", "suggestions"],
+    queryFn: getStaleRebindSuggestions,
+    enabled: staleGroups.length > 0,
+  })
+  const suggestionByGroupId = useMemo(
+    () => new Map(rebindSuggestions.map((s) => [s.group_id, s])),
+    [rebindSuggestions],
+  )
+  const [rebindingId, setRebindingId] = useState<number | null>(null)
   const toggleMutation = useToggleGroup()
   const previewMutation = usePreviewGroup()
   const clearCacheMutation = useClearGroupMatchCache()
@@ -203,6 +220,27 @@ export function EventGroups() {
       toast.error(err instanceof Error ? err.message : "Failed to delete stale sources")
     } finally {
       setDeletingStale(false)
+    }
+  }
+
+  const handleRebind = async (s: StaleRebindSuggestion, adoptPattern: boolean) => {
+    setRebindingId(s.group_id)
+    try {
+      await rebindGroup(s.group_id, {
+        m3u_group_id: s.candidate_group_id,
+        m3u_group_name: s.candidate_group_name,
+        pattern: adoptPattern ? s.suggested_pattern : undefined,
+      })
+      toast.success(
+        adoptPattern
+          ? `Re-bound "${s.group_name}" with rename-proof pattern`
+          : `Re-bound "${s.group_name}" to "${s.candidate_group_name}"`,
+      )
+      queryClient.invalidateQueries({ queryKey: ["groups"] })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to re-bind source")
+    } finally {
+      setRebindingId(null)
     }
   }
 
@@ -383,21 +421,64 @@ export function EventGroups() {
               {staleGroups.length === 1
                 ? "Its M3U group was removed or renamed in Dispatcharr, so it can no longer pull streams. Delete it, or restore the source in Dispatcharr."
                 : "Their M3U groups were removed or renamed in Dispatcharr, so they can no longer pull streams. Delete them, or restore the sources in Dispatcharr."}
+              {rebindSuggestions.length > 0 &&
+                " Teamarr found likely renames — re-bind in one click below."}
             </p>
-            <ul className="space-y-0.5 text-sm">
-              {staleGroups.map((g) => (
-                <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-medium">{g.display_name || g.name}</span>
-                  {g.m3u_group_name && (
-                    <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
-                  )}
-                  {g.source_last_seen && (
-                    <span className="text-xs text-muted-foreground">
-                      · last seen {formatRelativeTime(g.source_last_seen)}
-                    </span>
-                  )}
-                </li>
-              ))}
+            <ul className="space-y-1.5 text-sm">
+              {staleGroups.map((g) => {
+                const suggestion = suggestionByGroupId.get(g.id)
+                return (
+                  <li key={g.id} className="space-y-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium">{g.display_name || g.name}</span>
+                      {g.m3u_group_name && (
+                        <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
+                      )}
+                      {g.source_last_seen && (
+                        <span className="text-xs text-muted-foreground">
+                          · last seen {formatRelativeTime(g.source_last_seen)}
+                        </span>
+                      )}
+                    </div>
+                    {/* Rename flywheel (#450): likely-renamed live group → one-click re-bind */}
+                    {suggestion && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4">
+                        <span>
+                          Likely renamed to{" "}
+                          <span className="font-medium">&ldquo;{suggestion.candidate_group_name}&rdquo;</span>
+                          <span className="text-xs text-muted-foreground">
+                            {" "}({Math.round(suggestion.similarity * 100)}% similar)
+                          </span>
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={rebindingId === g.id}
+                          onClick={() => handleRebind(suggestion, false)}
+                        >
+                          Re-bind
+                        </Button>
+                        {suggestion.suggested_pattern && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={rebindingId === g.id}
+                              title="Re-bind AND enable pattern binding with the suggested pattern, so future renames re-bind automatically"
+                              onClick={() => handleRebind(suggestion, true)}
+                            >
+                              Re-bind + pattern
+                            </Button>
+                            <code className="text-xs text-muted-foreground break-all">
+                              {suggestion.suggested_pattern}
+                            </code>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
             <Button
               variant="destructive"
