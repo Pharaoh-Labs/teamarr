@@ -236,22 +236,39 @@ def extract_teams_with_custom_regex(
     if not match:
         return None, None, False
 
-    # Try numbered groups first (group 1 and 2)
-    groups = match.groups()
-    if len(groups) >= 2:
-        team1 = groups[0].strip() if groups[0] else None
-        team2 = groups[1].strip() if groups[1] else None
-        if team1 and team2:
-            return team1, team2, True
+    return _extract_pair_from_match(match, pattern, "team1", "team2")
 
-    # Try named groups (?P<team1>...) and (?P<team2>...)
-    try:
-        team1 = match.group("team1")
-        team2 = match.group("team2")
-        if team1 and team2:
-            return team1.strip(), team2.strip(), True
-    except (IndexError, re.error):
-        pass
+
+def _extract_pair_from_match(
+    match: re.Match,
+    pattern: Pattern,
+    name1: str,
+    name2: str,
+) -> tuple[str | None, str | None, bool]:
+    """Pull a participant pair out of a custom-regex match.
+
+    Named groups take precedence: named groups are also numbered, so a
+    pattern mixing them with an extra unnamed group (a hand-written
+    ``(vs|v)`` separator, a ``(ESPN|FOX):`` prefix) would otherwise return
+    the wrong captures with success=True (#456). When either name is
+    declared, the pair comes only from the named groups — no numbered
+    fallback, since the numbered view of such a pattern is exactly the
+    garbage the precedence exists to avoid.
+    """
+    if name1 in pattern.groupindex or name2 in pattern.groupindex:
+        try:
+            first = match.group(name1)
+            second = match.group(name2)
+        except (IndexError, re.error):
+            return None, None, False
+        if first and second:
+            return first.strip(), second.strip(), True
+        return None, None, False
+
+    # No named groups: first two numbered groups are the pair.
+    groups = match.groups()
+    if len(groups) >= 2 and groups[0] and groups[1]:
+        return groups[0].strip(), groups[1].strip(), True
 
     return None, None, False
 
@@ -277,24 +294,7 @@ def extract_fighters_with_custom_regex(
     if not match:
         return None, None, False
 
-    # Try numbered groups first (group 1 and 2)
-    groups = match.groups()
-    if len(groups) >= 2:
-        fighter1 = groups[0].strip() if groups[0] else None
-        fighter2 = groups[1].strip() if groups[1] else None
-        if fighter1 and fighter2:
-            return fighter1, fighter2, True
-
-    # Try named groups (?P<fighter1>...) and (?P<fighter2>...)
-    try:
-        fighter1 = match.group("fighter1")
-        fighter2 = match.group("fighter2")
-        if fighter1 and fighter2:
-            return fighter1.strip(), fighter2.strip(), True
-    except (IndexError, re.error):
-        pass
-
-    return None, None, False
+    return _extract_pair_from_match(match, pattern, "fighter1", "fighter2")
 
 
 def extract_event_name_with_custom_regex(
@@ -473,18 +473,30 @@ def _parse_date_string(date_str: str) -> date | None:
     """Parse various date string formats."""
     from datetime import datetime
 
-    # Common formats to try
+    # Common formats to try (US-first where ambiguous, matching the
+    # full-date priority below)
     formats = [
         "%d %b",  # 14 Jan
         "%d %B",  # 14 January
         "%b %d",  # Jan 14
         "%B %d",  # January 14
+        "%d %b %Y",  # 14 Jan 2026
+        "%d %B %Y",  # 14 January 2026
+        "%b %d %Y",  # Jan 14 2026
+        "%B %d %Y",  # January 14 2026
+        "%b %d, %Y",  # Jan 14, 2026
+        "%B %d, %Y",  # January 14, 2026
         "%m/%d/%Y",  # 01/14/2026
         "%m/%d/%y",  # 01/14/26
         "%d/%m/%Y",  # 14/01/2026
         "%d/%m/%y",  # 14/01/26
+        "%m/%d",  # 7/15
+        "%d/%m",  # 15/7 (reached only when month-first is impossible)
         "%Y-%m-%d",  # 2026-01-14
         "%d-%m-%Y",  # 14-01-2026
+        "%m-%d",  # 7-15
+        "%d.%m.%Y",  # 15.07.2026
+        "%d.%m",  # 15.07
     ]
 
     # Clean up ordinal suffixes (1st, 2nd, 3rd, 4th)
