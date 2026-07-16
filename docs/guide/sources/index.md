@@ -66,6 +66,8 @@ Some IPTV providers rotate group names — `EPL (MW1)` becomes `EPL (MW2)`, date
 
 The editor shows a live **"Matches N groups"** preview as you type. A pattern that matches nothing means the source is treated as stale — same as a missing pinned group.
 
+A stale pattern never deletes your channels: when it matches nothing, the source simply skips the run and existing channels stay until their normal post-event expiry. If the pattern still matches *some* groups but misses one (say a rename escaped your regex), streams from the missed group are treated like streams removed from the M3U — they're detached on the next run, and a channel is removed only once no streams are left on it.
+
 ## Stream Matching Pipeline
 
 When EPG generation runs, each stream goes through:
