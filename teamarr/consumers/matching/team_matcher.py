@@ -1327,9 +1327,6 @@ class TeamMatcher:
             if best is None or pair[0] > best[0]:
                 best = (pair[0], pair[1], pair[2], event)
 
-        alias1 = self._resolve_alias(team1_norm, None) if team1_norm else None
-        alias2 = self._resolve_alias(team2_norm, None) if team2_norm else None
-
         if best is None:
             logger.debug(
                 "[NEAR_MISS] stream_id=%d no candidates in window; date_gated=%d",
@@ -1339,6 +1336,11 @@ class TeamMatcher:
             return
 
         _, s1, s2, event = best
+        # Resolve against the candidate's league — user aliases are
+        # league-scoped, so league=None under-reports ("alias2=none" for an
+        # alias that WOULD fire in the real path).
+        alias1 = self._resolve_alias(team1_norm, event.league) if team1_norm else None
+        alias2 = self._resolve_alias(team2_norm, event.league) if team2_norm else None
         logger.debug(
             "[NEAR_MISS] stream_id=%d best='%s vs %s' (%s %s) scores %s=%.0f / %s=%.0f "
             "(need %.0f) alias1=%s alias2=%s date_gated=%d",
@@ -1522,13 +1524,25 @@ class TeamMatcher:
             # unrelated name ("SEA" in "Portland Sea Dogs") and useless
             # scores for real abbreviations ("SF" vs the Giants = 9).
             def _side_score(stream_norm: str, event_team, event_name_norm: str) -> float:
+                # Per-side alias resolution (#480 round 2): an alias is a
+                # statement about ONE team, so its canonical name scores
+                # this side directly — a single-sided alias must be able to
+                # carry its side while the opponent matches by fuzz/abbrev.
+                # (_check_alias_match's both-sides path remains as the fast
+                # path when every side is aliased.)
+                alias_score = 0.0
+                canonical = self._resolve_alias(stream_norm, event.league)
+                if canonical:
+                    alias_score = _best_name_score(canonical, event_team)
                 if _is_short_code(stream_norm):
-                    return (
+                    base = (
                         100.0
                         if _abbrev_equals(stream_norm, event_team.abbreviation)
                         else 0.0
                     )
-                return _best_name_score(stream_norm, event_team)
+                else:
+                    base = _best_name_score(stream_norm, event_team)
+                return max(base, alias_score)
 
             t1_vs_home = _side_score(t1_norm, event.home_team, home_normalized)
             t1_vs_away = _side_score(t1_norm, event.away_team, away_normalized)
@@ -1554,6 +1568,17 @@ class TeamMatcher:
             # Use stricter threshold since we have less confidence
             single_team = team1 or team2
             single_norm = normalize_text(single_team)
+
+            # Per-side alias resolution (#480 round 2): the canonical name
+            # scores against the combined event name like any full name.
+            canonical = self._resolve_alias(single_norm, event.league)
+            if canonical:
+                event_norm_full = normalize_text(
+                    f"{event.home_team.name} vs {event.away_team.name}"
+                )
+                alias_score = fuzz.token_set_ratio(canonical, event_norm_full)
+                if alias_score >= HIGH_CONFIDENCE_THRESHOLD:
+                    return (MatchMethod.FUZZY, alias_score)
 
             # Short codes never fuzzy-match a combined event name (#472):
             # abbreviation equality is the only evidence they can offer, and
@@ -1612,6 +1637,12 @@ class TeamMatcher:
         else:
             home_score = _best_name_score(team_norm, event.home_team)
             away_score = _best_name_score(team_norm, event.away_team)
+
+        # Per-side alias resolution (#480 round 2)
+        canonical = self._resolve_alias(team_norm, event.league)
+        if canonical:
+            home_score = max(home_score, _best_name_score(canonical, event.home_team))
+            away_score = max(away_score, _best_name_score(canonical, event.away_team))
 
         home_matches = home_score >= HIGH_CONFIDENCE_THRESHOLD
         away_matches = away_score >= HIGH_CONFIDENCE_THRESHOLD
