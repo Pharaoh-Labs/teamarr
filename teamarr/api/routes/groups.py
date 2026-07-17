@@ -2212,6 +2212,10 @@ class TestExtractionResponse(BaseModel):
     # field -> compile error message (invalid Python regex)
     pattern_errors: dict[str, str] = {}
     warnings: list[str] = []
+    # Format learned from the submitted streams for blob date patterns (#474),
+    # e.g. "%d/%m/%Y"; null when declared/component groups are used or no
+    # consistent format explains every sample.
+    learned_date_format: str | None = None
 
 
 @router.post("/test-extraction", response_model=TestExtractionResponse)
@@ -2284,6 +2288,11 @@ def test_extraction(request: TestExtractionRequest):
             "enabled — the pipeline gates all date extraction on it."
         )
 
+    # Learn the source's date format from the submitted batch (#474) —
+    # exactly what the matcher does before a run.
+    if p.date_enabled and p.date_pattern:
+        config.learn_date_format(request.stream_names)
+
     date_attempted = p.date_enabled  # mirror _apply_custom_datetime_regex gate
     results: list[StreamExtractionResult] = []
     for name in request.stream_names:
@@ -2309,7 +2318,7 @@ def test_extraction(request: TestExtractionRequest):
             )
 
         if date_attempted:
-            extracted_date = extract_date_with_custom_regex(name, config)
+            extracted_date, _trusted = extract_date_with_custom_regex(name, config)
             r.date = ExtractionFieldResult(
                 matched=extracted_date is not None,
                 values=[extracted_date.isoformat()] if extracted_date else [],
@@ -2332,5 +2341,10 @@ def test_extraction(request: TestExtractionRequest):
         results.append(r)
 
     return TestExtractionResponse(
-        results=results, pattern_errors=pattern_errors, warnings=warnings
+        results=results,
+        pattern_errors=pattern_errors,
+        warnings=warnings,
+        learned_date_format=(
+            config.learned_date_formats[0] if config.learned_date_formats else None
+        ),
     )

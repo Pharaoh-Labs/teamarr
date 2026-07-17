@@ -34,6 +34,11 @@ class NormalizedStream:
 
     # Extracted metadata (may be None)
     extracted_date: date | None = None
+    # Whether the date's format is verified (#474): True for built-in
+    # extraction and for custom regex with declared (month/day/year groups)
+    # or learned formats; False when the date came from blind per-string
+    # format guessing. Unverified dates rank candidates instead of gating them.
+    extracted_date_trusted: bool = True
     extracted_time: time | None = None
     extracted_tz: str | None = None  # IANA timezone (e.g., 'America/New_York')
     league_hint: str | None = None

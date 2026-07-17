@@ -178,6 +178,8 @@ export interface TestExtractionResponse {
   results: StreamExtractionResult[]
   pattern_errors: Record<string, string>
   warnings: string[]
+  /** Format learned from the streams for blob date patterns (#474), e.g. "%d/%m/%Y" */
+  learned_date_format: string | null
 }
 
 export async function testExtraction(

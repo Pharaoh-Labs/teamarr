@@ -212,6 +212,9 @@ export function TestPatternsModal({
   const patternErrors = extractionRequest !== null
     ? extractionData?.pattern_errors ?? {}
     : {}
+  const learnedDateFormat = extractionRequest !== null
+    ? extractionData?.learned_date_format ?? null
+    : null
   const pipelineWarnings = extractionRequest !== null
     ? extractionData?.warnings ?? []
     : []
@@ -288,6 +291,12 @@ export function TestPatternsModal({
               </div>
             )}
 
+            {learnedDateFormat && (
+              <div className="px-3 py-1 text-xs border-b border-border bg-secondary/30 text-muted-foreground">
+                Learned date format from these streams: <code className="px-1 rounded bg-muted">{learnedDateFormat}</code>
+                {" "}— applied to every stream. Label pieces with (?P&lt;day&gt;…)(?P&lt;month&gt;…)(?P&lt;year&gt;…) to declare it explicitly.
+              </div>
+            )}
             {(Object.keys(patternErrors).length > 0 || pipelineWarnings.length > 0) && (
               <div className="px-3 py-1.5 text-xs border-b border-border bg-yellow-500/10 space-y-0.5">
                 {Object.entries(patternErrors).map(([field, err]) => (

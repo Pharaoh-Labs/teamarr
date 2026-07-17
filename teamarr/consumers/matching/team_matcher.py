@@ -835,6 +835,8 @@ class TeamMatcher:
         best_date_distance: int = 999  # Absolute days from target_date
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
+        best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
+        date_rejected = 0  # Candidates gated by a trusted stream date (#474)
 
         for event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -853,13 +855,28 @@ class TeamMatcher:
 
             event_date = event.start_time.astimezone(ctx.user_tz).date()
 
-            # Check for date mismatch from stream (if extracted)
-            # Use stream_tz if available - the date in the stream name is in the provider's timezone
+            # Date validation from the stream (#474). A trusted date (built-in
+            # extraction, declared component groups, or a learned per-source
+            # format) gates candidates with ±1 day of tolerance for provider
+            # timezone day-boundaries. An untrusted date (blind per-string
+            # format guess) never rejects — it ranks candidates instead, so a
+            # misread date can no longer zero out the whole group.
+            stream_date_dist = 0
             if ctx.classified.normalized.extracted_date:
-                # Get event date in the stream's timezone (or user_tz as fallback)
+                # The date in the stream name is in the provider's timezone
                 compare_tz = ctx.stream_tz or ctx.user_tz
                 event_date_in_stream_tz = event.start_time.astimezone(compare_tz).date()
-                if ctx.classified.normalized.extracted_date != event_date_in_stream_tz:
+                stream_date_dist = abs(
+                    (
+                        ctx.classified.normalized.extracted_date
+                        - event_date_in_stream_tz
+                    ).days
+                )
+                if (
+                    stream_date_dist > 1
+                    and ctx.classified.normalized.extracted_date_trusted
+                ):
+                    date_rejected += 1
                     continue
 
             # Check for sport mismatch from stream (if detected)
@@ -914,7 +931,11 @@ class TeamMatcher:
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if ctx.anchor_dt is not None:
+                    if stream_date_dist != best_stream_date_dist:
+                        # Agreement with the stream's declared date is the
+                        # strongest equal-score disambiguator (#474)
+                        is_better = stream_date_dist < best_stream_date_dist
+                    elif ctx.anchor_dt is not None:
                         is_better = anchor_dist < best_anchor_dist
                     elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
@@ -935,6 +956,7 @@ class TeamMatcher:
                     best_date_distance = abs_distance
                     best_time_distance = time_distance
                     best_anchor_dist = anchor_dist
+                    best_stream_date_dist = stream_date_dist
 
         if best_match:
             logger.debug(
@@ -960,6 +982,10 @@ class TeamMatcher:
             reason = FailedReason.TEAM2_NOT_FOUND
         elif team2_normalized and not team1_normalized:
             reason = FailedReason.TEAM1_NOT_FOUND
+        elif date_rejected:
+            # Candidates existed but every one was gated by the stream's
+            # date — say so instead of a generic "no event found" (#474)
+            reason = FailedReason.DATE_MISMATCH
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
@@ -1023,6 +1049,8 @@ class TeamMatcher:
         best_date_distance: int = 999  # Absolute days from target_date
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
+        best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
+        date_rejected = 0  # Candidates gated by a trusted stream date (#474)
 
         for league, event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -1041,13 +1069,28 @@ class TeamMatcher:
 
             event_date = event.start_time.astimezone(ctx.user_tz).date()
 
-            # Check for date mismatch from stream (if extracted)
-            # Use stream_tz if available - the date in the stream name is in the provider's timezone
+            # Date validation from the stream (#474). A trusted date (built-in
+            # extraction, declared component groups, or a learned per-source
+            # format) gates candidates with ±1 day of tolerance for provider
+            # timezone day-boundaries. An untrusted date (blind per-string
+            # format guess) never rejects — it ranks candidates instead, so a
+            # misread date can no longer zero out the whole group.
+            stream_date_dist = 0
             if ctx.classified.normalized.extracted_date:
-                # Get event date in the stream's timezone (or user_tz as fallback)
+                # The date in the stream name is in the provider's timezone
                 compare_tz = ctx.stream_tz or ctx.user_tz
                 event_date_in_stream_tz = event.start_time.astimezone(compare_tz).date()
-                if ctx.classified.normalized.extracted_date != event_date_in_stream_tz:
+                stream_date_dist = abs(
+                    (
+                        ctx.classified.normalized.extracted_date
+                        - event_date_in_stream_tz
+                    ).days
+                )
+                if (
+                    stream_date_dist > 1
+                    and ctx.classified.normalized.extracted_date_trusted
+                ):
+                    date_rejected += 1
                     continue
 
             # Check for sport mismatch from stream (if detected)
@@ -1102,7 +1145,11 @@ class TeamMatcher:
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if ctx.anchor_dt is not None:
+                    if stream_date_dist != best_stream_date_dist:
+                        # Agreement with the stream's declared date is the
+                        # strongest equal-score disambiguator (#474)
+                        is_better = stream_date_dist < best_stream_date_dist
+                    elif ctx.anchor_dt is not None:
                         is_better = anchor_dist < best_anchor_dist
                     elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
@@ -1124,6 +1171,7 @@ class TeamMatcher:
                     best_date_distance = abs_distance
                     best_anchor_dist = anchor_dist
                     best_time_distance = time_distance
+                    best_stream_date_dist = stream_date_dist
 
         if best_match and best_league:
             logger.debug(
@@ -1150,6 +1198,10 @@ class TeamMatcher:
             reason = FailedReason.TEAM2_NOT_FOUND
         elif team2_normalized and not team1_normalized:
             reason = FailedReason.TEAM1_NOT_FOUND
+        elif date_rejected:
+            # Candidates existed but every one was gated by the stream's
+            # date — say so instead of a generic "no event found" (#474)
+            reason = FailedReason.DATE_MISMATCH
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
