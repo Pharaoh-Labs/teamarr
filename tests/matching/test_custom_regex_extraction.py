@@ -94,7 +94,8 @@ class TestNamedGroupPrecedence:
 class TestCustomDateFormats:
     def _extract(self, pattern: str, text: str):
         cfg = CustomRegexConfig(date_pattern=pattern, date_enabled=True)
-        return extract_date_with_custom_regex(text, cfg)
+        extracted, _trusted = extract_date_with_custom_regex(text, cfg)
+        return extracted
 
     def test_yearless_numeric_slash_date_parses(self):
         # Matched fine in the JS tester, silently extracted nothing before #456.

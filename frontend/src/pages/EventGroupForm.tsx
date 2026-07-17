@@ -922,7 +922,7 @@ export function EventGroupForm() {
                           onChange={(e) =>
                             setFormData({ ...formData, custom_regex_date: e.target.value || null })
                           }
-                          placeholder="(?<date>\d{1,2}/\d{1,2})"
+                          placeholder="(?<day>\d{1,2})/(?<month>\d{1,2})/(?<year>\d{2,4})"
                           disabled={!formData.custom_regex_date_enabled}
                           className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
                         />
@@ -1101,7 +1101,7 @@ export function EventGroupForm() {
                           onChange={(e) =>
                             setFormData({ ...formData, custom_regex_date: e.target.value || null })
                           }
-                          placeholder="(?<date>\d{1,2}/\d{1,2})"
+                          placeholder="(?<day>\d{1,2})/(?<month>\d{1,2})/(?<year>\d{2,4})"
                           disabled={!formData.custom_regex_date_enabled}
                           className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
                         />

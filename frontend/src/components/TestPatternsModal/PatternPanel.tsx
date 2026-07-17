@@ -135,7 +135,7 @@ const DATE_FIELD: FieldConfig = {
   patternKey: "custom_regex_date",
   enabledKey: "custom_regex_date_enabled",
   label: "Date Extraction",
-  placeholder: '(?P<date>\\d{4}-\\d{2}-\\d{2})',
+  placeholder: '(?P<day>\\d{1,2})/(?P<month>\\d{1,2})/(?P<year>\\d{2,4})',
   icon: <Calendar className="h-3.5 w-3.5" />,
   color: "text-yellow-400",
 }

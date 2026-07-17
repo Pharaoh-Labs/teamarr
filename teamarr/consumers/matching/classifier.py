@@ -92,6 +92,12 @@ class CustomRegexConfig:
     event_name_pattern: str | None = None
     event_name_enabled: bool = False
 
+    # Learned per-source date format (#474): the date regex says WHERE the
+    # date lives; this records HOW the source formats it, inferred once per
+    # group from every stream's captured date string. None = never learned
+    # (fall back to per-string format guessing).
+    learned_date_formats: list[str] | None = None
+
     # Compiled patterns (cached)
     _compiled_teams: Pattern | None = None
     _compiled_date: Pattern | None = None
@@ -101,6 +107,43 @@ class CustomRegexConfig:
     _compiled_league: Pattern | None = None
     _compiled_fighters: Pattern | None = None
     _compiled_event_name: Pattern | None = None
+
+    def learn_date_format(self, stream_names) -> None:
+        """Infer this source's date format from all its stream names (#474).
+
+        No-op when the date pattern is off, uses unambiguous month/day/year
+        component groups, or when no candidate format explains every sample.
+        """
+        pattern = self.get_date_pattern()
+        if not pattern:
+            return
+        # Component groups already declare the format — nothing to learn.
+        if "month" in pattern.groupindex or "day" in pattern.groupindex:
+            return
+
+        samples: list[str] = []
+        for name in stream_names:
+            match = pattern.search(name or "")
+            if not match:
+                continue
+            captured: str | None = None
+            try:
+                captured = match.group("date")
+            except (IndexError, re.error):
+                pass
+            if not captured:
+                groups = match.groups()
+                captured = groups[0] if groups and groups[0] else None
+            if captured:
+                samples.append(captured)
+
+        self.learned_date_formats = infer_date_formats(samples)
+        if self.learned_date_formats:
+            logger.info(
+                "[CLASSIFY] Learned date format %s from %d stream(s)",
+                self.learned_date_formats[0],
+                len(samples),
+            )
 
     def get_pattern(self) -> Pattern | None:
         """Get compiled teams regex pattern, compiling on first access."""
@@ -337,7 +380,7 @@ def extract_event_name_with_custom_regex(
 def extract_date_with_custom_regex(
     text: str,
     config: CustomRegexConfig,
-) -> date | None:
+) -> tuple[date | None, bool]:
     """Extract date using custom regex pattern.
 
     Supports:
@@ -351,9 +394,13 @@ def extract_date_with_custom_regex(
         config: Custom regex configuration
 
     Returns:
-        Extracted date or None
+        (extracted date or None, trusted) — trusted is True when the format
+        was declared (component groups) or learned from the source (#474);
+        False when the string went through blind per-string format guessing.
     """
     from datetime import datetime
+
+    blob_format_known = config.learned_date_formats is not None
 
     # Strategy 1: Single date pattern (full date or month+day named groups within it)
     pattern = config.get_date_pattern()
@@ -365,11 +412,17 @@ def extract_date_with_custom_regex(
                 try:
                     date_str = match.group("date")
                     if date_str:
-                        return _parse_date_string(date_str.strip())
+                        return (
+                            _parse_date_string(
+                                date_str.strip(), config.learned_date_formats
+                            ),
+                            blob_format_known,
+                        )
                 except (IndexError, re.error):
                     pass
 
-                # Try individual named groups (month, day, year)
+                # Try individual named groups (month, day, year) — the format
+                # is declared structurally, so the result is trusted.
                 try:
                     month_str = match.group("month")
                     day_str = match.group("day")
@@ -382,14 +435,19 @@ def extract_date_with_custom_regex(
                                 year += 2000 if year < 50 else 1900
                         except (IndexError, re.error, ValueError, AttributeError):
                             year = datetime.now().year
-                        return date(year, month, day)
+                        return date(year, month, day), True
                 except (IndexError, re.error, ValueError, AttributeError):
                     pass
 
                 # Try first capture group as raw date string
                 groups = match.groups()
                 if groups and groups[0]:
-                    return _parse_date_string(groups[0].strip())
+                    return (
+                        _parse_date_string(
+                            groups[0].strip(), config.learned_date_formats
+                        ),
+                        blob_format_known,
+                    )
 
             except (ValueError, TypeError) as e:
                 logger.debug("[CLASSIFY] Failed to parse custom date: %s", e)
@@ -428,11 +486,11 @@ def extract_date_with_custom_regex(
                     month = _parse_month(month_str.strip())
                     day = int(day_str.strip())
                     year = datetime.now().year
-                    return date(year, month, day)
+                    return date(year, month, day), True
             except (ValueError, TypeError, AttributeError) as e:
                 logger.debug("[CLASSIFY] Failed to parse separate month/day: %s", e)
 
-    return None
+    return None, False
 
 
 def _parse_month(month_str: str) -> int:
@@ -469,13 +527,95 @@ def _parse_month(month_str: str) -> int:
     return int(month_str)
 
 
-def _parse_date_string(date_str: str) -> date | None:
-    """Parse various date string formats."""
+# Every format _parse_date_string can guess, in default (US-first) priority.
+# infer_date_formats() scores these against a source's actual samples (#474).
+_DATE_FORMAT_CANDIDATES = [
+    "%d %b",
+    "%d %B",
+    "%b %d",
+    "%B %d",
+    "%d %b %Y",
+    "%d %B %Y",
+    "%b %d %Y",
+    "%B %d %Y",
+    "%b %d, %Y",
+    "%B %d, %Y",
+    "%m/%d/%Y",
+    "%m/%d/%y",
+    "%d/%m/%Y",
+    "%d/%m/%y",
+    "%m/%d",
+    "%d/%m",
+    "%Y-%m-%d",
+    "%d-%m-%Y",
+    "%m-%d",
+    "%d.%m.%Y",
+    "%d.%m",
+]
+
+
+def infer_date_formats(samples: list[str], window_days: int = 60) -> list[str] | None:
+    """Learn the date format a stream source uses (#474).
+
+    The custom date regex describes WHERE a source's date lives; this learns
+    HOW it is formatted, from the whole batch at once: keep the candidate
+    formats that parse EVERY sample, then break ties by which format lands
+    the most dates near today (sports stream dates cluster around now —
+    "05/07, 06/07, 07/07" in mid-July is day-first, not May/June/July).
+
+    Returns a single-element format list, or None when no candidate parses
+    every sample (caller falls back to per-stream guessing).
+    """
+    from datetime import datetime, timedelta
+
+    cleaned = list(
+        {
+            re.sub(r"(\d{1,2})(st|nd|rd|th)", r"\1", s.strip(), flags=re.IGNORECASE)
+            for s in samples
+            if s and s.strip()
+        }
+    )[:500]
+    if not cleaned:
+        return None
+
+    today = datetime.now().date()
+    lo, hi = today - timedelta(days=window_days), today + timedelta(days=window_days)
+
+    best_fmt: str | None = None
+    best_in_window = -1
+    for fmt in _DATE_FORMAT_CANDIDATES:
+        parsed: list[date] = []
+        for sample in cleaned:
+            try:
+                dt = datetime.strptime(sample, fmt)
+                if "%Y" not in fmt and "%y" not in fmt:
+                    dt = dt.replace(year=today.year)
+                parsed.append(dt.date())
+            except ValueError:
+                break
+        if len(parsed) != len(cleaned):
+            continue  # must explain EVERY sample
+        in_window = sum(1 for d in parsed if lo <= d <= hi)
+        # Strictly-greater keeps the earlier (US-first) candidate on ties.
+        if in_window > best_in_window:
+            best_fmt = fmt
+            best_in_window = in_window
+
+    return [best_fmt] if best_fmt else None
+
+
+def _parse_date_string(date_str: str, formats: list[str] | None = None) -> date | None:
+    """Parse various date string formats.
+
+    When `formats` is given (a learned per-source format, #474), ONLY those
+    formats are tried — the source has one format; guessing per stream is
+    what made ambiguous dates parse inconsistently.
+    """
     from datetime import datetime
 
     # Common formats to try (US-first where ambiguous, matching the
     # full-date priority below)
-    formats = [
+    formats = formats or [
         "%d %b",  # 14 Jan
         "%d %B",  # 14 January
         "%b %d",  # Jan 14
@@ -1449,9 +1589,12 @@ def _apply_custom_datetime_regex(
     Mutates ``normalized`` in place.
     """
     if custom_regex.date_enabled:
-        custom_date = extract_date_with_custom_regex(stream_name, custom_regex)
+        custom_date, format_verified = extract_date_with_custom_regex(
+            stream_name, custom_regex
+        )
         if custom_date:
             normalized.extracted_date = custom_date
+            normalized.extracted_date_trusted = format_verified
             logger.debug(
                 "[CLASSIFY] Custom date regex extracted: %s from '%s'",
                 custom_date,
