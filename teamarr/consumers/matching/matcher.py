@@ -939,7 +939,11 @@ class StreamMatcher:
                 # skew measured against that session so "live over pre-game"
                 # still holds within each bucket.
                 key: object = ev_id
-                if getattr(ev, "sessions", None) and program.start_dt is not None:
+                if (
+                    ev is not None
+                    and getattr(ev, "sessions", None)
+                    and program.start_dt is not None
+                ):
                     s_code, s_dist = nearest_session(
                         ev, program.start_dt, self._sport_durations
                     )

@@ -142,12 +142,16 @@ def resolve_program_tvg_ids(
     # cascade.
     epgdata_by_id = {e["id"]: e for e in epg_data_list if e.get("id") is not None}
 
-    def _resolvable(ed: dict | None) -> bool:
+    def _resolved_tvg(ed: dict | None) -> str | None:
+        """The program tvg_id ``ed`` resolves to, or None if it must not resolve."""
         if not ed or not ed.get("tvg_id"):
-            return False
+            return None
         if own_source_id is not None and ed.get("epg_source") == own_source_id:
-            return False
-        return not str(ed["tvg_id"]).startswith(_SYNTHETIC_EVENT_TVG_PREFIXES)
+            return None
+        tvg = ed["tvg_id"]
+        if str(tvg).startswith(_SYNTHETIC_EVENT_TVG_PREFIXES):
+            return None
+        return tvg
 
     # Direct + name match only the ACTIVE imported EPG (honor enabled sources).
     if active_source_ids is not None:
@@ -180,9 +184,9 @@ def resolve_program_tvg_ids(
         ch = stream_channel_map.get(sid) if sid is not None else None
         if ch:
             eid = ch.get("effective_epg_data_id") or ch.get("epg_data_id")
-            ed = epgdata_by_id.get(eid)
-            if _resolvable(ed):
-                resolution[s_tvg] = ed["tvg_id"]
+            resolved = _resolved_tvg(epgdata_by_id.get(eid))
+            if resolved:
+                resolution[s_tvg] = resolved
                 stats["channel"] += 1
                 continue
 
@@ -192,9 +196,9 @@ def resolve_program_tvg_ids(
             ch = channel_by_uuid.get(m.group(1).lower()) if m else None
             if ch:
                 eid = ch.get("effective_epg_data_id") or ch.get("epg_data_id")
-                ed = epgdata_by_id.get(eid)
-                if _resolvable(ed):
-                    resolution[s_tvg] = ed["tvg_id"]
+                resolved = _resolved_tvg(epgdata_by_id.get(eid))
+                if resolved:
+                    resolution[s_tvg] = resolved
                     stats["loopback"] += 1
                     continue
 
