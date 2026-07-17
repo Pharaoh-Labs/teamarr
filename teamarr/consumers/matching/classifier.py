@@ -400,7 +400,7 @@ def extract_date_with_custom_regex(
     """
     from datetime import datetime
 
-    blob_trusted = config.learned_date_formats is not None
+    blob_format_known = config.learned_date_formats is not None
 
     # Strategy 1: Single date pattern (full date or month+day named groups within it)
     pattern = config.get_date_pattern()
@@ -416,7 +416,7 @@ def extract_date_with_custom_regex(
                             _parse_date_string(
                                 date_str.strip(), config.learned_date_formats
                             ),
-                            blob_trusted,
+                            blob_format_known,
                         )
                 except (IndexError, re.error):
                     pass
@@ -446,7 +446,7 @@ def extract_date_with_custom_regex(
                         _parse_date_string(
                             groups[0].strip(), config.learned_date_formats
                         ),
-                        blob_trusted,
+                        blob_format_known,
                     )
 
             except (ValueError, TypeError) as e:
@@ -1596,9 +1596,8 @@ def _apply_custom_datetime_regex(
             normalized.extracted_date = custom_date
             normalized.extracted_date_trusted = format_verified
             logger.debug(
-                "[CLASSIFY] Custom date regex extracted: %s (format_verified=%s) from '%s'",
+                "[CLASSIFY] Custom date regex extracted: %s from '%s'",
                 custom_date,
-                format_verified,
                 stream_name[:50],
             )
 
