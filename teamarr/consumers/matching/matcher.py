@@ -49,8 +49,8 @@ from teamarr.consumers.matching.result import (
     ResultAggregator,
 )
 from teamarr.consumers.matching.team_matcher import TeamMatcher
-from teamarr.consumers.racing_segments import nearest_session
 from teamarr.consumers.matching.tennis_matcher import TennisMatcher
+from teamarr.consumers.racing_segments import nearest_session
 from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
     get_generation_counter,

@@ -84,7 +84,7 @@ def _augment_compounds(normalized: str) -> str:
     the pair scores as related without loosening the threshold.
     """
     tokens = normalized.split()
-    return " ".join(tokens + [a + b for a, b in zip(tokens, tokens[1:])])
+    return " ".join(tokens + [a + b for a, b in zip(tokens, tokens[1:], strict=False)])
 
 
 @dataclass
