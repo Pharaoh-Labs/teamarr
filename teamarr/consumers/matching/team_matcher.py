@@ -18,8 +18,10 @@ from rapidfuzz import fuzz
 from teamarr.consumers.matching import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.classifier import ClassifiedStream, StreamCategory
 from teamarr.consumers.matching.constants import (
+    ALTERNATE_TEAM_CODES,
     BOTH_TEAMS_THRESHOLD,
     HIGH_CONFIDENCE_THRESHOLD,
+    SHORT_CODE_MAX_LEN,
 )
 from teamarr.consumers.matching.country_resolver import (
     CountryNameResolver,
@@ -90,6 +92,26 @@ def _sport_hint_matches(sport_hint: str | list[str], event_sport: str) -> bool:
 
 # Type alias for user-defined aliases: (alias_text, league) -> team_name
 UserAliasCache = dict[tuple[str, str], str]
+
+
+def _is_short_code(normalized: str) -> bool:
+    """A single token this short is an abbreviation, not a team name (#472)."""
+    return len(normalized) <= SHORT_CODE_MAX_LEN and " " not in normalized
+
+
+def _resolve_alt_codes(tokens: set[str]) -> set[str]:
+    """Expand stream tokens with canonical provider codes (AZ -> ARI, ...)."""
+    return tokens | {
+        ALTERNATE_TEAM_CODES[t] for t in tokens if t in ALTERNATE_TEAM_CODES
+    }
+
+
+def _abbrev_equals(stream_code: str, event_abbrev: str | None) -> bool:
+    """Does a short stream code equal the event team's abbreviation (#472)?"""
+    if not event_abbrev:
+        return False
+    code = ALTERNATE_TEAM_CODES.get(stream_code, stream_code)
+    return code == normalize_text(event_abbrev)
 
 
 @dataclass
@@ -1232,8 +1254,14 @@ class TeamMatcher:
         "SWE" matches abbreviation "SWE", "ITA (M Group B)" contains token "ita"
         matching "ITA".
 
-        Requires both abbreviations to be >= 3 chars to avoid matching 2-letter codes
-        (SF, NE, KC) that are more likely to appear as noise tokens.
+        With BOTH teams extracted, 2-letter abbreviations are allowed (#472):
+        requiring the two stream teams to hit DIFFERENT event abbreviations
+        makes noise hits vanishingly unlikely, and MLB's official codes (SF,
+        SD, KC, TB) are 2 letters — the old >=3 guard made those teams
+        unmatchable by code. Single-team streams keep the >=3 guard (a lone
+        2-letter token really is noise-prone). Well-known alternate codes
+        (AZ for ARI, Baseball-Reference forms) resolve via
+        ALTERNATE_TEAM_CODES.
         """
         home_abbr = (
             normalize_text(event.home_team.abbreviation)
@@ -1246,11 +1274,11 @@ class TeamMatcher:
             else ""
         )
 
-        if not home_abbr or not away_abbr or len(home_abbr) < 3 or len(away_abbr) < 3:
+        if not home_abbr or not away_abbr or len(home_abbr) < 2 or len(away_abbr) < 2:
             return None
 
-        t1_tokens = set(normalize_text(team1).split()) if team1 else set()
-        t2_tokens = set(normalize_text(team2).split()) if team2 else set()
+        t1_tokens = _resolve_alt_codes(set(normalize_text(team1).split())) if team1 else set()
+        t2_tokens = _resolve_alt_codes(set(normalize_text(team2).split())) if team2 else set()
 
         # Both teams must match different event teams
         if team1 and team2:
@@ -1258,12 +1286,13 @@ class TeamMatcher:
             opt2 = away_abbr in t1_tokens and home_abbr in t2_tokens
             if opt1 or opt2:
                 return (MatchMethod.FUZZY, 100.0)
-        elif team1:
-            if home_abbr in t1_tokens or away_abbr in t1_tokens:
-                return (MatchMethod.FUZZY, 100.0)
-        elif team2:
-            if home_abbr in t2_tokens or away_abbr in t2_tokens:
-                return (MatchMethod.FUZZY, 100.0)
+        elif len(home_abbr) >= 3 and len(away_abbr) >= 3:
+            if team1:
+                if home_abbr in t1_tokens or away_abbr in t1_tokens:
+                    return (MatchMethod.FUZZY, 100.0)
+            elif team2:
+                if home_abbr in t2_tokens or away_abbr in t2_tokens:
+                    return (MatchMethod.FUZZY, 100.0)
 
         return None
 
@@ -1372,11 +1401,24 @@ class TeamMatcher:
             t1_norm = normalize_text(team1)
             t2_norm = normalize_text(team2)
 
-            # Score each stream team against each event team
-            t1_vs_home = fuzz.token_set_ratio(t1_norm, home_normalized)
-            t1_vs_away = fuzz.token_set_ratio(t1_norm, away_normalized)
-            t2_vs_home = fuzz.token_set_ratio(t2_norm, home_normalized)
-            t2_vs_away = fuzz.token_set_ratio(t2_norm, away_normalized)
+            # Score each stream team against each event team. Short codes
+            # score by abbreviation equality ONLY (#472): token_set_ratio
+            # gives a spurious 100 when a code is a literal word of an
+            # unrelated name ("SEA" in "Portland Sea Dogs") and useless
+            # scores for real abbreviations ("SF" vs the Giants = 9).
+            def _side_score(stream_norm: str, event_team, event_name_norm: str) -> float:
+                if _is_short_code(stream_norm):
+                    return (
+                        100.0
+                        if _abbrev_equals(stream_norm, event_team.abbreviation)
+                        else 0.0
+                    )
+                return fuzz.token_set_ratio(stream_norm, event_name_norm)
+
+            t1_vs_home = _side_score(t1_norm, event.home_team, home_normalized)
+            t1_vs_away = _side_score(t1_norm, event.away_team, away_normalized)
+            t2_vs_home = _side_score(t2_norm, event.home_team, home_normalized)
+            t2_vs_away = _side_score(t2_norm, event.away_team, away_normalized)
 
             # Try both valid assignments (each stream team matches a different event team)
             # Option 1: team1 → home, team2 → away
@@ -1397,6 +1439,19 @@ class TeamMatcher:
             # Use stricter threshold since we have less confidence
             single_team = team1 or team2
             single_norm = normalize_text(single_team)
+
+            # Short codes never fuzzy-match a combined event name (#472):
+            # abbreviation equality is the only evidence they can offer, and
+            # the single-team abbreviation path deliberately requires >=3
+            # chars — a lone 2-letter token is noise.
+            if _is_short_code(single_norm):
+                if len(single_norm) >= 3 and (
+                    _abbrev_equals(single_norm, event.home_team.abbreviation)
+                    or _abbrev_equals(single_norm, event.away_team.abbreviation)
+                ):
+                    return (MatchMethod.FUZZY, 100.0)
+                return None
+
             event_name = f"{event.home_team.name} vs {event.away_team.name}"
             event_norm = normalize_text(event_name)
 
@@ -1431,8 +1486,20 @@ class TeamMatcher:
         home_norm = normalize_text(event.home_team.name)
         away_norm = normalize_text(event.away_team.name)
 
-        home_score = fuzz.token_set_ratio(team_norm, home_norm)
-        away_score = fuzz.token_set_ratio(team_norm, away_norm)
+        if _is_short_code(team_norm):
+            # Short codes match only by abbreviation equality (#472), and a
+            # lone 2-letter token stays unmatchable (noise guard).
+            if len(team_norm) < 3:
+                return None, None
+            home_score = (
+                100.0 if _abbrev_equals(team_norm, event.home_team.abbreviation) else 0.0
+            )
+            away_score = (
+                100.0 if _abbrev_equals(team_norm, event.away_team.abbreviation) else 0.0
+            )
+        else:
+            home_score = fuzz.token_set_ratio(team_norm, home_norm)
+            away_score = fuzz.token_set_ratio(team_norm, away_norm)
 
         home_matches = home_score >= HIGH_CONFIDENCE_THRESHOLD
         away_matches = away_score >= HIGH_CONFIDENCE_THRESHOLD
