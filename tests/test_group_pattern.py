@@ -75,6 +75,7 @@ def _stream(sid, name, account=7):
         name=name,
         tvg_id=None,
         tvg_name=None,
+        url=None,
         channel_group=None,
         channel_group_id=None,
         m3u_account_id=account,

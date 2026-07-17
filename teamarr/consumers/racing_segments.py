@@ -38,6 +38,14 @@ _HYPERPOLE_RE = re.compile(
 )
 _PROLOGUE_RE = re.compile(r"prologue", re.IGNORECASE)
 
+# How far a broadcast instant may sit from a session's real [start, end]
+# window and still count as covering that session. 90 minutes accommodates
+# pre-session build-up coverage (a broadcast starting well before lights
+# out) without letting a program merely NAMING a racing series bind to a
+# session airing hours away. Shared by the racing matcher's EPG anchor gate
+# and the session-scoping logic below.
+RACING_ANCHOR_TOLERANCE_SECONDS = 90 * 60
+
 # Canonical session order, earliest to latest within a race weekend.
 SESSION_ORDER = [
     "fp1",
@@ -233,6 +241,33 @@ def _session_category_from_stream_name(stream_name: str) -> str | None:
     label = _isolate_stream_session_label(stream_name)
     if not label:
         return None
+    if category := _classify_session_label(label):
+        return category
+    # Fallback: the label isn't ENTIRELY a session type, but ENDS in one —
+    # e.g. NASCAR/TSN+'s "NASCAR Cup Series Qualifying" or "2026 NASCAR ORAP
+    # Series Qualifying", vs. tsdb/STAN's convention of the label being just
+    # "Qualifying" on its own (handled above).
+    if category := _session_category_from_trailing_keyword(label):
+        return category
+    # Apple-TV-PPV shape: "NEXT | BELGIUM: RACE | Sun 19 Jul ... | UK: ..."
+    # — the session name is a colon-VALUE in a middle segment, which the
+    # last-segment label isolation above never sees (live: dedicated
+    # "BELGIUM: RACE" streams fanned out onto the Qualifying channel). Scan
+    # every pipe segment's colon-separated fields with the ANCHORED
+    # classifiers only — the whole field must be a session name, so a
+    # session word merely embedded in branding text still doesn't count
+    # (no trailing-keyword fallback here).
+    for segment in stream_name.split("|"):
+        for field in segment.split(":", 1):
+            if category := _classify_session_label(field.strip()):
+                return category
+    return None
+
+
+def _classify_session_label(label: str) -> str | None:
+    """Anchored classification of a field that should BE a session name."""
+    if not label:
+        return None
     if category := _EXACT_SESSION_LABELS.get(label.lower()):
         return category
     if m := _FREE_PRACTICE_RE.match(label):
@@ -243,11 +278,7 @@ def _session_category_from_stream_name(stream_name: str) -> str | None:
         return "hyperpole"
     if _PROLOGUE_RE.search(label):
         return "prologue"
-    # Fallback: the label isn't ENTIRELY a session type, but ENDS in one —
-    # e.g. NASCAR/TSN+'s "NASCAR Cup Series Qualifying" or "2026 NASCAR ORAP
-    # Series Qualifying", vs. tsdb/STAN's convention of the label being just
-    # "Qualifying" on its own (handled above).
-    return _session_category_from_trailing_keyword(label)
+    return None
 
 
 def _session_in_category(session_code: str, category: str) -> bool:
@@ -317,6 +348,37 @@ def get_session_times(
     return event.start_time, event.start_time + timedelta(hours=duration)
 
 
+def nearest_session(
+    event: Event,
+    instant: datetime,
+    sport_durations: dict[str, float] | None = None,
+) -> tuple[str | None, float]:
+    """The session of ``event`` airing nearest ``instant``.
+
+    Distance is 0 inside a session's real [start, end] window, else the gap
+    to the nearest window edge, in seconds. Used to bucket EPG programmes by
+    the session they broadcast (a race weekend's guide carries one programme
+    per session, all matching the same event).
+
+    Returns:
+        (session_code, distance_seconds); (None, inf) when the event carries
+        no session data.
+    """
+    best_code: str | None = None
+    best_dist = float("inf")
+    for session in event.sessions or []:
+        start, end = get_session_times(event, session.code, sport_durations)
+        if start <= instant <= end:
+            dist = 0.0
+        elif instant < start:
+            dist = (start - instant).total_seconds()
+        else:
+            dist = (instant - end).total_seconds()
+        if dist < best_dist:
+            best_code, best_dist = session.code, dist
+    return best_code, best_dist
+
+
 def expand_racing_segments(
     matched_streams: list[dict],
     sport_durations: dict[str, float] | None = None,
@@ -362,8 +424,52 @@ def expand_racing_segments(
         stream_name = match.get("stream", {}).get("name") or ""
         if category := _session_category_from_stream_name(stream_name):
             scoped = [s for s in sessions if _session_in_category(s.code, category)]
-            if scoped:
-                sessions = scoped
+            # No session of the named category: providers list sessions the
+            # data source doesn't (ESPN's IndyCar events often carry only
+            # the race). A dedicated "Practice 1"/"Qualifying" feed must not
+            # fall back to the full fan-out and land on the Race channel —
+            # better no channel than the wrong one.
+            if not scoped:
+                logger.debug(
+                    "[RACING_SEGMENTS] Dropping '%s': names session category "
+                    "'%s' but event '%s' has no such session",
+                    stream_name[:60],
+                    category,
+                    event.name,
+                )
+                continue
+            sessions = scoped
+        elif match.get("match_method") == "epg" and match.get("epg_program_start") is not None:
+            # EPG-matched linear channel: the guide names the exact slot this
+            # stream airs, so scope to the session(s) that slot covers —
+            # PRACTICE INCLUDED. The generic practice exclusion below exists
+            # because a name-path stream's coverage is unknown; here the
+            # listing is positive evidence the channel airs this session.
+            prog_start = match["epg_program_start"]
+            prog_end = match.get("epg_program_end") or prog_start
+            overlapping = []
+            for s in sessions:
+                start, end = get_session_times(event, s.code, sport_durations)
+                if start <= prog_end and prog_start <= end:
+                    overlapping.append(s)
+            if not overlapping:
+                # Build-up coverage that ends before lights out (no overlap):
+                # the matcher's anchor gate already proved a session airs
+                # within tolerance of this slot — bind to the nearest one.
+                code, dist = nearest_session(event, prog_start, sport_durations)
+                if code is not None and dist <= RACING_ANCHOR_TOLERANCE_SECONDS:
+                    overlapping = [s for s in sessions if s.code == code]
+            if not overlapping:
+                logger.debug(
+                    "[RACING_SEGMENTS] Dropping '%s': EPG slot [%s..%s] covers "
+                    "no session of event '%s'",
+                    stream_name[:60],
+                    prog_start,
+                    prog_end,
+                    event.name,
+                )
+                continue
+            sessions = overlapping
         else:
             # Providers frequently don't carry a dedicated practice feed at
             # all (coverage often starts at qualifying), so a generic

@@ -7,6 +7,7 @@ regression-prone path (cf. #157): a team-sport stream that leaks into a
 racing-dominant group must NOT be hijacked as a race.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -26,6 +27,7 @@ from teamarr.consumers.racing_segments import (
     _session_duration_hours,
     _session_in_category,
     expand_racing_segments,
+    nearest_session,
 )
 from teamarr.services.detection_keywords import DetectionKeywordService
 
@@ -840,14 +842,18 @@ def test_expand_racing_segments_scopes_unnumbered_trailing_practice_stream():
     assert [m["segment"] for m in out] == ["practice"]
 
 
-def test_expand_racing_segments_falls_back_when_no_session_of_the_category_exists():
-    # Defensive: a hint that doesn't match anything in THIS event's sessions
-    # must not silently produce zero segments for a real matched stream.
+def test_expand_racing_segments_drops_stream_when_no_session_of_the_category_exists():
+    # Live false positive (Grand Prix of Nashville, 2026-07-17): ESPN's
+    # IndyCar events carry only the race session, so dedicated "Practice 1:"
+    # and "Qualifying:" streams found no session of their category and the
+    # old fallback fanned them out to everything — all three landed as
+    # sources on the Race channel. A stream that names a session category
+    # the event doesn't have must be dropped, not rebound to other sessions.
     sessions = [s for s in _wec_sessions() if s.code != "fp3"]
     matched = [{"stream": {"id": 1, "name": "AU (STAN) | Free Practice 3: 6 Hours of Sao Paulo"},
                 "event": _wec_event(sessions)}]
     out = expand_racing_segments(matched)
-    assert len(out) == len(sessions)
+    assert out == []
 
 
 def test_expand_racing_segments_produces_no_channel_when_only_practice_exists():
@@ -861,3 +867,347 @@ def test_expand_racing_segments_produces_no_channel_when_only_practice_exists():
     matched = [{"stream": {"id": 1, "name": "TSN+ 016"}, "event": _wec_event(sessions)}]
     out = expand_racing_segments(matched)
     assert out == []
+
+
+# ---------------------------------------------------------------------------
+# RacingMatcher EPG-path match date: a programme's own broadcast date, not the
+# run's target_date, decides which race weekend it can bind to.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _FakeRacingEvent:
+    """dataclass (not SimpleNamespace) so _cache_result's asdict() works."""
+
+    id: str
+    name: str
+    short_name: str
+    circuit_name: str
+    league: str
+    sport: str
+    start_time: datetime
+    sessions: list
+    venue: object = None
+
+
+class _FakeMatchCache:
+    def __init__(self):
+        self.set_calls = []
+
+    def get(self, *args, **kwargs):
+        return None
+
+    def touch(self, *args, **kwargs):
+        pass
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    def set(self, **kwargs):
+        self.set_calls.append(kwargs)
+
+
+class _FakeSportsService:
+    def __init__(self, events):
+        self._events = events
+        self.requested_dates = []
+
+    def get_provider_name(self, league):
+        return "espn"
+
+    def get_events(self, league, target_date, cache_only=False):
+        self.requested_dates.append(target_date)
+        return self._events
+
+
+def _racing_session2(code, start_time):
+    return SimpleNamespace(code=code, start_time=start_time)
+
+
+def _belgian_gp():
+    fp1 = datetime(2026, 7, 17, 11, 30, tzinfo=UTC)
+    race = datetime(2026, 7, 19, 13, 0, tzinfo=UTC)
+    return _FakeRacingEvent(
+        id="espn_f1_belgium_2026",
+        name="Belgian Grand Prix",
+        short_name="Belgian Grand Prix",
+        circuit_name="Circuit de Spa-Francorchamps",
+        league="f1",
+        sport="racing",
+        start_time=fp1,
+        sessions=[_racing_session2("fp1", fp1), _racing_session2("race", race)],
+    )
+
+
+def _match_belgian_gp(anchor_dt):
+    event = _belgian_gp()
+    service = _FakeSportsService([event])
+    matcher = RacingMatcher(service=service, cache=_FakeMatchCache())
+    classified = classify_stream(
+        "Formula 1 | Belgian Grand Prix: 1st Practice", league_event_type="event"
+    )
+    assert classified.category == StreamCategory.RACING_EVENT
+    assert classified.normalized.extracted_date is None  # premise: no date in text
+    outcome = matcher.match(
+        classified=classified,
+        league="f1",
+        target_date=date(2026, 7, 16),  # Thursday's run, weekend starts Friday
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=ZoneInfo("America/Chicago"),
+        anchor_dt=anchor_dt,
+    )
+    return outcome, service
+
+
+def test_epg_programme_matches_by_its_own_broadcast_date():
+    # Friday 11:00 UTC guide slot, 30 min before FP1 — inside anchor tolerance.
+    outcome, service = _match_belgian_gp(anchor_dt=datetime(2026, 7, 17, 11, 0, tzinfo=UTC))
+    assert outcome.is_matched and outcome.event.id == "espn_f1_belgium_2026"
+    # Events were fetched for the programme's date, not the run's.
+    assert service.requested_dates == [date(2026, 7, 17)]
+
+
+def test_name_path_still_uses_run_target_date():
+    # Without an anchor (plain stream-name path) the old fallback holds: the
+    # Thursday run date isn't covered by the weekend, so no match yet.
+    outcome, service = _match_belgian_gp(anchor_dt=None)
+    assert not outcome.is_matched
+    assert service.requested_dates == [date(2026, 7, 16)]
+
+
+# ---------------------------------------------------------------------------
+# expand_racing_segments: EPG-matched entries scope by their programme slot
+# ---------------------------------------------------------------------------
+
+
+def _belgian_sessions():
+    return [
+        SimpleNamespace(code="fp1", name="Practice 1",
+                        start_time=datetime(2026, 7, 17, 11, 30, tzinfo=UTC)),
+        SimpleNamespace(code="fp2", name="Practice 2",
+                        start_time=datetime(2026, 7, 17, 15, 0, tzinfo=UTC)),
+        SimpleNamespace(code="qualifying", name="Qualifying",
+                        start_time=datetime(2026, 7, 18, 14, 0, tzinfo=UTC)),
+        SimpleNamespace(code="race", name="Race",
+                        start_time=datetime(2026, 7, 19, 13, 0, tzinfo=UTC)),
+    ]
+
+
+def _epg_entry(prog_start, prog_end):
+    return {
+        "stream": {"id": 1, "name": "Sky Sports F1 HD"},
+        "event": _wec_event(_belgian_sessions()),
+        "match_method": "epg",
+        "epg_program_start": prog_start,
+        "epg_program_end": prog_end,
+    }
+
+
+def test_epg_entry_scopes_to_practice_session_its_programme_covers():
+    # "Live: Formula 1 | Belgian Grand Prix: 1st Practice" 11:00–12:55 UTC.
+    out = expand_racing_segments([_epg_entry(
+        datetime(2026, 7, 17, 11, 0, tzinfo=UTC),
+        datetime(2026, 7, 17, 12, 55, tzinfo=UTC),
+    )])
+    assert [m["segment"] for m in out] == ["fp1"]
+
+
+def test_epg_entry_scopes_to_race_for_race_slot():
+    out = expand_racing_segments([_epg_entry(
+        datetime(2026, 7, 19, 12, 30, tzinfo=UTC),
+        datetime(2026, 7, 19, 15, 30, tzinfo=UTC),
+    )])
+    assert [m["segment"] for m in out] == ["race"]
+
+
+def test_epg_buildup_programme_binds_to_nearest_session_within_tolerance():
+    # Pre-race build-up that ENDS before lights out (no window overlap) —
+    # the anchor gate admitted it, so it binds to the nearest session.
+    out = expand_racing_segments([_epg_entry(
+        datetime(2026, 7, 19, 11, 30, tzinfo=UTC),
+        datetime(2026, 7, 19, 12, 50, tzinfo=UTC),
+    )])
+    assert [m["segment"] for m in out] == ["race"]
+
+
+def test_epg_entry_covering_no_session_is_dropped():
+    # A slot hours from every session (stale plan entry): no channel at all
+    # beats a wrong one.
+    out = expand_racing_segments([_epg_entry(
+        datetime(2026, 7, 18, 2, 0, tzinfo=UTC),
+        datetime(2026, 7, 18, 3, 0, tzinfo=UTC),
+    )])
+    assert out == []
+
+
+def test_name_path_generic_stream_still_excludes_practice():
+    # Non-EPG entry (no match_method/window): generic fan-out minus practice,
+    # unchanged.
+    entry = {
+        "stream": {"id": 1, "name": "Sky Sports F1 HD"},
+        "event": _wec_event(_belgian_sessions()),
+    }
+    out = expand_racing_segments([entry])
+    assert {m["segment"] for m in out} == {"qualifying", "race"}
+
+
+def test_nearest_session_inside_window_is_zero_distance():
+    event = _wec_event(_belgian_sessions())
+    code, dist = nearest_session(event, datetime(2026, 7, 17, 11, 45, tzinfo=UTC))
+    assert code == "fp1" and dist == 0.0
+
+
+def test_nearest_session_picks_closest_edge():
+    event = _wec_event(_belgian_sessions())
+    # 14:40 UTC Friday: FP1 ended 12:30 (7800s away), FP2 starts 15:00 (1200s).
+    code, dist = nearest_session(event, datetime(2026, 7, 17, 14, 40, tzinfo=UTC))
+    assert code == "fp2" and dist == 1200.0
+
+
+def test_nearest_session_no_sessions():
+    event = _wec_event([])
+    code, dist = nearest_session(event, datetime(2026, 7, 17, 11, 45, tzinfo=UTC))
+    assert code is None and dist == float("inf")
+
+
+# ---------------------------------------------------------------------------
+# Session scoping: Apple-TV-PPV "<tag> | <COUNTRY>: <SESSION> | ..." names
+# ---------------------------------------------------------------------------
+
+
+class TestColonValueSessionLabels:
+    def test_apple_tv_race_stream_scopes_to_race(self):
+        assert _session_category_from_stream_name(
+            "NEXT | BELGIUM: RACE | Sun 19 Jul 11:50 UTC (UK) | 8K EXCLUSIVE "
+            "| UK: APPLE TV F1 PPV 1"
+        ) == "race"
+
+    def test_apple_tv_sprint_stream_scopes_to_sprint(self):
+        assert _session_category_from_stream_name(
+            "NEXT | NETHERLANDS: SPRINT | Sat 22 Aug 09:15 UTC (UK) | 8K EXCLUSIVE "
+            "| UK: APPLE TV F1 PPV 3"
+        ) == "sprint"
+
+    def test_session_word_embedded_in_branding_does_not_count(self):
+        # "RACING"/"Race" inside branding text is not an anchored field match.
+        assert _session_category_from_stream_name(
+            "UK ★ SKY SPORTS F1 RACING HD"
+        ) is None
+        assert _session_category_from_stream_name(
+            "US: Racecourse Network | Live: Horse Coverage"
+        ) is None
+
+    def test_timestamp_colons_do_not_confuse_field_scan(self):
+        # "11:50" splits into non-session fields; a generic linear name with
+        # times must keep the full fan-out.
+        assert _session_category_from_stream_name(
+            "HBO UK 065 | Live 11:50 | Grand Prix Coverage"
+        ) is None
+
+
+def test_expand_scopes_apple_tv_race_stream_to_race_only():
+    # Live: "NEXT | BELGIUM: RACE ..." PPV streams (name-path matches) were
+    # fanned out generically and landed as full-life sources on the
+    # Qualifying channel too.
+    entry = {
+        "stream": {"id": 1, "name": "NEXT | BELGIUM: RACE | Sun 19 Jul 11:50 UTC (UK) "
+                   "| 8K EXCLUSIVE | UK: APPLE TV F1 PPV 1"},
+        "event": _wec_event(_belgian_sessions()),
+    }
+    out = expand_racing_segments([entry])
+    assert [m["segment"] for m in out] == ["race"]
+
+
+# ---------------------------------------------------------------------------
+# RacingMatcher season-year gate: archival replays name the wrong year
+# ---------------------------------------------------------------------------
+
+
+def _match_named_stream(name, anchor_dt):
+    event = _belgian_gp()
+    service = _FakeSportsService([event])
+    matcher = RacingMatcher(service=service, cache=_FakeMatchCache())
+    classified = classify_stream(name, league_event_type="event")
+    assert classified.category == StreamCategory.RACING_EVENT
+    return matcher.match(
+        classified=classified,
+        league="f1",
+        target_date=date(2026, 7, 19),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=ZoneInfo("America/Chicago"),
+        anchor_dt=anchor_dt,
+    )
+
+
+def test_archival_replay_naming_old_year_is_rejected():
+    # Live (Plex FAST "F1 Channel"): "2008 Belgian Grand Prix" aired 33 min
+    # into 2026 qualifying — inside anchor tolerance, racing text evidence,
+    # near-perfect fuzzy score. The year is the tell.
+    out = _match_named_stream(
+        "2008 Belgian Grand Prix", datetime(2026, 7, 19, 13, 33, tzinfo=UTC)
+    )
+    assert not out.is_matched
+    assert "archival" in (out.detail or "")
+
+
+def test_last_years_replay_is_rejected():
+    out = _match_named_stream(
+        "F1 2025 Belgium Grand Prix", datetime(2026, 7, 19, 13, 33, tzinfo=UTC)
+    )
+    assert not out.is_matched
+
+
+def test_current_year_in_text_still_matches():
+    out = _match_named_stream(
+        "Formula 1 2026: Belgian Grand Prix Race", datetime(2026, 7, 19, 13, 0, tzinfo=UTC)
+    )
+    assert out.is_matched
+
+
+def test_no_year_in_text_is_unaffected():
+    out = _match_named_stream(
+        "Live: Formula 1 | Belgian Grand Prix: Race", datetime(2026, 7, 19, 13, 0, tzinfo=UTC)
+    )
+    assert out.is_matched
+
+
+def test_resolution_tokens_do_not_read_as_years():
+    # "2160P" must not be treated as a season year and veto the match.
+    out = _match_named_stream(
+        "NOW: BELGIAN GRAND PRIX RACE 2160P", datetime(2026, 7, 19, 13, 0, tzinfo=UTC)
+    )
+    assert out.is_matched
+
+
+# ---------------------------------------------------------------------------
+# Compound-word spelling tolerance in fuzzy scoring
+# ---------------------------------------------------------------------------
+
+
+def test_compound_spelling_mismatch_still_matches():
+    # Live (NASCAR Trucks, FaithFest 250): the guide writes "Faith Fest 250"
+    # but the provider event is "FaithFest 250 presented by Mercer
+    # Transportation" — plain token scoring shares only "250" and lands under
+    # the 50 sanity threshold, so the qualifying broadcast never matched.
+    a = _event("a", "FaithFest 250 presented by Mercer Transportation",
+               circuit="North Wilkesboro Speedway")
+    out = _matcher()._match_to_event(
+        _ctx("NASCAR Craftsman Truck Series | Faith Fest 250, Qualifying"),
+        [a], "nascar-truck",
+    )
+    assert out.is_matched and out.event.id == "a"
+
+
+def test_unrelated_stream_still_rejected_with_augmentation():
+    # The augmented pass must not rescue unrelated pairs: same FIM Speedway
+    # guard as above, still rejected.
+    a = _event("a", "Focused Health 250", circuit="Atlanta Motor Speedway")
+    out = _matcher()._match_to_event(
+        _ctx("HBO UK 047 | Malilla - FIM Speedway GP | Round 6 | Malilla"),
+        [a], "nascar-xfinity",
+    )
+    assert not out.is_matched

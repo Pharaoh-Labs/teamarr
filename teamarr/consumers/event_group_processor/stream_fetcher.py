@@ -80,6 +80,9 @@ class StreamFetcher:
                     "name": s.name,
                     "tvg_id": s.tvg_id,
                     "tvg_name": s.tvg_name,
+                    # Loopback EPG resolution reads the source-channel uuid
+                    # out of Dispatcharr-proxy URLs (see epg_resolver).
+                    "url": s.url,
                     "channel_group": s.channel_group,
                     "channel_group_id": s.channel_group_id,
                     "m3u_account_id": s.m3u_account_id,
