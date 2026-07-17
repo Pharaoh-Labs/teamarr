@@ -58,6 +58,25 @@ Click **Matched** numbers to see which streams matched to which events. Click th
 
 Click **Import** to pull stream groups from your Dispatcharr M3U accounts. Teamarr shows available groups with stream counts. Select the groups you want and they'll be created as sources with default settings.
 
+## Binding by Name Pattern
+
+Some IPTV providers rotate group names — `EPL (MW1)` becomes `EPL (MW2)`, dated tournament groups come and go. Dispatcharr matches M3U groups by exact name, so a provider rename always creates a **new** group and a source pinned to the old one silently stops finding streams.
+
+**Bind by name pattern** (in the source's Basic Settings) makes the source rename-proof: instead of the pinned group, the source binds to a regular expression over live M3U group names, re-resolved on every generation run. A pattern like `EPL \(MW\d+\)` keeps matching no matter which matchweek the provider is on. If the pattern matches several groups at once, the source scans all of them (scoped to its M3U account), and while a renamed group's old and new versions briefly coexist, stale streams from the old one are filtered out automatically.
+
+The editor shows a live **"Matches N groups"** preview as you type. A pattern that matches nothing means the source is treated as stale — same as a missing pinned group.
+
+A stale pattern never deletes your channels: when it matches nothing, the source simply skips the run and existing channels stay until their normal post-event expiry. If the pattern still matches *some* groups but misses one (say a rename escaped your regex), streams from the missed group are treated like streams removed from the M3U — they're detached on the next run, and a channel is removed only once no streams are left on it.
+
+### Re-bind Suggestions
+
+When a source goes stale, Teamarr scans the live M3U groups for a likely rename — an unused group whose name closely matches the old one — and offers it right in the stale-sources banner:
+
+- **Re-bind** — one click pins the source to the new group (and turns pattern binding off, so the pin is what's actually used).
+- **Re-bind + pattern** — also derives a pattern from the old/new name difference (`EPL (MW1)` → `EPL (MW2)` suggests `^EPL \(MW\d+\)$`) and enables pattern binding with it, so the *next* rename re-binds automatically.
+
+Suggestions are never applied silently — the suggested pattern is shown before you click, and you can always fine-tune it later in the source editor with the live match preview. Re-binding only updates the source's binding; existing channels are untouched.
+
 ## Stream Matching Pipeline
 
 When EPG generation runs, each stream goes through:

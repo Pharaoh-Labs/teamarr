@@ -408,6 +408,14 @@ class StreamMatcher:
         # Load league event types
         self._load_league_event_types()
 
+        # Learn the source's date format from the whole batch (#474): the
+        # custom date regex describes where the date lives; the batch shows
+        # how it's formatted (one 16/07 proves the source is day-first).
+        if self._custom_regex is not None:
+            self._custom_regex.learn_date_format(
+                s.get("name", "") for s in streams
+            )
+
         # Prefetch events for multi-league matching (significant performance boost)
         # This fetches events ONCE for all streams instead of per-stream
         if len(self._search_leagues) > 1:

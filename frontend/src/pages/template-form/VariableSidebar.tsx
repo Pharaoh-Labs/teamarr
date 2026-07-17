@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react"
-import { Search, X, FileText, User, Tv, Clock } from "lucide-react"
+import { Search, X, FileText, User, Tv, Clock, MousePointerClick } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
+import { RichTooltip } from "@/components/ui/rich-tooltip"
 import type { VariableSidebarProps, Variable } from "./types"
 
 // Local storage key for recently used variables
@@ -27,6 +28,21 @@ function addToRecentlyUsed(varName: string) {
   }
 }
 
+// Sample value for a variable's tooltip: exact name first, then any suffixed
+// form the samples map carries (e.g. game_time has samples under
+// "game_time.next").
+function lookupSample(
+  samples: Record<string, string> | undefined,
+  v: Variable,
+): string | null {
+  if (!samples) return null
+  if (samples[v.name]) return samples[v.name]
+  for (const s of v.suffixes) {
+    if (s !== "base" && samples[`${v.name}${s}`]) return samples[`${v.name}${s}`]
+  }
+  return null
+}
+
 // Determine suffix class for color coding
 function getSuffixClass(suffixes: string[]): string {
   if (suffixes.length === 1) {
@@ -41,7 +57,13 @@ function getSuffixClass(suffixes: string[]): string {
   return "var-all" // default
 }
 
-export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeamTemplate }: VariableSidebarProps) {
+export function VariableSidebar({
+  categories,
+  onInsert,
+  lastFocusedField,
+  isTeamTemplate,
+  samples,
+}: VariableSidebarProps) {
   const [search, setSearch] = useState("")
   const [expandedCat, setExpandedCat] = useState<string | null>(null)
   const [recentlyUsed, setRecentlyUsed] = useState<string[]>(() => getRecentlyUsed())
@@ -139,6 +161,15 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
           </span>
         </div>
 
+        {/* Insert affordance: chips are disabled until a field has focus —
+            say so instead of silently ignoring clicks (#459). */}
+        {!lastFocusedField && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded border border-dashed border-border text-xs text-muted-foreground">
+            <MousePointerClick className="h-3.5 w-3.5 shrink-0" />
+            Click into a template field to insert variables
+          </div>
+        )}
+
         {/* Suffix Guide (team templates only) */}
         {isTeamTemplate ? (
           <div className="p-2 bg-secondary/30 rounded border border-border text-xs space-y-2">
@@ -202,15 +233,25 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
                 if (!v) return null
                 const suffix = varName.includes(".next") ? ".next" : varName.includes(".last") ? ".last" : "base"
                 return (
-                  <button
+                  <RichTooltip
                     key={varName}
-                    type="button"
-                    onClick={() => handleInsert(baseVar, suffix === "base" ? undefined : suffix)}
+                    side="top"
+                    content={
+                      <div className="space-y-1.5 text-xs">
+                        <div className="text-muted-foreground">{v.description}</div>
+                      </div>
+                    }
                     disabled={!lastFocusedField}
-                    className="px-2 py-1 text-[11px] font-mono rounded bg-secondary/50 hover:bg-primary/20 text-primary transition-colors disabled:opacity-50"
                   >
-                    {`{${varName}}`}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsert(baseVar, suffix === "base" ? undefined : suffix)}
+                      disabled={!lastFocusedField}
+                      className="px-2 py-1 text-[11px] font-mono rounded bg-secondary/50 hover:bg-primary/20 text-primary transition-colors disabled:opacity-50"
+                    >
+                      {`{${varName}}`}
+                    </button>
+                  </RichTooltip>
                 )
               })}
             </div>
@@ -239,25 +280,43 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
                       ? `${v.name}${v.suffixes[0]}`
                       : v.name
                     : v.name
+                  const sample = lookupSample(samples, v)
 
                   return (
-                    <button
+                    <RichTooltip
                       key={v.name}
-                      type="button"
-                      onClick={(e) => handleVariableClick(e, v)}
+                      side="top"
+                      content={
+                        <div className="space-y-1.5 text-xs">
+                          <div className="font-mono font-semibold text-primary">{`{${displayName}}`}</div>
+                          <div className="text-muted-foreground">{v.description}</div>
+                          {sample && (
+                            <div className="pt-1 border-t border-border">
+                              <span className="text-muted-foreground">e.g. </span>
+                              <span className="font-medium">{sample}</span>
+                            </div>
+                          )}
+                        </div>
+                      }
                       disabled={!lastFocusedField}
-                      title={v.description}
-                      className={`
-                        px-2 py-1 text-[11px] font-mono rounded border transition-colors
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                        ${suffixClass === "var-all" ? "bg-blue-500/15 border-blue-500/30 text-blue-400 hover:bg-blue-500/30 hover:text-white hover:border-blue-500" : ""}
-                        ${suffixClass === "var-base" ? "bg-gray-500/15 border-gray-500/30 text-gray-400 hover:bg-gray-500/30 hover:text-white hover:border-gray-500" : ""}
-                        ${suffixClass === "var-next" ? "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/30 hover:text-white hover:border-green-500" : ""}
-                        ${suffixClass === "var-last" ? "bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/30 hover:text-white hover:border-red-500" : ""}
-                      `}
                     >
-                      {displayName}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleVariableClick(e, v)}
+                        disabled={!lastFocusedField}
+                        title={lastFocusedField ? undefined : v.description}
+                        className={`
+                          px-2 py-1 text-[11px] font-mono rounded border transition-colors
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          ${suffixClass === "var-all" ? "bg-blue-500/15 border-blue-500/30 text-blue-400 hover:bg-blue-500/30 hover:text-white hover:border-blue-500" : ""}
+                          ${suffixClass === "var-base" ? "bg-gray-500/15 border-gray-500/30 text-gray-400 hover:bg-gray-500/30 hover:text-white hover:border-gray-500" : ""}
+                          ${suffixClass === "var-next" ? "bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/30 hover:text-white hover:border-green-500" : ""}
+                          ${suffixClass === "var-last" ? "bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/30 hover:text-white hover:border-red-500" : ""}
+                        `}
+                      >
+                        {displayName}
+                      </button>
+                    </RichTooltip>
                   )
                 })}
               </div>
@@ -290,15 +349,15 @@ export function VariableSidebar({ categories, onInsert, lastFocusedField, isTeam
                     onClick={() => handleInsert(suffixPopup.varName, suffix)}
                     className={`
                       w-full px-2 py-1 text-left rounded transition-colors flex items-center gap-2
-                      ${suffix === "base" ? "hover:bg-emerald-500/20" : ""}
-                      ${suffix === ".next" ? "hover:bg-blue-500/20" : ""}
-                      ${suffix === ".last" ? "hover:bg-amber-500/20" : ""}
+                      ${suffix === "base" ? "hover:bg-gray-500/20" : ""}
+                      ${suffix === ".next" ? "hover:bg-green-500/20" : ""}
+                      ${suffix === ".last" ? "hover:bg-red-500/20" : ""}
                     `}
                   >
                     <code className={`text-xs font-mono font-semibold whitespace-nowrap
-                      ${suffix === "base" ? "text-emerald-400" : ""}
-                      ${suffix === ".next" ? "text-blue-400" : ""}
-                      ${suffix === ".last" ? "text-amber-400" : ""}
+                      ${suffix === "base" ? "text-gray-400" : ""}
+                      ${suffix === ".next" ? "text-green-400" : ""}
+                      ${suffix === ".last" ? "text-red-400" : ""}
                     `}>
                       {`{${varText}}`}
                     </code>

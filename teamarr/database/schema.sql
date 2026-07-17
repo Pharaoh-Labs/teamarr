@@ -439,30 +439,29 @@ CREATE TABLE IF NOT EXISTS settings (
         CHECK(feed_label_style IN ('team_name', 'short_name', 'home_away')),
 
     -- Emby Integration (Live TV Guide Refresh)
+    -- emby_servers is a JSON list of {name, url, username, password, api_key}
+    -- entries (#471 multi-server fan-out). Pre-v83 scalar columns may linger
+    -- in upgraded databases; they are unread.
     emby_enabled BOOLEAN DEFAULT 0,
-    emby_url TEXT,
-    emby_username TEXT,
-    emby_password TEXT,
-    emby_api_key TEXT,
+    emby_servers JSON,
 
     -- Jellyfin Integration (Live TV Guide Refresh)
+    -- jellyfin_servers: same shape as emby_servers (#471)
     jellyfin_enabled BOOLEAN DEFAULT 0,
-    jellyfin_url TEXT,
-    jellyfin_username TEXT,
-    jellyfin_password TEXT,
-    jellyfin_api_key TEXT,
+    jellyfin_servers JSON,
 
     -- Channels DVR Integration (M3U Source + XMLTV Lineup Refresh)
     -- Local API is unauthenticated by Channels DVR design; no credentials stored.
-    -- channelsdvr_lineup_id refreshes the XMLTV guide; without it CDVR
-    -- updates channels but leaves the EPG stale.
+    -- channelsdvr_servers is a JSON list of {name, url, source_name, lineup_id}
+    -- entries (#381 multi-server fan-out); each lineup_id refreshes that
+    -- server's XMLTV guide — without it CDVR updates channels but leaves the
+    -- EPG stale. Pre-v82 scalar columns (channelsdvr_url/source_name/lineup_id)
+    -- may linger in upgraded databases; they are unread.
     channelsdvr_enabled BOOLEAN DEFAULT 0,
-    channelsdvr_url TEXT,
-    channelsdvr_source_name TEXT,
-    channelsdvr_lineup_id TEXT,
+    channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 81
+    schema_version INTEGER DEFAULT 83
 );
 
 -- Insert default settings
@@ -526,6 +525,14 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     m3u_group_name TEXT,
     m3u_account_id INTEGER,                  -- Dispatcharr M3U account ID
     m3u_account_name TEXT,                   -- M3U account name for display
+
+    -- Group-name pattern binding (#450): when enabled, the source is bound to a
+    -- regex over live M3U group NAMES instead of the pinned m3u_group_id. The
+    -- pattern re-resolves to live group ids at stream-fetch time, so provider
+    -- renames (which always spawn a NEW Dispatcharr group id) re-bind
+    -- automatically. Scope: M3U-provided groups only.
+    m3u_group_name_pattern TEXT,
+    m3u_group_name_pattern_enabled BOOLEAN DEFAULT 0,
 
     -- Stale-source detection (lylt): a group is "stale" when its M3U source
     -- channel-group no longer exists in Dispatcharr (deleted/renamed). Distinct

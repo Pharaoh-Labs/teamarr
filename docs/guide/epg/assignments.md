@@ -25,9 +25,11 @@ When generating EPG, Teamarr checks the event's league first, then its sport, th
 
 ## Managing Assignments
 
-Go to **Event Groups > Global Defaults** and click **Manage** next to "Template Assignments".
+The central manager lives at the bottom of **EPG > Templates** ("Template Assignments"). It shows every rule across all templates side by side — use it to spot overlaps and resolve which template wins.
 
-The assignment modal shows:
+Each template's editor also has an **Assignments** tab showing the picture from that template's point of view: the rules that assign it (with quick add/edit/delete scoped to that template), or — for team templates — the followed teams currently using it (per-team assignment stays on the Teams page).
+
+The central manager shows:
 
 - Current assignment rules listed in priority order
 - Each rule has a **Template** dropdown, a **Sports** multi-select filter, and a **Leagues** multi-select filter

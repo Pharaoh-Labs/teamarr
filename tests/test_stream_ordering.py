@@ -120,6 +120,33 @@ class TestEPGMatch:
         assert svc.compute_priority(self._epg_stream("epg")) == 1
         assert svc.compute_priority(self._epg_stream("fuzzy")) == 50
 
+    def test_stream_type_excludes_epg_matched_streams(self):
+        # Event/team/EPG are one mutually-exclusive Stream Type select in the
+        # UI — an EPG-matched stream must never fall into an event or team
+        # band (#448).
+        svc = StreamOrderingService([StreamOrderingRule("stream_type", "event", 1)])
+        assert svc.compute_priority(self._epg_stream("epg")) == NO_MATCH_PRIORITY
+
+        team_epg = ManagedChannelStream(
+            id=1, managed_channel_id=1, dispatcharr_stream_id=1,
+            stream_name="ESPN", match_type="team", match_method="epg",
+        )
+        svc = StreamOrderingService([StreamOrderingRule("stream_type", "team", 1)])
+        assert svc.compute_priority(team_epg) == NO_MATCH_PRIORITY
+
+    def test_event_rule_above_epg_rule_does_not_capture_epg_streams(self):
+        # The #448 repro: rules prioritizing event matches above EPG matches.
+        # EPG-matched streams must land in the EPG band, name matches in the
+        # event band.
+        rules = [
+            StreamOrderingRule("stream_type", "event", 1),
+            StreamOrderingRule("epg_match", "", 2),
+        ]
+        svc = StreamOrderingService(rules)
+        assert svc.compute_priority(self._epg_stream("epg")) == 2
+        assert svc.compute_priority(self._epg_stream("fuzzy")) == 1
+        assert svc.compute_priority(self._epg_stream(None)) == 1
+
 
 class TestDispatcharrGroup:
     def _stream(self, dp_group):

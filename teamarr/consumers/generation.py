@@ -449,193 +449,84 @@ def run_full_generation(
             )
         timer.mark("dispatcharr_epg_refresh")
 
-        # Step 5b: Emby Live TV guide refresh
+        # Steps 5b-5d: media-server guide refreshes — Emby, Jellyfin, and
+        # Channels DVR servers ALL refresh in parallel (#471). They are
+        # independent HTTP targets; per-server failures are isolated and
+        # non-blocking, and one slow/offline server never delays the rest.
         check_cancelled()
         try:
-            from teamarr.database.settings import get_emby_settings
+            from teamarr.database.settings import (
+                get_channelsdvr_settings,
+                get_emby_settings,
+                get_jellyfin_settings,
+            )
 
             with db_factory() as conn:
                 emby_settings = get_emby_settings(conn)
-
-            if emby_settings.enabled and emby_settings.url:
-                update_progress("emby", 97, "Refreshing Emby guide...")
-
-                client = EmbyClient(
-                    base_url=emby_settings.url,
-                    username=emby_settings.username or "",
-                    password=emby_settings.password or "",
-                    api_key=emby_settings.api_key,
-                )
-
-                def on_emby_progress(pct):
-                    update_progress(
-                        "emby", 97, f"Refreshing Emby guide... {pct:.0f}%"
-                    )
-
-                emby_result = client.trigger_guide_refresh(
-                    timeout=300,
-                    on_progress=on_emby_progress,
-                    cancellation_check=is_cancellation_requested,
-                )
-                result.emby_refresh = emby_result
-                if emby_result.get("success"):
-                    logger.info(
-                        "[EMBY] Guide refresh completed in %.1fs",
-                        emby_result.get("duration", 0),
-                    )
-                else:
-                    logger.warning(
-                        "[EMBY] Guide refresh failed: %s",
-                        emby_result.get("message"),
-                    )
-        except Exception as e:
-            logger.warning("[EMBY] Guide refresh failed (non-blocking): %s", e)
-            result.emby_refresh = {"success": False, "error": str(e)}
-
-        # Step 5c: Jellyfin Live TV guide refresh
-        check_cancelled()
-        try:
-            from teamarr.database.settings import get_jellyfin_settings
-
-            with db_factory() as conn:
                 jellyfin_settings = get_jellyfin_settings(conn)
-
-            if jellyfin_settings.enabled and jellyfin_settings.url:
-                update_progress("jellyfin", 97, "Refreshing Jellyfin guide...")
-
-                client = JellyfinClient(
-                    base_url=jellyfin_settings.url,
-                    username=jellyfin_settings.username or "",
-                    password=jellyfin_settings.password or "",
-                    api_key=jellyfin_settings.api_key,
-                )
-
-                def on_jellyfin_progress(pct):
-                    update_progress(
-                        "jellyfin", 97, f"Refreshing Jellyfin guide... {pct:.0f}%"
-                    )
-
-                jellyfin_result = client.trigger_guide_refresh(
-                    timeout=300,
-                    on_progress=on_jellyfin_progress,
-                    cancellation_check=is_cancellation_requested,
-                )
-                result.jellyfin_refresh = jellyfin_result
-                if jellyfin_result.get("success"):
-                    logger.info(
-                        "[JELLYFIN] Guide refresh completed in %.1fs",
-                        jellyfin_result.get("duration", 0),
-                    )
-                else:
-                    logger.warning(
-                        "[JELLYFIN] Guide refresh failed: %s",
-                        jellyfin_result.get("message"),
-                    )
-        except Exception as e:
-            logger.warning("[JELLYFIN] Guide refresh failed (non-blocking): %s", e)
-            result.jellyfin_refresh = {"success": False, "error": str(e)}
-
-        # Step 5d: Channels DVR M3U source + XMLTV lineup refresh
-        # CDVR splits channel-list and EPG into two providers — without the
-        # lineup PUT the channels are fresh but the guide is stale.
-        check_cancelled()
-        try:
-            from teamarr.database.settings import get_channelsdvr_settings
-
-            with db_factory() as conn:
                 channelsdvr_settings = get_channelsdvr_settings(conn)
 
-            if not (channelsdvr_settings.enabled and channelsdvr_settings.url):
-                pass  # integration off or unconfigured — nothing to do
-            else:
+            jobs: list[tuple[str, Any]] = []
+            if emby_settings.enabled:
+                jobs += [("emby", s) for s in emby_settings.servers if s.url]
+            if jellyfin_settings.enabled:
+                jobs += [("jellyfin", s) for s in jellyfin_settings.servers if s.url]
+            if channelsdvr_settings.enabled:
+                jobs += [("channelsdvr", s) for s in channelsdvr_settings.servers if s.url]
 
-                # The client derives lineup_id as "XMLTV-<source_name>" when no
-                # lineup is explicitly configured, so the guide refresh fires
-                # even if the user only set the M3U source.
-                client = ChannelsDVRClient(
-                    base_url=channelsdvr_settings.url,
-                    source_name=channelsdvr_settings.source_name or "",
-                    lineup_id=channelsdvr_settings.lineup_id or "",
+            if jobs:
+                update_progress(
+                    "media_servers", 97,
+                    f"Refreshing {len(jobs)} media server(s) in parallel...",
+                )
+                outcomes = _run_media_server_refreshes(
+                    jobs, update_progress, is_cancellation_requested
                 )
 
-                if not (client.source_name or client.lineup_id):
-                    logger.warning(
-                        "[CHANNELSDVR] Enabled but no source name or XMLTV lineup "
-                        "configured — nothing to refresh. Set a source name "
-                        "(and optionally a lineup) in Settings."
-                    )
-                else:
-                    # Sequence the two refreshes on real evidence: wait for the
-                    # M3U channel-list refresh to actually finish before firing
-                    # the guide PUT, so the guide doesn't index against a stale
-                    # channel list. Both waits poll CDVR /log (see client docs).
-                    if client.source_name:
-                        update_progress(
-                            "channelsdvr", 97, "Refreshing Channels DVR channels..."
-                        )
-                        m3u_result = client.trigger_m3u_refresh(
-                            timeout=60, wait_for_completion=bool(client.lineup_id)
-                        )
-                        result.channelsdvr_refresh = m3u_result
-                        if m3u_result.get("success"):
-                            logger.info(
-                                "[CHANNELSDVR] M3U refresh triggered in %.1fs (completion: %s)",
-                                m3u_result.get("duration", 0),
-                                m3u_result.get("completed", "not awaited"),
-                            )
-                        else:
-                            logger.warning(
-                                "[CHANNELSDVR] M3U refresh failed: %s",
-                                m3u_result.get("message"),
-                            )
+                emby_results = [
+                    {"server": label, **o["guide"]}
+                    for kind, label, o in outcomes
+                    if kind == "emby" and o.get("guide") is not None
+                ]
+                if emby_results:
+                    result.emby_refresh = {
+                        "success": all(r.get("success") for r in emby_results),
+                        "servers": emby_results,
+                    }
 
-                    if client.lineup_id:
-                        if client.lineup_derived:
-                            logger.info(
-                                "[CHANNELSDVR] No XMLTV lineup configured; "
-                                "derived '%s' from source '%s'",
-                                client.lineup_id,
-                                client.source_name,
-                            )
-                        update_progress(
-                            "channelsdvr", 97, "Refreshing Channels DVR guide..."
-                        )
-                        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
-                        result.channelsdvr_epg_refresh = epg_result
-                        if not epg_result.get("success"):
-                            logger.warning(
-                                "[CHANNELSDVR] EPG refresh failed: %s",
-                                epg_result.get("message"),
-                            )
-                        else:
-                            verification = epg_result.get("verification") or {}
-                            status = verification.get("status")
-                            if status == "no_fetch":
-                                logger.warning(
-                                    "[CHANNELSDVR] EPG refresh accepted but guide "
-                                    "'%s' was not re-fetched — guide may be stale",
-                                    client.lineup_id,
-                                )
-                            else:
-                                logger.info(
-                                    "[CHANNELSDVR] EPG refresh for lineup '%s' in "
-                                    "%.1fs (verification: %s)",
-                                    client.lineup_id,
-                                    epg_result.get("duration", 0),
-                                    status or "not verified",
-                                )
-                    else:
-                        logger.warning(
-                            "[CHANNELSDVR] Skipping EPG/guide refresh: no XMLTV "
-                            "lineup configured and none could be derived (set a "
-                            "source name so the lineup can be inferred). The "
-                            "guide will stay stale until refreshed manually."
-                        )
+                jellyfin_results = [
+                    {"server": label, **o["guide"]}
+                    for kind, label, o in outcomes
+                    if kind == "jellyfin" and o.get("guide") is not None
+                ]
+                if jellyfin_results:
+                    result.jellyfin_refresh = {
+                        "success": all(r.get("success") for r in jellyfin_results),
+                        "servers": jellyfin_results,
+                    }
+
+                cdvr_m3u = [
+                    {"server": label, **o["m3u"]}
+                    for kind, label, o in outcomes
+                    if kind == "channelsdvr" and o.get("m3u") is not None
+                ]
+                if cdvr_m3u:
+                    result.channelsdvr_refresh = {
+                        "success": all(r.get("success") for r in cdvr_m3u),
+                        "servers": cdvr_m3u,
+                    }
+                cdvr_epg = [
+                    {"server": label, **o["epg"]}
+                    for kind, label, o in outcomes
+                    if kind == "channelsdvr" and o.get("epg") is not None
+                ]
+                if cdvr_epg:
+                    result.channelsdvr_epg_refresh = {
+                        "success": all(r.get("success") for r in cdvr_epg),
+                        "servers": cdvr_epg,
+                    }
         except Exception as e:
-            logger.warning(
-                "[CHANNELSDVR] Refresh failed (non-blocking): %s", e
-            )
-            result.channelsdvr_refresh = {"success": False, "error": str(e)}
+            logger.warning("[MEDIA_SERVERS] Refresh failed (non-blocking): %s", e)
         timer.mark("media_server_refresh")
 
         # Step 6: Process scheduled deletions (98-99%)
@@ -756,6 +647,204 @@ def run_full_generation(
         _generation_lock.release()
 
     return result
+
+
+def _run_media_server_refreshes(
+    jobs: list[tuple[str, Any]],
+    update_progress: Callable[..., None],
+    is_cancellation_requested: Callable[[], bool],
+) -> list[tuple[str, str, dict]]:
+    """Run every media-server refresh job concurrently (#471).
+
+    Each job is (kind, server) with kind in emby/jellyfin/channelsdvr.
+    Returns (kind, label, outcome) triples where outcome carries "guide"
+    (Emby/Jellyfin) or "m3u"/"epg" (Channels DVR) result dicts. A job that
+    raises yields a failed "guide" outcome — never an exception.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    results: list[tuple[str, str, dict]] = []
+    with ThreadPoolExecutor(
+        max_workers=min(8, len(jobs)), thread_name_prefix="media-refresh"
+    ) as pool:
+        futures = {
+            pool.submit(
+                _refresh_one_media_server,
+                kind,
+                server,
+                update_progress,
+                is_cancellation_requested,
+            ): (kind, server)
+            for kind, server in jobs
+        }
+        for future, (kind, server) in futures.items():
+            label = server.name or server.url or ""
+            try:
+                results.append((kind, label, future.result()))
+            except Exception as e:  # noqa: BLE001 — per-server isolation
+                logger.warning(
+                    "[%s] %s: refresh failed (non-blocking): %s",
+                    kind.upper(),
+                    label,
+                    e,
+                )
+                results.append(
+                    (kind, label, {"guide": {"success": False, "error": str(e)}})
+                )
+    return results
+
+
+def _refresh_one_media_server(
+    kind: str,
+    server: Any,
+    update_progress: Callable[..., None],
+    is_cancellation_requested: Callable[[], bool],
+) -> dict:
+    """Refresh a single media server (runs on a worker thread)."""
+    label = server.name or server.url or ""
+
+    if kind == "channelsdvr":
+        m3u_res, epg_res = _refresh_channelsdvr_server(
+            server,
+            label,
+            lambda msg: update_progress("channelsdvr", 97, f"{msg} ({label})"),
+        )
+        return {"m3u": m3u_res, "epg": epg_res}
+
+    title = "Emby" if kind == "emby" else "Jellyfin"
+    client_cls = EmbyClient if kind == "emby" else JellyfinClient
+    client = client_cls(
+        base_url=server.url,
+        username=server.username or "",
+        password=server.password or "",
+        api_key=server.api_key,
+    )
+
+    update_progress(kind, 97, f"Refreshing {title} guide... ({label})")
+
+    def on_progress(pct):
+        update_progress(kind, 97, f"Refreshing {title} guide... ({label}) {pct:.0f}%")
+
+    guide_result = client.trigger_guide_refresh(
+        timeout=300,
+        on_progress=on_progress,
+        cancellation_check=is_cancellation_requested,
+    )
+    if guide_result.get("success"):
+        logger.info(
+            "[%s] %s: guide refresh completed in %.1fs",
+            kind.upper(),
+            label,
+            guide_result.get("duration", 0),
+        )
+    else:
+        logger.warning(
+            "[%s] %s: guide refresh failed: %s",
+            kind.upper(),
+            label,
+            guide_result.get("message"),
+        )
+    return {"guide": guide_result}
+
+
+def _refresh_channelsdvr_server(
+    server: Any,
+    label: str,
+    progress: Callable[[str], None],
+) -> tuple[dict | None, dict | None]:
+    """Refresh one Channels DVR server's M3U source, then its XMLTV lineup.
+
+    Sequences the two refreshes on real evidence: waits for the M3U
+    channel-list refresh to actually finish before firing the guide PUT,
+    so the guide doesn't index against a stale channel list. Both waits
+    poll CDVR /log (see client docs).
+
+    Returns (m3u_result, epg_result); either is None when that phase
+    didn't run (no source / no lineup configured).
+    """
+    # The client derives lineup_id as "XMLTV-<source_name>" when no lineup
+    # is explicitly configured, so the guide refresh fires even if the
+    # user only set the M3U source.
+    client = ChannelsDVRClient(
+        base_url=server.url,
+        source_name=server.source_name or "",
+        lineup_id=server.lineup_id or "",
+    )
+
+    if not (client.source_name or client.lineup_id):
+        logger.warning(
+            "[CHANNELSDVR] %s: enabled but no source name or XMLTV lineup "
+            "configured — nothing to refresh. Set a source name "
+            "(and optionally a lineup) in Settings.",
+            label,
+        )
+        return None, None
+
+    m3u_result: dict | None = None
+    if client.source_name:
+        progress("Refreshing Channels DVR channels...")
+        m3u_result = client.trigger_m3u_refresh(
+            timeout=60, wait_for_completion=bool(client.lineup_id)
+        )
+        if m3u_result.get("success"):
+            logger.info(
+                "[CHANNELSDVR] %s: M3U refresh triggered in %.1fs (completion: %s)",
+                label,
+                m3u_result.get("duration", 0),
+                m3u_result.get("completed", "not awaited"),
+            )
+        else:
+            logger.warning(
+                "[CHANNELSDVR] %s: M3U refresh failed: %s",
+                label,
+                m3u_result.get("message"),
+            )
+
+    epg_result: dict | None = None
+    if client.lineup_id:
+        if client.lineup_derived:
+            logger.info(
+                "[CHANNELSDVR] %s: no XMLTV lineup configured; derived '%s' from source '%s'",
+                label,
+                client.lineup_id,
+                client.source_name,
+            )
+        progress("Refreshing Channels DVR guide...")
+        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
+        if not epg_result.get("success"):
+            logger.warning(
+                "[CHANNELSDVR] %s: EPG refresh failed: %s",
+                label,
+                epg_result.get("message"),
+            )
+        else:
+            verification = epg_result.get("verification") or {}
+            status = verification.get("status")
+            if status == "no_fetch":
+                logger.warning(
+                    "[CHANNELSDVR] %s: EPG refresh accepted but guide '%s' "
+                    "was not re-fetched — guide may be stale",
+                    label,
+                    client.lineup_id,
+                )
+            else:
+                logger.info(
+                    "[CHANNELSDVR] %s: EPG refresh for lineup '%s' in %.1fs (verification: %s)",
+                    label,
+                    client.lineup_id,
+                    epg_result.get("duration", 0),
+                    status or "not verified",
+                )
+    else:
+        logger.warning(
+            "[CHANNELSDVR] %s: skipping EPG/guide refresh: no XMLTV lineup "
+            "configured and none could be derived (set a source name so the "
+            "lineup can be inferred). The guide will stay stale until "
+            "refreshed manually.",
+            label,
+        )
+
+    return m3u_result, epg_result
 
 
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:

@@ -10,6 +10,8 @@ from datetime import datetime
 from threading import Lock
 from typing import Any
 
+from teamarr.utilities.tz import now_utc
+
 
 @dataclass
 class GenerationStatus:
@@ -94,7 +96,7 @@ def start_generation() -> bool:
         _status.status = "starting"
         _status.message = "Initializing EPG generation..."
         _status.percent = 0
-        _status.started_at = datetime.now()
+        _status.started_at = now_utc()
         return True
 
 
@@ -138,7 +140,7 @@ def complete_generation(result: dict) -> None:
         _status.status = "complete"
         _status.message = "EPG generation complete"
         _status.percent = 100
-        _status.completed_at = datetime.now()
+        _status.completed_at = now_utc()
         _status.result = result
 
 
@@ -149,7 +151,7 @@ def fail_generation(error: str) -> None:
         _status.status = "error"
         _status.message = f"Error: {error}"
         _status.error = error
-        _status.completed_at = datetime.now()
+        _status.completed_at = now_utc()
 
 
 def create_progress_callback(
@@ -212,4 +214,4 @@ def cancel_generation() -> None:
         _status.in_progress = False
         _status.status = "cancelled"
         _status.message = "Generation cancelled by user"
-        _status.completed_at = datetime.now()
+        _status.completed_at = now_utc()

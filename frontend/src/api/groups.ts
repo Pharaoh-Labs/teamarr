@@ -30,6 +30,7 @@ export interface StaleGroup {
   display_name: string | null
   m3u_group_id: number | null
   m3u_group_name: string | null
+  m3u_account_id: number | null
   m3u_account_name: string | null
   source_last_seen: string | null
   total_stream_count: number
@@ -39,8 +40,50 @@ export async function getStaleGroups(): Promise<StaleGroup[]> {
   return api.get("/groups/stale")
 }
 
+/** Re-bind suggestion for a stale source — a likely-renamed live group (#450). */
+export interface StaleRebindSuggestion {
+  group_id: number
+  group_name: string
+  old_group_name: string
+  candidate_group_id: number
+  candidate_group_name: string
+  similarity: number
+  suggested_pattern: string | null
+}
+
+export async function getStaleRebindSuggestions(): Promise<StaleRebindSuggestion[]> {
+  return api.get("/groups/stale/suggestions")
+}
+
+export interface GroupRebindRequest {
+  m3u_group_id: number
+  m3u_group_name: string
+  /** Adopt this name pattern in the same click (rename-proofing). */
+  pattern?: string | null
+}
+
+export async function rebindGroup(
+  groupId: number,
+  data: GroupRebindRequest
+): Promise<{ id: number }> {
+  return api.post(`/groups/${groupId}/rebind`, data)
+}
+
 export async function createGroup(data: EventGroupCreate): Promise<EventGroup> {
   return api.post("/groups", data)
+}
+
+/** Live resolution of a group-name pattern against Dispatcharr M3U groups (#450). */
+export interface GroupPatternPreview {
+  valid: boolean
+  total: number
+  matches: { id: number; name: string }[]
+}
+
+export async function previewGroupPattern(
+  pattern: string
+): Promise<GroupPatternPreview> {
+  return api.post("/groups/dispatcharr/group-pattern-preview", { pattern })
 }
 
 export async function updateGroup(
@@ -92,6 +135,61 @@ export async function getRawStreams(
   groupId: number
 ): Promise<RawStreamsResponse> {
   return api.get(`/groups/${groupId}/streams/raw`)
+}
+
+// Pipeline-truth extraction tester (#458) — runs the REAL Python extraction
+// functions server-side; the client-side JS highlighting is only approximate.
+
+export interface ExtractionPatterns {
+  teams_pattern?: string | null
+  teams_enabled?: boolean
+  date_pattern?: string | null
+  date_enabled?: boolean
+  month_pattern?: string | null
+  month_enabled?: boolean
+  day_pattern?: string | null
+  day_enabled?: boolean
+  time_pattern?: string | null
+  time_enabled?: boolean
+  league_pattern?: string | null
+  league_enabled?: boolean
+  fighters_pattern?: string | null
+  fighters_enabled?: boolean
+  event_name_pattern?: string | null
+  event_name_enabled?: boolean
+}
+
+export interface ExtractionFieldResult {
+  matched: boolean
+  values: string[]
+}
+
+export interface StreamExtractionResult {
+  stream_name: string
+  teams: ExtractionFieldResult | null
+  fighters: ExtractionFieldResult | null
+  event_name: ExtractionFieldResult | null
+  date: ExtractionFieldResult | null
+  time: ExtractionFieldResult | null
+  league: ExtractionFieldResult | null
+}
+
+export interface TestExtractionResponse {
+  results: StreamExtractionResult[]
+  pattern_errors: Record<string, string>
+  warnings: string[]
+  /** Format learned from the streams for blob date patterns (#474), e.g. "%d/%m/%Y" */
+  learned_date_format: string | null
+}
+
+export async function testExtraction(
+  streamNames: string[],
+  patterns: ExtractionPatterns
+): Promise<TestExtractionResponse> {
+  return api.post("/groups/test-extraction", {
+    stream_names: streamNames,
+    patterns,
+  })
 }
 
 export async function bulkUpdateGroups(

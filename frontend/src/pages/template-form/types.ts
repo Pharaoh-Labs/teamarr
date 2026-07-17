@@ -2,13 +2,15 @@ import type { ConditionalPreview, FillerRegisterPreview, TemplateCreate } from "
 import type { VariableCategory } from "@/api/variables"
 import type { CachedLeague } from "@/api/teams"
 
-export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv"
+export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv" | "assignments"
 
 export interface VariableSidebarProps {
   categories: VariableCategory[]
   onInsert: (varName: string) => void
   lastFocusedField: string | null
   isTeamTemplate: boolean
+  /** Variable name → sample value (from /variables/samples) for inline examples. */
+  samples?: Record<string, string>
 }
 
 /** Preview-context bar above the tabs (yk4j.10): league + live/sample. */

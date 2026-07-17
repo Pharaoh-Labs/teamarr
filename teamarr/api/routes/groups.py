@@ -29,6 +29,7 @@ from teamarr.database.groups import (
     get_group_channel_count,
     get_group_xmltv_with_metadata,
     get_stale_groups,
+    mark_group_source_seen,
     reorder_groups,
     set_group_enabled,
     update_group,
@@ -98,6 +99,9 @@ class GroupCreate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450)
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool = False
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -155,6 +159,9 @@ class GroupUpdate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450)
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool | None = None
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool | None = None
@@ -201,6 +208,7 @@ class GroupUpdate(BaseModel):
     clear_m3u_group_name: bool = False
     clear_m3u_account_id: bool = False
     clear_m3u_account_name: bool = False
+    clear_m3u_group_name_pattern: bool = False
     clear_stream_include_regex: bool = False
     clear_stream_exclude_regex: bool = False
     clear_custom_regex_teams: bool = False
@@ -240,6 +248,9 @@ class GroupResponse(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450)
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool = False
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -614,6 +625,8 @@ def list_groups(
                 m3u_group_name=g.m3u_group_name,
                 m3u_account_id=g.m3u_account_id,
                 m3u_account_name=get_account_name(g),
+                m3u_group_name_pattern=g.m3u_group_name_pattern,
+                m3u_group_name_pattern_enabled=g.m3u_group_name_pattern_enabled,
                 stream_include_regex=g.stream_include_regex,
                 stream_include_regex_enabled=g.stream_include_regex_enabled,
                 stream_exclude_regex=g.stream_exclude_regex,
@@ -726,6 +739,8 @@ def create_group(request: GroupCreate):
             m3u_group_name=request.m3u_group_name,
             m3u_account_id=request.m3u_account_id,
             m3u_account_name=request.m3u_account_name,
+            m3u_group_name_pattern=request.m3u_group_name_pattern,
+            m3u_group_name_pattern_enabled=request.m3u_group_name_pattern_enabled,
             stream_include_regex=request.stream_include_regex,
             stream_include_regex_enabled=request.stream_include_regex_enabled,
             stream_exclude_regex=request.stream_exclude_regex,
@@ -797,6 +812,8 @@ def create_group(request: GroupCreate):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=group.m3u_account_name,
+        m3u_group_name_pattern=group.m3u_group_name_pattern,
+        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1135,6 +1152,121 @@ def list_stale_groups() -> list[dict]:
         return get_stale_groups(conn)
 
 
+@router.get("/stale/suggestions")
+def list_stale_rebind_suggestions() -> list[dict]:
+    """Re-bind suggestions for stale sources (#450, the rename flywheel).
+
+    For each stale source, scans live M3U-provided Dispatcharr groups that no
+    source is bound to — scoped to the stale source's own M3U account (a
+    rename happens within one playlist) — and returns the closest name match
+    above the similarity threshold, plus a synthesized name pattern when the
+    old/new diff yields a safe one. Soft-empty when Dispatcharr is
+    unconfigured or unreachable — the stale banner must degrade, not error.
+    """
+    from teamarr.services.group_pattern import find_rebind_suggestions
+
+    conn_dc = get_dispatcharr_connection(get_db)
+    if not conn_dc:
+        return []
+    try:
+        live_groups = conn_dc.m3u.list_groups()
+    except Exception as e:
+        logger.warning("[REBIND] Could not list Dispatcharr groups: %s", e)
+        return []
+
+    with get_db() as conn:
+        stale = get_stale_groups(conn)
+        if not stale:
+            return []
+        bound = {
+            row[0]
+            for row in conn.execute(
+                "SELECT m3u_group_id FROM event_epg_groups WHERE m3u_group_id IS NOT NULL"
+            )
+        }
+
+    # Account attribution for candidate scoping: list_groups' nested account
+    # payload is version-dependent, so use the account detail endpoint per
+    # distinct stale-source account. Failed fetches stay absent from the map
+    # (those sources then get no suggestion rather than a cross-account one).
+    account_group_ids: dict[int, set[int]] = {}
+    for account_id in {
+        aid for row in stale if (aid := row.get("m3u_account_id")) is not None
+    }:
+        try:
+            counts = conn_dc.m3u.get_account_group_counts(account_id)
+        except Exception as e:
+            logger.warning("[REBIND] Could not fetch account %d groups: %s", account_id, e)
+            continue
+        if counts:
+            account_group_ids[account_id] = set(counts)
+
+    return find_rebind_suggestions(stale, live_groups, bound, account_group_ids)
+
+
+class GroupRebindRequest(BaseModel):
+    """One-click re-bind of a stale source to its renamed Dispatcharr group (#450)."""
+
+    m3u_group_id: int
+    m3u_group_name: str
+    # Optionally adopt a name pattern in the same click (rename-proofing).
+    pattern: str | None = None
+
+
+@router.post("/{group_id}/rebind")
+def rebind_group(group_id: int, request: GroupRebindRequest) -> dict:
+    """Re-bind a stale source to a new Dispatcharr group in one call.
+
+    Updates the pinned group id/name, then clears the stale flag so the
+    banner resolves immediately instead of waiting for the next generation
+    run. The resulting binding mode is deterministic: with ``pattern``,
+    pattern binding is enabled with it; without, pattern binding is turned
+    OFF — stream fetch gives an enabled pattern precedence over the pinned
+    id, so leaving a dead pattern active would keep the source broken.
+    Never touches channels — re-binding is a pure binding update (bpqb.8).
+    """
+    from teamarr.services.group_pattern import compile_group_pattern
+
+    if request.pattern is not None and compile_group_pattern(request.pattern) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid pattern: {request.pattern!r}",
+        )
+
+    with get_db() as conn:
+        if get_group(conn, group_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Group {group_id} not found",
+            )
+        update_group(
+            conn,
+            group_id,
+            m3u_group_id=request.m3u_group_id,
+            m3u_group_name=request.m3u_group_name,
+            m3u_group_name_pattern=request.pattern,
+            m3u_group_name_pattern_enabled=bool(request.pattern),
+        )
+        mark_group_source_seen(conn, group_id)
+        group = get_group(conn, group_id)
+
+    logger.info(
+        "[REBIND] Source %d re-bound to group %d ('%s')%s",
+        group_id,
+        request.m3u_group_id,
+        request.m3u_group_name,
+        f" with pattern {request.pattern!r}" if request.pattern else "",
+    )
+    assert group is not None
+    return {
+        "id": group.id,
+        "m3u_group_id": group.m3u_group_id,
+        "m3u_group_name": group.m3u_group_name,
+        "m3u_group_name_pattern": group.m3u_group_name_pattern,
+        "m3u_group_name_pattern_enabled": group.m3u_group_name_pattern_enabled,
+    }
+
+
 @router.get("/{group_id}", response_model=GroupResponse)
 def get_group_by_id(group_id: int):
     """Get a single event EPG group."""
@@ -1182,6 +1314,8 @@ def get_group_by_id(group_id: int):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=m3u_account_name,
+        m3u_group_name_pattern=group.m3u_group_name_pattern,
+        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1303,6 +1437,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 m3u_group_name=request.m3u_group_name,
                 m3u_account_id=request.m3u_account_id,
                 m3u_account_name=request.m3u_account_name,
+                m3u_group_name_pattern=request.m3u_group_name_pattern,
+                m3u_group_name_pattern_enabled=request.m3u_group_name_pattern_enabled,
                 stream_include_regex=request.stream_include_regex,
                 stream_include_regex_enabled=request.stream_include_regex_enabled,
                 stream_exclude_regex=request.stream_exclude_regex,
@@ -1344,6 +1480,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 clear_m3u_group_name=request.clear_m3u_group_name,
                 clear_m3u_account_id=request.clear_m3u_account_id,
                 clear_m3u_account_name=request.clear_m3u_account_name,
+                clear_m3u_group_name_pattern=request.clear_m3u_group_name_pattern,
                 clear_stream_include_regex=request.clear_stream_include_regex,
                 clear_stream_exclude_regex=request.clear_stream_exclude_regex,
                 clear_custom_regex_teams=request.clear_custom_regex_teams,
@@ -1409,6 +1546,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=group.m3u_account_name,
+        m3u_group_name_pattern=group.m3u_group_name_pattern,
+        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1704,6 +1843,51 @@ def list_dispatcharr_channel_groups() -> dict:
     }
 
 
+class GroupPatternPreviewRequest(BaseModel):
+    """Preview which live M3U groups a name pattern resolves to (#450)."""
+
+    pattern: str
+
+
+@router.post("/dispatcharr/group-pattern-preview")
+def preview_group_name_pattern(request: GroupPatternPreviewRequest) -> dict:
+    """Resolve a group-name pattern against live Dispatcharr M3U groups.
+
+    Powers the live "matches N groups" preview in the source editor. Only
+    M3U-provided groups are considered (same rule as generation-time
+    resolution). An invalid regex returns ``valid: false`` rather than an
+    error so the UI can show inline feedback while the user types.
+    """
+    from teamarr.services.group_pattern import (
+        compile_group_pattern,
+        resolve_group_name_pattern,
+    )
+
+    conn = get_dispatcharr_connection(get_db)
+    if not conn:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dispatcharr not configured or not connected",
+        )
+
+    valid = compile_group_pattern(request.pattern) is not None
+
+    try:
+        live_groups = conn.m3u.list_groups()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch channel groups: {e}",
+        ) from e
+
+    matched = resolve_group_name_pattern(live_groups, request.pattern) if valid else []
+    return {
+        "valid": valid,
+        "total": len(matched),
+        "matches": [{"id": g.id, "name": g.name} for g in matched[:50]],
+    }
+
+
 # =============================================================================
 # GROUP PROCESSING
 # =============================================================================
@@ -1966,4 +2150,201 @@ def get_combined_xmltv() -> Response:
         content=combined,
         media_type="application/xml",
         headers={"Content-Disposition": "inline; filename=teamarr-events.xml"},
+    )
+
+
+# =============================================================================
+# Custom regex extraction tester (#458)
+# =============================================================================
+
+
+class ExtractionPatterns(BaseModel):
+    """Custom regex patterns to test — mirrors CustomRegexConfig fields."""
+
+    teams_pattern: str | None = None
+    teams_enabled: bool = False
+    date_pattern: str | None = None
+    date_enabled: bool = False
+    month_pattern: str | None = None
+    month_enabled: bool = False
+    day_pattern: str | None = None
+    day_enabled: bool = False
+    time_pattern: str | None = None
+    time_enabled: bool = False
+    league_pattern: str | None = None
+    league_enabled: bool = False
+    fighters_pattern: str | None = None
+    fighters_enabled: bool = False
+    event_name_pattern: str | None = None
+    event_name_enabled: bool = False
+
+
+class ExtractionFieldResult(BaseModel):
+    """Pipeline extraction outcome for one field on one stream."""
+
+    matched: bool
+    values: list[str] = []
+
+
+class StreamExtractionResult(BaseModel):
+    """Per-stream pipeline extraction results (None = pattern not enabled)."""
+
+    stream_name: str
+    teams: ExtractionFieldResult | None = None
+    fighters: ExtractionFieldResult | None = None
+    event_name: ExtractionFieldResult | None = None
+    date: ExtractionFieldResult | None = None
+    time: ExtractionFieldResult | None = None
+    league: ExtractionFieldResult | None = None
+
+
+class TestExtractionRequest(BaseModel):
+    """Request to run the real extraction pipeline against stream names."""
+
+    stream_names: list[str] = Field(..., max_length=20000)
+    patterns: ExtractionPatterns
+
+
+class TestExtractionResponse(BaseModel):
+    """Pipeline-truth extraction results for the Pattern Tester."""
+
+    results: list[StreamExtractionResult]
+    # field -> compile error message (invalid Python regex)
+    pattern_errors: dict[str, str] = {}
+    warnings: list[str] = []
+    # Format learned from the submitted streams for blob date patterns (#474),
+    # e.g. "%d/%m/%Y"; null when declared/component groups are used or no
+    # consistent format explains every sample.
+    learned_date_format: str | None = None
+
+
+@router.post("/test-extraction", response_model=TestExtractionResponse)
+def test_extraction(request: TestExtractionRequest):
+    """Run the REAL custom-regex extraction functions against stream names.
+
+    The Pattern Tester's client-side JS highlighting can diverge from the
+    pipeline (Python `re` dialect, two-required-groups rule for teams and
+    fighters, date/time parseability). This endpoint is the single source
+    of truth: it calls the same `extract_*_with_custom_regex` functions the
+    matcher uses, on the original stream names, and returns per-stream
+    per-field results.
+    """
+    import re as _re
+
+    from teamarr.consumers.matching.classifier import (
+        CustomRegexConfig,
+        extract_date_with_custom_regex,
+        extract_event_name_with_custom_regex,
+        extract_fighters_with_custom_regex,
+        extract_league_with_custom_regex,
+        extract_teams_with_custom_regex,
+        extract_time_with_custom_regex,
+    )
+
+    p = request.patterns
+    config = CustomRegexConfig(
+        teams_pattern=p.teams_pattern,
+        teams_enabled=p.teams_enabled,
+        date_pattern=p.date_pattern,
+        date_enabled=p.date_enabled,
+        month_pattern=p.month_pattern,
+        month_enabled=p.month_enabled,
+        day_pattern=p.day_pattern,
+        day_enabled=p.day_enabled,
+        time_pattern=p.time_pattern,
+        time_enabled=p.time_enabled,
+        league_pattern=p.league_pattern,
+        league_enabled=p.league_enabled,
+        fighters_pattern=p.fighters_pattern,
+        fighters_enabled=p.fighters_enabled,
+        event_name_pattern=p.event_name_pattern,
+        event_name_enabled=p.event_name_enabled,
+    )
+
+    # Surface compile errors explicitly — the pipeline logs-and-ignores an
+    # invalid pattern, which the tester must report instead of showing
+    # "no match" with no explanation.
+    pattern_errors: dict[str, str] = {}
+    for fname, pat, enabled in (
+        ("teams", p.teams_pattern, p.teams_enabled),
+        ("date", p.date_pattern, p.date_enabled),
+        ("month", p.month_pattern, p.month_enabled),
+        ("day", p.day_pattern, p.day_enabled),
+        ("time", p.time_pattern, p.time_enabled),
+        ("league", p.league_pattern, p.league_enabled),
+        ("fighters", p.fighters_pattern, p.fighters_enabled),
+        ("event_name", p.event_name_pattern, p.event_name_enabled),
+    ):
+        if enabled and pat:
+            try:
+                _re.compile(pat, _re.IGNORECASE)
+            except _re.error as e:
+                pattern_errors[fname] = str(e)
+
+    warnings: list[str] = []
+    if (p.month_enabled or p.day_enabled) and not p.date_enabled:
+        warnings.append(
+            "Month/day patterns only apply when the date pattern toggle is "
+            "enabled — the pipeline gates all date extraction on it."
+        )
+
+    # Learn the source's date format from the submitted batch (#474) —
+    # exactly what the matcher does before a run.
+    if p.date_enabled and p.date_pattern:
+        config.learn_date_format(request.stream_names)
+
+    date_attempted = p.date_enabled  # mirror _apply_custom_datetime_regex gate
+    results: list[StreamExtractionResult] = []
+    for name in request.stream_names:
+        r = StreamExtractionResult(stream_name=name)
+
+        if p.teams_enabled and p.teams_pattern:
+            t1, t2, ok = extract_teams_with_custom_regex(name, config)
+            r.teams = ExtractionFieldResult(
+                matched=ok, values=[v for v in (t1, t2) if v] if ok else []
+            )
+
+        if p.fighters_enabled and p.fighters_pattern:
+            f1, f2, ok = extract_fighters_with_custom_regex(name, config)
+            r.fighters = ExtractionFieldResult(
+                matched=ok, values=[v for v in (f1, f2) if v] if ok else []
+            )
+
+        if p.event_name_enabled and p.event_name_pattern:
+            event_name = extract_event_name_with_custom_regex(name, config)
+            r.event_name = ExtractionFieldResult(
+                matched=event_name is not None,
+                values=[event_name] if event_name else [],
+            )
+
+        if date_attempted:
+            extracted_date, _trusted = extract_date_with_custom_regex(name, config)
+            r.date = ExtractionFieldResult(
+                matched=extracted_date is not None,
+                values=[extracted_date.isoformat()] if extracted_date else [],
+            )
+
+        if p.time_enabled and p.time_pattern:
+            extracted_time = extract_time_with_custom_regex(name, config)
+            r.time = ExtractionFieldResult(
+                matched=extracted_time is not None,
+                values=[extracted_time.strftime("%H:%M")] if extracted_time else [],
+            )
+
+        if p.league_enabled and p.league_pattern:
+            league = extract_league_with_custom_regex(name, config)
+            r.league = ExtractionFieldResult(
+                matched=league is not None,
+                values=[league] if league else [],
+            )
+
+        results.append(r)
+
+    return TestExtractionResponse(
+        results=results,
+        pattern_errors=pattern_errors,
+        warnings=warnings,
+        learned_date_format=(
+            config.learned_date_formats[0] if config.learned_date_formats else None
+        ),
     )

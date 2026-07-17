@@ -61,9 +61,14 @@ def test_channelsdvr_connection(
     with get_db() as conn:
         saved = get_channelsdvr_settings(conn)
 
-    url = (request.url if request and request.url else saved.url) or ""
+    # Multi-server (#381): the UI always passes explicit url/source_name per
+    # server row; the saved fallback uses the first configured server.
+    first = saved.servers[0] if saved.servers else None
+    url = (request.url if request and request.url else (first.url if first else None)) or ""
     source_name = (
-        request.source_name if request and request.source_name else saved.source_name
+        request.source_name
+        if request and request.source_name
+        else (first.source_name if first else None)
     ) or ""
 
     if not url:
@@ -95,7 +100,7 @@ def list_channelsdvr_sources(url: str | None = None):
     if not url:
         with get_db() as conn:
             saved = get_channelsdvr_settings(conn)
-        url = saved.url or ""
+        url = (saved.servers[0].url if saved.servers else None) or ""
 
     if not url:
         return ChannelsDVRSourcesResponse(
@@ -126,7 +131,7 @@ def list_channelsdvr_lineups(url: str | None = None):
     if not url:
         with get_db() as conn:
             saved = get_channelsdvr_settings(conn)
-        url = saved.url or ""
+        url = (saved.servers[0].url if saved.servers else None) or ""
 
     if not url:
         return ChannelsDVRLineupsResponse(

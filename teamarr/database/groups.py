@@ -84,6 +84,10 @@ class EventEPGGroup:
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450): regex over live M3U group names,
+    # re-resolved at stream-fetch time for provider-rename resilience.
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool = False
     # Processing stats
     last_refresh: datetime | None = None
     stream_count: int = 0
@@ -194,6 +198,14 @@ def _row_to_group(row) -> EventEPGGroup:
         m3u_group_name=row["m3u_group_name"],
         m3u_account_id=row["m3u_account_id"],
         m3u_account_name=row["m3u_account_name"],
+        m3u_group_name_pattern=(
+            row["m3u_group_name_pattern"] if "m3u_group_name_pattern" in row.keys() else None
+        ),
+        m3u_group_name_pattern_enabled=(
+            bool(row["m3u_group_name_pattern_enabled"])
+            if "m3u_group_name_pattern_enabled" in row.keys()
+            else False
+        ),
         last_refresh=last_refresh,
         stream_count=row["stream_count"] or 0,
         matched_count=row["matched_count"] or 0,
@@ -498,6 +510,8 @@ def create_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
+    m3u_group_name_pattern: str | None = None,
+    m3u_group_name_pattern_enabled: bool = False,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool = False,
@@ -574,6 +588,7 @@ def create_group(
             stream_timezone, duplicate_event_handling,
             channel_assignment_mode, sort_order, total_stream_count,
             m3u_group_id, m3u_group_name, m3u_account_id, m3u_account_name,
+            m3u_group_name_pattern, m3u_group_name_pattern_enabled,
             stream_include_regex, stream_include_regex_enabled,
             stream_exclude_regex, stream_exclude_regex_enabled,
             custom_regex_teams, custom_regex_teams_enabled,
@@ -589,7 +604,7 @@ def create_group(
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -607,6 +622,8 @@ def create_group(
             m3u_group_name,
             m3u_account_id,
             m3u_account_name,
+            m3u_group_name_pattern,
+            int(m3u_group_name_pattern_enabled),
             stream_include_regex,
             int(stream_include_regex_enabled),
             stream_exclude_regex,
@@ -673,6 +690,8 @@ def update_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
+    m3u_group_name_pattern: str | None = None,
+    m3u_group_name_pattern_enabled: bool | None = None,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool | None = None,
@@ -716,6 +735,7 @@ def update_group(
     clear_m3u_group_name: bool = False,
     clear_m3u_account_id: bool = False,
     clear_m3u_account_name: bool = False,
+    clear_m3u_group_name_pattern: bool = False,
     clear_stream_include_regex: bool = False,
     clear_stream_exclude_regex: bool = False,
     clear_custom_regex_teams: bool = False,
@@ -778,6 +798,10 @@ def update_group(
     builder.set_("m3u_group_name", m3u_group_name, clear=clear_m3u_group_name)
     builder.set_("m3u_account_id", m3u_account_id, clear=clear_m3u_account_id)
     builder.set_("m3u_account_name", m3u_account_name, clear=clear_m3u_account_name)
+    builder.set_(
+        "m3u_group_name_pattern", m3u_group_name_pattern, clear=clear_m3u_group_name_pattern
+    )
+    builder.set_("m3u_group_name_pattern_enabled", m3u_group_name_pattern_enabled, encoder=int)
 
     # Stream filtering
     builder.set_("stream_include_regex", stream_include_regex, clear=clear_stream_include_regex)
@@ -1037,7 +1061,7 @@ def get_stale_groups(conn: Connection) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, name, display_name, m3u_group_id, m3u_group_name,
-               m3u_account_name, source_last_seen, total_stream_count
+               m3u_account_id, m3u_account_name, source_last_seen, total_stream_count
         FROM event_epg_groups
         WHERE enabled = 1 AND source_missing = 1 AND COALESCE(is_channel_source, 0) = 0
         ORDER BY name

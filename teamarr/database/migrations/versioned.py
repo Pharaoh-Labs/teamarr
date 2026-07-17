@@ -260,6 +260,22 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 81
 
+    if current_version < 82:
+        _apply_migration(
+            conn, 82,
+            "fold scalar Channels DVR settings into channelsdvr_servers list (#381)",
+            _migrate_v82_channelsdvr_servers_list,
+        )
+        current_version = 82
+
+    if current_version < 83:
+        _apply_migration(
+            conn, 83,
+            "fold scalar Emby/Jellyfin settings into server lists (#471)",
+            _migrate_v83_media_server_lists,
+        )
+        current_version = 83
+
 
 # =============================================================================
 # Migration helpers
@@ -1968,3 +1984,81 @@ def _migrate_v81_seed_sports_event_category(conn: sqlite3.Connection) -> None:
 
     if seeded:
         logger.info("[MIGRATE v81] Seeded 'Sports event' into %d template(s)", seeded)
+
+
+def _migrate_v82_channelsdvr_servers_list(conn: sqlite3.Connection) -> None:
+    """v82: fold scalar Channels DVR settings into channelsdvr_servers (#381).
+
+    Multi-server fan-out replaces the single url/source_name/lineup_id
+    columns with a JSON list. An existing configured server becomes the
+    list's only entry; the scalar columns are left in place (unread) —
+    reconciliation never drops columns, and keeping them makes the
+    migration trivially reversible.
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
+    if "channelsdvr_url" not in cols:
+        return  # fresh database — scalar columns never existed
+
+    row = conn.execute(
+        """
+        SELECT channelsdvr_url, channelsdvr_source_name, channelsdvr_lineup_id,
+               channelsdvr_servers
+        FROM settings WHERE id = 1
+        """
+    ).fetchone()
+    if not row or not row["channelsdvr_url"] or row["channelsdvr_servers"]:
+        return  # nothing configured, or servers list already populated
+
+    servers = [
+        {
+            "name": "Channels DVR",
+            "url": row["channelsdvr_url"].rstrip("/"),
+            "source_name": row["channelsdvr_source_name"],
+            "lineup_id": row["channelsdvr_lineup_id"],
+        }
+    ]
+    conn.execute(
+        "UPDATE settings SET channelsdvr_servers = ? WHERE id = 1",
+        (json.dumps(servers),),
+    )
+    logger.info("[MIGRATE v82] Folded Channels DVR scalar settings into servers list")
+
+
+def _migrate_v83_media_server_lists(conn: sqlite3.Connection) -> None:
+    """v83: fold scalar Emby/Jellyfin settings into servers lists (#471).
+
+    Same pattern as v82 (Channels DVR): an existing configured server
+    becomes the list's only entry; the scalar columns are left in place
+    (unread) — reconciliation never drops columns.
+    """
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
+
+    for kind in ("emby", "jellyfin"):
+        if f"{kind}_url" not in cols:
+            continue  # fresh database — scalar columns never existed
+
+        row = conn.execute(
+            f"""
+            SELECT {kind}_url AS url, {kind}_username AS username,
+                   {kind}_password AS password, {kind}_api_key AS api_key,
+                   {kind}_servers AS servers
+            FROM settings WHERE id = 1
+            """
+        ).fetchone()
+        if not row or not row["url"] or row["servers"]:
+            continue  # nothing configured, or servers list already populated
+
+        servers = [
+            {
+                "name": kind.capitalize(),
+                "url": row["url"].rstrip("/"),
+                "username": row["username"],
+                "password": row["password"],
+                "api_key": row["api_key"],
+            }
+        ]
+        conn.execute(
+            f"UPDATE settings SET {kind}_servers = ? WHERE id = 1",
+            (json.dumps(servers),),
+        )
+        logger.info("[MIGRATE v83] Folded %s scalar settings into servers list", kind)

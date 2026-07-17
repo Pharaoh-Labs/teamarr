@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { ClipboardList, Pencil, Target, Calendar, Settings } from "lucide-react"
+import { ClipboardList, Pencil, Target, Calendar, Settings, Link2 } from "lucide-react"
 import type {
   TemplateCreate,
   FillerContent,
@@ -15,6 +15,14 @@ export const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "fillers", label: "Fillers", icon: Calendar },
   { id: "xmltv", label: "EPG Options", icon: Settings },
 ]
+
+// Edit-mode only (#461): a new template has no id to look up assignments for,
+// and the guided create stepper (which walks TABS) shouldn't end on it.
+export const ASSIGNMENTS_TAB: { id: Tab; label: string; icon: LucideIcon } = {
+  id: "assignments",
+  label: "Assignments",
+  icon: Link2,
+}
 
 // Default filler content
 export const DEFAULT_PREGAME: FillerContent = {

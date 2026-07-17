@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 from sqlite3 import Connection
 from typing import Literal
 
+from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,9 +21,7 @@ logger = logging.getLogger(__name__)
 # TYPES
 # =============================================================================
 
-RunType = Literal[
-    "event_group", "team_epg", "batch", "reconciliation", "scheduler", "full_epg"
-]
+RunType = Literal["event_group", "team_epg", "batch", "reconciliation", "scheduler", "full_epg"]
 RunStatus = Literal["running", "completed", "failed", "partial", "cancelled"]
 
 
@@ -35,7 +35,7 @@ class ProcessingRun:
     group_id: int | None = None
     team_id: int | None = None
 
-    started_at: datetime | None = field(default_factory=datetime.now)
+    started_at: datetime | None = field(default_factory=now_utc)
     completed_at: datetime | None = None
     duration_ms: int | None = None
     status: RunStatus = "running"
@@ -69,7 +69,7 @@ class ProcessingRun:
 
     def complete(self, status: RunStatus = "completed", error: str | None = None):
         """Mark run as complete and calculate duration."""
-        self.completed_at = datetime.now()
+        self.completed_at = now_utc()
         self.status = status
         self.error_message = error
         if self.started_at:
@@ -121,8 +121,8 @@ class StatsSnapshot:
 
     id: int | None = None
     snapshot_type: str = "daily"
-    period_start: datetime = field(default_factory=datetime.now)
-    period_end: datetime = field(default_factory=datetime.now)
+    period_start: datetime = field(default_factory=now_utc)
+    period_end: datetime = field(default_factory=now_utc)
 
     total_runs: int = 0
     successful_runs: int = 0
@@ -182,7 +182,7 @@ def create_run(
         run_id=str(uuid.uuid4()),
         group_id=group_id,
         team_id=team_id,
-        started_at=datetime.now(),
+        started_at=now_utc(),
     )
     assert run.started_at is not None  # just set above
 
@@ -198,7 +198,9 @@ def create_run(
             run.run_id,
             run.group_id,
             run.team_id,
-            run.started_at.isoformat(),
+            # SQLite-canonical UTC so `started_at > datetime('now', ...)` guards
+            # and comparisons against created_at stay plain string comparisons
+            to_db_utc(run.started_at),
             run.status,
         ),
     )
@@ -240,7 +242,7 @@ def save_run(conn: Connection, run: ProcessingRun) -> None:
         WHERE id = ?
         """,
         (
-            run.completed_at.isoformat() if run.completed_at else None,
+            to_db_utc(run.completed_at),
             run.duration_ms,
             run.status,
             run.error_message,
@@ -343,10 +345,8 @@ def _row_to_run(row: dict) -> ProcessingRun:
         run_id=row.get("run_id"),
         group_id=row.get("group_id"),
         team_id=row.get("team_id"),
-        started_at=(datetime.fromisoformat(row["started_at"]) if row.get("started_at") else None),
-        completed_at=(
-            datetime.fromisoformat(row["completed_at"]) if row.get("completed_at") else None
-        ),
+        started_at=parse_db_timestamp(row.get("started_at")),
+        completed_at=parse_db_timestamp(row.get("completed_at")),
         duration_ms=row.get("duration_ms"),
         status=row.get("status", "completed"),
         error_message=row.get("error_message"),
@@ -373,7 +373,6 @@ def _row_to_run(row: dict) -> ProcessingRun:
 # =============================================================================
 # AGGREGATE STATS
 # =============================================================================
-
 
 
 def get_current_stats(conn: Connection) -> dict:
@@ -418,8 +417,9 @@ def get_current_stats(conn: Connection) -> dict:
     ).fetchone()
     total_cached = (cached_row["total_cached"] if cached_row else 0) or 0
 
-    # Last 24 hours
-    yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+    # Last 24 hours — created_at is SQLite CURRENT_TIMESTAMP (UTC, space
+    # separator), so the cutoff must be in the same format to compare
+    yesterday = to_db_utc(now_utc() - timedelta(days=1))
     last_24h = conn.execute(
         """
         SELECT
@@ -453,7 +453,8 @@ def get_current_stats(conn: Connection) -> dict:
     last_run_row = conn.execute(
         "SELECT completed_at FROM processing_runs ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
-    last_run = last_run_row["completed_at"] if last_run_row else None
+    last_run_dt = parse_db_timestamp(last_run_row["completed_at"]) if last_run_row else None
+    last_run = last_run_dt.isoformat() if last_run_dt else None
 
     # Lifetime accumulator: sums of full-EPG runs already pruned from
     # processing_runs (folded by cleanup_old_runs/clear_all_runs). Live sums
@@ -477,22 +478,18 @@ def get_current_stats(conn: Connection) -> dict:
             "channels_created": last_24h["channels"] or 0,
         },
         "totals": {
-            "programmes_generated": (overall["total_programmes"] or 0)
-            + _lt("programmes_total"),
+            "programmes_generated": (overall["total_programmes"] or 0) + _lt("programmes_total"),
             "streams_matched": (overall["total_matched"] or 0) + _lt("streams_matched"),
             "streams_unmatched": (overall["total_unmatched"] or 0) + _lt("streams_unmatched"),
             "streams_cached": total_cached + _lt("streams_cached"),
-            "channels_created": (overall["total_channels_created"] or 0)
-            + _lt("channels_created"),
-            "channels_deleted": (overall["total_channels_deleted"] or 0)
-            + _lt("channels_deleted"),
+            "channels_created": (overall["total_channels_created"] or 0) + _lt("channels_created"),
+            "channels_deleted": (overall["total_channels_deleted"] or 0) + _lt("channels_deleted"),
         },
         "by_type": {k: v["runs"] for k, v in by_type.items()},
         # Average over the retention window only (folded runs keep no durations)
         "avg_duration_ms": int(overall["avg_duration"] or 0),
         "last_run": last_run,
     }
-
 
 
 def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = ()) -> None:
@@ -581,7 +578,7 @@ def cleanup_old_runs(conn: Connection, days: int = 30) -> int:
     Full-EPG run sums are folded into lifetime_stats first so all-time
     totals survive the rolling retention window.
     """
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    cutoff = to_db_utc(now_utc() - timedelta(days=days))
     _fold_runs_into_lifetime(conn, "created_at < ?", (cutoff,))
     cursor = conn.execute("DELETE FROM processing_runs WHERE created_at < ?", (cutoff,))
     conn.commit()
@@ -942,11 +939,14 @@ def get_match_stats_summary(conn: Connection, run_id: int | None = None) -> dict
     total_eligible = total_matched + total_unmatched
     match_rate = (total_matched / total_eligible * 100) if total_eligible > 0 else 0
 
+    started_dt = parse_db_timestamp(run_row["started_at"])
+    completed_dt = parse_db_timestamp(run_row["completed_at"])
+
     return {
         "run_id": run_id,
         "uuid": run_row["run_id"],
-        "started_at": run_row["started_at"],
-        "completed_at": run_row["completed_at"],
+        "started_at": started_dt.isoformat() if started_dt else None,
+        "completed_at": completed_dt.isoformat() if completed_dt else None,
         "status": run_row["status"],
         "totals": {
             "fetched": run_row["streams_fetched"] or 0,
@@ -1029,6 +1029,39 @@ def get_live_xmltv_content(conn: Connection) -> dict[str, list[str]]:
             event_content.append(row["xmltv_content"])
 
     return {"team": team_content, "event": event_content}
+
+
+def get_last_run_kpis(conn: Connection) -> dict | None:
+    """Get headline figures from the latest full_epg run (any status).
+
+    Used by the homepage widget KPI payload (#463). Latest run regardless of
+    status so a failed generation surfaces as last_run_status=failed instead
+    of silently showing the previous success.
+
+    Returns:
+        Dict with status, completed_at (aware datetime or None),
+        streams_matched, streams_unmatched, programmes_total —
+        or None if no full_epg run exists.
+    """
+    row = conn.execute(
+        """
+        SELECT status, completed_at, streams_matched, streams_unmatched,
+               programmes_total
+        FROM processing_runs
+        WHERE run_type = 'full_epg'
+        ORDER BY id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "status": row["status"],
+        "completed_at": parse_db_timestamp(row["completed_at"]),
+        "streams_matched": row["streams_matched"],
+        "streams_unmatched": row["streams_unmatched"],
+        "programmes_total": row["programmes_total"],
+    }
 
 
 def get_epg_analysis_stats(conn: Connection) -> dict | None:

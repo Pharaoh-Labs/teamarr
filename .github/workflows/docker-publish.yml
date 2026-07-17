@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - dev
-      - 1.4.9-archive
     tags:
       - 'v*.*.*'
     paths-ignore:

@@ -23,6 +23,8 @@ Variables are scoped to the template type they make sense in. The template edito
 
 If you hand-type a scope-restricted variable into a template where it doesn't belong (e.g., `{team}` in an event template), it will still resolve (backward compatibility), but the picker won't offer it. Use the picker to stay within the intended scope.
 
+Hovering any variable in the picker shows its description and an example value drawn from the current preview (so with a live preview selected, the example is real data from that event). Variables insert at the cursor of the last field you clicked into — the picker reminds you to click into a field first when none is focused.
+
 ## Previewing Templates
 
 The template editor renders a live preview of every field as you type. The **Previewing as** bar above the tabs picks which league to preview against — the leagues you've subscribed to (from the [Subscriptions](../subscriptions) tab, plus the leagues of teams you follow) are listed with their logos, grouped by sport and searchable. Before you've subscribed to anything, all available leagues are shown. It drives every preview on the page: the inline per-field previews, the condition trace on the Conditions tab, and the **Guide Preview** card in the right rail — an EPG-style card showing the title, subtitle, and description exactly as a viewer's guide would, including any [conditional rows](conditions.md) that win a field for the preview event (marked with a green target).
