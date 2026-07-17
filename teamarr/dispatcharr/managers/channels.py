@@ -763,12 +763,26 @@ class ChannelManager:
             Dict mapping stream id -> channel dict (id, epg_data_id, etc.).
             A stream assigned to multiple channels keeps the last one seen.
         """
+        return self.get_channel_maps()[0]
+
+    def get_channel_maps(self) -> tuple[dict[int, dict], dict[str, dict]]:
+        """One paginated channel fetch -> (stream id -> channel, uuid -> channel).
+
+        Superset of ``get_stream_channel_map`` for callers that also need the
+        uuid index (loopback-stream EPG resolution: a Dispatcharr-loopback M3U
+        stream's URL names its source channel by uuid) without paying for a
+        second fetch. Uuid keys are lowercased.
+        """
         channels = self._client.paginated_get(
             "/api/channels/channels/?page_size=500",
             error_context="channels",
         )
-        mapping: dict[int, dict] = {}
+        stream_map: dict[int, dict] = {}
+        uuid_map: dict[str, dict] = {}
         for ch in channels:
             for stream_id in ch.get("streams") or []:
-                mapping[stream_id] = ch
-        return mapping
+                stream_map[stream_id] = ch
+            uuid = ch.get("uuid")
+            if uuid:
+                uuid_map[str(uuid).lower()] = ch
+        return stream_map, uuid_map

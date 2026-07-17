@@ -191,3 +191,169 @@ def test_first_stream_wins_for_shared_tvg_id():
     epg = _epgdata([(100, "82547", "FS1 HD")])
     res, _ = resolve_program_tvg_ids(streams, epg, {})
     assert res == {"dup.us": "82547"}
+
+
+# ==================================================================== loopback
+
+
+_UUID = "523949c3-ac85-4c4a-baa7-bc9800000000"
+
+
+def _loopback_stream(sid=7, tvg="166", name="Sky Sports F1 HD", uuid=_UUID):
+    # A Dispatcharr-loopback M3U stream: tvg_id is the channel NUMBER (churns
+    # meaning), url names the source channel by its stable uuid.
+    return {
+        "id": sid,
+        "name": name,
+        "tvg_id": tvg,
+        "url": f"http://192.168.7.220:9191/proxy/ts/stream/{uuid}",
+    }
+
+
+def test_loopback_resolves_via_source_channel_uuid():
+    # Live case: the loopback stream is in NO channel, its tvg_id ("166", a
+    # channel number) exists in no guide, and its name is ambiguous across
+    # multiple guide entries — only the proxy URL identifies it.
+    streams = [_loopback_stream()]
+    epg = _epgdata([
+        (200, "87578", "Sky Sports F1 HD"),
+        (201, "131261", "Sky Sports F1 UHD"),
+    ])
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {}, channel_by_uuid={_UUID: {"epg_data_id": 200}}
+    )
+    assert res == {"166": "87578"}
+    assert stats["loopback"] == 1
+
+
+def test_loopback_survives_stream_id_churn():
+    # The loopback account recreates streams (new ids) on every refresh; the
+    # uuid in the URL is the stable identity, so resolution must not depend
+    # on the stream id appearing in the stream->channel map.
+    streams = [_loopback_stream(sid=999999)]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {12345: {"epg_data_id": 200}},  # stale map, old id
+        channel_by_uuid={_UUID: {"epg_data_id": 200}},
+    )
+    assert res == {"166": "87578"}
+    assert stats["loopback"] == 1
+
+
+def test_channel_membership_outranks_loopback():
+    streams = [_loopback_stream(sid=7)]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD"), (300, "99999", "Other")])
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {7: {"epg_data_id": 300}},
+        channel_by_uuid={_UUID: {"epg_data_id": 200}},
+    )
+    assert res == {"166": "99999"}
+    assert stats["channel"] == 1 and stats["loopback"] == 0
+
+
+def test_loopback_uuid_lookup_is_case_insensitive():
+    streams = [_loopback_stream(uuid=_UUID.upper())]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {}, channel_by_uuid={_UUID: {"epg_data_id": 200}}
+    )
+    assert res == {"166": "87578"}
+    assert stats["loopback"] == 1
+
+
+def test_unknown_uuid_falls_through_to_name_cascade():
+    # A proxy-shaped URL whose uuid isn't a known channel must not block the
+    # rest of the cascade.
+    streams = [_loopback_stream(uuid="00000000-0000-0000-0000-000000000000")]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {}, channel_by_uuid={_UUID: {"epg_data_id": 200}}
+    )
+    assert res == {"166": "87578"}
+    assert stats["name"] == 1
+
+
+def test_non_loopback_url_ignores_uuid_map():
+    streams = [{
+        "id": 7, "name": "Sky Sports F1 HD", "tvg_id": "sky.uk",
+        "url": "https://provider.example/live/user/pass/369549.ts",
+    }]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {}, channel_by_uuid={_UUID: {"epg_data_id": 200}}
+    )
+    assert res == {"sky.uk": "87578"}
+    assert stats["name"] == 1 and stats["loopback"] == 0
+
+
+# ===================================================== generated-guide poisoning
+
+
+def test_own_guide_channel_link_falls_through_to_loopback():
+    # Feedback loop (live, Belgian GP): a matched stream gets consolidated
+    # into the managed event channel it matched; next run the channel path
+    # resolves it to our OWN generated guide, whose programmes the index
+    # excludes — EPG matching dies for that stream forever. Own-guide links
+    # must not terminate the cascade.
+    streams = [_loopback_stream(sid=7)]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    epg.append({"id": 900, "tvg_id": "teamarr-f1-race", "name": "F1: Belgian GP - Race",
+                "epg_source": 32})
+    res, stats = resolve_program_tvg_ids(
+        streams, epg,
+        {7: {"epg_data_id": 900}},          # membership in own event channel
+        channel_by_uuid={_UUID: {"epg_data_id": 200}},
+        own_source_id=32,
+    )
+    assert res == {"166": "87578"}
+    assert stats["loopback"] == 1 and stats["channel"] == 0
+
+
+def test_own_guide_link_still_trusted_when_own_source_unknown():
+    # Without own_source_id (back-compat), behavior is unchanged for
+    # non-synthetic tvg ids.
+    streams = [_loopback_stream(sid=7)]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    epg.append({"id": 900, "tvg_id": "teamarr-f1-race", "name": "F1: Belgian GP - Race",
+                "epg_source": 32})
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {7: {"epg_data_id": 900}},
+        channel_by_uuid={_UUID: {"epg_data_id": 200}},
+    )
+    assert res == {"166": "teamarr-f1-race"}
+    assert stats["channel"] == 1
+
+
+def test_sibling_event_guide_link_falls_through():
+    # Same poisoning via a sibling install writing to the same Dispatcharr:
+    # its event channels' synthetic guide airs all-day "Coming up: F1
+    # Racing ..." placeholder blocks that bind the stream to every session
+    # (live: TSN 5 landed on all five Belgian GP session channels). Synthetic
+    # event guides are identified by tvg prefix, regardless of source id.
+    streams = [_loopback_stream(sid=7)]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    epg.append({"id": 950, "tvg_id": "apex-event-600057439-qualifying",
+                "name": "F1 | Belgian Grand Prix - Qualifying", "epg_source": 8})
+    res, stats = resolve_program_tvg_ids(
+        streams, epg,
+        {7: {"epg_data_id": 950}},          # membership in sibling's channel
+        channel_by_uuid={_UUID: {"epg_data_id": 200}},
+        own_source_id=32,
+    )
+    assert res == {"166": "87578"}
+    assert stats["loopback"] == 1 and stats["channel"] == 0
+
+
+def test_own_event_guide_prefix_blocked_even_without_source_id():
+    # Our own event-channel tvg prefix is synthetic by construction — blocked
+    # by prefix even when the own source id could not be resolved.
+    streams = [_loopback_stream(sid=7)]
+    epg = _epgdata([(200, "87578", "Sky Sports F1 HD")])
+    epg.append({"id": 960, "tvg_id": "teamarr-event-600057439-race",
+                "name": "F1 | Belgian Grand Prix - Race", "epg_source": 32})
+    res, stats = resolve_program_tvg_ids(
+        streams, epg, {7: {"epg_data_id": 960}},
+        channel_by_uuid={_UUID: {"epg_data_id": 200}},
+    )
+    assert res == {"166": "87578"}
+    assert stats["loopback"] == 1 and stats["channel"] == 0

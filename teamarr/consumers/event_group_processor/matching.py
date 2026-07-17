@@ -191,7 +191,9 @@ class StreamMatching:
         # curated channel fallback). Both are single scoped fetches.
         try:
             epg_data_list = self._dispatcharr_client.channels.get_epg_data_list()
-            stream_channels = self._dispatcharr_client.channels.get_stream_channel_map()
+            stream_channels, channel_by_uuid = (
+                self._dispatcharr_client.channels.get_channel_maps()
+            )
         except Exception as e:
             logger.warning("[EPG-MATCH] Failed to load EPG resolution data: %s", e)
             return None
@@ -201,7 +203,10 @@ class StreamMatching:
         # excluded so we never resolve a stream to our generated guide.
         active_source_ids = self._active_epg_source_ids()
         resolution, _stats = resolve_program_tvg_ids(
-            streams, epg_data_list, stream_channels, active_source_ids=active_source_ids
+            streams, epg_data_list, stream_channels,
+            active_source_ids=active_source_ids,
+            channel_by_uuid=channel_by_uuid,
+            own_source_id=self._own_epg_source_id(),
         )
 
         # Window mirrors the event match window so programs overlapping any
@@ -241,6 +246,21 @@ class StreamMatching:
             group.id, index.program_count(), len(index.tvg_ids()),
         )
         return index
+
+    def _own_epg_source_id(self) -> "int | None":
+        """The app's OWN configured EPG-source id (``dispatcharr_epg_id`` setting).
+
+        Resolved at runtime rather than assumed: name checks ("_Teamarr")
+        silently miss installs whose source was renamed.
+        """
+        try:
+            from teamarr.database.channels.settings_helpers import get_dispatcharr_settings
+
+            with self._db_factory() as conn:
+                return get_dispatcharr_settings(conn).get("epg_id")
+        except Exception as e:
+            logger.debug("[EPG-MATCH] could not resolve own epg_id setting: %s", e)
+            return None
 
     def _active_epg_source_ids(self) -> set[int] | None:
         """Enabled EPG-source ids for name/direct matching (excludes _Teamarr).

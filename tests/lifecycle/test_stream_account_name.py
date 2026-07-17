@@ -105,6 +105,7 @@ def _fake_stream(sid, name, account_id):
         name=name,
         tvg_id=None,
         tvg_name=None,
+        url=None,
         channel_group="G",
         channel_group_id=7,
         m3u_account_id=account_id,
