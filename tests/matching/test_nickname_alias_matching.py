@@ -33,7 +33,7 @@ def _team(name: str, abbr: str, short_name: str | None = None) -> Team:
 
 
 CARDINALS = _team("St. Louis Cardinals", "STL", "Cardinals")
-DBACKS = _team("Arizona Diamondbacks", "ARI", "D-backs")
+DBACKS = _team("Arizona Diamondbacks", "ARI", "Diamondbacks")
 
 
 def _event(days_from_today: int = 0, eid: str = "evt-1") -> Event:
@@ -72,11 +72,11 @@ def _match(stream_name: str, events: list[Event], matcher=None, cfg=None):
 
 
 class TestShortNameScoring:
-    def test_dbacks_matches_via_short_name(self):
-        # The remote user's stream, no alias needed: ESPN's short_name IS
-        # 'D-backs' — fuzzy must consult it
+    def test_dbacks_without_alias_still_fails_honestly(self):
+        # With the REAL short_name ('Diamondbacks'), 'D-backs' scores ~53 —
+        # documents why an alias (below) is the user-facing answer
         outcome = _match("Cardinals x D-backs", [_event()])
-        assert outcome.category == ResultCategory.MATCHED
+        assert outcome.category == ResultCategory.FAILED
 
 
 class TestAliasNormalization:
@@ -111,17 +111,22 @@ class TestHonestDateMismatch:
 
     def test_utc_day_boundary_tolerated(self):
         # Stream stamped with tomorrow's UTC date for tonight's game (the
-        # remote user's exact shape) — ±1 tolerance must let it match
+        # remote user's shape) — ±1 tolerance must let it match. The D-backs
+        # side rides the user's alias, exactly like their setup.
+        matcher = make_team_matcher()
+        matcher._user_aliases = {
+            (normalize_text("d-backs"), "mlb"): normalize_text("Arizona Diamondbacks"),
+        }
         stamp = (TODAY + timedelta(days=1)).isoformat()
-        name = f"MLB 13 | Cardinals x D-backs start:{stamp} 02:40"
-        outcome = _match(name, [_event()], cfg=self._iso_cfg(name))
+        name = f"Cardinals x D-backs {stamp}"
+        outcome = _match(name, [_event()], matcher=matcher, cfg=self._iso_cfg(name))
         assert outcome.category == ResultCategory.MATCHED
 
     def test_date_mismatch_only_when_teams_matched(self):
         # Teams DO match an event, but it's 5 days from the stream date →
         # honest DATE_MISMATCH
         stamp = TODAY.isoformat()
-        name = f"Cardinals x D-backs {stamp}"
+        name = f"Cardinals x Diamondbacks {stamp}"
         outcome = _match(name, [_event(days_from_today=5)], cfg=self._iso_cfg(name))
         assert outcome.category == ResultCategory.FAILED
         assert outcome.failed_reason == FailedReason.DATE_MISMATCH
@@ -150,3 +155,25 @@ class TestAliasEndToEnd:
         outcome = _match("Cards x D-backs", [_event()], matcher=matcher)
         assert outcome.category == ResultCategory.MATCHED
         assert outcome.match_method == MatchMethod.ALIAS
+
+    def test_single_sided_alias_carries_its_side(self):
+        # THE remote-user case (#480 round 2): only 'D-backs' is aliased;
+        # 'Cardinals' matches by fuzz. One alias must be enough — requiring
+        # both sides to alias made a lone alias structurally useless.
+        matcher = make_team_matcher()
+        matcher._user_aliases = {
+            (normalize_text("D-backs"), "mlb"): normalize_text("Arizona Diamondbacks"),
+        }
+        outcome = _match("Cardinals x D-backs", [_event()], matcher=matcher)
+        assert outcome.category == ResultCategory.MATCHED
+
+
+
+    def test_alias_for_wrong_team_does_not_help(self):
+        # Canonical must actually be one of the event's teams
+        matcher = make_team_matcher()
+        matcher._user_aliases = {
+            (normalize_text("D-backs"), "mlb"): normalize_text("Colorado Rockies"),
+        }
+        outcome = _match("Cardinals x D-backs", [_event()], matcher=matcher)
+        assert outcome.category == ResultCategory.FAILED
