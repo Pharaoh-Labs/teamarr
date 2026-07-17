@@ -64,6 +64,20 @@ class TestInferDateFormats:
 # ---------------------------------------------------------------------------
 
 
+class TestMonthDayOnlyGate:
+    def test_month_day_only_sets_extracted_date(self):
+        # #485: the pipeline gate now honors month/day-only configurations
+        cfg = CustomRegexConfig(
+            month_pattern=r"m(?P<month>\d{2})", month_enabled=True,
+            day_pattern=r"d(?P<day>\d{2})", day_enabled=True,
+        )
+        classified = classify_stream("A vs B m07 d16", custom_regex=cfg)
+        d = classified.normalized.extracted_date
+        assert d is not None and (d.month, d.day) == (7, 16)
+        # Component extraction is declared format -> trusted
+        assert classified.normalized.extracted_date_trusted is True
+
+
 class TestLearnDateFormat:
     def test_blob_pattern_learns_and_trusts(self):
         cfg = CustomRegexConfig(
