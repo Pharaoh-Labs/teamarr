@@ -1589,14 +1589,16 @@ def _apply_custom_datetime_regex(
     Mutates ``normalized`` in place.
     """
     if custom_regex.date_enabled:
-        custom_date, date_trusted = extract_date_with_custom_regex(stream_name, custom_regex)
+        custom_date, format_verified = extract_date_with_custom_regex(
+            stream_name, custom_regex
+        )
         if custom_date:
             normalized.extracted_date = custom_date
-            normalized.extracted_date_trusted = date_trusted
+            normalized.extracted_date_trusted = format_verified
             logger.debug(
-                "[CLASSIFY] Custom date regex extracted: %s (trusted=%s) from '%s'",
+                "[CLASSIFY] Custom date regex extracted: %s (format_verified=%s) from '%s'",
                 custom_date,
-                date_trusted,
+                format_verified,
                 stream_name[:50],
             )
 
