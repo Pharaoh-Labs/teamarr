@@ -171,17 +171,38 @@ function cleanupResolved(text: string): string {
   return out
 }
 
+// Template `|filter` modifiers, mirroring the backend resolver's _FILTERS
+// (teamarr/templates/resolver.py, #478). urlencode/url percent-encode a value
+// for safe use inside a URL. encodeURIComponent matches Python's
+// quote(safe="") closely enough for preview fidelity.
+const TEMPLATE_FILTERS: Record<string, (value: string) => string> = {
+  urlencode: encodeURIComponent,
+  url: encodeURIComponent,
+}
+
 // Helper to create resolveTemplate function with custom sample data.
 // A known variable resolves to its value even when that value is empty (e.g.
 // a pre-game {team_score.next}); only genuinely unknown variables stay literal.
 export function createResolver(sampleData: Record<string, string>) {
   return function resolveTemplate(template: string): string {
     if (!template) return ""
-    const substituted = template.replace(/\{([^}]+)\}/g, (match, varName) => {
-      if (varName in sampleData) return sampleData[varName]
-      const lower = varName.toLowerCase()
-      if (lower in sampleData) return sampleData[lower]
-      return match
+    const substituted = template.replace(/\{([^}]+)\}/g, (match, token) => {
+      // Split an optional `|filter` modifier off the variable name.
+      const pipe = token.indexOf("|")
+      const varName = pipe === -1 ? token : token.slice(0, pipe)
+      const filterName = pipe === -1 ? "" : token.slice(pipe + 1).toLowerCase()
+
+      let value: string
+      if (varName in sampleData) value = sampleData[varName]
+      else if (varName.toLowerCase() in sampleData) value = sampleData[varName.toLowerCase()]
+      else return match // unknown variable stays literal
+
+      if (filterName) {
+        const filterFn = TEMPLATE_FILTERS[filterName]
+        if (!filterFn) return match // unknown filter stays literal (visible typo)
+        return filterFn(value)
+      }
+      return value
     })
     return cleanupResolved(substituted)
   }
