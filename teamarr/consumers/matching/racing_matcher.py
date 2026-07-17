@@ -15,20 +15,28 @@ Matching strategy:
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from rapidfuzz import fuzz
 
-from teamarr.consumers.matching.classifier import ClassifiedStream, StreamCategory
+from teamarr.consumers.matching.classifier import (
+    ClassifiedStream,
+    StreamCategory,
+    has_racing_text_evidence,
+)
 from teamarr.consumers.matching.result import (
     FailedReason,
     FilteredReason,
     MatchMethod,
     MatchOutcome,
 )
-from teamarr.consumers.racing_segments import get_session_times
+from teamarr.consumers.racing_segments import (
+    RACING_ANCHOR_TOLERANCE_SECONDS,
+    get_session_times,
+)
 from teamarr.consumers.stream_match_cache import StreamMatchCache, event_to_cache_data
 from teamarr.core.types import Event
 from teamarr.services.sports_data import SportsDataService
@@ -52,7 +60,31 @@ SINGLE_EVENT_SANITY_THRESHOLD = 50
 # to "the one race covering this date" regardless of what hour it airs — a
 # program landing hours away from every real session is not a broadcast of
 # that event.
-RACING_ANCHOR_TOLERANCE_SECONDS = 90 * 60
+# (Value lives in racing_segments, shared with EPG session scoping; re-exported
+# here for the anchor-gate usage below and existing importers.)
+
+# Plausible season years in stream/programme text (1950 — F1's first season —
+# through 2049). Deliberately NOT \d{4}: resolutions ("2160p"), bitrates and
+# channel numbers must not read as years.
+_YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-4]\d)\b")
+
+
+def _years_in_text(text: str) -> set[int]:
+    """All plausible season years mentioned in ``text``."""
+    return {int(m) for m in _YEAR_RE.findall(text)}
+
+
+def _augment_compounds(normalized: str) -> str:
+    """Append fused adjacent-token bigrams to a normalized string.
+
+    Guides and providers disagree on compound-word spelling ("Faith Fest
+    250" vs "FaithFest 250"), leaving token-based scoring with only the
+    tokens both spellings share. Adding each adjacent pair fused as an
+    extra token lets either spelling grow the other's compound form, so
+    the pair scores as related without loosening the threshold.
+    """
+    tokens = normalized.split()
+    return " ".join(tokens + [a + b for a, b in zip(tokens, tokens[1:])])
 
 
 @dataclass
@@ -124,7 +156,14 @@ class RacingMatcher:
         # Race-weekend streams carry the session's own date (e.g. "Sun 14 Jun"
         # for the race), which may differ from today's batch target_date.
         # Use that date to find the covering event/session when present.
-        match_date = classified.normalized.extracted_date or target_date
+        # EPG programmes rarely carry a date in their text, but always carry
+        # their broadcast instant — fall back to the programme's own date so
+        # a Friday session can bind as soon as the guide publishes it, rather
+        # than waiting for the run date to reach the race weekend. The
+        # anchor_dt gate below still enforces real session proximity.
+        match_date = classified.normalized.extracted_date
+        if match_date is None:
+            match_date = anchor_dt.astimezone(user_tz).date() if anchor_dt else target_date
 
         ctx = RacingMatchContext(
             stream_name=classified.normalized.original,
@@ -169,6 +208,27 @@ class RacingMatcher:
                 stream_id=stream_id,
                 detail=f"No {league} events covering {ctx.target_date}",
             )
+
+        # Season-year gate: text naming a year that isn't a candidate event's
+        # year is archival, not coverage. FAST channels air classic races
+        # around the current weekend ("2008 Belgian Grand Prix" started 33
+        # minutes into 2026 qualifying — inside anchor tolerance, carrying
+        # racing text evidence, and a near-perfect fuzzy match). A text with
+        # no year (the normal case) is unaffected; any mentioned year
+        # matching the event keeps it ("... Indycar 2026 (2026-07-19 ...)").
+        years = _years_in_text(ctx.stream_name)
+        if years:
+            window_events = [e for e in window_events if e.start_time.year in years]
+            if not window_events:
+                return MatchOutcome.failed(
+                    FailedReason.NO_RACING_MATCH,
+                    stream_name=ctx.stream_name,
+                    stream_id=stream_id,
+                    detail=(
+                        f"Text names year(s) {sorted(years)} matching no "
+                        f"{league} event covering {ctx.target_date} (archival?)"
+                    ),
+                )
 
         # EPG path only: further gate to events with a session actually airing
         # near the program's broadcast instant, not just sharing a date.
@@ -259,6 +319,14 @@ class RacingMatcher:
         if not self._covers_date(event, ctx.target_date, ctx.user_tz):
             return None
 
+        # Season-year gate, same as match(): a cached archival bind ("2008
+        # Belgian Grand Prix" cached before the gate existed) must not keep
+        # resurrecting through the cache.
+        years = _years_in_text(ctx.stream_name)
+        if years and event.start_time.year not in years:
+            self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
+            return None
+
         # EPG path only: cached match must still have a session airing near
         # this program's instant (see match()'s anchor_dt gate above).
         if ctx.anchor_dt is not None and not self._covers_instant(
@@ -291,6 +359,13 @@ class RacingMatcher:
         # unique-country fallback below (country-named streams, e.g.
         # "NASCAR Cup Series at Mexico City").
         stream_norm = normalize_text(ctx.stream_name)
+        # Compound-spelling tolerance: score the plain normalized forms AND
+        # bigram-augmented forms, taking the best. The augmented pass only
+        # ever helps when adjacent tokens fuse into the other side's
+        # compound spelling ("Faith Fest" -> "faithfest"); unrelated pairs
+        # score LOWER augmented (more non-shared tokens), and max() keeps
+        # their plain score, so no existing accept/reject flips.
+        stream_aug = _augment_compounds(stream_norm)
         best_score = 0
         best_event: Event | None = None
         country_scores: dict[str, float] = {}
@@ -299,7 +374,11 @@ class RacingMatcher:
             for candidate in (event.name, event.short_name, event.circuit_name):
                 if not candidate:
                     continue
-                score = fuzz.token_set_ratio(stream_norm, normalize_text(candidate))
+                cand_norm = normalize_text(candidate)
+                score = max(
+                    fuzz.token_set_ratio(stream_norm, cand_norm),
+                    fuzz.token_set_ratio(stream_aug, _augment_compounds(cand_norm)),
+                )
                 if score > best_score:
                     best_score = score
                     best_event = event
@@ -317,9 +396,19 @@ class RacingMatcher:
         # happening this weekend" purely by elimination. The country score
         # counts here: with one covering event there's no ambiguity for it
         # to create.
+        #
+        # The score alone isn't a reliable bar: generic venue words
+        # ("Speedway", "International Circuit", ...) can clear it on a
+        # single shared token with zero real connection to the event, so a
+        # stream also needs actual textual evidence it's the right racing
+        # series before Strategy 1 is allowed to fire.
         if len(events) == 1 and best_score < SINGLE_EVENT_SANITY_THRESHOLD:
             best_score = max(best_score, country_scores.get(events[0].id, 0))
-        if len(events) == 1 and best_score >= SINGLE_EVENT_SANITY_THRESHOLD:
+        if (
+            len(events) == 1
+            and best_score >= SINGLE_EVENT_SANITY_THRESHOLD
+            and has_racing_text_evidence(ctx.stream_name)
+        ):
             event = events[0]
             logger.debug(
                 "[MATCHED] racing stream=%s -> %s (method=direct, single event, score=%d)",
