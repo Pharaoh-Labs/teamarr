@@ -58,12 +58,14 @@ export function buildValidVariableSet(categories: VariableCategory[]): {
  *
  * The engine only treats a braced token as a variable when it matches this shape:
  * a lowercase/underscore-led name (digits, `_`, `@` allowed — e.g. `vs_@`) with an
- * optional single dotted suffix. Anything else inside braces — `{2024}`, `{1-0}`,
+ * optional single dotted suffix and an optional trailing `|filter` modifier (e.g.
+ * `{race_name|urlencode}`, #478). Anything else inside braces — `{2024}`, `{1-0}`,
  * `{Team Name}`, `{a.b.c}` — is literal text the resolver leaves untouched, so the
- * validator must ignore it too rather than cry "unknown variable". The backend
+ * validator must ignore it too rather than cry "unknown variable". Group 1 is the
+ * variable name (validated); the filter in group 2 is ignored here. The backend
  * lowercases the captured name before lookup, so matching is case-insensitive.
  */
-const VARIABLE_PATTERN = /\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)\}/gi
+const VARIABLE_PATTERN = /\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)(?:\|[a-z_]+)?\}/gi
 
 /**
  * Extract variable references the engine would actually resolve, lowercased to

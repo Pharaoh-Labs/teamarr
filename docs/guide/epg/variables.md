@@ -89,6 +89,25 @@ Dispatcharr channel logo — so the guide artwork and the channel logo always ma
 live preview in the template editor applies the base URL too, so what you see matches the
 generated output (and renders the actual image so you can confirm the link resolves).
 
+### URL-encoding variable values (`|urlencode`)
+
+When a variable value goes into the **query string** of an art URL, characters like
+spaces and `&` need to be percent-encoded — otherwise a value such as
+`{race_name}` = `Pit Stop & Podium` truncates the URL at the `&`, so only the first
+part reaches Game-Thumbs. Add the `|urlencode` filter (short alias `|url`) to any
+variable to encode its value:
+
+```
+/f1/cover?title={race_name|urlencode}&subtitle={session_name|urlencode}&iconurl=
+```
+
+- The filter encodes **only the variable's value** — the template's own `?`, `&`, and
+  `=` that form the URL structure stay literal.
+- It's **opt-in**: variables without the filter are unchanged, so a variable that already
+  holds a full URL is never double-encoded.
+- A misspelled filter (e.g. `|urlencodee`) renders literally, just like a misspelled
+  variable name, so you can spot the typo. The live preview applies the filter too.
+
 ---
 
 ## Identity

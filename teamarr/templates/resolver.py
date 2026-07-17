@@ -9,7 +9,9 @@ game conditions (is_home, win_streak, etc.) and priority.
 
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
+from urllib.parse import quote
 
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TemplateContext
@@ -18,9 +20,32 @@ from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
 
-# Pattern matches: {variable} or {variable.next} or {variable.last}
-# Note: @ is allowed to support {vs_@} variable
-VARIABLE_PATTERN = re.compile(r"\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)\}", re.IGNORECASE)
+# Pattern matches: {variable}, {variable.next}, {variable.last}, and an optional
+# trailing `|filter` modifier (e.g. {race_name|urlencode}). Group 1 is the
+# variable token (name + optional suffix); group 2 is the filter name, if any.
+# Note: @ is allowed to support {vs_@} variable.
+VARIABLE_PATTERN = re.compile(
+    r"\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)(?:\|([a-z_]+))?\}", re.IGNORECASE
+)
+
+
+def _filter_urlencode(value: str) -> str:
+    """Percent-encode a resolved value for safe use inside a URL (#478).
+
+    Encodes every reserved character (space, ``&``, ``=``, ``?``, ``/`` …) so a
+    value interpolated into an art/poster URL query string — e.g. game-thumbs
+    ``/f1/cover?title={race_name|urlencode}`` — survives a value containing
+    spaces or ``&`` instead of truncating the URL.
+    """
+    return quote(value or "", safe="")
+
+
+# Registry of `|filter` modifiers usable in templates. Opt-in by design so
+# variables that legitimately hold full URLs are never encoded unless asked.
+_FILTERS: dict[str, Callable[[str], str]] = {
+    "urlencode": _filter_urlencode,
+    "url": _filter_urlencode,  # short alias
+}
 
 
 class TemplateResolver:
@@ -86,20 +111,33 @@ class TemplateResolver:
 
         def replace(match: re.Match) -> str:
             var_name = match.group(1).lower()
+            filter_name = (match.group(2) or "").lower()
             # Keep unknown variables literal (helps users identify typos)
             # Known variables with empty values still get replaced with ""
-            if var_name not in variables:
+            if var_name in variables:
+                value = variables[var_name]
+            elif self._is_contextless_suffix(var_name):
                 # A VALID registry variable with a LEGAL suffix that's simply
                 # missing its game context (no next/last game — offseason,
                 # season end) resolves to empty like any known-but-empty value
                 # (#418) — raw {game_time.next} braces must never reach a real
                 # guide. Typos and illegal suffix usage (e.g. .next on a
                 # BASE_ONLY variable) still stay literal.
-                if self._is_contextless_suffix(var_name):
-                    return ""
+                value = ""
+            else:
                 unreplaced.append(var_name)
                 return match.group(0)  # Return original {variable} unchanged
-            return variables[var_name]
+
+            # Apply an optional `|filter` modifier (e.g. |urlencode, #478). An
+            # unknown filter is treated like a typo: keep the whole token literal
+            # so the author can see and fix it, rather than silently dropping it.
+            if filter_name:
+                filter_fn = _FILTERS.get(filter_name)
+                if filter_fn is None:
+                    unreplaced.append(match.group(0))
+                    return match.group(0)
+                return filter_fn(value)
+            return value
 
         result = VARIABLE_PATTERN.sub(replace, template)
 
