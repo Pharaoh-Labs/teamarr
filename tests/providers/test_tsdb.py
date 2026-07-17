@@ -392,3 +392,86 @@ def test_premium_tsdb_leagues_query():
     # The known premium-tier codes are present; free-tier ones are not.
     assert set(PREMIUM).issubset(premium)
     assert premium.isdisjoint(FREE)
+
+
+# ---------------------------------------------------------------------------
+# Season format candidates + retry-on-empty (#60, bead pgtq.5)
+# ---------------------------------------------------------------------------
+
+
+def _season_client(sport: str):
+    """TSDBClient with league lookups and transport stubbed for season tests."""
+    from unittest.mock import MagicMock
+
+    from teamarr.providers.tsdb.client import TSDBClient
+
+    client = TSDBClient.__new__(TSDBClient)
+    client.get_league_id = MagicMock(return_value="5766")
+    client.get_sport = MagicMock(return_value=sport)
+    client._cache = MagicMock()
+    client._cache.get.return_value = None
+    client._request = MagicMock()
+    return client
+
+
+class TestSeasonCandidates:
+    def test_soccer_tries_calendar_year_first(self):
+        client = _season_client("soccer")
+        candidates = client._season_candidates("bra.camp.paranaense")
+        assert candidates[0].isdigit()  # "2026"
+        assert "-" in candidates[1]  # "2025-2026"
+
+    def test_hockey_tries_fall_spring_first(self):
+        client = _season_client("hockey")
+        candidates = client._season_candidates("some.league")
+        assert "-" in candidates[0]
+        assert candidates[1].isdigit()
+
+    def test_get_season_events_retries_alternate_format_on_empty(self):
+        # Brazilian league: calendar-year first; simulate TSDB having data
+        # only under the second candidate to prove the fall-through fires
+        client = _season_client("hockey")  # fall-spring first = wrong guess
+        empty = {"events": None}
+        good = {"events": [{"idEvent": "1"}]}
+        client._request.side_effect = [empty, good]
+
+        result = client.get_season_events("bra.camp.paranaense")
+
+        assert result is good
+        assert client._request.call_count == 2
+        seasons = [c.args[1]["s"] for c in client._request.call_args_list]
+        assert "-" in seasons[0] and seasons[1].isdigit()
+
+    def test_get_season_events_explicit_season_single_request(self):
+        client = _season_client("soccer")
+        client._request.return_value = {"events": None}
+
+        client.get_season_events("bra.camp.paranaense", season="2024")
+
+        client._request.assert_called_once()
+        assert client._request.call_args.args[1]["s"] == "2024"
+
+    def test_get_events_by_season_first_format_hit_stops(self):
+        client = _season_client("soccer")
+        client._request.return_value = {"events": [{"idEvent": "1"}]}
+
+        result = client.get_events_by_season("bra.camp.paranaense")
+
+        assert result["events"]
+        client._request.assert_called_once()
+        assert client._request.call_args.args[1]["s"].isdigit()
+
+    def test_get_events_by_season_cached_empty_skips_to_alternate(self):
+        # A fresh cached-empty for the first format must not re-request it —
+        # only the alternate format goes to the API
+        client = _season_client("soccer")
+        empty = {"events": None}
+        good = {"events": [{"idEvent": "1"}]}
+        client._cache.get.side_effect = [empty, None]
+        client._request.return_value = good
+
+        result = client.get_events_by_season("bra.camp.paranaense")
+
+        assert result is good
+        client._request.assert_called_once()
+        assert "-" in client._request.call_args.args[1]["s"]
