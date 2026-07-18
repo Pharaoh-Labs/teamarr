@@ -1,7 +1,7 @@
 import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, LoaderCircle, Copy, Download, Upload, Tv, User } from "lucide-react"
+import { Plus, Trash2, Pencil, LoaderCircle, Copy, Download, Upload, Tv, User, RotateCcw } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
@@ -28,7 +28,7 @@ import {
   useCreateTemplate,
   useDeleteTemplate,
 } from "@/hooks/useTemplates"
-import { getTemplate, type Template } from "@/api/templates"
+import { getTemplate, restoreDefaultTemplates, type Template } from "@/api/templates"
 import { useQuery } from "@tanstack/react-query"
 import { getLeagues } from "@/api/teams"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
@@ -55,6 +55,24 @@ export function Templates() {
   const sportName = (s: string) => getSportDisplayName(s, sportsData?.sports)
 
   const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
+  const [isRestoring, setIsRestoring] = useState(false)
+
+  const handleRestoreDefaults = async () => {
+    setIsRestoring(true)
+    try {
+      const result = await restoreDefaultTemplates()
+      if (result.restored > 0) {
+        toast.success(`Restored ${result.restored} starter template(s)`)
+        refetch()
+      } else {
+        toast.info("All starter templates are already present")
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed")
+    } finally {
+      setIsRestoring(false)
+    }
+  }
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -416,6 +434,24 @@ export function Templates() {
               </TableBody>
             </Table>
           )}
+
+        {/* Deleted or renamed starters never reseed on their own (#487) —
+            this is the explicit way back. */}
+        <div className="flex justify-end pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRestoreDefaults}
+            disabled={isRestoring}
+          >
+            {isRestoring ? (
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4 mr-1" />
+            )}
+            Restore Starter Templates
+          </Button>
+        </div>
       </div>
 
       {/* Template Assignments — the manager owns its own header + add button */}

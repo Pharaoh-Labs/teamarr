@@ -161,22 +161,33 @@ class TestCheckAbbreviationMatch:
         result = matcher._check_abbreviation_match("Boston Celtics", "LA Lakers", event)
         assert result is None
 
-    def test_two_letter_abbreviations_skipped(self, matcher):
-        """2-letter abbreviations (SF, NE) should be skipped — too noisy."""
+    def test_two_letter_abbreviations_match_when_both_present(self, matcher):
+        """2-letter codes match in the both-teams branch (#472) — MLB's
+        official codes (SF, SD, KC, TB) are 2 letters, and requiring both
+        stream teams to hit different event abbreviations kills the noise
+        the old >=3 guard existed for."""
         home = _make_team("San Francisco 49ers", "SF")
         away = _make_team("New England Patriots", "NE")
         event = _make_event(home, away)
 
         result = matcher._check_abbreviation_match("SF", "NE", event)
-        assert result is None
+        assert result == (MatchMethod.FUZZY, 100.0)
 
-    def test_one_abbr_too_short(self, matcher):
-        """If one abbreviation is < 3 chars, skip entirely."""
+    def test_mixed_length_abbreviations_match(self, matcher):
         home = _make_team("Kansas City Chiefs", "KC")
         away = _make_team("Denver Broncos", "DEN")
         event = _make_event(home, away)
 
         result = matcher._check_abbreviation_match("KC", "DEN", event)
+        assert result == (MatchMethod.FUZZY, 100.0)
+
+    def test_single_team_two_letter_code_still_skipped(self, matcher):
+        """A LONE 2-letter token stays unmatchable — genuinely noise-prone (#472)."""
+        home = _make_team("Kansas City Chiefs", "KC")
+        away = _make_team("Denver Broncos", "DEN")
+        event = _make_event(home, away)
+
+        result = matcher._check_abbreviation_match("KC", None, event)
         assert result is None
 
     def test_empty_abbreviations(self, matcher):

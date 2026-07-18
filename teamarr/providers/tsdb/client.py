@@ -517,6 +517,32 @@ class TSDBClient(BaseHTTPClient):
         """eventsnextleague.php by raw league ID, no DB mapping."""
         return self._request("eventsnextleague.php", {"id": league_id})
 
+    def _season_candidates(self, league: str) -> list[str]:
+        """Season strings to try, most likely format first (#60 pgtq.5).
+
+        TSDB's season format varies by league WITHIN a sport: Brazilian
+        state championships and Scandinavian soccer run calendar years
+        ("2026") while European soccer runs fall-spring ("2025-2026").
+        Callers try candidates in order and fall through on empty, so a
+        wrong first guess costs one extra request and self-heals instead
+        of silently returning 0 events.
+        """
+        from datetime import date
+
+        today = date.today()
+        calendar = str(today.year)
+        if today.month < 8:
+            fall_spring = f"{today.year - 1}-{today.year}"
+        else:
+            fall_spring = f"{today.year}-{today.year + 1}"
+
+        sport = (self.get_sport(league) or "").lower()
+        if sport in ("cricket", "boxing", "soccer"):
+            # TSDB's soccer set skews calendar-year (Brazilian state,
+            # Scandinavian); European fall-spring soccer is served by ESPN.
+            return [calendar, fall_spring]
+        return [fall_spring, calendar]
+
     def get_events_by_season(self, league: str, season: str | None = None) -> dict | None:
         """Fetch all events for a league season.
 
@@ -525,6 +551,9 @@ class TSDBClient(BaseHTTPClient):
         (e.g., Unrivaled). Replaces the former eventsround.php path, which
         TheSportsDB has removed — it returns 404 for every league, including
         TSDB's own documented examples (see GH #217).
+
+        Without an explicit season, both season formats are tried in
+        likelihood order (see _season_candidates) — first non-empty wins.
 
         Args:
             league: Canonical league code
@@ -537,21 +566,27 @@ class TSDBClient(BaseHTTPClient):
         if not league_id:
             return None
 
-        if not season:
-            # Use current year for calendar-year leagues
-            season = str(date.today().year)
+        candidates = [season] if season else self._season_candidates(league)
 
-        cache_key = make_cache_key("tsdb", "eventsseason", league, season)
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            logger.debug("[TSDB] Cache hit: %s", cache_key)
-            return cached
+        last_result: dict | None = None
+        for s in candidates:
+            cache_key = make_cache_key("tsdb", "eventsseason", league, s)
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.debug("[TSDB] Cache hit: %s", cache_key)
+                if cached.get("events"):
+                    return cached
+                last_result = cached
+                continue  # cached-empty: try the other format, don't re-request
 
-        result = self._request("eventsseason.php", {"id": league_id, "s": season})
-        if result:
-            # Cache for 2 hours (same as eventsday)
-            self._cache.set(cache_key, result, 2 * 60 * 60)
-        return result
+            result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            if result:
+                # Cache for 2 hours (same as eventsday)
+                self._cache.set(cache_key, result, 2 * 60 * 60)
+            if result and result.get("events"):
+                return result
+            last_result = result or last_result
+        return last_result
 
     def get_team_next_events(self, team_id: str) -> dict | None:
         """Fetch upcoming events for a team.
@@ -633,10 +668,12 @@ class TSDBClient(BaseHTTPClient):
 
         Args:
             league: Canonical league code
-            season: Season string. Format varies by sport:
-                    - Hockey: "2024-2025" (fall-spring)
-                    - Cricket: "2024" (calendar year)
-                    - Boxing: "2024" (calendar year)
+            season: Season string. Format varies BY LEAGUE, not just sport
+                    (#60): "2024-2025" fall-spring vs "2024" calendar year.
+                    When omitted, both formats are tried in likelihood order
+                    (see _season_candidates) — Brazilian state championships
+                    previously got a fall-spring guess, returned 0 events,
+                    and silently capped team discovery at 10.
 
         Returns:
             Raw TSDB response or None
@@ -645,26 +682,15 @@ class TSDBClient(BaseHTTPClient):
         if not league_id:
             return None
 
-        if not season:
-            from datetime import date
+        candidates = [season] if season else self._season_candidates(league)
 
-            year = date.today().year
-            month = date.today().month
-            sport = self.get_sport(league).lower()
-
-            # Different sports use different season formats
-            if sport in ("cricket", "boxing"):
-                # Calendar year seasons
-                season = str(year)
-            else:
-                # Fall-spring seasons (hockey, etc.)
-                # Use previous year if before August
-                if month < 8:
-                    season = f"{year - 1}-{year}"
-                else:
-                    season = f"{year}-{year + 1}"
-
-        return self._request("eventsseason.php", {"id": league_id, "s": season})
+        last_result: dict | None = None
+        for s in candidates:
+            result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            if result and result.get("events"):
+                return result
+            last_result = result or last_result
+        return last_result
 
     def get_teams_in_league(self, league: str) -> dict | None:
         """Get all teams in a league.

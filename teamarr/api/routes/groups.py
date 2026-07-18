@@ -2282,18 +2282,14 @@ def test_extraction(request: TestExtractionRequest):
                 pattern_errors[fname] = str(e)
 
     warnings: list[str] = []
-    if (p.month_enabled or p.day_enabled) and not p.date_enabled:
-        warnings.append(
-            "Month/day patterns only apply when the date pattern toggle is "
-            "enabled — the pipeline gates all date extraction on it."
-        )
 
     # Learn the source's date format from the submitted batch (#474) —
     # exactly what the matcher does before a run.
     if p.date_enabled and p.date_pattern:
         config.learn_date_format(request.stream_names)
 
-    date_attempted = p.date_enabled  # mirror _apply_custom_datetime_regex gate
+    # Mirror _apply_custom_datetime_regex's gate (#485): any date-ish pattern
+    date_attempted = p.date_enabled or p.month_enabled or p.day_enabled
     results: list[StreamExtractionResult] = []
     for name in request.stream_names:
         r = StreamExtractionResult(stream_name=name)

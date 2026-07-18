@@ -1588,7 +1588,11 @@ def _apply_custom_datetime_regex(
     Uses ORIGINAL stream name (not normalized) for more flexible matching.
     Mutates ``normalized`` in place.
     """
-    if custom_regex.date_enabled:
+    # Gate on ANY date-ish pattern (#485): month/day-only configurations are
+    # legal ("Or extract separately" in the UI) and handled by the extractor's
+    # month+day combination path — the old date_enabled-only gate made them
+    # silently dead.
+    if custom_regex.date_enabled or custom_regex.month_enabled or custom_regex.day_enabled:
         custom_date, format_verified = extract_date_with_custom_regex(
             stream_name, custom_regex
         )

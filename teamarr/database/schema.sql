@@ -1699,6 +1699,19 @@ CREATE TABLE IF NOT EXISTS condition_presets (
 
 
 -- =============================================================================
+-- DELETED_DEFAULT_TEMPLATES TABLE (#487)
+-- Tombstones for starter-set template names the user deleted or renamed
+-- away. seed_default_templates skips these, so user intent survives
+-- restarts. Cleared by the explicit "Restore starter templates" action.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS deleted_default_templates (
+    name TEXT PRIMARY KEY,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- =============================================================================
 -- EVENT_EPG_XMLTV TABLE
 -- Stores generated XMLTV content per event group
 -- Allows XMLTV to be served at a predictable URL for Dispatcharr to fetch
