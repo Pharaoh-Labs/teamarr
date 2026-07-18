@@ -485,6 +485,23 @@ class MediaServerEntryModel(BaseModel):
         return MASKED_SECRET if v else None
 
 
+class MediaServerEntryUpdateModel(BaseModel):
+    """Update-path twin of MediaServerEntryModel — NO masking serializers.
+
+    The response model's field_serializers also run during model_dump(),
+    which masked freshly-entered secrets in the update route before the
+    merge step could see them — new credentials stored as None (#491).
+    Updates must carry values verbatim; merge_masked_servers handles the
+    masked sentinels the UI round-trips for untouched fields.
+    """
+
+    name: str = ""
+    url: str | None = None
+    username: str | None = None
+    password: str | None = None
+    api_key: str | None = None
+
+
 class EmbySettingsModel(BaseModel):
     """Emby integration settings."""
 
@@ -498,7 +515,7 @@ class EmbySettingsUpdate(BaseModel):
     enabled: bool | None = None
     # Full-replace: send the complete list. Untouched secrets may be sent as
     # the masked sentinel; the route merges stored values back per entry.
-    servers: list[MediaServerEntryModel] | None = None
+    servers: list[MediaServerEntryUpdateModel] | None = None
 
 
 class EmbyConnectionTestRequest(BaseModel):
@@ -539,7 +556,7 @@ class JellyfinSettingsUpdate(BaseModel):
     enabled: bool | None = None
     # Full-replace: send the complete list. Untouched secrets may be sent as
     # the masked sentinel; the route merges stored values back per entry.
-    servers: list[MediaServerEntryModel] | None = None
+    servers: list[MediaServerEntryUpdateModel] | None = None
 
 
 class JellyfinConnectionTestRequest(BaseModel):

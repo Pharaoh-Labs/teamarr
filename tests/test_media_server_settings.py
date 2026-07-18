@@ -136,3 +136,85 @@ class TestMaskedSecretMerge:
             [],
         )
         assert merged[0]["password"] is None
+
+
+class TestFreshCredentialSave:
+    """Route-level regression for #491: the update path must NOT mask
+    freshly-entered secrets before the merge sees them."""
+
+    def _wire(self, db_conn, monkeypatch):
+        from contextlib import contextmanager
+
+        import teamarr.api.routes.settings.emby as emby_routes
+
+        @contextmanager
+        def fake_db():
+            yield db_conn
+
+        monkeypatch.setattr(emby_routes, "get_db", fake_db)
+        return emby_routes
+
+    def test_fresh_password_and_api_key_store_real_values(self, db_conn, monkeypatch):
+        import json
+
+        from teamarr.api.routes.settings.models import EmbySettingsUpdate
+
+        routes = self._wire(db_conn, monkeypatch)
+        routes.update_emby_settings(
+            EmbySettingsUpdate(
+                enabled=True,
+                servers=[{
+                    "name": "Den", "url": "http://emby:8096",
+                    "username": "u", "password": "fresh-pw", "api_key": "fresh-key",
+                }],
+            )
+        )
+        raw = db_conn.execute(
+            "SELECT emby_servers FROM settings WHERE id = 1"
+        ).fetchone()[0]
+        stored = json.loads(raw)[0]
+        # The bug stored None here: model_dump() ran the masking serializer
+        assert stored["password"] == "fresh-pw"
+        assert stored["api_key"] == "fresh-key"
+
+    def test_masked_round_trip_still_preserves(self, db_conn, monkeypatch):
+        import json
+
+        from teamarr.api.routes.settings.models import (
+            MASKED_SECRET,
+            EmbySettingsUpdate,
+        )
+
+        routes = self._wire(db_conn, monkeypatch)
+        routes.update_emby_settings(
+            EmbySettingsUpdate(
+                servers=[{"name": "Den", "url": "http://emby:8096",
+                          "username": "u", "password": "fresh-pw", "api_key": None}],
+            )
+        )
+        # UI round-trip: GET shows masked; user saves without touching it
+        routes.update_emby_settings(
+            EmbySettingsUpdate(
+                servers=[{"name": "Den Renamed", "url": "http://emby:8096",
+                          "username": "u", "password": MASKED_SECRET, "api_key": None}],
+            )
+        )
+        stored = json.loads(db_conn.execute(
+            "SELECT emby_servers FROM settings WHERE id = 1"
+        ).fetchone()[0])[0]
+        assert stored["name"] == "Den Renamed"
+        assert stored["password"] == "fresh-pw"
+
+    def test_get_masks_but_never_stores_mask(self, db_conn, monkeypatch):
+        from teamarr.api.routes.settings.models import EmbySettingsUpdate
+
+        routes = self._wire(db_conn, monkeypatch)
+        routes.update_emby_settings(
+            EmbySettingsUpdate(
+                servers=[{"name": "Den", "url": "http://emby:8096",
+                          "username": "u", "password": "fresh-pw", "api_key": None}],
+            )
+        )
+        resp = routes.get_emby_settings()
+        dumped = resp.model_dump()
+        assert dumped["servers"][0]["password"] == "********"
