@@ -1659,8 +1659,9 @@ class TeamMatcher:
         """Resolve a team name to its canonical form via alias lookup.
 
         Priority:
-        1. Built-in aliases (TEAM_ALIASES constant) - league-agnostic
-        2. User-defined aliases (database) - league-specific
+        1. User-defined aliases (database, league-specific) — a user's
+           deliberate mapping outranks shipped defaults (#480)
+        2. Built-in aliases (TEAM_ALIASES constant) - league-agnostic
         3. International country name auto-resolution (e.g. "brasil" → "Brazil")
 
         Args:
@@ -1672,16 +1673,17 @@ class TeamMatcher:
         """
         normalized = normalize_text(team_name)
 
-        # First check built-in aliases (league-agnostic)
-        canonical = _NORMALIZED_TEAM_ALIASES.get(normalized)
-        if canonical:
-            return canonical
-
-        # Then check user-defined aliases (league-specific)
+        # User-defined aliases first — deliberate user mappings outrank
+        # shipped defaults (#480)
         if league and self._user_aliases:
             user_canonical = self._lookup_user_alias(normalized, league)
             if user_canonical:
                 return user_canonical
+
+        # Then built-in aliases (league-agnostic)
+        canonical = _NORMALIZED_TEAM_ALIASES.get(normalized)
+        if canonical:
+            return canonical
 
         # Finally, try automatic country name resolution for national-team sports.
         # Memoized: the same stream team names are re-checked against every

@@ -161,6 +161,10 @@ TEAM_ALIASES: dict[str, str] = {
     "sens": "ottawa senators",
     "jets": "winnipeg jets",
     # MLB
+    # Official club nickname with no matching provider string — ESPN says
+    # "Diamondbacks" in every field, so "D-backs" scores ~53 without this (#480)
+    "d-backs": "arizona diamondbacks",
+    "dbacks": "arizona diamondbacks",
     "yanks": "new york yankees",
     "bosox": "boston red sox",
     "redsox": "boston red sox",
