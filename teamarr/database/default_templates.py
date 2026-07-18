@@ -1254,16 +1254,20 @@ def _is_referenced(conn: Connection, template_id: int) -> bool:
     return False
 
 
-def seed_default_templates(conn: Connection) -> None:
+def seed_default_templates(conn: Connection) -> int:
     """Seed the curated default set — idempotent, safe on every startup.
 
     1. A PRISTINE legacy seed ("Team"/"Event" still carrying the broken
        localhost:3000 placeholder art) is upgraded in place to its curated
        replacement — same row id, so assignments survive (tvnk.1 decision).
     2. Any set member missing by name is created (fresh installs get the full
-       set; upgrades pick up new members). Existing rows are NEVER
+       set; upgrades pick up new members) — EXCEPT tombstoned names (#487):
+       a user deleting or renaming-away a starter records a tombstone, and
+       absence-by-intent must not reseed. Existing rows are NEVER
        overwritten — except unedited prior-iteration rows, which are healed
        to current content in place (steps 1b/1c).
+
+    Returns the number of templates created (step 2).
     """
     from teamarr.database.templates import (
         create_template,
@@ -1338,8 +1342,56 @@ def seed_default_templates(conn: Connection) -> None:
         delete_template(conn, row.id)
         del existing[retired_spec["name"]]
 
-    # 2. Add missing set members.
+    # 2. Add missing set members — absence-by-user-intent excluded (#487).
+    tombstoned = get_seed_tombstones(conn)
+    created = 0
     for name, spec in specs.items():
-        if name in existing:
+        if name in existing or name in tombstoned:
             continue
         create_template(conn, **spec)
+        created += 1
+    return created
+
+
+# =============================================================================
+# Seed tombstones (#487): deletes and renames of starter names must not
+# resurrect on the next seed run. Recorded by the API layer on user-initiated
+# actions only — the seeder's own internal deletes (duplicate healing,
+# retired members) never tombstone.
+# =============================================================================
+
+
+def seed_names_affected_by(name: str) -> set[str]:
+    """The CURRENT starter-set names that would reseed if ``name`` vanished.
+
+    A deleted row named by a LEGACY or PRIOR-generation seed name causes the
+    mapped CURRENT member to be recreated by step 2, so the tombstone must
+    target the mapped name too.
+    """
+    specs = {spec["name"] for spec in DEFAULT_TEMPLATE_SET}
+    targets = set()
+    if name in specs:
+        targets.add(name)
+    mapped = LEGACY_UPGRADES.get(name) or PRIOR_NAME_UPGRADES.get(name)
+    if mapped and mapped in specs:
+        targets.add(mapped)
+    return targets
+
+
+def record_seed_tombstones(conn: Connection, names: set[str]) -> None:
+    for n in names:
+        conn.execute(
+            "INSERT OR IGNORE INTO deleted_default_templates (name) VALUES (?)", (n,)
+        )
+
+
+def get_seed_tombstones(conn: Connection) -> set[str]:
+    try:
+        rows = conn.execute("SELECT name FROM deleted_default_templates").fetchall()
+    except Exception:
+        return set()  # pre-reconciliation startup order safety
+    return {r[0] for r in rows}
+
+
+def clear_seed_tombstones(conn: Connection) -> int:
+    return conn.execute("DELETE FROM deleted_default_templates").rowcount

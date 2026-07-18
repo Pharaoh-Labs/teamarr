@@ -196,6 +196,17 @@ export async function updateTemplate(
   return api.put(`/templates/${templateId}`, data)
 }
 
+export interface RestoreDefaultsResponse {
+  restored: number
+  tombstones_cleared: number
+}
+
+// Restore the starter template set (#487): clears delete/rename tombstones
+// and re-runs the seeder. Never touches user-modified or user-created rows.
+export async function restoreDefaultTemplates(): Promise<RestoreDefaultsResponse> {
+  return api.post("/templates/restore-defaults")
+}
+
 export async function deleteTemplate(templateId: number): Promise<void> {
   return api.delete(`/templates/${templateId}`)
 }
