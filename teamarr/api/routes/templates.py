@@ -315,6 +315,24 @@ def update_template(template_id: int, template: TemplateUpdate):
     kwargs = {k: _pydantic_to_plain(k, getattr(template, k, v)) for k, v in updates.items()}
 
     with get_db() as conn:
+        # Rename-away tombstone (#487): renaming a starter must not cause a
+        # fresh seed of the old name on the next startup.
+        if "name" in updates:
+            from teamarr.database.default_templates import (
+                record_seed_tombstones,
+                seed_names_affected_by,
+            )
+
+            old = get_template_raw(conn, template_id)
+            if old and old.get("name") != updates["name"]:
+                affected = seed_names_affected_by(old["name"])
+                if affected:
+                    record_seed_tombstones(conn, affected)
+                    logger.info(
+                        "[TEMPLATES] Tombstoned starter name(s) %s (renamed away)",
+                        sorted(affected),
+                    )
+
         if not db_update(conn, template_id, **kwargs):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
@@ -328,8 +346,49 @@ def update_template(template_id: int, template: TemplateUpdate):
 
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_template(template_id: int):
-    """Delete a template."""
+    """Delete a template.
+
+    Deleting a starter-set template records a tombstone (#487) so the seeder
+    never resurrects it; the explicit restore endpoint clears tombstones.
+    """
+    from teamarr.database.default_templates import (
+        record_seed_tombstones,
+        seed_names_affected_by,
+    )
 
     with get_db() as conn:
+        row = get_template_raw(conn, template_id)
         if not db_delete(conn, template_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+        if row:
+            affected = seed_names_affected_by(row.get("name") or "")
+            if affected:
+                record_seed_tombstones(conn, affected)
+                logger.info(
+                    "[TEMPLATES] Tombstoned starter name(s) %s (deleted)",
+                    sorted(affected),
+                )
+
+
+@router.post("/templates/restore-defaults")
+def restore_default_templates():
+    """Restore the starter template set (#487).
+
+    Clears deletion/rename tombstones and re-runs the seeder — recreates any
+    missing starter-set member. User-modified or user-created templates are
+    never touched (the seeder only creates missing names).
+    """
+    from teamarr.database.default_templates import (
+        clear_seed_tombstones,
+        seed_default_templates,
+    )
+
+    with get_db() as conn:
+        cleared = clear_seed_tombstones(conn)
+        created = seed_default_templates(conn)
+        logger.info(
+            "[TEMPLATES] Restore defaults: %d tombstone(s) cleared, %d template(s) recreated",
+            cleared,
+            created,
+        )
+        return {"restored": created, "tombstones_cleared": cleared}

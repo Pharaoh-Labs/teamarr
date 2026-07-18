@@ -123,3 +123,13 @@ base URL.
 
 The racing starter ships without program art: race weekends have no home/away
 matchup for the cover path to compose from.
+
+## Deleting and restoring starters
+
+Starter templates you **delete** stay deleted, and starters you **rename**
+become fully yours — neither reappears after a restart. Teamarr records your
+intent and skips those names when seeding.
+
+To get the full starter set back, use **Restore Starter Templates** at the
+bottom of the Templates table. Restoring only recreates *missing* starters —
+templates you've modified or created yourself are never touched.
