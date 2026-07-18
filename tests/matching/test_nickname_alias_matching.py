@@ -72,11 +72,16 @@ def _match(stream_name: str, events: list[Event], matcher=None, cfg=None):
 
 
 class TestShortNameScoring:
-    def test_dbacks_without_alias_still_fails_honestly(self):
-        # With the REAL short_name ('Diamondbacks'), 'D-backs' scores ~53 —
-        # documents why an alias (below) is the user-facing answer
+    def test_dbacks_matches_out_of_the_box_via_builtin_alias(self):
+        # ESPN has no "D-backs" string anywhere (short_name scores ~53), so
+        # the official club nickname is a BUILTIN alias (#480) — no user
+        # alias required
         outcome = _match("Cardinals x D-backs", [_event()])
-        assert outcome.category == ResultCategory.FAILED
+        assert outcome.category == ResultCategory.MATCHED
+
+    def test_dbacks_no_hyphen_variant_matches(self):
+        outcome = _match("Cardinals x Dbacks", [_event()])
+        assert outcome.category == ResultCategory.MATCHED
 
 
 class TestAliasNormalization:
