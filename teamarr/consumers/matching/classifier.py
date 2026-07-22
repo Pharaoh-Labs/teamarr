@@ -68,6 +68,18 @@ class ClassifiedStream:
     feed_hint: str | None = None
 
 
+def normalize_regex_syntax(pattern: str) -> str:
+    """Accept JS/.NET-style named groups in custom patterns (#494).
+
+    The edit form displays patterns in JS syntax, so users naturally write
+    ``(?<team1>`` — which Python's ``re`` rejects. Translate to Python syntax
+    before compiling: ``(?<name>`` → ``(?P<name>``, ``\\k<name>`` → ``(?P=name)``.
+    Lookbehinds are safe: ``(?<=`` / ``(?<!`` don't start with a word character.
+    """
+    pattern = re.sub(r"\(\?<([A-Za-z_]\w*)>", r"(?P<\1>", pattern)
+    return re.sub(r"\\k<([A-Za-z_]\w*)>", r"(?P=\1)", pattern)
+
+
 @dataclass
 class CustomRegexConfig:
     """Configuration for custom regex extraction patterns."""
@@ -152,7 +164,9 @@ class CustomRegexConfig:
 
         if self._compiled_teams is None:
             try:
-                self._compiled_teams = re.compile(self.teams_pattern, re.IGNORECASE)
+                self._compiled_teams = re.compile(
+                    normalize_regex_syntax(self.teams_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom teams regex pattern: %s", e)
                 return None
@@ -166,7 +180,9 @@ class CustomRegexConfig:
 
         if self._compiled_date is None:
             try:
-                self._compiled_date = re.compile(self.date_pattern, re.IGNORECASE)
+                self._compiled_date = re.compile(
+                    normalize_regex_syntax(self.date_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom date regex pattern: %s", e)
                 return None
@@ -180,7 +196,9 @@ class CustomRegexConfig:
 
         if self._compiled_month is None:
             try:
-                self._compiled_month = re.compile(self.month_pattern, re.IGNORECASE)
+                self._compiled_month = re.compile(
+                    normalize_regex_syntax(self.month_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom month regex pattern: %s", e)
                 return None
@@ -194,7 +212,9 @@ class CustomRegexConfig:
 
         if self._compiled_day is None:
             try:
-                self._compiled_day = re.compile(self.day_pattern, re.IGNORECASE)
+                self._compiled_day = re.compile(
+                    normalize_regex_syntax(self.day_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom day regex pattern: %s", e)
                 return None
@@ -208,7 +228,9 @@ class CustomRegexConfig:
 
         if self._compiled_time is None:
             try:
-                self._compiled_time = re.compile(self.time_pattern, re.IGNORECASE)
+                self._compiled_time = re.compile(
+                    normalize_regex_syntax(self.time_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom time regex pattern: %s", e)
                 return None
@@ -222,7 +244,9 @@ class CustomRegexConfig:
 
         if self._compiled_league is None:
             try:
-                self._compiled_league = re.compile(self.league_pattern, re.IGNORECASE)
+                self._compiled_league = re.compile(
+                    normalize_regex_syntax(self.league_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom league regex pattern: %s", e)
                 return None
@@ -236,7 +260,9 @@ class CustomRegexConfig:
 
         if self._compiled_fighters is None:
             try:
-                self._compiled_fighters = re.compile(self.fighters_pattern, re.IGNORECASE)
+                self._compiled_fighters = re.compile(
+                    normalize_regex_syntax(self.fighters_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom fighters regex pattern: %s", e)
                 return None
@@ -250,7 +276,9 @@ class CustomRegexConfig:
 
         if self._compiled_event_name is None:
             try:
-                self._compiled_event_name = re.compile(self.event_name_pattern, re.IGNORECASE)
+                self._compiled_event_name = re.compile(
+                    normalize_regex_syntax(self.event_name_pattern), re.IGNORECASE
+                )
             except re.error as e:
                 logger.warning("[CLASSIFY] Invalid custom event_name regex pattern: %s", e)
                 return None
@@ -413,9 +441,7 @@ def extract_date_with_custom_regex(
                     date_str = match.group("date")
                     if date_str:
                         return (
-                            _parse_date_string(
-                                date_str.strip(), config.learned_date_formats
-                            ),
+                            _parse_date_string(date_str.strip(), config.learned_date_formats),
                             blob_format_known,
                         )
                 except (IndexError, re.error):
@@ -443,9 +469,7 @@ def extract_date_with_custom_regex(
                 groups = match.groups()
                 if groups and groups[0]:
                     return (
-                        _parse_date_string(
-                            groups[0].strip(), config.learned_date_formats
-                        ),
+                        _parse_date_string(groups[0].strip(), config.learned_date_formats),
                         blob_format_known,
                     )
 
@@ -741,9 +765,7 @@ def _parse_time_string(time_str: str) -> time | None:
     # Normalize: remove spaces between number and am/pm. Times are at most
     # 4 digits; the bounds also keep backtracking linear on adversarial input
     # (py/polynomial-redos — this runs on user-captured text via #458).
-    time_str_normalized = re.sub(
-        r"(\d{1,4})\s{0,3}(am|pm)", r"\1\2", time_str, flags=re.IGNORECASE
-    )
+    time_str_normalized = re.sub(r"(\d{1,4})\s{0,3}(am|pm)", r"\1\2", time_str, flags=re.IGNORECASE)
 
     for fmt in formats:
         try:
@@ -1593,9 +1615,7 @@ def _apply_custom_datetime_regex(
     # month+day combination path — the old date_enabled-only gate made them
     # silently dead.
     if custom_regex.date_enabled or custom_regex.month_enabled or custom_regex.day_enabled:
-        custom_date, format_verified = extract_date_with_custom_regex(
-            stream_name, custom_regex
-        )
+        custom_date, format_verified = extract_date_with_custom_regex(stream_name, custom_regex)
         if custom_date:
             normalized.extracted_date = custom_date
             normalized.extracted_date_trusted = format_verified
