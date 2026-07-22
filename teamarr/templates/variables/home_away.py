@@ -423,6 +423,32 @@ def extract_broadcast_feed_team(ctx: TemplateContext, game_ctx: GameContext | No
     return f"{ctx.feed_team.name} Feed"
 
 
+@register_variable(
+    name="broadcast_feed_team_short",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="'{Team Short Name} Feed' (e.g., 'Mariners Feed') or '' if no feed",
+    scope=TemplateScope.EVENT_ONLY,
+)
+def extract_broadcast_feed_team_short(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return f"{ctx.feed_team.short_name or ctx.feed_team.name} Feed"
+
+
+@register_variable(
+    name="broadcast_feed_team_abbrev",
+    category=Category.HOME_AWAY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="'{TEAM ABBREV} Feed' (e.g., 'SEA Feed') or '' if no feed",
+    scope=TemplateScope.EVENT_ONLY,
+)
+def extract_broadcast_feed_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    if not ctx.feed_team:
+        return ""
+    return f"{ctx.feed_team.abbreviation.upper()} Feed"
+
+
 # --- Article-aware naming + matchup connector (tvnk.7, #329) ---
 # Gracenote convention: clubs/franchises take "the", national teams and
 # individual-sport competitors don't. Lowercase "the" — the resolver

@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 260 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 262 variables across 20 categories.
 
 ## Team vs Event Templates
 
@@ -230,10 +230,12 @@ These are most useful for Event EPG templates on stream-separated channels (e.g.
 | `{feed_home_away}` | `'Home'` if home feed, `'Away'` if away feed, `''` if no feed | base | `Home` |
 | `{broadcast_feed}` | `'Home Team Feed'` / `'Away Team Feed'` / `''` if no feed | base | `Home Team Feed` |
 | `{broadcast_feed_team}` | `'{Team Name} Feed'` or `''` if no feed | base | `Baltimore Orioles Feed` |
+| `{broadcast_feed_team_short}` | `'{Team Short Name} Feed'` or `''` if no feed | base | `Orioles Feed` |
+| `{broadcast_feed_team_abbrev}` | `'{TEAM ABBREV} Feed'` or `''` if no feed | base | `BAL Feed` |
 
 Feed Team variables do **not** support `.next` / `.last` suffixes — they describe the channel's configuration, not a specific game's schedule. For per-game home/away references, use the `{home_team}` / `{away_team}` variables above.
 
-`{broadcast_feed}` and `{broadcast_feed_team}` are **pre-formatted** — they include the literal `" Feed"` suffix. When feed separation isn't active they return `""` as a unit, so the whole phrase disappears cleanly from the template (unlike composing `{feed_home_away} Team Feed` yourself, which would leave `"Team Feed"` orphaned).
+`{broadcast_feed}` and the `{broadcast_feed_team}`/`{broadcast_feed_team_short}`/`{broadcast_feed_team_abbrev}` family are **pre-formatted** — they include the literal `" Feed"` suffix. When feed separation isn't active they return `""` as a unit, so the whole phrase disappears cleanly from the template (unlike composing `{feed_home_away} Team Feed` yourself, which would leave `"Team Feed"` orphaned).
 
 ---
 
