@@ -252,6 +252,24 @@ TIME_PATTERNS = [
 # Standalone TZ pattern (after time has been masked, e.g., "@ ET" at end)
 TZ_STANDALONE_PATTERN = rf"\s*@?\s*({_TZ_ABBREVS})\s*$"
 
+# Catchup/timeshift metadata some providers append to stream names (#495):
+#   "Dodgers x Yankees start:2026-07-19 17:35:00 stop:2026-07-20 00:48:20"
+# The start timestamp doubles as the stream's date/time, but the WHOLE tail has
+# to go before separator/team detection: generic masking replaces only the
+# first date+time, so the stop timestamp would survive and corrupt team
+# extraction ("Yankees start:" reads as a show-name prefix, leaving
+# team2="stop:2026-07-20 00:48:20").
+CATCHUP_START_PATTERN = re.compile(
+    r"\bstart\s*[:=]\s*(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::\d{2})?",
+    re.IGNORECASE,
+)
+# Stop timestamp may be truncated by provider name-length limits ("stop:20"),
+# so accept any digit-led date/time fragment after the label.
+CATCHUP_STOP_PATTERN = re.compile(
+    r"\bstop\s*[:=]\s*\d[\d/\-]*(?:[ T]\d{1,2}(?::\d{2}){0,2})?",
+    re.IGNORECASE,
+)
+
 # Map timezone abbreviations to IANA timezone names
 TZ_ABBREVIATION_MAP = {
     # === North America ===
@@ -372,13 +390,27 @@ def extract_and_mask_datetime(text: str) -> tuple[str, date | None, time | None,
     extracted_time = None
     extracted_tz = None
 
+    # Catchup metadata (#495): take date/time from the start timestamp, then
+    # strip both start and stop labels entirely.
+    catchup_match = CATCHUP_START_PATTERN.search(result)
+    if catchup_match:
+        try:
+            year, month, day, hour, minute = (int(g) for g in catchup_match.groups())
+            extracted_date = date(year, month, day)
+            extracted_time = time(hour, minute)
+        except ValueError:
+            pass
+        result = CATCHUP_START_PATTERN.sub(" ", result)
+    result = CATCHUP_STOP_PATTERN.sub(" ", result)
+
     # Extract and mask dates
     for pattern, mask in DATE_PATTERNS:
         match = re.search(pattern, result, re.IGNORECASE)
         if match:
             is_iso = mask == "DATE_MASK_ISO"
             no_year = mask == "DATE_MASK_NO_YEAR"
-            extracted_date = _parse_date_match(match, is_iso=is_iso, no_year=no_year)
+            if extracted_date is None:
+                extracted_date = _parse_date_match(match, is_iso=is_iso, no_year=no_year)
             result = re.sub(pattern, " DATE_MASK ", result, count=1, flags=re.IGNORECASE)
             break
 
@@ -386,7 +418,10 @@ def extract_and_mask_datetime(text: str) -> tuple[str, date | None, time | None,
     for pattern, mask in TIME_PATTERNS:
         match = re.search(pattern, result, re.IGNORECASE)
         if match:
-            extracted_time, extracted_tz = _parse_time_match(match)
+            parsed_time, parsed_tz = _parse_time_match(match)
+            if extracted_time is None:
+                extracted_time = parsed_time
+            extracted_tz = extracted_tz or parsed_tz
             result = re.sub(pattern, f" {mask} ", result, count=1, flags=re.IGNORECASE)
             break
 
