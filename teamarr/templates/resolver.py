@@ -9,43 +9,60 @@ game conditions (is_home, win_streak, etc.) and priority.
 
 import logging
 import re
-from collections.abc import Callable
 from typing import Any
-from urllib.parse import quote
 
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TemplateContext
+from teamarr.templates.filters import FILTERS
 from teamarr.templates.variables import SuffixRules, get_registry
 from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
 
 # Pattern matches: {variable}, {variable.next}, {variable.last}, and an optional
-# trailing `|filter` modifier (e.g. {race_name|urlencode}). Group 1 is the
-# variable token (name + optional suffix); group 2 is the filter name, if any.
+# chain of trailing `|filter` modifiers (e.g. {race_name|urlencode},
+# {team_name|pascal|url} — applied left-to-right, #484). Group 1 is the
+# variable token (name + optional suffix); group 2 is the filter chain, if any.
 # Note: @ is allowed to support {vs_@} variable.
 VARIABLE_PATTERN = re.compile(
-    r"\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)(?:\|([a-z_]+))?\}", re.IGNORECASE
+    r"\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)((?:\|[a-z_]+)*)\}", re.IGNORECASE
 )
 
-
-def _filter_urlencode(value: str) -> str:
-    """Percent-encode a resolved value for safe use inside a URL (#478).
-
-    Encodes every reserved character (space, ``&``, ``=``, ``?``, ``/`` …) so a
-    value interpolated into an art/poster URL query string — e.g. game-thumbs
-    ``/f1/cover?title={race_name|urlencode}`` — survives a value containing
-    spaces or ``&`` instead of truncating the URL.
-    """
-    return quote(value or "", safe="")
-
-
-# Registry of `|filter` modifiers usable in templates. Opt-in by design so
-# variables that legitimately hold full URLs are never encoded unless asked.
-_FILTERS: dict[str, Callable[[str], str]] = {
-    "urlencode": _filter_urlencode,
-    "url": _filter_urlencode,  # short alias
+# Retired pure-transform variables (#484) resolve FOREVER as base|filter so
+# pre-migration backups, Discord-shared templates, and community guides keep
+# working. They are gone from the picker, docs, and the variable count — but
+# never from here. sport_lower maps to |slug (not |lower) because it returned
+# the hyphenated sport CODE ('australian-football'), not the display name.
+_LEGACY_ALIASES: dict[str, tuple[str, str]] = {
+    "team_name_pascal": ("team_name", "pascal"),
+    "home_team_pascal": ("home_team", "pascal"),
+    "away_team_pascal": ("away_team", "pascal"),
+    "team_abbrev_lower": ("team_abbrev", "lower"),
+    "home_team_abbrev_lower": ("home_team_abbrev", "lower"),
+    "away_team_abbrev_lower": ("away_team_abbrev", "lower"),
+    "opponent_abbrev_lower": ("opponent_abbrev", "lower"),
+    "feed_team_abbrev_lower": ("feed_team_abbrev", "lower"),
+    "result_lower": ("result", "lower"),
+    "sport_lower": ("sport", "slug"),
 }
+
+
+def rewrite_legacy_tokens(text: str) -> str:
+    """Rewrite retired transform tokens to their base|filter form (#484).
+
+    ``{team_name_pascal}`` -> ``{team_name|pascal}``; suffixes carry over and
+    an existing filter chain stays appended. Rendering is identical either way
+    (the resolver aliases the old names forever) — this exists for comparison
+    and migration paths that need old- and new-form text to look the same.
+    """
+    for old, (new, filt) in _LEGACY_ALIASES.items():
+        text = re.sub(
+            r"\{" + old + r"(\.[a-z]+)?((?:\|[a-z_]+)*)\}",
+            r"{" + new + r"\g<1>|" + filt + r"\g<2>}",
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text
 
 
 class TemplateResolver:
@@ -111,11 +128,22 @@ class TemplateResolver:
 
         def replace(match: re.Match) -> str:
             var_name = match.group(1).lower()
-            filter_name = (match.group(2) or "").lower()
+            # Filter chain: "|pascal|url" -> ["pascal", "url"], applied
+            # left-to-right (#484).
+            filter_names = [f for f in (match.group(2) or "").lower().split("|") if f]
+
             # Keep unknown variables literal (helps users identify typos)
             # Known variables with empty values still get replaced with ""
+            legacy = None
+            if var_name not in variables:
+                legacy = self._resolve_legacy_alias(var_name, variables)
             if var_name in variables:
                 value = variables[var_name]
+            elif legacy is not None:
+                # Retired transform variable (#484): resolve the base and
+                # prepend its implied filter to the chain.
+                value, alias_filter = legacy
+                filter_names.insert(0, alias_filter)
             elif self._is_contextless_suffix(var_name):
                 # A VALID registry variable with a LEGAL suffix that's simply
                 # missing its game context (no next/last game — offseason,
@@ -128,15 +156,16 @@ class TemplateResolver:
                 unreplaced.append(var_name)
                 return match.group(0)  # Return original {variable} unchanged
 
-            # Apply an optional `|filter` modifier (e.g. |urlencode, #478). An
-            # unknown filter is treated like a typo: keep the whole token literal
-            # so the author can see and fix it, rather than silently dropping it.
-            if filter_name:
-                filter_fn = _FILTERS.get(filter_name)
+            # Apply the `|filter` chain (e.g. |urlencode #478, |pascal #484).
+            # An unknown filter anywhere in the chain is treated like a typo:
+            # keep the whole token literal so the author can see and fix it,
+            # rather than silently dropping it.
+            for filter_name in filter_names:
+                filter_fn = FILTERS.get(filter_name)
                 if filter_fn is None:
                     unreplaced.append(match.group(0))
                     return match.group(0)
-                return filter_fn(value)
+                value = filter_fn(value)
             return value
 
         result = VARIABLE_PATTERN.sub(replace, template)
@@ -148,6 +177,27 @@ class TemplateResolver:
         result = self._cleanup_result(result)
 
         return result
+
+    def _resolve_legacy_alias(
+        self, var_name: str, variables: dict[str, str]
+    ) -> tuple[str, str] | None:
+        """Resolve a retired transform variable (#484) to (base value, filter).
+
+        ``team_name_pascal`` -> value of ``team_name`` + implied ``pascal``;
+        suffixes carry over (``home_team_pascal.next`` -> ``home_team.next``).
+        Returns None when var_name isn't a legacy alias or its base can't
+        resolve — the caller then falls through to the normal literal path.
+        """
+        base, sep, suffix = var_name.partition(".")
+        alias = _LEGACY_ALIASES.get(base)
+        if alias is None:
+            return None
+        real_name = alias[0] + (sep + suffix if sep else "")
+        if real_name in variables:
+            return variables[real_name], alias[1]
+        if self._is_contextless_suffix(real_name):
+            return "", alias[1]
+        return None
 
     def _is_contextless_suffix(self, var_name: str) -> bool:
         """True for a valid variable + legal suffix that lacks game context.

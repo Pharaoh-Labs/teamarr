@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS settings (
     tsdb_api_key TEXT,
 
     -- Channel ID Format
-    channel_id_format TEXT DEFAULT '{team_name_pascal}.{league_id}',
+    channel_id_format TEXT DEFAULT '{team_name|pascal}.{league_id}',
 
     -- Generation Counter (for cache purging)
     epg_generation_counter INTEGER DEFAULT 0,
@@ -461,7 +461,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 83
+    schema_version INTEGER DEFAULT 84
 );
 
 -- Insert default settings
