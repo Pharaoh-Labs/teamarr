@@ -8,13 +8,13 @@ docs_version: "2.3.1"
 
 # Template Engine
 
-The template engine resolves `{variable}` placeholders in EPG titles, descriptions, and filler content. It supports 262 variables across 20 categories, 33 condition evaluators, suffix rules for multi-game context, and template-type scoping for the variable picker.
+The template engine resolves `{variable}` placeholders in EPG titles, descriptions, and filler content. It supports 252 variables across 20 categories (plus chainable `|filter` value transforms), 33 condition evaluators, suffix rules for multi-game context, and template-type scoping for the variable picker.
 
 ## Architecture
 
 ```
 TemplateResolver
-  ├── VariableRegistry (262 variables, 20 categories)
+  ├── VariableRegistry (252 variables, 20 categories)
   ├── ConditionEvaluator (23 evaluators)
   └── ContextBuilder (Event + Team → TemplateContext)
 ```
@@ -163,7 +163,7 @@ When adding new template variables, all three paths must be updated.
 ## Art URL Reconstruction (game-thumbs base URL)
 
 Art/icon fields (`program_art_url`, `event_channel_logo_url`, and filler
-`art_url`) can store **relative paths** (e.g. `/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png`).
+`art_url`) can store **relative paths** (e.g. `/{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png`).
 A single configured **base URL** (`settings.art_base_url`, set in EPG → Output →
 Game Thumbs) is prefixed onto them at resolution time so the deployment-specific
 host:port lives in one place. See [Game Thumbs](../../guide/epg/game-thumbs) and the

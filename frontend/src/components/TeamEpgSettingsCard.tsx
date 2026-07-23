@@ -101,7 +101,7 @@ export function TeamEpgSettingsCard() {
             <Label htmlFor="channel-id-format">Channel ID Format</Label>
             <Input
               id="channel-id-format"
-              value={display?.channel_id_format ?? "{team_name_pascal}.{league}"}
+              value={display?.channel_id_format ?? "{team_name|pascal}.{league}"}
               onChange={(e) => display && setDisplay({ ...display, channel_id_format: e.target.value })}
               className="font-mono text-sm"
             />

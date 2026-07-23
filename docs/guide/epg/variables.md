@@ -11,7 +11,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 262 variables across 20 categories.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 252 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -73,7 +73,7 @@ Instead of writing the full image host in every template, set it **once** in
 always starting with `/`:
 
 ```
-/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=6&logo=true&fallback=true
+/{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png?style=6&logo=true&fallback=true
 ```
 
 At generation the base URL — host **and port**, exactly as you entered it — is prefixed onto the
@@ -89,24 +89,50 @@ Dispatcharr channel logo — so the guide artwork and the channel logo always ma
 live preview in the template editor applies the base URL too, so what you see matches the
 generated output (and renders the actual image so you can confirm the link resolves).
 
-### URL-encoding variable values (`|urlencode`)
+### Filters: transforming variable values
+
+Any variable accepts a `|filter` modifier that transforms its resolved value:
+
+| Filter | Effect | `{home_team\|…}` example |
+|--------|--------|--------------------------|
+| `lower` | lowercase | `detroit lions` |
+| `upper` | UPPERCASE | `DETROIT LIONS` |
+| `title` | Title Case each word | `Detroit Lions` |
+| `pascal` | PascalCase, accents folded, punctuation dropped | `DetroitLions` |
+| `slug` | lowercase, hyphen-separated, URL-safe | `detroit-lions` |
+| `urlencode` (alias `url`) | percent-encode for URL query strings | `Detroit%20Lions` |
+
+Filters **chain** left-to-right: `{home_team|pascal|url}` PascalCases the name, then
+URL-encodes the result. Suffixes come before the filter: `{opponent.next|upper}`.
+
+- Filters are **opt-in**: variables without one are unchanged, so a variable that already
+  holds a full URL is never double-encoded.
+- A misspelled filter (e.g. `|urlencodee`) renders literally, just like a misspelled
+  variable name, so you can spot the typo. The live preview applies filters too.
+- In the template editor, hover any variable chip to preview each filter against the
+  live sample and insert `{variable|filter}` in one click.
+
+**Retired transform variables.** Ten single-purpose variables were replaced by filters
+(`{team_name_pascal}`, `{home_team_pascal}`, `{away_team_pascal}`, `{team_abbrev_lower}`,
+`{home_team_abbrev_lower}`, `{away_team_abbrev_lower}`, `{opponent_abbrev_lower}`,
+`{feed_team_abbrev_lower}`, `{result_lower}`, `{sport_lower}`). Existing templates were
+migrated automatically, and the old names remain permanent aliases — `{team_name_pascal}`
+resolves as `{team_name|pascal}` forever (`{sport_lower}` maps to `{sport|slug}`, matching
+its old hyphenated output).
+
+#### URL-encoding in art URLs
 
 When a variable value goes into the **query string** of an art URL, characters like
 spaces and `&` need to be percent-encoded — otherwise a value such as
 `{race_name}` = `Pit Stop & Podium` truncates the URL at the `&`, so only the first
-part reaches Game-Thumbs. Add the `|urlencode` filter (short alias `|url`) to any
-variable to encode its value:
+part reaches Game-Thumbs. Add `|urlencode` to any variable to encode its value:
 
 ```
 /f1/cover?title={race_name|urlencode}&subtitle={session_name|urlencode}&iconurl=
 ```
 
-- The filter encodes **only the variable's value** — the template's own `?`, `&`, and
-  `=` that form the URL structure stay literal.
-- It's **opt-in**: variables without the filter are unchanged, so a variable that already
-  holds a full URL is never double-encoded.
-- A misspelled filter (e.g. `|urlencodee`) renders literally, just like a misspelled
-  variable name, so you can spot the typo. The live preview applies the filter too.
+The filter encodes **only the variable's value** — the template's own `?`, `&`, and
+`=` that form the URL structure stay literal.
 
 ---
 
@@ -120,14 +146,11 @@ Core identifiers for teams, leagues, and matchups.
 | `{team_name_the}` | Team name with Gracenote-convention article (clubs get 'the', national teams don't) | base | `the Detroit Lions` |
 | `{team_name_ranked_the}` | Team name with rank and article composed (article survives when unranked) | base | `the No. 7 Detroit Lions` |
 | `{team_abbrev}` | Team abbreviation uppercase | base | `DET` |
-| `{team_abbrev_lower}` | Team abbreviation lowercase | base | `det` |
-| `{team_name_pascal}` | Team name in PascalCase for channel IDs | base | `DetroitLions` |
 | `{team_short}` | Team short name | base | `Lions` |
 | `{opponent}` | Opponent team name | base, .next, .last | `Chicago Bears` |
 | `{opponent_the}` | Opponent name with Gracenote-convention article | base, .next, .last | `the Chicago Bears` |
 | `{opponent_ranked_the}` | Opponent with rank and article composed | base, .next, .last | `the No. 14 Chicago Bears` |
 | `{opponent_abbrev}` | Opponent team abbreviation uppercase | base, .next, .last | `CHI` |
-| `{opponent_abbrev_lower}` | Opponent abbreviation lowercase | base, .next, .last | `chi` |
 | `{opponent_short}` | Opponent short name | base, .next, .last | `Bears` |
 | `{matchup}` | Full matchup string | base, .next, .last | `Chicago Bears @ Detroit Lions` |
 | `{matchup_abbrev}` | Abbreviated matchup uppercase | base, .next, .last | `CHI @ DET` |
@@ -137,7 +160,6 @@ Core identifiers for teams, leagues, and matchups.
 | `{league_id}` | League identifier for URLs | base | `nfl` |
 | `{league_code}` | Raw league code | base | `nfl` |
 | `{sport}` | Sport display name | base | `Football` |
-| `{sport_lower}` | Sport in lowercase | base | `football` |
 | `{gracenote_category}` | Gracenote category for EPG; customizable per league (Settings → Advanced → Gracenote Category Overrides) | base | `NFL Football` |
 | `{exception_keyword}` | Exception keyword label (e.g., 'Spanish', '4K') | base | `4K` |
 
@@ -185,16 +207,12 @@ Positional team references and home/away context.
 | `{home_team_the}` | Home team name with Gracenote-convention article | base, .next, .last | `the Detroit Lions` |
 | `{home_team_ranked_the}` | Home team with rank and article composed (rank slots after the article; article survives when unranked) | base, .next, .last | `the No. 20 Arkansas Razorbacks` |
 | `{home_team_abbrev}` | Home team abbreviation uppercase | base, .next, .last | `DET` |
-| `{home_team_abbrev_lower}` | Home team abbreviation lowercase | base, .next, .last | `det` |
-| `{home_team_pascal}` | Home team name in PascalCase | base, .next, .last | `DetroitLions` |
 | `{home_team_short}` | Home team short name | base, .next, .last | `Lions` |
 | `{home_team_logo}` | Home team logo URL | base, .next, .last | ESPN logo URL |
 | `{away_team}` | Away team name (positional) | base, .next, .last | `Chicago Bears` |
 | `{away_team_the}` | Away team name with Gracenote-convention article | base, .next, .last | `the Chicago Bears` |
 | `{away_team_ranked_the}` | Away team with rank and article composed | base, .next, .last | `the No. 14 Texas A&M Aggies` |
 | `{away_team_abbrev}` | Away team abbreviation uppercase | base, .next, .last | `CHI` |
-| `{away_team_abbrev_lower}` | Away team abbreviation lowercase | base, .next, .last | `chi` |
-| `{away_team_pascal}` | Away team name in PascalCase | base, .next, .last | `ChicagoBears` |
 | `{away_team_short}` | Away team short name | base, .next, .last | `Bears` |
 | `{away_team_logo}` | Away team logo URL | base, .next, .last | ESPN logo URL |
 | `{is_home}` | 'true' if team is home, 'false' if away | base, .next, .last | `true` |
@@ -223,7 +241,6 @@ These are most useful for Event EPG templates on stream-separated channels (e.g.
 | `{feed_team}` | Feed team full name | base | `Baltimore Orioles` |
 | `{feed_team_short}` | Feed team short name | base | `Orioles` |
 | `{feed_team_abbrev}` | Feed team abbreviation uppercase | base | `BAL` |
-| `{feed_team_abbrev_lower}` | Feed team abbreviation lowercase | base | `bal` |
 | `{feed_team_logo}` | Feed team logo URL | base | ESPN logo URL |
 | `{is_home_feed}` | `'true'` if this channel is the home team's feed, `'false'` if away, `''` if no feed | base | `true` |
 | `{is_away_feed}` | `'true'` if this channel is the away team's feed, `'false'` if home, `''` if no feed | base | `false` |
@@ -324,7 +341,6 @@ Game result indicators. Empty for future games.
 | Variable | Description | Suffixes | Sample |
 |----------|-------------|----------|--------|
 | `{result}` | Game result ('W', 'L', or 'T') | base, .next, .last | `W` |
-| `{result_lower}` | Game result lowercase ('w', 'l', or 't') | base, .next, .last | `w` |
 | `{result_text}` | Game result as text ('defeated', 'lost to', 'tied') | base, .next, .last | `defeated` |
 | `{overtime_text}` | 'in overtime' if game went to overtime, empty otherwise | base, .next, .last | `` |
 | `{overtime_short}` | 'OT' if game went to overtime, empty otherwise | base, .next, .last | `` |

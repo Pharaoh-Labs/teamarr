@@ -14,26 +14,6 @@ from teamarr.templates.variables.registry import (
 )
 
 
-def _to_pascal_case(name: str) -> str:
-    """Convert team name to PascalCase.
-
-    Strips non-alphanumeric characters and normalizes accents.
-    Examples:
-        "Detroit Lions" → "DetroitLions"
-        "D.C. United" → "DcUnited"
-        "Atlético Madrid" → "AtleticoMadrid"
-    """
-    import re
-    import unicodedata
-
-    # Normalize unicode (é → e)
-    normalized = unicodedata.normalize("NFKD", name)
-    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
-    # Keep only alphanumeric, split on non-alpha
-    words = re.split(r"[^a-zA-Z0-9]+", ascii_name)
-    return "".join(word.capitalize() for word in words if word)
-
-
 def _is_home(ctx: TemplateContext, game_ctx: GameContext | None) -> bool | None:
     """Determine if configured team is home. Returns None if no game."""
     if not game_ctx or not game_ctx.event:
@@ -205,54 +185,6 @@ def extract_away_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None)
 
 
 @register_variable(
-    name="home_team_abbrev_lower",
-    category=Category.HOME_AWAY,
-    suffix_rules=SuffixRules.ALL,
-    description="Home team abbreviation lowercase",
-)
-def extract_home_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    return _abbrev_or_name(game_ctx.event.home_team).lower()
-
-
-@register_variable(
-    name="away_team_abbrev_lower",
-    category=Category.HOME_AWAY,
-    suffix_rules=SuffixRules.ALL,
-    description="Away team abbreviation lowercase",
-)
-def extract_away_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    return _abbrev_or_name(game_ctx.event.away_team).lower()
-
-
-@register_variable(
-    name="home_team_pascal",
-    category=Category.HOME_AWAY,
-    suffix_rules=SuffixRules.ALL,
-    description="Home team name in PascalCase",
-)
-def extract_home_team_pascal(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    return _to_pascal_case(game_ctx.event.home_team.name)
-
-
-@register_variable(
-    name="away_team_pascal",
-    category=Category.HOME_AWAY,
-    suffix_rules=SuffixRules.ALL,
-    description="Away team name in PascalCase",
-)
-def extract_away_team_pascal(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    return _to_pascal_case(game_ctx.event.away_team.name)
-
-
-@register_variable(
     name="home_team_logo",
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
@@ -318,19 +250,6 @@ def extract_feed_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None)
     if not ctx.feed_team:
         return ""
     return ctx.feed_team.abbreviation.upper()
-
-
-@register_variable(
-    name="feed_team_abbrev_lower",
-    category=Category.HOME_AWAY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Feed team abbreviation lowercase (e.g., 'bal')",
-    scope=TemplateScope.EVENT_ONLY,
-)
-def extract_feed_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not ctx.feed_team:
-        return ""
-    return ctx.feed_team.abbreviation.lower()
 
 
 @register_variable(

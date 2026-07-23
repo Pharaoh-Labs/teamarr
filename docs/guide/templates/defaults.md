@@ -116,7 +116,7 @@ MiLB levels (Triple-A … Rookie) are covered by **Default Event**.
 ## Art
 
 Program art uses **relative paths** (e.g.
-`{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png`) combined with
+`{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png`) combined with
 the **art base URL** setting — point it at your image server and every
 template resolves against it. Absolute URLs in your own templates bypass the
 base URL.

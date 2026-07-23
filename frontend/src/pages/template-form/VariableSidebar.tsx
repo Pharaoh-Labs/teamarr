@@ -1,10 +1,87 @@
 import { useState, useEffect, useMemo } from "react"
-import { Search, X, FileText, User, Tv, Clock, MousePointerClick } from "lucide-react"
+import { Search, X, FileText, User, Tv, Clock, MousePointerClick, Wand2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
 import { RichTooltip } from "@/components/ui/rich-tooltip"
+import { TEMPLATE_FILTERS, LEGACY_FILTER_ALIASES } from "./constants"
 import type { VariableSidebarProps, Variable } from "./types"
+
+// Filter chips shown in each variable's tooltip (#484). Label is styled by
+// example — hovering flips the live sample through the transform, clicking
+// inserts {variable|filter}. urlencode is offered via its short alias.
+const FILTER_CHIPS: { name: string; label: string }[] = [
+  { name: "lower", label: "lower" },
+  { name: "upper", label: "UPPER" },
+  { name: "title", label: "Title" },
+  { name: "pascal", label: "Pascal" },
+  { name: "slug", label: "slug" },
+  { name: "url", label: "url" },
+]
+
+// Search bridge (#484): retired alias names by their base variable, so typing
+// "pascal" (or a full retired name like "team_name_pascal") still surfaces the
+// base variables that used to have a dedicated transform variant.
+const ALIASES_BY_BASE: Record<string, string[]> = {}
+for (const [alias, [base]] of Object.entries(LEGACY_FILTER_ALIASES)) {
+  ;(ALIASES_BY_BASE[base] ??= []).push(alias)
+}
+
+// Tooltip body for one variable: description, live sample (flipped through a
+// filter on chip hover), and the filter chips row.
+function VariableTooltipBody({
+  v,
+  displayName,
+  sample,
+  canInsert,
+  onPickFilter,
+}: {
+  v: Variable
+  displayName: string
+  sample: string | null
+  canInsert: boolean
+  onPickFilter: (filter: string) => void
+}) {
+  const [hovered, setHovered] = useState<string | null>(null)
+  const shownSample =
+    sample && hovered ? TEMPLATE_FILTERS[hovered]?.(sample) ?? sample : sample
+
+  return (
+    <div className="space-y-1.5 text-xs">
+      <div className="font-mono font-semibold text-primary">
+        {hovered ? `{${displayName}|${hovered}}` : `{${displayName}}`}
+      </div>
+      <div className="text-muted-foreground">{v.description}</div>
+      {shownSample && (
+        <div className="pt-1 border-t border-border">
+          <span className="text-muted-foreground">e.g. </span>
+          <span className="font-medium">{shownSample}</span>
+        </div>
+      )}
+      <div className="pt-1 border-t border-border">
+        <div className="text-[10px] text-muted-foreground mb-1">Insert with filter:</div>
+        <div className="flex flex-wrap gap-1">
+          {FILTER_CHIPS.map((chip) => (
+            <button
+              key={chip.name}
+              type="button"
+              disabled={!canInsert}
+              onMouseEnter={() => setHovered(chip.name)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onPickFilter(chip.name)
+              }}
+              className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-border bg-secondary/50 text-muted-foreground hover:bg-primary/20 hover:text-primary hover:border-primary/50 transition-colors disabled:opacity-50"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Local storage key for recently used variables
 const RECENTLY_USED_KEY = "teamarr_recently_used_vars"
@@ -87,18 +164,34 @@ export function VariableSidebar({
       .map((cat) => ({
         ...cat,
         variables: cat.variables.filter(
-          (v) => v.name.toLowerCase().includes(q) || v.description.toLowerCase().includes(q)
+          (v) =>
+            v.name.toLowerCase().includes(q) ||
+            v.description.toLowerCase().includes(q) ||
+            // Search bridge (#484): retired names still find their base
+            // variable ("pascal" or "team_name_pascal" -> team_name).
+            (ALIASES_BY_BASE[v.name] ?? []).some((a) => a.includes(q))
         ),
       }))
       .filter((cat) => cat.variables.length > 0)
   }, [categories, search])
 
-  const handleInsert = (varName: string, suffix?: string) => {
-    const fullVar = suffix && suffix !== "base" ? `${varName}${suffix}` : varName
-    onInsert(fullVar)
-    addToRecentlyUsed(fullVar)
+  // Filter-hint banner when the search names a filter (#484).
+  const searchedFilter = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (q.length < 3) return null
+    return FILTER_CHIPS.find((c) => c.name.includes(q) || q.includes(c.name))?.name ?? null
+  }, [search])
+
+  const insertToken = (token: string) => {
+    onInsert(token)
+    addToRecentlyUsed(token)
     setRecentlyUsed(getRecentlyUsed())
     setSuffixPopup(null)
+  }
+
+  const handleInsert = (varName: string, suffix?: string, filter?: string) => {
+    const base = suffix && suffix !== "base" ? `${varName}${suffix}` : varName
+    insertToken(filter ? `${base}|${filter}` : base)
   }
 
   const handleVariableClick = (e: React.MouseEvent, v: Variable) => {
@@ -228,10 +321,10 @@ export function VariableSidebar({
           >
             <div className="flex flex-wrap gap-1">
               {recentlyUsed.slice(0, 8).map((varName) => {
-                const baseVar = varName.replace(/\.(next|last)$/, "")
+                // Token may carry a filter chain (#484) and/or a suffix.
+                const baseVar = varName.replace(/\|.*$/, "").replace(/\.(next|last)$/, "")
                 const v = variableMap[baseVar]
                 if (!v) return null
-                const suffix = varName.includes(".next") ? ".next" : varName.includes(".last") ? ".last" : "base"
                 return (
                   <RichTooltip
                     key={varName}
@@ -245,7 +338,7 @@ export function VariableSidebar({
                   >
                     <button
                       type="button"
-                      onClick={() => handleInsert(baseVar, suffix === "base" ? undefined : suffix)}
+                      onClick={() => insertToken(varName)}
                       disabled={!lastFocusedField}
                       className="px-2 py-1 text-[11px] font-mono rounded bg-secondary/50 hover:bg-primary/20 text-primary transition-colors disabled:opacity-50"
                     >
@@ -256,6 +349,21 @@ export function VariableSidebar({
               })}
             </div>
           </CollapsibleSection>
+        )}
+
+        {/* Search bridge hint (#484): the retired *_pascal / *_lower variants
+            are filters now — point muscle-memory searches at the chips. */}
+        {searchedFilter && (
+          <div className="flex items-start gap-2 px-2 py-1.5 rounded border border-primary/30 bg-primary/5 text-xs text-muted-foreground">
+            <Wand2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
+            <span>
+              <code className="text-primary">|{searchedFilter}</code> is a filter — hover a
+              variable and pick the chip, or type{" "}
+              <code className="text-primary">{`{variable|${searchedFilter}}`}</code>. Old{" "}
+              <code>_{searchedFilter === "slug" ? "lower" : searchedFilter}</code> variable names
+              keep working.
+            </span>
+          </div>
         )}
 
         {/* Categories — controlled CollapsibleSections: single-open accordion,
@@ -287,16 +395,19 @@ export function VariableSidebar({
                       key={v.name}
                       side="top"
                       content={
-                        <div className="space-y-1.5 text-xs">
-                          <div className="font-mono font-semibold text-primary">{`{${displayName}}`}</div>
-                          <div className="text-muted-foreground">{v.description}</div>
-                          {sample && (
-                            <div className="pt-1 border-t border-border">
-                              <span className="text-muted-foreground">e.g. </span>
-                              <span className="font-medium">{sample}</span>
-                            </div>
-                          )}
-                        </div>
+                        <VariableTooltipBody
+                          v={v}
+                          displayName={displayName}
+                          sample={sample}
+                          canInsert={!!lastFocusedField}
+                          onPickFilter={(filter) => {
+                            const suffix =
+                              displayName !== v.name
+                                ? displayName.slice(v.name.length)
+                                : undefined
+                            handleInsert(v.name, suffix, filter)
+                          }}
+                        />
                       }
                       disabled={!lastFocusedField}
                     >

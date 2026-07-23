@@ -43,6 +43,7 @@ import copy
 from sqlite3 import Connection
 
 from teamarr.core.filler_types import legacy_conditional_to_rows
+from teamarr.templates.resolver import rewrite_legacy_tokens
 
 # Neutralized legacy filler conditional (#420, cajd.6): starters author
 # condition rows natively; the legacy columns ship disabled so the v80
@@ -66,13 +67,13 @@ _LEGACY_CONDITIONAL_OFF = {
 # on the channel icon.
 _TEAM_PARAMS = "?style=1&logo=true&fallback=true"
 _EVENT_PARAMS = "?style=6&logo=true&fallback=true"
-_ART_PATH = "{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png"
+_ART_PATH = "{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png"
 _TEAM_ART = _ART_PATH + _TEAM_PARAMS
 _EVENT_ART = _ART_PATH + _EVENT_PARAMS
-_ART_NEXT = "{league_id}/{away_team_pascal.next}/{home_team_pascal.next}/cover.png" + _TEAM_PARAMS
-_ART_LAST = "{league_id}/{away_team_pascal.last}/{home_team_pascal.last}/cover.png" + _TEAM_PARAMS
+_ART_NEXT = "{league_id}/{away_team.next|pascal}/{home_team.next|pascal}/cover.png" + _TEAM_PARAMS
+_ART_LAST = "{league_id}/{away_team.last|pascal}/{home_team.last|pascal}/cover.png" + _TEAM_PARAMS
 _EVENT_LOGO = (
-    "{league_id}/{away_team_pascal}/{home_team_pascal}/logo.png"
+    "{league_id}/{away_team|pascal}/{home_team|pascal}/logo.png"
     "?style=1&logo=true&fallback=true"
     "&badge={broadcast_national_network}%20{exception_keyword}"
 )
@@ -84,7 +85,7 @@ _XMLTV_VIDEO = {"enabled": False, "quality": "HDTV"}
 # stripped the origin into the art_base_url setting, so upgraded installs
 # carry the RELATIVE form instead — pristine detection accepts both.
 LEGACY_PRISTINE_MARKER = "http://localhost:3000/"
-_LEGACY_STRIPPED_ART = "{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png"
+_LEGACY_STRIPPED_ART = "{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png"
 
 # Legacy seed name → curated replacement name (upgrade-in-place keeps the row
 # id, so assignments and group references survive the rename).
@@ -135,7 +136,9 @@ def _is_pristine_legacy(row, legacy_name: str) -> bool:
         return False
     if (row.subtitle_template or "") != _STOCK_SUBTITLE:
         return False
-    art = row.program_art_url or ""
+    # Retired transform tokens compare as their base|filter form (#484) —
+    # legacy rows predate the v84 rewrite by definition.
+    art = rewrite_legacy_tokens(row.program_art_url or "")
     stock_art = (
         art.startswith(LEGACY_PRISTINE_MARKER)
         or art == _LEGACY_STRIPPED_ART
@@ -189,7 +192,9 @@ _CONTENT_FIELDS = (
 def _norm(value):
     """Normalization for content comparison: None and '' are equivalent,
     bools and 0/1 are equivalent, empty dict values drop, containers
-    recurse. Tolerates JSON round-trip and storage-default drift."""
+    recurse, retired transform tokens compare as their base|filter form
+    (#484 — a not-yet-migrated row is still 'unedited'). Tolerates JSON
+    round-trip and storage-default drift."""
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -198,12 +203,15 @@ def _norm(value):
         return {k: _norm(v) for k, v in value.items() if _norm(v) != ""}
     if isinstance(value, list):
         return [_norm(v) for v in value]
+    if isinstance(value, str):
+        return rewrite_legacy_tokens(value)
     return value
 
 
 def _art_matches(row_value, spec_value) -> bool:
-    """Art matches the spec value or its bare (param-less) earlier form."""
-    art = row_value or ""
+    """Art matches the spec value or its bare (param-less) earlier form.
+    Retired transform tokens (#484) compare as their base|filter form."""
+    art = rewrite_legacy_tokens(row_value or "")
     spec_art = spec_value or ""
     return art in (spec_art, spec_art.split("?")[0])
 

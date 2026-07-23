@@ -79,8 +79,11 @@ The format string for generating team channel IDs. Available variables:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `{team_name}` | Team name (spaces preserved) | `New York Yankees` |
-| `{team_name_pascal}` | Team name in PascalCase | `NewYorkYankees` |
+| `{team_name|pascal}` | Team name in PascalCase | `NewYorkYankees` |
 | `{league}` | League slug | `mlb` |
 | `{league_id}` | League ID | `mlb` |
 
-Default: `{team_name_pascal}.{league_id}`
+Default: `{team_name|pascal}.{league_id}`
+
+The retired `{team_name_pascal}` variable is accepted forever as an alias of
+`{team_name|pascal}`; existing formats were migrated automatically.

@@ -45,4 +45,4 @@ def test_no_silent_shadowing_possible():
     """Every module-level registration survived import — the guard would have
     raised otherwise. Spot-check the registry is intact and non-trivial."""
     registry = get_registry()
-    assert len(registry.all_variables()) >= 260
+    assert len(registry.all_variables()) >= 250

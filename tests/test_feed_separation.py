@@ -527,7 +527,8 @@ class TestFeedTemplateVarsConstant:
         from teamarr.consumers.lifecycle.naming import FEED_TEMPLATE_VARS
 
         # Naming-relevant feed vars only — logo URL and directional booleans
-        # are deliberately excluded.
+        # are deliberately excluded. feed_team_abbrev_lower is a retired
+        # alias (#484) kept for templates that never got migrated.
         assert FEED_TEMPLATE_VARS == frozenset(
             {
                 "feed_team",
@@ -537,6 +538,8 @@ class TestFeedTemplateVarsConstant:
                 "feed_home_away",
                 "broadcast_feed",
                 "broadcast_feed_team",
+                "broadcast_feed_team_short",
+                "broadcast_feed_team_abbrev",
             }
         )
 

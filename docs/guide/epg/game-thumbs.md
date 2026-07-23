@@ -24,7 +24,7 @@ entirely from this setting. Templates then store only the **relative
 path** (always starting with `/`):
 
 ```
-/{league_id}/{away_team_pascal}/{home_team_pascal}/cover.png?style=6&logo=true
+/{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png?style=6&logo=true
 ```
 
 At EPG generation the base URL is prefixed onto each relative art path. Rules:

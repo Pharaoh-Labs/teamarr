@@ -65,7 +65,7 @@ export function buildValidVariableSet(categories: VariableCategory[]): {
  * variable name (validated); the filter in group 2 is ignored here. The backend
  * lowercases the captured name before lookup, so matching is case-insensitive.
  */
-const VARIABLE_PATTERN = /\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)(?:\|[a-z_]+)?\}/gi
+const VARIABLE_PATTERN = /\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)(?:\|[a-z_]+)*\}/gi
 
 /**
  * Extract variable references the engine would actually resolve, lowercased to
@@ -91,6 +91,22 @@ export function hasSuffix(varName: string): boolean {
 /**
  * Validate a single template string.
  */
+// Retired pure-transform variables (#484): the resolver aliases them forever
+// (team_name_pascal -> team_name|pascal), so they're valid — just no longer in
+// the picker or the /variables response. Suffix legality follows the base var.
+const LEGACY_ALIAS_BASES: Record<string, string> = {
+  team_name_pascal: "team_name",
+  home_team_pascal: "home_team",
+  away_team_pascal: "away_team",
+  team_abbrev_lower: "team_abbrev",
+  home_team_abbrev_lower: "home_team_abbrev",
+  away_team_abbrev_lower: "away_team_abbrev",
+  opponent_abbrev_lower: "opponent_abbrev",
+  feed_team_abbrev_lower: "feed_team_abbrev",
+  result_lower: "result",
+  sport_lower: "sport",
+}
+
 export function validateTemplate(
   template: string,
   validNames: Set<string>,
@@ -98,7 +114,15 @@ export function validateTemplate(
   isEventTemplate: boolean
 ): ValidationWarning[] {
   const warnings: ValidationWarning[] = []
-  const variables = extractVariables(template)
+  const variables = extractVariables(template).map((varName) => {
+    // Map retired aliases onto their base variable so validation follows the
+    // same resolution the engine applies (#484).
+    const dot = varName.indexOf(".")
+    const base = dot === -1 ? varName : varName.slice(0, dot)
+    const aliased = LEGACY_ALIAS_BASES[base]
+    if (!aliased) return varName
+    return aliased + (dot === -1 ? "" : varName.slice(dot))
+  })
 
   for (const varName of variables) {
     // Check for suffixed variables in event templates

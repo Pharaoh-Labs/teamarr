@@ -276,6 +276,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 83
 
+    if current_version < 84:
+        _apply_migration(
+            conn, 84,
+            "rewrite retired transform variables to base|filter form (#484)",
+            _migrate_v84_filter_consolidation,
+        )
+        current_version = 84
+
 
 # =============================================================================
 # Migration helpers
@@ -2062,3 +2070,114 @@ def _migrate_v83_media_server_lists(conn: sqlite3.Connection) -> None:
             (json.dumps(servers),),
         )
         logger.info("[MIGRATE v83] Folded %s scalar settings into servers list", kind)
+
+
+# Retired pure-transform variables (#484): old token -> (base, implied filter).
+# sport_lower maps to |slug (not |lower): it returned the hyphenated sport
+# CODE ('australian-football'), and slug(display name) reproduces that.
+_V84_RETIRED_TRANSFORMS = {
+    "team_name_pascal": ("team_name", "pascal"),
+    "home_team_pascal": ("home_team", "pascal"),
+    "away_team_pascal": ("away_team", "pascal"),
+    "team_abbrev_lower": ("team_abbrev", "lower"),
+    "home_team_abbrev_lower": ("home_team_abbrev", "lower"),
+    "away_team_abbrev_lower": ("away_team_abbrev", "lower"),
+    "opponent_abbrev_lower": ("opponent_abbrev", "lower"),
+    "feed_team_abbrev_lower": ("feed_team_abbrev", "lower"),
+    "result_lower": ("result", "lower"),
+    "sport_lower": ("sport", "slug"),
+}
+
+# Template-bearing columns on the templates table (TEXT fields and JSON blobs
+# whose string values may hold {variable} tokens). The rewrite is textual, which
+# is JSON-safe: tokens contain no quotes or backslashes.
+_V84_TEMPLATE_COLUMNS = [
+    "title_format",
+    "subtitle_template",
+    "description_template",
+    "program_art_url",
+    "event_channel_name",
+    "event_channel_logo_url",
+    "conditional_descriptions",
+    "pregame_periods",
+    "pregame_fallback",
+    "pregame_conditional_rows",
+    "postgame_periods",
+    "postgame_fallback",
+    "postgame_conditional",
+    "postgame_conditional_rows",
+    "idle_content",
+    "idle_conditional",
+    "idle_conditional_rows",
+    "idle_offseason",
+]
+
+
+def _v84_rewrite_tokens(text: str) -> str:
+    """Rewrite retired transform tokens to base|filter form.
+
+    {team_name_pascal} -> {team_name|pascal}; suffixes carry over
+    ({home_team_pascal.next} -> {home_team.next|pascal}); an existing filter
+    chain stays appended ({team_name_pascal|urlencode} ->
+    {team_name|pascal|urlencode}). 1:1 substitution — rendered output is
+    identical.
+    """
+    import re
+
+    for old, (new, filt) in _V84_RETIRED_TRANSFORMS.items():
+        text = re.sub(
+            r"\{" + old + r"(\.[a-z]+)?((?:\|[a-z_]+)*)\}",
+            r"{" + new + r"\g<1>|" + filt + r"\g<2>}",
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text
+
+
+def _migrate_v84_filter_consolidation(conn: sqlite3.Connection) -> None:
+    """Rewrite stored templates + channel_id_format to base|filter form (#484).
+
+    The resolver keeps the retired names as permanent legacy aliases, so this
+    is belt-and-suspenders: anything missed still renders old-style.
+    """
+    template_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()
+    }
+    cols = [c for c in _V84_TEMPLATE_COLUMNS if c in template_cols]
+    rewritten = 0
+    if cols:
+        for row in conn.execute(f"SELECT id, {', '.join(cols)} FROM templates").fetchall():
+            updates = {}
+            for col in cols:
+                value = row[col]
+                if not value or not isinstance(value, str):
+                    continue
+                new_value = _v84_rewrite_tokens(value)
+                if new_value != value:
+                    updates[col] = new_value
+            if updates:
+                sets = ", ".join(f"{c} = ?" for c in updates)
+                conn.execute(
+                    f"UPDATE templates SET {sets} WHERE id = ?",
+                    [*updates.values(), row["id"]],
+                )
+                rewritten += 1
+
+    settings_cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()
+    }
+    row = (
+        conn.execute("SELECT channel_id_format FROM settings WHERE id = 1").fetchone()
+        if "channel_id_format" in settings_cols
+        else None
+    )
+    if row and row["channel_id_format"]:
+        new_format = _v84_rewrite_tokens(row["channel_id_format"])
+        if new_format != row["channel_id_format"]:
+            conn.execute(
+                "UPDATE settings SET channel_id_format = ? WHERE id = 1",
+                (new_format,),
+            )
+            rewritten += 1
+
+    logger.info("[MIGRATE v84] Rewrote retired transform tokens in %d row(s)", rewritten)

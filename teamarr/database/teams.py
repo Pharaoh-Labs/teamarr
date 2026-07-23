@@ -201,7 +201,8 @@ def bulk_update_channel_ids(
     """Bulk update channel IDs based on a format template.
 
     Supported format variables:
-    - {team_name_pascal}: Team name in PascalCase
+    - {team_name|pascal}: Team name in PascalCase ({team_name_pascal} is a
+      permanent legacy alias, #484)
     - {team_abbrev}: Team abbreviation lowercase
     - {team_name}: Team name lowercase with dashes
     - {provider_team_id}: Provider's team ID
@@ -243,6 +244,7 @@ def bulk_update_channel_ids(
             league_id = get_league_id(conn, primary_league)
 
             channel_id = format_template
+            channel_id = channel_id.replace("{team_name|pascal}", to_pascal_case(team_name))
             channel_id = channel_id.replace("{team_name_pascal}", to_pascal_case(team_name))
             channel_id = channel_id.replace(
                 "{team_abbrev}", (team_data.get("team_abbrev") or "").lower()
@@ -256,7 +258,8 @@ def bulk_update_channel_ids(
             channel_id = channel_id.replace("{sport}", (team_data.get("sport") or "").lower())
 
             if (
-                "{team_name_pascal}" in format_template
+                "{team_name|pascal}" in format_template
+                or "{team_name_pascal}" in format_template
                 or "{league}" in format_template
             ):
                 channel_id = re.sub(r"[^a-zA-Z0-9.-]+", "", channel_id)
