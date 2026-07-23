@@ -225,7 +225,7 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v83) |
+| Schema version | `teamarr/database/schema.sql` (v84) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 
@@ -253,7 +253,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
-- 262 variables in `variables/` (20 categories)
+- 252 variables in `variables/` (20 categories); chainable `|filter` transforms in `filters.py` (lower/upper/title/pascal/slug/urlencode) with permanent legacy aliases for 10 retired transform variables
 - 33 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`

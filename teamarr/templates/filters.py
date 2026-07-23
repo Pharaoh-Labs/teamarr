@@ -66,7 +66,7 @@ def filter_pascal(value: str) -> str:
 
     Identical to the retired ``*_pascal`` variables' transform: accents
     normalized, split on non-alphanumeric, each word capitalized.
-    ``D.C. United`` -> ``DcUnited``.
+    ``D.C. United`` -> ``DCUnited``.
     """
     words = re.split(r"[^a-zA-Z0-9]+", _ascii_fold(value or ""))
     return "".join(word.capitalize() for word in words if word)
