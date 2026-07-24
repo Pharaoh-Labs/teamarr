@@ -663,3 +663,132 @@ class TestAdditiveScoring:
         assert d.score == 25
         assert d.matched_rule_type == "m3u"
         assert d.computed_priority == 3 * BAND_STRIDE - 25
+
+
+# ---------------------------------------------------------------------------
+# team_feed / not_team_feed against the persisted feed_team_id (#489)
+# ---------------------------------------------------------------------------
+
+
+def _feed_stream(
+    name: str | None = None,
+    feed_team_id: str | None = None,
+    match_type: str = "event",
+) -> ManagedChannelStream:
+    return ManagedChannelStream(
+        id=1,
+        managed_channel_id=1,
+        dispatcharr_stream_id=1,
+        stream_name=name,
+        feed_team_id=feed_team_id,
+        match_type=match_type,
+    )
+
+
+class TestTeamFeedResolved:
+    """Resolved feed_team_id is authoritative; the name regex is the fallback."""
+
+    KEY = "espn:mlb:23"  # Pittsburgh Pirates
+
+    def test_resolved_feed_matches_without_name_signal(self, seeded_db):
+        # 'Pirates.TV' carries no vs/home/away marker — the regex can't see it,
+        # but the matching layer resolved it, so the rule fires (#489).
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], seeded_db)
+        assert svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23")) == 1
+
+    def test_resolved_other_team_does_not_match(self, seeded_db):
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], seeded_db)
+        assert (
+            svc.compute_priority(_feed_stream("Cubs.TV", feed_team_id="16"))
+            == NO_MATCH_PRIORITY
+        )
+
+    def test_resolution_is_authoritative_over_name(self, seeded_db):
+        # Resolved to the Cubs: even a name the Pirates regex would match
+        # must not fire the Pirates rule.
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], seeded_db)
+        stream = _feed_stream("Cubs vs Pirates (Home)", feed_team_id="16")
+        assert svc.compute_priority(stream) == NO_MATCH_PRIORITY
+
+    def test_null_feed_team_falls_back_to_regex(self, seeded_db):
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], seeded_db)
+        assert svc.compute_priority(_feed_stream("Cubs vs Pirates (Home)")) == 1
+        assert svc.compute_priority(_feed_stream("Pirates.TV")) == NO_MATCH_PRIORITY
+
+    def test_team_stream_matched_side_counts_as_feed(self, seeded_db):
+        # TEAM_ONLY streams carry their matched team the same way (#489):
+        # 'sort Brewers team streams above Marlins' in a shared channel.
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], seeded_db)
+        assert (
+            svc.compute_priority(
+                _feed_stream("MLB | Pittsburgh Pirates", feed_team_id="23", match_type="team")
+            )
+            == 1
+        )
+
+    def test_not_team_feed_matches_other_resolved_feed(self, seeded_db):
+        svc = StreamOrderingService(
+            [StreamOrderingRule("not_team_feed", self.KEY, 1)], seeded_db
+        )
+        # Another team's resolved feed matches — no name indicator needed.
+        assert svc.compute_priority(_feed_stream("Cubs.TV", feed_team_id="16")) == 1
+        # The rule team's own resolved feed does not.
+        assert (
+            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23"))
+            == NO_MATCH_PRIORITY
+        )
+
+    def test_not_team_feed_null_keeps_indicator_gate(self, seeded_db):
+        svc = StreamOrderingService(
+            [StreamOrderingRule("not_team_feed", self.KEY, 1)], seeded_db
+        )
+        # Unresolved + no feed indicator → gated out (regex fallback semantics).
+        assert svc.compute_priority(_feed_stream("Cubs.TV")) == NO_MATCH_PRIORITY
+
+    def test_legacy_integer_rule_resolves_provider_team_id(self, seeded_db):
+        # Legacy rule values hold teams-table row ids; the stream column holds
+        # the provider team id ('8' for the seeded Tigers row).
+        tigers_row_id = seeded_db.execute(
+            "SELECT id FROM teams WHERE team_abbrev = 'DET'"
+        ).fetchone()[0]
+        svc = StreamOrderingService(
+            [StreamOrderingRule("team_feed", str(tigers_row_id), 1)], seeded_db
+        )
+        assert svc.compute_priority(_feed_stream("Tigers.TV", feed_team_id="8")) == 1
+        assert (
+            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23"))
+            == NO_MATCH_PRIORITY
+        )
+
+    def test_keyed_format_needs_no_connection(self):
+        # Keyed rule values carry the provider team id directly, so resolved
+        # streams keep matching even without a DB connection.
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], conn=None)
+        assert svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23")) == 1
+
+    def test_empty_rule_value_never_matches_resolved(self, seeded_db):
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", "", 1)], seeded_db)
+        assert (
+            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23"))
+            == NO_MATCH_PRIORITY
+        )
+
+    def test_attach_time_priority_sees_feed_team(self, seeded_db):
+        # compute_stream_priority_from_rules must thread feed_team_id into the
+        # stub stream so team_feed rules apply at attach time, not only at the
+        # end-of-run reorder pass (#379 pattern, #489).
+        from teamarr.database.channels import compute_stream_priority_from_rules
+        from teamarr.database.settings.update import update_stream_ordering_rules
+
+        update_stream_ordering_rules(
+            seeded_db, [{"type": "team_feed", "value": self.KEY, "priority": 1}]
+        )
+        seeded_db.commit()
+
+        resolved = compute_stream_priority_from_rules(
+            seeded_db, "Pirates.TV", None, None, feed_team_id="23"
+        )
+        assert resolved == 1
+
+        unresolved = compute_stream_priority_from_rules(seeded_db, "Pirates.TV", None, None)
+        assert unresolved == NO_MATCH_PRIORITY

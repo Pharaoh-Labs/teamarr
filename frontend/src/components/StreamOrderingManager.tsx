@@ -271,7 +271,7 @@ const RULE_TYPES = [
   { value: "group", label: "Event Group", description: "Match streams by event group name" },
   { value: "regex", label: "Regex Pattern", description: "Match streams by regex against stream name" },
   { value: "stream_type", label: "Stream Type", description: "Match by how the stream was recognized: event, team, or EPG-matched (time-shared linear)" },
-  { value: "team_feed", label: "Home/Away Feed", description: "Match streams that appear to be a team's own broadcast (home or away feed) for any enabled team" },
+  { value: "team_feed", label: "Home/Away Feed", description: "Match streams resolved as a team's own broadcast — team-branded channels (Brewers.TV), broadcast-market listings, team streams, or home/away markers in the name" },
   { value: "dispatcharr_group", label: "Dispatcharr Group", description: "Match channel-source streams by the Dispatcharr channel group you selected as an EPG source" },
   { value: "stats_metric", label: "Stream Stats", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
 ] as const

@@ -892,3 +892,85 @@ class TestFillerChannelIdMatchesLiveProgramme:
 
         assert filler_channel_id == live_channel_id
         assert filler_channel_id == "teamarr-event-401815159-feed-18"
+
+
+# ===========================================================================
+# Identifier candidates for feed resolution: name, tvg-id, tvg-name (#489)
+# ===========================================================================
+
+
+class TestResolveFeedTeamsIdentifiers:
+    """_resolve_feed_teams checks tvg-id/tvg-name when the display name
+    gives no signal — a stream whose tvg-id is 'Brewers.TV' is the Brewers
+    feed regardless of the name (#489)."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        return MockEvent(
+            home_team=MockTeam(
+                id="16",
+                provider="espn",
+                name="Chicago Cubs",
+                short_name="Cubs",
+                abbreviation="CHC",
+                league="mlb",
+                sport="baseball",
+            ),
+            away_team=MockTeam(
+                id="158",
+                provider="espn",
+                name="Milwaukee Brewers",
+                short_name="Brewers",
+                abbreviation="MIL",
+                league="mlb",
+                sport="baseball",
+            ),
+            broadcast_markets={"Brewers.TV": "away", "Marquee Sports Network": "home"},
+        )
+
+    def _resolve(self, stream: dict, event, detect_team_names: bool = True):
+        from teamarr.consumers.event_group_processor.matching import StreamMatching
+
+        entry = {"stream": stream, "event": event, "feed_hint": None}
+        StreamMatching._resolve_feed_teams(
+            StreamMatching(), [entry], detect_team_names
+        )
+        return entry["feed_team"]
+
+    def test_tvg_id_matches_broadcast_market(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event) is event.away_team
+
+    def test_tvg_id_team_branded_token(self, event):
+        # No broadcast-market hit ('Brewers.TV' removed) — the team-branded
+        # channel token detector still recognizes the tvg-id.
+        event.broadcast_markets = {}
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event) is event.away_team
+
+    def test_tvg_name_is_also_checked(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": None, "tvg_name": "Brewers.TV"}
+        assert self._resolve(stream, event) is event.away_team
+
+    def test_name_takes_precedence(self, event):
+        # Display name resolves home; a conflicting tvg-id never gets consulted.
+        stream = {
+            "name": "MIL @ CHC on Marquee Sports Network",
+            "tvg_id": "Brewers.TV",
+            "tvg_name": None,
+        }
+        assert self._resolve(stream, event) is event.home_team
+
+    def test_missing_identifier_keys_are_safe(self, event):
+        stream = {"name": "MIL @ CHC"}
+        assert self._resolve(stream, event) is None
+
+    def test_detect_team_names_off_still_uses_broadcast_markets(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event, detect_team_names=False) is event.away_team

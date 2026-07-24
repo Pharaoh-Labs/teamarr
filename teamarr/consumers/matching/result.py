@@ -212,6 +212,12 @@ class MatchOutcome:
     parsed_team1: str | None = None
     parsed_team2: str | None = None
 
+    # For TEAM_ONLY matches (#489): which side of the event the stream's team
+    # is ("home"/"away"). The lifecycle resolves it to that side's team id and
+    # persists it per-stream so team_feed/not_team_feed ordering rules can
+    # match team-branded streams. None for TEAM_VS_TEAM/other categories.
+    matched_side: str | None = None
+
     # For EXCLUDED/LEAGUE_NOT_INCLUDED - the league that was found (for display)
     found_league: str | None = None
     found_league_name: str | None = None
@@ -271,6 +277,7 @@ class MatchOutcome:
         origin_match_method: str | None = None,
         epg_program_start: datetime | None = None,
         epg_program_end: datetime | None = None,
+        matched_side: str | None = None,
     ) -> "MatchOutcome":
         """Create a MATCHED result.
 
@@ -286,6 +293,7 @@ class MatchOutcome:
             origin_match_method: For CACHE hits, the original method used (e.g., "fuzzy")
             epg_program_start: For EPG matches, the program's broadcast start
             epg_program_end: For EPG matches, the program's broadcast end
+            matched_side: For TEAM_ONLY matches, which event side the team is (#489)
         """
         return cls(
             category=ResultCategory.MATCHED,
@@ -300,6 +308,7 @@ class MatchOutcome:
             origin_match_method=origin_match_method,
             epg_program_start=epg_program_start,
             epg_program_end=epg_program_end,
+            matched_side=matched_side,
         )
 
     @classmethod

@@ -52,6 +52,7 @@ def add_stream_to_channel(
         "exception_keyword",
         "match_type",
         "match_method",  # how matched ('epg', 'fuzzy', …); drives the epg_match ordering rule
+        "feed_team_id",  # resolved feed/matched team; drives team_feed rules (#489)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
         "attach_at",   # time-windowed membership (183.5); None = full-life
         "detach_at",
@@ -182,6 +183,7 @@ def compute_stream_priority_from_rules(
     match_type: str = "event",
     match_method: str | None = None,
     dispatcharr_channel_group: str | None = None,
+    feed_team_id: str | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
@@ -189,10 +191,11 @@ def compute_stream_priority_from_rules(
     If no rules or no match, returns 999 (sort to end).
 
     Callers should pass every field they have (#379): rule types match on
-    match_type (stream_type rules), match_method (epg_match rules), and
-    dispatcharr_channel_group (dispatcharr_group rules) — omitting them makes
-    those rules silently non-matching at attach time, so the order pushed to
-    Dispatcharr is wrong until the end-of-generation reorder pass corrects it.
+    match_type (stream_type rules), match_method (epg_match rules),
+    dispatcharr_channel_group (dispatcharr_group rules), and feed_team_id
+    (team_feed/not_team_feed rules, #489) — omitting them makes those rules
+    silently non-matching at attach time, so the order pushed to Dispatcharr
+    is wrong until the end-of-generation reorder pass corrects it.
 
     Args:
         conn: Database connection
@@ -202,6 +205,7 @@ def compute_stream_priority_from_rules(
         match_type: 'event' or 'team' (for stream_type rules)
         match_method: 'epg', 'fuzzy', etc. (for epg_match rules)
         dispatcharr_channel_group: DP channel group name (for dispatcharr_group rules)
+        feed_team_id: Resolved feed/matched team id (for team_feed rules)
 
     Returns:
         Computed priority (lower = higher priority)
@@ -225,6 +229,7 @@ def compute_stream_priority_from_rules(
         match_type=match_type,
         match_method=match_method,
         dispatcharr_channel_group=dispatcharr_channel_group,
+        feed_team_id=feed_team_id,
     )
 
     return ordering_service.compute_priority(temp_stream)
@@ -325,6 +330,45 @@ def update_stream_account_name(
             managed_channel_id,
             dispatcharr_stream_id,
             account_name,
+        )
+    return cursor.rowcount > 0
+
+
+def update_stream_feed_team(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    feed_team_id: str,
+) -> bool:
+    """Backfill/refresh the resolved feed team of an attached stream (#489).
+
+    Rows attached before the feed_team_id column existed carry NULL; called
+    each generation for already-attached streams so team_feed/not_team_feed
+    ordering rules see the resolved team without waiting for re-attach.
+    Guarded on a resolved value — never nulls on a transient resolution miss.
+
+    Returns:
+        True if a row was updated (value actually changed), False otherwise
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET feed_team_id = ?
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND feed_team_id IS NOT ?""",
+        (
+            feed_team_id,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            feed_team_id,
+        ),
+    )
+    if cursor.rowcount > 0:
+        logger.debug(
+            "[FEED] Stream %d on channel %d feed_team_id -> %s",
+            dispatcharr_stream_id,
+            managed_channel_id,
+            feed_team_id,
         )
     return cursor.rowcount > 0
 

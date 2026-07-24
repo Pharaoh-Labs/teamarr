@@ -590,7 +590,7 @@ class TeamMatcher:
                 anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
                 if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
-            score, _side = self._score_single_team_against_event(team_norm, event)
+            score, side = self._score_single_team_against_event(team_norm, event)
             if score is None:
                 continue
             seen_event_ids.add(event.id)
@@ -610,6 +610,9 @@ class TeamMatcher:
                 stream_name=stream_name,
                 stream_id=stream_id,
                 parsed_team1=classified.team1,
+                # Which event side the branded team is (#489) — the lifecycle
+                # persists that side's team id per-stream for ordering rules.
+                matched_side=side,
             ))
 
         if matched_outcomes:

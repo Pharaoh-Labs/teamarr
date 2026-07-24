@@ -101,6 +101,9 @@ class StreamOrderingService:
         self._group_name_cache: dict[int, str] = {}
         # Keyed by rule.value string so different team selections cache separately
         self._team_feed_patterns: dict[str, re.Pattern | None] = {}
+        # Rule value → provider team ids it selects (#489); compared against a
+        # stream's persisted feed_team_id ahead of the name regex
+        self._team_feed_ids: dict[str, frozenset[str] | None] = {}
         # Keyed by sorted comma-joined keys for simple team-presence patterns
         self._team_presence_patterns: dict[str, re.Pattern | None] = {}
 
@@ -370,7 +373,17 @@ class StreamOrderingService:
     )
 
     def _match_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
-        """Match stream name against the dynamic team-feed pattern."""
+        """Match a stream against the rule's team selection (#489).
+
+        The persisted feed_team_id (matching layer's resolution: broadcast
+        markets, tvg-id, team-branded names like 'Brewers.TV', TEAM_ONLY
+        matched side) is authoritative when present — it covers streams the
+        name regex can't see. Rows without one (NULL) fall back to the name
+        regex, so pre-column rows and unresolved streams keep working.
+        """
+        if stream.feed_team_id:
+            team_ids = self._get_team_feed_ids(rule_value)
+            return team_ids is not None and stream.feed_team_id in team_ids
         if not stream.stream_name:
             return False
         pattern = self._get_team_feed_pattern(rule_value)
@@ -379,7 +392,15 @@ class StreamOrderingService:
         return bool(pattern.search(stream.stream_name))
 
     def _match_not_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
-        """Match streams that have feed indicators but are NOT this team's feed."""
+        """Match streams that are team feeds but NOT this team's feed.
+
+        A persisted feed_team_id means the stream IS a team feed — match when
+        it belongs to a different team than the rule selects. NULL falls back
+        to the regex path, which requires an explicit feed indicator first.
+        """
+        if stream.feed_team_id:
+            team_ids = self._get_team_feed_ids(rule_value)
+            return team_ids is not None and stream.feed_team_id not in team_ids
         if not stream.stream_name:
             return False
         if not self._FEED_INDICATOR_RE.search(stream.stream_name):
@@ -609,6 +630,49 @@ class StreamOrderingService:
             ).fetchall()
 
         return rows
+
+    def _get_team_feed_ids(self, rule_value: str) -> frozenset[str] | None:
+        """Resolve a team_feed rule value to the provider team ids it selects (#489).
+
+        Compared against a stream's persisted feed_team_id (which holds the
+        provider team id, same namespace as managed_channels.feed_team_id).
+        Keyed formats carry the id directly ('espn:mlb:158' → '158'); the
+        legacy integer format holds teams-table row ids and needs a lookup.
+        Returns None when nothing resolves (rule matches no resolved stream).
+        Results are cached per rule_value string.
+        """
+        if rule_value in self._team_feed_ids:
+            return self._team_feed_ids[rule_value]
+
+        ids: set[str] = set()
+        if rule_value:
+            if ":" in rule_value:
+                for key in rule_value.split(","):
+                    key = key.strip()
+                    if ":" in key:
+                        # 2-part provider:id or 3-part provider:league:id —
+                        # the provider team id is always the last segment
+                        ids.add(key.split(":")[-1])
+            elif self.conn:
+                row_ids = [int(x) for x in rule_value.split(",") if x.strip().isdigit()]
+                if row_ids:
+                    placeholders = ",".join("?" * len(row_ids))
+                    try:
+                        rows = self.conn.execute(
+                            f"SELECT provider_team_id FROM teams"
+                            f" WHERE id IN ({placeholders}) AND active = 1",
+                            row_ids,
+                        ).fetchall()
+                        ids.update(str(r[0]) for r in rows if r[0] is not None)
+                    except Exception as e:
+                        logger.warning(
+                            "[STREAM_ORDER] Failed to resolve team ids for team_feed rule: %s",
+                            e,
+                        )
+
+        result = frozenset(ids) if ids else None
+        self._team_feed_ids[rule_value] = result
+        return result
 
     def _get_team_feed_pattern(self, rule_value: str) -> re.Pattern | None:
         """Build and cache the team-feed regex.
