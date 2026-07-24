@@ -144,6 +144,20 @@ class ChannelCreator(_LifecycleHost):
                         feed_team = matched.get("feed_team")
                         feed_team_id = feed_team.id if feed_team else None
 
+                        # Per-stream resolved team (#489) for team_feed/
+                        # not_team_feed ordering rules. Feed resolution first;
+                        # for TEAM_ONLY streams fall back to the matched side's
+                        # team. Distinct from feed_team_id above: this is only
+                        # persisted on the stream row and never creates
+                        # feed-separated channels.
+                        stream_feed_team_id = feed_team_id
+                        if stream_feed_team_id is None:
+                            side = matched.get("matched_side")
+                            if side == "home" and event.home_team:
+                                stream_feed_team_id = event.home_team.id
+                            elif side == "away" and event.away_team:
+                                stream_feed_team_id = event.away_team.id
+
                         # Stream type tag ('event' or 'team') for ordering rules
                         match_type = matched.get("match_type", "event")
                         # How the stream matched ('epg', 'fuzzy', …) for the
@@ -255,6 +269,7 @@ class ChannelCreator(_LifecycleHost):
                                 segment=segment,
                                 match_type=match_type,
                                 match_method=match_method,
+                                stream_feed_team_id=stream_feed_team_id,
                                 attach_at=attach_at,
                                 detach_at=detach_at,
                             )
@@ -331,6 +346,7 @@ class ChannelCreator(_LifecycleHost):
                             feed_label_style=feed_label_style,
                             match_type=match_type,
                             match_method=match_method,
+                            stream_feed_team_id=stream_feed_team_id,
                             attach_at=attach_at,
                             detach_at=detach_at,
                         )
@@ -440,6 +456,7 @@ class ChannelCreator(_LifecycleHost):
         segment: str | None = None,
         match_type: str = "event",
         match_method: str | None = None,
+        stream_feed_team_id: str | None = None,
         attach_at: str | None = None,
         detach_at: str | None = None,
     ) -> StreamProcessResult | None:
@@ -459,6 +476,7 @@ class ChannelCreator(_LifecycleHost):
             remove_stream_from_channel,
             stream_exists_on_channel,
             update_stream_account_name,
+            update_stream_feed_team,
             update_stream_window,
         )
 
@@ -552,6 +570,7 @@ class ChannelCreator(_LifecycleHost):
                     match_type=match_type,
                     match_method=match_method,
                     dispatcharr_channel_group=stream.get("dp_channel_group"),
+                    feed_team_id=stream_feed_team_id,
                 )
                 if priority is None:
                     priority = get_next_stream_priority(conn, existing.id)
@@ -569,6 +588,7 @@ class ChannelCreator(_LifecycleHost):
                     source_group_id=source_group_id,
                     match_type=match_type,
                     match_method=match_method,
+                    feed_team_id=stream_feed_team_id,
                     dispatcharr_channel_group=stream.get("dp_channel_group"),
                     attach_at=attach_at,
                     detach_at=detach_at,
@@ -683,6 +703,13 @@ class ChannelCreator(_LifecycleHost):
                     update_stream_window(
                         conn, existing.id, stream_id, attach_at, detach_at
                     )
+                if stream_feed_team_id:
+                    # Backfill the resolved feed team (#489) so rows attached
+                    # before the column existed feed the team_feed ordering
+                    # rules on the next reorder pass, not only at re-attach.
+                    update_stream_feed_team(
+                        conn, existing.id, stream_id, stream_feed_team_id
+                    )
 
             result.existing.append(
                 {
@@ -758,6 +785,7 @@ class ChannelCreator(_LifecycleHost):
         feed_label_style: str | None = None,
         match_type: str = "event",
         match_method: str | None = None,
+        stream_feed_team_id: str | None = None,
         attach_at: str | None = None,
         detach_at: str | None = None,
     ) -> ChannelCreationResult:
@@ -770,6 +798,10 @@ class ChannelCreator(_LifecycleHost):
             feed_team_id: Provider team ID for feed separation (HOME/AWAY channels)
             feed_team: Team object for feed label generation
             feed_label_style: Label style ('team_name', 'short_name', 'home_away')
+            stream_feed_team_id: Resolved feed/matched team persisted on the
+                stream row for team_feed ordering rules (#489) — includes the
+                TEAM_ONLY matched-side fallback, so it can be set when
+                feed_team_id is None and never creates feed-separated channels
         """
         from teamarr.database.channels import (
             add_stream_to_channel,
@@ -955,6 +987,7 @@ class ChannelCreator(_LifecycleHost):
                 source_group_id=group_id,
                 match_type=match_type,
                 match_method=match_method,
+                feed_team_id=stream_feed_team_id,
                 dispatcharr_channel_group=stream.get("dp_channel_group"),
                 attach_at=attach_at,
                 detach_at=detach_at,

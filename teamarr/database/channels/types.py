@@ -123,6 +123,10 @@ class ManagedChannelStream:
     exception_keyword: str | None = None
     match_type: str = "event"
     match_method: str | None = None  # 'epg', 'fuzzy', etc. — drives the epg_match ordering rule
+    # (#489) Resolved feed/matched team — provider team id, same namespace as
+    # managed_channels.feed_team_id. Drives team_feed/not_team_feed ordering
+    # rules ahead of the name regex. NULL = no team resolved for this stream.
+    feed_team_id: str | None = None
     # DP channel's own group name (channel-source streams) — drives the
     # dispatcharr_group ordering rule (ybt.3). NULL for non-channel-source streams.
     dispatcharr_channel_group: str | None = None
@@ -161,6 +165,7 @@ class ManagedChannelStream:
             exception_keyword=row.get("exception_keyword"),
             match_type=row.get("match_type", "event"),
             match_method=row.get("match_method"),
+            feed_team_id=row.get("feed_team_id"),
             dispatcharr_channel_group=row.get("dispatcharr_channel_group"),
             added_at=row.get("added_at"),
             removed_at=row.get("removed_at"),

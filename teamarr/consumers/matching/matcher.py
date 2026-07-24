@@ -109,6 +109,9 @@ class MatchedStreamResult:
 
     # Feed separation
     feed_hint: str | None = None  # "home" or "away" if detected
+    # TEAM_ONLY (#489): which event side the branded team is ("home"/"away").
+    # The lifecycle persists that side's team id per-stream for ordering rules.
+    matched_side: str | None = None
 
     # Detailed reason enums from MatchOutcome (preserved for type-safe access)
     failed_reason: FailedReason | None = None
@@ -1386,6 +1389,7 @@ class StreamMatcher:
             excluded_reason=outcome.excluded_reason,
             detail=outcome.detail,
             feed_hint=classified.feed_hint,
+            matched_side=outcome.matched_side,
             epg_program_start=outcome.epg_program_start,
             epg_program_end=outcome.epg_program_end,
         )

@@ -45,7 +45,7 @@ Any rule type can be used as a Scoring rule or a Priority rule.
 | **Event Group** | Match streams from a specific event group | "ESPN+ Group" → +20 |
 | **Regex Pattern** | Match streams whose name matches a regex | `(?i)1080p` → +15 |
 | **Stream Type** | Match by how the stream was recognized: **event stream**, **team stream**, or **EPG matched stream**. Optionally narrow a team-stream rule to specific teams. *EPG matched stream* covers streams attached via [EPG program-data matching](../matching/program-matching) — i.e. time-shared linear channels (ESPN, FS1) matched to events through Dispatcharr's program guide. The three types are mutually exclusive: an EPG-matched stream only ever matches the *EPG matched stream* option, never *event* or *team* — regardless of rule order. | Team stream → +10 |
-| **Home/Away Feed** | Match streams that look like a team's own broadcast (its home or away feed), detected from the stream name. Pick one or more teams. **Invert** flips it to match feeds that are *not* your selected teams (useful for pushing other teams' feeds down). | Selected teams → +30 |
+| **Home/Away Feed** | Match streams identified as a team's own broadcast — via the matching engine's resolved feed team (team-branded channels like `Brewers.TV`, broadcast-market listings, tvg-id, team streams) or, as a fallback, home/away markers in the stream name. Pick one or more teams. **Invert** flips it to match feeds that are *not* your selected teams (useful for pushing other teams' feeds down). | Selected teams → +30 |
 | **Dispatcharr Group** | Match channel-source streams by their Dispatcharr channel group. The dropdown lists the groups you selected under [Use Dispatcharr channels as an EPG source](../matching/program-matching#dispatcharr-channels-as-an-epg-source). Only channel-source streams carry a Dispatcharr group; regular matched streams are unaffected. | "US \| Sports" → +5 |
 | **Stream Stats** | Match streams whose quality meets numeric thresholds — **resolution width/height**, **source FPS**, **output/audio bitrate**, or **sample rate** — using `>`, `<`, `>=`, `<=`, `=`. Combine several conditions (all must pass). Use it to float HD / high-bitrate streams ahead of lower-quality ones. | `resolution_height >= 1080` and `source_fps >= 50` → +25 |
 | **Everything Else** | Optional catch-all baseline for any stream not matched by a Priority rule. Only meaningful as a **Priority** rule — it sets the band unmatched streams land in. | Everything else → priority 99 |
@@ -67,7 +67,12 @@ Both **Stream Type** (team streams) and **Home/Away Feed** rules let you pick sp
 
 ### How Home/Away Feed detection works
 
-Teamarr builds a name-matching pattern from your selected teams' names and abbreviations, then looks for feed indicators in the stream name — a matchup (`vs`, `at`, `@`), a side (`home`/`away`), a camera label (`cam 01`/`cam 02`), or a `(Team feed)` marker. A stream like `Cubs vs Pirates (Home)` is recognized as the Pirates' home feed. Generic streams with no feed markers (for example a plain `Pirates vs Cubs` with no side) are left for other rules to handle. Because detection relies on the stream name, results depend on your provider's naming conventions.
+The rule checks two layers, in order:
+
+1. **Resolved feed team (authoritative).** During matching, Teamarr resolves which team a stream belongs to — from ESPN broadcast-market listings (`Brewers.TV` listed as the away-market broadcast), team-branded channel tokens in the stream name, tvg-id, or tvg-name, and for team streams (`MLB \| Milwaukee Brewers`) the matched team itself. That resolution is stored per stream, and the rule matches it directly — no feed markers needed in the name. A stream resolved to a *different* team never matches, even if its name looks similar.
+2. **Name-pattern fallback.** When no team was resolved, Teamarr builds a name-matching pattern from your selected teams' names and abbreviations, then looks for feed indicators in the stream name — a matchup (`vs`, `at`, `@`), a side (`home`/`away`), a camera label (`cam 01`/`cam 02`), or a `(Team feed)` marker. A stream like `Cubs vs Pirates (Home)` is recognized as the Pirates' home feed.
+
+Generic streams with no resolved team and no feed markers (for example a plain `Pirates vs Cubs` with no side) are left for other rules to handle.
 
 ## Live events keep their #1 stream
 
