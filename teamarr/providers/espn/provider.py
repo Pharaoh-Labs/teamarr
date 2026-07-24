@@ -25,6 +25,7 @@ from teamarr.core import (
 from teamarr.core.sports import normalize_sport
 from teamarr.providers.espn.client import ESPN_TEAM_ID_CORRECTIONS, ESPNClient
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
+from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
 from teamarr.providers.espn.tennis import TennisParserMixin
 from teamarr.providers.espn.tournament import TournamentParserMixin
 from teamarr.providers.espn.ufc import UFCParserMixin
@@ -52,6 +53,9 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         # events cache instead of fetching each day's scoreboard once per team —
         # so a league's daily scoreboard is fetched once per run, not N_teams times.
         self._cached_events_fn: Callable[[str, date], list[Event]] | None = None
+        # Drift canary (#506): warns if the editorial scoreboard keys the
+        # empty-safe features rely on vanish from every payload (rename drift).
+        self._editorial_canary = EditorialDriftCanary()
 
     @property
     def name(self) -> str:
@@ -749,6 +753,12 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             game_event_note = (notes[0].get("headline") if notes else "") or ""
             soccer_match_note = competition.get("altGameNote") or ""
             neutral_site = bool(competition.get("neutralSite"))
+            self._editorial_canary.record(
+                competition,
+                sport=sport,
+                # Same final indicators as is_event_final (ESPN emits both)
+                is_final=status.state in ("final", "post"),
+            )
 
             home_score = self._parse_score(home_data.get("score"))
             away_score = self._parse_score(away_data.get("score"))
