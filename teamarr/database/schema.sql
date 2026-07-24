@@ -1207,8 +1207,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free', 1),
 
     -- Motorsports (ESPN) - Race weekends with multi-driver sessions, no home/away
-    -- 'f1' is the fully-implemented reference league; IndyCar/MotoGP session
-    -- structure needs confirmation in a follow-up.
+    -- 'f1' is the fully-implemented reference league. IndyCar verified 2026-07
+    -- (bead h31.3): ESPN exposes the race session ONLY (no practice/qualifying
+    -- anywhere in the payload) — the untyped-competition fallback maps it to a
+    -- single 'race' session by design. MotoGP remains unverified (h31.2, TSDB).
     ('f1', 'espn', 'racing/f1', NULL, 'Formula 1', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/f1.png', NULL, 0, 'F1', 'f1', 'event', 'Formula 1 Racing', NULL, NULL, NULL, 1),
 
     -- Motorsports (NASCAR API) - authoritative session schedules from cf.nascar.com.
