@@ -48,33 +48,7 @@ import { useSports } from "@/hooks/useSports"
 import { useRowSelection } from "@/hooks/useRowSelection"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useGenerationProgress } from "@/hooks/useGenerationProgress"
-
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return "-"
-  const date = new Date(dateStr)
-  return date.toLocaleString()
-}
-
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "-"
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = date.getTime() - now.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMins / 60)
-
-  if (diffMs < 0) {
-    const absMins = Math.abs(diffMins)
-    const absHours = Math.abs(diffHours)
-    if (absMins < 60) return `${absMins}m ago`
-    if (absHours < 24) return `${absHours}h ago`
-    return formatDateTime(dateStr)
-  }
-
-  if (diffMins < 60) return `in ${diffMins}m`
-  if (diffHours < 24) return `in ${diffHours}h`
-  return formatDateTime(dateStr)
-}
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 // Sports whose events aren't a team-vs-team matchup — the event NAME is the
 // event (fight card, race weekend, tournament), not the participant pair.
@@ -362,6 +336,7 @@ function MethodCell({ stream }: { stream: ChannelStreamEntry }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useOutsideDismiss(ref, open, setOpen)
+  const { formatRelativeTime } = useDateFormat()
 
   const badge = getMatchMethodBadge(stream.match_method)
   if (!badge) return <span className="text-muted-foreground">—</span>
@@ -489,6 +464,7 @@ const ChannelRow = React.memo(function ChannelRow({
   onToggleSelect,
   onDelete,
 }: ChannelRowProps) {
+  const { formatRelativeTime, timezone } = useDateFormat()
   return (
     <>
       <TableRow className={expanded ? "border-b-0" : ""}>
@@ -535,7 +511,8 @@ const ChannelRow = React.memo(function ChannelRow({
             <div className="truncate text-xs text-muted-foreground">
               {channel.event_date && (
                 <>
-                  {new Date(channel.event_date).toLocaleString(undefined, {
+                  {new Date(channel.event_date).toLocaleString("en-US", {
+                    timeZone: timezone,
                     weekday: "short",
                     month: "short",
                     day: "numeric",
@@ -559,7 +536,7 @@ const ChannelRow = React.memo(function ChannelRow({
         </TableCell>
         <TableCell>{getSyncStatusBadge(channel.sync_status)}</TableCell>
         <TableCell className="text-muted-foreground">
-          {formatRelativeTime(channel.scheduled_delete_at)}
+          {channel.scheduled_delete_at ? formatRelativeTime(channel.scheduled_delete_at) : "-"}
         </TableCell>
         <TableCell>
           <div className="flex items-center justify-end">
@@ -639,6 +616,7 @@ const ChannelRow = React.memo(function ChannelRow({
 })
 
 export function ManagedChannelsTable() {
+  const { formatDateTime } = useDateFormat()
   // Filter states
   const [nameFilter, setNameFilter] = useState<string>("")
   const [sportFilter, setSportFilter] = useState<string>("")
@@ -1124,14 +1102,7 @@ export function ManagedChannelsTable() {
                       <Badge variant="secondary" className="text-xs">{getLeagueDisplay(channel.league)}</Badge>
                     </TableCell>
                     <TableCell className="text-sm">
-                      {channel.deleted_at
-                        ? new Date(channel.deleted_at).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "-"}
+                      {channel.deleted_at ? formatDateTime(channel.deleted_at) : "-"}
                     </TableCell>
                   </TableRow>
                 ))}

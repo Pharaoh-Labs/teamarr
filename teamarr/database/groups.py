@@ -11,6 +11,8 @@ from datetime import datetime
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.utilities.tz import parse_db_timestamp
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,17 +164,20 @@ def _row_to_group(row) -> EventEPGGroup:
         except (ValueError, TypeError):
             pass
 
+    # parse_db_timestamp, not bare fromisoformat (#511): these columns hold
+    # SQLite-canonical naive UTC — the aware result keeps downstream
+    # .isoformat() serialization carrying an explicit offset for the browser.
     updated_at = None
     if row["updated_at"]:
         try:
-            updated_at = datetime.fromisoformat(row["updated_at"])
+            updated_at = parse_db_timestamp(row["updated_at"])
         except (ValueError, TypeError):
             pass
 
     last_refresh = None
     if row["last_refresh"]:
         try:
-            last_refresh = datetime.fromisoformat(row["last_refresh"])
+            last_refresh = parse_db_timestamp(row["last_refresh"])
         except (ValueError, TypeError):
             pass
 
@@ -1067,7 +1072,18 @@ def get_stale_groups(conn: Connection) -> list[dict]:
         ORDER BY name
         """
     ).fetchall()
-    return [dict(row) for row in rows]
+    out = []
+    for row in rows:
+        d = dict(row)
+        # Naive-UTC column → offset-bearing ISO for the browser (#511).
+        if d.get("source_last_seen"):
+            try:
+                parsed = parse_db_timestamp(d["source_last_seen"])
+                d["source_last_seen"] = parsed.isoformat() if parsed else None
+            except (ValueError, TypeError):
+                pass
+        out.append(d)
+    return out
 
 
 # =============================================================================

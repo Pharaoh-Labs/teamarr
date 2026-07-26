@@ -21,6 +21,7 @@ from teamarr.core.filler_types import (
     OffseasonFillerTemplate,
     legacy_conditional_to_rows,
 )
+from teamarr.utilities.tz import parse_db_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,21 @@ def _parse_json(value: str | None, default: Any = None) -> Any:
         return default if default is not None else {}
 
 
+def _iso_utc(value: str | None) -> str | None:
+    """Naive-UTC DB timestamp → offset-bearing ISO string (#511).
+
+    Without an offset, JS ``new Date()`` parses the string as browser-local
+    time, shifting the displayed date by the UTC offset.
+    """
+    if not value:
+        return value
+    try:
+        parsed = parse_db_timestamp(value)
+    except (ValueError, TypeError):
+        return value
+    return parsed.isoformat() if parsed else value
+
+
 def _row_to_template(row: Row) -> Template:
     """Convert database row to Template object."""
     return Template(
@@ -237,8 +253,8 @@ def _row_to_template(row: Row) -> Template:
         conditional_descriptions=_parse_json(row["conditional_descriptions"], []),
         event_channel_name=row["event_channel_name"],
         event_channel_logo_url=row["event_channel_logo_url"],
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
+        created_at=_iso_utc(row["created_at"]),
+        updated_at=_iso_utc(row["updated_at"]),
     )
 
 

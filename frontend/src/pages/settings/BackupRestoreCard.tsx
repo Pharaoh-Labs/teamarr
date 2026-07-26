@@ -33,6 +33,7 @@ import {
   useUpdateBackupSettings,
 } from "@/hooks/useBackup"
 import { formatBytes } from "./format"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 interface BackupScheduleSettings {
   enabled: boolean
@@ -153,6 +154,7 @@ function ScheduledBackupsSection({ initial }: { initial: BackupScheduleSettings 
 }
 
 export function BackupRestoreCard() {
+  const { formatDateTime } = useDateFormat()
   const { data: settings } = useBackupSettings()
 
   // Backup files state
@@ -262,10 +264,6 @@ export function BackupRestoreCard() {
     }
   }
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
 
   return (
     <Card>
@@ -318,7 +316,7 @@ export function BackupRestoreCard() {
                   >
                     {files.map((backup) => (
                       <option key={backup.filename} value={backup.filename}>
-                        {backup.is_protected ? "🔒 " : ""}{backup.filename} · {formatBytes(backup.size_bytes)} · {formatDate(backup.created_at)}
+                        {backup.is_protected ? "🔒 " : ""}{backup.filename} · {formatBytes(backup.size_bytes)} · {formatDateTime(backup.created_at)}
                       </option>
                     ))}
                   </Select>
