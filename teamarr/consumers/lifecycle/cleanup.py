@@ -261,6 +261,8 @@ class ChannelCleanup(_LifecycleHost):
         group_id: int,
         current_streams: dict[int, dict],
         matched_streams: list[dict] | None = None,
+        *,
+        is_channel_source: bool = False,
     ) -> StreamProcessResult:
         """Clean up channels for streams that no longer exist, changed content, or rotated events.
 
@@ -278,6 +280,12 @@ class ChannelCleanup(_LifecycleHost):
             group_id: Event EPG group ID
             current_streams: Dict mapping stream_id -> stream_data with 'name' field
             matched_streams: Optional list of matched stream dicts with event data
+            is_channel_source: True for the hidden Dispatcharr-channels source
+                group. Its "pool" is DERIVED from the stream->channel map, not
+                an M3U listing, so absence from it must never be read as
+                "removed from source" (#512) — a pool-construction gap would
+                cascade into channel deletion. Rotation checks still apply;
+                stale channels fall to their scheduled event-end deletion.
 
         Returns:
             StreamProcessResult with deleted channels and errors
@@ -361,8 +369,10 @@ class ChannelCleanup(_LifecycleHost):
                             s.source_group_id is not None and s.source_group_id != group_id
                         )
 
-                        if is_cross_group:
-                            # Cross-group stream: skip "missing from M3U" check
+                        if is_cross_group or is_channel_source:
+                            # No authoritative M3U pool for this stream (other
+                            # group's stream, or channel-source derived pool):
+                            # skip the "missing from M3U" check.
                             # But still check event rotation if we have match data
                             if stream_event_map and channel_event_id:
                                 matched_events = stream_event_map.get(stream_id)

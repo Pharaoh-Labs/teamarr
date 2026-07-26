@@ -191,8 +191,11 @@ class StreamMatching:
         # curated channel fallback). Both are single scoped fetches.
         try:
             epg_data_list = self._dispatcharr_client.channels.get_epg_data_list()
-            stream_channels, channel_by_uuid = (
-                self._dispatcharr_client.channels.get_channel_maps()
+            # Teamarr's own output channels must not claim stream->channel slots
+            # (#512): last-write-wins would let them mask a shared stream's
+            # curated channel and break tier-1 (curated) EPG resolution.
+            stream_channels, channel_by_uuid = self._dispatcharr_client.channels.get_channel_maps(
+                exclude_channel_ids=self._managed_channel_ids()
             )
         except Exception as e:
             logger.warning("[EPG-MATCH] Failed to load EPG resolution data: %s", e)

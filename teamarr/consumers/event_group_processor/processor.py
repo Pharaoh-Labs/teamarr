@@ -965,7 +965,10 @@ class EventGroupProcessor(
         if current_streams is not None:
             try:
                 cleanup_result = lifecycle_service.cleanup_deleted_streams(
-                    group.id, current_streams, matched_streams=matched_streams
+                    group.id,
+                    current_streams,
+                    matched_streams=matched_streams,
+                    is_channel_source=bool(getattr(group, "is_channel_source", False)),
                 )
                 combined_result.merge(cleanup_result)
                 if cleanup_result.deleted:
