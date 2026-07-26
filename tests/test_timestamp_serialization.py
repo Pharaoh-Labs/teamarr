@@ -9,7 +9,7 @@ parses them as browser-LOCAL time and the UI echoes raw UTC digits (the
 from datetime import UTC, datetime
 
 from teamarr.api.routes.channels import _safe_isoformat
-from teamarr.database.templates import _iso_utc
+from teamarr.database.templates import _parse_ts
 
 
 class TestSafeIsoformat:
@@ -30,13 +30,15 @@ class TestSafeIsoformat:
         assert _safe_isoformat("not a timestamp") == "not a timestamp"
 
 
-class TestTemplateIsoUtc:
-    def test_naive_db_string_gains_utc_offset(self):
-        assert _iso_utc("2026-07-25 03:01:00") == "2026-07-25T03:01:00+00:00"
+class TestTemplateParseTs:
+    def test_naive_db_string_becomes_aware_utc(self):
+        parsed = _parse_ts("2026-07-25 03:01:00")
+        assert parsed == datetime(2026, 7, 25, 3, 1, tzinfo=UTC)
+        assert parsed.isoformat() == "2026-07-25T03:01:00+00:00"
 
     def test_none_and_garbage(self):
-        assert _iso_utc(None) is None
-        assert _iso_utc("garbage") == "garbage"
+        assert _parse_ts(None) is None
+        assert _parse_ts("garbage") is None
 
 
 def test_group_row_timestamps_parse_aware(db_conn):

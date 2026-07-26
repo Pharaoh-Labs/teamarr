@@ -195,19 +195,19 @@ def _parse_json(value: str | None, default: Any = None) -> Any:
         return default if default is not None else {}
 
 
-def _iso_utc(value: str | None) -> str | None:
-    """Naive-UTC DB timestamp → offset-bearing ISO string (#511).
+def _parse_ts(value: str | None) -> datetime | None:
+    """Naive-UTC DB timestamp → aware datetime (#511).
 
-    Without an offset, JS ``new Date()`` parses the string as browser-local
-    time, shifting the displayed date by the UTC offset.
+    Pydantic then serializes it WITH an offset; an offset-less string is
+    parsed as browser-local time by JS ``new Date()``, shifting the
+    displayed date by the UTC offset.
     """
     if not value:
-        return value
+        return None
     try:
-        parsed = parse_db_timestamp(value)
+        return parse_db_timestamp(value)
     except (ValueError, TypeError):
-        return value
-    return parsed.isoformat() if parsed else value
+        return None
 
 
 def _row_to_template(row: Row) -> Template:
@@ -253,8 +253,8 @@ def _row_to_template(row: Row) -> Template:
         conditional_descriptions=_parse_json(row["conditional_descriptions"], []),
         event_channel_name=row["event_channel_name"],
         event_channel_logo_url=row["event_channel_logo_url"],
-        created_at=_iso_utc(row["created_at"]),
-        updated_at=_iso_utc(row["updated_at"]),
+        created_at=_parse_ts(row["created_at"]),
+        updated_at=_parse_ts(row["updated_at"]),
     )
 
 
@@ -323,6 +323,10 @@ def list_templates_with_counts(conn: Connection) -> list[dict]:
         """
     )
     templates = [dict(row) for row in cursor.fetchall()]
+    for t in templates:
+        # Aware datetimes so the API serializes offsets (#511).
+        t["created_at"] = _parse_ts(t.get("created_at"))
+        t["updated_at"] = _parse_ts(t.get("updated_at"))
 
     # Fetch global (subscription_templates) assignments per template
     assign_cursor = conn.execute(
