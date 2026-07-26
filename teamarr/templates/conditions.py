@@ -58,6 +58,7 @@ from typing import Any
 
 from teamarr.core import SEASON_POSTSEASON, SEASON_PRESEASON
 from teamarr.templates.context import GameContext, TemplateContext
+from teamarr.templates.variables.combat import COMBAT_SPORTS
 from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
@@ -397,7 +398,7 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if fight ended by KO or TKO."""
         event = game_ctx.event
-        if not event or event.sport != "mma":
+        if not event or event.sport not in COMBAT_SPORTS:
             return False
         method = event.fight_result_method
         return method in ("ko", "tko")
@@ -407,7 +408,7 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if fight ended by submission."""
         event = game_ctx.event
-        if not event or event.sport != "mma":
+        if not event or event.sport not in COMBAT_SPORTS:
             return False
         return event.fight_result_method == "submission"
 
@@ -416,7 +417,7 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if fight went to decision."""
         event = game_ctx.event
-        if not event or event.sport != "mma":
+        if not event or event.sport not in COMBAT_SPORTS:
             return False
         method = event.fight_result_method
         return method is not None and "decision" in method
@@ -426,7 +427,7 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if fight ended by finish (KO/TKO/Submission, not decision)."""
         event = game_ctx.event
-        if not event or event.sport != "mma":
+        if not event or event.sport not in COMBAT_SPORTS:
             return False
         method = event.fight_result_method
         return method in ("ko", "tko", "submission")
@@ -436,7 +437,7 @@ class ConditionEvaluator:
     ) -> bool:
         """Check if fight went all scheduled rounds."""
         event = game_ctx.event
-        if not event or event.sport != "mma":
+        if not event or event.sport not in COMBAT_SPORTS:
             return False
         method = event.fight_result_method
         # If it went to decision, it went the distance
