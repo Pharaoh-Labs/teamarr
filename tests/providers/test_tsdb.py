@@ -475,3 +475,44 @@ class TestSeasonCandidates:
         assert result is good
         client._request.assert_called_once()
         assert "-" in client._request.call_args.args[1]["s"]
+
+
+class TestFighterParsing:
+    """#510: fighters parsed from combat event names (boxing has no home/away)."""
+
+    def _provider(self):
+        from unittest.mock import MagicMock
+
+        return TSDBProvider(client=MagicMock())
+
+    def test_vs_with_period(self):
+        p = self._provider()
+        home, away = p._parse_fighters_from_event_name(
+            "Canelo Alvarez vs. Terence Crawford", "1", "boxing", "boxing"
+        )
+        assert home.name == "Canelo Alvarez"
+        assert away.name == "Terence Crawford"
+
+    def test_plain_vs(self):
+        p = self._provider()
+        home, away = p._parse_fighters_from_event_name(
+            "Errol Spence Jr. vs Tim Tszyu", "2", "boxing", "boxing"
+        )
+        assert home.name == "Errol Spence Jr."
+        assert away.name == "Tim Tszyu"
+
+    def test_single_v(self):
+        p = self._provider()
+        home, away = p._parse_fighters_from_event_name(
+            "Fury v Usyk", "3", "boxing", "boxing"
+        )
+        assert home.name == "Fury"
+        assert away.name == "Usyk"
+
+    def test_unparseable_falls_back_to_tbd(self):
+        p = self._provider()
+        home, away = p._parse_fighters_from_event_name(
+            "Zuffa Boxing 9", "4", "boxing", "boxing"
+        )
+        assert home.name == "Zuffa Boxing 9"
+        assert away.name == "TBD"

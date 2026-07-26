@@ -23,6 +23,10 @@ from teamarr.providers.tsdb.racing import parse_racing_events
 
 logger = logging.getLogger(__name__)
 
+# Fighter separators in combat-event names ("A vs. B" / "A vs B" / "A v B").
+# " vs. " must come first so the bare " vs " variant can't half-match it (#510).
+_VS_SEPARATORS = (" vs. ", " vs ", " v ")
+
 # Type alias for team name resolver callback
 # Takes (team_id, league) -> team_name or None
 TeamNameResolver = Callable[[str, str], str | None]
@@ -482,7 +486,9 @@ class TSDBProvider(SportsProvider):
             home_name = data.get("strHomeTeam")
             away_name = data.get("strAwayTeam")
 
-            if not home_name and not away_name and " vs " in event_name:
+            if not home_name and not away_name and any(
+                sep in event_name for sep in _VS_SEPARATORS
+            ):
                 # Parse fighters from event name: "Fighter A vs Fighter B"
                 home_team, away_team = self._parse_fighters_from_event_name(
                     event_name, event_id, league, sport
@@ -564,11 +570,12 @@ class TSDBProvider(SportsProvider):
 
         Returns (home_team, away_team) - first fighter is "home".
         """
-        # Split on " vs " (case insensitive)
-        parts = event_name.split(" vs ")
-        if len(parts) != 2:
-            # Try " v " as fallback
-            parts = event_name.split(" v ")
+        # Try each separator in order (" vs. " first — " vs " never matches it).
+        parts = [event_name]
+        for sep in _VS_SEPARATORS:
+            parts = event_name.split(sep)
+            if len(parts) == 2:
+                break
 
         if len(parts) == 2:
             fighter1 = parts[0].strip()

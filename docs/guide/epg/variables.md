@@ -524,7 +524,10 @@ Soccer teams often play in multiple competitions (domestic league, cups, Champio
 
 ## Combat Sports
 
-UFC and MMA-specific variables for event templates. These are **event-only** (no `.next`/`.last` suffixes) since each UFC event is independent.
+Variables for combat-sport event templates (UFC/MMA and boxing). These are **event-only** (no `.next`/`.last` suffixes) since each event is independent.
+
+{: .note }
+**Boxing support:** the fighter/matchup/title variables in this section work for boxing events too. Card segments, bout lists, fight results, records, and weight class only populate for UFC — that data comes from ESPN's UFC feed and TheSportsDB (which serves boxing) doesn't provide it. `{event_number}` is UFC-only by definition.
 
 ### Fighters & Matchup
 
