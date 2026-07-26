@@ -305,7 +305,11 @@ class ChannelCleanup(_LifecycleHost):
                 stream_info = ms.get("stream", {})
                 sid = stream_info.get("id") if isinstance(stream_info, dict) else None
                 event = ms.get("event")
-                segment = ms.get("card_segment")
+                # Key must mirror channel identity (_effective_event_id):
+                # segment expansion writes the canonical "segment" key (#514) —
+                # "card_segment" is the raw classifier field and is absent for
+                # racing, which made every segmented channel look rotated.
+                segment = ms.get("segment")
                 if sid and event:
                     eid = f"{event.id}-{segment}" if segment else str(event.id)
                     stream_event_map.setdefault(sid, set()).add(eid)
