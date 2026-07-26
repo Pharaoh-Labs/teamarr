@@ -9,6 +9,29 @@ from teamarr.services.stream_filter import FilterResult, StreamFilter, StreamFil
 logger = logging.getLogger(__name__)
 
 
+def managed_channel_ids(db_factory: Any) -> set[int]:
+    """Dispatcharr ids of Teamarr's own output channels.
+
+    These are OUTPUT, never EPG-match input — callers pass them as
+    ``exclude_channel_ids`` to the stream->channel map builders so they
+    can't claim slots for streams shared with curated channels (#512).
+    Module-level (not a mixin method) so both StreamFetcher and
+    StreamMatching can use it without cross-mixin attribute access.
+    """
+    try:
+        from teamarr.database.channels import get_all_managed_channels
+
+        with db_factory() as conn:
+            return {
+                mc.dispatcharr_channel_id
+                for mc in get_all_managed_channels(conn, include_deleted=False)
+                if mc.dispatcharr_channel_id
+            }
+    except Exception as e:
+        logger.warning("[CHANNEL_SOURCE] Failed to load managed channel ids: %s", e)
+        return set()
+
+
 class StreamFetcher:
     """Fetches and filters M3U streams from Dispatcharr for event groups.
 
@@ -152,8 +175,19 @@ class StreamFetcher:
         channels are OUTPUT, not INPUT, so they are excluded.
         """
         client = self._dispatcharr_client
+
+        # Teamarr's own managed channels are OUTPUT — never treat them as a source.
+        # Loaded BEFORE the channel-map fetch so they can be excluded from slot
+        # claiming (#512): the map is last-write-wins, so once the attach window
+        # opens a Teamarr event channel would steal a shared stream's slot from
+        # the curated channel, dropping it from this pool and cascading into
+        # delete/recreate churn on alternating runs.
+        managed_ids = managed_channel_ids(self._db_factory)
+
         try:
-            stream_channel_map = client.channels.get_stream_channel_map()
+            stream_channel_map = client.channels.get_stream_channel_map(
+                exclude_channel_ids=managed_ids
+            )
             epg_data_list = client.channels.get_epg_data_list()
         except Exception as e:
             logger.warning("[CHANNEL_SOURCE] Failed to load channel/EPG data: %s", e)
@@ -162,29 +196,21 @@ class StreamFetcher:
         active_source_ids = self._active_epg_source_ids()
         epg_by_id = {e["id"]: e for e in epg_data_list if e.get("id") is not None}
 
-        # Teamarr's own managed channels are OUTPUT — never treat them as a source.
-        # Also collect the M3U group ids already covered by an EPG-match-enabled
-        # group: streams in those groups are matched by the per-group path (whose
-        # tier-1 resolution uses the same channel EPG), so including them here would
-        # double-process the identical match. Consolidation would dedupe the result
-        # anyway, but skipping avoids wasted work and inflated source-group stats.
-        managed_ids: set[int] = set()
+        # M3U group ids already covered by an EPG-match-enabled group: streams in
+        # those groups are matched by the per-group path (whose tier-1 resolution
+        # uses the same channel EPG), so including them here would double-process
+        # the identical match. Consolidation would dedupe the result anyway, but
+        # skipping avoids wasted work and inflated source-group stats.
         epg_group_m3u_ids: set[int] = set()
         # User-selected DP channel groups to scope the scan (ybt.2). Empty = all.
         # Scoping skips the expensive EPG-resolution/matching for channels in
         # groups the user didn't pick — a generation-time saving.
         selected_groups: set[int] = set()
         try:
-            from teamarr.database.channels import get_all_managed_channels
             from teamarr.database.groups import get_all_groups
             from teamarr.database.settings import get_epg_settings
 
             with self._db_factory() as conn:
-                managed_ids = {
-                    mc.dispatcharr_channel_id
-                    for mc in get_all_managed_channels(conn, include_deleted=False)
-                    if mc.dispatcharr_channel_id
-                }
                 epg_group_m3u_ids = {
                     g.m3u_group_id
                     for g in get_all_groups(conn, include_disabled=False)
@@ -194,7 +220,7 @@ class StreamFetcher:
                     int(gid) for gid in get_epg_settings(conn).epg_channel_source_groups
                 }
         except Exception as e:
-            logger.warning("[CHANNEL_SOURCE] Failed to load managed/group ids: %s", e)
+            logger.warning("[CHANNEL_SOURCE] Failed to load group ids: %s", e)
 
         # Stream detail (name, account) keyed by id — listed once.
         try:
