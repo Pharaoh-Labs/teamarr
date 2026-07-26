@@ -9,6 +9,29 @@ from teamarr.services.stream_filter import FilterResult, StreamFilter, StreamFil
 logger = logging.getLogger(__name__)
 
 
+def managed_channel_ids(db_factory: Any) -> set[int]:
+    """Dispatcharr ids of Teamarr's own output channels.
+
+    These are OUTPUT, never EPG-match input — callers pass them as
+    ``exclude_channel_ids`` to the stream->channel map builders so they
+    can't claim slots for streams shared with curated channels (#512).
+    Module-level (not a mixin method) so both StreamFetcher and
+    StreamMatching can use it without cross-mixin attribute access.
+    """
+    try:
+        from teamarr.database.channels import get_all_managed_channels
+
+        with db_factory() as conn:
+            return {
+                mc.dispatcharr_channel_id
+                for mc in get_all_managed_channels(conn, include_deleted=False)
+                if mc.dispatcharr_channel_id
+            }
+    except Exception as e:
+        logger.warning("[CHANNEL_SOURCE] Failed to load managed channel ids: %s", e)
+        return set()
+
+
 class StreamFetcher:
     """Fetches and filters M3U streams from Dispatcharr for event groups.
 
@@ -141,26 +164,6 @@ class StreamFetcher:
                     streams.append(s)
         return streams
 
-    def _managed_channel_ids(self) -> set[int]:
-        """Dispatcharr ids of Teamarr's own output channels.
-
-        These are OUTPUT, never EPG-match input — callers pass them as
-        ``exclude_channel_ids`` to the stream->channel map builders so they
-        can't claim slots for streams shared with curated channels (#512).
-        """
-        try:
-            from teamarr.database.channels import get_all_managed_channels
-
-            with self._db_factory() as conn:
-                return {
-                    mc.dispatcharr_channel_id
-                    for mc in get_all_managed_channels(conn, include_deleted=False)
-                    if mc.dispatcharr_channel_id
-                }
-        except Exception as e:
-            logger.warning("[CHANNEL_SOURCE] Failed to load managed channel ids: %s", e)
-            return set()
-
     def _fetch_channel_source_streams(self) -> list[dict]:
         """Build EPG-match candidates from streams curated onto Dispatcharr channels.
 
@@ -179,7 +182,7 @@ class StreamFetcher:
         # opens a Teamarr event channel would steal a shared stream's slot from
         # the curated channel, dropping it from this pool and cascading into
         # delete/recreate churn on alternating runs.
-        managed_ids = self._managed_channel_ids()
+        managed_ids = managed_channel_ids(self._db_factory)
 
         try:
             stream_channel_map = client.channels.get_stream_channel_map(

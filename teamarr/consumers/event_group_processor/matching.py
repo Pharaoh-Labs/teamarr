@@ -9,6 +9,9 @@ from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from teamarr.consumers.event_group_processor.stream_fetcher import (
+    managed_channel_ids,
+)
 from teamarr.consumers.matching import BatchMatchResult, StreamCategory, StreamMatcher
 from teamarr.database.groups import EventEPGGroup
 from teamarr.database.settings import get_feed_separation_settings
@@ -195,7 +198,7 @@ class StreamMatching:
             # (#512): last-write-wins would let them mask a shared stream's
             # curated channel and break tier-1 (curated) EPG resolution.
             stream_channels, channel_by_uuid = self._dispatcharr_client.channels.get_channel_maps(
-                exclude_channel_ids=self._managed_channel_ids()
+                exclude_channel_ids=managed_channel_ids(self._db_factory)
             )
         except Exception as e:
             logger.warning("[EPG-MATCH] Failed to load EPG resolution data: %s", e)
