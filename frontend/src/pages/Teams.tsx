@@ -55,6 +55,7 @@ import type { Team } from "@/api/teams"
 import { getLeagues } from "@/api/teams"
 import { statsApi } from "@/api/stats"
 import { useQuery } from "@tanstack/react-query"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 type ActiveFilter = "" | "active" | "inactive"
 type SortColumn = "team" | "league" | "sport" | "template" | "channel" | "status"
@@ -187,6 +188,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
 }
 
 export function Teams() {
+  const { timezone } = useDateFormat()
   const navigate = useNavigate()
   const { data: teams, isLoading, error, refetch } = useTeams()
   const { data: templates } = useTemplates()
@@ -607,7 +609,7 @@ export function Teams() {
                         </div>
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{event.league}</span>
-                          <span>Started {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                          <span>Started {new Date(event.start_time).toLocaleTimeString("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" })}</span>
                         </div>
                       </div>
                     ))}

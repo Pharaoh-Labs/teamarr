@@ -35,8 +35,10 @@ import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
 import { TemplateAssignmentManager } from "@/components/TemplateAssignmentModal"
 import { useSubscription } from "@/hooks/useSubscription"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 export function Templates() {
+  const { formatDate } = useDateFormat()
   const navigate = useNavigate()
   const { data: templates, isLoading, error, refetch } = useTemplates()
   const { data: subscription } = useSubscription()
@@ -380,13 +382,7 @@ export function Templates() {
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {template.created_at
-                        ? new Date(template.created_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
+                      {template.created_at ? formatDate(template.created_at) : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">

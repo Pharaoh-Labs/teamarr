@@ -125,7 +125,9 @@ def list_backups():
                 filename=b.filename,
                 filepath=b.filepath,
                 size_bytes=b.size_bytes,
-                created_at=b.created_at.isoformat(),
+                # Filename timestamps are server-local wall time; astimezone()
+                # attaches the server offset so browsers parse the instant (#511).
+                created_at=b.created_at.astimezone().isoformat(),
                 is_protected=b.is_protected,
                 backup_type=b.backup_type,
             )
