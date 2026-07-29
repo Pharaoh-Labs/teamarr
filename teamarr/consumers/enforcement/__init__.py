@@ -12,6 +12,10 @@ consistency across channels:
 3. KeywordOrderingEnforcer: Ensures main channel has lower number than
    keyword channels for the same event (main before Spanish/French)
 
+4. find_suspect_duplicates: Detection-only safety net for channels that
+   the DB unique index can't catch -- two differently-formatted streams of
+   the same real game that never got the same event_id.
+
 Usage:
     from teamarr.consumers.enforcement import (
         KeywordEnforcer,
@@ -31,6 +35,7 @@ Usage:
 """
 
 from .cross_group import CrossGroupEnforcer, CrossGroupResult
+from .duplicate_detector import find_suspect_duplicates
 from .keywords import KeywordEnforcementResult, KeywordEnforcer
 from .ordering import KeywordOrderingEnforcer, OrderingResult
 
@@ -41,4 +46,5 @@ __all__ = [
     "CrossGroupResult",
     "KeywordOrderingEnforcer",
     "OrderingResult",
+    "find_suspect_duplicates",
 ]
