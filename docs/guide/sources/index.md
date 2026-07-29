@@ -24,7 +24,7 @@ A **Source** is an IPTV stream group that Teamarr matches to real-world sporting
 3. Teamarr parses each stream name, matches it to a real sporting event, and creates a channel with rich EPG data
 4. Channels are created in Dispatcharr with proper names, logos, EPG data, and group/profile assignments
 
-Which leagues a source scans is governed by your global [Subscription](../subscriptions) — configured on the **Subscriptions** page, not here. A source can [override the subscription](creating-groups#per-source-subscription-overrides) with its own league set when needed (e.g., a hockey-only source that shouldn't scan for football events).
+Which leagues a source scans is governed by your global [Subscription](../subscriptions) — configured on the **Subscriptions** page, not here. A source can [override the subscription](creating-groups#subscription-override) with its own league set when needed (e.g., a hockey-only source that shouldn't scan for football events).
 
 ## The Sources Table
 
@@ -36,12 +36,12 @@ The Sources page header shows an overall **X% matched** summary and the **Add St
 |--------|-------------|
 | *(drag handle)* | Drag rows to reorder — the order sets each source's processing order and auto channel allocation |
 | *(checkbox)* | Multi-select for the bulk action bar |
-| **Name** | Source name, M3U account, and a color-coded badge per active matching type (plus a **Regex** badge when custom extraction patterns are set) |
+| **Name** | Source name, M3U account, and a color-coded badge per active matching type (plus a **Regex** badge when custom regex is configured — team-vs-team extraction patterns or include/exclude stream filters) |
 | **Matched** | Stream coverage — how many of the source's eligible streams matched at least one event, as a 0–100% bar. Hover for total *matches produced* and the last-run timestamp |
 | **Status** | Enable/disable toggle |
 | **Actions** | Preview matches, clear cache, edit, delete |
 
-Column headers sort, and a filter row narrows the list per column. Selecting rows raises a bulk action bar: **Enable**, **Disable**, **Clear Cache**, **Edit** (bulk-edit shared settings), and **Delete**. When stale sources exist, a **Delete all stale** action appears.
+Column headers sort, and a filter row narrows the list by name and status. Selecting rows raises a bulk action bar: **Enable**, **Disable**, **Clear Cache**, **Edit** (bulk-edit shared settings), and **Delete**. When stale sources exist, a **Delete all stale** action appears.
 
 To see *which* streams matched or failed (and fix failures manually), use the **Matched**/**Failed** drill-downs in the [Dashboard](../dashboard)'s run history — the Sources table shows rates, not per-stream detail. The per-source **preview** button shows current stream matches without running a full generation.
 

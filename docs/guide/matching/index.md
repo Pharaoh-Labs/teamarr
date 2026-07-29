@@ -65,7 +65,7 @@ Your aliases sit on top of a built-in alias set that ships with Teamarr — user
 
 ### Event Type Detection
 
-Keywords that identify what type of event a stream represents — regular team-vs-team games, fight cards, field events. The **Target Value** is the event type the keyword maps to (`TEAM_VS_TEAM`, `EVENT_CARD`, `FIELD_EVENT`).
+Keywords that identify fight-card / event-style streams. The effective **Target Value** is `EVENT_CARD` — a keyword like `Fight Night` tells Teamarr the stream is a card event rather than a team matchup. (The form also offers `TEAM_VS_TEAM` and `FIELD_EVENT`, but neither does anything today: team-vs-team is detected via separators, not keywords, and `FIELD_EVENT` is reserved for future use.)
 
 | Column | Description |
 |--------|-------------|

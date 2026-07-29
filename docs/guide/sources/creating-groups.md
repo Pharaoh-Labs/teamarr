@@ -26,7 +26,7 @@ Channel numbering, channel groups, and channel profiles are *not* per-source set
 - **Enabled** — toggle the source on/off without deleting it. Disabled sources are skipped during generation.
 - **Matching types** — three independent toggles; at least one must be on (see [Matching Types](index#matching-types)):
   - **Stream name matching** — match streams whose names identify a specific event (`Bills vs Dolphins`).
-  - **Team matching** — team-branded streams (e.g. `NHL | Toronto Maple Leafs`) match every event that team plays in the lookahead window. Built-in stream filtering is bypassed for these streams.
+  - **Team matching** — team-branded streams (e.g. `NHL | Toronto Maple Leafs`) match every event that team plays in the lookahead window. Built-in stream filtering is bypassed for the whole source.
   - **EPG matching** — static linear channels (`ESPN`, `NBA1`) match events via Dispatcharr's program guide and are time-shared across event channels. Built-in filtering is bypassed. See [EPG Program Matching](../matching/program-matching).
 
 ## Subscription Override
