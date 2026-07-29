@@ -79,8 +79,54 @@ MOJIBAKE_PATTERNS = [
 ]
 
 
+def try_fix_double_encoded(text: str) -> str:
+    """Attempt to repair double-encoded UTF-8 text via a latin-1/utf-8 round trip.
+
+    Mojibake like "MÃ¼nchen" (for "München") typically happens when UTF-8
+    bytes get mis-decoded as latin-1 somewhere upstream (latin-1 is a
+    lossless 1:1 byte<->codepoint mapping, so no information is lost -- it
+    can be reversed). Reversing it means re-encoding the broken text back to
+    latin-1 bytes, then decoding those bytes as UTF-8.
+
+    This is intentionally conservative and safe to call on arbitrary,
+    possibly-already-correct text: if the round trip raises (the text wasn't
+    actually latin-1-of-utf8, e.g. legitimate "SÃO PAULO FC") or produces a
+    U+FFFD replacement character (a silently swallowed decode error), the
+    original text is returned unchanged rather than mangled. It is also
+    idempotent -- re-running it on already-correct text is a no-op, since
+    re-encoding proper unicode text as latin-1 generally fails or decoding
+    the result as UTF-8 does.
+
+    Args:
+        text: Potentially double-encoded text
+
+    Returns:
+        The repaired text, or the original text unchanged if the round trip
+        wasn't safely reversible.
+    """
+    if not text:
+        return text
+
+    try:
+        candidate = text.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+
+    if "�" in candidate:
+        return text
+
+    return candidate
+
+
 def fix_mojibake(text: str) -> str:
-    """Fix common mojibake patterns from double-encoded UTF-8.
+    """Fix mojibake (double-encoded UTF-8) in text.
+
+    Tries the generic, guarded latin-1/utf-8 round trip first
+    (``try_fix_double_encoded``), which covers any double-encoded script
+    (Nordic, Polish, etc.), not just the hard-coded patterns below. Falls
+    back to the hard-coded MOJIBAKE_PATTERNS replacements when the generic
+    round trip doesn't change anything, to preserve any prior behavior it
+    doesn't cover.
 
     Args:
         text: Potentially mojibake'd text
@@ -91,9 +137,10 @@ def fix_mojibake(text: str) -> str:
     if not text:
         return text
 
-    result = text
-    for pattern, replacement in MOJIBAKE_PATTERNS:
-        result = result.replace(pattern, replacement)
+    result = try_fix_double_encoded(text)
+    if result == text:
+        for pattern, replacement in MOJIBAKE_PATTERNS:
+            result = result.replace(pattern, replacement)
 
     if result != text:
         logger.debug("[MOJIBAKE] Fixed: '%s' -> '%s'", text[:40], result[:40])
