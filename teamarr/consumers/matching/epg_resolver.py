@@ -44,17 +44,40 @@ _QUALITY_TOKENS = re.compile(
 # stream with a country label and a delimiter — "US: ESPN FHD", "UK | Sky
 # Sports". Without stripping it, "US: ESPN" normalizes to "us espn" and never
 # matches the EPGData catalog's "espn", so name-cascade resolution collapses to
-# zero for such providers. We strip ONE leading <code> + (':' or '|') prefix.
+# zero for such providers. We strip ONE leading <code> + delimiter prefix,
+# where the delimiter is ':', '|', or a SPACED dash (" - ").
 #
 # The delimiter is the safety anchor: "USA Network" (no delimiter) is left
 # intact so its identity "usa" survives, while "US: USA Network" -> "USA
-# Network". The allowlist keeps a stray "ESPN: …"-style title from being
-# mistaken for a region prefix.
+# Network". The allowlist keeps a stray "ESPN: …"-style title (or a city
+# abbreviation like "LA - Lakers Live") from being mistaken for a region
+# prefix. The dash variant requires whitespace on BOTH sides so an unspaced
+# hyphen inside a real name ("FR-ESPN", "Bein-Sports") is never split on.
 _REGION_PREFIX = re.compile(
     r"^\s*(?:us|usa|uk|ca|au|nz|ie|ire|fr|de|es|it|nl|pt|be|ch|no|se|dk|fi|"
-    r"br|mx|ar|in|gr|al|tr|bg|cz|pl|ro|hu|hr|rs|eu|intl|latam|ex-?yu)\s*[:|]\s*",
+    r"br|mx|ar|in|gr|al|tr|bg|cz|pl|ro|hu|hr|rs|eu|intl|latam|ex-?yu|"
+    r"jp|kr|cn|za|sa|qa|ae|il|pk|ph|th|vn|my|sg|id|hk|tw)"
+    r"(?:\s*[:|]\s*|\s+-\s+)",
     re.IGNORECASE,
 )
+
+# Network abbreviation -> canonical EPGData-style name. Applied at the very
+# end of normalize_channel_name(), after region-prefix stripping and quality
+# suffix removal, so e.g. "US: FS1 HD" -> "fs1" -> "fox sports 1".
+#
+# Mechanism (deliberately simple since only final strings are asserted):
+# exact-match the whole normalized string against a key, OR -- for
+# multi-word names like "SN 360" -- rewrite just the LEADING token when it
+# exactly equals a key. This aliases "sn" only when it stands alone as a
+# whole token (leading or entire name), so "sn 360" -> "sportsnet 360" but
+# "wisconsin sports" and "espn2" are left untouched (no substring aliasing).
+NETWORK_ALIASES = {
+    "fs1": "fox sports 1",
+    "fs2": "fox sports 2",
+    "nbcsn": "nbc sports network",
+    "cbssn": "cbs sports network",
+    "sn": "sportsnet",
+}
 
 
 def normalize_channel_name(name: str) -> str:
@@ -71,7 +94,17 @@ def normalize_channel_name(name: str) -> str:
     n = re.sub(r"\(.*?\)", " ", n)  # drop "(US)", "(1080p)", etc.
     n = re.sub(r"[^a-z0-9]+", " ", n)  # punctuation -> space
     n = _QUALITY_TOKENS.sub(" ", n)
-    return re.sub(r"\s+", " ", n).strip()
+    n = re.sub(r"\s+", " ", n).strip()
+
+    # Network abbreviation aliasing (see NETWORK_ALIASES above) -- last step,
+    # after region-prefix stripping, so e.g. "US: FS1" -> "fs1" -> aliased.
+    if n in NETWORK_ALIASES:
+        return NETWORK_ALIASES[n]
+    tokens = n.split(" ")
+    if tokens and tokens[0] in NETWORK_ALIASES:
+        tokens[0] = NETWORK_ALIASES[tokens[0]]
+        return " ".join(tokens)
+    return n
 
 
 # Dispatcharr's own channel-proxy URL shape. A "Dispatcharr inside
@@ -223,7 +256,12 @@ def resolve_program_tvg_ids(
     logger.info(
         "[EPG-RESOLVE] resolved %d stream tvg_ids (channel=%d loopback=%d direct=%d "
         "name=%d ambiguous_name=%d unresolved=%d)",
-        len(resolution), stats["channel"], stats["loopback"], stats["direct"],
-        stats["name"], stats["ambiguous_name"], stats["unresolved"],
+        len(resolution),
+        stats["channel"],
+        stats["loopback"],
+        stats["direct"],
+        stats["name"],
+        stats["ambiguous_name"],
+        stats["unresolved"],
     )
     return resolution, stats
