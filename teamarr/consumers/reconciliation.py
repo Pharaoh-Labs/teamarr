@@ -85,6 +85,7 @@ class ReconciliationResult:
             "orphan_teamarr": 0,
             "orphan_dispatcharr": 0,
             "duplicate": 0,
+            "suspect_duplicate": 0,
             "drift": 0,
             "total": len(self.issues_found),
             "fixed": len(self.issues_fixed),
@@ -194,6 +195,12 @@ class ChannelReconciler:
                 # Step 3: Detect duplicates
                 duplicates = self._detect_duplicates(conn)
                 result.issues_found.extend(duplicates)
+
+                # Step 3b: Detect suspect duplicates (fuzzy safety net -- see
+                # _detect_suspect_duplicates for why this is separate from
+                # _detect_duplicates above).
+                suspect_duplicates = self._detect_suspect_duplicates(conn)
+                result.issues_found.extend(suspect_duplicates)
 
                 # Step 4: Detect drift (setting mismatches)
                 drift_issues = self._detect_drift(conn)
@@ -414,6 +421,102 @@ class ChannelReconciler:
 
         if issues:
             logger.info("[DUPLICATE] Found %d duplicate event(s)", len(issues))
+
+        return issues
+
+    def _detect_suspect_duplicates(
+        self,
+        conn: Connection,
+    ) -> list[ReconciliationIssue]:
+        """Detect probable duplicate channels the exact-match check can't see.
+
+        ``_detect_duplicates`` above only catches channels that already
+        share the SAME ``event_id`` -- exactly the case the DB unique index
+        also prevents, so in practice it rarely fires. The real blind spot
+        is two channels for the SAME real game that never got the same
+        ``event_id`` because name/team matching resolved one of the streams
+        differently (or not at all). ``find_suspect_duplicates`` (Phase 3b,
+        item 12) catches that case via sport + window + fuzzy-name heuristics
+        applied across ALL active channels, independent of event_id.
+
+        This is DETECTION only -- flagged pairs are reported (as "info"
+        severity, never auto-fixable) for a human to review; nothing is
+        merged automatically. Defensive by design: any failure here must
+        never break the rest of reconciliation, and the check is skipped
+        entirely for the common case of fewer than 2 active channels.
+
+        Channel windows: managed_channels only stores a single event_date,
+        not a start/end range, so ``event_end`` is passed as None. Per
+        find_suspect_duplicates' contract that makes the window
+        "unavailable" and bypasses the overlap check (falls through to the
+        sport/event_id/similarity gates instead of using window overlap to
+        narrow candidates).
+        """
+        issues: list[ReconciliationIssue] = []
+
+        try:
+            from teamarr.consumers.enforcement.duplicate_detector import (
+                find_suspect_duplicates,
+            )
+            from teamarr.database.channels import get_all_managed_channels
+
+            channels = get_all_managed_channels(conn, include_deleted=False)
+            if len(channels) < 2:
+                return issues
+
+            channels_by_id = {channel.id: channel for channel in channels}
+            candidates = [
+                {
+                    "id": channel.id,
+                    "name": channel.channel_name,
+                    "sport": channel.sport,
+                    "league": channel.league,
+                    "event_start": channel.event_date,
+                    "event_end": None,
+                    "event_id": channel.event_id,
+                }
+                for channel in channels
+            ]
+
+            for pair in find_suspect_duplicates(candidates):
+                channel_a = channels_by_id.get(pair["channel_id_a"])
+                channel_b = channels_by_id.get(pair["channel_id_b"])
+
+                logger.warning(
+                    "[SUSPECT_DUPLICATE] '%s' (id=%s) ~ '%s' (id=%s) similarity=%.1f sport=%s",
+                    pair["channel_a_name"],
+                    pair["channel_id_a"],
+                    pair["channel_b_name"],
+                    pair["channel_id_b"],
+                    pair["similarity"],
+                    pair["sport"],
+                )
+
+                issues.append(
+                    ReconciliationIssue(
+                        issue_type="suspect_duplicate",
+                        severity="info",
+                        managed_channel_id=pair["channel_id_a"],
+                        channel_name=pair["channel_a_name"],
+                        event_id=channel_a.event_id if channel_a else None,
+                        details={
+                            "channel_id_b": pair["channel_id_b"],
+                            "channel_b_name": pair["channel_b_name"],
+                            "event_id_b": channel_b.event_id if channel_b else None,
+                            "similarity": pair["similarity"],
+                            "sport": pair["sport"],
+                        },
+                        suggested_action="review",
+                        auto_fixable=False,
+                    )
+                )
+
+            if issues:
+                logger.info("[SUSPECT_DUPLICATE] Found %d suspect pair(s)", len(issues))
+
+        except Exception:
+            logger.exception("[SUSPECT_DUPLICATE] Detection failed; skipping")
+            return []
 
         return issues
 
