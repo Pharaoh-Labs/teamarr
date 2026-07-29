@@ -10,6 +10,8 @@ Step-by-step guides for using Teamarr.
 
 The app's navigation is numbered to walk you through setup in order. Follow the same order here:
 
+![Numbered navigation steps in the top bar](../assets/images/nav-steps.png)
+
 | Step | Page | What you do |
 |------|------|-------------|
 | 0 | [Settings](settings/) | Connect Dispatcharr, set timezones and schedule |

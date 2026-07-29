@@ -12,7 +12,11 @@ Common issues and how to resolve them.
 
 ### Streams show as "Failed" after generation
 
-Failed streams couldn't be matched to a real sporting event. Click the **Failed** count in the Dashboard's run history to see each stream's failure reason, and use **Fix** to manually match a stream to an event. Common causes:
+Failed streams couldn't be matched to a real sporting event. Click the **Failed** count in the Dashboard's run history to see each stream's failure reason, and use **Fix** to manually match a stream to an event.
+
+![Failed Matches drill-down with per-stream failure reasons and Fix buttons](../assets/images/dashboard-failed-drilldown.png)
+
+Common causes:
 
 - **Stream name too vague** — Names like "Sports 1" or "NBA 3" don't contain team names. Teamarr needs identifiable team or event information (or [EPG program matching](matching/program-matching) for linear channels).
 - **League not subscribed** — The stream's league isn't in your [Subscription](subscriptions) (or a Source's subscription override). This is the most common cause — add the league under Subscriptions and regenerate. Newly-created custom leagues are auto-subscribed, but check the Custom Leagues list for a **Not subscribed** badge.

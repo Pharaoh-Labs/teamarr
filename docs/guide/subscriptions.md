@@ -26,6 +26,8 @@ Every event group resolves its set of match-and-include leagues from this Subscr
 
 Open **Subscriptions** — it has four tiles: **Sport/League**, **Soccer**, **Teams**, and **Custom Leagues** (the last only appears with a TheSportsDB premium key). On the **Sport/League** tile, check the leagues you want Teamarr to scan. Browse by sport, then tick individual leagues. Only checked leagues are matched.
 
+![Subscriptions — Sport/League tile with selected leagues and expanded sports](../assets/images/subscriptions-sport-league.png)
+
 Subscribe to as many or as few leagues as you like — there is no cost to a broad subscription beyond slightly more work each generation run. A narrow subscription keeps your guide focused on exactly the competitions you care about.
 
 {: .tip }
@@ -48,6 +50,8 @@ Soccer is special because there are hundreds of leagues. Rather than checking ea
 | **Select Leagues** | Only the exact soccer leagues you check are matched. Best for focused coverage. |
 
 In **Follow Teams** mode, the followed-teams list lives here in Subscriptions because it's a *subscription* concept (which competitions to scan).
+
+![Soccer tile in Follow Teams mode with followed teams and the league-discovery callout](../assets/images/subscriptions-soccer-follow-teams.png)
 
 {: .note }
 > **Following a soccer team adds *all* the leagues that team could potentially participate in** — its domestic league, cups, and continental/club competitions — not just that team's individual matches. For example, following Barcelona subscribes you to all of La Liga, the Copa del Rey, and the Champions League, so you'll see *every* match in those competitions. To surface events for the followed teams **only**, enable the **Default Team Filter** on the [Teams tab](#default-team-filter), set it to *Include only selected teams*, and select your teams. The filter is league-scoped: leagues where you've selected at least one team show only those teams' games, while leagues with no selections pass through unfiltered.

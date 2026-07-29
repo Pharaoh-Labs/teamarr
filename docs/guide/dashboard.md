@@ -8,6 +8,8 @@ nav_order: 9
 
 The dashboard is your landing page — a health-and-control panel. It answers "is my system healthy?" at a glance, surfaces recent generation runs, and holds the managed-channel tables and EPG output preview.
 
+![Dashboard — status strip, generation history, and managed channels](../assets/images/dashboard.png)
+
 ## Status Strip
 
 A read-only strip across the top shows system health at a glance:

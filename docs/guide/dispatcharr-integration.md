@@ -19,9 +19,14 @@ Teamarr creates and manages channels in Dispatcharr automatically. This guide co
 5. Click **Test** — a successful test reports the connected account, group, and channel counts
 6. Click **Save**
 
+![Settings → Dispatcharr with a successful connection](../assets/images/settings-dispatcharr.png)
+
 ### 2. Set Up EPG Source
 
 1. Copy the **EPG URL** from the right end of the [Dashboard](dashboard) status strip (e.g., `http://teamarr:9195/api/v1/epg/xmltv`)
+
+   ![Dashboard status strip with the EPG URL and Copy button](../assets/images/dashboard-epg-url.png)
+
 2. In **Dispatcharr**, add a new EPG source using that URL
 3. Back in **Teamarr Settings → Dispatcharr**, select your Teamarr EPG source from the dropdown (it activates once the connection is live)
 4. Click **Save**
@@ -33,6 +38,8 @@ Go to **Channels → Dispatcharr Output** to configure where Teamarr channels la
 - **Default Channel Profiles** — which Dispatcharr profiles Teamarr channels appear in
 - **Default Stream Profile** — which stream profile to assign to streams
 - **Default Channel Group** — a static group, or a dynamic pattern like `{sport} | {league}` that auto-creates groups
+
+![Channels → Dispatcharr Output configuration cards](../assets/images/channels-output.png)
 
 See [Channels → Output](channels/output) for details on each option, including per-league overrides.
 
