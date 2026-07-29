@@ -3,7 +3,6 @@ title: Templates
 parent: EPG
 grand_parent: User Guide
 nav_order: 1
-docs_version: "2.7.0"
 redirect_from:
   - /guide/templates/
   - /guide/templates.html
@@ -18,16 +17,18 @@ Templates define how your EPG content looks - the titles, descriptions, and artw
 professional (Gracenote) EPG conventions — you don't need to build templates
 from scratch. Assign the starters that match your setup and customize later.
 
+![EPG → Templates — the starter set with Import/Export and the assignments manager below](../../assets/images/epg-templates.png)
+
 ## What Templates Do
 
 When Teamarr generates EPG, it uses templates to create programme entries. Templates contain:
 
-- **Title, subtitle, and description formats** using variables like `{team_name}`, `{opponent}`, `{game_time}`
-- **Filler content** for pregame, postgame, and idle periods
-- **Conditional logic** to show different descriptions based on game context
+- **Title, subtitle, and description formats** using variables like `{team_name}`, `{opponent}`, `{game_time}` — see [Variables](variables)
+- **Filler content** for pregame, postgame, and idle periods, with optional [condition rows](conditions#filler-condition-rows)
+- **Conditional logic** to show different descriptions based on game context — see [Conditions](conditions)
 - **XMLTV metadata** like categories and flags
 
-A single template can be assigned to multiple teams or event groups.
+A single template can serve many teams or events — team templates are assigned per team, event templates via sport/league [assignment rules](assignments).
 
 ## Template Types
 
@@ -38,7 +39,7 @@ For **team-based EPG** where each team has a dedicated channel (e.g., "Detroit L
 - Channel persists 24/7
 - Content shown from the team's perspective ("we play the Bears")
 - Includes idle content for days without games
-- Supports `.next` and `.last` suffixes to reference upcoming/previous games
+- Supports `.next` and `.last` suffixes to reference upcoming/previous games (where the variable allows them)
 
 ### Event Templates
 
@@ -48,82 +49,40 @@ For **event-based EPG** where channels are created dynamically for each game.
 - Content is positional ("away team @ home team") rather than team-specific
 - No idle content needed (no channel when no game)
 - No `.next` or `.last` suffixes needed - each channel references only one event
-- Used with event groups that match streams to real events
+- Applied to events matched from your [Sources](../sources/), routed by [assignment rules](assignments)
+
+See [Team vs Event](team-vs-event) for the full comparison.
 
 ## Template Form Tabs
 
-The template editor has five tabs:
+![The template editor — preview bar, EPG Timeline, tab strip, and the variable picker rail](../../assets/images/template-editor.png)
+
+The template editor has five tabs (six when editing — an **Assignments** tab is added):
 
 | Tab | Purpose |
 |-----|---------|
-| **Basic Info** | Template name and event duration settings |
+| **Basics** | Template name and event duration settings |
 | **Defaults** | Title, subtitle, description(s), artwork URL, and channel name/logo (event templates) |
-| **Conditions** | Rules that show different descriptions based on game context (team templates only) |
+| **Conditions** | Rules that show different descriptions based on game context (both template types — event templates get the event-scoped condition set) |
 | **Fillers** | Pregame, postgame, and idle content, each with optional condition rows |
-| **Other EPG Options** | XMLTV categories, tags (new/live/date), and video quality |
+| **EPG Options** | XMLTV categories, tags (new/live/date), and video quality |
+| **Assignments** *(edit only)* | This template's assignment rules — or, for team templates, the teams using it |
 
 When **creating** a template, every tab is pre-filled with working defaults: a **Next** button below each tab walks you through them in order, and each tab in the strip carries a small hint — a check once you've reviewed it, an amber dot if something required (the template name) is still missing. Tabs stay freely clickable, and editing an existing template shows no stepper at all.
 
-The **Previewing as** bar above the tabs selects the league (and live vs. sample data) for every preview on the page, and the **Guide Preview** card in the right rail renders the title, subtitle, and description as a viewer's guide would show them — see [Previewing Templates](variables.md#previewing-templates).
+The **Previewing as** bar above the tabs selects the league (and live vs. sample data) for every preview on the page. Below it, the **EPG Timeline** strip shows how the day's programmes lay out, and the **Guide Preview** card in the right rail renders the title, subtitle, and description as a viewer's guide would show them — see [Previewing Templates](variables.md#previewing-templates).
 
-## Variables
-
-Templates use variables enclosed in curly braces that get replaced with real data:
-
-```
-{team_name} vs {opponent} at {venue}
-→ "Detroit Lions vs Chicago Bears at Ford Field"
-```
-
-**Team templates** support suffixes for multi-game context:
-- `{opponent}` - current game's opponent
-- `{opponent.next}` - next game's opponent
-- `{opponent.last}` - last game's opponent
-
-**Event templates** don't use suffixes - each channel exists for a single event, so there's no "next" or "last" game to reference.
-
-See [Variables](variables) for the complete list of 217 available variables. Artwork
-fields support a shared [Game Thumbs](game-thumbs) base URL so templates can store
-relative image paths — see [Artwork & Game Thumbs](variables#artwork--game-thumbs).
-
-## Filler Content
-
-Team templates support filler programmes for non-game periods:
-
-| Filler | When It Shows |
-|--------|---------------|
-| **Pregame** | Hours before game starts (configurable) |
-| **Postgame** | After game ends until midnight or next programme |
-| **Idle** | Days with no games scheduled |
-
-Each filler has its own title, subtitle, description, and artwork URL — plus
-optional **condition rows** that override those fields based on the register's
-reference game (pregame → next game, postgame/idle → last game). The starter
-set uses this to show ESPN's recap headline once it's published and an
-in-progress line while a game is still running. See
-[Filler condition rows](conditions#filler-condition-rows).
-
-## Conditions
-
-Conditions let you show different descriptions based on game context:
-
-- Team on a win streak? Show "🔥 5-game win streak!"
-- Playing at home? Show "Home game at {venue}"
-- Ranked matchup? Show "Top 25 showdown"
-
-Conditions have priorities - the first matching condition wins.
-
-See [Conditions](conditions) for available condition types.
+The editor also validates as you type — unknown variable names and unsupported suffixes are flagged inline as advisory warnings (they never block saving; unknown tokens render literally in the output).
 
 ## Getting Started
 
 The fastest path is the shipped starter set — every install seeds ten
 Gracenote-modeled templates covering team channels, US pro events, soccer
 (club and international), college, combat, tennis, and racing.
-See [Default Templates](../templates/defaults) for the full
+See [Starter Templates](../templates/defaults) for the full
 set and recommended scoping.
 
-1. Go to **Templates** — the starter templates are already there, unassigned
+1. Go to **EPG → Templates** — the starter templates are already there, unassigned
 2. Assign the ones that match your setup (per sport/league, or as global
    defaults) via **Template Assignments**
 3. Rename or edit freely — an edited starter is yours and never touched by
@@ -131,8 +90,8 @@ set and recommended scoping.
 
 To build your own from scratch:
 
-1. Go to **Templates** and click **Create Template**
-2. Choose **Team** or **Event** type (this cannot be changed later)
+1. Go to **EPG → Templates** and click **New Template**
+2. The type defaults to **Event** — a one-click toggle switches to **Team** (this cannot be changed later)
 3. Fill in the defaults with your preferred formats
 4. Optionally configure fillers and conditions
-5. Save and assign the template to teams or event groups
+5. Save, then assign the template — to teams, or via assignment rules

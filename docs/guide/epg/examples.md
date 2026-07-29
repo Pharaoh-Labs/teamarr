@@ -3,7 +3,6 @@ title: Examples
 parent: EPG
 grand_parent: User Guide
 nav_order: 5
-docs_version: "2.7.0"
 redirect_from:
   - /guide/templates/examples/
   - /guide/templates/examples.html
@@ -11,52 +10,26 @@ redirect_from:
 
 # Template Examples
 
-Community-contributed templates to get you started quickly.
+Looking for ready-made templates? Start with the shipped [starter set](../templates/defaults) — ten Gracenote-modeled templates seeded on every install. The community templates below predate the starter set but remain available.
 
 ## Community Templates by @jesmannstlPanda
 
-Production-ready templates designed to match real Gracenote EPG data as closely as possible, with enhancements like dynamic artwork via [Game Thumbs](game-thumbs).
+Production-ready templates designed to match real Gracenote EPG data as closely as possible, with dynamic artwork via [Game Thumbs](game-thumbs).
 
-### Features
+- [Download Team Template](../../assets/templates/team-template-jesmannstlpanda.json){: .btn .btn-primary }
+- [Download Event Template](../../assets/templates/event-template-jesmannstlpanda.json){: .btn .btn-primary }
 
-- **Gracenote-accurate formatting** - Titles, descriptions, and categories that match real EPG feeds
-- **Dynamic artwork** - Matchup thumbnails generated on-the-fly showing team logos, scores, and game info
-- **Full filler content** - Pregame, postgame, and idle programmes with detailed descriptions
+{: .note }
+> These files predate two newer conventions: they hardcode a `<game-thumbs-base-url>` placeholder in each art field (the current approach is to set the base URL once in **EPG → Output → Game Thumbs** and keep slash-less relative paths in templates — see [Artwork](variables#artwork--game-thumbs)), and they use retired transform variables like `{away_team_pascal}` (still rendered forever via permanent aliases, but the current syntax is `{away_team|pascal}` — see [Filters](variables#filters-transforming-variable-values)).
 
-### Team Template
-
-[Download Team Template](../../assets/templates/team-template-jesmannstlpanda.json){: .btn .btn-primary }
-
-### Event Template
-
-[Download Event Template](../../assets/templates/event-template-jesmannstlpanda.json){: .btn .btn-primary }
-
----
-
-## Game Thumbs Integration
-
-These templates use Game Thumbs to generate dynamic programme artwork. Game Thumbs creates matchup images showing:
-
-- Team logos for both teams
-- Live scores during games
-- Win/loss indicators for completed games
-- Broadcast network badges
-- Venue and time information
-
-See [Game Thumbs](game-thumbs) for setup instructions and hosted options.
-
----
-
-## Using Downloaded Templates
+## Importing and Exporting
 
 1. Download the template JSON file
-2. Open the file and replace `<game-thumbs-base-url>` with your Game Thumbs URL:
-   - Self-hosted: `http://your-server:port`
-   - Hosted options: See [Game Thumbs](game-thumbs#hosted-instances)
-3. In Teamarr, go to **Templates** and click **Import**
+2. Open the file and replace `<game-thumbs-base-url>` with your Game Thumbs URL (or blank it and rely on the base-URL setting)
+3. In Teamarr, go to **EPG → Templates** and click **Import**
 4. Select your modified JSON file
 
----
+Any template can also be **exported** from its row actions on the Templates page — the natural way to share your own or move templates between installs.
 
 ## Contributing Templates
 

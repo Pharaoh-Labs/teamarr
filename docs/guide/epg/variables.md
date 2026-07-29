@@ -3,7 +3,6 @@ title: Variables
 parent: EPG
 grand_parent: User Guide
 nav_order: 3
-docs_version: "2.7.0"
 redirect_from:
   - /guide/templates/variables/
   - /guide/templates/variables.html
@@ -25,11 +24,13 @@ If you hand-type a scope-restricted variable into a template where it doesn't be
 
 Hovering any variable in the picker shows its description and an example value drawn from the current preview (so with a live preview selected, the example is real data from that event). Variables insert at the cursor of the last field you clicked into — the picker reminds you to click into a field first when none is focused.
 
+The picker has a **search box** and a **Recently used** row at the top. Searching also understands the retired transform names — typing `pascal` or `team_name_pascal` surfaces the base variable with a hint pointing at the `|pascal` filter.
+
 ## Previewing Templates
 
 The template editor renders a live preview of every field as you type. The **Previewing as** bar above the tabs picks which league to preview against — the leagues you've subscribed to (from the [Subscriptions](../subscriptions) tab, plus the leagues of teams you follow) are listed with their logos, grouped by sport and searchable. Before you've subscribed to anything, all available leagues are shown. It drives every preview on the page: the inline per-field previews, the condition trace on the Conditions tab, and the **Guide Preview** card in the right rail — an EPG-style card showing the title, subtitle, and description exactly as a viewer's guide would, including any [conditional rows](conditions.md) that win a field for the preview event (marked with a green target).
 
-**Live by default.** The preview tries to render **real data** for a recent or upcoming event in the selected league, and the badge turns green **Live** with a coverage count (e.g. `137/181 variables live · 44 gaps`) — how many of the variables that apply to this kind of event the real event actually populated. A "gap" is a variable that *could* apply but the event didn't provide (variables for other sports aren't counted). If no event is available or the provider can't be reached, it falls back automatically to sample data and the badge reads **No event**.
+**Live by default.** The preview tries to render **real data** for a recent or upcoming event in the selected league, and the badge turns green **Live** with a coverage count (e.g. `137/203 variables live · 66 gaps`) — how many of the variables that apply to this kind of event the real event actually populated. A "gap" is a variable that *could* apply but the event didn't provide (variables for other sports aren't counted). If no event is available or the provider can't be reached, it falls back automatically to sample data and the badge reads **No event**.
 
 Click the badge to toggle to **Sample** mode, which uses generic, intentionally-fictitious placeholders (the same three sample shapes — a team game, a fight card, a race — regardless of league) so you can see every variable filled even when nothing is live.
 
@@ -70,16 +71,18 @@ Three template fields hold image URLs and accept the same variables as any other
 Instead of writing the full image host in every template, set it **once** in
 **EPG → Output → Game Thumbs → Game-Thumbs Base URL** (e.g. your
 [Game Thumbs](game-thumbs) host). Templates then store only the **relative path**,
-always starting with `/`:
+with **no leading slash**:
 
 ```
-/{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png?style=6&logo=true&fallback=true
+{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png?style=6&logo=true&fallback=true
 ```
 
 At generation the base URL — host **and port**, exactly as you entered it — is prefixed onto the
 relative path. Rules:
 
-- **Relative paths** (start with `/`) get the base prefixed.
+- **Relative paths** (anything without a `scheme://`) get the base prefixed. Don't start
+  them with `/` — a leading variable may resolve to an absolute URL, and a prepended `/`
+  would break it. (A stray leading slash on a plain path is stripped automatically.)
 - **Absolute URLs** (anything with `http://`/`https://`) are left **unchanged**, so you can
   still hardcode a one-off full URL in a single field.
 - Empty base URL = no prefixing (every art field must then be a full URL).
@@ -89,7 +92,7 @@ Dispatcharr channel logo — so the guide artwork and the channel logo always ma
 live preview in the template editor applies the base URL too, so what you see matches the
 generated output (and renders the actual image so you can confirm the link resolves).
 
-### Filters: transforming variable values
+## Filters: transforming variable values
 
 Any variable accepts a `|filter` modifier that transforms its resolved value:
 
@@ -120,7 +123,7 @@ migrated automatically, and the old names remain permanent aliases — `{team_na
 resolves as `{team_name|pascal}` forever (`{sport_lower}` maps to `{sport|slug}`, matching
 its old hyphenated output).
 
-#### URL-encoding in art URLs
+### URL-encoding in art URLs
 
 When a variable value goes into the **query string** of an art URL, characters like
 spaces and `&` need to be percent-encoded — otherwise a value such as
@@ -128,7 +131,7 @@ spaces and `&` need to be percent-encoded — otherwise a value such as
 part reaches Game-Thumbs. Add `|urlencode` to any variable to encode its value:
 
 ```
-/f1/cover?title={race_name|urlencode}&subtitle={session_name|urlencode}&iconurl=
+f1/cover?title={race_name|urlencode}&subtitle={session_name|urlencode}&iconurl=
 ```
 
 The filter encodes **only the variable's value** — the template's own `?`, `&`, and
@@ -156,7 +159,8 @@ Core identifiers for teams, leagues, and matchups.
 | `{matchup_abbrev}` | Abbreviated matchup uppercase | base, .next, .last | `CHI @ DET` |
 | `{matchup_short}` | Short name matchup | base, .next, .last | `Bears @ Lions` |
 | `{league}` | League short alias | base | `NFL` |
-| `{league_name}` | League full display name | base | `National Football League` |
+| `{league_name}` | League display name from the leagues table | base | `NFL` |
+| `{league_abbrev}` | League abbreviation built from the league name — existing capitals plus the first letter of each word | base | `WC` (from `World Cup`) |
 | `{league_id}` | League identifier for URLs | base | `nfl` |
 | `{league_code}` | Raw league code | base | `nfl` |
 | `{sport}` | Sport display name | base | `Football` |
@@ -181,6 +185,9 @@ Game scheduling information.
 | `{today_tonight_title}` | 'Today' or 'Tonight' (title case) | base, .next, .last | `Today` |
 | `{relative_day}` | Relative day: 'today', 'tonight', 'tomorrow', day of week, or date | base, .next | `tomorrow` |
 | `{relative_day_title}` | Relative day (title case) | base, .next | `Tomorrow` |
+| `{day}` | Game day of month, no leading zero | base, .next, .last | `22` |
+| `{month}` | Game month number, no leading zero | base, .next, .last | `12` |
+| `{year}` | Game year | base, .next, .last | `2024` |
 
 ---
 
@@ -318,14 +325,14 @@ Game scores and results. Empty for future games.
 |----------|-------------|----------|--------|
 | `{team_score}` | Team's score (empty if game not started) | base, .next, .last | `31` |
 | `{opponent_score}` | Opponent's score (empty if game not started) | base, .next, .last | `24` |
-| `{score}` | Score (e.g., '24-17'). Empty if not started. | base, .next, .last | `31-24` |
+| `{score}` | Score, home team first. Empty if not started. | base, .next, .last | `31-24` |
 | `{final_score}` | Score with team perspective (team score first) | base, .next, .last | `31-24` |
 | `{home_team_score}` | Home team's score | base, .next, .last | `31` |
 | `{away_team_score}` | Away team's score | base, .next, .last | `24` |
 | `{score_diff}` | Score differential (+7 = won by 7, -7 = lost by 7) | base, .next, .last | `+7` |
 | `{score_differential}` | Score differential as absolute value | base, .next, .last | `7` |
 | `{score_differential_text}` | Score differential as text | base, .next, .last | `by 7` |
-| `{event_result}` | Full event result. Empty if not final. | base, .next, .last | `Detroit Lions 31 - Chicago Bears 24` |
+| `{event_result}` | Full event result, home team first. Empty if not final. | base, .next, .last | `Detroit Lions 31 - Chicago Bears 24` |
 | `{event_result_abbrev}` | Abbreviated event result. Empty if not final. | base, .next, .last | `DET 31 - CHI 24` |
 | `{winner}` | Winning team name. Empty if not final or tie. | base, .next, .last | `Detroit Lions` |
 | `{winner_abbrev}` | Winning team abbreviation. Empty if not final or tie. | base, .next, .last | `DET` |
@@ -510,6 +517,7 @@ Soccer-specific variables for teams that play in multiple competitions.
 | `{soccer_primary_league}` | Team's home league name (e.g., 'Premier League') | base | `` |
 | `{soccer_primary_league_id}` | Team's home league ID (e.g., 'eng.1') | base | `` |
 | `{soccer_match_league}` | League for THIS game (may differ from primary) | base, .next, .last | `` |
+| `{soccer_match_league_name}` | Full league display name for THIS game | base, .next, .last | `English Premier League` |
 | `{soccer_match_league_id}` | League ID for THIS game (e.g., 'uefa.champions') | base, .next, .last | `` |
 | `{soccer_match_league_logo}` | Logo URL for THIS game's league | base, .next, .last | `` |
 | `{soccer_match_note}` | Provider's competition note for the match, untouched — competition name plus group/stage where present | base, .next, .last | `FIFA World Cup, Group J` |
@@ -524,7 +532,7 @@ Soccer teams often play in multiple competitions (domestic league, cups, Champio
 
 ## Combat Sports
 
-Variables for combat-sport event templates (UFC/MMA and boxing). These are **event-only** (no `.next`/`.last` suffixes) since each event is independent.
+Variables for combat-sport templates (UFC/MMA and boxing). Unlike Motorsports and Tennis (which are event-template-only), combat variables appear in **both** template types' pickers — but none support `.next`/`.last` suffixes, since each event is independent.
 
 {: .note }
 **Boxing support:** the fighter/matchup/title variables in this section work for boxing events too. Card segments, bout lists, fight results, records, and weight class only populate for UFC — that data comes from ESPN's UFC feed and TheSportsDB (which serves boxing) doesn't provide it. `{event_number}` is UFC-only by definition.
@@ -540,6 +548,10 @@ Variables for combat-sport event templates (UFC/MMA and boxing). These are **eve
 | `{matchup_combat}` | Fight matchup — headline fighter first with 'vs' | `Alex Volkanovski vs Diego Lopes` |
 | `{event_number}` | UFC event number (e.g., '314' from 'UFC 314') | `314` |
 | `{event_title}` | Full event title | `UFC 314: Volkanovski vs Lopes` |
+| `{fighter1_record}` | Fighter 1's record | `28-4-0` |
+| `{fighter2_record}` | Fighter 2's record | `27-8-0` |
+| `{weight_class}` | Weight class of the headline bout | `Featherweight` |
+| `{weight_class_short}` | Weight class abbreviated | `FW` |
 
 ### Card Segments
 
@@ -560,6 +572,20 @@ Variables for combat-sport event templates (UFC/MMA and boxing). These are **eve
 | `{main_card_bouts}` | Main card bouts only | `Alex Volkanovski vs Diego Lopes`<br>`Merab Dvalishvili vs Umar Nurmagomedov` |
 | `{prelims_bouts}` | Prelims bouts only | `Sean Brady vs Kelvin Gastelum`<br>`Chris Weidman vs Eryk Anders` |
 | `{early_prelims_bouts}` | Early prelims bouts only | `Mauricio Ruffy vs Jamie Mullarkey` |
+
+### Fight Results
+
+Result variables for the headline bout — empty until the fight is final. Ideal for postgame filler on a UFC template.
+
+| Variable | Description | Sample |
+|----------|-------------|--------|
+| `{fight_result}` | Result method | `Decision (Unanimous)` |
+| `{fight_result_short}` | Result abbreviated | `UD` |
+| `{fight_summary}` | Full result summary | `TKO R2 4:31` |
+| `{finish_round}` | Round the fight ended | `3` |
+| `{finish_time}` | Time in round when the fight ended | `3:48` |
+| `{finish_info}` | Combined finish info | `R3 3:48` |
+| `{judge_scores}` | Judge scores for decisions | `48-47, 49-46, 48-47` |
 
 {: .note }
 UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout. Use `{matchup_combat}` for the fight-conventional "Volkanovski vs Lopes" form — the generic `{matchup}` renders `{away} @ {home}` ("Lopes @ Volkanovski") for every sport, combat included.

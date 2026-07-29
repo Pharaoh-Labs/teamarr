@@ -3,7 +3,6 @@ title: Teams
 parent: EPG
 grand_parent: User Guide
 nav_order: 7
-docs_version: "2.7.0"
 redirect_from:
   - /guide/teams/
   - /guide/teams.html
@@ -11,10 +10,9 @@ redirect_from:
 
 # Teams
 
-Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. Teamarr does *not* create a Dispatcharr channel for each team — that's only done for event-based workflows. Instead, you point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association), and Teamarr keeps that XMLTV channel populated with the team's schedule — upcoming games, live events, and recent results.
+![EPG → Team EPG — settings card, stats, and the teams table](../../assets/images/epg-teams.png)
 
-{: .note }
-In v2.7.0 Teams was demoted from a top-level navigation item to live under the **EPG** section, alongside Templates and Output.
+Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. Teamarr does *not* create a Dispatcharr channel for each team — that's only done for event-based workflows. Instead, you point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association), and Teamarr keeps that XMLTV channel populated with the team's schedule — upcoming games, live events, and recent results.
 
 ## How It Works
 
@@ -30,36 +28,36 @@ Each team's EPG includes:
 
 ## Importing Teams
 
-Go to **Teams > Import** to browse the league cache by sport.
+Go to **EPG → Team EPG** and click **Add Team** to browse the league cache by sport.
 
 1. Click a sport to expand its leagues
 2. Click a league to see available teams
 3. Select teams individually or use **Select All**
-4. Click **Import Selected**
+4. Click **Import Selected Teams**
 
-Teams are grouped by sport in the sidebar. The badge next to each sport shows how many leagues have cached teams. Leagues with 0 teams haven't had their cache refreshed yet — use the cache refresh button in Settings > System.
+Teams are grouped by sport in the sidebar. The badge next to each sport shows how many leagues have cached teams. Leagues with 0 teams haven't had their cache refreshed yet — use the cache refresh on **Settings → Advanced** (Data Caches).
 
 ## Managing Teams
 
-The Teams table shows all imported teams with:
+The Teams table lists all imported teams. Columns are sortable, and a filter row under the header narrows the list.
 
 | Column | Description |
 |--------|-------------|
 | **Team** | Team name with logo |
 | **League** | League the team belongs to |
+| **Sport** | The team's sport |
+| **Channel ID** | XMLTV channel id — point a Dispatcharr channel at this id to wire up the EPG. Generated as PascalCase team name + league (e.g. `DetroitLions.nfl`) |
 | **Template** | Assigned template (click to change) |
-| **Channel** | XMLTV channel id (e.g. `team.espn.nfl.123`) — point a Dispatcharr channel at this id to wire up the EPG |
 | **Status** | Active (has upcoming games) or inactive |
+| **Actions** | Per-team actions (delete, etc.) |
 
 ### Assigning Templates
 
-Each team needs a **team template** assigned. Click the template dropdown in the team's row to select one. You can also bulk-assign templates by selecting multiple teams.
+Each team needs a **team template** assigned — see [Team vs Event](team-vs-event) for how team templates differ. Click the template dropdown in the team's row to select one. You can also bulk-assign templates by selecting multiple teams.
 
-Team templates are different from event templates — they support `.next` and `.last` suffixes for referencing upcoming and previous games, and include idle/pregame/postgame filler content. See [Team vs Event](team-vs-event) for the full comparison.
+## Team EPG Settings
 
-## Team Settings
-
-Per-team EPG behavior is configured in **Settings > Teams**.
+The **Team EPG Settings** card at the top of the page holds the behavior settings:
 
 ### Schedule Days Ahead
 
@@ -71,19 +69,3 @@ Controls what filler content is shown when a game crosses midnight:
 
 - **Show postgame filler** — Display postgame content after midnight
 - **Show idle filler** — Display idle/off-air content after midnight
-
-### Channel ID Format
-
-The format string for generating team channel IDs. Available variables:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{team_name}` | Team name (spaces preserved) | `New York Yankees` |
-| `{team_name|pascal}` | Team name in PascalCase | `NewYorkYankees` |
-| `{league}` | League slug | `mlb` |
-| `{league_id}` | League ID | `mlb` |
-
-Default: `{team_name|pascal}.{league_id}`
-
-The retired `{team_name_pascal}` variable is accepted forever as an alias of
-`{team_name|pascal}`; existing formats were migrated automatically.
