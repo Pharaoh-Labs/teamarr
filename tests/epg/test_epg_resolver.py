@@ -69,6 +69,111 @@ def test_prefix_strip_enables_name_resolution():
     assert stats["name"] == 1
 
 
+# ============================================= region prefixes: item 10 (Phase 3a)
+
+
+def test_normalize_strips_spaced_dash_delimiter():
+    # New delimiter: a spaced dash is as valid a grouping separator as ":" or
+    # "|". Today _REGION_PREFIX only recognizes [:|], so "US - ESPN" is left
+    # as "us espn" instead of being stripped to "espn".
+    assert normalize_channel_name("US - ESPN") == "espn"
+
+
+def test_normalize_allowlist_extended_with_asia_pacific_and_middle_east_codes():
+    # New allowlist codes: jp, kr, cn, za, sa, qa, ae, il, pk, ph, th, vn, my,
+    # sg, id, hk, tw. None of these are in the current _REGION_PREFIX
+    # allowlist, so all of these currently stay unstripped (e.g. "jp nhk").
+    assert normalize_channel_name("JP: NHK") == "nhk"
+    assert normalize_channel_name("KR: KBS") == "kbs"
+    assert normalize_channel_name("CN: CCTV") == "cctv"
+    assert normalize_channel_name("ZA: SuperSport") == "supersport"
+    assert normalize_channel_name("SA: Al Jazeera") == "al jazeera"
+    assert normalize_channel_name("QA: BeIN") == "bein"
+    assert normalize_channel_name("AE: Dubai Sports") == "dubai sports"
+    assert normalize_channel_name("IL: Sport1") == "sport1"
+    assert normalize_channel_name("PK: PTV") == "ptv"
+    assert normalize_channel_name("PH: ABS-CBN") == "abs cbn"
+    assert normalize_channel_name("TH: Thai PBS") == "thai pbs"
+    assert normalize_channel_name("VN: VTV") == "vtv"
+    assert normalize_channel_name("MY: Astro") == "astro"
+    assert normalize_channel_name("SG: StarHub") == "starhub"
+    assert normalize_channel_name("ID: RCTI") == "rcti"
+    assert normalize_channel_name("HK: TVB") == "tvb"
+    assert normalize_channel_name("TW: CTV") == "ctv"
+
+
+def test_normalize_new_allowlist_code_with_spaced_dash():
+    # The two new-contract pieces (spaced dash + expanded allowlist) combined.
+    assert normalize_channel_name("JP - NHK World") == "nhk world"
+
+
+def test_normalize_no_delimiter_still_not_stripped():
+    # NON-goal: "USA ESPN" has no delimiter at all (no ":", "|", or " - "),
+    # so it stays ambiguous and must NOT be treated as a grouping prefix, same
+    # as today. Guards against an implementation that starts matching on bare
+    # whitespace once dash-support is added.
+    assert normalize_channel_name("USA ESPN") == "usa espn"
+
+
+def test_normalize_city_code_false_positive_guard():
+    # NON-goal: "LA" (Los Angeles) is deliberately NOT in the allowlist even
+    # though the new dash delimiter would otherwise make "LA - Lakers Live"
+    # look like a region-prefixed name. Adding the dash delimiter must not
+    # accidentally treat city abbreviations as country codes.
+    assert normalize_channel_name("LA - Lakers Live") == "la lakers live"
+
+
+def test_normalize_unspaced_dash_not_treated_as_delimiter():
+    # NON-goal: only a SPACED dash (" - ") is a delimiter. An unspaced dash
+    # ("FR-ESPN") must stay untouched by the region-prefix step so real names
+    # like "Bein-Sports" are never accidentally split on their hyphen.
+    assert normalize_channel_name("FR-ESPN") == "fr espn"
+
+
+# ============================================ network aliases: item 11 (Phase 3a)
+
+
+def test_fs1_and_fox_sports_1_normalize_to_the_same_string():
+    # NETWORK_ALIASES doesn't exist yet -- "fs1" and "fox sports 1" are
+    # currently two distinct normalized strings.
+    assert normalize_channel_name("FS1 HD") == normalize_channel_name("Fox Sports 1 FHD")
+    assert normalize_channel_name("FS1 HD") == "fox sports 1"
+
+
+def test_region_prefixed_fs1_also_aliases():
+    # Alias resolution runs AFTER region-prefix stripping.
+    assert normalize_channel_name("US: FS1") == "fox sports 1"
+
+
+def test_fs2_aliases_to_fox_sports_2():
+    assert normalize_channel_name("FS2") == "fox sports 2"
+
+
+def test_nbcsn_aliases_to_nbc_sports_network():
+    assert normalize_channel_name("NBCSN") == "nbc sports network"
+
+
+def test_cbssn_aliases_to_cbs_sports_network():
+    assert normalize_channel_name("CBSSN") == "cbs sports network"
+
+
+def test_espn2_does_not_collapse_to_espn():
+    # Pinned NON-goal: ESPN2 is a distinct channel, not an "ESPN" abbreviation.
+    assert normalize_channel_name("ESPN2 HD") == "espn2"
+    assert normalize_channel_name("ESPN2 HD") != normalize_channel_name("ESPN HD")
+
+
+def test_sn_aliases_to_sportsnet_only_as_whole_name():
+    assert normalize_channel_name("SN 360") == "sportsnet 360"
+
+
+def test_sn_substring_inside_word_is_untouched():
+    # Pinned NON-goal: "sn" must only alias when it IS the whole normalized
+    # name (or a whole leading token per "sn 360"), not when it's merely
+    # contained inside another word.
+    assert normalize_channel_name("Wisconsin Sports") == "wisconsin sports"
+
+
 # ====================================================================== cascade
 
 
