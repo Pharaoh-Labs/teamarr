@@ -631,6 +631,14 @@ class DetectionKeywordService:
     def find_separator(cls, text: str) -> tuple[str | None, int]:
         """Find game separator in text.
 
+        Scans every known separator and keeps the one whose match starts
+        EARLIEST in the string, since a low-priority separator occurring
+        early in the text should win over a high-priority one that only
+        occurs much later. ``get_separators()`` list order (priority) is
+        used only to break a genuine same-position tie, and even then the
+        LONGER match wins first (e.g. " vs. " beats " vs " when both start
+        at the same index) -- list order only matters if lengths also tie.
+
         Args:
             text: Stream name to search
 
@@ -638,11 +646,18 @@ class DetectionKeywordService:
             Tuple of (separator_found, position) or (None, -1) if not found
         """
         text_lower = text.lower()
+        best_sep: str | None = None
+        best_pos = -1
+        best_len = -1
         for sep in cls.get_separators():
             pos = text_lower.find(sep.lower())
-            if pos != -1:
-                return sep, pos
-        return None, -1
+            if pos == -1:
+                continue
+            if best_sep is None or pos < best_pos or (pos == best_pos and len(sep) > best_len):
+                best_sep = sep
+                best_pos = pos
+                best_len = len(sep)
+        return (best_sep, best_pos) if best_sep is not None else (None, -1)
 
     # ==========================================================================
     # Cache Management
