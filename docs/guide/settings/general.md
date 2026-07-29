@@ -67,7 +67,7 @@ A handful of TSDB leagues (CFL, Unrivaled, boxing, Norwegian Fjordkraft-ligaen) 
 
 A saved key displays masked (`********`); type over it to replace it. The **Premium** badge in the card header only means a key is stored — it isn't a validated tier. To actually verify a key, **retype it and click Validate**, which tests it against TSDB live and reports the real tier (clicking Validate on the masked placeholder will report invalid).
 
-See [TSDB Provider](../../reference/providers/tsdb.md) for technical details.
+See [TSDB Provider](../../reference/providers/tsdb) for technical details.
 
 ## Update Notifications
 

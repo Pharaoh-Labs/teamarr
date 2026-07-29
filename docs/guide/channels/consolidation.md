@@ -36,7 +36,7 @@ Each keyword has:
 | **Separate** | Each matching stream gets its own channel |
 | **Ignore** | Matching streams are dropped entirely — no channel |
 
-- **Enabled** — toggle a keyword without deleting it.
+- **Enabled** — an API-only flag (there's no UI toggle); keywords disabled via the API disappear from the card.
 
 A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box.
 
@@ -81,7 +81,7 @@ Controls the label appended to channel names when a feed team is detected (alway
 | **Home/Away** | `NYY @ BAL (Home Feed)` / `(Away Feed)` |
 
 {: .note }
-If your channel-name template already places the feed team itself (any `{feed_team*}` variable), the automatic `(… Feed)` suffix is suppressed — the template wins.
+If your channel-name template already places the feed team itself (any feed variable — `{feed_team*}`, `{broadcast_feed*}`, or `{feed_home_away}`), the automatic `(… Feed)` suffix is suppressed — the template wins.
 
 ### Example
 

@@ -44,7 +44,7 @@ These leagues have high event volume or unreliable free-tier data and require a 
 - Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
 - 23 Brazilian state championships (*campeonatos estaduais*) — every state except the four ESPN already covers (Carioca, Paulista, Gaúcho, Mineiro); see [Supported Leagues](../supported-leagues#brazilian-state-championships)
 - IMSA and WEC (motor racing). WEC's 62 events/season exceeds the free `eventsseason.php` 15-event cap; IMSA fits it but is gated premium too, so all TSDB racing is premium (no silent truncation if a schedule grows).
-- FIBA Basketball World Cup (M/W: `fiba`, `fiba-women`) — gated premium since qualifiers run in parallel across multiple confederations, which can exceed the free tier's 5-events/day/league cap during busy qualifying windows.
+- FIBA Basketball World Cup (M/W: `fiba`, `fibaw`) — gated premium since qualifiers run in parallel across multiple confederations, which can exceed the free tier's 5-events/day/league cap during busy qualifying windows.
 - Uruguayan Segunda División (`uru.2`)
 
 The `tsdb_tier` column in `schema.sql` classifies each league as `free` or `premium`.
@@ -59,7 +59,7 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
 ## Supported Leagues
 
-TSDB serves **48 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fiba-women` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
+TSDB serves **48 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
 | League | Code | TSDB ID | Sport | Tier |
 |--------|------|---------|-------|------|

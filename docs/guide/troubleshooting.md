@@ -25,6 +25,7 @@ Common causes:
 
 ### Streams matching the wrong event
 
+- Click the **Matched** count in the Dashboard's run history and use **Fix** on the wrong match to correct it manually — the correction persists as a "User Fixed" match
 - Check [Matching → Custom Rules](matching/) for conflicting league or sport hints
 - Verify your stream filters (include/exclude regex) aren't too broad
 - Use the preview button on the [Sources](sources/) page to see matches without running a full generation

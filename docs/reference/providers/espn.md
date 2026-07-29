@@ -7,7 +7,7 @@ nav_order: 1
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 98 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 98 pre-configured leagues (97 enabled — MotoGP ships disabled) plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 

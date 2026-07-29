@@ -8,7 +8,7 @@ has_children: true
 
 Step-by-step guides for using Teamarr.
 
-The app's navigation is numbered to walk you through setup in order. Follow the same order here:
+The app's navigation is numbered to walk you through setup in order (the numbers appear on first run and drop off as you visit each step). Follow the same order here:
 
 ![Numbered navigation steps in the top bar](../assets/images/nav-steps.png)
 

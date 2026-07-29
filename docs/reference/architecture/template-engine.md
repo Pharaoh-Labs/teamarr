@@ -97,7 +97,7 @@ Variables are registered via decorator in `teamarr/templates/variables/` (one fi
 
 ## Filters
 
-Any variable can be piped through chainable value transforms: `{home_team|pascal}`, `{league|upper}`. Six filters are defined in `teamarr/templates/filters.py`: `lower`, `upper`, `title`, `pascal`, `slug`, `urlencode`. The module also carries permanent legacy aliases for 10 retired transform variables (e.g. `{home_team_pascal}` resolves as `{home_team|pascal}`).
+Any variable can be piped through chainable value transforms: `{home_team|pascal}`, `{league|upper}`. Six filters are defined in `teamarr/templates/filters.py`: `lower`, `upper`, `title`, `pascal`, `slug`, `urlencode`. Permanent legacy aliases live in `teamarr/templates/resolver.py` for 10 retired transform variables (e.g. `{home_team_pascal}` resolves as `{home_team|pascal}`).
 
 ## Condition Evaluators
 
@@ -235,7 +235,7 @@ optimistic layer while the debounced server render is in flight.
 | `templates/context_builder.py` | Build TemplateContext from Event + Team |
 | `templates/variables/` | 20 category modules with 252 variable definitions |
 | `templates/variables/registry.py` | VariableRegistry singleton |
-| `templates/filters.py` | Chainable filter transforms + legacy transform-variable aliases |
+| `templates/filters.py` | Chainable filter transforms (legacy aliases live in `resolver.py`) |
 | `templates/validation.py` | Template validation |
 | `templates/sample_data.py` | 3-shape fictitious sample values + `resolve_shape` for UI preview |
 | `templates/preview.py` | Live-context builder + cache shared by `/variables/samples` and `/templates/preview` |

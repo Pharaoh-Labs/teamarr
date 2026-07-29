@@ -232,7 +232,7 @@ Each rule runs in one of two modes: `priority` (band assignment) or `score` (num
 | `consumers/generation_status.py` | Generation progress state machine |
 | `consumers/event_matcher.py` | Event matching helpers |
 
-`consumers/matching/` contains 15 modules; beyond those described above: `team_matcher.py`, `racing_matcher.py`, `tennis_matcher.py`, `country_resolver.py`, `normalizer.py`, `constants.py`, `result.py`, `event_matcher.py`.
+`consumers/matching/` contains 14 modules; beyond those described above: `team_matcher.py`, `racing_matcher.py`, `tennis_matcher.py`, `country_resolver.py`, `normalizer.py`, `constants.py`, `result.py`, `event_matcher.py`.
 
 ## File Locations
 

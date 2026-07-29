@@ -34,7 +34,7 @@ ORAP/Trucks:  https://cf.nascar.com/cacher/{year}/race_list_basic.json   (keys: 
 - **Sessions** — schedule entries map to session codes by `run_type` (1 = practice → `fp1`–`fp4`/`practice`, 2 = qualifying, 3 = race); admin entries (`run_type` 0, e.g. "Haulers Enter") are skipped. Events with no on-track sessions are dropped.
 - **Race format data** — scheduled laps, distance, and per-stage lap counts populate the `{race_laps}`, `{race_distance}`, `{stage_N_laps}`, and `{stage_summary}` [template variables](../../guide/epg/variables#race-format).
 - **Matching** — events carry per-session start times, so the racing matcher's date-coverage check works across the whole race weekend (same contract as the TSDB racing path).
-- **Broadcasts** — the `television_broadcaster` field flows into `{broadcast}` variables.
+- **Broadcasts** — the `television_broadcaster` field flows into the Broadcast variables (`{broadcast_simple}`, `{network}`).
 
 ## Limitations
 

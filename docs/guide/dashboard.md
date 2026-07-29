@@ -31,11 +31,11 @@ A table of recent full-pipeline runs (matching, channels, and EPG). Five show by
 
 | Column | Description |
 |--------|-------------|
-| **Status** | Completed, failed, cancelled, or running (spinner) |
+| **Status** | Completed, partial, failed, cancelled, or running (spinner) |
 | **Time** | When the run started |
 | **Processed** | What was processed in the run |
 | **Programmes** | Total programmes generated. Hover for the Events / Pregame / Postgame / Idle breakdown |
-| **Matched** | Streams matched to events. Click to open a searchable drill-down of matched streams, filterable by group, with a badge showing how each match was made (Cache, Alias, Fuzzy, Direct, …) |
+| **Matched** | Streams matched to events. Click to open a searchable drill-down of matched streams, filterable by group, with a badge showing how each match was made (Cache, Alias, Fuzzy, Direct, …) and a **Fix** button to correct a wrong match |
 | **Failed** | Streams that could not be matched. Click to see each stream's failure reason, and use **Fix** to manually match it via the Event Matcher |
 | **Channels** | Active channels after the run |
 | **API Calls** | Provider HTTP calls made during the run, shown as calls-per-channel. Hover for the per-provider breakdown. Muted in the normal range; amber/red if call volume per channel climbs abnormally — a quick way to spot a fetch regression |
@@ -48,7 +48,7 @@ A collapsible **Managed Channels** table lists the channels Teamarr currently ma
 
 - **Sync status badges** — In Sync, Pending, Created, Drifted, Orphaned, or Error. Drifted channels are corrected on the next generation run.
 - **Expand a row** to see its attached streams with per-stream match detail, priority, and stream health (resolution, fps, bitrate).
-- **Find Orphans** detects Teamarr-tagged channels in Dispatcharr that aren't tracked locally; **Reset All** and the multi-select bar handle bulk deletes.
+- **Find Orphans** detects Teamarr-tagged channels in Dispatcharr that aren't tracked locally; **Reset All**, the multi-select bar, and a per-row delete button handle removals. Sport and League dropdowns filter the table, and a **Pending Deletions** banner appears when channels are scheduled for removal.
 
 A separate **Recently Deleted** section lists channels removed by event cleanup (channel, event, sport, league, and when they were deleted).
 

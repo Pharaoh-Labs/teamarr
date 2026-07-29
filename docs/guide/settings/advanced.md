@@ -25,11 +25,11 @@ Automatic backups on a cron schedule:
 | **Schedule (Cron Expression)** | Standard cron; presets: Daily 3 AM (`0 3 * * *`), Weekly Sun (`0 3 * * 0`), Monthly 1st (`0 3 1 * *`) |
 | **Max backups to keep** | 3 / 5 / 7 / 14 / 30 — the oldest backup is deleted when the limit is exceeded |
 
-Backups are written to `./data/backups` (the path is settable via `PUT /settings/backup`; no UI field).
+Backups are written to `./data/backups` (the path is settable via `PUT /backup/settings`; no UI field).
 
 ### Backup Files
 
-**Create Backup** takes a manual backup on demand. The file list below shows each backup's size, date, and a **manual**/**scheduled** type badge, with per-file actions:
+**Create Backup** takes a manual backup on demand. A dropdown below lists your backups; selecting one shows its size, date, and **manual**/**scheduled** type badge, with actions for the selected file:
 
 - **Download** the file
 - **Restore** from it
@@ -61,7 +61,7 @@ Customize what the `{gracenote_category}` template variable renders for any leag
 
 ## Data Caches
 
-Teamarr maintains several caches. Each tile shows live counts (entries, last refresh time and duration, any last error) and a clear/refresh action.
+Teamarr maintains several caches, each with a tile and a clear/refresh action. Tiles show live counts where available; the Directory tile also shows the last refresh time, duration, and any error.
 
 | Cache | Contents | Action |
 |-------|----------|--------|

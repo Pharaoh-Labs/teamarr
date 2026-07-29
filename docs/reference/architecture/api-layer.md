@@ -33,7 +33,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 | `subscription.py` | 9 | Global/per-group subscription config, soccer mode |
 | `variables.py` | 4 | Template variable discovery and introspection |
 | `backup.py` | 11 | Database backup creation, restore, compression |
-| `settings/` | 44 | Settings package: `models.py` plus 12 domain modules (`channel_numbering`, `channelsdvr`, `dispatcharr`, `display`, `emby`, `epg`, `feed_separation`, `jellyfin`, `lifecycle`, `stream_ordering`, `team_filter`, `update_check`) — includes the media-server routes |
+| `settings/` | 44 | Settings package: `models.py` plus 12 domain modules (`channel_numbering`, `channelsdvr`, `dispatcharr`, `display`, `emby`, `epg`, `feed_separation`, `jellyfin`, `lifecycle`, `stream_ordering`, `team_filter`, `update_check`) — includes the media-server routes and the aggregate `GET /settings` in `__init__.py` |
 
 ## Application Startup
 

@@ -37,13 +37,13 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
 | `managed_channels` | Channels created in Dispatcharr (tvg_id, delete_at, profiles) |
 | `detection_keywords` | User-defined stream classification patterns |
-| `aliases` | Team name aliases for matching |
+| `team_aliases` | Team name aliases for matching |
 | `team_cache` | Cached team data from providers |
 | `service_cache` | Cached events/teams/stats with TTL |
 | `stream_match_cache` | Fingerprint cache for stream matching |
 | `processing_runs` | EPG generation run statistics (28 columns) |
 
-The schema contains **35 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed stream membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
+The schema contains **34 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed stream membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
 
 ## Settings Table
 

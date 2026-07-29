@@ -49,7 +49,7 @@ A few failure modes are handled gracefully: a pattern whose wildcard can't resol
 
 ## Per-League Channel Config
 
-Override channel profiles, channel groups, and group modes on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off or use the search field to see all). Click a league row to expand its configuration.
+Override channel profiles, channel groups, and group modes on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off to see all; the search field filters within whatever's visible). Click a league row to expand its configuration.
 
 ### Available Overrides
 

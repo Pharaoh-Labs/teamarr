@@ -70,7 +70,7 @@ Number Stability applies to **Auto** mode. Manual mode uses its own per-league s
 
 ## Per-League Starting Channels (Manual Mode)
 
-When Manual mode is selected, a table lists leagues with a configurable starting channel number for each. The **Subscribed only** toggle is on by default, so the table opens showing just your subscribed leagues; turn it off (or use the search field) to see everything.
+When Manual mode is selected, a table lists leagues with a configurable starting channel number for each. The **Subscribed only** toggle is on by default, so the table opens showing just your subscribed leagues; turn it off to see everything (the search field filters within whatever's visible).
 
 Each league gets sequential numbers starting from its configured start. This lets you group sports into predictable channel ranges (e.g., NFL at 500, NBA at 600, NHL at 700). Leagues without a configured start fall back to the channel range start.
 

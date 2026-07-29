@@ -60,6 +60,8 @@ The full list of supported environment variables (logging, ports, provider tunin
 
 An Unraid Docker template is available in the Community Applications store. Search for "Teamarr" to install directly from the Unraid UI.
 
+## Opening the UI
+
 Open Teamarr at `http://<your-server>:9195`
 
 ## Data Persistence
@@ -84,7 +86,7 @@ On first startup, Teamarr will:
 2. Refresh the league and team directory from providers (a startup overlay shows progress — usually well under a minute)
 3. Start the web UI on port 9195
 
-The navigation bar numbers the setup flow: **Settings (0) → Sources (1) → Subscriptions (2) → Matching (3) → EPG (4) → Channels (5)**, with the **Generate** button at the end. Work left to right; the [User Guide index](./) mirrors the same order. Start with [Dispatcharr Integration](dispatcharr-integration).
+The navigation bar numbers the setup flow (first-run guidance — each number disappears once you've visited that step): **Settings (0) → Sources (1) → Subscriptions (2) → Matching (3) → EPG (4) → Channels (5)**, with the **Generate** button at the end. Work left to right; the [User Guide index](./) mirrors the same order. Start with [Dispatcharr Integration](dispatcharr-integration).
 
 ## Updating
 
@@ -95,7 +97,7 @@ docker compose pull teamarr
 docker compose up -d teamarr
 ```
 
-Teamarr handles database migrations automatically — no manual steps needed between versions.
+Teamarr handles database migrations automatically — no manual steps needed between versions. When an update is available, the version badge in the nav bar gains an amber dot (update checks are configurable under Settings → General → Update Notifications).
 
 {: .note }
 Advanced users familiar with Python may run Teamarr locally without Docker. Clone the repository and run `python app.py`.

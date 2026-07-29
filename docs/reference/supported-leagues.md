@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **170 pre-configured leagues** across 15 sports, plus **~250 dynamically discovered soccer leagues** from ESPN. Pre-configured leagues have full support (team import + event matching). Discovered leagues support event matching only.
+Teamarr supports **170 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -25,7 +25,7 @@ Leagues have different levels of support:
 
 | Provider | Description |
 |----------|-------------|
-| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~250 soccer leagues dynamically. |
+| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. |
 | **NASCAR** | NASCAR Cup, O'Reilly (Xfinity), and Truck series via the official cf.nascar.com schedule API. Full race-weekend sessions, no API key required. See [provider docs](providers/nascar). |
 | **MLB Stats API** | Minor League Baseball (MiLB) — Triple-A, Double-A, High-A, Single-A, Rookie |
 | **Squiggle** | AFL (Australian Football League). Free, no API key required. See [provider docs](providers/squiggle). |
@@ -65,8 +65,8 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | NCAA Men's Basketball | `ncaam` | ESPN |
 | NCAA Women's Basketball | `ncaaw` | ESPN |
 | National Basketball League (Australia) | `nbl` | ESPN |
-| FIBA Basketball World Cup | `fiba` | TSDB (premium) |
-| FIBA Women's Basketball World Cup | `fibaw` | TSDB (premium) |
+| FIBA Basketball World Cup | `fiba` | TSDB **P** |
+| FIBA Women's Basketball World Cup | `fibaw` | TSDB **P** |
 | Unrivaled | `unrivaled` | TSDB |
 
 ---
@@ -146,7 +146,7 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 ## Soccer
 
 {: .tip }
-Teamarr automatically discovers **~250 soccer leagues** from ESPN's API during cache refresh. The leagues listed below are the pre-configured ones with full support (team import + event matching). All discovered leagues are available for event matching in event groups — select them from the league picker under the Soccer sport.
+Teamarr automatically discovers **~228 soccer leagues** from ESPN's API during cache refresh. The leagues listed below are the pre-configured ones with full support (team import + event matching). All discovered leagues are available for event matching in event groups — select them from the league picker under the Soccer sport.
 
 ### North America
 
@@ -311,7 +311,7 @@ Motorsports are **Event Only** - no team import available.
 | NASCAR O'Reilly Auto Parts Series | `nascar-xfinity` | NASCAR API | Event |
 | NASCAR Craftsman Truck Series | `nascar-truck` | NASCAR API | Event |
 | IndyCar Series | `indycar` | ESPN | Event |
-| IMSA SportsCar Championship | `imsa` | TSDB **P** | Event |
+| IMSA WeatherTech SportsCar Championship | `imsa` | TSDB **P** | Event |
 | FIA World Endurance Championship | `wec` | TSDB **P** | Event |
 
 Motorsports events are race weekends made up of multiple sessions (Practice,

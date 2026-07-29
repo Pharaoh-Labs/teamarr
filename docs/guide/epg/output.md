@@ -11,7 +11,7 @@ redirect_from:
 
 # Output
 
-**EPG → Output** configures the XMLTV file Teamarr writes: where it goes, how much it covers, the Game Thumbs base URL, default event durations, and the generator metadata embedded in it.
+**EPG → EPG Output** (the sub-nav tab is labeled "EPG Output") configures the XMLTV file Teamarr writes: where it goes, how much it covers, the Game Thumbs base URL, default event durations, and the generator metadata embedded in it.
 
 {: .note }
 Running a generation, previewing the XML, and reviewing run history live on the [Dashboard](../dashboard). This page is only the output *settings*.

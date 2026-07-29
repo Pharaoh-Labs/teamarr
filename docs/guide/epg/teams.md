@@ -35,7 +35,7 @@ Go to **EPG → Team EPG** and click **Add Team** to browse the league cache by 
 3. Select teams individually or use **Select All**
 4. Click **Import Selected Teams**
 
-Teams are grouped by sport in the sidebar. The badge next to each sport shows how many leagues have cached teams. Leagues with 0 teams haven't had their cache refreshed yet — use the cache refresh on **Settings → Advanced** (Data Caches).
+Teams are grouped by sport in the sidebar. The badge next to each sport shows how many importable leagues it has; each league shows its cached team count. Leagues with 0 teams haven't had their cache refreshed yet — use the cache refresh on **Settings → Advanced** (Data Caches).
 
 ## Managing Teams
 
@@ -46,14 +46,14 @@ The Teams table lists all imported teams. Columns are sortable, and a filter row
 | **Team** | Team name with logo |
 | **League** | League the team belongs to |
 | **Sport** | The team's sport |
-| **Channel ID** | XMLTV channel id — point a Dispatcharr channel at this id to wire up the EPG. Generated as PascalCase team name + league (e.g. `DetroitLions.nfl`) |
+| **Channel ID** | XMLTV channel id — point a Dispatcharr channel at this id to wire up the EPG. Generated as PascalCase team name + league (e.g. `DetroitLions.nfl`) at import; regenerate in bulk with a custom format via the **Channel ID** action after selecting rows |
 | **Template** | Assigned template (click to change) |
-| **Status** | Active (has upcoming games) or inactive |
+| **Status** | On/off toggle — inactive teams are excluded from EPG generation |
 | **Actions** | Per-team actions (delete, etc.) |
 
 ### Assigning Templates
 
-Each team needs a **team template** assigned — see [Team vs Event](team-vs-event) for how team templates differ. Click the template dropdown in the team's row to select one. You can also bulk-assign templates by selecting multiple teams.
+Each team needs a **team template** assigned — see [Team vs Event](team-vs-event) for how team templates differ. Edit a team (pencil icon) to change its template, or select multiple rows and use **Assign Template** to bulk-assign.
 
 ## Team EPG Settings
 

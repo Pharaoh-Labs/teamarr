@@ -28,6 +28,9 @@ In the template editor, each row carries a live **trace badge** driven by the se
 
 ![Conditions tab — preset library, prioritized rows with a live "fires" badge, and the Guide Preview](../../assets/images/template-conditions.png)
 
+{: .note }
+> The condition picker on **event** templates currently offers a reduced set (league/sport, summary, combat, and motorsports conditions) — the common game-state conditions (`is_final`, `is_playoff`, `has_odds`, …) are missing from its dropdown even though they evaluate correctly on event templates (the shipped event starters use them). A picker fix is queued.
+
 ### Condition presets
 
 A set of condition rows can be saved as a reusable **preset** from the Conditions tab — save the current rows under a name, then apply (or delete) presets from the same menu on any other template. Applying a preset replaces the tab's rows with the preset's.
@@ -348,4 +351,4 @@ Here's a complete set of conditions for a college football team template:
 ]
 ```
 
-Evaluation walks the priorities from lowest number to highest: the first matching row wins, with the priority-100 default as the guaranteed fallback.
+Evaluation walks the priorities from lowest number to highest; the priority-100 default is the guaranteed fallback. Description ties at the same priority are chosen randomly (titles and subtitles pick the first row deterministically).

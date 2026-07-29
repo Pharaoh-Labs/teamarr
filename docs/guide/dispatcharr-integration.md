@@ -50,10 +50,9 @@ Once connected, each generation run manages the full channel lifecycle in Dispat
 1. **M3U accounts are refreshed** so matching sees the latest streams
 2. Teamarr **matches streams to events** and resolves templates
 3. **Channels are created** with names, logos, EPG data, streams, and profile/group assignments
-4. **Channels are updated** when event data changes (scores, status, streams)
+4. **Channels are updated** when event data changes (scores, status, streams), **deleted** when events end (based on [lifecycle timing](channels/lifecycle)), and drift is reconciled
 5. **Dispatcharr's EPG source is refreshed** and channels are associated with their guide data
-6. **Channels are deleted** when events end (based on [lifecycle timing](channels/lifecycle)), and drift is reconciled
-7. Configured **media servers** (Emby, Jellyfin, Channels DVR) are refreshed in parallel
+6. Configured **media servers** (Emby, Jellyfin, Channels DVR) are refreshed in parallel
 
 ### Profile & Group Sync
 
@@ -68,7 +67,7 @@ Teamarr detects drift between its expected state and Dispatcharr's actual state.
 
 ### Logo Cleanup
 
-**Settings → Dispatcharr** also has an optional **Logo Cleanup** toggle that removes unused channel logos from Dispatcharr after each generation.
+**Settings → Dispatcharr** also has an optional **Logo Cleanup** toggle that removes **all** unused logos from Dispatcharr after each generation — not just Teamarr-uploaded ones, so use with care if you keep a manually curated logo library.
 
 ## Network Configuration
 

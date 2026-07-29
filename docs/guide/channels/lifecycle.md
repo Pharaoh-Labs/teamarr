@@ -20,7 +20,7 @@ Controls when event channels are created in and deleted from Dispatcharr.
 
 The **Pre-Event Buffer (hours)** field is greyed out until **Before event + buffer** is selected; it sets how many hours before the event to create the channel (0–336 hours, default 1).
 
-Channels are never created for events that are already over: final events are excluded (unless *include final events* is enabled), an event with no reported status is treated as final two hours after its estimated end, and an event already past its delete threshold is skipped entirely.
+Channels are never created for events that are already over: final events are excluded (an API-only `include_final_events` setting can override this), an event not yet reported final is treated as final two hours after its estimated end, and an event already past its delete threshold is skipped entirely.
 
 ## Delete Timing
 
@@ -29,7 +29,7 @@ Channels are never created for events that are already over: final events are ex
 | **Same day** | Delete channels at the end of the event's day (23:59 on the day the event is estimated to end) |
 | **After event + buffer** | Delete channels a configurable number of hours after the event ends |
 
-The **Post-Event Buffer (hours)** (0–336, default 1) sets how many hours after the event ends to keep the channel (e.g., 2 hours for postgame coverage). "Ends" is an **estimate**: start time plus a per-sport default duration (configurable under [EPG → Output](../epg/output#default-durations)); for session-based events like race weekends, the last session's start plus its duration.
+The **Post-Event Buffer (hours)** (0–336, default 1) sets how many hours after the event ends to keep the channel (e.g., 2 hours for postgame coverage). "Ends" is an **estimate**: start time plus a per-sport default duration (configurable under [EPG → Output](../epg/output#default-durations)). For session-based events like race weekends, the creation-time window uses the last session's start plus its duration; the per-run recalculation uses each channel's own start time plus the sport duration.
 
 {: .note }
 Events that cross midnight always use the post-event buffer for deletion, even in "Same day" mode, so a channel isn't pulled out from under a game in progress.
@@ -49,4 +49,4 @@ Deleted channels appear in the **Recently Deleted** section of the [Dashboard](.
 
 ## Sync reliability
 
-Every channel write to Dispatcharr is confirmed before Teamarr's local record updates — if a Dispatcharr API call fails, the local state stays unchanged and the drift is detected and corrected on the next generation run. Profile assignments self-heal the same way, by comparing against Dispatcharr's actual state. Channels whose actual state has diverged show a **Drifted** badge in the Dashboard's Managed Channels table until the next run corrects them.
+Channel create/update/stream writes to Dispatcharr are confirmed before Teamarr's local record updates — if a Dispatcharr API call fails, the local state stays unchanged and the drift is detected and corrected on the next generation run. Profile assignments self-heal the same way, by comparing against Dispatcharr's actual state. Channels whose actual state has diverged show a **Drifted** badge in the Dashboard's Managed Channels table until the next run corrects them.
