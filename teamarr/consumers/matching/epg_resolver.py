@@ -30,15 +30,31 @@ fetched by the resolved key yet keyed by the stream tvg_id the matcher carries.
 import logging
 import re
 
+from teamarr.consumers.matching.text_primitives import QUALITY_TOKENS, REGION_CODES
+
 logger = logging.getLogger(__name__)
 
 # Quality / format tokens that decorate a channel name but not its identity.
 # Deliberately NOT including country words (us/usa) or feed words (backup/alt),
-# which CAN change identity ("USA Network" must keep "usa").
+# which CAN change identity ("USA Network" must keep "usa"). Sourced from the
+# shared text_primitives.QUALITY_TOKENS so a token added there automatically
+# applies here too.
 _QUALITY_TOKENS = re.compile(
-    r"\b(fhd|uhd|hd|sd|4k|hevc|h265|h264|hq|lq)\b",
+    r"\b(?:" + "|".join(re.escape(t) for t in sorted(QUALITY_TOKENS)) + r")\b",
     re.IGNORECASE,
 )
+
+
+def _region_code_pattern(code: str) -> str:
+    """Regex fragment for a single region code.
+
+    "exyu" is the one code that needs an optional-hyphen variant (matches
+    both "exyu" and "ex-yu") -- everything else is a literal, escaped code.
+    """
+    if code == "exyu":
+        return "ex-?yu"
+    return re.escape(code)
+
 
 # Country / region grouping prefixes (bead yke). Many providers prefix every
 # stream with a country label and a delimiter — "US: ESPN FHD", "UK | Sky
@@ -53,11 +69,13 @@ _QUALITY_TOKENS = re.compile(
 # abbreviation like "LA - Lakers Live") from being mistaken for a region
 # prefix. The dash variant requires whitespace on BOTH sides so an unspaced
 # hyphen inside a real name ("FR-ESPN", "Bein-Sports") is never split on.
+#
+# The allowlist itself is sourced from the shared text_primitives.REGION_CODES
+# so a code added there automatically applies here too.
 _REGION_PREFIX = re.compile(
-    r"^\s*(?:us|usa|uk|ca|au|nz|ie|ire|fr|de|es|it|nl|pt|be|ch|no|se|dk|fi|"
-    r"br|mx|ar|in|gr|al|tr|bg|cz|pl|ro|hu|hr|rs|eu|intl|latam|ex-?yu|"
-    r"jp|kr|cn|za|sa|qa|ae|il|pk|ph|th|vn|my|sg|id|hk|tw)"
-    r"(?:\s*[:|]\s*|\s+-\s+)",
+    r"^\s*(?:"
+    + "|".join(_region_code_pattern(c) for c in sorted(REGION_CODES))
+    + r")(?:\s*[:|]\s*|\s+-\s+)",
     re.IGNORECASE,
 )
 
