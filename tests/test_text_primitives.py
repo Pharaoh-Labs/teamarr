@@ -76,15 +76,15 @@ for lead review before implementation locks it in.
 """
 
 import pytest
+
+from teamarr.consumers.matching.classifier import _clean_team_name
+from teamarr.consumers.matching.epg_resolver import normalize_channel_name
 from teamarr.consumers.matching.text_primitives import (
     QUALITY_TOKENS,
     REGION_CODES,
     TEAM_SAFE_QUALITY_TOKENS,
     strip_quality_tokens,
 )
-
-from teamarr.consumers.matching.classifier import _clean_team_name
-from teamarr.consumers.matching.epg_resolver import normalize_channel_name
 
 # ================================================================= QUALITY_TOKENS
 
