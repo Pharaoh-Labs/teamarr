@@ -2,7 +2,6 @@
 title: Subscriptions
 parent: User Guide
 nav_order: 5
-docs_version: "2.7.0"
 ---
 
 # Subscriptions
@@ -25,7 +24,7 @@ Every event group resolves its set of match-and-include leagues from this Subscr
 
 ## Picking leagues and sports
 
-Open **Subscriptions** and check the leagues you want Teamarr to scan. Browse by sport, then tick individual leagues. Only checked leagues are matched.
+Open **Subscriptions** — it has four tiles: **Sport/League**, **Soccer**, **Teams**, and **Custom Leagues** (the last only appears with a TheSportsDB premium key). On the **Sport/League** tile, check the leagues you want Teamarr to scan. Browse by sport, then tick individual leagues. Only checked leagues are matched.
 
 Subscribe to as many or as few leagues as you like — there is no cost to a broad subscription beyond slightly more work each generation run. A narrow subscription keeps your guide focused on exactly the competitions you care about.
 
@@ -37,26 +36,25 @@ Subscribe to as many or as few leagues as you like — there is no cost to a bro
 
 ### Stale leagues
 
-Provider discovery lists change over time, so a subscribed league can disappear from Teamarr's league cache while still sitting in your subscription. These show up in an amber **Stale leagues** box on the Sports tile — remove them with the × and save, or just save: unrecognized codes are dropped automatically (and logged) whenever the subscription is saved, so they can't silently waste provider calls on every generation run.
+Provider discovery lists change over time, so a subscribed league can disappear from Teamarr's league cache while still sitting in your subscription. These show up in an amber **Stale leagues** box on the Sport/League tile — remove them with the × and save, or just save: unrecognized codes are dropped automatically (and logged) whenever the subscription is saved, so they can't silently waste provider calls on every generation run.
 
 ## Soccer modes
 
-Soccer is special because there are hundreds of leagues. Rather than checking each one, you choose a **mode**:
+Soccer is special because there are hundreds of leagues. Rather than checking each one on the Sport/League tile, the **Soccer** tile offers two modes:
 
 | Mode | Behavior |
 |------|----------|
-| **All** | Every enabled soccer league is matched. Broadest coverage; you don't pick leagues individually. |
-| **Teams** | Leagues are discovered automatically from the soccer teams you follow — Teamarr subscribes to whatever competitions those teams play in. |
-| **Manual** | Only the exact soccer leagues you check are matched. |
+| **Follow Teams** | Leagues are discovered automatically from the soccer teams you follow — Teamarr subscribes to whatever competitions those teams play in (domestic league, cups, continental). |
+| **Select Leagues** | Only the exact soccer leagues you check are matched. Best for focused coverage. |
 
-In **Teams** mode, the followed-teams list lives here in Subscriptions because it's a *subscription* concept (which competitions to scan). The team-channel workflow itself — persistent channels for specific teams — lives under [EPG → Teams](epg/teams).
+In **Follow Teams** mode, the followed-teams list lives here in Subscriptions because it's a *subscription* concept (which competitions to scan).
 
 {: .note }
 > **Following a soccer team adds *all* the leagues that team could potentially participate in** — its domestic league, cups, and continental/club competitions — not just that team's individual matches. For example, following Barcelona subscribes you to all of La Liga, the Copa del Rey, and the Champions League, so you'll see *every* match in those competitions. To surface events for the followed teams **only**, enable the **Default Team Filter** on the [Teams tab](#default-team-filter), set it to *Include only selected teams*, and select your teams. The filter is league-scoped: leagues where you've selected at least one team show only those teams' games, while leagues with no selections pass through unfiltered.
 
 ## Default Team Filter
 
-The **Teams** tab adds an optional filter that narrows matched events down to specific teams — useful when a subscription pulls in a whole league (e.g. soccer [Teams mode](#soccer-modes)) but you only care about a few teams in it.
+The **Teams** tile adds an optional filter that narrows matched events down to specific teams — useful when a subscription pulls in a whole league (e.g. soccer [Follow Teams mode](#soccer-modes)) but you only care about a few teams in it.
 
 - **Enabled** toggle — turn the filter on or off without losing your selections.
 - **Filter mode** — *Include only selected teams* (keep just these) or *Exclude selected teams* (drop these).
@@ -69,7 +67,7 @@ The filter is **league-scoped**: it only affects leagues where you've selected a
 Custom Leagues let you add a competition Teamarr doesn't ship with. They live inside Subscriptions and are powered by [TheSportsDB](https://www.thesportsdb.com/).
 
 {: .note }
-> Custom Leagues require a **TheSportsDB premium key**. The feature is hidden until you add one in **Settings → System → TheSportsDB API Key**. TheSportsDB's free tier returns too few upcoming events to build a reliable guide, so the premium key is a hard requirement.
+> Custom Leagues require a **TheSportsDB premium key**. The tile is hidden until you add one in **Settings → General → TheSportsDB API Key**. TheSportsDB's free tier returns too few upcoming events to build a reliable guide, so the premium key is a hard requirement.
 
 ### Adding a custom league
 
@@ -88,9 +86,6 @@ The same checks run again server-side on save: the ID must resolve, the sport mu
 Creating a custom league **automatically adds it to your global Subscription**, so its games start matching immediately — no extra step.
 
 If you later uncheck that league in Subscriptions, the Custom Leagues list flags it with a **Not subscribed** warning badge. That league still exists, but — like any unsubscribed league — its games won't appear until you re-subscribe it. Re-check it in Subscriptions to clear the warning.
-
-{: .note }
-> This auto-subscribe behavior was added to close a footgun (GitHub #240) where a newly-created custom league produced no events because it was never subscribed.
 
 ### Deleting a custom league
 

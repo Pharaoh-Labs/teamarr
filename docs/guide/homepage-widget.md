@@ -2,7 +2,6 @@
 title: Homepage Widget
 parent: User Guide
 nav_order: 11
-docs_version: "2.11.1"
 ---
 
 # Homepage Dashboard Widget
@@ -53,8 +52,8 @@ Homepage's block layout displays up to four fields. This config shows what's on 
 | `streams_matched` | number | Streams matched in the last full run |
 | `streams_unmatched` | number | Streams unmatched in the last full run |
 | `match_percent` | number | Match rate of the last full run (null before first run) |
-| `last_run_status` | string | `completed`, `failed`, `partial`, or `running` |
-| `last_run_at` | ISO timestamp | When the last full run finished (your EPG timezone) |
+| `last_run_status` | string | `completed`, `failed`, `partial`, `cancelled`, or `running` (null before the first run) |
+| `last_run_at` | ISO timestamp | When the last full run finished (your EPG timezone; null before the first run and while a run is in progress) |
 | `next_run_at` | ISO timestamp | Next scheduled generation (null if scheduler off) |
 | `scheduler_running` | boolean | Whether scheduled generation is enabled |
 | `dispatcharr_configured` | boolean | Whether Dispatcharr integration is set up |

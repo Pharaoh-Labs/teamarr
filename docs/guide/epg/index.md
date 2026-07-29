@@ -1,7 +1,7 @@
 ---
 title: EPG
 parent: User Guide
-nav_order: 6
+nav_order: 7
 has_children: true
 docs_version: "2.7.0"
 ---

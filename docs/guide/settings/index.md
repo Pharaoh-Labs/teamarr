@@ -1,7 +1,7 @@
 ---
 title: Settings
 parent: User Guide
-nav_order: 9
+nav_order: 3
 has_children: true
 docs_version: "2.7.0"
 ---
