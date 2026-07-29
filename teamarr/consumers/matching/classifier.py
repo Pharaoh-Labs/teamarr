@@ -16,9 +16,19 @@ from re import Pattern
 from typing import cast
 
 from teamarr.consumers.matching.normalizer import NormalizedStream, normalize_stream
+from teamarr.consumers.matching.text_primitives import TEAM_SAFE_QUALITY_TOKENS
 from teamarr.services.detection_keywords import DetectionKeywordService
 
 logger = logging.getLogger(__name__)
+
+# Quality/format tokens safe to strip from an extracted TEAM name, at the
+# start or end of the string only. Sourced from the shared
+# text_primitives.TEAM_SAFE_QUALITY_TOKENS (a conservative subset of
+# QUALITY_TOKENS -- see that module for the hq/lq exclusion rationale), so a
+# token added there automatically applies here too.
+_TEAM_QUALITY_ALTERNATION = "|".join(re.escape(token) for token in sorted(TEAM_SAFE_QUALITY_TOKENS))
+_TEAM_QUALITY_START = re.compile(rf"^\s*\b(?:{_TEAM_QUALITY_ALTERNATION})\b\s*", re.IGNORECASE)
+_TEAM_QUALITY_END = re.compile(rf"\s+\b(?:{_TEAM_QUALITY_ALTERNATION})\b\s*$", re.IGNORECASE)
 
 
 class StreamCategory(Enum):
@@ -945,9 +955,9 @@ def _clean_team_name(name: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Remove HD, SD, 4K, UHD quality indicators (at start or end)
-    name = re.sub(r"^\s*\b(HD|SD|FHD|4K|UHD)\b\s*", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+\b(HD|SD|FHD|4K|UHD)\b\s*$", "", name, flags=re.IGNORECASE)
+    # Remove quality indicators (at start or end) -- team-name-safe subset only
+    name = _TEAM_QUALITY_START.sub("", name)
+    name = _TEAM_QUALITY_END.sub("", name)
 
     # Remove broadcast network indicators like (CBS), (FOX), (ABC), (NBC), (ESPN)
     name = re.sub(
