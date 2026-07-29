@@ -43,7 +43,6 @@ Thumbs.db
 .env
 
 # Local documentation (not distributed)
-docs/reference/providers/tsdb-api.md
 CLAUDE.md
 DEVELOPMENT.md
 teamarr.xml

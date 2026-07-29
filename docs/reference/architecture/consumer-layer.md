@@ -3,7 +3,6 @@ title: Consumer Layer
 parent: Architecture
 grand_parent: Technical Reference
 nav_order: 2
-docs_version: "2.3.1"
 ---
 
 # Consumer Layer
@@ -14,18 +13,22 @@ The consumer layer orchestrates EPG generation, stream matching, channel lifecyc
 
 `generation.py` provides the single entry point: `run_full_generation()`.
 
-A global lock prevents concurrent runs. The workflow progresses through 8 phases:
+A global lock prevents concurrent runs. The workflow progresses through these phases (names match `generation_status` progress events):
 
-| Phase | % Range | Description |
-|-------|---------|-------------|
-| M3U Refresh | 0-5% | Refresh Dispatcharr M3U accounts |
-| Teams | 5-50% | Process all active team EPGs |
-| Event Groups | 50-95% | Match streams, create channels, generate EPG |
-| Channel Reassignment | 93-95% | Global channel number rebalancing |
-| Stream Ordering | 93-95% | Apply priority rules to channels |
-| Merge XMLTV | 95-96% | Combine team + group XMLTV output |
-| Dispatcharr Ops | 96-98% | EPG refresh, channel association, cleanup |
-| Reconciliation | 99-100% | Detect/fix channel drift |
+| Phase | % | Description |
+|-------|---|-------------|
+| `init` | 3% | M3U refresh, setup |
+| `teams` | 5-50% | Process all active team EPGs |
+| `groups` | 50-93% | Match streams, create channels, generate EPG |
+| `ordering` | 93% | Apply stream-ordering priority rules |
+| (channel reassignment) | 94% | Global channel number rebalancing (`_sync_global_channels`) |
+| `saving` | 95% | Merge team + group XMLTV output |
+| `dispatcharr` | 96-97% | EPG refresh, channel association, stream audit |
+| `channelsdvr`/`emby`/`jellyfin` | 97% | Parallel media-server EPG refreshes (`_run_media_server_refreshes`) |
+| `lifecycle` | 98% | Channel lifecycle sync |
+| `reconciliation` | 99% | Detect/fix channel drift |
+| `cleanup` | 99% | Scheduled deletions, orphan sweeps |
+| `complete` | 100% | Done |
 
 **Shared state across phases:**
 - Single `SportsDataService` instance keeps the event cache warm across all teams and groups
@@ -89,6 +92,7 @@ The `event_group_processor/` package handles the core matching and channel lifec
 |----------|-------------|---------|
 | `TEAM_VS_TEAM` | Contains separator (vs/@/at) | `"Cowboys vs Eagles"` |
 | `EVENT_CARD` | Combat sports pattern | `"UFC 315: Main Card"` |
+| `FIELD_EVENT` | Field/competitor events (racing, tennis, golf) | `"NASCAR Cup: Daytona 500"` |
 | `PLACEHOLDER` | No event info | `"ESPN+ 1"`, `"Coming Soon"` |
 
 Output includes: extracted team names, detected league/sport hints, card segment (combat sports), and whether custom regex was used.
@@ -106,23 +110,20 @@ Output includes: extracted team names, detected league/sport hints, card segment
 | `alias` | Team alias lookup (Detection Library) |
 | `fuzzy` | Fuzzy string matching on team names |
 | `league_hint` | Detected league hint narrows search space |
+| `epg` | Matched via EPG program title (see below); persisted as `MatchMethod.EPG` |
 
 **Caching:** Fingerprint-based cache keyed by `hash(stream_name, group_id, generation)`. The generation counter increments per EPG run to bust stale cache entries.
 
 ### EPG-title matching (`matching/epg_matcher.py`, `matching/epg_index.py`)
 
-For static-named linear channels (ESPN, NBA1) the stream name is unmatchable, but the Dispatcharr EPG guide carries the real matchup. When a group opts in (epic `teamarrv2-183`), `StreamMatcher` augments name matching with EPG-title matching:
+For static-named linear channels (ESPN, NBA1) the stream name is unmatchable, but the Dispatcharr EPG guide carries the real matchup. When a group opts in, `StreamMatcher` augments name matching with EPG-title matching:
 
-1. **Resolve** — `matching/epg_resolver.py` maps each candidate stream's `tvg_id` to the EPG source's program `tvg_id`. A raw M3U `tvg_id` (`FoxSports1.us`) is a different namespace from the program `tvg_id` (the EPG-source channel id, e.g. `82547`), so a cascade bridges them, most-authoritative first: **(a) channel** (the stream is on a Dispatcharr channel whose curated `epg_data_id` resolves to an EPGData row — a user-confirmed mapping, trusted unconditionally); **(b) direct** (the stream `tvg_id` already is an **active-source** EPGData `tvg_id`); **(c) name** (strict, unambiguous normalized name match against the active source — skips ambiguous names so `ESPN` never resolves to `ESPN2`); **(d) Xtream provider guide** (`matching/epg_xtream.py`, opt-in epic `crs`): streams still unresolved on an Xtream-Codes (XC) account match against the provider's own `xmltv.php`, where the stream `tvg_id` IS the guide channel id — exact hit, disk-cached per account. This does **not** require streams to be pre-built into channels.
-2. **Index** — `EPGProgramIndex` (built once per run, scoped to the resolved `tvg_id`s) fetches programs by the resolved program `tvg_id` but keys results by the stream `tvg_id`; provides `programs_for(tvg_id)` and `is_linear(tvg_id)`.
-3. **Match input** — `build_match_input()` joins `title + sub_title` with a pipe (`"MLB Baseball | Cubs at Cardinals"`): real linear EPG puts the category in the title and the matchup in the sub_title, and the pipe lets `classify_stream` strip the leading segment as a league/sport hint instead of folding it into the first team. Fed through the **same** `classify_stream → TeamMatcher` pipeline.
-4. **Category gate** — `classify_program_policy()` skips `Sports non-event` (studio/talk) and `Classic Sport Event` (replays; precedence over `Sports event`). Absent categories → attempt anyway; the team-match + event-window overlap is its own filter.
-5. **Fan-out** — one linear stream matches **many** events (one per program); results carry `MatchMethod.EPG` and the program's `epg_program_start`/`epg_program_end` window for the lifecycle layer.
-6. **Reconciliation** — `_reconcile_epg()`: linear `tvg_id` + EPG match → EPG wins (time-windowed), name match discarded; dedicated `tvg_id` → name match kept, EPG only fills when name found nothing.
+1. **Resolve** — `matching/epg_resolver.py` bridges the stream `tvg_id` → program `tvg_id` namespace gap via a cascade (curated channel `epg_data_id` → direct tvg_id → strict name match → Xtream provider guide, `matching/epg_xtream.py`). Does not require streams to be pre-built into channels.
+2. **Index + match** — `EPGProgramIndex` (built once per run, scoped to resolved `tvg_id`s) fetches programs; `build_match_input()` pipe-joins program `title + sub_title` and feeds it through the **same** `classify_stream → TeamMatcher` pipeline. Studio/talk and replay program categories are skipped.
+3. **Fan-out** — one linear stream matches **many** events (one per program); results carry `MatchMethod.EPG` and the program's start/end window for the lifecycle layer.
+4. **Reconciliation** — `_reconcile_epg()`: linear `tvg_id` + EPG match → EPG wins (time-windowed), name match discarded; dedicated `tvg_id` → name match kept, EPG only fills when name found nothing.
 
-The persisted `MatchMethod` is carried onto each `managed_channel_streams` row (`match_method` column) so the **EPG Matched** stream-ordering rule can prioritize time-shared linear streams.
-
-EPG-path caching is free: `TeamMatcher` already keys its cache on `(group_id, stream_id, input_string)`, so each distinct program title is memoized across runs without a separate fingerprint.
+The persisted `MatchMethod` is carried onto each `managed_channel_streams` row (`match_method` column) so the `epg_match` stream-ordering rule can prioritize time-shared linear streams. See [Program Matching](../../guide/matching/program-matching) for the user-facing behavior.
 
 ## Channel Lifecycle
 
@@ -154,7 +155,7 @@ Resolves `{sport}` and `{league}` wildcards in channel group and profile names:
 - Auto-creates groups/profiles in Dispatcharr if they don't exist
 - Caches resolved IDs for fast repeated lookups
 
-### Reconciliation (`lifecycle/reconciliation.py`)
+### Reconciliation (`consumers/reconciliation.py`)
 
 `ChannelReconciler` detects and fixes inconsistencies between the local DB and Dispatcharr:
 
@@ -177,12 +178,10 @@ Runs automatically at the end of each generation. Issues have severity levels (c
 
 ### Time-windowed stream membership (`managed_channel_streams.attach_at`/`detach_at`)
 
-For EPG-matched linear streams (epic `teamarrv2-183.5`), membership in a channel is **time-windowed** so one linear stream (ESPN, NBA1) rotates across many event channels, attached to each only near game time. This is **separate** from channel create/delete timing — the channel exists for its whole lifecycle (filler + upcoming guide); only the *stream* swaps in and out.
+For EPG-matched linear streams, membership in a channel is **time-windowed** so one linear stream (ESPN, NBA1) rotates across many event channels, attached to each only near game time. This is **separate** from channel create/delete timing — the channel exists for its whole lifecycle; only the *stream* swaps in and out.
 
-- `compute_stream_window()` (`lifecycle/timing.py`) derives `attach_at`/`detach_at` from the matched EPG program slot ± the global `epg_stream_pre/post_buffer_minutes` settings, **clipped** to the neighbouring programs on that `tvg_id` so a back-to-back game's buffer never bleeds into the adjacent slot.
-- A membership row is **active in Dispatcharr now** when `removed_at IS NULL AND (attach_at IS NULL OR attach_at ≤ now < detach_at)`. `NULL` window = full-life membership (dedicated/name-matched streams — unchanged behavior). `get_ordered_stream_ids()` enforces this; it's the set pushed to Dispatcharr.
-- `removed_at` stays **terminal** (permanent removal only); re-evaluatability comes from the window gate, not from un-setting it.
-- Reconciliation drift uses the **window-gated** set as "expected", so a correctly out-of-window stream is not flagged or re-added.
+- `compute_stream_window()` (`lifecycle/timing.py`) derives `attach_at`/`detach_at` from the matched EPG program slot ± the global `epg_stream_pre/post_buffer_minutes` settings, clipped to the neighbouring programs on that `tvg_id`.
+- `NULL` window = full-life membership (dedicated/name-matched streams — unchanged behavior). `get_ordered_stream_ids()` enforces the window gate; it's the set pushed to Dispatcharr, and reconciliation drift uses the same window-gated set as "expected".
 
 ## Sports Data Service
 
@@ -203,15 +202,37 @@ For EPG-matched linear streams (epic `teamarrv2-183.5`), membership in a channel
 
 ## Stream Ordering
 
-`services/stream_ordering.py` assigns priority to channels based on configurable rules.
+`services/stream_ordering.py` assigns priority to a channel's streams based on configurable rules. Nine rule types:
 
 | Rule Type | Matches On |
 |-----------|-----------|
 | `m3u` | M3U account name |
 | `group` | Source group name |
 | `regex` | Stream name pattern (case-insensitive) |
+| `stream_type` | Stream type |
+| `team_feed` / `not_team_feed` | Whether the stream is a team feed |
+| `epg_match` | Stream was EPG-matched (`match_method`) |
+| `dispatcharr_group` | Dispatcharr channel group |
+| `stats_metric` | Stream stats metric (score mode) |
 
-No match defaults to priority 999 (sorted to end). Channels are sorted by priority, then by `added_at` for stable ordering.
+Each rule runs in one of two modes: `priority` (band assignment) or `score` (numeric ranking); bands and scores are collapsed into a single ordering (`_collapse`). No match defaults to priority 999 (sorted to end), though a user rule can override the catch-all band. Ties break by `added_at` for stable ordering.
+
+## Other Consumer Modules
+
+| Module | Purpose |
+|--------|---------|
+| `consumers/cache/` | Unified team/league reverse-lookup cache (queries, refresh) driving event matching, multi-league resolution, soccer league discovery |
+| `consumers/enforcement/` | Post-processing enforcers: `KeywordEnforcer`, `CrossGroupEnforcer`, `KeywordOrderingEnforcer` |
+| `consumers/filler/` | Team and event filler programme generation |
+| `consumers/team_epg.py` / `consumers/event_epg.py` | XMLTV programme generation for team and event channels |
+| `consumers/scheduler.py` | Background EPG cron scheduler |
+| `consumers/racing_segments.py` / `consumers/ufc_segments.py` | Racing-weekend and fight-card segment expansion |
+| `consumers/channel_lifecycle.py` | Lifecycle helpers shared across consumers |
+| `consumers/stream_match_cache.py` | Fingerprint match cache persistence |
+| `consumers/generation_status.py` | Generation progress state machine |
+| `consumers/event_matcher.py` | Event matching helpers |
+
+`consumers/matching/` contains 15 modules; beyond those described above: `team_matcher.py`, `racing_matcher.py`, `tennis_matcher.py`, `country_resolver.py`, `normalizer.py`, `constants.py`, `result.py`, `event_matcher.py`.
 
 ## File Locations
 
@@ -226,7 +247,7 @@ No match defaults to priority 999 (sorted to end). Channels are sorted by priori
 | `consumers/matching/epg_matcher.py` | EPG title/category matching helpers |
 | `consumers/lifecycle/` | Channel lifecycle management (service coordinator + creator/syncer/cleanup/naming) |
 | `consumers/lifecycle/dynamic_resolver.py` | Wildcard resolution |
-| `consumers/lifecycle/reconciliation.py` | Drift detection and repair |
+| `consumers/reconciliation.py` | Drift detection and repair |
 | `consumers/lifecycle/timing.py` | Channel create/delete timing |
 | `services/sports_data.py` | Provider orchestration with caching |
 | `services/stream_ordering.py` | Channel priority rules |

@@ -3,7 +3,6 @@ title: NASCAR
 parent: Providers
 grand_parent: Technical Reference
 nav_order: 3
-docs_version: "2.8.0"
 ---
 
 # NASCAR

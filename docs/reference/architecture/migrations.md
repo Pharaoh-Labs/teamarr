@@ -2,8 +2,7 @@
 title: Database Migrations
 parent: Architecture
 grand_parent: Technical Reference
-nav_order: 6
-docs_version: "2.3.1"
+nav_order: 8
 ---
 
 # Database Migrations
@@ -71,7 +70,7 @@ Since v2.4.0, reconciliation handles missing columns automatically. Just edit `s
 CREATE TABLE settings (
     ...
     my_new_setting TEXT DEFAULT 'value',  -- Added
-    schema_version INTEGER DEFAULT 73
+    schema_version INTEGER DEFAULT 84
 );
 ```
 
@@ -88,18 +87,18 @@ When the change requires transforming data (not just adding a column), use a ver
 1. **Bump `schema_version` DEFAULT** in `schema.sql`:
 
    ```sql
-   schema_version INTEGER DEFAULT 73  -- was 72
+   schema_version INTEGER DEFAULT 85  -- was 84
    ```
 
 2. **Add a migration block** after the checkpoint call in `_run_migrations()`:
 
    ```python
-   # v72: Transform my_field from legacy format
-   if current_version < 72:
+   # v85: Transform my_field from legacy format
+   if current_version < 85:
        conn.execute("UPDATE settings SET my_field = ... WHERE my_field = ...")
-       conn.execute("UPDATE settings SET schema_version = 72 WHERE id = 1")
-       logger.info("[MIGRATE] Schema upgraded to version 72")
-       current_version = 72
+       conn.execute("UPDATE settings SET schema_version = 85 WHERE id = 1")
+       logger.info("[MIGRATE] Schema upgraded to version 85")
+       current_version = 85
    ```
 
    Column additions that pair with the data change can use `_add_column_if_not_exists` inside the block as a safety net for tests that call `_run_migrations` directly — reconciliation will also pick them up on real startups.
@@ -119,38 +118,8 @@ For changes SQLite can't do via ALTER (e.g., tightening a CHECK constraint), use
 
 ## Best Practices
 
-### Use Idempotent Operations
-
-```python
-# Safe to run multiple times
-_add_column_if_not_exists(conn, "table", "col", "TYPE DEFAULT val")
-
-# Safe INSERT
-conn.execute("INSERT OR IGNORE INTO sports (code, name) VALUES ('x', 'X')")
-
-# Safe UPDATE
-conn.execute("UPDATE t SET col = 'new' WHERE col IS NULL")
-```
-
-### Check Before Operating
-
-```python
-if _table_exists(conn, "my_table"):
-    columns = _get_table_columns(conn, "my_table")
-    if "target_col" in columns:
-        conn.execute("UPDATE my_table SET target_col = ...")
-```
-
-### Avoid Non-Constant Defaults
-
-```python
-# BAD: SQLite can't add CURRENT_TIMESTAMP default
-_add_column_if_not_exists(conn, "t", "created", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-
-# GOOD: Add with NULL, populate separately
-_add_column_if_not_exists(conn, "t", "created", "TIMESTAMP")
-conn.execute("UPDATE t SET created = CURRENT_TIMESTAMP WHERE created IS NULL")
-```
+- Use idempotent operations (`_add_column_if_not_exists`, `INSERT OR IGNORE`, `UPDATE ... WHERE col IS NULL`) — see Key Principles above.
+- Avoid non-constant defaults: SQLite can't `ALTER TABLE ADD COLUMN` with `DEFAULT CURRENT_TIMESTAMP`; add the column as NULL and populate with a separate `UPDATE`.
 
 ## Available Helper Functions
 
@@ -160,19 +129,6 @@ conn.execute("UPDATE t SET created = CURRENT_TIMESTAMP WHERE created IS NULL")
 | `_table_exists(conn, table)` | Check if table exists |
 | `_get_table_columns(conn, table)` | Get column names as set |
 | `_index_exists(conn, name)` | Check if index exists |
-
-## When to Create a New Checkpoint
-
-Consider a new checkpoint when:
-- 15-20+ migrations accumulated since last checkpoint
-- Major schema restructure planned
-- Migration code becoming unwieldy
-
-To create:
-1. Copy `checkpoint_v43.py` to `checkpoint_vXX.py`
-2. Update all schema definitions to match current `schema.sql`
-3. Update `migrations/versioned.py` to use new checkpoint
-4. Old checkpoint can be removed (or kept for users on very old versions)
 
 ## Pre-Migrations
 
@@ -191,7 +147,7 @@ Pre-migrations are idempotent and only modify the schema if the target column/ta
 
 ## Schema Reconciliation (v2.4.0+)
 
-`reconcile_schema()` runs on every startup after the checkpoint and before `_run_migrations()`. It:
+`reconcile_schema()` runs on every startup after the structural pre-migrations and before `_run_migrations()` (which itself calls the checkpoint internally — so reconciliation runs **before** the checkpoint). It:
 
 1. Builds an **in-memory reference database** from `schema.sql`.
 2. For each real table (except `sqlite_sequence`), compares its columns to the reference.
@@ -205,7 +161,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 84** (41 incremental migrations since checkpoint)
+**Current schema version: 84** (32 migration blocks across the 41 versions since the checkpoint — not every version number has a block)
 
 | Version | Type | Description |
 |---------|------|-------------|
@@ -213,17 +169,3 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 | 3-42 | Consolidated | Merged into checkpoint_v43 |
 | 43 | Checkpoint | Checkpoint baseline |
 | 44-84 | Incremental | Individual migrations in `migrations/versioned.py` |
-
-## Troubleshooting
-
-### "no such column" during migration
-Add column existence check before UPDATE operations.
-
-### Migration runs but nothing changes
-Verify `schema_version` is being updated in the migration.
-
-### Fresh install has wrong version
-Update `schema_version` default in `schema.sql`.
-
-### User reports partial state
-The checkpoint handles this - it fills in missing pieces idempotently.

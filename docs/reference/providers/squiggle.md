@@ -2,8 +2,7 @@
 title: Squiggle
 parent: Providers
 grand_parent: Technical Reference
-nav_order: 4
-docs_version: "2.5.5"
+nav_order: 2
 ---
 
 # Squiggle Provider
@@ -61,14 +60,4 @@ Variables not available (no data source):
 | Team list (18 teams) | 24 hours |
 | Ladder standings | 6 hours |
 
-The full season schedule is fetched once per hour and filtered in-process for each date query. This satisfies Squiggle's requirement to cache and reuse data rather than polling per-date.
-
-## Usage Policy
-
-Squiggle requires bots to:
-
-- Set a descriptive `User-Agent` header identifying the application (Teamarr does this automatically)
-- Cache data and avoid repeated identical requests
-- Not spam the API with simultaneous bulk requests
-
-Teamarr's in-process caching satisfies all of these requirements.
+The full season schedule is fetched once per hour and filtered in-process for each date query. Together with the descriptive `User-Agent` header Teamarr sets automatically, this satisfies Squiggle's usage policy for bots (identify yourself, cache and reuse data, no bulk request spam).

@@ -2,8 +2,7 @@
 title: MLB Stats
 parent: Providers
 grand_parent: Technical Reference
-nav_order: 3
-docs_version: "2.3.1"
+nav_order: 4
 ---
 
 # MLB Stats Provider
@@ -23,10 +22,10 @@ The MLB Stats provider serves Minor League Baseball (MiLB) data via MLB's public
 
 | League | Code | Sport ID |
 |--------|------|----------|
-| Triple-A | `aaa` | 11 |
-| Double-A | `aa` | 12 |
-| High-A | `higha` | 13 |
-| Single-A | `a` | 14 |
+| Triple-A | `milb-aaa` | 11 |
+| Double-A | `milb-aa` | 12 |
+| High-A | `milb-high-a` | 13 |
+| Single-A | `milb-a` | 14 |
 | Rookie | `rookie` | 16 |
 
 The `provider_league_id` in `schema.sql` is the MLB Stats `sport_id` value.
