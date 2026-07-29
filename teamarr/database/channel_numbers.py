@@ -519,6 +519,24 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             }
         )
 
+    def _event_id_sort_key(event_id) -> tuple:
+        """Build a tie-break sort key for an event_id.
+
+        Numeric event_ids compare numerically ("2" sorts before "10", not
+        after it as plain string comparison would give). A numeric event_id
+        always sorts before a non-numeric one (e.g. a provider slug id).
+        Two non-numeric event_ids fall back to plain string comparison.
+
+        Returns a tuple of (is_non_numeric, numeric_value, string_value):
+        numeric ids get (0, <int>, "") so they compare numerically amongst
+        themselves and sort ahead of the (1, 0, <str>) non-numeric tier.
+        """
+        s = str(event_id)
+        try:
+            return (0, int(s), "")
+        except ValueError:
+            return (1, 0, s)
+
     # 3. Sort by: priority team → sport priority → league priority → time → event_id → keyword
     def sort_key(ch):
         sport = ch.get("sport") or ""
@@ -556,7 +574,14 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         # Main channel (no keyword) sorts before keyword channels
         keyword_sort = (0, "") if not keyword else (1, keyword)
 
-        return (priority_tier, sport_pri, league_pri, event_date, str(event_id), keyword_sort)
+        return (
+            priority_tier,
+            sport_pri,
+            league_pri,
+            event_date,
+            _event_id_sort_key(event_id),
+            keyword_sort,
+        )
 
     sorted_channels = sorted(channels, key=sort_key)
 
