@@ -3,7 +3,6 @@ title: Template Assignments
 parent: EPG
 grand_parent: User Guide
 nav_order: 6
-docs_version: "2.7.0"
 redirect_from:
   - /guide/templates/assignments/
   - /guide/templates/assignments.html
@@ -11,7 +10,7 @@ redirect_from:
 
 # Template Assignments
 
-Templates are assigned through the **subscription** system, not per-group. This means one set of template rules applies globally across all event groups.
+Event templates are assigned through **subscription-level rules**, not per-source. One set of template rules applies globally across all [Sources](../sources/).
 
 ## How Assignment Works
 
@@ -21,11 +20,15 @@ Template assignments use a priority system to decide which template applies to a
 2. **Sport-specific** — A template assigned to a sport (e.g., "Hockey") applies to all leagues in that sport
 3. **Default** — The fallback template used when no sport or league match exists
 
-When generating EPG, Teamarr checks the event's league first, then its sport, then falls back to the default. The most specific matching rule wins.
+When generating EPG, Teamarr checks the event's league first, then its sport, then falls back to the default. The most specific matching rule wins. Matching is **case-insensitive** on both league and sport, so `NHL` and `nhl` behave the same.
+
+If two rules at the same tier both match (say, two league rules covering NHL), the first one wins — there's no explicit tie-breaking, so keep tiers non-overlapping. If **no** rule matches at all (including no default), the event renders with built-in generic formatting.
+
+Because one rule-set is global, a multi-sport source resolves a *different* template per event — an NHL game and an NBA game in the same source each get their own league's template.
 
 ## Managing Assignments
 
-The central manager lives at the bottom of **EPG > Templates** ("Template Assignments"). It shows every rule across all templates side by side — use it to spot overlaps and resolve which template wins.
+The central manager lives at the bottom of **EPG → Templates** ("Template Assignments"). It shows every rule across all templates side by side — use it to spot overlaps.
 
 Each template's editor also has an **Assignments** tab showing the picture from that template's point of view: the rules that assign it (with quick add/edit/delete scoped to that template), or — for team templates — the followed teams currently using it (per-team assignment stays on the Teams page).
 
@@ -36,9 +39,9 @@ The central manager shows:
 - Rules with leagues specified are more specific than rules with only sports
 - A rule with no sports and no leagues acts as the default
 
-You can add, edit, or remove rules. Changes apply to all event groups on the next generation run.
+You can add, edit, or remove rules. Changes apply to all sources on the next generation run.
 
-## Examples
+## Example
 
 | Template | Sports | Leagues | Effect |
 |----------|--------|---------|--------|
@@ -46,29 +49,10 @@ You can add, edit, or remove rules. Changes apply to all event groups on the nex
 | NHL Premium | — | NHL, AHL | NHL and AHL events use "NHL Premium" |
 | Default | — | — | Everything else uses "Default" |
 
-If an AHL event is generated, Teamarr checks:
-
-1. Is there a league-specific rule for AHL? **Yes** — "NHL Premium" matches. Use it.
-
-If a Premier League event is generated:
-
-1. Is there a league-specific rule for Premier League? **No.**
-2. Is there a sport-specific rule for Soccer? **Yes** — "Soccer HD" matches. Use it.
-
-If an MLB event is generated:
-
-1. Is there a league-specific rule for MLB? **No.**
-2. Is there a sport-specific rule for Baseball? **No.**
-3. Use the default — "Default".
-
-## Per-Group Overrides
-
-Individual event groups can override the global template assignment by selecting a specific template in their group settings. This takes absolute priority over the subscription-based rules.
-
-Use per-group overrides when a single event group needs different formatting than the rest of its sport or league.
+An AHL event matches the league rule → "NHL Premium". A Premier League event has no league rule but matches the Soccer sport rule → "Soccer HD". An MLB event matches neither → "Default".
 
 ## Team Templates
 
-Team-based EPG uses a separate assignment model: each team has a template assigned directly on the **Teams** page. The subscription-based assignment system described here only applies to event-based EPG.
+Team-based EPG uses a separate assignment model: each team has a template assigned directly on the **EPG → Team EPG** page. The subscription-based assignment system described here only applies to event-based EPG.
 
 See [Team vs Event Templates](team-vs-event) for more on the differences between the two modes.

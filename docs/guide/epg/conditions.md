@@ -3,7 +3,6 @@ title: Conditions
 parent: EPG
 grand_parent: User Guide
 nav_order: 4
-docs_version: "2.7.0"
 redirect_from:
   - /guide/templates/conditions/
   - /guide/templates/conditions.html
@@ -21,8 +20,20 @@ Each condition option has:
 - **Priority**: Lower numbers = higher priority (1-99 for conditionals, 100 for defaults)
 - **Template**: The description to use if the condition matches
 - **Title / Subtitle Override** *(optional)*: replace the programme title and/or subtitle when this condition matches — e.g. put a bowl name or `{game_event_note}` in the title for marquee games
+- **Label** *(optional)*: a display name for the row, shown in the editor
 
 When generating EPG, Teamarr evaluates all conditions and selects the highest-priority (lowest number) match. If multiple conditions match at the same priority, one is chosen randomly.
+
+In the template editor, each row carries a live **trace badge** driven by the selected preview event — green when the row *fires* (it's the winner), amber when it *matched but lost* to a higher-priority row, muted when it doesn't match — with a reason line explaining why. Condition names are advisory-validated as you type, like variables.
+
+![Conditions tab — preset library, prioritized rows with a live "fires" badge, and the Guide Preview](../../assets/images/template-conditions.png)
+
+{: .note }
+> The condition picker on **event** templates currently offers a reduced set (league/sport, summary, combat, and motorsports conditions) — the common game-state conditions (`is_final`, `is_playoff`, `has_odds`, …) are missing from its dropdown even though they evaluate correctly on event templates (the shipped event starters use them). A picker fix is queued.
+
+### Condition presets
+
+A set of condition rows can be saved as a reusable **preset** from the Conditions tab — save the current rows under a name, then apply (or delete) presets from the same menu on any other template. Applying a preset replaces the tab's rows with the preset's.
 
 ### Title and subtitle selection
 
@@ -32,8 +43,8 @@ Titles and subtitles are selected **per field, independently**: for each field, 
 ```json
 {"condition": "has_event_note", "priority": 15,
  "title": "{game_event_note}: {away_team} at {home_team}",
- "subtitle": "{venue_name} · {venue_city}",
- "template": "{game_event_note}. {away_team} take on {home_team} at {venue_name}."}
+ "subtitle": "{venue} · {venue_city}",
+ "template": "{game_event_note}. {away_team} take on {home_team} at {venue}."}
 ```
 
 ## Priority System
@@ -186,7 +197,7 @@ subtitles flip without a condition.
 
 | Condition | Value | Description |
 |-----------|-------|-------------|
-| `is_national_broadcast` | - | Game is on national TV (ABC, CBS, NBC, FOX, ESPN, TNT, TBS) |
+| `is_national_broadcast` | - | Game is on national TV (ABC, CBS, NBC, FOX, ESPN, ESPN2, TNT, TBS) |
 
 **Example:**
 ```json
@@ -272,6 +283,44 @@ Available to both team and event templates — one template can branch its descr
 
 ---
 
+### Combat Sports (UFC/Boxing)
+
+Result-based conditions for the headline bout — all false until the fight is final. Pair them with the [Fight Results variables](variables#fight-results) in postgame filler.
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `is_knockout` | - | Fight ended by KO or TKO |
+| `is_submission` | - | Fight ended by submission |
+| `is_decision` | - | Fight went to a decision (any kind) |
+| `is_finish` | - | Fight ended in a finish (KO/TKO/submission — not a decision) |
+| `went_distance` | - | Fight went all scheduled rounds |
+
+**Example:**
+```json
+{"condition": "is_finish", "priority": 10, "template": "{fighter1} def. {fighter2} — {fight_summary}"}
+{"condition": "is_decision", "priority": 20, "template": "{fighter1} def. {fighter2} by {fight_result} ({judge_scores})"}
+```
+
+---
+
+### Motorsports
+
+Session-aware conditions for racing templates, where each channel covers one session of a race weekend.
+
+| Condition | Value | Description |
+|-----------|-------|-------------|
+| `is_race_session` | - | This channel's session is the race itself |
+| `is_qualifying_session` | - | This channel's session is qualifying (or sprint qualifying) |
+| `has_results` | - | This channel's session has finished with results |
+
+**Example:**
+```json
+{"condition": "has_results", "priority": 10, "template": "{session_name} results: {race_winner} wins the {race_name}"}
+{"condition": "is_race_session", "priority": 50, "template": "The {race_name} from {circuit_name}"}
+```
+
+---
+
 ## Default Descriptions
 
 Priority 100 is reserved for default descriptions that always match. You should always have at least one default as a fallback.
@@ -302,36 +351,4 @@ Here's a complete set of conditions for a college football team template:
 ]
 ```
 
-**Evaluation order:**
-1. If it's a playoff game → use playoff template (priority 5)
-2. Else if both teams are top 10 → use top 10 template (priority 10)
-3. Else if team has 5+ game win streak → use win streak template (priority 15)
-4. Else if both teams ranked → use ranked matchup template (priority 20)
-5. Else if opponent is ranked → use ranked opponent template (priority 30)
-6. Else if same conference → use conference template (priority 40)
-7. Else if home game → use home template (priority 50)
-8. Else if away game → use away template (priority 50)
-9. Otherwise → use default template (priority 100)
-
----
-
-## Condition Summary
-
-| Condition | Requires Value | Best For |
-|-----------|----------------|----------|
-| `is_home` | No | Home game messaging |
-| `is_away` | No | Road game messaging |
-| `win_streak` | Yes (min length) | Hot streak highlights |
-| `loss_streak` | Yes (min length) | Struggling team context |
-| `is_ranked` | No | Ranked team (college) |
-| `is_ranked_opponent` | No | Facing ranked opponent |
-| `is_ranked_matchup` | No | Both teams ranked |
-| `is_top_ten_matchup` | No | Elite matchups |
-| `is_playoff` | No | Postseason games |
-| `is_preseason` | No | Exhibition games |
-| `is_conference_game` | No | Conference play (college) |
-| `is_national_broadcast` | No | National TV games |
-| `has_odds` | No | Including betting lines |
-| `opponent_name_contains` | Yes (search text) | Rivalry or specific opponent |
-| `league_is` | Yes (league codes) | Branching one template by league |
-| `sport_is` | Yes (sport codes) | Branching one template by sport |
+Evaluation walks the priorities from lowest number to highest; the priority-100 default is the guaranteed fallback. Description ties at the same priority are chosen randomly (titles and subtitles pick the first row deterministically).

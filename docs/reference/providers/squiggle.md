@@ -2,8 +2,7 @@
 title: Squiggle
 parent: Providers
 grand_parent: Technical Reference
-nav_order: 4
-docs_version: "2.5.5"
+nav_order: 2
 ---
 
 # Squiggle Provider
@@ -31,27 +30,17 @@ Variables populated from Squiggle data:
 
 | Category | Variables | Notes |
 |----------|-----------|-------|
-| Identity | `{opponent}`, `{opponent.abbrev}` | Full name and 3-letter abbreviation |
-| Identity | `{opponent.short}` | Same as full name (no separate short name in API) |
-| Scores | `{home_score}`, `{away_score}`, `{score}`, `{team_score}`, `{opp_score}` | Populated for completed and live games |
-| Result | `{result}` | win / loss / tie |
-| Status | `{status}` | scheduled / live / final |
+| Identity | `{opponent}`, `{opponent_abbrev}`, `{opponent_short}` | Abbreviation is 3-letter; short name falls back to the full name (no separate short name in the API) |
+| Scores | `{home_team_score}`, `{away_team_score}`, `{score}`, `{team_score}`, `{opponent_score}` | Populated for completed and live games |
+| Outcome | `{result}`, `{result_text}` | W / L / T |
 | Venue | `{venue}` | Venue name only |
-| Season | `{is_playoff}`, `{season_type}` | Finals games flagged as postseason |
-| Record | `{record}`, `{opp_record}` | Season W-L from ladder standings |
-| Ranking | `{rank}`, `{opp_rank}` | Ladder position (1 = top of table) |
-| Stats | `{ppg}`, `{papg}` | Points scored/conceded per game |
+| Playoffs | `{is_playoff}` condition | Finals games flagged as postseason |
+| Records | `{team_record}`, `{opponent_record}` | Season W-L from ladder standings |
+| Rankings | `{team_rank}`, `{opponent_rank}` | Ladder position (1 = top of table) |
+| Statistics | `{team_ppg}`, `{opponent_ppg}` | Points per game |
 | Logos | Team logos | Served from squiggle.com.au |
 
-Variables not available (no data source):
-
-| Variable | Reason |
-|----------|--------|
-| `{venue.city}`, `{venue.state}` | API returns venue name only |
-| `{broadcasts}` | Not in Squiggle API |
-| `{odds}` | Not in Squiggle API |
-| `{home.color}`, `{away.color}` | No color data |
-| Conference/division variables | AFL has no conferences |
+Not populated (no data source in the Squiggle API): venue city/state (`{venue_city}`, `{venue_state}`), broadcast variables, odds variables, and conference variables (AFL has no conferences).
 
 ## Caching
 
@@ -61,14 +50,4 @@ Variables not available (no data source):
 | Team list (18 teams) | 24 hours |
 | Ladder standings | 6 hours |
 
-The full season schedule is fetched once per hour and filtered in-process for each date query. This satisfies Squiggle's requirement to cache and reuse data rather than polling per-date.
-
-## Usage Policy
-
-Squiggle requires bots to:
-
-- Set a descriptive `User-Agent` header identifying the application (Teamarr does this automatically)
-- Cache data and avoid repeated identical requests
-- Not spam the API with simultaneous bulk requests
-
-Teamarr's in-process caching satisfies all of these requirements.
+The full season schedule is fetched once per hour and filtered in-process for each date query. Together with the descriptive `User-Agent` header Teamarr sets automatically, this satisfies Squiggle's usage policy for bots (identify yourself, cache and reuse data, no bulk request spam).

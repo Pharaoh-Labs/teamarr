@@ -2,8 +2,7 @@
 title: Dispatcharr Integration Layer
 parent: Architecture
 grand_parent: Technical Reference
-nav_order: 4
-docs_version: "2.3.1"
+nav_order: 3
 ---
 
 # Dispatcharr Integration Layer
@@ -31,8 +30,7 @@ Low-level HTTP client with JWT authentication and exponential backoff retry.
 | Setting | Value |
 |---------|-------|
 | Timeout | 30 seconds |
-| Max retries | 5 |
-| Backoff | `min(32s, 1s × 2^attempt) × jitter(0.5-1.5)` |
+| Backoff ladder | 1s, 2s, 4s, 8s, 16s, 32s (capped) × jitter(0.5-1.5) |
 | Retryable codes | 502, 503, 504 |
 | Non-retryable | 401, 403, 404, other 4xx |
 
@@ -45,7 +43,7 @@ On 401 responses, the client clears the JWT token and retries once with fresh au
 `TokenManager` handles JWT token lifecycle:
 
 - Session isolation by `{url}_{username}` key
-- Proactive refresh 1 minute before expiry (5-minute token lifetime)
+- Proactive refresh 1 minute before expiry (Dispatcharr's token lifetime defaults to ~5 minutes)
 - Thread-safe with `threading.Lock`
 - Fallback chain: cached token → refresh token → full auth
 
@@ -138,16 +136,7 @@ Async EPG refresh with polling for completion.
 
 ### Program-data search (EPG matching)
 
-Supports matching streams to events by EPG program data (epic `teamarrv2-183`):
-
-| Method | Description |
-|--------|-------------|
-| `supports_program_search(force=False)` | Feature-detection. Probes `GET /api/epg/programs/search/?page_size=1` once and caches: `200` → supported, `404` → unsupported (older Dispatcharr). Transient errors (no response / 5xx) are **not** cached so a later call retries. |
-| `search_programs(tvg_id, start_before, end_after, title, channel_id, epg_source, page_size, fields)` | Returns `list[DispatcharrProgram]` across all pages via `paginated_get`. Short-circuits to `[]` when the endpoint is unsupported. Scope a day window with `start_before=<window end>`, `end_after=<window start>`. |
-
-> **Version dependency.** The program-search endpoint (`/api/epg/programs/search/`) only exists on newer Dispatcharr builds — **confirmed working on Dispatcharr `0.24.0`**. Teamarr never hard-requires it: callers gate on `supports_program_search()` and degrade gracefully on older builds (EPG-based matching simply stays off). The settings toggle is feature-gated on this detection.
-
-**Per-run index (`consumers/matching/epg_index.py`).** `EPGProgramIndex.build(...)` fetches programs **only** for the distinct `tvg_id`s of candidate streams in imported event groups (never the whole instance — one search call per `tvg_id`, since the endpoint takes a single `tvg_id` per call), excludes our own `_Teamarr` programs, and builds a `tvg_id → [programs]` index. `lookup(tvg_id, event_start, event_end)` returns programs whose time window overlaps the event (half-open). The matcher (`teamarrv2-183.4`) consumes this; the index itself holds no matching logic.
+`supports_program_search()` feature-detects the `GET /api/epg/programs/search/` endpoint (probed once and cached; only exists on newer Dispatcharr builds — callers degrade gracefully when absent), and `search_programs(...)` returns `list[DispatcharrProgram]` across all pages. How program data drives stream-to-event matching is covered in the [Consumer Layer](consumer-layer) EPG-title matching section.
 
 ## M3U Manager (`managers/m3u.py`)
 

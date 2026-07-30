@@ -3,7 +3,6 @@ title: Template Engine
 parent: Architecture
 grand_parent: Technical Reference
 nav_order: 6
-docs_version: "2.3.1"
 ---
 
 # Template Engine
@@ -15,7 +14,7 @@ The template engine resolves `{variable}` placeholders in EPG titles, descriptio
 ```
 TemplateResolver
   ├── VariableRegistry (252 variables, 20 categories)
-  ├── ConditionEvaluator (23 evaluators)
+  ├── ConditionEvaluator (33 evaluators)
   └── ContextBuilder (Event + Team → TemplateContext)
 ```
 
@@ -43,6 +42,7 @@ Each variable declares which game contexts it supports:
 | `ALL` | Yes | Yes | Yes | Most variables (opponent, game_date, scores) |
 | `BASE_ONLY` | Yes | No | No | Team constants (team_name, league, sport) |
 | `BASE_NEXT_ONLY` | Yes | Yes | No | Odds (no odds for past games) |
+| `LAST_ONLY` | No | No | Yes | Deprecated — no variables use it |
 
 ## Template Scope
 
@@ -72,19 +72,22 @@ Declare scope on the decorator:
 
 | Category | Count | Key Variables |
 |----------|-------|---------------|
-| **Identity** | 20 | team_name, opponent, league, sport, team_short, matchup_short |
-| **Combat** | 26 | fighter1, fighter2, card_segment, round_number, fight_result_method |
+| **Home/Away** | 30 | is_home, vs_at, home_team_name, away_team_short |
+| **Combat** | 28 | fighter1, fighter2, card_segment, round_number, fight_result_method |
+| **Identity** | 21 | team_name, opponent, league, sport, team_short, matchup_short |
+| **Motorsports** | 21 | race_name, circuit_name, session_name, pole_position, race_winner |
 | **Conference** | 20 | college_conference, pro_division, division_abbrev |
 | **Records** | 18 | team_record, opponent_record, team_wins, team_losses |
 | **Streaks** | 18 | win_streak, loss_streak, streak_detail, streak_emoji |
-| **Home/Away** | 17 | is_home, vs_at, home_team_name, away_team_short |
 | **Scores** | 15 | team_score, opponent_score, final_score, score_differential |
-| **DateTime** | 10 | game_date, game_time, days_until, hours_until |
-| **Rankings** | 9 | team_rank, opponent_rank, is_ranked, rank_text |
+| **DateTime** | 13 | game_date, game_time, days_until, hours_until |
+| **Rankings** | 11 | team_rank, opponent_rank, is_ranked, rank_text |
+| **Tennis** | 10 | tournament_name, tennis_round, player1, player2 |
+| **Summary** | 7 | game_recap, game_preview, game_event_note, series_summary |
 | **Odds** | 7 | odds_spread, odds_over_under, odds_moneyline_team |
-| **Soccer** | 6 | soccer_match_league, soccer_group_name, soccer_match_matchday |
+| **Soccer** | 7 | soccer_match_league, soccer_group_name, soccer_match_matchday |
 | **Statistics** | 6 | team_ppg, opponent_ppg, team_wpct |
-| **Outcome** | 5 | result, result_text, result_emoji, final_status |
+| **Outcome** | 4 | result, result_text, result_emoji, final_status |
 | **Broadcast** | 4 | broadcast_simple, network, market |
 | **Venue** | 4 | venue_full, venue_name, venue_city |
 | **Standings** | 4 | playoff_seed, games_back |
@@ -92,9 +95,13 @@ Declare scope on the decorator:
 
 Variables are registered via decorator in `teamarr/templates/variables/` (one file per category).
 
+## Filters
+
+Any variable can be piped through chainable value transforms: `{home_team|pascal}`, `{league|upper}`. Six filters are defined in `teamarr/templates/filters.py`: `lower`, `upper`, `title`, `pascal`, `slug`, `urlencode`. Permanent legacy aliases live in `teamarr/templates/resolver.py` for 10 retired transform variables (e.g. `{home_team_pascal}` resolves as `{home_team|pascal}`).
+
 ## Condition Evaluators
 
-23 evaluators for conditional descriptions. Lower priority number = evaluated first. Priority 100 is the default (always matches).
+33 evaluators for conditional descriptions. Lower priority number = evaluated first. Priority 100 is the default (always matches).
 
 | Condition | Description | Value Param |
 |-----------|-------------|-------------|
@@ -118,6 +125,19 @@ Variables are registered via decorator in `teamarr/templates/variables/` (one fi
 | `is_decision` | Decision (MMA) | No |
 | `is_finish` | Any finish (KO/TKO/sub) | No |
 | `went_distance` | Went all rounds (MMA) | No |
+| `is_final` | Reference game exists and is final | No |
+| `is_not_final` | Reference game exists and is not final | No |
+| `has_recap` | Provider postgame recap headline available | No |
+| `has_preview` | Provider pregame preview blurb available | No |
+| `has_structured_preview` | Structured preview data (recent form) available | No |
+| `is_neutral_site` | Game at a neutral site (bowls, tournaments) | No |
+| `has_event_note` | Provider marquee/playoff note available | No |
+| `has_match_note` | Provider soccer competition note available | No |
+| `is_race_session` | Racing: session is the race itself | No |
+| `is_qualifying_session` | Racing: session is (sprint) qualifying | No |
+| `has_results` | Racing: session finished with results | No |
+| `league_is` | Event's league in comma-separated list | League codes (e.g. `cfb,nfl`) |
+| `sport_is` | Event's sport in comma-separated list | Sport codes (e.g. `basketball,hockey`) |
 
 ### Conditional Description Selection
 
@@ -150,15 +170,7 @@ The context builder assembles a `TemplateContext` from events and team data:
 
 ## Three Parallel Resolution Paths
 
-Template resolution happens in three places that **must stay in sync**:
-
-| Path | Purpose | File |
-|------|---------|------|
-| Channel creation | New channel name, tvg_id, logo | `lifecycle/creator.py` |
-| Channel sync | Update existing channel | `lifecycle/syncer.py` |
-| EPG generation | XMLTV programme content | `consumers/event_epg.py` |
-
-When adding new template variables, all three paths must be updated.
+Template resolution happens in three places that **must stay in sync** (channel creation, channel sync, EPG generation) — see [Consumer Layer](consumer-layer#channel-lifecycle) for the table.
 
 ## Art URL Reconstruction (game-thumbs base URL)
 
@@ -181,9 +193,6 @@ Every art sink calls `resolve_art` (or the shared helper): EPG programme `<icon>
 and channel `<icon>` (event/team EPG + `xmltv.py` as an idempotent safety net),
 Dispatcharr channel logos (`lifecycle/naming._resolve_logo_url`), and fillers.
 This guarantees the EPG icon and the Dispatcharr channel logo never diverge.
-
-**Migrations:** v75 deduces the most-frequent art origin from existing templates
-and relativizes them; v76 normalizes relative paths to a leading slash;
 `create_template`/`update_template` keep new art relative on write.
 
 ## Sample Data & Live Preview
@@ -202,19 +211,17 @@ Each shape is a kitchen-sink: every variable that applies to it is filled (the `
 
 **Live preview.** When live is on, the picker fetches a real recent/upcoming event (`get_sample_event`, provider-aware, cached) and shows its actual values. A variable the real event can't fill is **surfaced as a gap** — left empty and counted — rather than masked with the fictitious sample, so users don't get a false sense of availability. Gaps are scoped to **categories relevant to the event's shape** (a basketball preview doesn't flag empty combat/racing variables), and the picker shows live coverage (`live_populated`/`live_total`). Any failure (no event, provider down) falls back silently to the static sample.
 
-Combat leagues follow the same finished-first cascade (#260): candidates come from a ±7-day UFC scoreboard range (cards are ~weekly, so a today-only scan is empty most of the week), and when no card is in range a deep lookback walks 35-day windows for the last finished card — the only sample that fills `fight_result`/`finish_*`. Failing all of that, the static WVBA shape renders, so game-thumbs URL slugs stay testable year-round.
+Combat leagues follow the same finished-first cascade: candidates come from a ±7-day scoreboard range, with a deep lookback (35-day windows) for the last finished card — the only sample that fills `fight_result`/`finish_*`. Failing all of that, the static WVBA shape renders.
 
 See `GET /variables/samples` (`live`, `gaps`, `live_populated`, `live_total`).
 
-**Server-side render (`POST /templates/preview`, #357).** The editor's rendered
-previews come from the backend, not client-side substitution: the endpoint runs
-the SAME `TemplateResolver` (substitution, empty-artifact cleanup, article
-capitalization) and conditional selector that EPG generation uses, against the
-same live event context as `/variables/samples` (shared cache in
-`templates/preview.py`), falling back to static samples when no live event is
-available. The response also carries a **condition trace** — per row: matched,
-selected, and a human-readable reason — so the editor can show which
-conditional-description row fires for the preview event and why. The frontend
+**Server-side render (`POST /templates/preview`).** The editor's rendered
+previews come from the backend: the endpoint runs the SAME `TemplateResolver`
+and conditional selector that EPG generation uses, against the same live event
+context as `/variables/samples` (shared cache in `templates/preview.py`),
+falling back to static samples when no live event is available. The response
+also carries a **condition trace** (per row: matched, selected, reason) so the
+editor can show which conditional-description row fires and why. The frontend
 keeps a client-side substitution (`createResolver`) only as an instant
 optimistic layer while the debounced server render is in flight.
 
@@ -226,8 +233,10 @@ optimistic layer while the debounced server render is in flight.
 | `templates/conditions.py` | 33 condition evaluators |
 | `templates/context.py` | Context dataclasses (Odds, GameContext, TemplateContext) |
 | `templates/context_builder.py` | Build TemplateContext from Event + Team |
-| `templates/variables/` | 20 category modules with 240 variable definitions |
+| `templates/variables/` | 20 category modules with 252 variable definitions |
 | `templates/variables/registry.py` | VariableRegistry singleton |
+| `templates/filters.py` | Chainable filter transforms (legacy aliases live in `resolver.py`) |
+| `templates/validation.py` | Template validation |
 | `templates/sample_data.py` | 3-shape fictitious sample values + `resolve_shape` for UI preview |
 | `templates/preview.py` | Live-context builder + cache shared by `/variables/samples` and `/templates/preview` |
 | `utilities/art_url.py` | Game-thumbs base URL join helper + reader (`apply_art_base_url`, `read_art_base_url`) |

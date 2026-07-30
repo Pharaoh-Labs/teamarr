@@ -1,9 +1,8 @@
 ---
 title: Default Templates
-parent: Templates
+parent: EPG
 grand_parent: User Guide
-nav_order: 5
-docs_version: "2.9.1"
+nav_order: 10
 ---
 
 # Default Templates
@@ -28,24 +27,25 @@ again.
 
 ## The Set
 
-| Template | Type | Designed for | Channel name style |
-|----------|------|--------------|--------------------|
-| **Default Team (Starter)** | team | Any team channel (US-pro travel-line register) | `{team_name}` |
-| **Soccer Team (Starter)** | team | Soccer team channels, club or national — "face" match register, article-aware naming | `{team_name}` |
-| **College Team (Starter)** | team | NCAA team channels — home-led host framing with rank, record, and conference context | `{team_name}` |
-| **Default Event (Starter)** | event | Any matchup league — team abbreviations fall back to short/full names automatically | `NBA \| DET/LAL` |
-| **College Event (Starter)** | event | NCAA event channels — ranked matchups lead with `No. {rank}` | `NCAAB \| MIZ/ARK` |
-| **Soccer Club Event (Starter)** | event | Club soccer leagues | `EPL \| ARS v CHE` |
-| **Combat Event (Starter)** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` |
-| **International Event (Starter)** | event | National-team tournaments — year-composed title (`FIFA World Cup 2026`) | `NED v JPN` |
-| **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) — year-prefixed tournament title | `Alcaraz v Sinner` |
-| **Racing Event (Starter)** | event | NASCAR / F1 / IndyCar / IMSA / WEC (per-session channels) — series-led title, race + session subtitle (`Navy 250, Practice 1`) | `NASCAR Cup \| Race` |
+| Template | Type | Designed for | Channel name style | Assign to |
+|----------|------|--------------|--------------------|-----------|
+| **Default Team (Starter)** | team | Any team channel (US-pro travel-line register) | `{team_name}` | Global team default |
+| **Soccer Team (Starter)** | team | Soccer team channels, club or national — "face" match register, article-aware naming | `{team_name}` | Soccer teams |
+| **College Team (Starter)** | team | NCAA team channels — home-led host framing with rank, record, and conference context | `{team_name}` | NCAA teams |
+| **Default Event (Starter)** | event | Any matchup league — team abbreviations fall back to short/full names automatically | `NBA \| DET/LAL` | Global event default |
+| **College Event (Starter)** | event | NCAA event channels — ranked matchups lead with `No. {rank}` | `NCAAB \| MIZ/ARK` | NCAA sports |
+| **Soccer Club Event (Starter)** | event | Club soccer leagues | `EPL \| ARS v CHE` | Club soccer leagues (EPL, La Liga, MLS, …) |
+| **Combat Event (Starter)** | event | UFC / PFL / boxing (card segments) | `UFC 310 Main Card` | UFC, PFL, boxing leagues |
+| **International Event (Starter)** | event | National-team tournaments — year-composed title (`FIFA World Cup 2026`) | `NED v JPN` | National-team tournaments (World Cup, Euro, …) |
+| **Tennis Event (Starter)** | event | ATP / WTA (per-match channels) — year-prefixed tournament title | `Alcaraz v Sinner` | ATP, WTA |
+| **Racing Event (Starter)** | event | NASCAR / F1 / IndyCar / IMSA / WEC (per-session channels) — series-led title, race + session subtitle (`Navy 250, Practice 1`) | `NASCAR Cup \| Race` | Racing leagues |
 
 Minor-league baseball needs no dedicated starter: **Default Event** titles
 every MiLB level as Gracenote's real `Minor League Baseball` (from the league
 data) and prefixes channels with the level (`AAA | ABQ/SUG`). An earlier
-"MiLB Event (Starter)" is removed on upgrade only if you never edited or
-assigned it.
+"MiLB Event (Starter)" is removed on upgrade only if you never edited **or
+assigned** it — a starter that's in use anywhere (a team, a source, or an
+assignment rule) is protected from retirement even when unedited.
 
 Team starters exist only for sport families that support **team subscriptions**
 (persistent team channels): the universal default plus soccer and college.
@@ -96,23 +96,6 @@ exists — cascades to the next matching row, then the register's base
 description. Pregame fillers also support a simple `description_fallback`
 field for the preview-first pattern without any rows.
 
-## Recommended scoping
-
-| Template | Assign to |
-|----------|-----------|
-| Default Team | Global team default |
-| Soccer Team | Soccer (covers club and national teams) |
-| College Team | NCAA sports |
-| Default Event | Global event default |
-| College Event | NCAA sports |
-| Soccer Club Event | Club soccer leagues (EPL, La Liga, MLS, …) |
-| Combat Event | UFC, PFL, boxing leagues |
-| International Event | National-team tournaments (World Cup, Euro, Gold Cup, …) |
-| Tennis Event | ATP, WTA |
-| Racing Event | Racing leagues (NASCAR, F1, IndyCar, IMSA, WEC) |
-
-MiLB levels (Triple-A … Rookie) are covered by **Default Event**.
-
 ## Art
 
 Program art uses **relative paths** (e.g.
@@ -127,8 +110,8 @@ matchup for the cover path to compose from.
 ## Deleting and restoring starters
 
 Starter templates you **delete** stay deleted, and starters you **rename**
-become fully yours — neither reappears after a restart. Teamarr records your
-intent and skips those names when seeding.
+become fully yours — neither reappears after a restart. Teamarr records a
+tombstone for the old name and skips it when seeding.
 
 To get the full starter set back, use **Restore Starter Templates** at the
 bottom of the Templates table. Restoring only recreates *missing* starters —

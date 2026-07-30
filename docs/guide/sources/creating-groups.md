@@ -3,7 +3,6 @@ title: Adding a Source
 parent: Sources
 grand_parent: User Guide
 nav_order: 1
-docs_version: "2.7.0"
 redirect_from:
   - /guide/event-groups/creating-groups/
   - /guide/event-groups/creating-groups.html
@@ -11,142 +10,86 @@ redirect_from:
 
 # Adding a Source
 
-Sources connect M3U stream groups to Teamarr's sports data. Each source pulls streams from a Dispatcharr M3U account and matches them to real sporting events.
+Sources connect M3U stream groups to Teamarr's sports data. Each source pulls streams from a Dispatcharr M3U group and matches them to real sporting events.
 
-## The Subscription Model
+New sources are created from the [import screen](index#importing-sources) (**Add Stream Source**), which pins the source to an M3U group — you don't pick an account or group inside the editor. The editor has five sections: **Basic Settings**, **Subscription Override**, **Team Filtering**, **Custom Regex**, and **Stream Timezone**.
 
-Sources use a **global subscription** to determine which sports and leagues to scan. This is configured in **Sources > Global Defaults**, not per-source.
-
-**Global Defaults** include:
-- **League subscriptions** — which non-soccer leagues to scan (e.g., NFL, NBA, NHL)
-- **Soccer mode** — how to handle soccer leagues (follow teams, select leagues, or all)
-- **Template assignments** — which template to use by sport or league
-- **Team filter** — include/exclude specific teams from matching
-
-All sources inherit these defaults. Individual sources can override the subscription if needed (see Per-Source Overrides below).
+Channel numbering, channel groups, and channel profiles are *not* per-source settings — they're configured globally (with per-league overrides) under [Channels → Numbering](../channels/numbering) and [Channels → Output](../channels/output).
 
 ## Basic Settings
 
-When creating or editing a source:
+![Source editor — Basic Settings with the three matching toggles](../../assets/images/source-editor-basic.png)
 
-### Name
+- **Group Name** — the M3U group this source is bound to (read-only; set at import).
+- **Display Name** *(optional)* — a friendlier name to show in Teamarr instead of the raw group name.
+- **Bind by name pattern** *(edit mode only)* — bind the source to a regex over live group names instead of the exact pinned name, with a live **"Matches N groups"** preview. Makes the source survive provider group renames — see [Binding by Name Pattern](index#binding-by-name-pattern).
+- **Enabled** — toggle the source on/off without deleting it. Disabled sources are skipped during generation.
+- **Matching types** — three independent toggles; at least one must be on (see [Matching Types](index#matching-types)):
+  - **Stream name matching** — match streams whose names identify a specific event (`Bills vs Dolphins`).
+  - **Team matching** — team-branded streams (e.g. `NHL | Toronto Maple Leafs`) match every event that team plays in the lookahead window. Built-in stream filtering is bypassed for the whole source.
+  - **EPG matching** — static linear channels (`ESPN`, `NBA1`) match events via Dispatcharr's program guide and are time-shared across event channels. Built-in filtering is bypassed. See [EPG Program Matching](../matching/program-matching).
 
-A descriptive name for the source (e.g., "ESPN+ Sports", "NHL Backup").
+## Subscription Override
 
-### M3U Account
-
-Select which Dispatcharr M3U account to pull streams from.
-
-### Stream Group
-
-Select which stream group within the M3U account to use, or "All Groups" to include all streams from that account.
-
-## Channel Configuration
-
-### Channel Assignment Mode
-
-| Mode | Description |
-|------|-------------|
-| **Auto** | Teamarr assigns channel numbers sequentially from the configured range |
-| **Manual** | You specify a fixed starting channel number for this source |
-
-### Channel Group
-
-How channels are assigned to Dispatcharr channel groups:
-
-- **Use Default** — inherit from Settings > Channels
-- **Static** — assign all channels to a specific group
-- **Dynamic** — use patterns like `{sport}` or `{league}` to auto-create groups
-
-### Channel Profiles
-
-Override the global default channel profiles for this source:
-
-- **Use Default** — inherit from Settings > Dispatcharr
-- **Custom** — choose specific profiles for this source
-
-Dynamic wildcards like `{sport}` and `{league}` create profiles automatically in Dispatcharr.
-
-## Stream Matching
-
-### Stream Filters
-
-Control which streams from the M3U group are processed:
-
-- **Include regex** — only process streams matching this pattern
-- **Exclude regex** — skip streams matching this pattern
-
-### Custom Regex Extractors
-
-Override how Teamarr parses stream names. By default, the built-in classifier handles most formats. Use custom regex when your IPTV provider uses unusual naming.
-
-| Extractor | Purpose | Example Pattern |
-|-----------|---------|-----------------|
-| Teams | Extract team names | `(?P<team1>.*)\s*vs\s*(?P<team2>.*)` |
-| Date | Extract date | `\d{1,2}/\d{1,2}/\d{4}` |
-| Time | Extract time | `\d{1,2}:\d{2}\s*(?:AM\|PM)?` |
-| League | Extract league hint | `(?:NFL\|NBA\|NHL):` |
-| Fighters | Extract fighter names (MMA/Boxing) | `(?P<fighter1>.*)\s*vs\s*(?P<fighter2>.*)` |
-| Event name | Extract event name | — |
-
-Each extractor has an enable toggle. Leave disabled to use the built-in parser.
-
-Named groups accept both `(?<name>...)` and Python's `(?P<name>...)` syntax. The recognized names are `team1`/`team2` (Teams), `fighter1`/`fighter2` (Fighters), `date` or `month`/`day`/`year` (Date), `time` or `hour`/`minute`/`ampm` (Time), `league` (League), and `event_name` (Event name). When the recognized named groups are present they take precedence, so extra unnamed groups — like a `(vs|v)` separator — are safe. Without named groups, the first capture group is used (first two for Teams/Fighters).
-
-**Date patterns describe a format, not a literal date.** The best way to write one is with component groups that declare the format structurally — `(?P<day>\d{1,2})/(?P<month>\d{1,2})/(?P<year>\d{2,4})` says "day-first, then month, then year" and can never be misread. A single `(?P<date>...)` blob also works: Teamarr learns the source's format from the whole group before matching (one `16/07` in the list proves the source is day-first, so `05/07` parses as July 5). When the format can be verified this way, the date strictly gates candidate games (±1 day for provider-timezone boundaries) and a mismatch is reported as `date_mismatch`; when it can't be verified, the date only ranks candidates — it never blocks team matching outright.
-
-**Pattern Tester** — the *Open Pattern Tester* button opens a workspace that runs your patterns against the group's real stream names. Highlighting is instant client-side JavaScript regex, and each stream also gets a **pipeline verdict badge** computed by the real Python extraction functions: green `✓ pipeline` means the pattern fully extracts (both teams captured, date/time actually parseable), amber `✗` lists the fields the pipeline would reject even if the regex visually matches. Invalid Python patterns and configuration pitfalls (e.g. month/day patterns without the date toggle) are called out in a banner. Hover a badge to see the extracted values.
-
-**Tennis groups** use the **Teams** extractor for player pairs — the two named
-groups become player 1 and player 2 (surname-based matching handles tournament
-prefixes and extra tokens). The built-in parser also recognizes the
-`Surname, First - Surname, First` provider format without any configuration.
-
-## Team Filter
-
-Override the global default team filter for this source:
-
-- **Use Default** — inherit from Global Defaults
-- **Custom Filter** — define include/exclude teams specific to this source
-- **Bypass for playoffs** — auto-include all playoff games regardless of team filter
-
-## Per-Source Subscription Overrides
-
-By default, sources inherit the global league subscription. To override:
+By default, sources inherit the global [Subscription](../subscriptions). To override:
 
 1. Edit the source
-2. Under "Subscription Override", uncheck **Use global subscription**
+2. Under **Subscription Override**, uncheck **Use global subscription**
 3. The picker automatically seeds from your current global subscription
 4. Deselect any leagues or sports you want to exclude, then save
 
 Use **Match Global** at any time to reset the picker back to the current global subscription and start over.
 
-This is useful when a stream source mixes sports and you need to exclude specific leagues from a source — for example, excluding MLB from a multi-sport source where the provider labels all streams with the same channel format regardless of sport.
+This is useful when a stream source mixes sports and you need to exclude specific leagues from it — for example, excluding MLB from a multi-sport source where the provider labels all streams with the same channel format regardless of sport.
 
-## Channel Sort Order
+{: .warning }
+> An override fully **replaces** the global league set for that source — a league missing from the override won't match here even if globally subscribed.
 
-Controls how channels within this source are ordered:
+## Team Filtering
 
-| Mode | Description |
-|------|-------------|
-| **Time** | Sort by event start time |
-| **Sport, then time** | Group by sport, then sort by time within each sport |
-| **League, then time** | Group by league, then sort by time within each league |
+Narrow this source's matches to specific teams:
 
-## Advanced Options
+- **Use default team filter** — inherit the global filter from [Subscriptions → Teams](../subscriptions#default-team-filter).
+- Or define a source-specific filter: choose **Include only selected teams** or **Exclude selected teams**, then pick teams.
+- **Include all playoff & All-Star games** — bypass the team filter for postseason and All-Star events, so you never miss them.
 
-### Enabled
+## Custom Regex
 
-Toggle the source on/off without deleting it. Disabled sources are skipped during EPG generation.
+Controls how this source's streams are filtered and parsed.
 
-### Priority
+### Stream filters
 
-When multiple sources could match the same stream, higher priority sources are checked first. Lower numbers = higher priority.
+- **Skip built-in stream filtering** — bypass Teamarr's built-in non-sport filters for this source (automatic when Team or EPG matching is on).
+- **Inclusion Pattern** — only process streams matching this regex.
+- **Exclusion Pattern** — skip streams matching this regex.
 
-### Team Stream Source
+Each is a checkbox that reveals a pattern input when enabled.
 
-Allow team-branded streams (e.g. `NHL | Toronto Maple Leafs`) to match events where that team plays. Built-in stream filtering is automatically bypassed for this source.
+### Extraction Patterns
 
-### EPG Program Matching
+Override how Teamarr parses stream names. By default the built-in classifier handles most formats; use custom patterns when your provider's naming is unusual. Patterns are organized in two tabs by event type:
 
-Match static-named linear channels (e.g. `ESPN`, `FS1`, `NBA1`) in this source to events using Dispatcharr's program guide, and time-share one stream across many event channels near game time. Built-in filtering is bypassed for this source. See [EPG Program Matching](../matching/program-matching) for the full guide.
+| Tab | Patterns |
+|-----|----------|
+| **Team vs Team** | Teams, Date (with optional Month/Day sub-patterns), Time, League |
+| **Combat / Event Card** | Fighters, Event Name, Date (with Month/Day), Time |
+
+![Custom Regex — stream filters and extraction patterns with event-type tabs](../../assets/images/source-editor-custom-regex.png)
+
+Each pattern has an enable checkbox — leave it unchecked to use the built-in parser for that field.
+
+Named groups accept both `(?<name>...)` and Python's `(?P<name>...)` syntax. The recognized names are `team1`/`team2` (Teams), `fighter1`/`fighter2` (Fighters), `date` or `month`/`day`/`year` (Date), `time` or `hour`/`minute`/`ampm` (Time), `league` (League), and `event_name` (Event name). When the recognized named groups are present they take precedence, so extra unnamed groups — like a `(vs|v)` separator — are safe. Without named groups, the first capture group is used (first two for Teams/Fighters).
+
+**Date patterns describe a format, not a literal date.** The best way to write one is with component groups that declare the format structurally — `(?P<day>\d{1,2})/(?P<month>\d{1,2})/(?P<year>\d{2,4})` says "day-first, then month, then year" and can never be misread. A single `(?P<date>...)` blob also works: Teamarr learns the source's format from the whole group before matching (one `16/07` in the list proves the source is day-first, so `05/07` parses as July 5). When the format can be verified this way, the date strictly gates candidate games (±1 day for provider-timezone boundaries) and a mismatch is reported as `date_mismatch`; when it can't be verified, the date only ranks candidates — it never blocks team matching outright.
+
+**Tennis groups** use the **Teams** patterns for player pairs — the two named groups become player 1 and player 2 (surname-based matching handles tournament prefixes and extra tokens). The built-in parser also recognizes the `Surname, First - Surname, First` provider format without any configuration.
+
+### Pattern Tester
+
+When editing an existing source, the **Open Pattern Tester** button (edit mode only) opens a workspace that runs your patterns against the group's real stream names. Highlighting is instant client-side JavaScript regex, and each stream also gets a **pipeline verdict badge** computed by the real Python extraction functions: green `✓ pipeline` means the pattern fully extracts (both teams captured, date/time actually parseable); yellow `✗` lists the fields the pipeline would reject even if the regex visually matches. Invalid Python patterns are called out in a banner. Hover a badge to see the extracted values.
+
+The tester also helps you *build* patterns: select text in a stream name to generate a pattern interactively, watch the **learned date format** banner confirm what Teamarr inferred from the samples, and click **Apply to Form** to copy the working patterns back into the editor.
+
+## Stream Timezone
+
+Optional. Declares the timezone of dates/times embedded in this source's stream names. Timezone markers in the names themselves (e.g., "ET", "PT") are auto-detected — set this only if your provider omits them and uses a different timezone than yours.

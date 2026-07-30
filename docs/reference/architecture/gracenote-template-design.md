@@ -1,8 +1,8 @@
 ---
 title: Gracenote-Modeled Template Design
 parent: Architecture
+grand_parent: Technical Reference
 nav_order: 20
-docs_version: "2.7.0"
 ---
 
 # Gracenote-Modeled Best-in-Class Templates — Design & Research
@@ -61,8 +61,8 @@ The structured **subtitle** ("Group C: Scotland vs. Morocco") *is* present days 
 > - **Recap is free/bulk, confirmed:** all 10 of the prior day's MLB finals carried recap headlines *inside the scoreboard* (no per-event call).
 
 **Takeaways:**
-- `{game_recap}` + `{game_note}`/`{round}` are **free** from the scoreboard Teamarr
-  already fetches — high value, no extra calls (Tier 1).
+- `{game_recap}` + `{game_event_note}`/`{soccer_match_note}` are **free** from the
+  scoreboard Teamarr already fetches — high value, no extra calls (Tier 1).
 - **Preview prose is viable for the common case** (most users generate same-day, and
   it populates ~T-0/T-1 across MLB/WNBA/soccer). It just can't fill the *far* end of a
   14-day window — which a **fallback chain** handles: recap (postgame) → preview prose
@@ -98,23 +98,16 @@ The idea: scrape the public Gracenote grid for upcoming events' descriptions. Bl
 | `{game_event_note}` | ESPN scoreboard `notes[0].headline` (type `event`) | marquee/playoff designation ("NBA Finals - Game 5", "Stanley Cup Final", cups, bowls) | free/bulk; marquee-only, empty for regular season |
 | `{soccer_match_note}` | ESPN scoreboard `competitions[0].altGameNote` | soccer competition + group, untouched ("FIFA World Cup, Group J") | free/bulk; soccer-only, empty otherwise |
 
-**SHIPPED (tvnk.10, 2026-06-17):** the three free-tier vars above as raw 1:1 field maps —
-no post-processing. Multisport spikes killed the earlier `{game_note}`/`{round}` idea
-(`altGameNote` is soccer-only and mostly = league name; the cross-sport round/stage lives
-in `notes[0].headline` with per-sport shapes — so it became the two honest vars above
-rather than one normalized field). Per-event `{game_preview}` (summary `article` type
-Preview) and `{series_summary}` (`seasonseries[0].summary`) are the gated Tier-2 follow-ups.
-New variable category: `SUMMARY`.
-
-**FOLLOW-UP (tvnk.11, 2026-06-18):** `{game_recap}` now prefers ESPN's `shortLinkText`
-(a clean, EPG-sized headline that carries the score — 'Mets beat Reds 9-1 to avoid sweep')
-over the long `.description` wire body, falling back to the body with the AP dateline em
-dash stripped. `{game_preview}` keeps `article.description` (previews carry no
-`shortLinkText`) and gets the same dash strip. The provider boundary now does this light
-EPG normalization; everything downstream is still passthrough.
-
-`Event` model additions: `game_recap`, `game_event_note`, `soccer_match_note`.
-All new vars require the CLAUDE.md docs-table updates (variables count, etc.).
+The three free-tier vars above shipped as raw 1:1 field maps (new variable category:
+`SUMMARY`; `Event` model fields of the same names). An earlier normalized
+`{game_note}`/`{round}` idea was **dropped** — `altGameNote` is soccer-only and mostly
+equals the league name, while the cross-sport round/stage lives in `notes[0].headline`
+with per-sport shapes — so it became the two honest vars above rather than one
+normalized field. `{game_recap}` prefers ESPN's `shortLinkText` (a clean, EPG-sized
+headline that carries the score) over the long `.description` wire body, falling back
+to the body with the AP dateline em dash stripped. Per-event `{game_preview}` (summary
+`article` type Preview) and `{series_summary}` (`seasonseries[0].summary`) are the
+gated Tier-2 follow-ups.
 
 **`gracenote_category` gaps** (majors match perfectly): curate **UFC** (`"Ultimate
 Fighting Championship Mma"` → "UFC ...") and the **56 import-enabled fallback leagues**
@@ -142,7 +135,7 @@ Two tiers by **provider coverage** (rich copy vars are ESPN-only):
 
 | Tier | Leagues | Template content |
 |------|---------|------------------|
-| **ESPN-rich** | NBA/NFL/MLB/NHL/WNBA/NCAA/MiLB/UFC/ESPN-soccer | `{gracenote_category}` title · sport-specific subtitle · `{round}` context · `{game_recap}` postgame (→ fallback) · structured pregame · article-aware copy |
+| **ESPN-rich** | NBA/NFL/MLB/NHL/WNBA/NCAA/MiLB/UFC/ESPN-soccer | `{gracenote_category}` title · sport-specific subtitle · `{game_event_note}`/`{soccer_match_note}` context · `{game_recap}` postgame (→ fallback) · structured pregame · article-aware copy |
 | **Lean** | TSDB/niche (Swedish, Canadian Premier, Scandinavian, uru.2, etc.) | matchup + venue + generic randomized copy — **no ESPN-only vars** |
 
 Templates ship **unassigned**; each carries a **recommended scoping** (provider + sport).
@@ -162,7 +155,7 @@ game-thumbs base URL. Flags new+live. Descriptions = multiple priority-100 varia
 - **postgame desc:** `{game_recap}` → fallback "{team_name} {result_text} {opponent} {final_score}."
 
 ### Soccer — international (national teams)
-- **subtitle:** `{round}: {away_team} vs. {home_team}` → collapses to `{away_team} vs. {home_team}`
+- **subtitle:** `{away_team} vs. {home_team}` (stage prefix available via `{soccer_match_note}`)
 - **desc:** **article-OFF** ("Germany take on Curaçao…")
 
 ### Soccer — club
@@ -182,38 +175,35 @@ game-thumbs base URL. Flags new+live. Descriptions = multiple priority-100 varia
 
 ---
 
-## 8. Shipping / seeding
+## 8. `{gracenote_category}` construction
 
-- Seed **unassigned** on fresh install (guard: no existing templates).
-- Art = **relative paths** (z02s); user sets the game-thumbs base URL once.
-- Replace the 2 generic seeds (Default Team/Event supersede them) — *maintainer decision pending*.
-- Recommended scoping surfaced via docs + (optionally) template name/description.
+The `{gracenote_category}` value is built by a three-step cascade
+(`teamarr/services/league_mappings.py::get_gracenote_category`, tests in
+`tests/templates/test_gracenote_category.py`):
 
----
+1. **User override** from the `league_overrides` table (editable at
+   Settings → Advanced → Gracenote Category Overrides; survives re-seeds).
+2. **Curated** `leagues.gracenote_category` seed value.
+3. **Auto-generated fallback**, shaped by the league's `event_type`:
+   - **team_vs_team** → `{display_name} {Sport}` (`NFL Football`,
+     `Ontario Hockey League Hockey`) — matches captured Gracenote for US majors
+     and club soccer (`Premier League Soccer`, `MLS Soccer`).
+   - **event / event_card** → `display_name` alone — Gracenote titles
+     racing/combat by series or promotion name (`NASCAR Craftsman Truck Series`,
+     never "X Racing").
 
-## 9. Hardening (test method)
+Seed curation choices:
 
-Re-pull the live Gracenote grid (§1 recipe) and **diff** each rendered template's
-output against the actual Gracenote title/subtitle/desc shape for that sport —
-checking separators, article usage, venue, round context. Add a rendering test per
-template (against realistic sample data). Edge cases: national teams, no-abbrev leagues,
-combat segments, doubleheaders, postponed, missing recap/round.
-
----
-
-## Appendix — reusable research commands
-
-```bash
-# Gracenote grid (modeling/hardening only — not for redistribution)
-curl -s -H "User-Agent: Mozilla/5.0" -H "Referer: https://tvlistings.gracenote.com/" \
-  -H "X-Requested-With: XMLHttpRequest" \
-  "https://tvlistings.gracenote.com/api/grid?lineupId=USA-OTA10001-DEFAULT&headendId=lineupId&device=-&country=USA&postalCode=10001&isOverride=true&timespan=4&time=$(date -u +%s)&pref=16,128&userId=-&aid=orbebb&languagecode=en-us"
-
-# ESPN recap (free, bulk) — per sport/league
-curl -s "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" \
-  | jq -r '.events[] | select(.competitions[0].headlines[0].description) | "\(.shortName): \(.competitions[0].headlines[0].description)"'
-
-# ESPN round/group (free, bulk)
-curl -s "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard" \
-  | jq -r '.events[] | "\(.shortName) | \(.competitions[0].altGameNote // "—")"'
-```
+- **Racing**: the NASCAR Cup/Xfinity/Truck, IMSA, and WEC curations are **NULL** —
+  the event-aware fallback serves the series name, so sponsor renames
+  (e.g. Xfinity → O'Reilly) can't drift a duplicated string. Kept curated:
+  `Formula 1 Racing`, `IndyCar Racing`, `MotoGP Racing`, and `Tennis` for ATP/WTA.
+- **International tournaments** (fifa.world, fifa.wwc, uefa.euro,
+  conmebol.america, concacaf.gold, concacaf.nations.league) are curated
+  **without** the " Soccer" suffix (`FIFA World Cup`), matching the captured
+  branded shape. Club competitions keep it (`FA Cup Soccer`,
+  `UEFA Champions League Soccer`).
+- **Year-stamping is template composition, not dynamic.** Real Gracenote brands
+  tournaments with a year (`FIFA World Cup 2026`); a static year-stamped seed
+  would go stale annually, so templates compose `{gracenote_category} {year}`
+  where wanted.
