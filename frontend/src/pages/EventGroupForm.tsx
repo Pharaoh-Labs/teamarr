@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react"
-import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router"
 import { toast } from "sonner"
 import { ArrowLeft, LoaderCircle, FlaskConical } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"

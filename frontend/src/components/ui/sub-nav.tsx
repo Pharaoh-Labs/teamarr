@@ -1,5 +1,5 @@
 import { type ReactNode } from "react"
-import { NavLink } from "react-router-dom"
+import { NavLink } from "react-router"
 import { cn } from "@/lib/utils"
 
 export interface SubNavItem {

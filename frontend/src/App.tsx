@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MainLayout } from "@/layouts/MainLayout"
 import { EpgLayout } from "@/components/EpgLayout"
