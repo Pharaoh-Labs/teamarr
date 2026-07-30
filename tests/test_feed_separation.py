@@ -934,13 +934,20 @@ class TestResolveFeedTeamsIdentifiers:
             broadcast_markets={"Brewers.TV": "away", "Marquee Sports Network": "home"},
         )
 
-    def _resolve(self, stream: dict, event, detect_team_names: bool = True):
+    def _resolve(
+        self,
+        stream: dict,
+        event,
+        detect_team_names: bool = True,
+        separation_enabled: bool = True,
+    ):
         from teamarr.consumers.event_group_processor.matching import StreamMatching
 
         entry = {"stream": stream, "event": event, "feed_hint": None}
         StreamMatching._resolve_feed_teams(
-            StreamMatching(), [entry], detect_team_names
+            StreamMatching(), [entry], detect_team_names, separation_enabled
         )
+        self._last_entry = entry
         return entry["feed_team"]
 
     def test_tvg_id_matches_broadcast_market(self, event):
@@ -974,3 +981,27 @@ class TestResolveFeedTeamsIdentifiers:
     def test_detect_team_names_off_still_uses_broadcast_markets(self, event):
         stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
         assert self._resolve(stream, event, detect_team_names=False) is event.away_team
+
+    # --- Identification decoupled from separation (#527) ---
+
+    def test_separation_off_still_identifies_stream_feed_team(self, event):
+        # The prioritization lever: with feed separation OFF, resolution still
+        # runs and lands in stream_feed_team (→ persisted feed_team_id →
+        # team_feed ordering rules), while the channel-splitting feed_team
+        # key stays None so no feed-separated channels appear.
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event, separation_enabled=False) is None
+        assert self._last_entry["stream_feed_team"] is event.away_team
+
+    def test_separation_on_populates_both_keys(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event, separation_enabled=True) is event.away_team
+        assert self._last_entry["stream_feed_team"] is event.away_team
+
+    def test_separation_off_team_branded_name_identifies(self, event):
+        # FractalBoy's exact case (#527): 'Brewers.TV'-branded stream name,
+        # no broadcast-market data, feed separation off.
+        event.broadcast_markets = {}
+        stream = {"name": "Brewers.TV", "tvg_id": None, "tvg_name": None}
+        assert self._resolve(stream, event, separation_enabled=False) is None
+        assert self._last_entry["stream_feed_team"] is event.away_team
