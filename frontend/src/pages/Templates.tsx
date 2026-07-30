@@ -1,5 +1,5 @@
 import { useState, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import { Plus, Trash2, Pencil, LoaderCircle, Copy, Download, Upload, Tv, User, RotateCcw } from "lucide-react"
 import { Alert } from "@/components/ui/alert"

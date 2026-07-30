@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, type ReactNode } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router"
 import { toast } from "sonner"
 import { ArrowLeft, User, Tv, ArrowRight, Check } from "lucide-react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
