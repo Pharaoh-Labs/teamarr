@@ -280,7 +280,7 @@ def bulk_update_channel_ids(request: BulkChannelIdRequest):
     """Bulk update channel IDs based on a format template.
 
     Supported format variables:
-    - {team_name_pascal}: Team name in PascalCase (e.g., "MichiganWolverines")
+    - {team_name|pascal}: Team name in PascalCase (e.g., "MichiganWolverines")
     - {team_abbrev}: Team abbreviation lowercase (e.g., "mich")
     - {team_name}: Team name lowercase with dashes (e.g., "michigan-wolverines")
     - {provider_team_id}: Provider's team ID

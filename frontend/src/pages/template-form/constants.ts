@@ -171,13 +171,48 @@ function cleanupResolved(text: string): string {
   return out
 }
 
-// Template `|filter` modifiers, mirroring the backend resolver's _FILTERS
-// (teamarr/templates/resolver.py, #478). urlencode/url percent-encode a value
-// for safe use inside a URL. encodeURIComponent matches Python's
-// quote(safe="") closely enough for preview fidelity.
-const TEMPLATE_FILTERS: Record<string, (value: string) => string> = {
+// Accent fold for pascal/slug parity with the backend's NFKD+ascii pass.
+function asciiFold(value: string): string {
+  return value.normalize("NFKD").replace(/[̀-ͯ]/g, "")
+}
+
+// Template `|filter` modifiers, mirroring the backend registry
+// (teamarr/templates/filters.py, #478/#484). Chains apply left-to-right:
+// {team_name|pascal|url}. Kept in lockstep with the backend by
+// tests/templates/test_filter_parity.py — add filters in BOTH places.
+export const TEMPLATE_FILTERS: Record<string, (value: string) => string> = {
   urlencode: encodeURIComponent,
   url: encodeURIComponent,
+  lower: (v) => v.toLowerCase(),
+  upper: (v) => v.toUpperCase(),
+  title: (v) => v.replace(/[A-Za-z]+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()),
+  pascal: (v) =>
+    asciiFold(v)
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(Boolean)
+      .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+      .join(""),
+  slug: (v) =>
+    asciiFold(v)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, ""),
+}
+
+// Retired pure-transform variables (#484): resolved forever as base+filter so
+// pasted-in old templates still preview correctly (mirrors the backend
+// resolver's _LEGACY_ALIASES). Exported for the picker's search bridge.
+export const LEGACY_FILTER_ALIASES: Record<string, [string, string]> = {
+  team_name_pascal: ["team_name", "pascal"],
+  home_team_pascal: ["home_team", "pascal"],
+  away_team_pascal: ["away_team", "pascal"],
+  team_abbrev_lower: ["team_abbrev", "lower"],
+  home_team_abbrev_lower: ["home_team_abbrev", "lower"],
+  away_team_abbrev_lower: ["away_team_abbrev", "lower"],
+  opponent_abbrev_lower: ["opponent_abbrev", "lower"],
+  feed_team_abbrev_lower: ["feed_team_abbrev", "lower"],
+  result_lower: ["result", "lower"],
+  sport_lower: ["sport", "slug"],
 }
 
 // Helper to create resolveTemplate function with custom sample data.
@@ -187,20 +222,31 @@ export function createResolver(sampleData: Record<string, string>) {
   return function resolveTemplate(template: string): string {
     if (!template) return ""
     const substituted = template.replace(/\{([^}]+)\}/g, (match, token) => {
-      // Split an optional `|filter` modifier off the variable name.
+      // Split an optional `|filter` chain off the variable name (#484).
       const pipe = token.indexOf("|")
-      const varName = pipe === -1 ? token : token.slice(0, pipe)
-      const filterName = pipe === -1 ? "" : token.slice(pipe + 1).toLowerCase()
+      let varName = pipe === -1 ? token : token.slice(0, pipe)
+      const filterNames =
+        pipe === -1 ? [] : token.slice(pipe + 1).toLowerCase().split("|").filter(Boolean)
+
+      // Retired transform variable: rewrite to base + implied leading filter,
+      // preserving any suffix ({home_team_pascal.next} -> home_team.next).
+      const dot = varName.indexOf(".")
+      const base = (dot === -1 ? varName : varName.slice(0, dot)).toLowerCase()
+      const alias = LEGACY_FILTER_ALIASES[base]
+      if (alias && !(varName in sampleData) && !(varName.toLowerCase() in sampleData)) {
+        varName = alias[0] + (dot === -1 ? "" : varName.slice(dot))
+        filterNames.unshift(alias[1])
+      }
 
       let value: string
       if (varName in sampleData) value = sampleData[varName]
       else if (varName.toLowerCase() in sampleData) value = sampleData[varName.toLowerCase()]
       else return match // unknown variable stays literal
 
-      if (filterName) {
+      for (const filterName of filterNames) {
         const filterFn = TEMPLATE_FILTERS[filterName]
         if (!filterFn) return match // unknown filter stays literal (visible typo)
-        return filterFn(value)
+        value = filterFn(value)
       }
       return value
     })

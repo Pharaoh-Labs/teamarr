@@ -58,7 +58,8 @@ export function useDateFormat() {
     [formatter]
   )
 
-  // Format relative time (e.g., "5m ago")
+  // Format relative time, past or future (e.g., "5m ago", "in 3h").
+  // Future times beyond 24h fall back to the absolute display-timezone form.
   const formatRelativeTime = useCallback(
     (dateStr: string | null): string => {
       if (!dateStr) return "Never"
@@ -67,16 +68,42 @@ export function useDateFormat() {
 
       const now = new Date()
       const diffMs = now.getTime() - date.getTime()
-      const diffMins = Math.floor(diffMs / 60000)
+      const diffMins = Math.floor(Math.abs(diffMs) / 60000)
       const diffHours = Math.floor(diffMins / 60)
       const diffDays = Math.floor(diffHours / 24)
 
+      if (diffMs < 0) {
+        if (diffMins < 60) return `in ${diffMins}m`
+        if (diffHours < 24) return `in ${diffHours}h`
+        return formatDateTime(dateStr)
+      }
       if (diffMins < 1) return "Just now"
       if (diffMins < 60) return `${diffMins}m ago`
       if (diffHours < 24) return `${diffHours}h ago`
       return `${diffDays}d ago`
     },
-    []
+    [formatDateTime]
+  )
+
+  // Date-only in the display timezone (e.g., "Jul 26, 2026"). Avoids the
+  // off-by-one-day a browser-local toLocaleDateString can produce.
+  const formatDate = useCallback(
+    (dateStr: string | Date | null): string => {
+      if (!dateStr) return "-"
+      try {
+        const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr
+        if (isNaN(date.getTime())) return "-"
+        return new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }).format(date)
+      } catch {
+        return "-"
+      }
+    },
+    [timezone]
   )
 
   // Format with both absolute and relative (e.g., "Dec 24, 3:45 PM EST (5m ago)")
@@ -93,6 +120,7 @@ export function useDateFormat() {
 
   return {
     formatDateTime,
+    formatDate,
     formatRelativeTime,
     formatDateTimeWithRelative,
     timezone,

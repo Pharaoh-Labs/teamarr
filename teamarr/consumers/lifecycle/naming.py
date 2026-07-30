@@ -25,10 +25,12 @@ FEED_TEMPLATE_VARS = frozenset({
     "feed_team",
     "feed_team_short",
     "feed_team_abbrev",
-    "feed_team_abbrev_lower",
+    "feed_team_abbrev_lower",  # retired alias (#484), may linger in old templates
     "feed_home_away",
     "broadcast_feed",
     "broadcast_feed_team",
+    "broadcast_feed_team_short",
+    "broadcast_feed_team_abbrev",
 })
 
 
@@ -177,8 +179,18 @@ class ChannelNaming(_LifecycleHost):
         Used to suppress the canned feed-label auto-append so users who place
         {feed_team}/{feed_team_short}/etc. in their template don't get a
         duplicated suffix like "Pirates Feed (Pirates)".
+
+        Matched via the resolver's token pattern (not raw containment) so
+        `|filter` modifiers don't hide the variable: {feed_team_abbrev|lower}
+        still counts as a feed reference (#484).
         """
-        return any(f"{{{var}}}" in name_format for var in FEED_TEMPLATE_VARS)
+        from teamarr.templates.resolver import VARIABLE_PATTERN
+
+        names = {
+            m.group(1).partition(".")[0].lower()
+            for m in VARIABLE_PATTERN.finditer(name_format or "")
+        }
+        return not names.isdisjoint(FEED_TEMPLATE_VARS)
 
     @staticmethod
     def _build_feed_label(feed_team, event: Event, style: str) -> str:

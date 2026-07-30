@@ -209,6 +209,7 @@ class KeywordEnforcer:
                             # ordering rules and its EPG attach window (#344).
                             match_type=stream.match_type,
                             match_method=stream.match_method,
+                            feed_team_id=stream.feed_team_id,
                             attach_at=stream.attach_at,
                             detach_at=stream.detach_at,
                             dispatcharr_channel_group=stream.dispatcharr_channel_group,

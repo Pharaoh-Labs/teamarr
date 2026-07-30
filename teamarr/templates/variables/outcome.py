@@ -50,24 +50,6 @@ def extract_result(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
 
 @register_variable(
-    name="result_lower",
-    category=Category.OUTCOME,
-    suffix_rules=SuffixRules.ALL,
-    description="Game result lowercase ('w', 'l', or 't')",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_result_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    result = _get_result(ctx, game_ctx)
-    if result == "win":
-        return "w"
-    elif result == "loss":
-        return "l"
-    elif result == "tie":
-        return "t"
-    return ""
-
-
-@register_variable(
     name="result_text",
     category=Category.OUTCOME,
     suffix_rules=SuffixRules.ALL,

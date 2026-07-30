@@ -3,7 +3,6 @@ title: Providers
 parent: Technical Reference
 nav_order: 2
 has_children: true
-docs_version: "2.3.1"
 ---
 
 # Data Providers
@@ -25,6 +24,7 @@ Request for league data
         ├── NASCAR (priority 35)      → supports? → Yes → use NASCAR
         ├── MLB Stats (priority 40)   → supports? → Yes → use MLB Stats
         ├── HockeyTech (priority 50)  → supports? → Yes → use HockeyTech
+        ├── Supabase (priority 55)    → supports? → Yes → use Supabase
         └── TSDB (priority 100)       → supports? → Yes → use TSDB
 ```
 
@@ -32,12 +32,13 @@ Request for league data
 
 | Provider | Priority | Leagues | Auth | Rate Limit |
 |----------|----------|---------|------|------------|
-| [ESPN](espn) | 0 | 52 | None (public API) | Generous (DNS is usually the bottleneck) |
+| [ESPN](espn) | 0 | 98 | None (public API) | Generous (DNS is usually the bottleneck) |
 | [Squiggle](squiggle) | 30 | 1 (AFL) | None (free) | No hard limit — cache required |
 | [NASCAR](nascar) | 35 | 3 | None (public API) | None observed — season schedule cached 6h |
 | [MLB Stats](mlbstats) | 40 | 5 | None (public API) | None observed |
 | [HockeyTech](hockeytech) | 50 | 14 | Public client keys | None observed |
-| [TSDB](tsdb) | 100 | 11 | API key in URL path | 30/min free, 100/min premium |
+| [Supabase](supabase) | 55 | 1 (CBL) | None (credentials auto-extracted, cached 7 days) | None observed |
+| [TSDB](tsdb) | 100 | 48 | API key in URL path | 30/min free, 100/min premium |
 
 ## SportsProvider Interface
 
@@ -66,6 +67,7 @@ Each league in `schema.sql` maps to a provider via the `provider` and `provider_
 | NASCAR | series number | `1` (Cup), `2` (ORAP), `3` (Trucks) |
 | MLB Stats | `sport_id` | `11` (Triple-A) |
 | HockeyTech | `client_code` | `ohl`, `ahl` |
+| Supabase | league website URL | `https://cbl.ca` (credentials are scraped from the site) |
 | TSDB | `league_id` | `4460` (IPL) |
 
 ## Design Principles

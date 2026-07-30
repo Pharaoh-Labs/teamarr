@@ -3,7 +3,6 @@ title: Channels
 parent: User Guide
 nav_order: 8
 has_children: true
-docs_version: "2.7.0"
 redirect_from:
   - /guide/channels/
   - /guide/channels.html
@@ -15,7 +14,9 @@ redirect_from:
 
 The Channels area is where you control everything about the channels Teamarr creates in Dispatcharr for sporting events — when they exist, how streams map onto them, what numbers they get, which stream plays first, and where they land in Dispatcharr.
 
-Event channels are ephemeral: they're created around each event and deleted when it ends. Team-based channels are managed separately on the [Teams](../epg/teams) page.
+Event channels are ephemeral: they're created around each event and removed when it's over — by the delete timing you configure, and by several automatic cleanup paths (vanished streams, disabled sources, unsubscribed leagues, orphan detection) described under [Lifecycle](lifecycle#how-channels-get-deleted). Team-based channels are managed separately on the [Teams](../epg/teams) page.
+
+The channels themselves are inspected on the **Dashboard**'s [Managed Channels table](../dashboard#managed-channels) — sync status, per-stream detail and priority explainer, Find Orphans, and bulk deletes all live there. These pages configure the behavior; the Dashboard shows the result.
 
 ## Sub-pages
 

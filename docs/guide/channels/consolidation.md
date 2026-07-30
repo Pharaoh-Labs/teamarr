@@ -3,7 +3,6 @@ title: Consolidation
 parent: Channels
 grand_parent: User Guide
 nav_order: 2
-docs_version: "2.7.0"
 ---
 
 # Consolidation
@@ -21,9 +20,30 @@ In Consolidate mode, [Stream Priority](stream-priority) rules decide which strea
 
 ## Exception Keywords
 
-When using Consolidate mode, exception keywords let certain streams break out of the default merge. Streams whose names match one of these terms get sub-consolidated or separated instead of folding into the main channel — useful for keeping, say, a 4K or alternate-language feed on its own channel.
+Exception keywords let certain streams break out of the default behavior — useful for keeping, say, a 4K or alternate-language feed on its own channel.
 
-Exception keywords only apply in Consolidate mode.
+![Channels → Consolidation — default mode and the exception keywords table](../../assets/images/channels-consolidation.png)
+
+Each keyword has:
+
+- **Label** — the display name. It's appended to the variant channel's name, resolves the `{exception_keyword}` template variable, and is part of the channel's tvg-id.
+- **Match Terms** — comma-separated terms matched against stream names.
+- **Behavior** — one of three:
+
+| Behavior | Description |
+|----------|-------------|
+| **Sub-Consolidate** | Group matching streams together on their own channel, separate from the main channel |
+| **Separate** | Each matching stream gets its own channel |
+| **Ignore** | Matching streams are dropped entirely — no channel |
+
+- **Enabled** — an API-only flag (there's no UI toggle); keywords disabled via the API disappear from the card.
+
+A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box.
+
+{: .note }
+The Exception Keywords card is only *shown* in Consolidate mode, but stored keywords are checked on every run regardless of mode — a keyword's behavior overrides the global mode per-stream (an **Ignore** keyword drops its streams even in Separate mode).
+
+Keyword placement is **enforced every generation**: if a stream should move between a main channel and its keyword variant (because keywords or stream names changed), it's moved, and the main channel is always kept on the lower channel number than its variants.
 
 ## Feed Separation
 
@@ -31,37 +51,44 @@ When multiple IPTV providers carry separate home and away broadcast feeds for th
 
 ### How It Works
 
-1. **Literal token detection** — stream names containing terms like "HOME" or "AWAY" are detected before team matching. The token is stripped so it doesn't interfere with team-name parsing.
-2. **Broadcast-market detection** — the stream name is matched against the event's actual broadcast listings from the provider (ESPN reports each network's market: national, home, or away). This is how team-branded channels ("Brewers.TV") and regional networks that don't carry the team's name at all ("YES", "Marquee Sports Network") resolve to the right feed. Matching tolerates the usual stream-name drift — punctuation and casing ("BREWERS TV"), run-together forms ("BrewersTV"), and abbreviated words ("Bally Sports WI" for "Bally Sports Wisconsin"). Always on; national networks never count as a team feed.
-3. **Team-name detection** — if enabled, stream names are scanned for team names in a feed context (e.g., "Orioles Feed", "Orioles.TV", "Orioles.US") and matched against the event's home and away teams.
-4. **Channel discrimination** — streams resolved to different teams get separate channels, even for the same event. Unlabeled streams go to their own channel as usual.
+1. **Literal token detection** — streams containing terms like "HOME" or "AWAY" are detected before team matching. The token is stripped so it doesn't interfere with team-name parsing.
+2. **Broadcast-market detection** — the stream is matched against the event's actual broadcast listings from the provider (ESPN reports each network's market: national, home, or away). This is how team-branded channels ("Brewers.TV") and regional networks that don't carry the team's name at all ("YES", "Marquee Sports Network") resolve to the right feed. Matching tolerates the usual drift — punctuation, casing, run-together and abbreviated forms. National networks never count as a team feed, a stream matching *both* sides stays a normal channel, and very short names are skipped.
+3. **Team-name detection** — if enabled, streams are scanned for team names in a feed context (e.g., "Orioles Feed", "Orioles.TV", "Orioles.US") and matched against the event's home and away teams.
+4. **Channel discrimination** — streams resolved to different teams get separate channels, even for the same event. Unlabeled streams go to their own channel as usual. Each feed channel gets its own tvg-id (`…-feed-<team>`), which is why each carries distinct EPG.
+
+Detection checks the stream **name, tvg-id, and tvg-name** — a stream whose tvg-id is `Brewers.TV` resolves even when its display name says nothing.
 
 ### Settings
 
+All detection (including broadcast-market) runs only when the master **Feed Separation** toggle is on.
+
 | Setting | Default | Description |
 |---------|---------|-------------|
-| **Enable Feed Separation** | Off | Master toggle for the feature |
-| **Home Terms** | `HOME` | Comma-separated terms that indicate a home feed |
-| **Away Terms** | `AWAY` | Comma-separated terms that indicate an away feed |
+| **Feed Separation** | Off | Master toggle for the feature |
+| **Home Feed Terms** | `HOME` | Comma-separated terms that indicate a home feed |
+| **Away Feed Terms** | `AWAY` | Comma-separated terms that indicate an away feed |
 | **Detect Team Names** | On | Also match team names in stream names (e.g., "Orioles Feed") |
-| **Label Style** | Team Name | How feed channels are labeled — see below |
+| **Feed Label Style** | Team Name | How feed channels are labeled — see below |
 
 ### Label Styles
 
-Controls the text appended to channel names when a feed team is detected:
+Controls the label appended to channel names when a feed team is detected (always in the form `(<label> Feed)`):
 
 | Style | Example |
 |-------|---------|
-| **Team Name** | `NYY @ BAL (Baltimore Orioles)` |
-| **Short Name** | `NYY @ BAL (Orioles)` |
-| **Home/Away** | `NYY @ BAL (Home)` |
+| **Team Name** | `NYY @ BAL (Orioles Feed)` |
+| **Short Name** | `NYY @ BAL (BAL Feed)` |
+| **Home/Away** | `NYY @ BAL (Home Feed)` / `(Away Feed)` |
+
+{: .note }
+If your channel-name template already places the feed team itself (any feed variable — `{feed_team*}`, `{broadcast_feed*}`, or `{feed_home_away}`), the automatic `(… Feed)` suffix is suppressed — the template wins.
 
 ### Example
 
-Given an event "NYY @ BAL" with streams:
+Given an event "NYY @ BAL" with streams (default Team Name style):
 
-- `MLB: NYY @ BAL HOME` → detected as home feed → channel: `NYY @ BAL (Orioles)`
-- `MLB: NYY @ BAL AWAY` → detected as away feed → channel: `NYY @ BAL (Yankees)`
+- `MLB: NYY @ BAL HOME` → detected as home feed → channel: `NYY @ BAL (Orioles Feed)`
+- `MLB: NYY @ BAL AWAY` → detected as away feed → channel: `NYY @ BAL (Yankees Feed)`
 - `MLB: NYY @ BAL` → no feed detected → channel: `NYY @ BAL`
 
 This creates three separate channels, each consolidating their respective streams.

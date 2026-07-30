@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -88,7 +88,7 @@ export function EventGroups() {
   const cachedLeagues = leaguesResponse?.leagues
   const allLeagueSlugs = useMemo(() => cachedLeagues?.map(l => l.slug) ?? [], [cachedLeagues])
   const deleteMutation = useDeleteGroup()
-  const { formatRelativeTime } = useDateFormat()
+  const { formatRelativeTime, formatDateTime } = useDateFormat()
   // Stale source groups (lylt.2) — their Dispatcharr M3U group is gone.
   const { data: staleGroups = [] } = useQuery({
     queryKey: ["groups", "stale"],
@@ -770,7 +770,7 @@ export function EventGroups() {
                           (~1 stream → 1 event). A pure Team/EPG source fans one stream
                           out to many events, so show raw stream volume instead. */}
                       {!group.name_match_enabled ? (
-                        <span className="text-[0.65rem] text-muted-foreground" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
+                        <span className="text-[0.65rem] text-muted-foreground" title={`Last: ${group.last_refresh ? formatDateTime(group.last_refresh) : 'Never'}`}>
                           {group.stream_count ?? 0} streams
                         </span>
                       ) : group.stream_count && group.stream_count > 0 ? (
@@ -782,7 +782,7 @@ export function EventGroups() {
                               {(group.match_result_count ?? 0) > (group.matched_count ?? 0) && (
                                 <div className="text-muted-foreground">EPG time-sharing: streams matched to multiple events</div>
                               )}
-                              <div className="text-muted-foreground">Last: {group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}</div>
+                              <div className="text-muted-foreground">Last: {group.last_refresh ? formatDateTime(group.last_refresh) : 'Never'}</div>
                             </div>
                           }
                         >
@@ -1033,7 +1033,7 @@ export function EventGroups() {
                               <div className="font-medium">{stream.event_name}</div>
                               {stream.start_time && (
                                 <div className="text-muted-foreground text-xs">
-                                  {new Date(stream.start_time).toLocaleString()}
+                                  {formatDateTime(stream.start_time)}
                                 </div>
                               )}
                             </div>

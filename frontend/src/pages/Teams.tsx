@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import {
   Plus,
@@ -55,6 +55,7 @@ import type { Team } from "@/api/teams"
 import { getLeagues } from "@/api/teams"
 import { statsApi } from "@/api/stats"
 import { useQuery } from "@tanstack/react-query"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 type ActiveFilter = "" | "active" | "inactive"
 type SortColumn = "team" | "league" | "sport" | "template" | "channel" | "status"
@@ -187,6 +188,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
 }
 
 export function Teams() {
+  const { timezone } = useDateFormat()
   const navigate = useNavigate()
   const { data: teams, isLoading, error, refetch } = useTeams()
   const { data: templates } = useTemplates()
@@ -231,7 +233,7 @@ export function Teams() {
   const [channelIdMode, setChannelIdMode] = useState<"default" | "custom">("default")
   const [customChannelIdFormat, setCustomChannelIdFormat] = useState("")
   const [isUpdatingChannelIds, setIsUpdatingChannelIds] = useState(false)
-  const defaultChannelIdFormat = "{team_name_pascal}.{league_id}"
+  const defaultChannelIdFormat = "{team_name|pascal}.{league_id}"
 
   // Edit dialog state
   const [showDialog, setShowDialog] = useState(false)
@@ -607,7 +609,7 @@ export function Teams() {
                         </div>
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{event.league}</span>
-                          <span>Started {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                          <span>Started {new Date(event.start_time).toLocaleTimeString("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" })}</span>
                         </div>
                       </div>
                     ))}
@@ -1069,12 +1071,12 @@ export function Teams() {
                   <Input
                     value={customChannelIdFormat}
                     onChange={(e) => setCustomChannelIdFormat(e.target.value)}
-                    placeholder="{team_name_pascal}.{league_id}"
+                    placeholder="{team_name|pascal}.{league_id}"
                   />
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p className="font-medium">Available variables:</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                      <span><code>{"{team_name_pascal}"}</code> - PascalCase</span>
+                      <span><code>{"{team_name|pascal}"}</code> - PascalCase</span>
                       <span><code>{"{team_abbrev}"}</code> - Abbreviation</span>
                       <span><code>{"{team_name}"}</code> - lowercase-dashes</span>
                       <span><code>{"{league_id}"}</code> - league code</span>

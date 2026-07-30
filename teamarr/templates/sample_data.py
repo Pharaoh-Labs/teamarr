@@ -30,12 +30,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "team_abbrev": {
         "NBA": "DET",
     },
-    "team_abbrev_lower": {
-        "NBA": "det",
-    },
-    "team_name_pascal": {
-        "NBA": "DetroitPistons",
-    },
     "team_short": {
         "NBA": "Pistons",
     },
@@ -92,15 +86,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     },
     "opponent_abbrev.last": {
         "NBA": "CLE",
-    },
-    "opponent_abbrev_lower": {
-        "NBA": "chi",
-    },
-    "opponent_abbrev_lower.next": {
-        "NBA": "mil",
-    },
-    "opponent_abbrev_lower.last": {
-        "NBA": "cle",
     },
     "opponent_short": {
         "NBA": "Bulls",
@@ -166,10 +151,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
         "NBA": "Basketball",
         "F1": "Racing",
     },
-    "sport_lower": {
-        "NBA": "basketball",
-        "F1": "racing",
-    },
     "gracenote_category": {
         "NBA": "NBA Basketball",
         "F1": "Formula 1 Racing",
@@ -203,24 +184,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     },
     "home_team_abbrev.last": {
         "NBA": "CLE",
-    },
-    "home_team_abbrev_lower": {
-        "NBA": "det",
-    },
-    "home_team_abbrev_lower.next": {
-        "NBA": "mil",
-    },
-    "home_team_abbrev_lower.last": {
-        "NBA": "cle",
-    },
-    "home_team_pascal": {
-        "NBA": "DetroitPistons",
-    },
-    "home_team_pascal.next": {
-        "NBA": "MilwaukeeBucks",
-    },
-    "home_team_pascal.last": {
-        "NBA": "ClevelandCavaliers",
     },
     "home_team_logo": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
@@ -257,24 +220,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     },
     "away_team_abbrev.last": {
         "NBA": "DET",
-    },
-    "away_team_abbrev_lower": {
-        "NBA": "chi",
-    },
-    "away_team_abbrev_lower.next": {
-        "NBA": "det",
-    },
-    "away_team_abbrev_lower.last": {
-        "NBA": "det",
-    },
-    "away_team_pascal": {
-        "NBA": "ChicagoBulls",
-    },
-    "away_team_pascal.next": {
-        "NBA": "DetroitPistons",
-    },
-    "away_team_pascal.last": {
-        "NBA": "DetroitPistons",
     },
     "away_team_logo": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/4.png",
@@ -834,15 +779,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "result.last": {
         "NBA": "W",
     },
-    "result_lower": {
-        "NBA": "w",
-    },
-    "result_lower.next": {
-        "NBA": "",
-    },
-    "result_lower.last": {
-        "NBA": "w",
-    },
     "result_text": {
         "NBA": "defeated",
     },
@@ -1399,9 +1335,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "feed_team_abbrev": {
         "NBA": "DET",
     },
-    "feed_team_abbrev_lower": {
-        "NBA": "det",
-    },
     "feed_team_logo": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
     },
@@ -1534,8 +1467,6 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "team_name": "Flint Tropics",
         "team_short": "Tropics",
         "team_abbrev": "FLT",
-        "team_abbrev_lower": "flt",
-        "team_name_pascal": "FlintTropics",
         "opponent": "Greenwich Mean Time",
         "opponent.next": "Baltimore Pinchy Crabs",
         "opponent.last": "Denver Mile High Club",
@@ -1545,9 +1476,6 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "opponent_abbrev": "GMT",
         "opponent_abbrev.next": "CRB",
         "opponent_abbrev.last": "MHC",
-        "opponent_abbrev_lower": "gmt",
-        "opponent_abbrev_lower.next": "crb",
-        "opponent_abbrev_lower.last": "mhc",
         "matchup": "Greenwich Mean Time @ Flint Tropics",
         "matchup.next": "Flint Tropics @ Baltimore Pinchy Crabs",
         "matchup.last": "Flint Tropics @ Denver Mile High Club",
@@ -1573,7 +1501,6 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "league_code": "ppl",
         "league_id": "ppl",
         "sport": "Placeholderball",
-        "sport_lower": "placeholderball",
         "gracenote_category": "Placeholder Premier League",
         # --- home / away identity ---
         "home_team": "Flint Tropics",
@@ -1585,12 +1512,6 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "home_team_abbrev": "FLT",
         "home_team_abbrev.next": "CRB",
         "home_team_abbrev.last": "MHC",
-        "home_team_abbrev_lower": "flt",
-        "home_team_abbrev_lower.next": "crb",
-        "home_team_abbrev_lower.last": "mhc",
-        "home_team_pascal": "FlintTropics",
-        "home_team_pascal.next": "BaltimorePinchyCrabs",
-        "home_team_pascal.last": "DenverMileHighClub",
         "away_team": "Greenwich Mean Time",
         "away_team.next": "Flint Tropics",
         "away_team.last": "Flint Tropics",
@@ -1600,16 +1521,9 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "away_team_abbrev": "GMT",
         "away_team_abbrev.next": "FLT",
         "away_team_abbrev.last": "FLT",
-        "away_team_abbrev_lower": "gmt",
-        "away_team_abbrev_lower.next": "flt",
-        "away_team_abbrev_lower.last": "flt",
-        "away_team_pascal": "GreenwichMeanTime",
-        "away_team_pascal.next": "FlintTropics",
-        "away_team_pascal.last": "FlintTropics",
         "feed_team": "Flint Tropics",
         "feed_team_short": "Tropics",
         "feed_team_abbrev": "FLT",
-        "feed_team_abbrev_lower": "flt",
         "broadcast_feed_team": "Flint Tropics",
         # --- venue ---
         "venue": "The Coconut Coliseum",
@@ -1821,7 +1735,6 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "league_code": "wvba",
         "league_id": "wvba",
         "sport": "Boxing",
-        "sport_lower": "boxing",
         "gracenote_category": "World Video Boxing Association",
         "venue": "Madison Square Pixels",
         "venue_city": "New York",
@@ -1861,7 +1774,6 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "league_code": "pcs",
         "league_id": "pcs",
         "sport": "Stock Car Racing",
-        "sport_lower": "stock car racing",
         "gracenote_category": "Piston Cup Series",
         "venue": "Radiator Springs Speedway",
         "venue_city": "Radiator Springs",

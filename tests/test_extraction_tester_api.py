@@ -95,3 +95,45 @@ def test_month_day_only_extracts(month_first=True):
     assert resp.results[0].date is not None
     assert resp.results[0].date.matched is True
     assert resp.results[0].date.values[0].endswith("-07-16")
+
+
+# --- JS/.NET-style named groups accepted (#494) ---
+# The edit form displays patterns in JS syntax ((?<team1>), so users see and
+# write that form. Both the tester and the pipeline translate it to Python
+# syntax before compiling.
+
+
+def test_js_style_named_groups_accepted():
+    resp = _run(
+        ExtractionPatterns(
+            teams_pattern=r"(?<team1>.+?) vs (?<team2>.+)",
+            teams_enabled=True,
+        ),
+        ["Tigers vs Twins"],
+    )
+    assert resp.pattern_errors == {}
+    assert resp.results[0].teams.matched is True
+    assert resp.results[0].teams.values == ["Tigers", "Twins"]
+
+
+def test_js_style_date_pattern_accepted():
+    resp = _run(
+        ExtractionPatterns(date_pattern=r"(?<date>\d{2}/\d{2}/\d{4})", date_enabled=True),
+        ["Tigers vs Twins 07/16/2026"],
+    )
+    assert resp.pattern_errors == {}
+    assert resp.results[0].date.matched is True
+    assert resp.results[0].date.values == ["2026-07-16"]
+
+
+def test_lookbehind_not_mangled_by_syntax_translation():
+    # (?<=...) and (?<!...) must survive the (?<name> -> (?P<name> translation
+    resp = _run(
+        ExtractionPatterns(
+            teams_pattern=r"(?<=: )(?P<team1>\w+) vs (?P<team2>\w+)(?<! HD)",
+            teams_enabled=True,
+        ),
+        ["MLB: Tigers vs Twins"],
+    )
+    assert resp.pattern_errors == {}
+    assert resp.results[0].teams.matched is True

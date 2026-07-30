@@ -2,7 +2,6 @@
 title: Installation
 parent: User Guide
 nav_order: 1
-docs_version: "2.7.0"
 ---
 
 # Installation
@@ -12,14 +11,14 @@ Docker Compose is the recommended method for installation.
 ## Prerequisites
 
 - Docker
-- [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) (highly recommended - Teamarr is designed for tight integration with Dispatcharr)
-- [Game-Thumbs](epg/game-thumbs.md) (optional - sports matchup thumbnail and logo generation)
+- [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) (highly recommended — Teamarr is designed for tight integration with Dispatcharr)
+- [Game-Thumbs](epg/game-thumbs) (optional — sports matchup thumbnail and logo generation)
 
 ## Docker
 
 **Image tags:**
-- `latest` - Stable release (recommended)
-- `dev` - Development branch, may contain experimental features
+- `latest` — Stable release (recommended)
+- `dev` — Development branch, may contain experimental features
 
 ```yaml
 services:
@@ -49,13 +48,19 @@ services:
       # be refreshed manually via the UI or by the daily scheduled task.
       # - SKIP_CACHE_REFRESH=true
 
-      # Override log directory path (default: /app/data/logs)
-      # - LOG_DIR=/custom/log/path
+      # ESPN connection tuning — useful if a local DNS filter (Pi-hole,
+      # AdGuard) throttles the many parallel ESPN lookups
+      # - ESPN_MAX_WORKERS=25
+      # - ESPN_MAX_CONNECTIONS=25
 ```
+
+The full list of supported environment variables (logging, ports, provider tuning) is in the [Configuration reference](../reference/deployment/configuration).
 
 ### Unraid
 
 An Unraid Docker template is available in the Community Applications store. Search for "Teamarr" to install directly from the Unraid UI.
+
+## Opening the UI
 
 Open Teamarr at `http://<your-server>:9195`
 
@@ -66,8 +71,9 @@ All Teamarr data is stored in the `./data` volume mount:
 | Path | Contents |
 |------|----------|
 | `data/teamarr.db` | Database — teams, templates, settings, sources, subscriptions, run history |
+| `data/teamarr.xml` | Generated XMLTV output |
 | `data/logs/` | Log files (rotating, auto-managed) |
-| `data/epg/` | Generated XMLTV output |
+| `data/backups/` | Manual and scheduled database backups |
 
 {: .warning }
 **Never delete `teamarr.db`** — it contains all your configuration. Schema upgrades are handled automatically via migrations on startup.
@@ -77,10 +83,10 @@ All Teamarr data is stored in the `./data` volume mount:
 On first startup, Teamarr will:
 
 1. Create the database and run all migrations
-2. Refresh the league and team cache from providers (~2-3 minutes)
+2. Refresh the league and team directory from providers (a startup overlay shows progress — usually well under a minute)
 3. Start the web UI on port 9195
 
-The dashboard walks you through the setup flow: connect to Dispatcharr, add Sources, choose Subscriptions, build EPG templates, then generate.
+The navigation bar numbers the setup flow (first-run guidance — each number disappears once you've visited that step): **Settings (0) → Sources (1) → Subscriptions (2) → Matching (3) → EPG (4) → Channels (5)**, with the **Generate** button at the end. Work left to right; the [User Guide index](./) mirrors the same order. Start with [Dispatcharr Integration](dispatcharr-integration).
 
 ## Updating
 
@@ -91,7 +97,7 @@ docker compose pull teamarr
 docker compose up -d teamarr
 ```
 
-Teamarr handles database migrations automatically — no manual steps needed between versions.
+Teamarr handles database migrations automatically — no manual steps needed between versions. When an update is available, the version badge in the nav bar gains an amber dot (update checks are configurable under Settings → General → Update Notifications).
 
 {: .note }
 Advanced users familiar with Python may run Teamarr locally without Docker. Clone the repository and run `python app.py`.

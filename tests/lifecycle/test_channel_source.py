@@ -36,10 +36,26 @@ def _make_processor(
     stream_channel_map, epg_data_list, streams, managed, epg_groups, monkeypatch,
     dp_groups=None,
 ):
-    """Build a processor with mocked Dispatcharr client + DB lookups."""
+    """Build a processor with mocked Dispatcharr client + DB lookups.
+
+    The map mock honors exclude_channel_ids (#512) like the real builder and
+    records the passed set on ``client.map_exclusions`` for assertions.
+    """
+
+    def _map(exclude_channel_ids=None):
+        client.map_exclusions.append(exclude_channel_ids)
+        if not exclude_channel_ids:
+            return dict(stream_channel_map)
+        return {
+            sid: ch
+            for sid, ch in stream_channel_map.items()
+            if ch.get("id") not in exclude_channel_ids
+        }
+
     client = SimpleNamespace(
+        map_exclusions=[],
         channels=SimpleNamespace(
-            get_stream_channel_map=lambda: stream_channel_map,
+            get_stream_channel_map=_map,
             get_epg_data_list=lambda: epg_data_list,
         ),
         m3u=SimpleNamespace(
@@ -242,6 +258,23 @@ def test_channel_source_group_hidden_from_ui_list(db_conn):
     # Processing path (no exclusion) still sees it.
     everything = get_all_groups(db_conn, include_disabled=True)
     assert gid in {g.id for g in everything}
+
+
+def test_managed_ids_passed_as_map_exclusion(monkeypatch):
+    # #512: the fetcher must hand Teamarr's own channel ids to the map builder
+    # so they can't claim slots for streams shared with curated channels.
+    proc = _make_processor(
+        stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD", group_id=42)],
+        managed=[SimpleNamespace(dispatcharr_channel_id=900)],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+    )
+    out = proc._fetch_channel_source_streams()
+    assert proc._dispatcharr_client.map_exclusions == [{900}]
+    # Curated channel 100 is not managed → its stream stays a candidate.
+    assert [c["id"] for c in out] == [500]
 
 
 if __name__ == "__main__":

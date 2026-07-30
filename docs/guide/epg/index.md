@@ -1,34 +1,25 @@
 ---
 title: EPG
 parent: User Guide
-nav_order: 6
+nav_order: 7
 has_children: true
-docs_version: "2.7.0"
 ---
 
 # EPG
 
-The EPG section is where you shape and produce your guide data. In v2.7.0 the
-Templates, Teams, and Output areas were grouped together here, since they all
-contribute to the same XMLTV output.
+The EPG section is where you shape and produce your guide data — templates, team channels, and the XMLTV output all live here.
 
 | Area | What it does |
 |------|--------------|
 | [Templates](templates) | Define how programmes look — titles, descriptions, artwork, fillers, and conditional logic |
+| [Template Assignments](assignments) | Route templates to events by sport/league rules |
+| [Team vs Event](team-vs-event) | The two template types and when to use each |
+| [Variables](variables) | Reference: every template variable, with filters and suffixes |
+| [Conditions](conditions) | Reference: condition types for context-aware descriptions |
+| [Starter Templates](../templates/defaults) | The shipped 10-template starter set |
+| [Examples](examples) | Importable community template examples |
 | [Teams](teams) | Per-team persistent XMLTV channels for team-based EPG |
-| [Output](output) | Generate, download, and monitor your XMLTV output |
+| [Output](output) | Output path, window, durations, Game Thumbs base URL, and XMLTV metadata |
+| [Game Thumbs](game-thumbs) | Artwork integration for covers and logos |
 
-## Where to start
-
-- **Shaping guide text and art?** Start with [Templates](templates) and the
-  [Variables](variables) and [Conditions](conditions) references.
-- **Team-based channels?** See [Teams](teams) for importing teams and assigning
-  team templates.
-- **Generating and verifying output?** See [Output](output).
-
-Templates split into two types — [Team vs Event](team-vs-event) — depending on
-whether you want a persistent per-team channel or dynamic per-game channels. Once
-templates are built, you assign them with [Template Assignments](assignments).
-
-Artwork fields can use a shared [Game Thumbs](game-thumbs) base URL so templates
-store relative image paths.
+Start with [Templates](templates) — new installs ship with a starter set, so assigning is usually faster than building.

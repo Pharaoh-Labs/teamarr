@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { getRawStreams, testExtraction } from "@/api/groups"
 import type { ExtractionPatterns, StreamExtractionResult } from "@/api/groups"
+import { jsToPython } from "@/lib/regex-utils"
 import { StreamList } from "./StreamList"
 import { PatternPanel } from "./PatternPanel"
 import { InteractiveSelector } from "./InteractiveSelector"
@@ -169,22 +170,26 @@ export function TestPatternsModal({
       (p.custom_regex_fighters_enabled && p.custom_regex_fighters) ||
       (p.custom_regex_event_name_enabled && p.custom_regex_event_name)
     if (!anyEnabled) return null
+    // The form (and this modal) hold patterns in JS syntax — convert to
+    // Python before the backend compiles them with `re` (#494), exactly
+    // like the form's save path does.
+    const py = (s: string | null) => (s ? jsToPython(s) : s)
     return {
-      teams_pattern: p.custom_regex_teams,
+      teams_pattern: py(p.custom_regex_teams),
       teams_enabled: p.custom_regex_teams_enabled,
-      date_pattern: p.custom_regex_date,
+      date_pattern: py(p.custom_regex_date),
       date_enabled: p.custom_regex_date_enabled,
-      month_pattern: p.custom_regex_month,
+      month_pattern: py(p.custom_regex_month),
       month_enabled: p.custom_regex_month_enabled,
-      day_pattern: p.custom_regex_day,
+      day_pattern: py(p.custom_regex_day),
       day_enabled: p.custom_regex_day_enabled,
-      time_pattern: p.custom_regex_time,
+      time_pattern: py(p.custom_regex_time),
       time_enabled: p.custom_regex_time_enabled,
-      league_pattern: p.custom_regex_league,
+      league_pattern: py(p.custom_regex_league),
       league_enabled: p.custom_regex_league_enabled,
-      fighters_pattern: p.custom_regex_fighters,
+      fighters_pattern: py(p.custom_regex_fighters),
       fighters_enabled: p.custom_regex_fighters_enabled,
-      event_name_pattern: p.custom_regex_event_name,
+      event_name_pattern: py(p.custom_regex_event_name),
       event_name_enabled: p.custom_regex_event_name_enabled,
     }
   }, [debouncedPatterns])

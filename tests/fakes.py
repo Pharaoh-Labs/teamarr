@@ -123,6 +123,7 @@ class FakeChannel:
     channel_name: str = "Ch"
     league: str | None = None
     event_epg_group_id: int | None = 1
+    event_id: str | None = None
 
 
 @dataclass
@@ -155,6 +156,7 @@ class FakeStream:
 
     dispatcharr_stream_id: int
     source_group_id: int | None
+    stream_name: str | None = None
 
 
 @dataclass

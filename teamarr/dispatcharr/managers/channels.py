@@ -748,7 +748,9 @@ class ChannelManager:
 
         return None
 
-    def get_stream_channel_map(self) -> dict[int, dict]:
+    def get_stream_channel_map(
+        self, exclude_channel_ids: set[int] | None = None
+    ) -> dict[int, dict]:
         """Map each assigned stream id -> the Dispatcharr channel that carries it.
 
         A raw M3U stream's ``tvg_id`` lives in a different namespace from EPG
@@ -763,15 +765,24 @@ class ChannelManager:
             Dict mapping stream id -> channel dict (id, epg_data_id, etc.).
             A stream assigned to multiple channels keeps the last one seen.
         """
-        return self.get_channel_maps()[0]
+        return self.get_channel_maps(exclude_channel_ids=exclude_channel_ids)[0]
 
-    def get_channel_maps(self) -> tuple[dict[int, dict], dict[str, dict]]:
+    def get_channel_maps(
+        self, exclude_channel_ids: set[int] | None = None
+    ) -> tuple[dict[int, dict], dict[str, dict]]:
         """One paginated channel fetch -> (stream id -> channel, uuid -> channel).
 
         Superset of ``get_stream_channel_map`` for callers that also need the
         uuid index (loopback-stream EPG resolution: a Dispatcharr-loopback M3U
         stream's URL names its source channel by uuid) without paying for a
         second fetch. Uuid keys are lowercased.
+
+        ``exclude_channel_ids`` keeps those channels from claiming stream->
+        channel slots (#512): the map is single-slot last-write-wins, so
+        Teamarr's own OUTPUT channels would otherwise steal a shared stream's
+        slot from the curated channel once the attach window opens — which
+        self-poisons the channel-source candidate pool and degrades curated
+        EPG resolution. Excluded channels still appear in the uuid map.
         """
         channels = self._client.paginated_get(
             "/api/channels/channels/?page_size=500",
@@ -780,8 +791,9 @@ class ChannelManager:
         stream_map: dict[int, dict] = {}
         uuid_map: dict[str, dict] = {}
         for ch in channels:
-            for stream_id in ch.get("streams") or []:
-                stream_map[stream_id] = ch
+            if not (exclude_channel_ids and ch.get("id") in exclude_channel_ids):
+                for stream_id in ch.get("streams") or []:
+                    stream_map[stream_id] = ch
             uuid = ch.get("uuid")
             if uuid:
                 uuid_map[str(uuid).lower()] = ch

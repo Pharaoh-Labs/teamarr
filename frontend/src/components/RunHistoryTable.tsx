@@ -124,7 +124,7 @@ interface RunHistoryTableProps {
 }
 
 export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
-  const { formatDateTime } = useDateFormat()
+  const { formatDateTime, formatDate } = useDateFormat()
 
   // Modal state
   const [matchedModalRunId, setMatchedModalRunId] = useState<number | null>(null)
@@ -424,7 +424,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
                       </div>
                       {stream.event_date && (
                         <div className="text-xs text-muted-foreground">
-                          {new Date(stream.event_date).toLocaleDateString()}
+                          {formatDate(stream.event_date)}
                         </div>
                       )}
                     </div>

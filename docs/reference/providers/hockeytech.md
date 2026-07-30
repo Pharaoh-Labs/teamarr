@@ -2,8 +2,7 @@
 title: HockeyTech
 parent: Providers
 grand_parent: Technical Reference
-nav_order: 4
-docs_version: "2.3.1"
+nav_order: 5
 ---
 
 # HockeyTech Provider
@@ -17,7 +16,7 @@ HockeyTech serves Canadian and US junior/minor hockey leagues via an undocumente
 | **Base URL** | `https://lscluster.hockeytech.com/feed/` |
 | **Auth** | Public client keys (embedded in league websites) |
 | **Priority** | 50 |
-| **Rate Limit** | None observed (caching used to be respectful) |
+| **Rate Limit** | None observed (caching is used to be respectful) |
 
 ## Supported Leagues
 
@@ -84,8 +83,6 @@ The `provider_league_id` in `schema.sql` is the `client_code` value (e.g., `ohl`
 | Tomorrow's games | 4 hours |
 | 3-7 days out | 8 hours |
 | 8+ days out | 24 hours |
-
-The provider fetches the full season schedule and caches it, then filters by date for individual queries. This reduces API calls significantly.
 
 ## Special Behaviors
 

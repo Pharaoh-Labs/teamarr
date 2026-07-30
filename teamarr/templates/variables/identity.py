@@ -15,26 +15,6 @@ from teamarr.templates.variables.registry import (
 )
 
 
-def _to_pascal_case(name: str) -> str:
-    """Convert team name to PascalCase for channel IDs.
-
-    Strips non-alphanumeric characters and normalizes accents.
-    Examples:
-        "Detroit Lions" → "DetroitLions"
-        "D.C. United" → "DcUnited"
-        "Atlético Madrid" → "AtleticoMadrid"
-    """
-    import re
-    import unicodedata
-
-    # Normalize unicode (é → e)
-    normalized = unicodedata.normalize("NFKD", name)
-    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
-    # Keep only alphanumeric, split on non-alpha
-    words = re.split(r"[^a-zA-Z0-9]+", ascii_name)
-    return "".join(word.capitalize() for word in words if word)
-
-
 def _get_opponent(ctx: TemplateContext, game_ctx: GameContext | None):
     """Helper to get opponent team from game context."""
     if not game_ctx or not game_ctx.event:
@@ -68,18 +48,6 @@ def extract_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> s
 
 
 @register_variable(
-    name="team_abbrev_lower",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Team abbreviation lowercase (e.g., 'det')",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    abbrev = ctx.team_config.team_abbrev or ""
-    return abbrev.lower()
-
-
-@register_variable(
     name="team_short",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.BASE_ONLY,
@@ -88,17 +56,6 @@ def extract_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None
 )
 def extract_team_short(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     return ctx.team_config.team_short_name or ""
-
-
-@register_variable(
-    name="team_name_pascal",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Team name in PascalCase for channel IDs (e.g., 'DetroitLions')",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_team_name_pascal(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    return _to_pascal_case(ctx.team_config.team_name or "")
 
 
 @register_variable(
@@ -123,18 +80,6 @@ def extract_opponent(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 def extract_opponent_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     opponent = _get_opponent(ctx, game_ctx)
     return opponent.abbreviation.upper() if opponent else ""
-
-
-@register_variable(
-    name="opponent_abbrev_lower",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.ALL,
-    description="Opponent abbreviation lowercase",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_opponent_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    opponent = _get_opponent(ctx, game_ctx)
-    return opponent.abbreviation.lower() if opponent else ""
 
 
 @register_variable(
@@ -319,17 +264,6 @@ def extract_sport(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
     service = get_league_mapping_service()
     return service.get_sport_display_name(sport_code)
-
-
-@register_variable(
-    name="sport_lower",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Sport in lowercase (e.g., 'football')",
-)
-def extract_sport_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    sport = ctx.team_config.sport or ""
-    return sport.lower()
 
 
 @register_variable(

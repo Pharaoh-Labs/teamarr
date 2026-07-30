@@ -1,7 +1,7 @@
 """Tests for feed team template variables (PR #187) + broadcast feed labels (#195).
 
 Verifies that {feed_team}, {feed_team_short}, {feed_team_abbrev},
-{feed_team_abbrev_lower}, {feed_team_logo}, {is_home_feed}, {is_away_feed},
+{feed_team_logo}, {is_home_feed}, {is_away_feed},
 {feed_home_away}, {broadcast_feed}, and {broadcast_feed_team} extract
 correctly for the three feed states (none / home team / away team).
 """
@@ -22,7 +22,6 @@ from teamarr.templates.variables.home_away import (
     extract_feed_home_away,
     extract_feed_team,
     extract_feed_team_abbrev,
-    extract_feed_team_abbrev_lower,
     extract_feed_team_logo,
     extract_feed_team_short,
     extract_is_away_feed,
@@ -99,7 +98,6 @@ _GRID = [
     (extract_feed_team, "Baltimore Orioles", "New York Yankees"),
     (extract_feed_team_short, "Orioles", "Yankees"),
     (extract_feed_team_abbrev, "BAL", "NYY"),
-    (extract_feed_team_abbrev_lower, "bal", "nyy"),
     (extract_feed_team_logo, "https://example.com/bal.png", "https://example.com/nyy.png"),
     (extract_is_home_feed, "true", "false"),
     (extract_is_away_feed, "false", "true"),
