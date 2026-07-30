@@ -144,13 +144,17 @@ class ChannelCreator(_LifecycleHost):
                         feed_team = matched.get("feed_team")
                         feed_team_id = feed_team.id if feed_team else None
 
-                        # Per-stream resolved team (#489) for team_feed/
-                        # not_team_feed ordering rules. Feed resolution first;
-                        # for TEAM_ONLY streams fall back to the matched side's
+                        # Per-stream resolved team (#489/#527) for team_feed/
+                        # not_team_feed ordering rules. Reads stream_feed_team —
+                        # populated even when feed separation is off; for
+                        # TEAM_ONLY streams fall back to the matched side's
                         # team. Distinct from feed_team_id above: this is only
                         # persisted on the stream row and never creates
                         # feed-separated channels.
-                        stream_feed_team_id = feed_team_id
+                        stream_feed_team = matched.get("stream_feed_team")
+                        stream_feed_team_id = (
+                            stream_feed_team.id if stream_feed_team else None
+                        )
                         if stream_feed_team_id is None:
                             side = matched.get("matched_side")
                             if side == "home" and event.home_team:

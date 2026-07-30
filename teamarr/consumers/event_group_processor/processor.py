@@ -713,12 +713,15 @@ class EventGroupProcessor(
                 streams, match_result, stream_timezone=group.stream_timezone
             )
 
-            # Step 4a: Resolve feed hints to actual teams
+            # Step 4a: Resolve feed hints to actual teams. Always runs (#527):
+            # identification persists per-stream for team_feed ordering rules;
+            # feed_separation.enabled gates only channel splitting.
             feed_settings = get_feed_separation_settings(conn)
-            if feed_settings.enabled:
-                matched_streams = self._resolve_feed_teams(
-                    matched_streams, feed_settings.detect_team_names
-                )
+            matched_streams = self._resolve_feed_teams(
+                matched_streams,
+                feed_settings.detect_team_names,
+                feed_settings.enabled,
+            )
 
             # Sort channels: sport → league → time → event_id (fixed order since v59)
             matched_streams = self._sort_matched_streams(matched_streams)

@@ -80,10 +80,13 @@ class StreamMatching:
             match_days_ahead = (row["event_match_days_ahead"] if row else 3) or 3
             tennis_majors_only = bool(row["tennis_majors_only"]) if row else False
 
-            # Load feed separation settings
+            # Load feed separation settings. Terms always reach the matcher:
+            # feed identification is unconditional (#527) — the
+            # feed_separation.enabled toggle gates only channel splitting
+            # (see _resolve_feed_teams / processor Step 4a).
             feed_settings = get_feed_separation_settings(conn)
-            feed_home_terms = feed_settings.home_terms if feed_settings.enabled else None
-            feed_away_terms = feed_settings.away_terms if feed_settings.enabled else None
+            feed_home_terms = feed_settings.home_terms
+            feed_away_terms = feed_settings.away_terms
 
         sport_durations = self._load_sport_durations_cached()
 
@@ -417,6 +420,7 @@ class StreamMatching:
         self,
         matched_streams: list[dict],
         detect_team_names: bool,
+        separation_enabled: bool,
     ) -> list[dict]:
         """Resolve feed hints to actual teams (Phase 2 feed separation).
 
@@ -434,9 +438,17 @@ class StreamMatching:
         a stream whose tvg-id is 'Brewers.TV' is the Brewers feed even when
         the display name alone gives no signal.
 
+        Identification is decoupled from feed separation (#527): resolution
+        always runs and the result always lands in 'stream_feed_team' (per-
+        stream feed_team_id → team_feed/not_team_feed ordering rules). The
+        channel-level 'feed_team' key — which splits channels per feed and
+        keys tvg_ids/naming — is populated only when separation_enabled.
+
         Args:
             matched_streams: List of matched stream dicts with 'event', 'stream', 'feed_hint'
             detect_team_names: Whether to scan stream names for team name patterns
+            separation_enabled: Whether resolved teams also create feed-separated
+                channels (feed_separation.enabled master toggle)
         """
         for entry in matched_streams:
             event = entry.get("event")
@@ -469,14 +481,16 @@ class StreamMatching:
                             source = "team_name_detect"
                             break
 
-            entry["feed_team"] = feed_team
+            entry["stream_feed_team"] = feed_team
+            entry["feed_team"] = feed_team if separation_enabled else None
 
             if feed_team:
                 logger.info(
-                    "[FEED] Stream '%s' → feed_team=%s (hint=%s)",
+                    "[FEED] Stream '%s' → feed_team=%s (hint=%s, separation=%s)",
                     entry["stream"]["name"][:50],
                     feed_team.name,
                     source,
+                    "on" if separation_enabled else "off",
                 )
 
         return matched_streams
