@@ -135,8 +135,10 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   group: "Event Group",
   regex: "Regex",
   stream_type: "Stream Type",
-  team_feed: "Home/Away Feed",
-  not_team_feed: "Not Home/Away Feed",
+  team_feed: "Specific Team's Feed",
+  not_team_feed: "Not That Team's Feed",
+  home_feed: "Home Side's Feed",
+  away_feed: "Away Side's Feed",
   epg_match: "EPG Match",
   dispatcharr_group: "Dispatcharr Group",
   stats_metric: "Stats Metric",
@@ -326,6 +328,28 @@ const METHOD_INFO: Record<string, { label: string; desc: string }> = {
   keyword: { label: "Keyword", desc: "Matched via an event keyword (e.g. UFC / boxing cards)." },
   user_corrected: { label: "Pinned", desc: "Manually corrected by you — pinned, never auto-rematched." },
   no_match: { label: "No match", desc: "No event matched this stream." },
+}
+
+// Which side of the matchup a stream's feed is (#533). Tri-state: home, away,
+// or unknown — rendered as an em dash, NOT as one of the two sides. Unknown
+// means either no feed signal on the stream or a sport with no home/away at
+// all, and it deliberately matches neither feed-side ordering rule.
+function FeedSideCell({ side }: { side?: string | null }) {
+  if (side !== "home" && side !== "away") {
+    return <span className="text-muted-foreground/60">—</span>
+  }
+  const isHome = side === "home"
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium ${
+        isHome
+          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+      }`}
+    >
+      {isHome ? "HOME" : "AWAY"}
+    </span>
+  )
 }
 
 // Clickable match-method badge → popover explaining how/why the stream matched
@@ -566,10 +590,11 @@ const ChannelRow = React.memo(function ChannelRow({
             ) : (
               <table className="w-full text-xs">
                 <colgroup>
-                  <col className="w-[28%]" />
-                  <col className="w-[18%]" />
+                  <col className="w-[24%]" />
                   <col className="w-[16%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[10%]" />
+                  <col className="w-[8%]" />
                   <col className="w-[6%]" />
                   <col className="w-[22%]" />
                 </colgroup>
@@ -579,6 +604,17 @@ const ChannelRow = React.memo(function ChannelRow({
                     <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
                     <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
                     <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">
+                      <span className="inline-flex items-center gap-1">
+                        Feed
+                        <RichTooltip
+                          content="Which side of the matchup this stream's feed belongs to. “—” means unknown — either the stream carries no feed signal, or the sport has no home/away at all (racing, combat). Unknown is never assumed to be one side or the other, and it matches neither the Home nor the Away feed-side ordering rule."
+                          side="top"
+                        >
+                          <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                        </RichTooltip>
+                      </span>
+                    </th>
                     <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Sort</th>
                     <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
                       <span className="inline-flex items-center gap-1">
@@ -600,6 +636,7 @@ const ChannelRow = React.memo(function ChannelRow({
                       <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
                       <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
                       <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
+                      <td className="py-1 pr-4"><FeedSideCell side={stream.feed_side} /></td>
                       <td className="py-1 pr-4"><PriorityCell priority={stream.priority} expected={stream.expected_priority} rules={stream.matched_rules} generating={isGenerating} /></td>
                       <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
                     </tr>

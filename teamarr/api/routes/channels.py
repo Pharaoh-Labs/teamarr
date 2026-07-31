@@ -198,6 +198,10 @@ class ChannelStreamEntry(BaseModel):
     m3u_account_name: str | None = None
     match_method: str | None = None
     match_type: str | None = None
+    # Which side this feed is: 'home', 'away', or None = UNKNOWN (#533).
+    # None is a real answer (no feed signal, or a sport with no sides) — the
+    # UI renders it as "—", never as the opposite side.
+    feed_side: str | None = None
     exception_keyword: str | None = None
     priority: int = 0  # stored sort key from the last generation run
     expected_priority: int = 0  # recomputed under current rules (drives staleness flag)
@@ -418,6 +422,7 @@ def get_managed_channel_streams(channel_id: int):
                 m3u_account_name=s.m3u_account_name,
                 match_method=s.match_method,
                 match_type=s.match_type,
+                feed_side=s.feed_side,
                 exception_keyword=s.exception_keyword,
                 priority=s.priority,
                 expected_priority=expected_by_stream.get(s.dispatcharr_stream_id, s.priority),

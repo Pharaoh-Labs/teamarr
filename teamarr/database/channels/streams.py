@@ -53,6 +53,7 @@ def add_stream_to_channel(
         "match_type",
         "match_method",  # how matched ('epg', 'fuzzy', …); drives the epg_match ordering rule
         "feed_team_id",  # resolved feed/matched team; drives team_feed rules (#489)
+        "feed_side",  # 'home'/'away'; NULL = unknown. Drives home_feed/away_feed rules (#533)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
         "attach_at",   # time-windowed membership (183.5); None = full-life
         "detach_at",
@@ -184,6 +185,7 @@ def compute_stream_priority_from_rules(
     match_method: str | None = None,
     dispatcharr_channel_group: str | None = None,
     feed_team_id: str | None = None,
+    feed_side: str | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
@@ -192,10 +194,11 @@ def compute_stream_priority_from_rules(
 
     Callers should pass every field they have (#379): rule types match on
     match_type (stream_type rules), match_method (epg_match rules),
-    dispatcharr_channel_group (dispatcharr_group rules), and feed_team_id
-    (team_feed/not_team_feed rules, #489) — omitting them makes those rules
-    silently non-matching at attach time, so the order pushed to Dispatcharr
-    is wrong until the end-of-generation reorder pass corrects it.
+    dispatcharr_channel_group (dispatcharr_group rules), feed_team_id
+    (team_feed/not_team_feed rules, #489), and feed_side (home_feed/away_feed
+    rules, #533) — omitting them makes those rules silently non-matching at
+    attach time, so the order pushed to Dispatcharr is wrong until the
+    end-of-generation reorder pass corrects it.
 
     Args:
         conn: Database connection
@@ -206,6 +209,8 @@ def compute_stream_priority_from_rules(
         match_method: 'epg', 'fuzzy', etc. (for epg_match rules)
         dispatcharr_channel_group: DP channel group name (for dispatcharr_group rules)
         feed_team_id: Resolved feed/matched team id (for team_feed rules)
+        feed_side: 'home'/'away', or None = unknown (for home_feed/away_feed
+            rules). Unknown matches neither rule — never coerced to a side.
 
     Returns:
         Computed priority (lower = higher priority)
@@ -230,6 +235,7 @@ def compute_stream_priority_from_rules(
         match_method=match_method,
         dispatcharr_channel_group=dispatcharr_channel_group,
         feed_team_id=feed_team_id,
+        feed_side=feed_side,
     )
 
     return ordering_service.compute_priority(temp_stream)
@@ -369,6 +375,49 @@ def update_stream_feed_team(
             dispatcharr_stream_id,
             managed_channel_id,
             feed_team_id,
+        )
+    return cursor.rowcount > 0
+
+
+def update_stream_feed_side(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    feed_side: str,
+) -> bool:
+    """Backfill/refresh the resolved feed side of an attached stream (#533).
+
+    Rows attached before the feed_side column existed carry NULL (unknown);
+    called each generation for already-attached streams so home_feed/away_feed
+    ordering rules see the resolved side without waiting for re-attach.
+
+    Guarded on a resolved value — the caller must not pass None. An unknown
+    side is left as NULL rather than written, so a transient resolution miss
+    can never overwrite a good row, and NULL keeps meaning "we don't know"
+    instead of being confused with a negative answer.
+
+    Returns:
+        True if a row was updated (value actually changed), False otherwise
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET feed_side = ?
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND feed_side IS NOT ?""",
+        (
+            feed_side,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            feed_side,
+        ),
+    )
+    if cursor.rowcount > 0:
+        logger.debug(
+            "[FEED] Stream %d on channel %d feed_side -> %s",
+            dispatcharr_stream_id,
+            managed_channel_id,
+            feed_side,
         )
     return cursor.rowcount > 0
 

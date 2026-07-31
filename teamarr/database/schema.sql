@@ -1492,6 +1492,8 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
         CHECK(match_type IN ('event', 'team')),
     match_method TEXT,                        -- how the stream was matched: 'epg', 'fuzzy', 'cache', etc. (drives the epg_match stream-ordering rule)
     feed_team_id TEXT,                        -- (#489) resolved feed/matched team (provider team id, same namespace as managed_channels.feed_team_id); drives team_feed/not_team_feed ordering rules ahead of the name regex. NULL = no team resolved.
+    feed_side TEXT                            -- (#533) which side this feed is: 'home', 'away', or NULL = UNKNOWN. Tri-state by design — NULL is a real value (no feed signal, or a sport with no sides), never "not home therefore away". Drives home_feed/away_feed ordering rules; unknown matches neither.
+        CHECK(feed_side IN ('home', 'away')),
     dispatcharr_channel_group TEXT,           -- (ybt.3) the DP channel's own group name, for channel-source streams; drives the 'dispatcharr_group' stream-ordering rule. NULL for non-channel-source streams.
 
     -- Priority (0 = primary, higher = failover)

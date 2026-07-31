@@ -127,6 +127,12 @@ class ManagedChannelStream:
     # managed_channels.feed_team_id. Drives team_feed/not_team_feed ordering
     # rules ahead of the name regex. NULL = no team resolved for this stream.
     feed_team_id: str | None = None
+    # (#533) Which side this feed is: 'home', 'away', or None = UNKNOWN.
+    # Tri-state on purpose — None is a real answer (no feed signal on the
+    # stream, or a sport with no sides at all), NEVER "not home therefore
+    # away". Drives home_feed/away_feed ordering rules; unknown matches
+    # neither and falls to the catch-all band.
+    feed_side: str | None = None
     # DP channel's own group name (channel-source streams) — drives the
     # dispatcharr_group ordering rule (ybt.3). NULL for non-channel-source streams.
     dispatcharr_channel_group: str | None = None
@@ -166,6 +172,7 @@ class ManagedChannelStream:
             match_type=row.get("match_type", "event"),
             match_method=row.get("match_method"),
             feed_team_id=row.get("feed_team_id"),
+            feed_side=row.get("feed_side"),
             dispatcharr_channel_group=row.get("dispatcharr_channel_group"),
             added_at=row.get("added_at"),
             removed_at=row.get("removed_at"),

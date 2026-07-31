@@ -151,7 +151,7 @@ export interface ChannelNumberingSettingsUpdate {
 }
 
 export interface StreamOrderingRule {
-  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "stats_metric" | "catch_all"
+  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "home_feed" | "away_feed" | "stats_metric" | "catch_all"
   value: string
   priority: number  // 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
   mode: "priority" | "score"  // 'priority' = hard first-match band; 'score' = additive
