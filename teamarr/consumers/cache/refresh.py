@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Expected league counts per provider (for progress estimation)
 # These are approximate and used for work-proportional progress allocation
 EXPECTED_LEAGUES = {
-    "espn": 280,  # ~52 configured + ~228 discovered soccer leagues
+    "espn": 280,  # ~98 configured + ~180 discovered soccer leagues
     "tsdb": 6,  # NRL, Boxing, IPL, BBL, SA20, Svenska Cupen + free tier leagues
     "hockeytech": 6,
     "mlbstats": 5,  # AAA, AA, High-A, Single-A, Rookie
