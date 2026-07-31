@@ -764,6 +764,7 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     broadcast TEXT,
 
     -- Lifecycle
+    event_end_estimate TIMESTAMP,            -- (#533/#522) session-aware estimated event end, set at creation from get_event_end_time(). The delete-time recalc applies timing policy to THIS instead of re-deriving start+sport_duration, which is session-blind and would cut a race weekend short after Friday practice. NULL = unknown (pre-column rows) -> recalc falls back to the naive derivation.
     scheduled_delete_at TIMESTAMP,           -- When to delete (based on delete_timing)
     deleted_at TIMESTAMP,                    -- When actually deleted
     delete_reason TEXT,                      -- Why deleted (expired, stream_removed, manual, etc.)

@@ -6,10 +6,12 @@ including soccer league consolidation and non-soccer deduplication.
 
 import json
 import logging
+import sqlite3
 from dataclasses import dataclass
 from sqlite3 import Connection
 
-from teamarr.database.leagues import get_league_id
+from teamarr.database.leagues import get_league_display, get_league_id
+from teamarr.database.teams import render_channel_id
 
 logger = logging.getLogger(__name__)
 
@@ -48,26 +50,50 @@ def _parse_leagues(leagues_str: str | None) -> list[str]:
 
 _TBD_NAMES = {"tbd", "tbd tbd"}
 
+# Mirrors DisplaySettings.channel_id_format's default. Used only as a rescue
+# when a user template renders empty — never to override a configured value.
+DEFAULT_CHANNEL_ID_FORMAT = "{team_name|pascal}.{league_id}"
+
 
 def _generate_channel_id(
     conn: Connection,
-    team_name: str,
-    primary_league: str,
-    provider_team_id: str,
+    team: ImportTeam,
     used_ids: set[str],
+    format_template: str,
 ) -> str:
-    """Generate a unique channel ID from team name and league.
+    """Generate a unique channel ID for an imported team.
+
+    Uses the `channel_id_format` display setting (#522) rather than a hardcoded
+    shape, so import and bulk regeneration produce the same house style. The
+    default template is "{team_name|pascal}.{league_id}" — byte-identical to
+    the shape import hardcoded before, so existing installs see no change.
 
     If the base channel_id collides with an existing DB row or an ID already
     used in this import batch, appends the provider_team_id to disambiguate.
     """
 
-    name = "".join(
-        word.capitalize()
-        for word in "".join(c if c.isalnum() or c.isspace() else "" for c in team_name).split()
+    league_id = get_league_id(conn, team.league)
+    base_id = render_channel_id(
+        format_template,
+        team_name=team.team_name,
+        team_abbrev=team.team_abbrev,
+        provider_team_id=team.provider_team_id,
+        league_id=league_id,
+        # Only resolved when the template asks for it: {league} is rare, and
+        # get_league_display touches columns a minimal schema may not carry.
+        league_display=(
+            get_league_display(conn, team.league) if "{league}" in format_template else ""
+        ),
+        sport=team.sport,
     )
-    league_id = get_league_id(conn, primary_league)
-    base_id = f"{name}.{league_id}"
+    if not base_id:
+        # Template rendered empty (e.g. a token-only template with no data) —
+        # fall back to the default shape rather than writing an empty id.
+        base_id = render_channel_id(
+            DEFAULT_CHANNEL_ID_FORMAT,
+            team_name=team.team_name,
+            league_id=league_id,
+        )
 
     if base_id not in used_ids:
         row = conn.execute(
@@ -77,7 +103,7 @@ def _generate_channel_id(
             return base_id
 
     # Collision — disambiguate with provider team ID
-    return f"{base_id}.{provider_team_id}"
+    return f"{base_id}.{team.provider_team_id}"
 
 
 def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult:
@@ -110,6 +136,20 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
     updated = 0
     skipped = 0
     used_ids: set[str] = set()  # Track channel_ids used in this batch
+
+    # Read the channel-id template once per run, not per team (#522).
+    # bulk_import_teams accepts any connection carrying a teams+leagues schema
+    # (see tests), so a missing settings table must not make it unusable —
+    # fall back to the default template, which is what import hardcoded before.
+    from teamarr.database.settings import get_display_settings
+
+    try:
+        channel_id_format = (
+            get_display_settings(conn).channel_id_format or DEFAULT_CHANNEL_ID_FORMAT
+        )
+    except sqlite3.OperationalError:
+        logger.debug("[BULK_IMPORT] settings unavailable; using default channel_id_format")
+        channel_id_format = DEFAULT_CHANNEL_ID_FORMAT
 
     # Build two indexes for existing teams:
     # 1. Full key (provider, id, sport, league) - for exact lookups
@@ -183,9 +223,7 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
                     updated += 1
             else:
                 # Create new soccer team
-                channel_id = _generate_channel_id(
-                    conn, team.team_name, team.league, team.provider_team_id, used_ids
-                )
+                channel_id = _generate_channel_id(conn, team, used_ids, channel_id_format)
                 leagues_json = json.dumps(sorted(all_leagues))
                 cursor = conn.execute(
                     """
@@ -218,9 +256,7 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
             if full_key in existing_full:
                 skipped += 1
             else:
-                channel_id = _generate_channel_id(
-                    conn, team.team_name, team.league, team.provider_team_id, used_ids
-                )
+                channel_id = _generate_channel_id(conn, team, used_ids, channel_id_format)
                 leagues_json = json.dumps([team.league])
                 cursor = conn.execute(
                     """

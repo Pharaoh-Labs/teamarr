@@ -22,7 +22,7 @@ const RESET_PRESETS: { label: string; cron: string }[] = [
  * Scheduled Channel Reset — periodically purges all Teamarr channels in
  * Dispatcharr so the media server's guide refresh picks up fresh logos/data.
  * A media-server-agnostic workaround (originally documented for Jellyfin stale
- * logos); lives in the Media Servers tab as of the v2.7.0 IA overhaul.
+ * logos); lives in the Advanced tab as of the v2.7.0 IA overhaul.
  *
  * Self-contained via its own scheduler hooks. Saves only the channel_reset_*
  * fields — the scheduler update is a merge, so this never touches the

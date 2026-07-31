@@ -328,7 +328,7 @@ function BulkEditForm({
             <div className="flex items-center gap-3 pl-6">
               <Switch checked={epgMatch} onCheckedChange={setEpgMatch} />
               <span className="text-sm text-muted-foreground">
-                {epgMatch ? "Enabled — match static-named linear channels to events via Dispatcharr's program guide (requires the global EPG matching switch)" : "Disabled"}
+                {epgMatch ? "Enabled — match static-named linear channels to events via Dispatcharr's program guide" : "Disabled"}
               </span>
             </div>
           )}

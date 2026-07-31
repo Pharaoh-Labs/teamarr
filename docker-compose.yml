@@ -8,7 +8,9 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      # Timezone for all date/time display and XMLTV output
+      # Container timezone: affects log timestamps and scheduler wall-clock
+      # times. XMLTV output times come from the EPG timezone setting in the
+      # UI, not from this.
       - TZ=America/Detroit
 
       # Console log level: DEBUG, INFO, WARNING, ERROR (default: INFO)

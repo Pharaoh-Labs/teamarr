@@ -4,7 +4,10 @@ parent: User Guide
 nav_order: 8
 has_children: true
 redirect_from:
-  - /guide/channels/
+  # Do NOT add /guide/channels/ here — that is this page's own URL, so
+  # jekyll-redirect-from writes the stub over guide/channels/index.html and
+  # the page redirects to itself forever. Only genuinely different legacy
+  # paths belong in this list.
   - /guide/channels.html
   - /guide/settings/channels/
   - /guide/settings/channels.html

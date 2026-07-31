@@ -628,7 +628,7 @@ export function EventGroupForm() {
                       }}
                     />
                     <span className="text-sm font-normal">
-                      Use default team filter (set in Global Defaults above)
+                      Use default team filter (set in Global Defaults on the Subscriptions page)
                     </span>
                   </label>
 
@@ -723,7 +723,7 @@ export function EventGroupForm() {
                         </span>
                       </label>
                       <p className="text-xs text-muted-foreground -mt-1 ml-6">
-                        Unchecked uses the global default from Settings
+                        Unchecked uses the global default from Global Defaults on the Subscriptions page
                       </p>
 
                       <div className="space-y-1 mt-2">

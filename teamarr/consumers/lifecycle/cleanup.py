@@ -207,10 +207,21 @@ class ChannelCleanup(_LifecycleHost):
                 event_start = parser.parse(str(channel.event_date))
                 event_start = to_user_tz(event_start)
 
-                # Calculate event end time using sport-specific duration
-                sport = channel.sport or "other"
-                duration_hours = get_sport_duration(sport, sport_durations, default_duration)
-                event_end = event_start + timedelta(hours=duration_hours)
+                # Event end: prefer the estimate persisted at creation (#522).
+                # That one is session-aware; re-deriving it here from
+                # event_date + sport duration is not, because sessions aren't
+                # on the channel row. For a multi-day race weekend the naive
+                # derivation lands after Friday practice, and since this loop
+                # OVERWRITES scheduled_delete_at it would delete the channel
+                # before the race. NULL (pre-column rows) falls back to the
+                # naive derivation — unchanged behaviour, not a guess dressed
+                # up as an answer.
+                if channel.event_end_estimate:
+                    event_end = to_user_tz(parser.parse(str(channel.event_end_estimate)))
+                else:
+                    sport = channel.sport or "other"
+                    duration_hours = get_sport_duration(sport, sport_durations, default_duration)
+                    event_end = event_start + timedelta(hours=duration_hours)
 
                 # Calculate delete threshold based on timing setting
                 if delete_timing == "after_event":

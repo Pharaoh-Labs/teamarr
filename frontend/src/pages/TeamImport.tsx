@@ -379,7 +379,7 @@ export function TeamImport() {
           ) : Object.keys(leaguesBySport).length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
               <p className="mb-2">No leagues cached.</p>
-              <p>Go to Settings → Cache to refresh the team/league cache.</p>
+              <p>Go to Settings → Advanced (Data Caches) to refresh the team/league cache.</p>
             </div>
           ) : (
             <div className="py-1">

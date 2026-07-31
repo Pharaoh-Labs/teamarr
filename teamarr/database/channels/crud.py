@@ -94,6 +94,7 @@ def create_managed_channel(
         "sport",
         "venue",
         "broadcast",
+        "event_end_estimate",
         "scheduled_delete_at",
         "sync_status",
     ]

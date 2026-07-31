@@ -136,7 +136,7 @@ def require_custom_leagues_enabled(conn: sqlite3.Connection) -> None:
     if not custom_leagues_enabled(conn):
         raise CustomLeagueGateError(
             "Custom leagues require a TheSportsDB premium key. "
-            "Add one in Settings > System > TheSportsDB API Key."
+            "Add one in Settings > General > TheSportsDB API Key."
         )
 
 

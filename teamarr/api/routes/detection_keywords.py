@@ -169,9 +169,16 @@ def list_categories():
             {
                 "id": "event_type_keywords",
                 "name": "Event Type Detection",
-                "description": "Keywords that detect event type (routed to type-specific pipeline)",
+                "description": (
+                    "Keywords that detect combat-sports event cards "
+                    "(routed to the event-card pipeline)"
+                ),
                 "has_target": True,
-                "target_description": "Event type: EVENT_CARD, TEAM_VS_TEAM, FIELD_EVENT",
+                # EVENT_CARD is the only target detect_event_type() consumes:
+                # TEAM_VS_TEAM is recognised via separators (the keyword loop
+                # skips it) and FIELD_EVENT is not a StreamCategory. Listing
+                # them here offered silent no-op targets in the keyword form.
+                "target_description": "Event type: EVENT_CARD",
             },
             {
                 "id": "league_hints",

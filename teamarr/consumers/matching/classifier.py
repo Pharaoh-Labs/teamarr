@@ -1834,7 +1834,7 @@ def _classify_tennis_match(ctx: _ClassifyContext) -> ClassifiedStream | None:
     TennisMatcher). Court/round/day feeds ("Wimbledon Day #6 No 1
     Court") have no separator — they still classify TENNIS_MATCH with
     only an event_hint so the matcher can report a precise reason
-    (court-feed matching is a planned phase 2).
+    (court feeds are matched by TennisMatcher.match_feed).
     """
     if not is_tennis(
         ctx.league_event_type, ctx.league_hint, ctx.sport_hint, ctx.event_league_sport

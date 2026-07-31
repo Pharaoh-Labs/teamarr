@@ -714,6 +714,9 @@ export function EventGroups() {
                               group.custom_regex_month_enabled ||
                               group.custom_regex_day_enabled ||
                               group.custom_regex_time_enabled ||
+                              group.custom_regex_league_enabled ||
+                              group.custom_regex_fighters_enabled ||
+                              group.custom_regex_event_name_enabled ||
                               group.stream_include_regex_enabled ||
                               group.stream_exclude_regex_enabled) && (
                               <Badge
@@ -725,6 +728,9 @@ export function EventGroups() {
                                   group.custom_regex_month_enabled && "month",
                                   group.custom_regex_day_enabled && "day",
                                   group.custom_regex_time_enabled && "time",
+                                  group.custom_regex_league_enabled && "league",
+                                  group.custom_regex_fighters_enabled && "fighters",
+                                  group.custom_regex_event_name_enabled && "event name",
                                   group.stream_include_regex_enabled && "include",
                                   group.stream_exclude_regex_enabled && "exclude",
                                 ].filter(Boolean).join(", ")}`}

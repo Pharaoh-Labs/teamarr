@@ -540,7 +540,7 @@ function RuleRow({
                 ))}
               </Select>
               <RichTooltip
-                content="Sorts streams brought in via Settings → EPG → 'Use Dispatcharr channels as an EPG source'. The list shows the Dispatcharr channel groups you selected there. Only channel-source streams carry a Dispatcharr group; regular matched streams are unaffected."
+                content="Sorts streams brought in via Matching → 'Dispatcharr as a Stream Source'. The list shows the Dispatcharr channel groups you selected there. Only channel-source streams carry a Dispatcharr group; regular matched streams are unaffected."
                 side="top"
               >
                 <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />

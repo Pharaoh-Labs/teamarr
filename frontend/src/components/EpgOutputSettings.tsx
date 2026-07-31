@@ -118,7 +118,7 @@ export function EpgOutputSettings() {
             />
             <p className="text-xs text-muted-foreground">
               Optional. Prefixed onto relative art paths in templates (e.g. a template
-              value of <code>/{"{league}"}/{"{home_team}"}/cover.png</code> becomes the full
+              value of <code>{"{league}"}/{"{home_team}"}/cover.png</code> becomes the full
               URL). Absolute URLs in templates are left unchanged. See the{" "}
               <a
                 href={GAMETHUMBS_REPO_URL}
