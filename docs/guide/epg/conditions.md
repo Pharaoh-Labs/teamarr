@@ -29,7 +29,7 @@ In the template editor, each row carries a live **trace badge** driven by the se
 ![Conditions tab — preset library, prioritized rows with a live "fires" badge, and the Guide Preview](../../assets/images/template-conditions.png)
 
 {: .note }
-> The condition picker on **event** templates currently offers a reduced set (league/sport, summary, combat, and motorsports conditions) — the common game-state conditions (`is_final`, `is_playoff`, `has_odds`, …) are missing from its dropdown even though they evaluate correctly on event templates (the shipped event starters use them). A picker fix is queued.
+> The picker offers a different set per template type. **Event** templates get everything except the "our team" perspective conditions (`is_home`, `is_away`, `win_streak`, `loss_streak`, `is_ranked`, `is_ranked_opponent`, `opponent_name_contains`) — those need a subscribed team, and event channels are positional. **Team** templates get the full list.
 
 ### Condition presets
 

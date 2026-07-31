@@ -507,9 +507,14 @@ def get_conditions(template_type: str = "team"):
     ]
 
     if template_type == "event":
-        # Event templates get game-level + combat/motorsports conditions
+        # Event templates get everything except the "our team" perspective
+        # conditions. The common set belongs here (#521): event contexts are
+        # built home-team-first (event_epg.py), so team_stats/opponent_stats
+        # are populated and is_ranked_matchup/is_conference_game evaluate as
+        # written — and the shipped event starters already use is_final.
         conditions = (
             identity_conditions
+            + common_conditions
             + summary_conditions
             + combat_conditions
             + motorsports_conditions

@@ -716,6 +716,43 @@ def test_condition_parity_picker_vs_evaluator():
     )
 
 
+# Conditions that need the "our team" perspective (a subscribed team plus its
+# opponent). Event channels are positional, so these are the ONLY conditions
+# the event picker may withhold — see #521, where the event branch silently
+# dropped the whole common game-state group as well.
+TEAM_ONLY_CONDITIONS = {
+    "is_home",
+    "is_away",
+    "opponent_name_contains",
+    "win_streak",
+    "loss_streak",
+    "is_ranked",
+    "is_ranked_opponent",
+}
+
+
+def test_event_picker_withholds_only_team_perspective_conditions():
+    """The event list must be the team list minus TEAM_ONLY_CONDITIONS exactly.
+
+    Regression guard for #521: event contexts are built home-team-first, so
+    every non-perspective condition evaluates on event templates and belongs
+    in their picker. Dropping a group makes shipped starter templates use
+    conditions users cannot select.
+    """
+    team = {c["name"] for c in get_conditions("team")["conditions"]}
+    event = {c["name"] for c in get_conditions("event")["conditions"]}
+
+    assert TEAM_ONLY_CONDITIONS <= team, (
+        f"team picker lost perspective conditions: {sorted(TEAM_ONLY_CONDITIONS - team)}"
+    )
+    assert event == team - TEAM_ONLY_CONDITIONS, (
+        f"event picker missing: {sorted((team - TEAM_ONLY_CONDITIONS) - event)} · "
+        f"unexpectedly present: {sorted(event & TEAM_ONLY_CONDITIONS)}"
+    )
+    # The group that went missing in #521, pinned by name.
+    assert {"is_final", "is_not_final", "is_playoff", "has_odds"} <= event
+
+
 # --- guarantee 4: every condition proves True and False ---------------------
 
 # condition -> (value, context where it must be True, context where it must
