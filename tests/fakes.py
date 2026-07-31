@@ -80,6 +80,9 @@ class FakeEvent:
     venue: str | None = None
     broadcasts: list = field(default_factory=list)
     status: FakeStatus | None = None
+    # Real Event carries this; timing.get_event_end_time() reads it to find a
+    # multi-day event's true end. Empty = no sessions, the common case.
+    sessions: list = field(default_factory=list)
 
 
 def make_event(**overrides) -> FakeEvent:

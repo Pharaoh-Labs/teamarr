@@ -6,6 +6,7 @@ including soccer league consolidation and non-soccer deduplication.
 
 import json
 import logging
+import sqlite3
 from dataclasses import dataclass
 from sqlite3 import Connection
 
@@ -78,7 +79,11 @@ def _generate_channel_id(
         team_abbrev=team.team_abbrev,
         provider_team_id=team.provider_team_id,
         league_id=league_id,
-        league_display=get_league_display(conn, team.league),
+        # Only resolved when the template asks for it: {league} is rare, and
+        # get_league_display touches columns a minimal schema may not carry.
+        league_display=(
+            get_league_display(conn, team.league) if "{league}" in format_template else ""
+        ),
         sport=team.sport,
     )
     if not base_id:
@@ -133,11 +138,18 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
     used_ids: set[str] = set()  # Track channel_ids used in this batch
 
     # Read the channel-id template once per run, not per team (#522).
+    # bulk_import_teams accepts any connection carrying a teams+leagues schema
+    # (see tests), so a missing settings table must not make it unusable —
+    # fall back to the default template, which is what import hardcoded before.
     from teamarr.database.settings import get_display_settings
 
-    channel_id_format = (
-        get_display_settings(conn).channel_id_format or DEFAULT_CHANNEL_ID_FORMAT
-    )
+    try:
+        channel_id_format = (
+            get_display_settings(conn).channel_id_format or DEFAULT_CHANNEL_ID_FORMAT
+        )
+    except sqlite3.OperationalError:
+        logger.debug("[BULK_IMPORT] settings unavailable; using default channel_id_format")
+        channel_id_format = DEFAULT_CHANNEL_ID_FORMAT
 
     # Build two indexes for existing teams:
     # 1. Full key (provider, id, sport, league) - for exact lookups

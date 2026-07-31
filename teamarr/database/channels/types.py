@@ -48,6 +48,11 @@ class ManagedChannel:
     sport: str | None = None
 
     # Lifecycle
+    # (#522) Session-aware estimated event end, set at creation. The delete-time
+    # recalc applies timing policy to this instead of re-deriving it from
+    # event_date + sport duration, which can't see sessions. None = unknown
+    # (pre-column rows) → recalc falls back to the naive derivation.
+    event_end_estimate: datetime | None = None
     scheduled_delete_at: datetime | None = None
     deleted_at: datetime | None = None
     delete_reason: str | None = None
@@ -96,6 +101,7 @@ class ManagedChannel:
             event_name=row.get("event_name"),
             league=row.get("league"),
             sport=row.get("sport"),
+            event_end_estimate=row.get("event_end_estimate"),
             scheduled_delete_at=row.get("scheduled_delete_at"),
             deleted_at=row.get("deleted_at"),
             delete_reason=row.get("delete_reason"),

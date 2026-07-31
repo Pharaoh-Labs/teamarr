@@ -875,8 +875,18 @@ class ChannelCreator(_LifecycleHost):
                 error="Could not allocate channel number",
             )
 
-        # Calculate delete time
+        # Calculate delete time, and persist the session-aware event end it was
+        # derived from (#522). The per-run recalc can only see DB columns, so
+        # without this it re-derives the end as event_date + sport duration —
+        # session-blind, and for a multi-day race weekend that lands after
+        # Friday practice instead of Sunday's race.
         delete_time = self._timing_manager.calculate_delete_time(event)
+        # No start time → the end is genuinely unknown, so leave the column
+        # NULL rather than inventing one. The recalc treats NULL as "derive it
+        # the old way", and its loop already skips channels with no event_date.
+        event_end_estimate = (
+            self._timing_manager.get_event_end_time(event) if event.start_time else None
+        )
 
         # Resolve logo URL from template (supports template variables including {exception_keyword})
         logo_url = self._resolve_logo_url(
@@ -1000,6 +1010,9 @@ class ChannelCreator(_LifecycleHost):
                 # V1 Parity: Include venue and broadcast
                 venue=event.venue.name if event.venue else None,
                 broadcast=", ".join(event.broadcasts) if event.broadcasts else None,
+                event_end_estimate=(
+                    event_end_estimate.isoformat() if event_end_estimate else None
+                ),
                 scheduled_delete_at=delete_time.isoformat() if delete_time else None,
                 sync_status="in_sync" if dispatcharr_channel_id else "pending",
             )
