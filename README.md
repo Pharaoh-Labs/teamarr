@@ -35,8 +35,6 @@ docker compose up -d
 
 **Official Docs**: [pharaoh-labs.github.io/teamarr](https://pharaoh-labs.github.io/teamarr/) — User Guide, Technical Reference, Supported Leagues
 
-**Community Guide**: https://teamarr-v2.jesmann.com/
-
 ## License
 
 MIT

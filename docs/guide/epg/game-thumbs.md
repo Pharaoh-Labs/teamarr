@@ -46,7 +46,6 @@ The shipped [starter templates](../templates/defaults) use these Game Thumbs que
 | URL | User |
 |-----|------|
 | `https://game-thumbs.swvn.io` | @sethwv |
-| `https://sportslogos.jesmann.com` | @jesmannstlPanda |
 
 {: .important }
 Hosted instances are community-provided and may have usage limits.
