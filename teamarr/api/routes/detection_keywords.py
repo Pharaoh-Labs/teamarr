@@ -169,7 +169,10 @@ def list_categories():
             {
                 "id": "event_type_keywords",
                 "name": "Event Type Detection",
-                "description": "Keywords that detect combat-sports event cards (routed to the event-card pipeline)",
+                "description": (
+                    "Keywords that detect combat-sports event cards "
+                    "(routed to the event-card pipeline)"
+                ),
                 "has_target": True,
                 # EVENT_CARD is the only target detect_event_type() consumes:
                 # TEAM_VS_TEAM is recognised via separators (the keyword loop

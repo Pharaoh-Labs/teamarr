@@ -96,19 +96,42 @@ class KeywordOrderingEnforcer:
                     keyword_number = keyword_channel["channel_number"]
 
                     try:
-                        # Swap in Dispatcharr
+                        # Swap in Dispatcharr. Closed-loop contract (mirrors
+                        # lifecycle's _safe_update_channel): BOTH updates must
+                        # be confirmed before the swap is persisted locally.
+                        # On failure the DB is left unchanged so the next run
+                        # re-detects the wrong order and retries — persisting
+                        # a swap Dispatcharr rejected would make the DB agree
+                        # with itself and hide the drift from reconciliation.
                         if self._channel_manager:
                             with self._dispatcharr_lock:
                                 # Set main to keyword's (lower) number
-                                self._channel_manager.update_channel(
+                                main_ok = self._channel_manager.update_channel(
                                     main_channel["dispatcharr_channel_id"],
                                     {"channel_number": keyword_number},
                                 )
                                 # Set keyword to main's (higher) number
-                                self._channel_manager.update_channel(
+                                keyword_ok = self._channel_manager.update_channel(
                                     keyword_channel["dispatcharr_channel_id"],
                                     {"channel_number": main_number},
                                 )
+                            if not (main_ok.success and keyword_ok.success):
+                                logger.warning(
+                                    "[ORDERING] Dispatcharr rejected the number swap for "
+                                    "channel %s <-> %s (main_ok=%s keyword_ok=%s); leaving the "
+                                    "DB unchanged so the next run retries",
+                                    main_channel["dispatcharr_channel_id"],
+                                    keyword_channel["dispatcharr_channel_id"],
+                                    main_ok.success,
+                                    keyword_ok.success,
+                                )
+                                result.errors.append(
+                                    {
+                                        "channel_id": main_channel["dispatcharr_channel_id"],
+                                        "error": "Dispatcharr rejected the channel-number swap",
+                                    }
+                                )
+                                continue
 
                         # Swap in database
                         update_managed_channel(
