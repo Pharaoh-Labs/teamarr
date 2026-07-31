@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card"
 import { Alert } from "@/components/ui/alert"
 import { TeamEpgSettingsCard } from "@/components/TeamEpgSettingsCard"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useDisplaySettings } from "@/hooks/useSettings"
 import { useTableSort } from "@/hooks/useTableSort"
 import { useRowSelection } from "@/hooks/useRowSelection"
 import { Badge } from "@/components/ui/badge"
@@ -233,7 +234,13 @@ export function Teams() {
   const [channelIdMode, setChannelIdMode] = useState<"default" | "custom">("default")
   const [customChannelIdFormat, setCustomChannelIdFormat] = useState("")
   const [isUpdatingChannelIds, setIsUpdatingChannelIds] = useState(false)
-  const defaultChannelIdFormat = "{team_name|pascal}.{league_id}"
+  // The dialog's "Use Global Default Format" option reads the actual
+  // channel_id_format setting (#522) — the same template team import now uses,
+  // so the two paths can't silently disagree. Falls back to the dataclass
+  // default when settings haven't loaded yet.
+  const { data: displaySettings } = useDisplaySettings()
+  const defaultChannelIdFormat =
+    displaySettings?.channel_id_format || "{team_name|pascal}.{league_id}"
 
   // Edit dialog state
   const [showDialog, setShowDialog] = useState(false)

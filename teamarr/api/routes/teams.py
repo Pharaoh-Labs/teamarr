@@ -13,7 +13,7 @@ from teamarr.api.models import (
     TeamUpdate,
 )
 from teamarr.database import get_db
-from teamarr.database.leagues import get_league_id, get_league_sport
+from teamarr.database.leagues import get_league_sport
 from teamarr.database.teams import (
     bulk_update_channel_ids as db_bulk_update,
 )
@@ -43,20 +43,6 @@ from teamarr.services.team_import import bulk_import_teams as do_import
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def generate_channel_id(team_name: str, primary_league: str) -> str:
-    """Generate channel ID from team name and league."""
-
-    name = "".join(
-        word.capitalize()
-        for word in "".join(c if c.isalnum() or c.isspace() else "" for c in team_name).split()
-    )
-
-    with get_db() as conn:
-        league_id = get_league_id(conn, primary_league)
-
-    return f"{name}.{league_id}"
 
 
 def _can_consolidate_leagues(conn, league1: str, league2: str) -> bool:
