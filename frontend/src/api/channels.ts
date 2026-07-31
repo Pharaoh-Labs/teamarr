@@ -184,6 +184,7 @@ export interface ChannelStreamEntry {
   exception_keyword: string | null
   priority: number            // stored sort key from the last generation run
   expected_priority: number   // recomputed under current rules (for staleness)
+  feed_side?: string | null   // 'home' | 'away' | null = unknown (#533); null is a real answer
   stream_stats: Record<string, unknown> | null
   stream_stats_updated_at: string | null
   matched_rules: StreamRuleMatch[]

@@ -321,6 +321,10 @@ class StreamOrderingService:
             return self._match_team_feed(stream, rule.value)
         elif rule.type == "not_team_feed":
             return self._match_not_team_feed(stream, rule.value)
+        elif rule.type == "home_feed":
+            return self._match_feed_side(stream, "home")
+        elif rule.type == "away_feed":
+            return self._match_feed_side(stream, "away")
         elif rule.type == "epg_match":
             return self._match_epg_match(stream)
         elif rule.type == "dispatcharr_group":
@@ -409,6 +413,23 @@ class StreamOrderingService:
         if pattern is None:
             return False
         return not bool(pattern.search(stream.stream_name))
+
+    @staticmethod
+    def _match_feed_side(stream: ManagedChannelStream, side: str) -> bool:
+        """Match streams whose persisted feed side is exactly `side` (#533).
+
+        Tri-state, deliberately strict: feed_side is 'home', 'away', or NULL
+        meaning UNKNOWN. An unknown stream matches NEITHER home_feed nor
+        away_feed and falls through to the catch-all band — it is never
+        treated as the opposite side just because it isn't this one.
+
+        No name-regex fallback, unlike team_feed. The stream-name feed marker
+        is already consumed upstream (classifier.detect_and_strip_feed_hint →
+        resolve_feed_side) and persisted here, so re-deriving it at ranking
+        time would be a second, weaker copy of a decision already made with
+        the event in scope.
+        """
+        return stream.feed_side == side
 
     def _match_epg_match(self, stream: ManagedChannelStream) -> bool:
         """Match streams attached via EPG program-data matching (epic 183).

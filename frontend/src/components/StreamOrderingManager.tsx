@@ -271,7 +271,8 @@ const RULE_TYPES = [
   { value: "group", label: "Event Group", description: "Match streams by event group name" },
   { value: "regex", label: "Regex Pattern", description: "Match streams by regex against stream name" },
   { value: "stream_type", label: "Stream Type", description: "Match by how the stream was recognized: event, team, or EPG-matched (time-shared linear)" },
-  { value: "team_feed", label: "Home/Away Feed", description: "Match streams resolved as a team's own broadcast — team-branded channels (Brewers.TV), broadcast-market listings, team streams, or home/away markers in the name" },
+  { value: "team_feed", label: "Specific Team's Feed", description: "Match streams resolved as a particular team's own broadcast — team-branded channels (Brewers.TV), broadcast-market listings, team streams, or home/away markers in the name" },
+  { value: "home_feed", label: "Feed Side", description: "Match the home or away side's feed for whichever teams are playing — no team selection needed. Streams whose side we couldn't determine match neither and fall to Everything Else" },
   { value: "dispatcharr_group", label: "Dispatcharr Group", description: "Match channel-source streams by the Dispatcharr channel group you selected as an EPG source" },
   { value: "stats_metric", label: "Stream Stats", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
 ] as const
@@ -293,12 +294,13 @@ function parseStreamTypeValue(value: string) {
   }
 }
 
-const NO_VALUE_TYPES = new Set(["team_feed", "not_team_feed", "epg_match", "catch_all"])
+const NO_VALUE_TYPES = new Set(["team_feed", "not_team_feed", "epg_match", "home_feed", "away_feed", "catch_all"])
 
 // Mirrors backend VALID_RULE_TYPES (database/settings/types.py) — used to validate imports.
 const VALID_RULE_TYPES = new Set([
   "m3u", "group", "regex", "stream_type",
-  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "stats_metric", "catch_all",
+  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
+  "home_feed", "away_feed", "stats_metric", "catch_all",
 ])
 
 interface RuleFormData {
@@ -306,7 +308,7 @@ interface RuleFormData {
   // Without this, keying by array index causes focus to follow DOM position
   // instead of the rule, breaking double-digit priority entry (#198).
   _id: number
-  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "stats_metric" | "catch_all"
+  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "home_feed" | "away_feed" | "stats_metric" | "catch_all"
   value: string
   priority: number
   // 'priority' rules form the hard first-match band list; 'score' rules add
@@ -319,6 +321,9 @@ interface RuleFormData {
 const DEFAULT_SCORE_POINTS = 10
 
 const TEAM_FEED_FAMILY = new Set<RuleFormData["type"]>(["team_feed", "not_team_feed"])
+// home_feed/away_feed share one UI control (the Feed Side select), collapsed to
+// "home_feed" in the outer rule-type dropdown — same pattern as stream_type/epg_match.
+const FEED_SIDE_FAMILY = new Set<RuleFormData["type"]>(["home_feed", "away_feed"])
 // stream_type and epg_match share one UI control (the Stream Type select). epg_match
 // is the backend type emitted when "EPG matched stream" is chosen — the outer rule-type
 // dropdown collapses both to "stream_type".
@@ -488,9 +493,11 @@ function RuleRow({
             value={
               TEAM_FEED_FAMILY.has(rule.type)
                 ? "team_feed"
-                : STREAM_TYPE_FAMILY.has(rule.type)
-                  ? "stream_type"
-                  : rule.type
+                : FEED_SIDE_FAMILY.has(rule.type)
+                  ? "home_feed"
+                  : STREAM_TYPE_FAMILY.has(rule.type)
+                    ? "stream_type"
+                    : rule.type
             }
             onChange={(e) => handleTypeChange(e.target.value as RuleFormData["type"])}
           >
@@ -598,6 +605,22 @@ function RuleRow({
                 selected={rule.value ? rule.value.split(",") : []}
                 onChange={(ids) => onUpdate(index, { ...rule, value: ids.join(",") })}
               />
+            </div>
+          ) : FEED_SIDE_FAMILY.has(rule.type) ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={rule.type}
+                onChange={(e) => onUpdate(index, { ...rule, type: e.target.value as RuleFormData["type"], value: "" })}
+              >
+                <option value="home_feed">Home side's feed</option>
+                <option value="away_feed">Away side's feed</option>
+              </Select>
+              <RichTooltip
+                content="Applies to whichever teams are playing — no team selection needed. A stream whose side couldn't be determined (no feed signal, or a sport with no home/away such as racing) matches NEITHER rule and falls through to Everything Else. It is never treated as the opposite side."
+                side="top"
+              >
+                <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+              </RichTooltip>
             </div>
           ) : rule.type === "stats_metric" ? (
             <div className="flex items-center gap-2">

@@ -60,7 +60,7 @@ Detection checks the stream **name, tvg-id, and tvg-name** — a stream whose tv
 
 ### Settings
 
-Feed **identification** always runs — every stream's resolved feed team is stored and drives the [Home/Away Feed stream-priority rule](stream-priority#how-homeaway-feed-detection-works) even with the feature off. The master **Feed Separation** toggle gates only the channel *splitting*: whether resolved feeds get their own channels.
+Feed **identification** always runs — every stream's resolved feed team *and* which side it is (home, away, or unknown) are stored, driving the [Specific Team's Feed and Feed Side stream-priority rules](stream-priority#rule-types) even with the feature off. The master **Feed Separation** toggle gates only the channel *splitting*: whether resolved feeds get their own channels.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
