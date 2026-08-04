@@ -7,7 +7,7 @@ nav_order: 7
 
 # TheSportsDB Provider
 
-TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, CFL, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 48 leagues in total (5 free-tier, 43 premium).
+TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, CFL, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 49 leagues in total (6 free-tier, 43 premium).
 
 ## API Details
 
@@ -34,6 +34,7 @@ These leagues have low enough event volume to work within free tier limits:
 
 - CFL, Unrivaled, Norwegian Hockey, Boxing
 - Major League Cricket (MLC) — its short US T20 season fits within the free rolling next-events window
+- WPBL (Women's Pro Baseball League) — 4 teams, ~30-game season, roughly one game per day
 
 ### Premium Tier Leagues
 
@@ -59,7 +60,7 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
 ## Supported Leagues
 
-TSDB serves **48 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
+TSDB serves **49 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
 | League | Code | TSDB ID | Sport | Tier |
 |--------|------|---------|-------|------|
@@ -68,6 +69,7 @@ TSDB serves **48 leagues** in total. The table below is representative, not exha
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
 | Boxing | `boxing` | 4445 | Boxing | Free |
 | Major League Cricket | `mlc` | 5401 | Cricket | Free |
+| WPBL | `wpbl` | 5929 | Baseball | Free |
 | Swedish Hockey League | `shl` | 4419 | Hockey | Premium |
 | Indian Premier League | `ipl` | 4460 | Cricket | Premium |
 | Big Bash League | `bbl` | 4461 | Cricket | Premium |
