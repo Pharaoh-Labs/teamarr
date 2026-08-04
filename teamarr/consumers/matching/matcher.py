@@ -994,6 +994,18 @@ class StreamMatcher:
             return epg_matched
         return name_results
 
+    def _non_tennis_leagues(self, leagues: list[str]) -> list[str]:
+        """Drop tennis leagues from a generic team-matching candidate pool.
+
+        Tennis events are player-vs-player, so through the TEAM_ONLY /
+        TEAM_VS_TEAM paths arbitrary text sharing a surname can fuzzy-bind to
+        them ("Good Day Chicago" -> "Kayla Day vs Diane Parry", #541) —
+        bypassing both the tennis-EPG skip (mf7.9) and the tennis_majors_only
+        filter, which only the tennis pipeline enforces. Tennis events must
+        stay reachable solely via TENNIS_MATCH -> TennisMatcher.
+        """
+        return [lg for lg in leagues if self._league_sports.get(lg) != "tennis"]
+
     def _match_team_vs_team(
         self,
         classified: ClassifiedStream,
@@ -1011,9 +1023,18 @@ class StreamMatcher:
             except (KeyError, ValueError):
                 pass  # Keep group setting or None
 
+        search_leagues = self._non_tennis_leagues(self._search_leagues)
+        if not search_leagues:
+            return MatchOutcome.filtered(
+                FilteredReason.LEAGUE_NOT_INCLUDED,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+                detail="No non-tennis leagues configured for team matching",
+            )
+
         # Determine if single-league or multi-league matching
-        if len(self._search_leagues) == 1:
-            league = self._search_leagues[0]
+        if len(search_leagues) == 1:
+            league = search_leagues[0]
             return self._team_matcher.match_single_league(
                 classified=classified,
                 league=league,
@@ -1029,7 +1050,7 @@ class StreamMatcher:
         else:
             return self._team_matcher.match_multi_league(
                 classified=classified,
-                enabled_leagues=self._search_leagues,
+                enabled_leagues=search_leagues,
                 target_date=target_date,
                 group_id=self._group_id,
                 stream_id=stream_id,
@@ -1058,7 +1079,7 @@ class StreamMatcher:
 
         return self._team_matcher.match_team_only(
             classified=classified,
-            enabled_leagues=list(self._include_leagues),
+            enabled_leagues=self._non_tennis_leagues(list(self._include_leagues)),
             target_date=target_date,
             group_id=self._group_id,
             stream_id=stream_id,
@@ -1087,7 +1108,7 @@ class StreamMatcher:
 
         return self._team_matcher.match_all_star(
             classified=classified,
-            enabled_leagues=list(self._include_leagues),
+            enabled_leagues=self._non_tennis_leagues(list(self._include_leagues)),
             target_date=target_date,
             group_id=self._group_id,
             stream_id=stream_id,

@@ -945,3 +945,129 @@ def test_majors_only_filters_player_matching():
         user_tz=tz,
     )
     assert not outcome.is_matched
+
+
+# ---------------------------------------------------------------------------
+# Generic team paths must not reach tennis events (#541)
+# ---------------------------------------------------------------------------
+
+
+def test_generic_team_paths_exclude_tennis_leagues():
+    """#541: an EPG programme like 'Good Day Chicago' classifies TEAM_ONLY and
+    must not fuzzy-bind to 'Kayla Day vs Diane Parry' — tennis leagues are
+    excluded from the generic TEAM_ONLY/TEAM_VS_TEAM/ALL_STAR candidate pools,
+    so tennis events stay reachable only via the tennis pipeline (which
+    enforces tennis_majors_only)."""
+    from tests.fakes import make_stream_matcher
+
+    m = make_stream_matcher(
+        leagues=("wta", "atp", "mlb"),
+        league_event_types={"wta": "event", "atp": "event", "mlb": "team_vs_team"},
+        league_sports={"wta": "tennis", "atp": "tennis", "mlb": "baseball"},
+    )
+
+    seen: dict[str, list[str]] = {}
+
+    def _capture_only(**kwargs):
+        seen["team_only"] = kwargs["enabled_leagues"]
+        return []
+
+    def _capture_all_star(**kwargs):
+        seen["all_star"] = kwargs["enabled_leagues"]
+        return []
+
+    def _capture_single(**kwargs):
+        seen["single"] = [kwargs["league"]]
+        return None
+
+    m._team_matcher.match_team_only = _capture_only
+    m._team_matcher.match_all_star = _capture_all_star
+    m._team_matcher.match_single_league = _capture_single
+
+    c = classify_stream("Good Day Chicago", league_event_type="team_vs_team")
+    m._match_team_only(c, stream_id=1, target_date=date(2026, 8, 3))
+    m._match_all_star(c, stream_id=1, target_date=date(2026, 8, 3))
+    # wta/atp filtered out of the 3 search leagues -> single-league path
+    m._match_team_vs_team(c, stream_id=1, target_date=date(2026, 8, 3))
+
+    assert seen["team_only"] == ["mlb"]
+    assert seen["all_star"] == ["mlb"]
+    assert seen["single"] == ["mlb"]
+
+
+def test_team_vs_team_filtered_when_group_is_tennis_only():
+    """A tennis-only group must yield an explicit FILTERED outcome on the
+    generic team path, never a fuzzy match into player-vs-player events."""
+    from teamarr.consumers.matching.result import FilteredReason
+    from tests.fakes import make_stream_matcher
+
+    m = make_stream_matcher(
+        leagues=("wta",),
+        league_event_types={"wta": "event"},
+        league_sports={"wta": "tennis"},
+    )
+    c = classify_stream("Day vs Parry", league_event_type="team_vs_team")
+    out = m._match_team_vs_team(c, stream_id=1, target_date=date(2026, 8, 3))
+    assert out.is_filtered
+    assert out.filtered_reason == FilteredReason.LEAGUE_NOT_INCLUDED
+
+
+def test_majors_only_gates_cache_hits():
+    """Entries cached before majors-only was enabled must not keep
+    resurrecting non-major matches until expiry (#541)."""
+    from types import SimpleNamespace
+
+    tz = ZoneInfo("America/New_York")
+
+    cached_data = {
+        "id": "wta-toronto-1",
+        "provider": "espn",
+        "name": "Kayla Day vs Diane Parry",
+        "start_time": datetime(2026, 8, 3, 11, 0, tzinfo=tz).isoformat(),
+        "home_team": {"name": "Kayla Day", "short_name": "Day"},
+        "away_team": {"name": "Diane Parry", "short_name": "Parry"},
+        "league": "wta",
+        "sport": "tennis",
+        "is_major": False,
+    }
+
+    class _EntryCache:
+        def __init__(self):
+            self.deleted = []
+
+        def get(self, *a, **k):
+            return SimpleNamespace(
+                cached_data=dict(cached_data),
+                league="wta",
+                match_method="tennis",
+                user_corrected=False,
+            )
+
+        def touch(self, *a, **k):
+            pass
+
+        def delete(self, *a, **k):
+            self.deleted.append(a)
+
+    c = classify_stream(
+        "WTA Toronto: Day vs Parry @ Aug 3 11:00 AM",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+
+    def _match(majors_only, cache):
+        tm = TennisMatcher(service=_PoolService([]), cache=cache, majors_only=majors_only)
+        return tm.match(
+            c, "wta", date(2026, 8, 3),
+            group_id=1, stream_id=1, generation=1, user_tz=tz,
+        )
+
+    # majors_only off: the cached non-major match is a valid hit
+    cache_off = _EntryCache()
+    assert _match(False, cache_off).is_matched
+    assert not cache_off.deleted
+
+    # majors_only on: same cache entry is rejected AND evicted
+    cache_on = _EntryCache()
+    assert not _match(True, cache_on).is_matched
+    assert cache_on.deleted

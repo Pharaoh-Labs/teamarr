@@ -469,6 +469,13 @@ class TennisMatcher:
         if event.start_time.astimezone(ctx.user_tz).date() != ctx.target_date:
             return None
 
+        # Majors-only gates cache hits too: entries cached before the toggle
+        # was enabled would otherwise keep resurrecting non-major matches
+        # until expiry (#541).
+        if self._majors_only and not event.is_major:
+            self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
+            return None
+
         return MatchOutcome.matched(
             MatchMethod.CACHE,
             event,
