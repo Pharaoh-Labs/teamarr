@@ -25,7 +25,9 @@ def _fix_double_encoded_utf8(text: str) -> str:
     """Fix double-encoded UTF-8 strings.
 
     Some M3U sources have UTF-8 text that was decoded as Latin-1 then re-encoded,
-    resulting in characters like 'Ã±' instead of 'ñ'.
+    resulting in characters like 'Ã±' instead of 'ñ'. Delegates the actual
+    guarded latin-1/utf-8 round trip to
+    ``teamarr.consumers.matching.normalizer.try_fix_double_encoded``.
 
     Args:
         text: Potentially double-encoded string
@@ -40,11 +42,13 @@ def _fix_double_encoded_utf8(text: str) -> str:
     if "Ã" not in text:
         return text
 
-    try:
-        # Try to fix: encode as Latin-1 (to get original bytes), decode as UTF-8
-        return text.encode("latin-1").decode("utf-8")
-    except (UnicodeDecodeError, UnicodeEncodeError):
-        return text
+    # Deferred import: teamarr.consumers.matching.normalizer sits behind an
+    # import chain that eventually reaches back to teamarr.dispatcharr.factory
+    # (which imports this module at load time), so this can't be hoisted to
+    # module scope without creating a circular import.
+    from teamarr.consumers.matching.normalizer import try_fix_double_encoded
+
+    return try_fix_double_encoded(text)
 
 
 class M3UManager:
