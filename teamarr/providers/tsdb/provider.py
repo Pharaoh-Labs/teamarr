@@ -86,9 +86,10 @@ class TSDBProvider(SportsProvider):
     def is_premium(self) -> bool:
         """Check if TSDB has premium/full API access.
 
-        Premium access has no rate limits on schedule endpoints.
-        Free tier is limited to ~5 events per day via eventsnextleague.
-        Used by ProviderRegistry for fallback resolution.
+        Free tier (measured 2026-08-04) serves only a rolling 1-event
+        next/past window and no league-filtered eventsday — see the
+        TSDBClient docstring. Used by ProviderRegistry for fallback
+        resolution and the cache-prewarm premium gate.
         """
         return self._client.is_premium
 
@@ -224,7 +225,11 @@ class TSDBProvider(SportsProvider):
         """Get schedule for a team including past and future games.
 
         Uses eventsday.php across multiple days to get both HOME and AWAY
-        games (eventsnext.php only returns HOME on free tier).
+        games. FREE-TIER CAVEAT (measured 2026-08-04): league-filtered
+        eventsday returns nothing without a premium key, so this whole
+        method yields [] keyless — team channels require premium. Event
+        channels survive on free via get_events' eventsnextleague fallback
+        (rolling 1-event window harvested by per-date polling).
 
         Scans:
         - Past DAYS_BACK days for .last variable resolution (cached indefinitely)
