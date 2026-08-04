@@ -20,17 +20,24 @@ TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a f
 
 ## API Tiers
 
-| | Free | Premium |
+Measured 2026-08-04 (two networks, three client types; matches TSDB's published limits — TSDB quietly tightened the free tier sometime in 2026):
+
+| | Free (`123`) | Premium |
 |---|---|---|
-| **API Key** | `123` (default) | Your own key (6+ digits) |
 | **Rate Limit** | 30 req/min | 100 req/min |
-| **Events per Query** | 5 per day per league | Full coverage |
-| **Team Search** | 10 teams | 3,000 teams |
+| **`eventsnextleague` / `eventspastleague`** | **1 event** (rolling next/last) | 20 |
+| **`eventsday` with `l=` league filter** | **always 0 — the filter is premium-gated** (unfiltered returns the global top-3 events/day) | full |
+| **`eventsseason`** | 15-event cap | 3,000 |
+| **`all_leagues`** | sample only | full list |
 | **Cost** | Free | ~$9/month |
+
+### How the free tier actually behaves in Teamarr
+
+Teamarr's event pipeline polls `get_events(league, date)` per date on 30min–8h cache TTLs. Each game enters the guide **the moment it becomes the league's rolling "next" game** — so on the free tier every game does appear, but with short lead time (day-of for stacked schedules), and a second same-day game only appears after the first finishes (replacing it in that date's cache). **Team channels get zero events on the free tier**: `get_team_schedule` iterates only the league-filtered `eventsday` endpoint, which free keys can't use. In short: free = event-source channels with day-of lead; premium = full forward guide + working team channels.
 
 ### Free Tier Leagues
 
-These leagues have low enough event volume to work within free tier limits:
+These leagues remain classified free: their event-source channels work through the rolling-next capture described above (team channels still require a premium key, as on every TSDB league):
 
 - CFL, Unrivaled, Norwegian Hockey, Boxing
 - Major League Cricket (MLC) — its short US T20 season fits within the free rolling next-events window

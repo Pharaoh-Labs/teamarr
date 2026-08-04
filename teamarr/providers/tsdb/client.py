@@ -119,9 +119,10 @@ class RateLimiter:
 
     Tracks all wait events for UI feedback. Never fails - always waits and continues.
 
-    Rate limits per TSDB tier:
-    - Free: 30 req/min, 10 teams/search, 5 events/day
-    - Premium: 100 req/min, 3000 teams/search, 3000 events/season
+    Rate limits per TSDB tier (measured 2026-08-04):
+    - Free: 30 req/min; rolling 1-event next/past; league-filtered eventsday
+      returns nothing (filter is premium-gated); 15-event season cap
+    - Premium: 100 req/min, 20-event next/past, 3000 events/season
     """
 
     # Cooldown duration when internal limit is hit (seconds)
@@ -214,10 +215,16 @@ class TSDBClient(BaseHTTPClient):
 
     Configure premium key in Settings UI.
 
-    Free tier limitations:
+    Free tier limitations (measured 2026-08-04 — TSDB tightened these in 2026):
     - 30 requests/minute
-    - Team schedule (eventsnext.php) only shows HOME events
-    - No livescores or highlights
+    - eventsnextleague/eventspastleague: 1 event (rolling window). The
+      pipeline's per-date polling still harvests every game as it becomes
+      the league's next (see provider.get_events), but with short lead time.
+    - eventsday WITH a league filter returns nothing — the l= filter is
+      premium-gated (unfiltered free returns the global top-3 events/day).
+      Our get_events_by_date always filters, so it yields 0 keyless; this
+      is why get_team_schedule (eventsday-only) is empty on free.
+    - eventsseason: 15-event cap; all_leagues: sample only
 
     League mappings provided via LeagueMappingSource (no direct database access).
 
@@ -591,14 +598,14 @@ class TSDBClient(BaseHTTPClient):
     def get_team_next_events(self, team_id: str) -> dict | None:
         """Fetch upcoming events for a team.
 
-        Note: Free tier only returns HOME events.
-
         Args:
             team_id: TSDB team ID
 
         Returns:
             Raw TSDB response or None
         """
+        # TODO: PRUNE? — no in-tree callers (verified Aug 2026), dead along
+        # with get_team_last_events; verify with user
         return self._request("eventsnext.php", {"id": team_id})
 
     def get_team_last_events(self, team_id: str) -> dict | None:
