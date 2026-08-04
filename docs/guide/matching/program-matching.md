@@ -34,6 +34,7 @@ Teamarr normally matches a stream to an event by reading the **stream name** —
 
 1. **Read the guide.** For each opted-in source, Teamarr asks Dispatcharr for the EPG **programs** airing on the source's streams (`GET /api/epg/programs/search/`).
 2. **Match program titles, not stream names.** Each program's title + subtitle (`MLB Baseball` + `Cubs at Cardinals`) goes through the *same* team-matching pipeline Teamarr uses for stream names, and is matched to a real event.
+   - **Description fallback:** some guides (Sky-style) title a programme by competition only (`Scottish Premiership Football`) with the matchup buried in the description prose. When the title yields a league or sport hint but no team pair, Teamarr checks whether **exactly one** event in the hinted league(s) both airs inside the programme's broadcast window *and* has **both** team names in the description — and binds only then. Zero or multiple candidates (e.g. a multi-game preview blurb) are skipped, never guessed.
 3. **Time-share the stream.** A linear stream that airs many programs is attached to each matched event's channel only for a window around that **program's** guide slot (program start − *attach before*, program end + *detach after*), then detached when the window ends. Studio shows and replays are skipped.
 
 ### Where the EPG comes from — you don't map it

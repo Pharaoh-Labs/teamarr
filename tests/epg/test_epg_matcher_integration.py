@@ -460,3 +460,135 @@ def test_epg_racing_receives_programme_instant_as_anchor(monkeypatch):
 
     assert len(out) == 1
     assert seen["anchor_dt"] == prog.start_dt
+
+
+# ===================================================== description fallback (#540)
+
+SKY_DESC = (
+    "Celtic v Dundee FC Following final day triumph last time out, Celtic's "
+    "defence of the Scottish Premiership title begins with the visit of Dundee"
+)
+
+
+def _sky_prog(desc=SKY_DESC, title="Scottish Premiership Football", start=None):
+    """Sky-style guide entry: competition in the title, matchup only in the
+    description, no sub_title (the observed #540 payload shape)."""
+    start = start or datetime(2026, 8, 3, 17, 30, tzinfo=UTC)
+    return DispatcharrProgram.from_api(
+        {
+            "id": 9,
+            "tvg_id": "sky",
+            "title": title,
+            "sub_title": "",
+            "description": desc,
+            "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end_time": (start + timedelta(minutes=225)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "epg_source": "ext",
+            "custom_properties": {},
+        }
+    )
+
+
+def _team(name, short=None):
+    return SimpleNamespace(name=name, short_name=short or name)
+
+
+def _soccer_event(eid, home, away, start, league="sco.1"):
+    return SimpleNamespace(
+        id=eid,
+        home_team=_team(home),
+        away_team=_team(away),
+        start_time=start,
+        league=league,
+        name=f"{home} v {away}",
+        short_name=f"{home} v {away}",
+    )
+
+
+def _sky_matcher(events, league="sco.1", team_streams_enabled=False):
+    m = make_stream_matcher(
+        leagues=(league,),
+        league_event_types={league: "team_vs_team"},
+        league_sports={league: "soccer"},
+        team_streams_enabled=team_streams_enabled,
+        epg_index=EPGProgramIndex({"sky": [_sky_prog()]}),
+    )
+    m._prefetched_events = {league: events}
+    return m
+
+
+def test_description_fallback_matches_sky_style_programme(monkeypatch):
+    """#540: title carries only the competition; the matchup lives in the
+    description. Exactly one league event airs inside the programme window
+    with both team names in the prose -> match, tagged EPG with the
+    programme's broadcast window. team_streams_enabled=False mirrors the
+    channel-source group, so this also pins the TEAM_ONLY-gate fall-through."""
+    kickoff = datetime(2026, 8, 3, 19, 0, tzinfo=UTC)
+    event = _soccer_event("spfl1", "Celtic", "Dundee", kickoff)
+    m = _sky_matcher([event])
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(1, "Sky Sports UHD", "sky", date(2026, 8, 3))
+    assert len(out) == 1
+    assert out[0].event.id == "spfl1"
+    assert out[0].match_method == MatchMethod.EPG
+    assert out[0].epg_program_start == datetime(2026, 8, 3, 17, 30, tzinfo=UTC)
+
+
+def test_description_fallback_requires_both_team_names(monkeypatch):
+    """Only one of the event's teams appears in the prose -> no bind."""
+    kickoff = datetime(2026, 8, 3, 19, 0, tzinfo=UTC)
+    event = _soccer_event("spfl2", "Celtic", "Hibernian", kickoff)
+    m = _sky_matcher([event])  # SKY_DESC never mentions Hibernian
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    assert m._match_via_epg(1, "Sky Sports UHD", "sky", date(2026, 8, 3)) == []
+
+
+def test_description_fallback_ambiguous_candidates_skip(monkeypatch):
+    """Two window events whose teams all appear in the prose (a multi-game
+    preview blurb) -> conservative skip, never a guess."""
+    kickoff = datetime(2026, 8, 3, 19, 0, tzinfo=UTC)
+    ev1 = _soccer_event("spfl3", "Celtic", "Dundee", kickoff)
+    ev2 = _soccer_event("spfl4", "Scottish", "Premiership", kickoff)  # names in title prose
+    m = _sky_matcher([ev1, ev2])
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    assert m._match_via_epg(1, "Sky Sports UHD", "sky", date(2026, 8, 3)) == []
+
+
+def test_description_fallback_requires_window_containment(monkeypatch):
+    """The event must kick off inside the programme's broadcast window —
+    a highlights show hours later must not bind."""
+    late_kickoff = datetime(2026, 8, 3, 22, 30, tzinfo=UTC)  # window ends 21:15
+    event = _soccer_event("spfl5", "Celtic", "Dundee", late_kickoff)
+    m = _sky_matcher([event])
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    assert m._match_via_epg(1, "Sky Sports UHD", "sky", date(2026, 8, 3)) == []
+
+
+def test_description_fallback_league_hint_scopes_scan(monkeypatch):
+    """When the title carries a league hint, only that league's events are
+    scanned — a same-window event in another soccer league can't bind."""
+    kickoff = datetime(2026, 8, 3, 19, 0, tzinfo=UTC)
+    prog = _sky_prog(
+        desc="Arsenal v Chelsea: London derby coverage.",
+        title="Premier League Football",
+        start=datetime(2026, 8, 3, 18, 30, tzinfo=UTC),
+    )
+    m = make_stream_matcher(
+        leagues=("eng.1", "sco.1"),
+        league_event_types={"eng.1": "team_vs_team", "sco.1": "team_vs_team"},
+        league_sports={"eng.1": "soccer", "sco.1": "soccer"},
+        team_streams_enabled=False,
+        epg_index=EPGProgramIndex({"sky": [prog]}),
+    )
+    epl = _soccer_event("epl1", "Arsenal", "Chelsea", kickoff, league="eng.1")
+    # Same names in the wrong league — must be invisible to an eng.1-hinted scan
+    decoy = _soccer_event("dec1", "Arsenal", "Chelsea", kickoff, league="sco.1")
+    m._prefetched_events = {"eng.1": [epl], "sco.1": [decoy]}
+    monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+
+    out = m._match_via_epg(1, "Sky Sports UHD", "sky", date(2026, 8, 3))
+    assert [o.event.id for o in out] == ["epl1"]
