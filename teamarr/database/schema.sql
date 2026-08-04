@@ -1059,6 +1059,8 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- ESPN serves no dedicated WBC league logo (only a generic baseball icon), so hardcode the Wikimedia Commons mark.
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/World_Baseball_Classic_logo.svg/500px-World_Baseball_Classic_logo.svg.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL, NULL, 1),
     ('cbl', 'supabase', 'https://cbl.ca', NULL, 'Canadian Baseball League', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Canadian_Baseball_League.svg/1280px-Canadian_Baseball_League.svg.png', NULL, 1, 'CBL', 'cbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    -- WPBL (Women's Pro Baseball League, #284): TSDB-only — ESPN airs games but exposes no API data. 4 teams, ~30-game season.
+    ('wpbl', 'tsdb', '5929', 'WPBL', 'WPBL', 'baseball', 'https://r2.thesportsdb.com/images/media/league/badge/rkx1371785226521.png', NULL, 1, 'WPBL', 'wpbl', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
 
     -- Soccer (ESPN)
     ('usa.1', 'espn', 'soccer/usa.1', NULL, 'Major League Soccer', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/19.png', NULL, 1, 'MLS', 'mls', 'team_vs_team', 'MLS Soccer', NULL, NULL, NULL, 1),
