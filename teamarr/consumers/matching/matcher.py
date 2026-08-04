@@ -21,6 +21,7 @@ Usage:
 """
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -60,6 +61,7 @@ from teamarr.core import Event
 from teamarr.database.leagues import get_leagues_bulk
 from teamarr.services import SportsDataService
 from teamarr.utilities.event_status import is_event_final
+from teamarr.utilities.fuzzy_match import normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -867,16 +869,16 @@ class StreamMatcher:
                 )
                 continue
 
-            # TEAM_ONLY gate: skip team routing when disabled, but allow the
-            # racing fallback to run if racing leagues are present. A race title
-            # like "F1 | Monaco Grand Prix" classifies TEAM_ONLY in a mixed
-            # group — we must not silently drop it here.
+            # TEAM_ONLY gate: skip team routing when disabled, but fall
+            # through with no outcomes so the later fallbacks still get their
+            # chance — racing (self-gated on event-type leagues + series-name
+            # text evidence; "F1 | Monaco Grand Prix" classifies TEAM_ONLY in
+            # a mixed group) and the description fallback (#540; a league-only
+            # programme title like "Scottish Premiership Football" also
+            # classifies TEAM_ONLY, but with the full matchup in the
+            # description it is morally TEAM_VS_TEAM, so the team-streams
+            # toggle must not gate it).
             if classified.category == StreamCategory.TEAM_ONLY and not self._team_streams_enabled:
-                if not any(
-                    self._league_event_types.get(lg) == "event"
-                    for lg in self._include_leagues
-                ):
-                    continue
                 primary_outcomes: list[MatchOutcome] = []
             else:
                 # Anchor matching to the program's own broadcast instant (bead t5e).
@@ -904,6 +906,18 @@ class StreamMatcher:
                 )
                 if fallback is not None:
                     matched_pairs.append(fallback)
+
+            # Description fallback (#540): Sky-style guides title sports
+            # programmes by competition ("Scottish Premiership Football") and
+            # carry the matchup only in the description ("Celtic v Dundee FC
+            # Following final day triumph..."). When the title yielded a
+            # league hint but no team pair, look for exactly one league event
+            # airing inside the programme window whose BOTH team names appear
+            # in the description.
+            if not matched_pairs:
+                desc_outcome = self._try_description_match(program, classified, stream_id)
+                if desc_outcome is not None:
+                    matched_pairs.append((desc_outcome, classified))
 
             for outcome, eff_classified in matched_pairs:
                 # Tag as EPG and attach the program's broadcast window (183.5).
@@ -993,6 +1007,125 @@ class StreamMatcher:
         if not name_matched and epg_matched:
             return epg_matched
         return name_results
+
+    def _try_description_match(
+        self,
+        program,
+        classified: ClassifiedStream,
+        stream_id: int,
+    ) -> MatchOutcome | None:
+        """EPG description fallback (#540).
+
+        Sky-style guides title sports programmes by competition ("Scottish
+        Premiership Football") with no sub_title; the matchup lives only in
+        the description prose. Prose can't go through classify_stream (no
+        reliable terminator after "Celtic v Dundee FC Following final day
+        triumph..."), so instead of parsing it we verify against known
+        events: the classification must carry a league hint, and exactly ONE
+        event in the hinted league(s) may both air inside the programme's
+        broadcast window AND have BOTH team names present in the description.
+        Zero or multiple candidates -> no match (conservative by design:
+        never bind on partial or ambiguous evidence).
+        """
+        description = program.description or ""
+        if not description.strip():
+            return None
+        # The title/sub_title path already extracted a team pair — it had
+        # its shot; this fallback is only for league-only programme titles.
+        if classified.team1 and classified.team2:
+            return None
+        hint = classified.league_hint
+        hint_leagues = [hint] if isinstance(hint, str) else list(hint or [])
+        leagues = [
+            lg
+            for lg in hint_leagues
+            if lg in self._include_leagues and self._league_sports.get(lg) != "tennis"
+        ]
+        if not leagues:
+            # No league hint — scope by the title's sport hint instead
+            # ("Scottish Premiership Football" carries a built-in Soccer/
+            # Football hint but the league name is often only a user-defined
+            # keyword). A hint of SOME kind is required: it anchors "this is
+            # a sports programme about this competition" before we go
+            # verifying prose against events.
+            sport_hint = classified.sport_hint
+            if not sport_hint:
+                return None
+            sports = {
+                s.lower()
+                for s in ([sport_hint] if isinstance(sport_hint, str) else sport_hint)
+            }
+            leagues = [
+                lg
+                for lg in self._include_leagues
+                if self._league_sports.get(lg, "").lower() in sports
+                and self._league_sports.get(lg) != "tennis"
+            ]
+        if not leagues:
+            return None
+        start_dt, end_dt = program.start_dt, program.end_dt
+        if start_dt is None or end_dt is None:
+            return None
+
+        desc_norm = normalize_text(description)
+
+        def _in_desc(team) -> bool:
+            for form in (team.name, team.short_name):
+                form_norm = normalize_text(form or "")
+                if len(form_norm) >= 3 and re.search(
+                    rf"\b{re.escape(form_norm)}\b", desc_norm
+                ):
+                    return True
+            return False
+
+        candidates: list[tuple[str, Event]] = []
+        for league in leagues:
+            events = None
+            if self._prefetched_events is not None:
+                events = self._prefetched_events.get(league)
+            if events is None:
+                # Single-league groups skip the prefetch — fetch the
+                # programme-window dates directly (cache-backed).
+                events = []
+                dates = {
+                    start_dt.astimezone(self._user_tz).date(),
+                    end_dt.astimezone(self._user_tz).date(),
+                }
+                for d in dates:
+                    events.extend(self._service.get_events(league, d))
+            for event in events:
+                ev_start = event.start_time
+                if ev_start is None or not (start_dt <= ev_start <= end_dt):
+                    continue
+                if _in_desc(event.home_team) and _in_desc(event.away_team):
+                    candidates.append((league, event))
+
+        if len(candidates) != 1:
+            if len(candidates) > 1:
+                logger.debug(
+                    "[EPG_MATCH] description fallback ambiguous (%d candidates) "
+                    "for prog '%s'",
+                    len(candidates),
+                    (program.title or "")[:48],
+                )
+            return None
+
+        league, event = candidates[0]
+        logger.info(
+            "[EPG_MATCH] description fallback: prog '%s' -> event=%s '%s' (%s)",
+            (program.title or "")[:48],
+            event.id,
+            (event.short_name or event.name or "?")[:40],
+            league,
+        )
+        return MatchOutcome.matched(
+            MatchMethod.EPG,
+            event,
+            detected_league=league,
+            confidence=0.9,
+            stream_name=classified.normalized.original,
+            stream_id=stream_id,
+        )
 
     def _non_tennis_leagues(self, leagues: list[str]) -> list[str]:
         """Drop tennis leagues from a generic team-matching candidate pool.
