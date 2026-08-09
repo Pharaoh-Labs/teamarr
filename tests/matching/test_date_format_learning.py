@@ -52,6 +52,29 @@ class TestInferDateFormats:
         in_window = [abs((d - TODAY).days) <= 2 for d in parsed]
         assert all(in_window)
 
+    def test_consecutive_ambiguous_dates_learn_day_first(self):
+        # #553: three consecutive days that are ALL ambiguous (every day
+        # component <= 12) score identically on the in-window count alone —
+        # day-first reads Aug 8/9/10, month-first reads Aug 8 / Sep 8 / Oct 8,
+        # and Oct 8 is exactly 60 days out, so both are 3-in-window. The
+        # spread tiebreak (2 days vs 91) is what picks day-first. Pinned to a
+        # fixed "today" so this runs every day, not only on the calendar
+        # dates that happen to produce the tie.
+        samples = ["08/08/2026", "09/08/2026", "10/08/2026"]
+        assert infer_date_formats(samples, today=date(2026, 8, 9)) == ["%d/%m/%Y"]
+
+    def test_exact_tie_keeps_us_first(self):
+        # Palindromic dates read identically either way, so the count AND the
+        # spread tie. The US-first default must survive the #553 tiebreak.
+        samples = ["05/05/2026", "07/07/2026"]
+        assert infer_date_formats(samples, today=date(2026, 6, 6)) == ["%m/%d/%Y"]
+
+    def test_scattered_reading_loses_even_when_all_in_window(self):
+        # A month-first reading that stays inside the window but scatters
+        # must still lose to the tight day-first cluster.
+        samples = ["03/03/2026", "04/03/2026", "05/03/2026"]
+        assert infer_date_formats(samples, today=date(2026, 3, 4)) == ["%d/%m/%Y"]
+
     def test_inconsistent_samples_return_none(self):
         assert infer_date_formats(["16/07/2026", "July 5"]) is None
 

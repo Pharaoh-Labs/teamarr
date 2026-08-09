@@ -578,14 +578,28 @@ _DATE_FORMAT_CANDIDATES = [
 ]
 
 
-def infer_date_formats(samples: list[str], window_days: int = 60) -> list[str] | None:
+def infer_date_formats(
+    samples: list[str], window_days: int = 60, today: date | None = None
+) -> list[str] | None:
     """Learn the date format a stream source uses (#474).
 
     The custom date regex describes WHERE a source's date lives; this learns
     HOW it is formatted, from the whole batch at once: keep the candidate
-    formats that parse EVERY sample, then break ties by which format lands
-    the most dates near today (sports stream dates cluster around now —
-    "05/07, 06/07, 07/07" in mid-July is day-first, not May/June/July).
+    formats that parse EVERY sample, then rank them by which lands the most
+    dates near today (sports stream dates cluster around now — "05/07, 06/07,
+    07/07" in mid-July is day-first, not May/June/July).
+
+    Ranking is two-key: dates inside the window first, then — among formats
+    that tie on that count — the smallest total distance from today. The
+    count alone does not discriminate, because a scattered reading of
+    consecutive ambiguous dates still lands inside a 60-day window: on
+    2026-08-09, "08/08, 09/08, 10/08" is 3-in-window read day-first (Aug
+    8/9/10) AND month-first (Aug 8, Sep 8, Oct 8). That tie used to fall
+    through to the US-first default and mislearn day-first sources (#553).
+
+    `today` overrides the reference date; production leaves it None. Tests
+    pin it so the ambiguous cases are exercised on every run rather than
+    only on the calendar dates that happen to produce them.
 
     Returns a single-element format list, or None when no candidate parses
     every sample (caller falls back to per-stream guessing).
@@ -602,11 +616,12 @@ def infer_date_formats(samples: list[str], window_days: int = 60) -> list[str] |
     if not cleaned:
         return None
 
-    today = datetime.now().date()
+    if today is None:
+        today = datetime.now().date()
     lo, hi = today - timedelta(days=window_days), today + timedelta(days=window_days)
 
     best_fmt: str | None = None
-    best_in_window = -1
+    best_score: tuple[int, int] | None = None
     for fmt in _DATE_FORMAT_CANDIDATES:
         parsed: list[date] = []
         for sample in cleaned:
@@ -620,10 +635,15 @@ def infer_date_formats(samples: list[str], window_days: int = 60) -> list[str] |
         if len(parsed) != len(cleaned):
             continue  # must explain EVERY sample
         in_window = sum(1 for d in parsed if lo <= d <= hi)
-        # Strictly-greater keeps the earlier (US-first) candidate on ties.
-        if in_window > best_in_window:
+        spread = sum(abs((d - today).days) for d in parsed)
+        # Sorts ascending: most dates in window first, then tightest cluster.
+        # Strictly-less keeps the earlier (US-first) candidate when a later
+        # one is no better — including the genuine ties, e.g. "05/05/2026",
+        # where both readings yield the same dates.
+        score = (-in_window, spread)
+        if best_score is None or score < best_score:
             best_fmt = fmt
-            best_in_window = in_window
+            best_score = score
 
     return [best_fmt] if best_fmt else None
 
