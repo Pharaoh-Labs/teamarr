@@ -7,7 +7,7 @@ nav_order: 1
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 98 pre-configured leagues (97 enabled — MotoGP ships disabled) plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 99 pre-configured leagues (98 enabled — MotoGP ships disabled) plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -59,7 +59,7 @@ baseball/mlb
 | Football | NFL, NCAAF, UFL | |
 | Basketball | NBA, WNBA, G League, NCAAM, NCAAW, NBL (Australia) | FIBA World Cup (M/W) is TSDB — ESPN only tracks the final, not qualifiers |
 | Hockey | NHL, NCAA M/W, Olympics M/W | |
-| Baseball | MLB, NCAA Baseball, World Baseball Classic | MiLB handled by MLB Stats provider |
+| Baseball | MLB, NCAA Baseball, World Baseball Classic, Little League Baseball | MiLB handled by MLB Stats provider; LLB is the August World Series only |
 | Soccer | 48 pre-configured, ~228 discovered | Dot notation: `eng.1`, `ger.2` |
 | Rugby | 20 leagues (Six Nations, Rugby World Cup, Super Rugby, URC, Premiership, Top 14, MLR, NRL, Olympic 7s, …) | Second-largest ESPN sport by league count; NRL and Super Rugby Pacific migrated here from TSDB |
 | Combat Sports | UFC | Event Card matching |
