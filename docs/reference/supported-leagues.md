@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **171 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
+Teamarr supports **172 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -139,6 +139,7 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | Canadian Baseball League | `cbl` | Supabase |
 | WPBL (Women's Pro Baseball) | `wpbl` | TSDB |
 | World Baseball Classic | `wbc` | ESPN |
+| Little League Baseball | `llb` | ESPN |
 | NCAA Baseball | `ncaabb` | ESPN |
 | NCAA Softball | `ncaasbw` | ESPN |
 

@@ -1061,6 +1061,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('cbl', 'supabase', 'https://cbl.ca', NULL, 'Canadian Baseball League', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Canadian_Baseball_League.svg/1280px-Canadian_Baseball_League.svg.png', NULL, 1, 'CBL', 'cbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- WPBL (Women's Pro Baseball League, #284): TSDB-only — ESPN airs games but exposes no API data. 4 teams, ~30-game season.
     ('wpbl', 'tsdb', '5929', 'WPBL', 'WPBL', 'baseball', 'https://r2.thesportsdb.com/images/media/league/badge/rkx1371785226521.png', NULL, 1, 'WPBL', 'wpbl', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
+    -- LLB (#556): Little League Baseball World Series. As with WBC, ESPN serves only a generic
+    -- baseball icon for this league, so hardcode the Wikimedia mark. Teams are regional all-star
+    -- squads ESPN re-seeds each season, and the calendar is whitelisted to ~3 weeks each August.
+    ('llb', 'espn', 'baseball/llb', NULL, 'Little League Baseball', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/8/8c/Little_League_logo.svg/500px-Little_League_logo.svg.png', NULL, 1, 'LLB', 'llb', 'team_vs_team', 'Little League Baseball', NULL, NULL, NULL, 1),
 
     -- Soccer (ESPN)
     ('usa.1', 'espn', 'soccer/usa.1', NULL, 'Major League Soccer', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/19.png', NULL, 1, 'MLS', 'mls', 'team_vs_team', 'MLS Soccer', NULL, NULL, NULL, 1),
