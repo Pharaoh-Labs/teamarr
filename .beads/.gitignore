@@ -78,3 +78,6 @@ daemon-error
 last_pull
 proxieddb/
 proxied_server_client_info.json
+
+# Added by bd (missing required patterns)
+*.gate.lock*
