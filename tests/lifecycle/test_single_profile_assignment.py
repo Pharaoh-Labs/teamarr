@@ -119,3 +119,61 @@ class TestCreateChannelProfileSentinel:
         api_profiles, db_profiles = self._run_create([2, 3])
         assert api_profiles == [2, 3]
         assert db_profiles == [2, 3]
+
+
+class TestValidateProfileIds:
+    """Stale configured profile ids are dropped before create (#565).
+
+    A profile deleted/recreated in Dispatcharr otherwise fails every
+    create with "Channel profiles with IDs [N] not found" — and since
+    Dispatcharr partially creates the channel first, the failure loops
+    into duplicate channels on every generation run.
+    """
+
+    def _service_with_catalog(self, catalog):
+        service = _make_service(channel_manager=MagicMock())
+        service._all_profile_ids_cache = catalog
+        return service
+
+    def test_valid_ids_pass_through(self):
+        service = self._service_with_catalog({1, 2, 3})
+        assert service._validate_profile_ids([2, 3]) == [2, 3]
+
+    def test_stale_id_dropped_valid_kept(self, caplog):
+        service = self._service_with_catalog({1, 2, 3})
+        with caplog.at_level("WARNING"):
+            assert service._validate_profile_ids([2, 5]) == [2]
+        assert "profile id 5" in caplog.text
+
+    def test_all_stale_falls_back_to_all_profiles_sentinel(self, caplog):
+        service = self._service_with_catalog({1, 2, 3})
+        with caplog.at_level("WARNING"):
+            assert service._validate_profile_ids([5]) == [0]
+        assert "falling back to ALL profiles" in caplog.text
+
+    def test_catalog_unavailable_passes_through_unverified(self):
+        # No Dispatcharr catalog → unverifiable, never guess.
+        service = _make_service(channel_manager=None)
+        assert service._validate_profile_ids([5]) == [5]
+
+    def test_all_profiles_sentinel_passes_without_catalog_fetch(self):
+        service = _make_service(channel_manager=None)
+        assert service._validate_profile_ids([0]) == [0]
+
+    def test_empty_selection_is_respected(self):
+        # [] means explicitly NO profiles — not a stale state.
+        service = self._service_with_catalog({1})
+        assert service._validate_profile_ids([]) == []
+
+    def test_stale_warning_fires_once_per_run(self, caplog):
+        service = self._service_with_catalog({1})
+        with caplog.at_level("WARNING"):
+            service._validate_profile_ids([5])
+            service._validate_profile_ids([5])
+        assert caplog.text.count("profile id 5") == 1
+
+    def test_resolver_output_is_validated_end_to_end(self):
+        service = self._service_with_catalog({1, 2})
+        service._dynamic_resolver = MagicMock()
+        service._dynamic_resolver.resolve_channel_profiles.return_value = [2, 5]
+        assert service._resolve_profiles_for_event([2, 5], "baseball", "mlb") == [2]

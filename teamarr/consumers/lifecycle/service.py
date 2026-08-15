@@ -201,6 +201,9 @@ class ChannelLifecycleService(
         # ALL-profiles ([0]) sentinel comparison in _sync_channel_profiles.
         self._all_profile_ids_cache: set[int] | None = None
 
+        # Stale configured profile ids already warned about this run (#565)
+        self._stale_profile_ids_warned: set[int] = set()
+
         # Dynamic group/profile resolver
         self._dynamic_resolver = DynamicResolver()
 
@@ -303,6 +306,7 @@ class ChannelLifecycleService(
         self._exception_keywords = None
         self._pending_profile_changes = {}
         self._all_profile_ids_cache = None
+        self._stale_profile_ids_warned = set()
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
 
