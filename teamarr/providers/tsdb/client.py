@@ -49,6 +49,10 @@ TSDB_CACHE_TTL_NEXT_EVENTS = 1 * 60 * 60  # 1 hour - league next events
 TSDB_CACHE_TTL_SEARCH = 24 * 60 * 60  # 24 hours - team search
 
 
+class TSDBRateLimitError(Exception):
+    """TSDB kept returning HTTP 429 after all configured retries."""
+
+
 def get_cache_ttl_for_date(target_date: date) -> int:
     """Get cache TTL based on how far the date is from today.
 
@@ -326,7 +330,7 @@ class TSDBClient(BaseHTTPClient):
                             f"TSDB 429 persisted after {self.BACKOFF_MAX_RETRIES} retries. "
                             "Check API key or try again later."
                         )
-                        return None
+                        raise TSDBRateLimitError(endpoint)
 
                     # Exponential backoff: 5s, 10s, 20s, 40s, 80s (capped at 120s)
                     wait_seconds = min(
@@ -382,6 +386,20 @@ class TSDBClient(BaseHTTPClient):
                 return None
 
         return None
+
+    def _request_or_none(self, endpoint: str, params: dict | None = None) -> dict | None:
+        """Preserve the existing no-data behavior for non-cacheable lookups."""
+        try:
+            return self._request(endpoint, params)
+        except TSDBRateLimitError:
+            return None
+
+    def _stale_response(self, cache_key: str) -> dict | None:
+        """Return a last-known-good response after a persistent TSDB 429."""
+        stale = self._cache.get_stale(cache_key)
+        if stale is not None:
+            logger.warning("[TSDB] Rate limited; using stale cached response: %s", cache_key)
+        return stale
 
     def supports_league(self, league: str) -> bool:
         """Check if we have mapping for this league."""
@@ -445,7 +463,10 @@ class TSDBClient(BaseHTTPClient):
             return None
 
         # eventsday.php uses 'l' for league NAME (strLeague), not ID
-        result = self._request("eventsday.php", {"d": date_str, "l": league_name})
+        try:
+            result = self._request("eventsday.php", {"d": date_str, "l": league_name})
+        except TSDBRateLimitError:
+            return self._stale_response(cache_key)
         if result:
             # Use tiered TTL based on date
             target_date = date.fromisoformat(date_str)
@@ -475,7 +496,10 @@ class TSDBClient(BaseHTTPClient):
         if not league_id:
             return None
 
-        result = self._request("eventsnextleague.php", {"id": league_id})
+        try:
+            result = self._request("eventsnextleague.php", {"id": league_id})
+        except TSDBRateLimitError:
+            return self._stale_response(cache_key)
         if result:
             self._cache.set(cache_key, result, TSDB_CACHE_TTL_NEXT_EVENTS)
         return result
@@ -497,7 +521,7 @@ class TSDBClient(BaseHTTPClient):
         if not league_id:
             return None
 
-        result = self._request("eventspastleague.php", {"id": league_id})
+        result = self._request_or_none("eventspastleague.php", {"id": league_id})
         if result:
             self._cache.set(cache_key, result, TSDB_CACHE_TTL_NEXT_EVENTS)
         return result
@@ -516,13 +540,13 @@ class TSDBClient(BaseHTTPClient):
         The returned dict carries ``strLeague`` and ``strSport``, used to verify
         the id resolves and to cross-check the user-selected sport.
         """
-        result = self._request("lookupleague.php", {"id": league_id})
+        result = self._request_or_none("lookupleague.php", {"id": league_id})
         leagues = (result or {}).get("leagues") or []
         return leagues[0] if leagues else None
 
     def get_next_events_raw(self, league_id: str) -> dict | None:
         """eventsnextleague.php by raw league ID, no DB mapping."""
-        return self._request("eventsnextleague.php", {"id": league_id})
+        return self._request_or_none("eventsnextleague.php", {"id": league_id})
 
     def _season_candidates(self, league: str) -> list[str]:
         """Season strings to try, most likely format first (#60 pgtq.5).
@@ -586,7 +610,10 @@ class TSDBClient(BaseHTTPClient):
                 last_result = cached
                 continue  # cached-empty: try the other format, don't re-request
 
-            result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            try:
+                result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            except TSDBRateLimitError:
+                result = self._stale_response(cache_key)
             if result:
                 # Cache for 2 hours (same as eventsday)
                 self._cache.set(cache_key, result, 2 * 60 * 60)
@@ -606,7 +633,7 @@ class TSDBClient(BaseHTTPClient):
         """
         # TODO: PRUNE? — no in-tree callers (verified Aug 2026), dead along
         # with get_team_last_events; verify with user
-        return self._request("eventsnext.php", {"id": team_id})
+        return self._request_or_none("eventsnext.php", {"id": team_id})
 
     def get_team_last_events(self, team_id: str) -> dict | None:
         """Fetch recent events for a team.
@@ -617,7 +644,7 @@ class TSDBClient(BaseHTTPClient):
         Returns:
             Raw TSDB response or None
         """
-        return self._request("eventslast.php", {"id": team_id})
+        return self._request_or_none("eventslast.php", {"id": team_id})
 
     def get_team(self, team_id: str) -> dict | None:
         """Fetch team details.
@@ -632,7 +659,7 @@ class TSDBClient(BaseHTTPClient):
         Returns:
             Raw TSDB response or None
         """
-        return self._request("lookupteam.php", {"id": team_id})
+        return self._request_or_none("lookupteam.php", {"id": team_id})
 
     def get_event(self, event_id: str) -> dict | None:
         """Fetch event details.
@@ -643,7 +670,7 @@ class TSDBClient(BaseHTTPClient):
         Returns:
             Raw TSDB response or None
         """
-        return self._request("lookupevent.php", {"id": event_id})
+        return self._request_or_none("lookupevent.php", {"id": event_id})
 
     def search_team(self, team_name: str) -> dict | None:
         """Search for a team by name.
@@ -662,7 +689,7 @@ class TSDBClient(BaseHTTPClient):
             logger.debug("[TSDB] Cache hit: %s", cache_key)
             return cached
 
-        result = self._request("searchteams.php", {"t": team_name})
+        result = self._request_or_none("searchteams.php", {"t": team_name})
         if result:
             self._cache.set(cache_key, result, TSDB_CACHE_TTL_SEARCH)
         return result
@@ -693,7 +720,7 @@ class TSDBClient(BaseHTTPClient):
 
         last_result: dict | None = None
         for s in candidates:
-            result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            result = self._request_or_none("eventsseason.php", {"id": league_id, "s": s})
             if result and result.get("events"):
                 return result
             last_result = result or last_result
@@ -725,7 +752,7 @@ class TSDBClient(BaseHTTPClient):
             return None
 
         # Phase 1: Get teams from search_all_teams (capped at 10 on free tier)
-        search_result = self._request("search_all_teams.php", {"l": league_name})
+        search_result = self._request_or_none("search_all_teams.php", {"l": league_name})
         teams_by_id: dict[str, dict] = {}
 
         if search_result and isinstance(search_result.get("teams"), list):

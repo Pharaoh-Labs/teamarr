@@ -78,12 +78,25 @@ class TTLCache:
                 self._misses += 1
                 return None
             if datetime.now() > entry.expires_at:
-                del self._cache[key]
                 self._misses += 1
                 return None
             # Update last accessed time for LRU
             entry.last_accessed = datetime.now()
             self._hits += 1
+            return entry.value
+
+    def get_stale(self, key: str) -> Any | None:
+        """Get an expired value for an explicit recovery fallback.
+
+        Normal callers must use :meth:`get`, which never returns expired data.
+        Keeping expired entries until normal cache cleanup or eviction allows a
+        provider to preserve a last-known-good response during an outage.
+        """
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry is None or datetime.now() <= entry.expires_at:
+                return None
+            entry.last_accessed = datetime.now()
             return entry.value
 
     def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:

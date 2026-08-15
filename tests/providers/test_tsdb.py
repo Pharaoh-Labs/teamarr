@@ -12,8 +12,10 @@ from unittest.mock import MagicMock
 
 from teamarr.consumers.cache.refresh import CacheRefresher
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
+from teamarr.providers.tsdb.client import TSDBClient, TSDBRateLimitError
 from teamarr.providers.tsdb.provider import TSDBProvider
 from teamarr.providers.tsdb.racing import parse_racing_events
+from teamarr.utilities.cache import TTLCache, make_cache_key
 from tests.helpers import SCHEMA_PATH
 
 # ===========================================================================
@@ -203,6 +205,71 @@ def test_fallback_league_uses_season_endpoint():
 def test_unrivaled_is_gated():
     assert "unrivaled" in TSDBProvider.SEASON_FALLBACK_LEAGUES
     assert "cfl" not in TSDBProvider.SEASON_FALLBACK_LEAGUES
+
+
+# ===========================================================================
+# Stale schedule fallback after persistent TSDB 429 responses
+# ===========================================================================
+
+
+def _cached_client() -> TSDBClient:
+    client = TSDBClient.__new__(TSDBClient)
+    client._cache = TTLCache()
+    client.get_league_name = MagicMock(return_value="CFL")
+    client.get_league_id = MagicMock(return_value="4405")
+    client._request = MagicMock()
+    return client
+
+
+def test_events_by_date_uses_stale_response_only_after_rate_limit():
+    client = _cached_client()
+    cache_key = make_cache_key("tsdb", "eventsday", "cfl", "2026-08-15")
+    stale = {"events": [{"idEvent": "old"}]}
+    client._cache.set(cache_key, stale, ttl_seconds=-1)
+    client._request.side_effect = TSDBRateLimitError("eventsday.php")
+
+    assert client.get_events_by_date("cfl", "2026-08-15") == stale
+
+
+def test_events_by_date_does_not_use_stale_response_for_non_rate_limit_failure():
+    client = _cached_client()
+    cache_key = make_cache_key("tsdb", "eventsday", "cfl", "2026-08-15")
+    client._cache.set(cache_key, {"events": [{"idEvent": "old"}]}, ttl_seconds=-1)
+    client._request.return_value = None
+
+    assert client.get_events_by_date("cfl", "2026-08-15") is None
+
+
+def test_events_by_date_replaces_stale_response_after_successful_refresh():
+    client = _cached_client()
+    cache_key = make_cache_key("tsdb", "eventsday", "cfl", "2026-08-15")
+    client._cache.set(cache_key, {"events": [{"idEvent": "old"}]}, ttl_seconds=-1)
+    fresh = {"events": [{"idEvent": "new"}]}
+    client._request.return_value = fresh
+
+    assert client.get_events_by_date("cfl", "2026-08-15") == fresh
+    assert client.get_events_by_date("cfl", "2026-08-15") == fresh
+    assert client._request.call_count == 1
+
+
+def test_events_next_league_uses_stale_response_after_rate_limit():
+    client = _cached_client()
+    cache_key = make_cache_key("tsdb", "nextleague", "cfl")
+    stale = {"events": [{"idEvent": "old"}]}
+    client._cache.set(cache_key, stale, ttl_seconds=-1)
+    client._request.side_effect = TSDBRateLimitError("eventsnextleague.php")
+
+    assert client.get_league_next_events("cfl") == stale
+
+
+def test_events_by_season_uses_stale_response_after_rate_limit():
+    client = _cached_client()
+    cache_key = make_cache_key("tsdb", "eventsseason", "unrivaled", "2026")
+    stale = {"events": [{"idEvent": "old"}]}
+    client._cache.set(cache_key, stale, ttl_seconds=-1)
+    client._request.side_effect = TSDBRateLimitError("eventsseason.php")
+
+    assert client.get_events_by_season("unrivaled", season="2026") == stale
 
 
 # ===========================================================================

@@ -35,6 +35,8 @@ Measured 2026-08-04 (two networks, three client types; matches TSDB's published 
 
 Teamarr's event pipeline polls `get_events(league, date)` per date on 30min–8h cache TTLs. Each game enters the guide **the moment it becomes the league's rolling "next" game** — so on the free tier every game does appear, but with short lead time (day-of for stacked schedules), and a second same-day game only appears after the first finishes (replacing it in that date's cache). **Team channels get zero events on the free tier**: `get_team_schedule` iterates only the league-filtered `eventsday` endpoint, which free keys can't use. In short: free = event-source channels with day-of lead; premium = full forward guide + working team channels.
 
+If TSDB repeatedly rate-limits a schedule refresh, Teamarr temporarily retains and uses the last successful response for that same request rather than dropping guide data. That fallback can be outdated and ends as soon as TSDB returns fresh data. It does not extend the free tier's rolling event window or add future schedule coverage.
+
 ### Free Tier Leagues
 
 These leagues remain classified free: their event-source channels work through the rolling-next capture described above (team channels still require a premium key, as on every TSDB league):
