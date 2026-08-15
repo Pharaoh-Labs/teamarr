@@ -3,5 +3,6 @@
   "backend": "dolt",
   "dolt_mode": "embedded",
   "dolt_database": "teamarrv2",
-  "project_id": "d32025b4-276f-48ea-83de-d1914163e9bd"
+  "project_id": "d32025b4-276f-48ea-83de-d1914163e9bd",
+  "last_bd_version": "1.2.2"
 }
