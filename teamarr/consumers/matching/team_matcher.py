@@ -123,18 +123,69 @@ def _abbrev_equals(stream_code: str, event_abbrev: str | None) -> bool:
     return code == normalize_text(event_abbrev)
 
 
+def _initialism(tokens: list[str]) -> str:
+    """First letter of each token, in order ("san francisco" -> "sf")."""
+    return "".join(t[0] for t in tokens if t)
+
+
+def _short_name_leg_is_safe(stream_norm: str, name_norm: str, short_norm: str, abbrev: str) -> bool:
+    """May the short_name score stand in for this stream candidate? (#569)
+
+    token_set_ratio returns 100 whenever the short name is a token subset of
+    the stream — so a bare nickname short_name makes every team sharing that
+    nickname interchangeable. ESPN hands both the NFL and MLB Giants
+    short_name "Giants", so "san francisco giants" scored 100 against the New
+    York Giants (57 on the full name) and SF streams landed on NFL channels.
+
+    The discriminator is whatever the full name carries beyond the nickname
+    ("new york" for NYG). Accept the short_name leg only when the stream's own
+    residual tokens are consistent with that discriminator — its own words,
+    its initialism ("ny"), or the provider abbreviation. This keeps #480's
+    "d backs" working, keeps "SF Giants" on the MLB side, and additionally
+    pins "NY Giants" to the NFL side, which is ambiguous today.
+    """
+    short_tokens = set(short_norm.split())
+    name_tokens = name_norm.split()
+    discriminator = [t for t in name_tokens if t not in short_tokens]
+    stream_residual = [t for t in stream_norm.split() if t not in short_tokens]
+
+    # Bare nickname on either side carries no location to contradict.
+    if not stream_residual or not discriminator:
+        return True
+
+    allowed = set(discriminator)
+    allowed.add(_initialism(discriminator))
+    allowed.add(_initialism(name_tokens))
+    if abbrev:
+        allowed.add(abbrev)
+    return all(token in allowed for token in stream_residual)
+
+
 def _best_name_score(stream_norm: str, event_team) -> float:
     """token_set_ratio against the best of the team's name and short_name.
 
     Official nicknames often share no words with the full name — ESPN's
     short_name for Arizona is literally "D-backs", which scores ~50 against
     "Arizona Diamondbacks" (#480). Streams use whichever form the provider
-    liked, so both are fair game.
+    liked, so both are fair game — but the short_name leg is gated by
+    _short_name_leg_is_safe so a shared nickname can't erase the location
+    that tells two teams apart (#569).
     """
-    score = fuzz.token_set_ratio(stream_norm, normalize_text(event_team.name))
+    name_norm = normalize_text(event_team.name)
+    score = fuzz.token_set_ratio(stream_norm, name_norm)
+
     short = getattr(event_team, "short_name", None)
-    if short and short != event_team.name:
-        score = max(score, fuzz.token_set_ratio(stream_norm, normalize_text(short)))
+    if not short or short == event_team.name:
+        return score
+
+    short_norm = normalize_text(short)
+    short_score = fuzz.token_set_ratio(stream_norm, short_norm)
+    if short_score <= score:
+        return score
+
+    abbrev = normalize_text(getattr(event_team, "abbreviation", "") or "")
+    if _short_name_leg_is_safe(stream_norm, name_norm, short_norm, abbrev):
+        return short_score
     return score
 
 
