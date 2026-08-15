@@ -1005,3 +1005,118 @@ class TestResolveFeedTeamsIdentifiers:
         stream = {"name": "Brewers.TV", "tvg_id": None, "tvg_name": None}
         assert self._resolve(stream, event, separation_enabled=False) is None
         assert self._last_entry["stream_feed_team"] is event.away_team
+
+
+# ===========================================================================
+# TEAM_ONLY matched_side splits feed channels (#559)
+# ===========================================================================
+
+
+class TestResolveFeedTeamsMatchedSide:
+    """A TEAM_ONLY match already proves which side's feed the stream is —
+    the whole stream name is one team ('MLB | Miami Marlins'). With
+    detect_team_names on, that matched_side splits the stream into its feed
+    channel (#559); the context-regex detector, which requires feed-specific
+    wording, never fires on bare team names by design (0b306e48)."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        return MockEvent(
+            home_team=MockTeam(
+                id="28",
+                provider="espn",
+                name="Miami Marlins",
+                short_name="Marlins",
+                abbreviation="MIA",
+                league="mlb",
+                sport="baseball",
+            ),
+            away_team=MockTeam(
+                id="23",
+                provider="espn",
+                name="Pittsburgh Pirates",
+                short_name="Pirates",
+                abbreviation="PIT",
+                league="mlb",
+                sport="baseball",
+            ),
+            broadcast_markets={},
+        )
+
+    def _resolve(
+        self,
+        stream: dict,
+        event,
+        matched_side=None,
+        feed_hint=None,
+        detect_team_names: bool = True,
+        separation_enabled: bool = True,
+    ):
+        from teamarr.consumers.event_group_processor.matching import StreamMatching
+
+        entry = {
+            "stream": stream,
+            "event": event,
+            "feed_hint": feed_hint,
+            "matched_side": matched_side,
+        }
+        StreamMatching._resolve_feed_teams(
+            StreamMatching(), [entry], detect_team_names, separation_enabled
+        )
+        self._last_entry = entry
+        return entry["feed_team"]
+
+    def test_matched_side_home_splits_to_home_feed(self, event):
+        stream = {"name": "MLB | Miami Marlins"}
+        assert self._resolve(stream, event, matched_side="home") is event.home_team
+
+    def test_matched_side_away_splits_to_away_feed(self, event):
+        stream = {"name": "US : MLB PITTSBURGH PIRATES"}
+        assert self._resolve(stream, event, matched_side="away") is event.away_team
+
+    def test_feed_hint_takes_precedence_over_matched_side(self, event):
+        stream = {"name": "Miami Marlins HOME"}
+        assert (
+            self._resolve(stream, event, matched_side="away", feed_hint="home")
+            is event.home_team
+        )
+
+    def test_matched_side_takes_precedence_over_broadcast_markets(self, event):
+        # The match is a stronger signal than fuzzy market-name presence.
+        event.broadcast_markets = {"Pirates TV": "away"}
+        stream = {"name": "Pirates TV alternate"}
+        assert self._resolve(stream, event, matched_side="home") is event.home_team
+
+    def test_detect_team_names_off_ignores_matched_side(self, event):
+        # The toggle means "team names are not a feed signal" — the split
+        # stays off; per-stream persistence still happens in the creator's
+        # matched_side fallback, not here.
+        stream = {"name": "MLB | Miami Marlins"}
+        assert (
+            self._resolve(stream, event, matched_side="home", detect_team_names=False)
+            is None
+        )
+        assert self._last_entry["stream_feed_team"] is None
+
+    def test_separation_off_still_identifies_stream_feed_team(self, event):
+        # Identification decoupled from separation (#527): channel-level
+        # feed_team stays None, per-stream identity is still resolved.
+        stream = {"name": "MLB | Miami Marlins"}
+        assert (
+            self._resolve(stream, event, matched_side="home", separation_enabled=False)
+            is None
+        )
+        assert self._last_entry["stream_feed_team"] is event.home_team
+
+    def test_matchup_stream_without_matched_side_never_splits(self, event):
+        # Regression guard for the 0b306e48 false-positive fix: a
+        # TEAM_VS_TEAM stream (no matched_side) whose name merely contains
+        # team names stays a shared feed.
+        stream = {"name": "Pittsburgh Pirates vs Miami Marlins"}
+        assert self._resolve(stream, event, matched_side=None) is None

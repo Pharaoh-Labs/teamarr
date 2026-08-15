@@ -426,6 +426,9 @@ class StreamMatching:
 
         For each matched stream, in precedence order:
         - feed_hint="home"/"away" (explicit HOME/AWAY term) → that side's team
+        - matched_side + detect_team_names → that side's team. Set only by
+          TEAM_ONLY matches (#489), where the stream name IS a team name —
+          the match itself is the feed signal, no rescanning needed (#559).
         - No hint → match the stream's identifiers against the event's
           home/away-market broadcast names (ESPN broadcasts[].market:
           'Brewers.TV' → away, 'YES' → home) — catches team-branded and
@@ -453,6 +456,7 @@ class StreamMatching:
         for entry in matched_streams:
             event = entry.get("event")
             feed_hint = entry.get("feed_hint")
+            matched_side = entry.get("matched_side")
             feed_team = None
             source = feed_hint
 
@@ -460,6 +464,12 @@ class StreamMatching:
                 feed_team = event.home_team
             elif event and feed_hint == "away":
                 feed_team = event.away_team
+            elif event and detect_team_names and matched_side == "home":
+                feed_team = event.home_team
+                source = "matched_side"
+            elif event and detect_team_names and matched_side == "away":
+                feed_team = event.away_team
+                source = "matched_side"
             elif event and not feed_hint:
                 stream = entry["stream"]
                 candidates: list[str] = []
@@ -587,7 +597,6 @@ class StreamMatching:
         Only matches when a team name appears in a feed-specific context:
         - In parentheses: "Game Title (Penguins)" or "(Penguins Feed)"
         - With feed keyword: "Penguins Feed", "Penguins Broadcast"
-        - After pipe/dash at end: "Game | Penguins", "Game - Penguins"
         - With home/away: "Penguins Home", "Home Penguins"
         - Team-branded channel token: "Penguins.TV", "Penguins.US" (#343)
 
