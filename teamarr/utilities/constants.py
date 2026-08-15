@@ -395,6 +395,13 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bnba[:\s-]", "nba"),
     (r"\bnhl[:\s-]", "nhl"),
     (r"\bmlb[:\s-]", "mlb"),
+    # LLB after MLB (#560): "MLB: Little League Classic" is an MLB game —
+    # the earlier MLB pattern must win. Bare "Little League" / LLWS streams
+    # would otherwise parse team abbreviations (MIL vs. LAD) straight into
+    # MLB matchups.
+    (r"\blittle league\b", "llb"),
+    (r"\bllws\b", "llb"),
+    (r"\bllb[:\s-]", "llb"),
     (r"\bmls[:\s-]", "usa.1"),
     (r"\bwnba[:\s-]", "wnba"),
     (r"\bnwsl[:\s-]", "usa.nwsl"),
