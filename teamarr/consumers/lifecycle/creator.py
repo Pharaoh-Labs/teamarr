@@ -790,11 +790,54 @@ class ChannelCreator(_LifecycleHost):
         """
         if profile_ids is None:
             return None
-        return self._dynamic_resolver.resolve_channel_profiles(
+        resolved = self._dynamic_resolver.resolve_channel_profiles(
             profile_ids=profile_ids,
             event_sport=event_sport,
             event_league=event_league,
         )
+        return self._validate_profile_ids(resolved)
+
+    def _validate_profile_ids(self, resolved: list[int]) -> list[int]:
+        """Drop configured profile ids Dispatcharr no longer knows (#565).
+
+        A stale id (profile deleted/recreated in Dispatcharr) makes every
+        create fail with "Channel profiles with IDs [N] not found" — and
+        Dispatcharr partially creates the channel first, so the failure
+        loops into duplicate channels every run. Validation is against the
+        per-run profile catalog; an unavailable catalog passes ids through
+        unverified rather than guessing.
+
+        A non-empty selection whose every id is stale falls back to the
+        [0] all-profiles sentinel: visible-everywhere beats a create loop
+        that fails forever. [] (explicitly NO profiles) is respected as-is.
+        """
+        if not resolved or resolved == [0]:
+            return resolved
+        catalog = self._all_profile_ids()
+        if catalog is None:
+            return resolved
+        valid = [p for p in resolved if p == 0 or p in catalog]
+        stale = [p for p in resolved if p != 0 and p not in catalog]
+        newly_warned = False
+        for pid in stale:
+            if pid not in self._stale_profile_ids_warned:
+                self._stale_profile_ids_warned.add(pid)
+                newly_warned = True
+                logger.warning(
+                    "[LIFECYCLE] Configured channel profile id %d does not exist "
+                    "in Dispatcharr (deleted or recreated?) — ignoring it. "
+                    "Re-select channel profiles in Teamarr settings.",
+                    pid,
+                )
+        if not valid:
+            if newly_warned:
+                logger.warning(
+                    "[LIFECYCLE] No configured channel profile exists in "
+                    "Dispatcharr — falling back to ALL profiles ([0]) so "
+                    "channel creation can proceed."
+                )
+            return [0]
+        return valid
 
     def _create_channel(
         self,
