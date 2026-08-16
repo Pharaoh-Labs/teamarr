@@ -225,7 +225,7 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v84) |
+| Schema version | `teamarr/database/schema.sql` (v87) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 
@@ -235,11 +235,12 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 API Layer        → teamarr/api/routes/ (18 modules)
 Consumer Layer   → teamarr/consumers/ (key packages: generation, team_epg, event_epg, event_group_processor/, cache/, lifecycle/, matching/, enforcement/, filler/)
 Service Layer    → teamarr/services/sports_data.py
-Provider Layer   → teamarr/providers/ (espn, squiggle, nascar, mlbstats, hockeytech, supabase, tsdb)
+Provider Layer   → teamarr/providers/ (espn, bellmedia, squiggle, nascar, mlbstats, hockeytech, supabase, tsdb)
 ```
 
 **Providers** (lower priority = tried first):
 - ESPN (0) - Primary, most leagues
+- Bell Media (20) - CFL; TSN public sports widget API, no key
 - Squiggle (30) - AFL (Australian Football League); free, no key required
 - NASCAR (35) - NASCAR Cup/O'Reilly (Xfinity)/Trucks; official cf.nascar.com schedule API, full weekend sessions, no key
 - MLB Stats (40) - MiLB (Triple-A through Rookie)

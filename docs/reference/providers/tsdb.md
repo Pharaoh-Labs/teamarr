@@ -7,7 +7,7 @@ nav_order: 7
 
 # TheSportsDB Provider
 
-TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, CFL, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 49 leagues in total (6 free-tier, 43 premium).
+TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 48 leagues in total (5 free-tier, 43 premium).
 
 ## API Details
 
@@ -67,11 +67,10 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
 ## Supported Leagues
 
-TSDB serves **49 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
+TSDB serves **48 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
 | League | Code | TSDB ID | Sport | Tier |
 |--------|------|---------|-------|------|
-| Canadian Football League | `cfl` | 4405 | Football | Free |
 | Unrivaled | `unrivaled` | 5622 | Basketball | Free |
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
 | Boxing | `boxing` | 4445 | Boxing | Free |
