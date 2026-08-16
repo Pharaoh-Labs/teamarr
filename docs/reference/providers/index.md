@@ -20,6 +20,7 @@ Request for league data
   ProviderRegistry.get_for_league(league)
         │
         ├── ESPN (priority 0)         → supports? → Yes → use ESPN
+        ├── Bell Media (priority 20)  → supports? → Yes → use Bell Media
         ├── Squiggle (priority 30)    → supports? → Yes → use Squiggle
         ├── NASCAR (priority 35)      → supports? → Yes → use NASCAR
         ├── MLB Stats (priority 40)   → supports? → Yes → use MLB Stats
@@ -33,6 +34,7 @@ Request for league data
 | Provider | Priority | Leagues | Auth | Rate Limit |
 |----------|----------|---------|------|------------|
 | [ESPN](espn) | 0 | 98 | None (public API) | Generous (DNS is usually the bottleneck) |
+| [Bell Media](bellmedia) | 20 | 1 (CFL) | None (public widget API) | None observed, cached |
 | [Squiggle](squiggle) | 30 | 1 (AFL) | None (free) | No hard limit — cache required |
 | [NASCAR](nascar) | 35 | 3 | None (public API) | None observed — season schedule cached 6h |
 | [MLB Stats](mlbstats) | 40 | 5 | None (public API) | None observed |
@@ -63,6 +65,7 @@ Each league in `schema.sql` maps to a provider via the `provider` and `provider_
 | Provider | Format | Example |
 |----------|--------|---------|
 | ESPN | `sport/league` | `football/nfl`, `soccer/eng.1` |
+| Bell Media | league slug | `cfl` |
 | Squiggle | `league_code` | `afl` |
 | NASCAR | series number | `1` (Cup), `2` (ORAP), `3` (Trucks) |
 | MLB Stats | `sport_id` | `11` (Triple-A) |

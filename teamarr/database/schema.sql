@@ -461,7 +461,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 84
+    schema_version INTEGER DEFAULT 87
 );
 
 -- Insert default settings
@@ -990,7 +990,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nfl', 'espn', 'football/nfl', NULL, 'National Football League', 'football', 'https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png', NULL, 1, 'NFL', 'nfl', 'team_vs_team', 'NFL Football', NULL, NULL, NULL, 1),
     ('college-football', 'espn', 'football/college-football', NULL, 'NCAA Football', 'football', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/football.png', NULL, 1, 'NCAAF', 'ncaaf', 'team_vs_team', 'College Football', NULL, NULL, NULL, 1),
     ('ufl', 'espn', 'football/ufl', NULL, 'United Football League', 'football', 'https://a.espncdn.com/i/teamlogos/leagues/500/ufl.png', NULL, 1, 'UFL', 'ufl', 'team_vs_team', 'UFL Football', NULL, NULL, NULL, 1),
-    ('cfl', 'tsdb', '4405', 'CFL', 'Canadian Football League', 'football', 'https://r2.thesportsdb.com/images/media/league/badge/ffypv51488739128.png', NULL, 1, 'CFL', 'cfl', 'team_vs_team', 'CFL Football', NULL, NULL, 'free', 1),  -- TSDB: ESPN stopped CFL coverage in 2022
+    ('cfl', 'bellmedia', 'cfl', NULL, 'Canadian Football League', 'football', 'https://r2.thesportsdb.com/images/media/league/badge/ffypv51488739128.png', NULL, 1, 'CFL', 'cfl', 'team_vs_team', 'CFL Football', NULL, NULL, NULL, 1),
 
     -- Basketball (ESPN)
     ('nba', 'espn', 'basketball/nba', NULL, 'National Basketball Association', 'basketball', 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png', NULL, 1, 'NBA', 'nba', 'team_vs_team', 'NBA Basketball', NULL, NULL, NULL, 1),

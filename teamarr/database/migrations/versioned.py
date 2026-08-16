@@ -284,6 +284,18 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 84
 
+    if current_version < 85:
+        _apply_migration(conn, 85, "migrate CFL to Bell Media", _migrate_v85_cfl_bellmedia)
+        current_version = 85
+
+    if current_version < 86:
+        _apply_migration(conn, 86, "clear CFL provider cache", _migrate_v86_cfl_service_cache)
+        current_version = 86
+
+    if current_version < 87:
+        _apply_migration(conn, 87, "remap CFL team selections", _migrate_v87_cfl_team_selections)
+        current_version = 87
+
 
 # =============================================================================
 # Migration helpers
@@ -1051,6 +1063,137 @@ def _migrate_v66_tsdb_tiers(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         # leagues table absent in minimal test databases.
         pass
+
+
+def _migrate_v85_cfl_bellmedia(conn: sqlite3.Connection) -> None:
+    """v85: replace TSDB's CFL IDs and clear its stale cache entries.
+
+    Bell Media competitor IDs are captured from TSN's public score widget. CFL
+    team records are remapped by their stable display name so existing team
+    channels keep their configuration while future events use Bell Media IDs.
+    """
+    cfl_teams = {
+        "bc lions": "93775",
+        "calgary stampeders": "112939",
+        "edmonton elks": "114347",
+        "hamilton tiger-cats": "83579",
+        "montreal alouettes": "86680",
+        "ottawa redblacks": "88019",
+        "saskatchewan roughriders": "106752",
+        "toronto argonauts": "122345",
+        "winnipeg blue bombers": "110380",
+    }
+
+    if _table_exists(conn, "team_cache"):
+        conn.execute("DELETE FROM team_cache WHERE league = 'cfl'")
+    if _table_exists(conn, "league_cache"):
+        conn.execute("DELETE FROM league_cache WHERE league_slug = 'cfl'")
+    _clear_cfl_service_cache(conn)
+
+    for table, league_column in (("teams", "primary_league"), ("channel_priority_teams", "league")):
+        if not _table_exists(conn, table) or not all(
+            _column_exists(conn, table, column)
+            for column in ("provider", "provider_team_id", league_column, "team_name")
+        ):
+            continue
+        for name, competitor_id in cfl_teams.items():
+            conn.execute(
+                f"UPDATE OR IGNORE {table} SET provider = 'bellmedia', provider_team_id = ? "
+                f"WHERE provider = 'tsdb' AND {league_column} = 'cfl' "
+                "AND LOWER(team_name) = ?",
+                (competitor_id, name),
+            )
+
+    if _table_exists(conn, "managed_channels") and all(
+        _column_exists(conn, "managed_channels", column)
+        for column in ("deleted_at", "delete_reason", "event_provider", "league")
+    ):
+        # Provider event IDs are not interoperable. Mark old channels deleted so
+        # normal generation can recreate them without a duplicate active row.
+        conn.execute(
+            "UPDATE managed_channels SET deleted_at = CURRENT_TIMESTAMP, "
+            "delete_reason = 'provider_migration' "
+            "WHERE event_provider = 'tsdb' AND league = 'cfl' AND deleted_at IS NULL"
+        )
+
+
+def _migrate_v86_cfl_service_cache(conn: sqlite3.Connection) -> None:
+    """v86: invalidate cached CFL values created before the provider migration."""
+    _clear_cfl_service_cache(conn)
+
+
+def _migrate_v87_cfl_team_selections(conn: sqlite3.Connection) -> None:
+    """v87: remap persisted CFL team-selection JSON to Bell Media IDs."""
+    team_ids = {
+        "135006": "93775",
+        "135007": "112939",
+        "135008": "114347",
+        "135002": "83579",
+        "135003": "86680",
+        "135004": "88019",
+        "135009": "106752",
+        "135005": "122345",
+        "135010": "110380",
+    }
+
+    def remap(value: str | None) -> str | None:
+        if not value:
+            return value
+        try:
+            teams = json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            return value
+        if not isinstance(teams, list):
+            return value
+        changed = False
+        for team in teams:
+            if not isinstance(team, dict):
+                continue
+            if team.get("provider") != "tsdb" or team.get("league") != "cfl":
+                continue
+            bellmedia_id = team_ids.get(str(team.get("team_id")))
+            if not bellmedia_id:
+                continue
+            team["provider"] = "bellmedia"
+            team["team_id"] = bellmedia_id
+            changed = True
+        return json.dumps(teams) if changed else value
+
+    targets = (
+        ("settings", "id = 1", ("default_include_teams", "default_exclude_teams")),
+        ("event_epg_groups", "1 = 1", ("include_teams", "exclude_teams")),
+    )
+    for table, where, columns in targets:
+        if not _table_exists(conn, table):
+            continue
+        for column in columns:
+            if not _column_exists(conn, table, column):
+                continue
+            rows = conn.execute(
+                f"SELECT rowid AS _rowid, {column} FROM {table} WHERE {where}"
+            ).fetchall()
+            for row in rows:
+                updated = remap(row[column])
+                if updated != row[column]:
+                    conn.execute(
+                        f"UPDATE {table} SET {column} = ? WHERE rowid = ?",
+                        (updated, row["_rowid"]),
+                    )
+
+
+def _clear_cfl_service_cache(conn: sqlite3.Connection) -> None:
+    """Remove provider-agnostic service-cache entries for CFL."""
+    if not _table_exists(conn, "service_cache") or not _column_exists(
+        conn, "service_cache", "cache_key"
+    ):
+        return
+    # Service-cache keys do not include the provider. A cached empty TSDB
+    # response would otherwise hide Bell Media events until its TTL expires.
+    conn.execute(
+        "DELETE FROM service_cache WHERE cache_key LIKE 'events:cfl:%' "
+        "OR cache_key LIKE 'schedule:cfl:%' OR cache_key LIKE 'team:cfl:%' "
+        "OR cache_key LIKE 'event:cfl:%' OR cache_key LIKE 'stats:cfl:%'"
+    )
 
 
 def _migrate_v67_remove_cricbuzz(conn: sqlite3.Connection) -> None:

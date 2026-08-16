@@ -19,6 +19,7 @@ from collections.abc import Callable
 
 from teamarr.database import get_db
 from teamarr.database.team_cache import get_team_name_by_id
+from teamarr.providers.bellmedia import BellMediaClient, BellMediaProvider
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
@@ -37,6 +38,13 @@ from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 def _create_espn_provider() -> ESPNProvider:
     """Factory for ESPN provider with injected dependencies."""
     return ESPNProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
+def _create_bellmedia_provider() -> BellMediaProvider:
+    """Factory for Bell Media provider with injected dependencies."""
+    return BellMediaProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
     )
 
@@ -134,6 +142,14 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="bellmedia",
+    provider_class=BellMediaProvider,
+    factory=_create_bellmedia_provider,
+    priority=20,
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="hockeytech",
     provider_class=HockeyTechProvider,
     factory=_create_hockeytech_provider,
@@ -189,6 +205,9 @@ __all__ = [
     # Registry
     "ProviderConfig",
     "ProviderRegistry",
+    # Bell Media
+    "BellMediaClient",
+    "BellMediaProvider",
     # ESPN
     "ESPNClient",
     "ESPNProvider",
