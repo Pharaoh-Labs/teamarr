@@ -115,9 +115,10 @@ class BellMediaClient(BaseHTTPClient):
             params,
             label="schedule",
         )
+        groups = data.values() if isinstance(data, dict) else []
         events = [
             event
-            for group in (data or {}).values()
+            for group in groups
             for event in group
             if isinstance(event, dict)
         ]
