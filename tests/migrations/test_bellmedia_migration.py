@@ -1,6 +1,12 @@
 """Regression coverage for the CFL provider migration."""
 
-from teamarr.database.migrations import _migrate_v85_cfl_bellmedia, _migrate_v86_cfl_service_cache
+import json
+
+from teamarr.database.migrations import (
+    _migrate_v85_cfl_bellmedia,
+    _migrate_v86_cfl_service_cache,
+    _migrate_v87_cfl_team_selections,
+)
 
 
 def test_cfl_migration_remaps_known_team_and_clears_cache(db_conn):
@@ -79,3 +85,22 @@ def test_cfl_service_cache_migration_handles_existing_v85_database(db_conn):
     assert db_conn.execute(
         "SELECT COUNT(*) FROM service_cache WHERE cache_key = 'events:cfl:2026-08-15'"
     ).fetchone()[0] == 0
+
+
+def test_cfl_team_selection_migration_remaps_global_defaults(db_conn):
+    selections = [
+        {"provider": "tsdb", "team_id": "135005", "league": "cfl", "name": "Toronto Argonauts"},
+        {"provider": "espn", "team_id": "21", "league": "nhl", "name": "Toronto Maple Leafs"},
+    ]
+    db_conn.execute(
+        "UPDATE settings SET default_include_teams = ? WHERE id = 1", (json.dumps(selections),)
+    )
+
+    _migrate_v87_cfl_team_selections(db_conn)
+
+    updated = json.loads(
+        db_conn.execute("SELECT default_include_teams FROM settings WHERE id = 1").fetchone()[0]
+    )
+    assert updated[0]["provider"] == "bellmedia"
+    assert updated[0]["team_id"] == "122345"
+    assert updated[1] == selections[1]

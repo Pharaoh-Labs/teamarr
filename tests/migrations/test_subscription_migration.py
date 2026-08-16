@@ -381,4 +381,4 @@ class TestGroupNormalization:
         _run_v58_migration(db)
 
         row = db.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row[0] == 86  # v59-v86 migrations run after v58
+        assert row[0] == 87  # v59-v87 migrations run after v58

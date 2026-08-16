@@ -292,6 +292,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _apply_migration(conn, 86, "clear CFL provider cache", _migrate_v86_cfl_service_cache)
         current_version = 86
 
+    if current_version < 87:
+        _apply_migration(conn, 87, "remap CFL team selections", _migrate_v87_cfl_team_selections)
+        current_version = 87
+
 
 # =============================================================================
 # Migration helpers
@@ -1116,6 +1120,65 @@ def _migrate_v85_cfl_bellmedia(conn: sqlite3.Connection) -> None:
 def _migrate_v86_cfl_service_cache(conn: sqlite3.Connection) -> None:
     """v86: invalidate cached CFL values created before the provider migration."""
     _clear_cfl_service_cache(conn)
+
+
+def _migrate_v87_cfl_team_selections(conn: sqlite3.Connection) -> None:
+    """v87: remap persisted CFL team-selection JSON to Bell Media IDs."""
+    team_ids = {
+        "135006": "93775",
+        "135007": "112939",
+        "135008": "114347",
+        "135002": "83579",
+        "135003": "86680",
+        "135004": "88019",
+        "135009": "106752",
+        "135005": "122345",
+        "135010": "110380",
+    }
+
+    def remap(value: str | None) -> str | None:
+        if not value:
+            return value
+        try:
+            teams = json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            return value
+        if not isinstance(teams, list):
+            return value
+        changed = False
+        for team in teams:
+            if not isinstance(team, dict):
+                continue
+            if team.get("provider") != "tsdb" or team.get("league") != "cfl":
+                continue
+            bellmedia_id = team_ids.get(str(team.get("team_id")))
+            if not bellmedia_id:
+                continue
+            team["provider"] = "bellmedia"
+            team["team_id"] = bellmedia_id
+            changed = True
+        return json.dumps(teams) if changed else value
+
+    targets = (
+        ("settings", "id = 1", ("default_include_teams", "default_exclude_teams")),
+        ("event_epg_groups", "1 = 1", ("include_teams", "exclude_teams")),
+    )
+    for table, where, columns in targets:
+        if not _table_exists(conn, table):
+            continue
+        for column in columns:
+            if not _column_exists(conn, table, column):
+                continue
+            rows = conn.execute(
+                f"SELECT rowid AS _rowid, {column} FROM {table} WHERE {where}"
+            ).fetchall()
+            for row in rows:
+                updated = remap(row[column])
+                if updated != row[column]:
+                    conn.execute(
+                        f"UPDATE {table} SET {column} = ? WHERE rowid = ?",
+                        (updated, row["_rowid"]),
+                    )
 
 
 def _clear_cfl_service_cache(conn: sqlite3.Connection) -> None:
