@@ -65,6 +65,10 @@ class TestESPNSupportsLeague:
         espn = _espn({("chl", "hockeytech")})
         assert espn.supports_league("chl") is False
 
+    def test_declines_cfl_assigned_to_bellmedia(self):
+        espn = _espn({("cfl", "bellmedia")})
+        assert espn.supports_league("cfl") is False
+
     def test_no_mapping_source_falls_back_to_dot_heuristic(self):
         """Without a mapping source, only the dotted heuristic applies."""
         espn = ESPNProvider(league_mapping_source=None)

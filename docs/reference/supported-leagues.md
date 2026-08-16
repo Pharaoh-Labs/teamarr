@@ -26,12 +26,13 @@ Leagues have different levels of support:
 | Provider | Description |
 |----------|-------------|
 | **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. |
+| **Bell Media** | Canadian Football League via TSN's public sports widget API. |
 | **NASCAR** | NASCAR Cup, O'Reilly (Xfinity), and Truck series via the official cf.nascar.com schedule API. Full race-weekend sessions, no API key required. See [provider docs](providers/nascar). |
 | **MLB Stats API** | Minor League Baseball (MiLB) — Triple-A, Double-A, High-A, Single-A, Rookie |
 | **Squiggle** | AFL (Australian Football League). Free, no API key required. See [provider docs](providers/squiggle). |
 | **HockeyTech** | Canadian and US junior/minor hockey leagues (CHL, AHL, ECHL, PWHL, USHL, Junior A) |
 | **Supabase** | Supabase-backed leagues such as the Canadian Baseball League (CBL). No API key required. See [provider docs](providers/supabase). |
-| **TheSportsDB** | Rugby, cricket, boxing, CFL, Scandinavian leagues, and more. Free and [premium tiers](providers/tsdb.md). |
+| **TheSportsDB** | Rugby, cricket, boxing, Scandinavian leagues, and more. Free and [premium tiers](providers/tsdb.md). |
 
 ### TSDB Tier Legend
 
@@ -49,7 +50,7 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | League | ID | Provider |
 |--------|-----|----------|
 | National Football League | `nfl` | ESPN |
-| Canadian Football League | `cfl` | TSDB |
+| Canadian Football League | `cfl` | Bell Media |
 | NCAA Football | `ncaaf` | ESPN |
 | United Football League | `ufl` | ESPN |
 

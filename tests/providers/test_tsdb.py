@@ -321,7 +321,7 @@ SCHEMA = SCHEMA_PATH
 
 # From schema.sql leagues table (tsdb_tier).
 PREMIUM = ["ipl", "sa20", "uru.2"]
-FREE = ["boxing", "cfl"]
+FREE = ["boxing"]
 
 
 def _db() -> sqlite3.Connection:

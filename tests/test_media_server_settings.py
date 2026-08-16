@@ -62,7 +62,7 @@ class TestV83MediaServerLists:
             "SELECT schema_version, emby_servers, jellyfin_servers "
             "FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 84
+        assert row["schema_version"] == 85
         emby = json.loads(row["emby_servers"])
         assert emby == [
             {
