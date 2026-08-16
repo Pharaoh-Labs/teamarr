@@ -288,6 +288,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _apply_migration(conn, 85, "migrate CFL to Bell Media", _migrate_v85_cfl_bellmedia)
         current_version = 85
 
+    if current_version < 86:
+        _apply_migration(conn, 86, "clear CFL provider cache", _migrate_v86_cfl_service_cache)
+        current_version = 86
+
 
 # =============================================================================
 # Migration helpers
@@ -1080,6 +1084,7 @@ def _migrate_v85_cfl_bellmedia(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM team_cache WHERE league = 'cfl'")
     if _table_exists(conn, "league_cache"):
         conn.execute("DELETE FROM league_cache WHERE league_slug = 'cfl'")
+    _clear_cfl_service_cache(conn)
 
     for table, league_column in (("teams", "primary_league"), ("channel_priority_teams", "league")):
         if not _table_exists(conn, table) or not all(
@@ -1106,6 +1111,26 @@ def _migrate_v85_cfl_bellmedia(conn: sqlite3.Connection) -> None:
             "delete_reason = 'provider_migration' "
             "WHERE event_provider = 'tsdb' AND league = 'cfl' AND deleted_at IS NULL"
         )
+
+
+def _migrate_v86_cfl_service_cache(conn: sqlite3.Connection) -> None:
+    """v86: invalidate cached CFL values created before the provider migration."""
+    _clear_cfl_service_cache(conn)
+
+
+def _clear_cfl_service_cache(conn: sqlite3.Connection) -> None:
+    """Remove provider-agnostic service-cache entries for CFL."""
+    if not _table_exists(conn, "service_cache") or not _column_exists(
+        conn, "service_cache", "cache_key"
+    ):
+        return
+    # Service-cache keys do not include the provider. A cached empty TSDB
+    # response would otherwise hide Bell Media events until its TTL expires.
+    conn.execute(
+        "DELETE FROM service_cache WHERE cache_key LIKE 'events:cfl:%' "
+        "OR cache_key LIKE 'schedule:cfl:%' OR cache_key LIKE 'team:cfl:%' "
+        "OR cache_key LIKE 'event:cfl:%' OR cache_key LIKE 'stats:cfl:%'"
+    )
 
 
 def _migrate_v67_remove_cricbuzz(conn: sqlite3.Connection) -> None:
