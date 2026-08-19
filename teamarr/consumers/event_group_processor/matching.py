@@ -598,6 +598,12 @@ class StreamMatching:
                     if feed_team:
                         source = "broadcast_market"
                         break
+                if feed_team is None:
+                    for text in candidates:
+                        feed_team = self._detect_feed_from_rsn_catalog(text, event)
+                        if feed_team:
+                            source = "rsn_catalog"
+                            break
                 if feed_team is None and detect_team_names:
                     for text in candidates:
                         feed_team = self._detect_team_in_stream_name(
@@ -784,6 +790,34 @@ class StreamMatching:
         return None
 
     @staticmethod
+    def _detect_feed_from_rsn_catalog(stream_name_lower: str, event):
+        """Match the stream identifier against the RSN catalog.
+
+        If the stream matches an unambiguous 1:1 RSN for the event's league
+        (e.g., 'YES Network' -> 'NYY', 'NESN' -> 'BOS'):
+        - Returns event.home_team if the home team is affiliated with the RSN
+        - Returns event.away_team if the away team is affiliated with the RSN
+        - Returns None if neither team is affiliated, or if the RSN is ambiguous
+          (e.g. MASN) with no explicit disambiguation.
+        """
+        from teamarr.core.rsn_catalog import resolve_unambiguous_rsn_team, team_matches_rsn
+
+        league = getattr(event, "league", None)
+        if not league:
+            return None
+
+        rsn_team_abbrev = resolve_unambiguous_rsn_team(stream_name_lower, league=league)
+        if not rsn_team_abbrev:
+            return None
+
+        if event.home_team and team_matches_rsn(event.home_team, rsn_team_abbrev):
+            return event.home_team
+        if event.away_team and team_matches_rsn(event.away_team, rsn_team_abbrev):
+            return event.away_team
+
+        return None
+
+    @staticmethod
     def _detect_team_in_stream_name(
         stream_name_lower: str, home_team, away_team
     ):
@@ -801,11 +835,14 @@ class StreamMatching:
         import re
 
         def _get_candidates(t) -> list[str]:
-            c = [t.name.lower()]
-            if t.short_name and t.short_name.lower() != t.name.lower():
-                c.append(t.short_name.lower())
-            if t.abbreviation and len(t.abbreviation) >= 3:
-                c.append(t.abbreviation.lower())
+            name = getattr(t, "name", "") or ""
+            c = [name.lower()] if name else []
+            short_name = getattr(t, "short_name", None)
+            if short_name and short_name.lower() != name.lower():
+                c.append(short_name.lower())
+            abbrev = getattr(t, "abbreviation", None)
+            if abbrev and len(abbrev) >= 3:
+                c.append(abbrev.lower())
             return c
 
         home_candidates = _get_candidates(home_team)

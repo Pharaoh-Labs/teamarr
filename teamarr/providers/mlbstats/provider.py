@@ -201,6 +201,35 @@ class MLBStatsProvider(SportsProvider):
             color=None,
         )
 
+    @staticmethod
+    def _parse_broadcast_markets(broadcasts_data: list) -> dict[str, str]:
+        """Broadcast name -> market ('national'/'home'/'away') from MLB StatsAPI."""
+        markets: dict[str, str] = {}
+        for broadcast in broadcasts_data:
+            name = broadcast.get("name")
+            if not name or not isinstance(name, str):
+                continue
+            is_national = broadcast.get("isNational", False)
+            home_away = broadcast.get("homeAway")
+            if is_national:
+                market = "national"
+            elif home_away in ("home", "away"):
+                market = home_away
+            else:
+                continue
+            markets[name] = market
+        return markets
+
+    @staticmethod
+    def _parse_broadcasts(broadcasts_data: list) -> list[str]:
+        """Extract unique list of broadcast network names."""
+        names = []
+        for broadcast in broadcasts_data:
+            name = broadcast.get("name")
+            if name and isinstance(name, str) and name not in names:
+                names.append(name)
+        return names
+
     def _parse_game(self, game: dict, league: str) -> Event | None:
         game_id = str(game.get("gamePk", ""))
         if not game_id:
@@ -246,6 +275,10 @@ class MLBStatsProvider(SportsProvider):
         if venue_data.get("name"):
             venue = Venue(name=venue_data["name"])
 
+        broadcasts_data = game.get("broadcasts", [])
+        broadcasts = self._parse_broadcasts(broadcasts_data)
+        broadcast_markets = self._parse_broadcast_markets(broadcasts_data)
+
         name = f"{away_team.name} at {home_team.name}"
         short_name = f"{away_team.short_name} at {home_team.short_name}"
 
@@ -263,7 +296,8 @@ class MLBStatsProvider(SportsProvider):
             home_score=home_info.get("score"),
             away_score=away_info.get("score"),
             venue=venue,
-            broadcasts=[],
+            broadcasts=broadcasts,
+            broadcast_markets=broadcast_markets,
             season_year=(game.get("season") or 0) or None,
             season_type=self._GAMETYPE_CANONICAL.get(game.get("gameType") or ""),
         )

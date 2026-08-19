@@ -1,5 +1,3 @@
-"""Core types and interfaces."""
-
 from teamarr.core.interfaces import LeagueMapping, LeagueMappingSource, SportsProvider
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
@@ -18,6 +16,12 @@ from teamarr.core.types import (
     TemplateConfig,
     Venue,
 )
+from teamarr.core.rsn_catalog import (
+    MLB_RSN_CATALOG,
+    RSNEntry,
+    resolve_unambiguous_rsn_team,
+    team_matches_rsn,
+)
 
 __all__ = [
     "Bout",
@@ -26,7 +30,9 @@ __all__ = [
     "GENERATED_PREVIEW_FIELDS",
     "LeagueMapping",
     "LeagueMappingSource",
+    "MLB_RSN_CATALOG",
     "Programme",
+    "RSNEntry",
     "RacingResult",
     "RacingSession",
     "SEASON_OFFSEASON",
@@ -38,4 +44,7 @@ __all__ = [
     "TeamStats",
     "TemplateConfig",
     "Venue",
+    "resolve_unambiguous_rsn_team",
+    "team_matches_rsn",
 ]
+

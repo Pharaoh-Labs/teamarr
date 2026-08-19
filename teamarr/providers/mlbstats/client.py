@@ -73,7 +73,7 @@ class MLBStatsClient(BaseHTTPClient):
         params: dict[str, Any] = {
             "sportId": sport_id,
             "date": target_date.strftime("%Y-%m-%d"),
-            "hydrate": "teams,venue",
+            "hydrate": "teams,venue,broadcasts",
         }
         if team_id:
             params["teamId"] = team_id
@@ -90,7 +90,7 @@ class MLBStatsClient(BaseHTTPClient):
             "sportId": sport_id,
             "startDate": start_date.strftime("%Y-%m-%d"),
             "endDate": end_date.strftime("%Y-%m-%d"),
-            "hydrate": "teams,venue",
+            "hydrate": "teams,venue,broadcasts",
         }
         if team_id:
             params["teamId"] = team_id
