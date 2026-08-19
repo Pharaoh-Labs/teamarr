@@ -202,7 +202,16 @@ class KeywordEnforcer:
                             source_group_id=stream.source_group_id,
                             source_group_type=stream.source_group_type,
                             exception_keyword=expected_keyword,
+                            m3u_account_id=stream.m3u_account_id,
                             m3u_account_name=stream.m3u_account_name,
+                            # Carry matcher metadata across the move — dropping it
+                            # detached the stream from the epg_match/stream_type
+                            # ordering rules and its EPG attach window (#344).
+                            match_type=stream.match_type,
+                            match_method=stream.match_method,
+                            feed_team_id=stream.feed_team_id,
+                            attach_at=stream.attach_at,
+                            detach_at=stream.detach_at,
                             dispatcharr_channel_group=stream.dispatcharr_channel_group,
                         )
 

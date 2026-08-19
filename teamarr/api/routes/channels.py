@@ -8,13 +8,31 @@ Provides REST API for:
 """
 
 import logging
-from datetime import date, datetime
-from typing import Any
+from datetime import date, datetime, timezone
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from teamarr.consumers.generation_status import is_in_progress
 from teamarr.database import get_db
+from teamarr.database.channels import (
+    get_all_managed_channels,
+    get_channels_pending_deletion,
+    get_managed_channels_for_group,
+)
+from teamarr.database.channels.crud import mark_all_channels_deleted
+from teamarr.database.channels.streams import (
+    get_channel_streams,
+    get_stream_match_details,
+    refresh_stream_stats,
+)
+from teamarr.database.groups import get_group_names_by_ids
+from teamarr.database.settings import get_dispatcharr_settings
+from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
+from teamarr.services import create_channel_service, create_default_service
+from teamarr.services.stream_ordering import get_stream_ordering_service
+from teamarr.utilities.tz import parse_db_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +41,20 @@ def _safe_isoformat(value: Any) -> str | None:
     """Safely convert a date/datetime value to ISO format string.
 
     Handles cases where the value might already be a string from the database.
+
+    Strings are normalized through parse_db_timestamp (#511): SQLite-canonical
+    naive UTC gains an explicit +00:00 offset. Without one, JS ``new Date()``
+    parses the string as browser-LOCAL time, so the UI echoed raw UTC digits.
+    Aware inputs keep their instant; non-timestamp strings pass through.
     """
     if value is None:
         return None
     if isinstance(value, str):
-        return value
+        try:
+            parsed = parse_db_timestamp(value)
+        except ValueError:
+            return value
+        return parsed.isoformat() if parsed else value
     if isinstance(value, (date, datetime)):
         return value.isoformat()
     return str(value)
@@ -57,7 +84,9 @@ class ManagedChannelModel(BaseModel):
     dispatcharr_uuid: str | None = None
 
     home_team: str | None = None
+    home_team_abbrev: str | None = None
     away_team: str | None = None
+    away_team_abbrev: str | None = None
     event_date: str | None = None
     event_name: str | None = None
     league: str | None = None
@@ -142,6 +171,61 @@ class DeleteResponse(BaseModel):
     message: str
 
 
+class StreamRuleMatch(BaseModel):
+    """One ordering rule that matched a stream (priority explainer)."""
+
+    type: str
+    value: str
+    priority: int
+    is_winner: bool  # the priority-mode rule that set the band
+    mode: str = "priority"  # 'priority' (band) or 'score' (additive contributor)
+    points: int = 0  # signed contribution for score-mode rules
+
+
+class StreamNameMatch(BaseModel):
+    """A name token that produced a match (alias text or team-name form → team)."""
+
+    text: str
+    team: str
+
+
+class ChannelStreamEntry(BaseModel):
+    """A single stream attached to a managed channel, with cached stats."""
+
+    dispatcharr_stream_id: int
+    stream_name: str | None = None
+    source_group: str | None = None
+    m3u_account_name: str | None = None
+    match_method: str | None = None
+    match_type: str | None = None
+    # Which side this feed is: 'home', 'away', or None = UNKNOWN (#533).
+    # None is a real answer (no feed signal, or a sport with no sides) — the
+    # UI renders it as "—", never as the opposite side.
+    feed_side: str | None = None
+    exception_keyword: str | None = None
+    priority: int = 0  # stored sort key from the last generation run
+    expected_priority: int = 0  # recomputed under current rules (drives staleness flag)
+    stream_stats: dict | None = None
+    stream_stats_updated_at: str | None = None
+    matched_rules: list[StreamRuleMatch] = []
+    # Cache-derived match detail (absent for EPG / dedicated matches)
+    matched_event: str | None = None
+    matched_league: str | None = None
+    cache_match_method: str | None = None
+    cache_created_at: str | None = None
+    match_aliases: list[StreamNameMatch] = []
+    match_patterns: list[StreamNameMatch] = []
+    user_corrected: bool = False
+    corrected_at: str | None = None
+
+
+class ChannelStreamsResponse(BaseModel):
+    """Streams attached to a managed channel."""
+
+    streams: list[ChannelStreamEntry]
+    stats_refreshed: bool = False
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
@@ -159,10 +243,6 @@ def list_managed_channels(
     Returns channels tracked by Teamarr for lifecycle management.
     Primary filters: sport, league. Secondary: group_id (source provenance).
     """
-    from teamarr.database.channels import (
-        get_all_managed_channels,
-        get_managed_channels_for_group,
-    )
 
     with get_db() as conn:
         if group_id:
@@ -189,7 +269,9 @@ def list_managed_channels(
                 dispatcharr_channel_id=c.dispatcharr_channel_id,
                 dispatcharr_uuid=c.dispatcharr_uuid,
                 home_team=c.home_team,
+                home_team_abbrev=c.home_team_abbrev,
                 away_team=c.away_team,
+                away_team_abbrev=c.away_team_abbrev,
                 event_date=_safe_isoformat(c.event_date),
                 event_name=c.event_name,
                 league=c.league,
@@ -232,7 +314,9 @@ def get_managed_channel(channel_id: int):
         dispatcharr_channel_id=channel.dispatcharr_channel_id,
         dispatcharr_uuid=channel.dispatcharr_uuid,
         home_team=channel.home_team,
+        home_team_abbrev=channel.home_team_abbrev,
         away_team=channel.away_team,
+        away_team_abbrev=channel.away_team_abbrev,
         event_date=_safe_isoformat(channel.event_date),
         event_name=channel.event_name,
         league=channel.league,
@@ -244,6 +328,134 @@ def get_managed_channel(channel_id: int):
     )
 
 
+@router.get("/managed/{channel_id}/streams", response_model=ChannelStreamsResponse)
+def get_managed_channel_streams(channel_id: int):
+    """Get active streams for a managed channel with cached stats.
+
+    Triggers a stats refresh when any stream has null stats or stats older than 1 hour.
+    Source group names are resolved from event_epg_groups via a join.
+    """
+    from teamarr.database.channels import get_managed_channel
+
+    with get_db() as conn:
+        channel = get_managed_channel(conn, channel_id)
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Channel {channel_id} not found",
+            )
+
+        streams = get_channel_streams(conn, channel_id)
+
+        # Resolve source group names in one query
+        group_ids = [s.source_group_id for s in streams if s.source_group_id is not None]
+        group_names = get_group_names_by_ids(conn, group_ids)
+
+        # Refresh stats when any stream has null stats or stats older than 1 hour
+        needs_refresh = any(
+            s.stream_stats is None or (
+                s.stream_stats_updated_at is not None and (
+                    datetime.now(timezone.utc) - datetime.fromisoformat(  # noqa: UP017
+                        str(s.stream_stats_updated_at).replace("Z", "+00:00")
+                    )
+                ).total_seconds() > 3600
+            )
+            for s in streams
+        )
+
+        stats_refreshed = False
+        if needs_refresh and streams:
+            updated = refresh_stream_stats(conn, channel_id)
+            if updated:
+                streams = get_channel_streams(conn, channel_id)
+                stats_refreshed = True
+
+        # Explain each stream's priority: which ordering rules currently match it,
+        # plus the priority those current rules WOULD produce (for the staleness
+        # flag — the stored priority is a collapsed band*stride-score int once
+        # scoring is in play, so the UI can't recompute it from matched_rules alone).
+        ordering_service = get_stream_ordering_service(conn)
+        # With no rules configured, generation never reorders (streams keep their
+        # sequential added order), so 'expected' must mirror the stored priority
+        # rather than the service's no-match baseline — otherwise every stream
+        # would look stale.
+        has_rules = bool(ordering_service.rules)
+        matched_by_stream: dict[int, list[StreamRuleMatch]] = {}
+        expected_by_stream: dict[int, int] = {}
+        for s in streams:
+            group_name = group_names.get(s.source_group_id) if s.source_group_id else None
+            matched_by_stream[s.dispatcharr_stream_id] = [
+                StreamRuleMatch(
+                    type=e.type, value=e.value, priority=e.priority, is_winner=e.is_winner,
+                    mode=e.mode, points=e.points,
+                )
+                for e in ordering_service.evaluate_rules(s, group_name)
+            ]
+            expected_by_stream[s.dispatcharr_stream_id] = (
+                ordering_service.compute_priority(s, group_name) if has_rules else s.priority
+            )
+
+        # Explain how each stream matched its event (cache-derived; absent for
+        # EPG / dedicated matches that bypass the fingerprint cache).
+        match_pairs = [
+            (s.source_group_id, s.dispatcharr_stream_id)
+            for s in streams
+            if s.source_group_id is not None
+        ]
+        match_details = get_stream_match_details(conn, match_pairs)
+
+    # The channel represents one event; that's the authoritative matched event for
+    # every stream on it. (The fingerprint cache can't be trusted here: EPG streams
+    # are time-shared across many event channels, so a stream's cache row points at
+    # whatever it last matched, not this channel's event.)
+    if channel.home_team or channel.away_team:
+        channel_event = f"{channel.away_team or ''} @ {channel.home_team or ''}".strip()
+    else:
+        channel_event = channel.event_name
+
+    return ChannelStreamsResponse(
+        streams=[
+            ChannelStreamEntry(
+                dispatcharr_stream_id=s.dispatcharr_stream_id,
+                stream_name=s.stream_name,
+                source_group=group_names.get(s.source_group_id) if s.source_group_id else None,
+                m3u_account_name=s.m3u_account_name,
+                match_method=s.match_method,
+                match_type=s.match_type,
+                feed_side=s.feed_side,
+                exception_keyword=s.exception_keyword,
+                priority=s.priority,
+                expected_priority=expected_by_stream.get(s.dispatcharr_stream_id, s.priority),
+                stream_stats=s.stream_stats,
+                stream_stats_updated_at=_safe_isoformat(s.stream_stats_updated_at),
+                matched_rules=matched_by_stream.get(s.dispatcharr_stream_id, []),
+                matched_event=channel_event,
+                matched_league=channel.league,
+                cache_match_method=(d := match_details.get(
+                    cast("tuple[int, int]", (s.source_group_id, s.dispatcharr_stream_id)), {}
+                )).get("match_method"),
+                cache_created_at=(
+                    _safe_isoformat(d.get("created_at"))
+                    if d.get("match_method") == "cache"
+                    else None
+                ),
+                match_aliases=[
+                    StreamNameMatch(text=a["alias"], team=a["team"])
+                    for a in d.get("aliases", [])
+                ],
+                match_patterns=[
+                    StreamNameMatch(text=p["token"], team=p["team"])
+                    for p in d.get("patterns", [])
+                ],
+                user_corrected=d.get("user_corrected", False),
+                corrected_at=_safe_isoformat(d.get("corrected_at")),
+            )
+            for s in streams
+        ],
+        stats_refreshed=stats_refreshed,
+    )
+
+
 @router.delete("/managed/{channel_id}", response_model=DeleteResponse)
 def delete_managed_channel(channel_id: int):
     """Delete a managed channel.
@@ -251,8 +463,6 @@ def delete_managed_channel(channel_id: int):
     Removes the channel from Dispatcharr (if configured) and marks as deleted in DB.
     """
     from teamarr.database.channels import get_managed_channel
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         channel = get_managed_channel(conn, channel_id)
@@ -294,9 +504,6 @@ def sync_lifecycle():
     Creates channels that are due and deletes expired channels.
     Requires Dispatcharr to be configured.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -342,9 +549,6 @@ def get_reconciliation_status():
 
     Checks all channels for issues without making any changes.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -402,9 +606,6 @@ def fix_reconciliation(request: ReconciliationRequest):
 
     Detects issues and optionally fixes them based on settings.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_channel_service, create_default_service
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -467,7 +668,6 @@ def get_pending_deletions() -> dict:
 
     Returns channels that are past their scheduled delete time.
     """
-    from teamarr.database.channels import get_channels_pending_deletion
 
     with get_db() as conn:
         channels = get_channels_pending_deletion(conn)
@@ -519,9 +719,6 @@ def delete_dispatcharr_channel(channel_id: int):
     Use this for orphan_dispatcharr channels that exist in Dispatcharr
     but aren't tracked by Teamarr. This bypasses the managed channels table.
     """
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.dispatcharr.managers.channels import ChannelManager
 
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
@@ -611,7 +808,6 @@ def preview_reset_channels():
     Returns all channels in Dispatcharr with teamarr-event-* tvg_id,
     regardless of whether they're tracked in managed_channels.
     """
-    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
     client = get_dispatcharr_client(get_db)
     if not client:
@@ -655,8 +851,6 @@ def execute_reset_channels():
 
     Will fail if EPG generation is currently in progress.
     """
-    from teamarr.api.generation_status import is_in_progress
-    from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
     # Check if EPG generation is in progress
     if is_in_progress():
@@ -691,7 +885,6 @@ def execute_reset_channels():
             errors.append(f"Failed to delete {ch.name}: {result.error}")
 
     # Mark all managed_channels as deleted
-    from teamarr.database.channels.crud import mark_all_channels_deleted
 
     with get_db() as conn:
         mark_all_channels_deleted(conn)

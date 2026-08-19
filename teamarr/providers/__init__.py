@@ -15,9 +15,15 @@ ProviderRegistry.initialize() must be called during app startup
 to inject the LeagueMappingSource into providers.
 """
 
+from collections.abc import Callable
+
+from teamarr.database import get_db
+from teamarr.database.team_cache import get_team_name_by_id
+from teamarr.providers.bellmedia import BellMediaClient, BellMediaProvider
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
 from teamarr.providers.mlbstats import MLBStatsClient, MLBStatsProvider
+from teamarr.providers.nascar import NASCARProvider
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.squiggle import SquiggleClient, SquiggleProvider
 from teamarr.providers.supabase import SupabaseLeagueClient, SupabaseProvider
@@ -36,6 +42,13 @@ def _create_espn_provider() -> ESPNProvider:
     )
 
 
+def _create_bellmedia_provider() -> BellMediaProvider:
+    """Factory for Bell Media provider with injected dependencies."""
+    return BellMediaProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 def _get_tsdb_api_key() -> str | None:
     """Fetch TSDB API key from database settings.
 
@@ -43,7 +56,6 @@ def _get_tsdb_api_key() -> str | None:
     passing to the provider layer (which should not access database).
     """
     try:
-        from teamarr.database import get_db
 
         with get_db() as conn:
             cursor = conn.execute("SELECT tsdb_api_key FROM settings WHERE id = 1")
@@ -57,14 +69,12 @@ def _get_tsdb_api_key() -> str | None:
     return None
 
 
-def _create_tsdb_team_name_resolver() -> callable:
+def _create_tsdb_team_name_resolver() -> Callable[[str, str], str | None]:
     """Create a team name resolver callback for TSDB provider.
 
     This callback accesses the database, keeping DB access at the factory
     boundary rather than inside the provider layer.
     """
-    from teamarr.database import get_db
-    from teamarr.database.team_cache import get_team_name_by_id
 
     def resolver(team_id: str, league: str) -> str | None:
         with get_db() as conn:
@@ -110,6 +120,13 @@ def _create_squiggle_provider() -> SquiggleProvider:
     )
 
 
+def _create_nascar_provider() -> NASCARProvider:
+    """Factory for NASCAR provider with injected dependencies."""
+    return NASCARProvider(
+        league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+    )
+
+
 # =============================================================================
 # PROVIDER REGISTRATION
 # =============================================================================
@@ -121,6 +138,14 @@ ProviderRegistry.register(
     provider_class=ESPNProvider,
     factory=_create_espn_provider,
     priority=0,  # Primary provider
+    enabled=True,
+)
+
+ProviderRegistry.register(
+    name="bellmedia",
+    provider_class=BellMediaProvider,
+    factory=_create_bellmedia_provider,
+    priority=20,
     enabled=True,
 )
 
@@ -157,13 +182,20 @@ ProviderRegistry.register(
 )
 
 ProviderRegistry.register(
+    name="nascar",
+    provider_class=NASCARProvider,
+    factory=_create_nascar_provider,
+    priority=35,  # NASCAR Cup/ORAP/Trucks — authoritative session schedules
+    enabled=True,
+)
+
+ProviderRegistry.register(
     name="tsdb",
     provider_class=TSDBProvider,
     factory=_create_tsdb_provider,
     priority=100,  # Fallback provider for boxing, etc.
     enabled=True,
 )
-
 
 # =============================================================================
 # EXPORTS
@@ -173,6 +205,9 @@ __all__ = [
     # Registry
     "ProviderConfig",
     "ProviderRegistry",
+    # Bell Media
+    "BellMediaClient",
+    "BellMediaProvider",
     # ESPN
     "ESPNClient",
     "ESPNProvider",
@@ -188,6 +223,8 @@ __all__ = [
     # Squiggle (AFL)
     "SquiggleClient",
     "SquiggleProvider",
+    # NASCAR
+    "NASCARProvider",
     # TheSportsDB
     "RateLimitStats",
     "TSDBClient",

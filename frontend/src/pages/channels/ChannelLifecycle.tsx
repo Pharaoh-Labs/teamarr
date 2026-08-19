@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -21,13 +21,14 @@ export function ChannelLifecycle() {
 
   const [lifecycle, setLifecycle] = useState<LifecycleSettings | null>(null)
 
-  const initRef = useRef(false)
-  useEffect(() => {
-    if (settings && !initRef.current) {
-      initRef.current = true
-      setLifecycle(settings.lifecycle)
-    }
-  }, [settings])
+  // Seed local state from the server blob during render (React's "adjusting
+  // state when a prop changes" pattern). The previous effect seeded ONCE
+  // (initRef guard) — `lifecycle === null` preserves that: it is only null
+  // before the first seed, and every later setLifecycle spreads a non-null
+  // object, so refetches never re-seed.
+  if (settings && lifecycle === null) {
+    setLifecycle(settings.lifecycle)
+  }
 
   return (
     <Card>

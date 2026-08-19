@@ -86,11 +86,17 @@ class TeamLeagueCache:
         sport: str | None = None,
         provider: str | None = None,
         import_enabled_only: bool = False,
+        configured_only: bool = False,
     ) -> list[LeagueEntry]:
         """Get all available leagues (configured + discovered).
 
         For Team Importer: set import_enabled_only=True to show only
         explicitly configured leagues with import_enabled=1.
+
+        For the template sample picker: set configured_only=True to show only
+        enabled configured leagues (`leagues.enabled = 1`), including event-only
+        leagues like UFC/motorsports that have import_enabled=0. Excludes
+        discovered (unconfigured) leagues.
 
         For general use (event matching, etc.): returns UNION of:
         - Configured leagues (from `leagues` table) - preferred
@@ -100,6 +106,7 @@ class TeamLeagueCache:
             sport: Optional filter by sport (e.g., 'soccer')
             provider: Optional filter by provider
             import_enabled_only: If True, only return import-enabled leagues
+            configured_only: If True, only return enabled configured leagues
 
         Returns:
             List of LeagueEntry objects
@@ -107,7 +114,29 @@ class TeamLeagueCache:
         with self._db() as conn:
             cursor = conn.cursor()
 
-            if import_enabled_only:
+            if configured_only:
+                # Sample picker: enabled configured leagues only (keeps
+                # event-only leagues, drops discovered ones).
+                query = """
+                    SELECT league_code as league_slug, provider,
+                           display_name as league_name, sport, logo_url,
+                           logo_url_dark,
+                           cached_team_count as team_count, import_enabled,
+                           league_alias, tsdb_tier
+                    FROM leagues
+                    WHERE enabled = 1
+                """
+                params: list = []
+
+                if sport:
+                    query += " AND sport = ?"
+                    params.append(sport)
+                if provider:
+                    query += " AND provider = ?"
+                    params.append(provider)
+
+                query += " ORDER BY sport, display_name"
+            elif import_enabled_only:
                 # Team Importer: only configured leagues with import_enabled=1
                 query = """
                     SELECT league_code as league_slug, provider,

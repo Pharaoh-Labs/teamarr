@@ -2,16 +2,21 @@
  * InteractiveSelector — popover for labeling selected text.
  *
  * When the user selects text in a stream name, this floating popover
- * asks "What is this?" with options: team1, team2, date, time, league.
- * The selection is then used to generate a regex pattern.
+ * asks "What is this?" with options: team1, team2, date, time, league,
+ * fighter1, fighter2, event name. The selection is then used to generate a
+ * regex pattern.
  */
 
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { generatePattern, generateTeamsPattern } from "@/lib/pattern-generator"
+import {
+  generatePattern,
+  generateTeamsPattern,
+  generateFightersPattern,
+} from "@/lib/pattern-generator"
 import type { TextSelection } from "@/lib/pattern-generator"
 import type { PatternState } from "./index"
-import { Users, Calendar, Clock, Trophy } from "lucide-react"
+import { Users, Calendar, Clock, Trophy, Swords, Ticket } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +46,9 @@ const OPTIONS: FieldOption[] = [
   { field: "day", label: "Day", icon: <Calendar className="h-3.5 w-3.5" />, color: "text-yellow-400/70" },
   { field: "time", label: "Time", icon: <Clock className="h-3.5 w-3.5" />, color: "text-orange-400" },
   { field: "league", label: "League", icon: <Trophy className="h-3.5 w-3.5" />, color: "text-purple-400" },
+  { field: "fighter1", label: "Fighter 1", icon: <Swords className="h-3.5 w-3.5" />, color: "text-blue-400" },
+  { field: "fighter2", label: "Fighter 2", icon: <Swords className="h-3.5 w-3.5" />, color: "text-cyan-400" },
+  { field: "event_name", label: "Event Name", icon: <Ticket className="h-3.5 w-3.5" />, color: "text-pink-400" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -53,6 +61,10 @@ export function InteractiveSelector({
   onApplyPattern,
 }: InteractiveSelectorProps) {
   const [pendingTeam1, setPendingTeam1] = useState<{
+    text: string
+    streamName: string
+  } | null>(null)
+  const [pendingFighter1, setPendingFighter1] = useState<{
     text: string
     streamName: string
   } | null>(null)
@@ -91,6 +103,31 @@ export function InteractiveSelector({
         return
       }
 
+      if (field === "fighter1") {
+        // Store fighter1 selection, wait for fighter2
+        setPendingFighter1({ text: selection.text, streamName: selection.streamName })
+        onClear()
+        return
+      }
+
+      if (field === "fighter2" && pendingFighter1) {
+        // Combine fighter1 + fighter2 into a fighters pattern
+        const pattern = generateFightersPattern(
+          pendingFighter1.text,
+          selection.text,
+          selection.streamName
+        )
+        if (pattern) {
+          onApplyPattern({
+            custom_regex_fighters: pattern,
+            custom_regex_fighters_enabled: true,
+          })
+        }
+        setPendingFighter1(null)
+        onClear()
+        return
+      }
+
       // Single-field pattern generation
       const pattern = generatePattern(
         { text: selection.text, field },
@@ -105,6 +142,7 @@ export function InteractiveSelector({
           league: { patternKey: "custom_regex_league", enabledKey: "custom_regex_league_enabled" },
           team1: { patternKey: "custom_regex_teams", enabledKey: "custom_regex_teams_enabled" },
           team2: { patternKey: "custom_regex_teams", enabledKey: "custom_regex_teams_enabled" },
+          event_name: { patternKey: "custom_regex_event_name", enabledKey: "custom_regex_event_name_enabled" },
         }
         const mapping = fieldMap[field]
         if (mapping) {
@@ -115,12 +153,13 @@ export function InteractiveSelector({
         }
       }
       setPendingTeam1(null)
+      setPendingFighter1(null)
       onClear()
     },
-    [selection, pendingTeam1, onClear, onApplyPattern]
+    [selection, pendingTeam1, pendingFighter1, onClear, onApplyPattern]
   )
 
-  if (!selection && !pendingTeam1) return null
+  if (!selection && !pendingTeam1 && !pendingFighter1) return null
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 border-t border-border shrink-0">
@@ -143,6 +182,25 @@ export function InteractiveSelector({
         </div>
       )}
 
+      {pendingFighter1 && !selection && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-blue-400 font-medium">
+            Fighter 1: &quot;{pendingFighter1.text}&quot;
+          </span>
+          <span className="text-muted-foreground">
+            — Now select Fighter 2 in a stream name
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 text-xs px-2"
+            onClick={() => setPendingFighter1(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
       {selection && (
         <div className="flex items-center gap-2 text-xs flex-wrap">
           <span className="text-foreground font-medium shrink-0">
@@ -152,9 +210,10 @@ export function InteractiveSelector({
           </span>
           <span className="text-muted-foreground shrink-0">is a:</span>
           {OPTIONS.map((opt) => {
-            // If team1 is pending, only show team2
+            // If a first participant is pending, only show its second step.
             if (pendingTeam1 && opt.field !== "team2") return null
-            // If team1 is not pending, show all options
+            if (pendingFighter1 && opt.field !== "fighter2") return null
+            // Otherwise show all options
             return (
               <Button
                 key={opt.field}
@@ -174,6 +233,7 @@ export function InteractiveSelector({
             className="h-5 text-xs px-2"
             onClick={() => {
               setPendingTeam1(null)
+              setPendingFighter1(null)
               onClear()
             }}
           >

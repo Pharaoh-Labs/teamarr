@@ -43,7 +43,6 @@ Thumbs.db
 .env
 
 # Local documentation (not distributed)
-docs/reference/providers/tsdb-api.md
 CLAUDE.md
 DEVELOPMENT.md
 teamarr.xml
@@ -62,3 +61,7 @@ plans/
 /*.png
 .playwright-mcp/
 fix-flow-snapshot.yml
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key

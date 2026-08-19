@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 from sqlite3 import Connection
 from typing import Literal
 
+from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 # TYPES
 # =============================================================================
 
-RunType = Literal["event_group", "team_epg", "batch", "reconciliation", "scheduler"]
+RunType = Literal["event_group", "team_epg", "batch", "reconciliation", "scheduler", "full_epg"]
 RunStatus = Literal["running", "completed", "failed", "partial", "cancelled"]
 
 
@@ -33,7 +35,7 @@ class ProcessingRun:
     group_id: int | None = None
     team_id: int | None = None
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime | None = field(default_factory=now_utc)
     completed_at: datetime | None = None
     duration_ms: int | None = None
     status: RunStatus = "running"
@@ -67,7 +69,7 @@ class ProcessingRun:
 
     def complete(self, status: RunStatus = "completed", error: str | None = None):
         """Mark run as complete and calculate duration."""
-        self.completed_at = datetime.now()
+        self.completed_at = now_utc()
         self.status = status
         self.error_message = error
         if self.started_at:
@@ -119,8 +121,8 @@ class StatsSnapshot:
 
     id: int | None = None
     snapshot_type: str = "daily"
-    period_start: datetime = field(default_factory=datetime.now)
-    period_end: datetime = field(default_factory=datetime.now)
+    period_start: datetime = field(default_factory=now_utc)
+    period_end: datetime = field(default_factory=now_utc)
 
     total_runs: int = 0
     successful_runs: int = 0
@@ -180,8 +182,9 @@ def create_run(
         run_id=str(uuid.uuid4()),
         group_id=group_id,
         team_id=team_id,
-        started_at=datetime.now(),
+        started_at=now_utc(),
     )
+    assert run.started_at is not None  # just set above
 
     cursor = conn.execute(
         """
@@ -195,7 +198,9 @@ def create_run(
             run.run_id,
             run.group_id,
             run.team_id,
-            run.started_at.isoformat(),
+            # SQLite-canonical UTC so `started_at > datetime('now', ...)` guards
+            # and comparisons against created_at stay plain string comparisons
+            to_db_utc(run.started_at),
             run.status,
         ),
     )
@@ -237,7 +242,7 @@ def save_run(conn: Connection, run: ProcessingRun) -> None:
         WHERE id = ?
         """,
         (
-            run.completed_at.isoformat() if run.completed_at else None,
+            to_db_utc(run.completed_at),
             run.duration_ms,
             run.status,
             run.error_message,
@@ -340,10 +345,8 @@ def _row_to_run(row: dict) -> ProcessingRun:
         run_id=row.get("run_id"),
         group_id=row.get("group_id"),
         team_id=row.get("team_id"),
-        started_at=(datetime.fromisoformat(row["started_at"]) if row.get("started_at") else None),
-        completed_at=(
-            datetime.fromisoformat(row["completed_at"]) if row.get("completed_at") else None
-        ),
+        started_at=parse_db_timestamp(row.get("started_at")),
+        completed_at=parse_db_timestamp(row.get("completed_at")),
         duration_ms=row.get("duration_ms"),
         status=row.get("status", "completed"),
         error_message=row.get("error_message"),
@@ -372,247 +375,6 @@ def _row_to_run(row: dict) -> ProcessingRun:
 # =============================================================================
 
 
-def get_dashboard_stats(conn: Connection) -> dict:
-    """Get aggregated dashboard stats for UI quadrants.
-
-    Returns stats organized for the Dashboard's 4 quadrants:
-    - Teams: total, active, assigned, leagues breakdown
-    - Event Groups: total, streams, match rates, leagues (from latest run)
-    - EPG: channels, events, filler by type (from latest run)
-    - Channels: active, logos, groups, deleted
-    """
-    # Teams stats
-    teams_row = conn.execute("""
-        SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) as active,
-            SUM(CASE WHEN template_id IS NOT NULL THEN 1 ELSE 0 END) as assigned
-        FROM teams
-    """).fetchone()
-
-    # Teams by league
-    team_leagues = [
-        {"league": r["league"], "logo_url": None, "count": r["count"]}
-        for r in conn.execute("""
-            SELECT primary_league as league, COUNT(*) as count
-            FROM teams
-            GROUP BY primary_league
-            ORDER BY count DESC
-        """).fetchall()
-    ]
-
-    # Event groups configuration
-    groups = conn.execute("""
-        SELECT id, name, leagues, total_stream_count
-        FROM event_epg_groups
-        WHERE enabled = 1
-    """).fetchall()
-
-    # Build group name lookup and collect configured leagues
-    group_name_lookup = {}
-    event_leagues_set: set[str] = set()
-    total_streams = 0
-
-    for g in groups:
-        group_name_lookup[g["id"]] = g["name"]
-        leagues = json.loads(g["leagues"]) if g["leagues"] else []
-        event_leagues_set.update(leagues)
-        total_streams += g["total_stream_count"] or 0
-
-    event_leagues = [
-        {"league": league, "logo_url": None, "count": 1} for league in sorted(event_leagues_set)
-    ]
-
-    # Get actual match stats from latest completed full_epg run
-    latest_run = conn.execute("""
-        SELECT id, streams_matched, streams_unmatched, streams_fetched, streams_cached,
-               programmes_total, programmes_events, programmes_pregame,
-               programmes_postgame, programmes_idle, channels_active,
-               extra_metrics
-        FROM processing_runs
-        WHERE status = 'completed' AND run_type = 'full_epg'
-        ORDER BY id DESC
-        LIMIT 1
-    """).fetchone()
-
-    # Initialize match stats from latest run
-    matched_streams = 0
-    unmatched_streams = 0
-    group_breakdown = []
-
-    if latest_run:
-        matched_streams = latest_run["streams_matched"] or 0
-        unmatched_streams = latest_run["streams_unmatched"] or 0
-
-        matched_by_group = conn.execute(
-            """
-            SELECT group_id, COUNT(*) as matched
-            FROM epg_matched_streams
-            WHERE run_id = ?
-            GROUP BY group_id
-        """,
-            (latest_run["id"],),
-        ).fetchall()
-
-        failed_by_group = conn.execute(
-            """
-            SELECT group_id, COUNT(*) as failed
-            FROM epg_failed_matches
-            WHERE run_id = ?
-            GROUP BY group_id
-        """,
-            (latest_run["id"],),
-        ).fetchall()
-
-        failed_lookup = {r["group_id"]: r["failed"] for r in failed_by_group}
-
-        for r in matched_by_group:
-            gid = r["group_id"]
-            matched = r["matched"]
-            failed = failed_lookup.get(gid, 0)
-            group_breakdown.append(
-                {
-                    "name": group_name_lookup.get(gid, f"Group {gid}"),
-                    "matched": matched,
-                    "total": matched + failed,
-                }
-            )
-
-        matched_gids = {r["group_id"] for r in matched_by_group}
-        for gid, failed in failed_lookup.items():
-            if gid not in matched_gids:
-                group_breakdown.append(
-                    {
-                        "name": group_name_lookup.get(gid, f"Group {gid}"),
-                        "matched": 0,
-                        "total": failed,
-                    }
-                )
-    else:
-        for g in groups:
-            stream_count = g["total_stream_count"] or 0
-            group_breakdown.append(
-                {
-                    "name": g["name"],
-                    "matched": 0,
-                    "total": stream_count,
-                }
-            )
-
-    total_eligible = matched_streams + unmatched_streams
-    match_percent = round(matched_streams / total_eligible * 100) if total_eligible > 0 else 0
-
-    # EPG stats from latest run
-    epg_stats = {
-        "channels_total": 0,
-        "channels_team": 0,
-        "channels_event": 0,
-        "events_total": 0,
-        "events_team": 0,
-        "events_event": 0,
-        "filler_total": 0,
-        "filler_pregame": 0,
-        "filler_postgame": 0,
-        "filler_idle": 0,
-        "programmes_total": 0,
-    }
-
-    if latest_run:
-        extra = json.loads(latest_run["extra_metrics"]) if latest_run["extra_metrics"] else {}
-        teams_processed = extra.get("teams_processed", 0)
-
-        programmes_total = latest_run["programmes_total"] or 0
-        events_total = latest_run["programmes_events"] or 0
-        channels_active = latest_run["channels_active"] or 0
-
-        if teams_processed > 0 and channels_active == 0:
-            events_team = events_total
-            events_event = 0
-        elif channels_active > 0 and teams_processed == 0:
-            events_team = 0
-            events_event = events_total
-        elif teams_processed > 0 and channels_active > 0:
-            total_channels = teams_processed + channels_active
-            events_team = int(events_total * teams_processed / total_channels)
-            events_event = events_total - events_team
-        else:
-            events_team = 0
-            events_event = 0
-
-        epg_stats["programmes_total"] = programmes_total
-        epg_stats["events_total"] = events_total
-        epg_stats["events_team"] = events_team
-        epg_stats["events_event"] = events_event
-        epg_stats["filler_pregame"] = latest_run["programmes_pregame"] or 0
-        epg_stats["filler_postgame"] = latest_run["programmes_postgame"] or 0
-        epg_stats["filler_idle"] = latest_run["programmes_idle"] or 0
-        epg_stats["filler_total"] = (
-            epg_stats["filler_pregame"]
-            + epg_stats["filler_postgame"]
-            + epg_stats["filler_idle"]
-        )
-        epg_stats["channels_team"] = teams_processed
-        epg_stats["channels_event"] = channels_active
-        epg_stats["channels_total"] = teams_processed + channels_active
-
-    # Managed channels stats
-    channels_row = conn.execute("""
-        SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) as active,
-            SUM(CASE WHEN logo_url IS NOT NULL AND logo_url != ''
-                THEN 1 ELSE 0 END) as with_logos,
-            SUM(CASE WHEN deleted_at IS NOT NULL
-                AND deleted_at > datetime('now', '-1 day')
-                THEN 1 ELSE 0 END) as deleted_24h
-        FROM managed_channels
-    """).fetchone()
-
-    # Channel groups breakdown
-    channel_group_rows = conn.execute("""
-        SELECT mc.event_epg_group_id, eg.name as group_name, COUNT(*) as count
-        FROM managed_channels mc
-        LEFT JOIN event_epg_groups eg ON mc.event_epg_group_id = eg.id
-        WHERE mc.deleted_at IS NULL AND mc.event_epg_group_id IS NOT NULL
-        GROUP BY mc.event_epg_group_id
-        ORDER BY count DESC
-    """).fetchall()
-    channel_group_breakdown = [
-        {
-            "id": r["event_epg_group_id"],
-            "name": r["group_name"] or f"Group {r['event_epg_group_id']}",
-            "count": r["count"],
-        }
-        for r in channel_group_rows
-    ]
-    channel_groups = len(channel_group_breakdown)
-
-    return {
-        "teams": {
-            "total": teams_row["total"] or 0,
-            "active": teams_row["active"] or 0,
-            "assigned": teams_row["assigned"] or 0,
-            "leagues": team_leagues,
-        },
-        "event_groups": {
-            "total": len(groups),
-            "streams_total": total_streams,
-            "streams_matched": matched_streams,
-            "match_percent": match_percent,
-            "leagues": event_leagues,
-            "groups": group_breakdown,
-        },
-        "epg": epg_stats,
-        "channels": {
-            "active": channels_row["active"] or 0,
-            "with_logos": channels_row["with_logos"] or 0,
-            "groups": channel_groups,
-            "deleted_24h": channels_row["deleted_24h"] or 0,
-            "group_breakdown": channel_group_breakdown,
-        },
-    }
-
-
 def get_current_stats(conn: Connection) -> dict:
     """Get current aggregate stats (live, not from snapshot).
 
@@ -627,7 +389,6 @@ def get_current_stats(conn: Connection) -> dict:
             SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
             SUM(streams_matched) as total_matched,
             SUM(streams_unmatched) as total_unmatched,
-            SUM(streams_cached) as total_cached,
             SUM(channels_created) as total_channels_created,
             SUM(channels_deleted) as total_channels_deleted,
             SUM(programmes_total) as total_programmes,
@@ -646,8 +407,19 @@ def get_current_stats(conn: Connection) -> dict:
         """
     ).fetchone()
 
-    # Last 24 hours
-    yesterday = (datetime.now() - timedelta(days=1)).isoformat()
+    # Cache hits live ONLY on event_group sub-runs (#312): the matcher's
+    # fingerprint-cache counter is written per group run and never rolled up
+    # to the parent full_epg row, so it must be summed outside the full_epg
+    # filter above (which exists to keep averages honest).
+    cached_row = conn.execute(
+        "SELECT SUM(streams_cached) as total_cached FROM processing_runs "
+        "WHERE run_type = 'event_group'"
+    ).fetchone()
+    total_cached = (cached_row["total_cached"] if cached_row else 0) or 0
+
+    # Last 24 hours — created_at is SQLite CURRENT_TIMESTAMP (UTC, space
+    # separator), so the cutoff must be in the same format to compare
+    yesterday = to_db_utc(now_utc() - timedelta(days=1))
     last_24h = conn.execute(
         """
         SELECT
@@ -681,13 +453,22 @@ def get_current_stats(conn: Connection) -> dict:
     last_run_row = conn.execute(
         "SELECT completed_at FROM processing_runs ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
-    last_run = last_run_row["completed_at"] if last_run_row else None
+    last_run_dt = parse_db_timestamp(last_run_row["completed_at"]) if last_run_row else None
+    last_run = last_run_dt.isoformat() if last_run_dt else None
+
+    # Lifetime accumulator: sums of full-EPG runs already pruned from
+    # processing_runs (folded by cleanup_old_runs/clear_all_runs). Live sums
+    # above only cover the retention window; totals below report both.
+    lifetime = conn.execute("SELECT * FROM lifetime_stats WHERE id = 1").fetchone()
+
+    def _lt(key: str) -> int:
+        return (lifetime[key] if lifetime else 0) or 0
 
     # Return structure matching frontend StatsResponse interface
     return {
-        "total_runs": overall["total_runs"] or 0,
-        "successful_runs": overall["successful"] or 0,
-        "failed_runs": overall["failed"] or 0,
+        "total_runs": (overall["total_runs"] or 0) + _lt("runs"),
+        "successful_runs": (overall["successful"] or 0) + _lt("successful_runs"),
+        "failed_runs": (overall["failed"] or 0) + _lt("failed_runs"),
         "last_24h": {
             "runs": last_24h["runs"] or 0,
             "successful": last_24h["runs"] or 0,  # Approximate
@@ -697,73 +478,116 @@ def get_current_stats(conn: Connection) -> dict:
             "channels_created": last_24h["channels"] or 0,
         },
         "totals": {
-            "programmes_generated": overall["total_programmes"] or 0,
-            "streams_matched": overall["total_matched"] or 0,
-            "streams_unmatched": overall["total_unmatched"] or 0,
-            "streams_cached": overall["total_cached"] or 0,
-            "channels_created": overall["total_channels_created"] or 0,
-            "channels_deleted": overall["total_channels_deleted"] or 0,
+            "programmes_generated": (overall["total_programmes"] or 0) + _lt("programmes_total"),
+            "streams_matched": (overall["total_matched"] or 0) + _lt("streams_matched"),
+            "streams_unmatched": (overall["total_unmatched"] or 0) + _lt("streams_unmatched"),
+            "streams_cached": total_cached + _lt("streams_cached"),
+            "channels_created": (overall["total_channels_created"] or 0) + _lt("channels_created"),
+            "channels_deleted": (overall["total_channels_deleted"] or 0) + _lt("channels_deleted"),
         },
         "by_type": {k: v["runs"] for k, v in by_type.items()},
+        # Average over the retention window only (folded runs keep no durations)
         "avg_duration_ms": int(overall["avg_duration"] or 0),
         "last_run": last_run,
     }
 
 
-def get_stats_history(
-    conn: Connection,
-    days: int = 7,
-    run_type: RunType | None = None,
-) -> list[dict]:
-    """Get daily stats history for charting."""
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = ()) -> None:
+    """Accumulate full-EPG run sums into lifetime_stats before rows are deleted.
 
-    query = """
+    Only run_type='full_epg' rows are folded, matching the filter
+    get_current_stats uses for its totals — EXCEPT streams_cached, which lives
+    only on event_group sub-runs (#312) and is folded from those separately
+    below so cache-hit history survives retention pruning.
+    """
+    condition = f"run_type = 'full_epg' AND ({where})" if where else "run_type = 'full_epg'"
+    row = conn.execute(
+        f"""
         SELECT
-            DATE(created_at) as date,
             COUNT(*) as runs,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
             SUM(streams_matched) as matched,
             SUM(streams_unmatched) as unmatched,
-            SUM(channels_created) as channels,
+            SUM(channels_created) as created,
+            SUM(channels_deleted) as deleted,
             SUM(programmes_total) as programmes,
-            AVG(duration_ms) as avg_duration
-        FROM processing_runs
-        WHERE created_at > ?
-    """
-    params = [cutoff]
+            SUM(programmes_events) as events,
+            SUM(programmes_pregame) as pregame,
+            SUM(programmes_postgame) as postgame,
+            SUM(programmes_idle) as idle
+        FROM processing_runs WHERE {condition}
+        """,
+        params,
+    ).fetchone()
 
-    if run_type:
-        query += " AND run_type = ?"
-        params.append(run_type)
+    # Cache hits are written on event_group sub-runs only — fold them from
+    # those rows (same where-scope) or they vanish with the pruned rows.
+    eg_condition = (
+        f"run_type = 'event_group' AND ({where})" if where else "run_type = 'event_group'"
+    )
+    eg_cached = conn.execute(
+        f"SELECT SUM(streams_cached) as cached FROM processing_runs WHERE {eg_condition}",
+        params,
+    ).fetchone()
+    cached_to_fold = (eg_cached["cached"] if eg_cached else 0) or 0
 
-    query += " GROUP BY DATE(created_at) ORDER BY date"
+    if (not row or not row["runs"]) and not cached_to_fold:
+        return
 
-    rows = conn.execute(query, params).fetchall()
-
-    return [
-        {
-            "date": row["date"],
-            "runs": row["runs"],
-            "streams_matched": row["matched"] or 0,
-            "streams_unmatched": row["unmatched"] or 0,
-            "channels_created": row["channels"] or 0,
-            "programmes_generated": row["programmes"] or 0,
-            "avg_duration_ms": int(row["avg_duration"] or 0),
-        }
-        for row in rows
-    ]
+    conn.execute("INSERT OR IGNORE INTO lifetime_stats (id) VALUES (1)")
+    conn.execute(
+        """
+        UPDATE lifetime_stats SET
+            runs = runs + ?,
+            successful_runs = successful_runs + ?,
+            failed_runs = failed_runs + ?,
+            streams_matched = streams_matched + ?,
+            streams_unmatched = streams_unmatched + ?,
+            streams_cached = streams_cached + ?,
+            channels_created = channels_created + ?,
+            channels_deleted = channels_deleted + ?,
+            programmes_total = programmes_total + ?,
+            programmes_events = programmes_events + ?,
+            programmes_pregame = programmes_pregame + ?,
+            programmes_postgame = programmes_postgame + ?,
+            programmes_idle = programmes_idle + ?
+        WHERE id = 1
+        """,
+        (
+            row["runs"] or 0,
+            row["successful"] or 0,
+            row["failed"] or 0,
+            row["matched"] or 0,
+            row["unmatched"] or 0,
+            cached_to_fold,
+            row["created"] or 0,
+            row["deleted"] or 0,
+            row["programmes"] or 0,
+            row["events"] or 0,
+            row["pregame"] or 0,
+            row["postgame"] or 0,
+            row["idle"] or 0,
+        ),
+    )
 
 
 def cleanup_old_runs(conn: Connection, days: int = 30) -> int:
-    """Delete processing runs older than specified days."""
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    """Delete processing runs older than specified days.
+
+    Full-EPG run sums are folded into lifetime_stats first so all-time
+    totals survive the rolling retention window.
+    """
+    cutoff = to_db_utc(now_utc() - timedelta(days=days))
+    _fold_runs_into_lifetime(conn, "created_at < ?", (cutoff,))
     cursor = conn.execute("DELETE FROM processing_runs WHERE created_at < ?", (cutoff,))
     conn.commit()
     return cursor.rowcount
 
 
 def clear_all_runs(conn: Connection) -> int:
-    """Delete all processing runs."""
+    """Delete all processing runs (lifetime totals are preserved via fold)."""
+    _fold_runs_into_lifetime(conn)
     cursor = conn.execute("DELETE FROM processing_runs")
     conn.commit()
     return cursor.rowcount
@@ -1115,11 +939,14 @@ def get_match_stats_summary(conn: Connection, run_id: int | None = None) -> dict
     total_eligible = total_matched + total_unmatched
     match_rate = (total_matched / total_eligible * 100) if total_eligible > 0 else 0
 
+    started_dt = parse_db_timestamp(run_row["started_at"])
+    completed_dt = parse_db_timestamp(run_row["completed_at"])
+
     return {
         "run_id": run_id,
         "uuid": run_row["run_id"],
-        "started_at": run_row["started_at"],
-        "completed_at": run_row["completed_at"],
+        "started_at": started_dt.isoformat() if started_dt else None,
+        "completed_at": completed_dt.isoformat() if completed_dt else None,
         "status": run_row["status"],
         "totals": {
             "fetched": run_row["streams_fetched"] or 0,
@@ -1202,6 +1029,39 @@ def get_live_xmltv_content(conn: Connection) -> dict[str, list[str]]:
             event_content.append(row["xmltv_content"])
 
     return {"team": team_content, "event": event_content}
+
+
+def get_last_run_kpis(conn: Connection) -> dict | None:
+    """Get headline figures from the latest full_epg run (any status).
+
+    Used by the homepage widget KPI payload (#463). Latest run regardless of
+    status so a failed generation surfaces as last_run_status=failed instead
+    of silently showing the previous success.
+
+    Returns:
+        Dict with status, completed_at (aware datetime or None),
+        streams_matched, streams_unmatched, programmes_total —
+        or None if no full_epg run exists.
+    """
+    row = conn.execute(
+        """
+        SELECT status, completed_at, streams_matched, streams_unmatched,
+               programmes_total
+        FROM processing_runs
+        WHERE run_type = 'full_epg'
+        ORDER BY id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "status": row["status"],
+        "completed_at": parse_db_timestamp(row["completed_at"]),
+        "streams_matched": row["streams_matched"],
+        "streams_unmatched": row["streams_unmatched"],
+        "programmes_total": row["programmes_total"],
+    }
 
 
 def get_epg_analysis_stats(conn: Connection) -> dict | None:

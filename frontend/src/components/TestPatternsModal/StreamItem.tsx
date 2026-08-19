@@ -1,7 +1,7 @@
 /**
  * StreamItem — renders a single stream name with multi-layer regex highlighting.
  *
- * Each extraction field (teams, date, time, league) gets a distinct color.
+ * Each extraction field (teams, date, time, league, fighters, event name) gets a distinct color.
  * Include/exclude matches are shown as green borders or red strike-through.
  * Built-in filter matches are shown with filter reason badge.
  */
@@ -9,6 +9,7 @@
 import { useMemo } from "react"
 import { cn } from "@/lib/utils"
 import type { MatchRange } from "@/lib/regex-utils"
+import type { StreamExtractionResult } from "@/api/groups"
 
 // ---------------------------------------------------------------------------
 // Color mapping for extraction fields
@@ -22,6 +23,11 @@ const FIELD_COLORS: Record<string, { bg: string; text: string; label: string }> 
   day:    { bg: "bg-yellow-500/15",  text: "text-yellow-200",  label: "Day" },
   time:   { bg: "bg-orange-500/20",  text: "text-orange-300",  label: "Time" },
   league: { bg: "bg-purple-500/20",  text: "text-purple-300",  label: "League" },
+  // Combat / Event Card extraction
+  fighter1:   { bg: "bg-blue-500/20",   text: "text-blue-300",   label: "Fighter 1" },
+  fighter2:   { bg: "bg-cyan-500/20",   text: "text-cyan-300",   label: "Fighter 2" },
+  fighters:   { bg: "bg-blue-500/20",   text: "text-blue-300",   label: "Fighters" },
+  event_name: { bg: "bg-pink-500/20",   text: "text-pink-300",   label: "Event Name" },
 }
 
 // ---------------------------------------------------------------------------
@@ -39,6 +45,8 @@ export interface StreamItemProps {
   excludeMatch: boolean
   /** Reason stream would be filtered by builtin filters (null if passes) */
   builtinFilterReason: string | null
+  /** Pipeline-truth extraction result from the backend (#458); null = not tested */
+  pipelineResult: StreamExtractionResult | null
   /** Whether built-in filtering is skipped */
   skipBuiltinFilter: boolean
   /** Called when user selects text for interactive pattern generation */
@@ -111,6 +119,7 @@ export function StreamItem({
   name,
   index,
   extractionRanges,
+  pipelineResult,
   includeMatch,
   excludeMatch,
   builtinFilterReason,
@@ -128,6 +137,27 @@ export function StreamItem({
 
   const isExcluded = excludeMatch || isBuiltinFiltered
   const isFilteredByInclude = includeMatch === false // include regex set but doesn't match
+
+  // Pipeline verdict (#458): per enabled field, did the REAL extraction succeed?
+  const pipeline = useMemo(() => {
+    if (!pipelineResult) return null
+    const fields: { label: string; matched: boolean; values: string[] }[] = []
+    const push = (label: string, f: { matched: boolean; values: string[] } | null) => {
+      if (f) fields.push({ label, ...f })
+    }
+    push("teams", pipelineResult.teams)
+    push("fighters", pipelineResult.fighters)
+    push("event", pipelineResult.event_name)
+    push("date", pipelineResult.date)
+    push("time", pipelineResult.time)
+    push("league", pipelineResult.league)
+    if (fields.length === 0) return null
+    const failed = fields.filter((f) => !f.matched)
+    const title = fields
+      .map((f) => `${f.label}: ${f.matched ? f.values.join(" vs ") || "✓" : "✗ not extracted"}`)
+      .join("\n")
+    return { failed, allOk: failed.length === 0, title }
+  }, [pipelineResult])
 
   const handleMouseUp = () => {
     if (!onTextSelect) return
@@ -179,6 +209,22 @@ export function StreamItem({
           )
         })}
       </span>
+      {/* Pipeline-truth verdict (#458) — only shown when a pattern is enabled */}
+      {pipeline && (
+        <span
+          className={cn(
+            "shrink-0 text-[10px] px-1.5 py-0.5 rounded whitespace-pre",
+            pipeline.allOk
+              ? "bg-green-500/15 text-green-400"
+              : "bg-yellow-500/20 text-yellow-400"
+          )}
+          title={pipeline.title}
+        >
+          {pipeline.allOk
+            ? "✓ pipeline"
+            : `✗ ${pipeline.failed.map((f) => f.label).join(", ")}`}
+        </span>
+      )}
       {/* Show filter reason badge when stream matches builtin filter */}
       {builtinFilterReason && (
         <span

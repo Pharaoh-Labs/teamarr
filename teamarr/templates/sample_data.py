@@ -5,3784 +5,1250 @@ Used for live preview in the UI.
 
 Organization: Variables grouped by category, with base/.next/.last variants together.
 """
+from teamarr.config import get_show_timezone, get_time_format, get_user_timezone_str
+from teamarr.templates.variables import get_registry
+from teamarr.templates.variables.identity import construct_league_abbrev
+from teamarr.utilities.sports import get_sport_from_league
 
-# Available sports for the dropdown
-AVAILABLE_SPORTS = ["NBA", "NFL", "MLB", "NHL", "NCAAM", "NCAAF", "Soccer", "UFC"]
+# Available sample "profiles" — the three shape bases. Every league previews
+# against one of three generic, fictitious shapes ("team" / "combat" / "racing")
+# whose sport-agnostic values are borrowed from these base profiles (NBA / UFC /
+# F1). Leagues map onto a shape via resolve_profile_for_league / resolve_shape.
+# The ``sport=`` query param accepts these names; anything else falls back to NBA.
+AVAILABLE_SPORTS = [
+    "NBA",
+    "UFC",
+    "F1",
+]
 
 # Sample data organized by variable name and sport
 # Each variable can have different sample values per sport
 SAMPLE_DATA: dict[str, dict[str, str]] = {
-    # ==========================================================================
-    # IDENTITY - Team/opponent/league identifiers
-    # ==========================================================================
     "team_name": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "team_abbrev": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
-    },
-    "team_abbrev_lower": {
-        "NBA": "det",
-        "NFL": "det",
-        "MLB": "det",
-        "NHL": "det",
-        "NCAAM": "mich",
-        "NCAAF": "mich",
-        "Soccer": "liv",
-    },
-    "team_name_pascal": {
-        "NBA": "DetroitPistons",
-        "NFL": "DetroitLions",
-        "MLB": "DetroitTigers",
-        "NHL": "DetroitRedWings",
-        "NCAAM": "MichiganWolverines",
-        "NCAAF": "MichiganWolverines",
-        "Soccer": "Liverpool",
     },
     "team_short": {
         "NBA": "Pistons",
-        "NFL": "Lions",
-        "MLB": "Tigers",
-        "NHL": "Red Wings",
-        "NCAAM": "Wolverines",
-        "NCAAF": "Wolverines",
-        "Soccer": "Liverpool",
     },
-    # Opponent
     "opponent": {
         "NBA": "Chicago Bulls",
-        "NFL": "Chicago Bears",
-        "MLB": "Chicago White Sox",
-        "NHL": "Chicago Blackhawks",
-        "NCAAM": "Ohio State Buckeyes",
-        "NCAAF": "Ohio State Buckeyes",
-        "Soccer": "Manchester City",
     },
     "opponent.next": {
         "NBA": "Milwaukee Bucks",
-        "NFL": "Green Bay Packers",
-        "MLB": "Cleveland Guardians",
-        "NHL": "Columbus Blue Jackets",
-        "NCAAM": "Indiana Hoosiers",
-        "NCAAF": "Penn State Nittany Lions",
-        "Soccer": "Arsenal",
     },
     "opponent.last": {
         "NBA": "Cleveland Cavaliers",
-        "NFL": "Minnesota Vikings",
-        "MLB": "Minnesota Twins",
-        "NHL": "Minnesota Wild",
-        "NCAAM": "Michigan State Spartans",
-        "NCAAF": "Michigan State Spartans",
-        "Soccer": "Chelsea",
+    },
+    "team_name_the": {
+        "NBA": "the Detroit Pistons",
+    },
+    "opponent_the": {
+        "NBA": "the Chicago Bulls",
+    },
+    "opponent_the.next": {
+        "NBA": "the Milwaukee Bucks",
+    },
+    "opponent_the.last": {
+        "NBA": "the Cleveland Cavaliers",
+    },
+    "home_team_the": {
+        "NBA": "the Detroit Pistons",
+    },
+    "away_team_the": {
+        "NBA": "the Chicago Bulls",
+    },
+    "at_vs": {
+        "NBA": "at",
+    },
+    "at_vs.next": {
+        "NBA": "at",
+    },
+    "at_vs.last": {
+        "NBA": "at",
+    },
+    "home_away_verb": {
+        "NBA": "host",
+    },
+    "home_away_verb.next": {
+        "NBA": "visit",
+    },
+    "home_away_verb.last": {
+        "NBA": "visit",
     },
     "opponent_abbrev": {
         "NBA": "CHI",
-        "NFL": "CHI",
-        "MLB": "CWS",
-        "NHL": "CHI",
-        "NCAAM": "OSU",
-        "NCAAF": "OSU",
-        "Soccer": "MCI",
     },
     "opponent_abbrev.next": {
         "NBA": "MIL",
-        "NFL": "GB",
-        "MLB": "CLE",
-        "NHL": "CBJ",
-        "NCAAM": "IND",
-        "NCAAF": "PSU",
-        "Soccer": "ARS",
     },
     "opponent_abbrev.last": {
         "NBA": "CLE",
-        "NFL": "MIN",
-        "MLB": "MIN",
-        "NHL": "MIN",
-        "NCAAM": "MSU",
-        "NCAAF": "MSU",
-        "Soccer": "CHE",
-    },
-    "opponent_abbrev_lower": {
-        "NBA": "chi",
-        "NFL": "chi",
-        "MLB": "cws",
-        "NHL": "chi",
-        "NCAAM": "osu",
-        "NCAAF": "osu",
-        "Soccer": "mci",
-    },
-    "opponent_abbrev_lower.next": {
-        "NBA": "mil",
-        "NFL": "gb",
-        "MLB": "cle",
-        "NHL": "cbj",
-        "NCAAM": "ind",
-        "NCAAF": "psu",
-        "Soccer": "ars",
-    },
-    "opponent_abbrev_lower.last": {
-        "NBA": "cle",
-        "NFL": "min",
-        "MLB": "min",
-        "NHL": "min",
-        "NCAAM": "msu",
-        "NCAAF": "msu",
-        "Soccer": "che",
     },
     "opponent_short": {
         "NBA": "Bulls",
-        "NFL": "Bears",
-        "MLB": "White Sox",
-        "NHL": "Blackhawks",
-        "NCAAM": "Buckeyes",
-        "NCAAF": "Buckeyes",
-        "Soccer": "Man City",
     },
     "opponent_short.next": {
         "NBA": "Bucks",
-        "NFL": "Packers",
-        "MLB": "Guardians",
-        "NHL": "Blue Jackets",
-        "NCAAM": "Hoosiers",
-        "NCAAF": "Nittany Lions",
-        "Soccer": "Arsenal",
     },
     "opponent_short.last": {
         "NBA": "Cavaliers",
-        "NFL": "Vikings",
-        "MLB": "Twins",
-        "NHL": "Wild",
-        "NCAAM": "Spartans",
-        "NCAAF": "Spartans",
-        "Soccer": "Chelsea",
     },
-    # Matchup
     "matchup": {
         "NBA": "Chicago Bulls @ Detroit Pistons",
-        "NFL": "Chicago Bears @ Detroit Lions",
-        "MLB": "Chicago White Sox @ Detroit Tigers",
-        "NHL": "Chicago Blackhawks @ Detroit Red Wings",
-        "NCAAM": "Ohio State Buckeyes @ Michigan Wolverines",
-        "NCAAF": "Ohio State Buckeyes @ Michigan Wolverines",
-        "Soccer": "Manchester City @ Liverpool",
-        "UFC": "Alex Volkanovski vs Diego Lopes",
+        "UFC": "Diego Lopes @ Alex Volkanovski",
     },
     "matchup.next": {
         "NBA": "Detroit Pistons @ Milwaukee Bucks",
-        "NFL": "Detroit Lions @ Green Bay Packers",
-        "MLB": "Detroit Tigers @ Cleveland Guardians",
-        "NHL": "Detroit Red Wings @ Columbus Blue Jackets",
-        "NCAAM": "Michigan Wolverines @ Indiana Hoosiers",
-        "NCAAF": "Michigan Wolverines @ Penn State Nittany Lions",
-        "Soccer": "Liverpool @ Arsenal",
-        "UFC": "Islam Makhachev vs Arman Tsarukyan",
+        "UFC": "Arman Tsarukyan @ Islam Makhachev",
     },
     "matchup.last": {
         "NBA": "Detroit Pistons @ Cleveland Cavaliers",
-        "NFL": "Detroit Lions @ Minnesota Vikings",
-        "MLB": "Detroit Tigers @ Minnesota Twins",
-        "NHL": "Detroit Red Wings @ Minnesota Wild",
-        "NCAAM": "Michigan Wolverines @ Michigan State Spartans",
-        "NCAAF": "Michigan Wolverines @ Michigan State Spartans",
-        "Soccer": "Liverpool @ Chelsea",
-        "UFC": "Jon Jones vs Stipe Miocic",
+        "UFC": "Stipe Miocic @ Jon Jones",
+    },
+    "matchup_combat": {
+        "UFC": "Alex Volkanovski vs Diego Lopes",
     },
     "matchup_abbrev": {
         "NBA": "CHI @ DET",
-        "NFL": "CHI @ DET",
-        "MLB": "CWS @ DET",
-        "NHL": "CHI @ DET",
-        "NCAAM": "OSU @ MICH",
-        "NCAAF": "OSU @ MICH",
-        "Soccer": "MCI @ LIV",
     },
     "matchup_abbrev.next": {
         "NBA": "DET @ MIL",
-        "NFL": "DET @ GB",
-        "MLB": "DET @ CLE",
-        "NHL": "DET @ CBJ",
-        "NCAAM": "MICH @ IND",
-        "NCAAF": "MICH @ PSU",
-        "Soccer": "LIV @ ARS",
     },
     "matchup_abbrev.last": {
         "NBA": "DET @ CLE",
-        "NFL": "DET @ MIN",
-        "MLB": "DET @ MIN",
-        "NHL": "DET @ MIN",
-        "NCAAM": "MICH @ MSU",
-        "NCAAF": "MICH @ MSU",
-        "Soccer": "LIV @ CHE",
     },
     "matchup_short": {
         "NBA": "Bulls @ Pistons",
-        "NFL": "Bears @ Lions",
-        "MLB": "White Sox @ Tigers",
-        "NHL": "Blackhawks @ Red Wings",
-        "NCAAM": "Buckeyes @ Wolverines",
-        "NCAAF": "Buckeyes @ Wolverines",
-        "Soccer": "Man City @ Liverpool",
     },
     "matchup_short.next": {
         "NBA": "Pistons @ Bucks",
-        "NFL": "Lions @ Packers",
-        "MLB": "Tigers @ Guardians",
-        "NHL": "Red Wings @ Blue Jackets",
-        "NCAAM": "Wolverines @ Hoosiers",
-        "NCAAF": "Wolverines @ Nittany Lions",
-        "Soccer": "Liverpool @ Arsenal",
     },
     "matchup_short.last": {
         "NBA": "Pistons @ Cavaliers",
-        "NFL": "Lions @ Vikings",
-        "MLB": "Tigers @ Twins",
-        "NHL": "Red Wings @ Wild",
-        "NCAAM": "Wolverines @ Spartans",
-        "NCAAF": "Wolverines @ Spartans",
-        "Soccer": "Liverpool @ Chelsea",
     },
-    # League identifiers
     "league": {
         "NBA": "NBA",
-        "NFL": "NFL",
-        "MLB": "MLB",
-        "NHL": "NHL",
-        "NCAAM": "NCAAM",
-        "NCAAF": "NCAAF",
-        "Soccer": "Premier League",
+        "UFC": "UFC",
+        "F1": "F1",
     },
     "league_name": {
         "NBA": "National Basketball Association",
-        "NFL": "National Football League",
-        "MLB": "Major League Baseball",
-        "NHL": "National Hockey League",
-        "NCAAM": "NCAA Men's Basketball",
-        "NCAAF": "NCAA Football",
-        "Soccer": "English Premier League",
+        "UFC": "Ultimate Fighting Championship",
+        "F1": "Formula 1",
     },
     "league_id": {
         "NBA": "nba",
-        "NFL": "nfl",
-        "MLB": "mlb",
-        "NHL": "nhl",
-        "NCAAM": "ncaam",
-        "NCAAF": "ncaaf",
-        "Soccer": "epl",
+        "F1": "f1",
     },
     "league_code": {
         "NBA": "nba",
-        "NFL": "nfl",
-        "MLB": "mlb",
-        "NHL": "nhl",
-        "NCAAM": "mens-college-basketball",
-        "NCAAF": "college-football",
-        "Soccer": "eng.1",
+        "F1": "f1",
     },
-    # Sport
     "sport": {
         "NBA": "Basketball",
-        "NFL": "Football",
-        "MLB": "Baseball",
-        "NHL": "Hockey",
-        "NCAAM": "Basketball",
-        "NCAAF": "Football",
-        "Soccer": "Soccer",
-    },
-    "sport_lower": {
-        "NBA": "basketball",
-        "NFL": "football",
-        "MLB": "baseball",
-        "NHL": "hockey",
-        "NCAAM": "basketball",
-        "NCAAF": "football",
-        "Soccer": "soccer",
+        "F1": "Racing",
     },
     "gracenote_category": {
         "NBA": "NBA Basketball",
-        "NFL": "NFL Football",
-        "MLB": "MLB Baseball",
-        "NHL": "NHL Hockey",
-        "NCAAM": "Men's College Basketball",
-        "NCAAF": "College Football",
-        "Soccer": "Premier League Soccer",
+        "F1": "Formula 1 Racing",
     },
-    # Exception keyword - channel-specific variable
     "exception_keyword": {
         "NBA": "4K",
-        "NFL": "4K",
-        "MLB": "4K",
-        "NHL": "4K",
-        "NCAAM": "4K",
-        "NCAAF": "4K",
-        "Soccer": "4K",
     },
-    # ==========================================================================
-    # HOME_AWAY - Positional team variables
-    # ==========================================================================
     "home_team": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "home_team.next": {
         "NBA": "Milwaukee Bucks",
-        "NFL": "Green Bay Packers",
-        "MLB": "Cleveland Guardians",
-        "NHL": "Columbus Blue Jackets",
-        "NCAAM": "Indiana Hoosiers",
-        "NCAAF": "Penn State Nittany Lions",
-        "Soccer": "Arsenal",
     },
     "home_team.last": {
         "NBA": "Cleveland Cavaliers",
-        "NFL": "Minnesota Vikings",
-        "MLB": "Minnesota Twins",
-        "NHL": "Minnesota Wild",
-        "NCAAM": "Michigan State Spartans",
-        "NCAAF": "Michigan State Spartans",
-        "Soccer": "Chelsea",
     },
     "home_team_short": {
         "NBA": "Pistons",
-        "NFL": "Lions",
-        "MLB": "Tigers",
-        "NHL": "Red Wings",
-        "NCAAM": "Wolverines",
-        "NCAAF": "Wolverines",
-        "Soccer": "Liverpool",
     },
     "home_team_short.next": {
         "NBA": "Bucks",
-        "NFL": "Packers",
-        "MLB": "Guardians",
-        "NHL": "Blue Jackets",
-        "NCAAM": "Hoosiers",
-        "NCAAF": "Nittany Lions",
-        "Soccer": "Arsenal",
     },
     "home_team_short.last": {
         "NBA": "Cavaliers",
-        "NFL": "Vikings",
-        "MLB": "Twins",
-        "NHL": "Wild",
-        "NCAAM": "Spartans",
-        "NCAAF": "Spartans",
-        "Soccer": "Chelsea",
     },
     "home_team_abbrev": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
     },
     "home_team_abbrev.next": {
         "NBA": "MIL",
-        "NFL": "GB",
-        "MLB": "CLE",
-        "NHL": "CBJ",
-        "NCAAM": "IND",
-        "NCAAF": "PSU",
-        "Soccer": "ARS",
     },
     "home_team_abbrev.last": {
         "NBA": "CLE",
-        "NFL": "MIN",
-        "MLB": "MIN",
-        "NHL": "MIN",
-        "NCAAM": "MSU",
-        "NCAAF": "MSU",
-        "Soccer": "CHE",
-    },
-    "home_team_abbrev_lower": {
-        "NBA": "det",
-        "NFL": "det",
-        "MLB": "det",
-        "NHL": "det",
-        "NCAAM": "mich",
-        "NCAAF": "mich",
-        "Soccer": "liv",
-    },
-    "home_team_abbrev_lower.next": {
-        "NBA": "mil",
-        "NFL": "gb",
-        "MLB": "cle",
-        "NHL": "cbj",
-        "NCAAM": "ind",
-        "NCAAF": "psu",
-        "Soccer": "ars",
-    },
-    "home_team_abbrev_lower.last": {
-        "NBA": "cle",
-        "NFL": "min",
-        "MLB": "min",
-        "NHL": "min",
-        "NCAAM": "msu",
-        "NCAAF": "msu",
-        "Soccer": "che",
-    },
-    "home_team_pascal": {
-        "NBA": "DetroitPistons",
-        "NFL": "DetroitLions",
-        "MLB": "DetroitTigers",
-        "NHL": "DetroitRedWings",
-        "NCAAM": "MichiganWolverines",
-        "NCAAF": "MichiganWolverines",
-        "Soccer": "Liverpool",
-    },
-    "home_team_pascal.next": {
-        "NBA": "MilwaukeeBucks",
-        "NFL": "GreenBayPackers",
-        "MLB": "ClevelandGuardians",
-        "NHL": "ColumbusBlueJackets",
-        "NCAAM": "IndianaHoosiers",
-        "NCAAF": "PennStateNittanyLions",
-        "Soccer": "Arsenal",
-    },
-    "home_team_pascal.last": {
-        "NBA": "ClevelandCavaliers",
-        "NFL": "MinnesotaVikings",
-        "MLB": "MinnesotaTwins",
-        "NHL": "MinnesotaWild",
-        "NCAAM": "MichiganStateSpartans",
-        "NCAAF": "MichiganStateSpartans",
-        "Soccer": "Chelsea",
     },
     "home_team_logo": {
-        "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",  # Pistons
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/16.png",  # Vikings
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/9.png",  # Twins
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/30.png",  # Wild
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",  # Michigan State
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",  # Michigan State
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/363.png",  # Chelsea
+        "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
     },
     "home_team_logo.next": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/16.png",
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/9.png",
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/30.png",
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/363.png",
     },
     "home_team_logo.last": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/16.png",
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/9.png",
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/30.png",
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/363.png",
     },
-    # Away team
     "away_team": {
         "NBA": "Chicago Bulls",
-        "NFL": "Chicago Bears",
-        "MLB": "Chicago White Sox",
-        "NHL": "Chicago Blackhawks",
-        "NCAAM": "Ohio State Buckeyes",
-        "NCAAF": "Ohio State Buckeyes",
-        "Soccer": "Manchester City",
     },
     "away_team.next": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "away_team.last": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "away_team_short": {
         "NBA": "Bulls",
-        "NFL": "Bears",
-        "MLB": "White Sox",
-        "NHL": "Blackhawks",
-        "NCAAM": "Buckeyes",
-        "NCAAF": "Buckeyes",
-        "Soccer": "Man City",
     },
     "away_team_short.next": {
         "NBA": "Pistons",
-        "NFL": "Lions",
-        "MLB": "Tigers",
-        "NHL": "Red Wings",
-        "NCAAM": "Wolverines",
-        "NCAAF": "Wolverines",
-        "Soccer": "Liverpool",
     },
     "away_team_short.last": {
         "NBA": "Pistons",
-        "NFL": "Lions",
-        "MLB": "Tigers",
-        "NHL": "Red Wings",
-        "NCAAM": "Wolverines",
-        "NCAAF": "Wolverines",
-        "Soccer": "Liverpool",
     },
     "away_team_abbrev": {
         "NBA": "CHI",
-        "NFL": "CHI",
-        "MLB": "CWS",
-        "NHL": "CHI",
-        "NCAAM": "OSU",
-        "NCAAF": "OSU",
-        "Soccer": "MCI",
     },
     "away_team_abbrev.next": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
     },
     "away_team_abbrev.last": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
-    },
-    "away_team_abbrev_lower": {
-        "NBA": "chi",
-        "NFL": "chi",
-        "MLB": "cws",
-        "NHL": "chi",
-        "NCAAM": "osu",
-        "NCAAF": "osu",
-        "Soccer": "mci",
-    },
-    "away_team_abbrev_lower.next": {
-        "NBA": "det",
-        "NFL": "det",
-        "MLB": "det",
-        "NHL": "det",
-        "NCAAM": "mich",
-        "NCAAF": "mich",
-        "Soccer": "liv",
-    },
-    "away_team_abbrev_lower.last": {
-        "NBA": "det",
-        "NFL": "det",
-        "MLB": "det",
-        "NHL": "det",
-        "NCAAM": "mich",
-        "NCAAF": "mich",
-        "Soccer": "liv",
-    },
-    "away_team_pascal": {
-        "NBA": "ChicagoBulls",
-        "NFL": "ChicagoBears",
-        "MLB": "ChicagoWhiteSox",
-        "NHL": "ChicagoBlackhawks",
-        "NCAAM": "OhioStateBuckeyes",
-        "NCAAF": "OhioStateBuckeyes",
-        "Soccer": "ManchesterCity",
-    },
-    "away_team_pascal.next": {
-        "NBA": "DetroitPistons",
-        "NFL": "DetroitLions",
-        "MLB": "DetroitTigers",
-        "NHL": "DetroitRedWings",
-        "NCAAM": "MichiganWolverines",
-        "NCAAF": "MichiganWolverines",
-        "Soccer": "Liverpool",
-    },
-    "away_team_pascal.last": {
-        "NBA": "DetroitPistons",
-        "NFL": "DetroitLions",
-        "MLB": "DetroitTigers",
-        "NHL": "DetroitRedWings",
-        "NCAAM": "MichiganWolverines",
-        "NCAAF": "MichiganWolverines",
-        "Soccer": "Liverpool",
     },
     "away_team_logo": {
-        "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/4.png",  # Bulls
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/3.png",  # Bears
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/4.png",  # White Sox
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/4.png",  # Blackhawks
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png",  # Ohio State
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png",  # Ohio State
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",  # Man City
+        "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/4.png",
     },
     "away_team_logo.next": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/4.png",
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/3.png",
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/4.png",
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/4.png",
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png",
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png",
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",
     },
     "away_team_logo.last": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/4.png",
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/3.png",
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/4.png",
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/4.png",
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png",
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/194.png",
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",
     },
-    # Home/away indicators
     "is_home": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "true",
     },
     "is_home.next": {
         "NBA": "false",
-        "NFL": "true",
-        "MLB": "false",
-        "NHL": "false",
-        "NCAAM": "false",
-        "NCAAF": "true",
-        "Soccer": "false",
     },
     "is_home.last": {
         "NBA": "false",
-        "NFL": "false",
-        "MLB": "false",
-        "NHL": "false",
-        "NCAAM": "false",
-        "NCAAF": "true",
-        "Soccer": "true",
     },
     "is_away": {
         "NBA": "false",
-        "NFL": "false",
-        "MLB": "false",
-        "NHL": "false",
-        "NCAAM": "false",
-        "NCAAF": "false",
-        "Soccer": "false",
     },
     "is_away.next": {
         "NBA": "true",
-        "NFL": "false",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "false",
-        "Soccer": "true",
     },
     "is_away.last": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "false",
-        "Soccer": "false",
     },
     "home_away_text": {
         "NBA": "at home",
-        "NFL": "at home",
-        "MLB": "at home",
-        "NHL": "at home",
-        "NCAAM": "at home",
-        "NCAAF": "at home",
-        "Soccer": "at home",
     },
     "home_away_text.next": {
         "NBA": "on the road",
-        "NFL": "at home",
-        "MLB": "on the road",
-        "NHL": "on the road",
-        "NCAAM": "on the road",
-        "NCAAF": "at home",
-        "Soccer": "on the road",
     },
     "home_away_text.last": {
         "NBA": "on the road",
-        "NFL": "on the road",
-        "MLB": "on the road",
-        "NHL": "on the road",
-        "NCAAM": "on the road",
-        "NCAAF": "at home",
-        "Soccer": "at home",
     },
     "vs_at": {
         "NBA": "vs",
-        "NFL": "vs",
-        "MLB": "vs",
-        "NHL": "vs",
-        "NCAAM": "vs",
-        "NCAAF": "vs",
-        "Soccer": "vs",
     },
     "vs_at.next": {
         "NBA": "at",
-        "NFL": "vs",
-        "MLB": "at",
-        "NHL": "at",
-        "NCAAM": "at",
-        "NCAAF": "vs",
-        "Soccer": "at",
     },
     "vs_at.last": {
         "NBA": "at",
-        "NFL": "at",
-        "MLB": "at",
-        "NHL": "at",
-        "NCAAM": "at",
-        "NCAAF": "vs",
-        "Soccer": "vs",
     },
     "vs_@": {
         "NBA": "vs",
-        "NFL": "vs",
-        "MLB": "vs",
-        "NHL": "vs",
-        "NCAAM": "vs",
-        "NCAAF": "vs",
-        "Soccer": "vs",
     },
     "vs_@.next": {
         "NBA": "@",
-        "NFL": "vs",
-        "MLB": "@",
-        "NHL": "@",
-        "NCAAM": "@",
-        "NCAAF": "vs",
-        "Soccer": "@",
     },
     "vs_@.last": {
         "NBA": "@",
-        "NFL": "@",
-        "MLB": "@",
-        "NHL": "@",
-        "NCAAM": "@",
-        "NCAAF": "vs",
-        "Soccer": "vs",
     },
-    # ==========================================================================
-    # DATETIME - Game dates and times
-    # ==========================================================================
     "game_date": {
         "NBA": "Sunday, December 22, 2024",
-        "NFL": "Sunday, December 22, 2024",
-        "MLB": "Saturday, July 12, 2025",
-        "NHL": "Saturday, December 21, 2024",
-        "NCAAM": "Saturday, January 11, 2025",
-        "NCAAF": "Saturday, November 30, 2024",
-        "Soccer": "Saturday, December 21, 2024",
     },
     "game_date.next": {
         "NBA": "Tuesday, December 24, 2024",
-        "NFL": "Sunday, December 29, 2024",
-        "MLB": "Sunday, July 13, 2025",
-        "NHL": "Monday, December 23, 2024",
-        "NCAAM": "Tuesday, January 14, 2025",
-        "NCAAF": "Saturday, December 7, 2024",
-        "Soccer": "Wednesday, December 25, 2024",
     },
     "game_date.last": {
         "NBA": "Friday, December 20, 2024",
-        "NFL": "Sunday, December 15, 2024",
-        "MLB": "Friday, July 11, 2025",
-        "NHL": "Thursday, December 19, 2024",
-        "NCAAM": "Wednesday, January 8, 2025",
-        "NCAAF": "Saturday, November 23, 2024",
-        "Soccer": "Sunday, December 15, 2024",
     },
     "game_date_short": {
         "NBA": "Dec 22",
-        "NFL": "Dec 22",
-        "MLB": "Jul 12",
-        "NHL": "Dec 21",
-        "NCAAM": "Jan 11",
-        "NCAAF": "Nov 30",
-        "Soccer": "Dec 21",
     },
     "game_date_short.next": {
         "NBA": "Dec 24",
-        "NFL": "Dec 29",
-        "MLB": "Jul 13",
-        "NHL": "Dec 23",
-        "NCAAM": "Jan 14",
-        "NCAAF": "Dec 7",
-        "Soccer": "Dec 25",
     },
     "game_date_short.last": {
         "NBA": "Dec 20",
-        "NFL": "Dec 15",
-        "MLB": "Jul 11",
-        "NHL": "Dec 19",
-        "NCAAM": "Jan 8",
-        "NCAAF": "Nov 23",
-        "Soccer": "Dec 15",
     },
     "game_day": {
         "NBA": "Sunday",
-        "NFL": "Sunday",
-        "MLB": "Saturday",
-        "NHL": "Saturday",
-        "NCAAM": "Saturday",
-        "NCAAF": "Saturday",
-        "Soccer": "Saturday",
     },
     "game_day.next": {
         "NBA": "Tuesday",
-        "NFL": "Sunday",
-        "MLB": "Sunday",
-        "NHL": "Monday",
-        "NCAAM": "Tuesday",
-        "NCAAF": "Saturday",
-        "Soccer": "Wednesday",
     },
     "game_day.last": {
         "NBA": "Friday",
-        "NFL": "Sunday",
-        "MLB": "Friday",
-        "NHL": "Thursday",
-        "NCAAM": "Wednesday",
-        "NCAAF": "Saturday",
-        "Soccer": "Sunday",
     },
     "game_day_short": {
         "NBA": "Sun",
-        "NFL": "Sun",
-        "MLB": "Sat",
-        "NHL": "Sat",
-        "NCAAM": "Sat",
-        "NCAAF": "Sat",
-        "Soccer": "Sat",
     },
     "game_day_short.next": {
         "NBA": "Tue",
-        "NFL": "Sun",
-        "MLB": "Sun",
-        "NHL": "Mon",
-        "NCAAM": "Tue",
-        "NCAAF": "Sat",
-        "Soccer": "Wed",
     },
     "game_day_short.last": {
         "NBA": "Fri",
-        "NFL": "Sun",
-        "MLB": "Fri",
-        "NHL": "Thu",
-        "NCAAM": "Wed",
-        "NCAAF": "Sat",
-        "Soccer": "Sun",
     },
     "game_time": {
         "NBA": "7:00 PM EST",
-        "NFL": "1:00 PM EST",
-        "MLB": "4:10 PM EDT",
-        "NHL": "7:00 PM EST",
-        "NCAAM": "2:00 PM EST",
-        "NCAAF": "12:00 PM EST",
-        "Soccer": "10:00 AM EST",
     },
     "game_time.next": {
         "NBA": "8:00 PM EST",
-        "NFL": "4:25 PM EST",
-        "MLB": "1:10 PM EDT",
-        "NHL": "7:30 PM EST",
-        "NCAAM": "7:00 PM EST",
-        "NCAAF": "3:30 PM EST",
-        "Soccer": "2:30 PM EST",
     },
     "game_time.last": {
         "NBA": "7:30 PM EST",
-        "NFL": "1:00 PM EST",
-        "MLB": "7:10 PM EDT",
-        "NHL": "7:00 PM EST",
-        "NCAAM": "4:00 PM EST",
-        "NCAAF": "12:00 PM EST",
-        "Soccer": "10:00 AM EST",
     },
     "days_until": {
         "NBA": "0",
-        "NFL": "0",
-        "MLB": "0",
-        "NHL": "0",
-        "NCAAM": "0",
-        "NCAAF": "0",
-        "Soccer": "0",
     },
     "days_until.next": {
         "NBA": "2",
-        "NFL": "7",
-        "MLB": "1",
-        "NHL": "2",
-        "NCAAM": "3",
-        "NCAAF": "7",
-        "Soccer": "4",
     },
     "days_until.last": {
         "NBA": "0",
-        "NFL": "0",
-        "MLB": "0",
-        "NHL": "0",
-        "NCAAM": "0",
-        "NCAAF": "0",
-        "Soccer": "0",
     },
     "today_tonight": {
         "NBA": "tonight",
-        "NFL": "today",
-        "MLB": "tonight",
-        "NHL": "tonight",
-        "NCAAM": "today",
-        "NCAAF": "today",
-        "Soccer": "today",
     },
     "today_tonight.next": {
         "NBA": "tonight",
-        "NFL": "today",
-        "MLB": "tonight",
-        "NHL": "tonight",
-        "NCAAM": "tonight",
-        "NCAAF": "today",
-        "Soccer": "today",
     },
     "today_tonight.last": {
         "NBA": "tonight",
-        "NFL": "today",
-        "MLB": "tonight",
-        "NHL": "tonight",
-        "NCAAM": "today",
-        "NCAAF": "today",
-        "Soccer": "today",
     },
     "today_tonight_title": {
         "NBA": "Tonight",
-        "NFL": "Today",
-        "MLB": "Tonight",
-        "NHL": "Tonight",
-        "NCAAM": "Today",
-        "NCAAF": "Today",
-        "Soccer": "Today",
     },
     "today_tonight_title.next": {
         "NBA": "Tonight",
-        "NFL": "Today",
-        "MLB": "Tonight",
-        "NHL": "Tonight",
-        "NCAAM": "Tonight",
-        "NCAAF": "Today",
-        "Soccer": "Today",
     },
     "today_tonight_title.last": {
         "NBA": "Tonight",
-        "NFL": "Today",
-        "MLB": "Tonight",
-        "NHL": "Tonight",
-        "NCAAM": "Today",
-        "NCAAF": "Today",
-        "Soccer": "Today",
     },
     "relative_day": {
         "NBA": "tonight",
-        "NFL": "tomorrow",
-        "MLB": "wednesday",
-        "NHL": "tonight",
-        "NCAAM": "today",
-        "NCAAF": "Jan 25",
-        "Soccer": "saturday",
     },
     "relative_day.next": {
         "NBA": "friday",
-        "NFL": "Jan 26",
-        "MLB": "thursday",
-        "NHL": "saturday",
-        "NCAAM": "tomorrow",
-        "NCAAF": "Feb 1",
-        "Soccer": "tuesday",
     },
     "relative_day_title": {
         "NBA": "Tonight",
-        "NFL": "Tomorrow",
-        "MLB": "Wednesday",
-        "NHL": "Tonight",
-        "NCAAM": "Today",
-        "NCAAF": "Jan 25",
-        "Soccer": "Saturday",
     },
     "relative_day_title.next": {
         "NBA": "Friday",
-        "NFL": "Jan 26",
-        "MLB": "Thursday",
-        "NHL": "Saturday",
-        "NCAAM": "Tomorrow",
-        "NCAAF": "Feb 1",
-        "Soccer": "Tuesday",
     },
-    # ==========================================================================
-    # VENUE - Stadium/arena information
-    # ==========================================================================
     "venue": {
         "NBA": "Little Caesars Arena",
-        "NFL": "Ford Field",
-        "MLB": "Comerica Park",
-        "NHL": "Little Caesars Arena",
-        "NCAAM": "Crisler Center",
-        "NCAAF": "Michigan Stadium",
-        "Soccer": "Anfield",
     },
     "venue.next": {
         "NBA": "Fiserv Forum",
-        "NFL": "Lambeau Field",
-        "MLB": "Progressive Field",
-        "NHL": "Nationwide Arena",
-        "NCAAM": "Simon Skjodt Assembly Hall",
-        "NCAAF": "Beaver Stadium",
-        "Soccer": "Emirates Stadium",
     },
     "venue.last": {
         "NBA": "Rocket Mortgage FieldHouse",
-        "NFL": "U.S. Bank Stadium",
-        "MLB": "Target Field",
-        "NHL": "Xcel Energy Center",
-        "NCAAM": "Breslin Center",
-        "NCAAF": "Spartan Stadium",
-        "Soccer": "Stamford Bridge",
     },
     "venue_city": {
         "NBA": "Detroit",
-        "NFL": "Detroit",
-        "MLB": "Detroit",
-        "NHL": "Detroit",
-        "NCAAM": "Ann Arbor",
-        "NCAAF": "Ann Arbor",
-        "Soccer": "Liverpool",
     },
     "venue_city.next": {
         "NBA": "Milwaukee",
-        "NFL": "Green Bay",
-        "MLB": "Cleveland",
-        "NHL": "Columbus",
-        "NCAAM": "Bloomington",
-        "NCAAF": "University Park",
-        "Soccer": "London",
     },
     "venue_city.last": {
         "NBA": "Cleveland",
-        "NFL": "Minneapolis",
-        "MLB": "Minneapolis",
-        "NHL": "St. Paul",
-        "NCAAM": "East Lansing",
-        "NCAAF": "East Lansing",
-        "Soccer": "London",
     },
     "venue_state": {
         "NBA": "MI",
-        "NFL": "MI",
-        "MLB": "MI",
-        "NHL": "MI",
-        "NCAAM": "MI",
-        "NCAAF": "MI",
-        "Soccer": "England",
     },
     "venue_state.next": {
         "NBA": "WI",
-        "NFL": "WI",
-        "MLB": "OH",
-        "NHL": "OH",
-        "NCAAM": "IN",
-        "NCAAF": "PA",
-        "Soccer": "England",
     },
     "venue_state.last": {
         "NBA": "OH",
-        "NFL": "MN",
-        "MLB": "MN",
-        "NHL": "MN",
-        "NCAAM": "MI",
-        "NCAAF": "MI",
-        "Soccer": "England",
     },
     "venue_full": {
         "NBA": "Little Caesars Arena, Detroit, MI",
-        "NFL": "Ford Field, Detroit, MI",
-        "MLB": "Comerica Park, Detroit, MI",
-        "NHL": "Little Caesars Arena, Detroit, MI",
-        "NCAAM": "Crisler Center, Ann Arbor, MI",
-        "NCAAF": "Michigan Stadium, Ann Arbor, MI",
-        "Soccer": "Anfield, Liverpool, England",
     },
     "venue_full.next": {
         "NBA": "Fiserv Forum, Milwaukee, WI",
-        "NFL": "Lambeau Field, Green Bay, WI",
-        "MLB": "Progressive Field, Cleveland, OH",
-        "NHL": "Nationwide Arena, Columbus, OH",
-        "NCAAM": "Simon Skjodt Assembly Hall, Bloomington, IN",
-        "NCAAF": "Beaver Stadium, University Park, PA",
-        "Soccer": "Emirates Stadium, London, England",
     },
     "venue_full.last": {
         "NBA": "Rocket Mortgage FieldHouse, Cleveland, OH",
-        "NFL": "U.S. Bank Stadium, Minneapolis, MN",
-        "MLB": "Target Field, Minneapolis, MN",
-        "NHL": "Xcel Energy Center, St. Paul, MN",
-        "NCAAM": "Breslin Center, East Lansing, MI",
-        "NCAAF": "Spartan Stadium, East Lansing, MI",
-        "Soccer": "Stamford Bridge, London, England",
     },
-    # ==========================================================================
-    # RECORDS - Team win/loss records
-    # ==========================================================================
     "team_record": {
         "NBA": "25-15",
-        "NFL": "10-4",
-        "MLB": "82-65",
-        "NHL": "28-18-6",
-        "NCAAM": "18-5",
-        "NCAAF": "11-1",
-        "Soccer": "15-3-2",
     },
     "team_wins": {
         "NBA": "25",
-        "NFL": "10",
-        "MLB": "82",
-        "NHL": "28",
-        "NCAAM": "18",
-        "NCAAF": "11",
-        "Soccer": "15",
     },
     "team_losses": {
         "NBA": "15",
-        "NFL": "4",
-        "MLB": "65",
-        "NHL": "18",
-        "NCAAM": "5",
-        "NCAAF": "1",
-        "Soccer": "3",
     },
     "team_ties": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "6",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "2",
     },
     "team_win_pct": {
         "NBA": ".625",
-        "NFL": ".714",
-        "MLB": ".558",
-        "NHL": ".596",
-        "NCAAM": ".783",
-        "NCAAF": ".917",
-        "Soccer": ".800",
     },
     "home_record": {
         "NBA": "15-5",
-        "NFL": "6-1",
-        "MLB": "45-28",
-        "NHL": "16-8-2",
-        "NCAAM": "12-1",
-        "NCAAF": "6-0",
-        "Soccer": "9-1-0",
     },
     "home_win_pct": {
         "NBA": ".750",
-        "NFL": ".857",
-        "MLB": ".616",
-        "NHL": ".654",
-        "NCAAM": ".923",
-        "NCAAF": "1.000",
-        "Soccer": ".900",
     },
     "away_record": {
         "NBA": "10-10",
-        "NFL": "4-3",
-        "MLB": "37-37",
-        "NHL": "12-10-4",
-        "NCAAM": "6-4",
-        "NCAAF": "5-1",
-        "Soccer": "6-2-2",
     },
     "away_win_pct": {
         "NBA": ".500",
-        "NFL": ".571",
-        "MLB": ".500",
-        "NHL": ".538",
-        "NCAAM": ".600",
-        "NCAAF": ".833",
-        "Soccer": ".700",
     },
-    # Opponent records
     "opponent_record": {
         "NBA": "22-18",
-        "NFL": "8-6",
-        "MLB": "75-72",
-        "NHL": "25-20-7",
-        "NCAAM": "16-7",
-        "NCAAF": "10-2",
-        "Soccer": "14-4-2",
     },
     "opponent_record.next": {
         "NBA": "20-20",
-        "NFL": "9-6",
-        "MLB": "70-77",
-        "NHL": "22-22-8",
-        "NCAAM": "14-9",
-        "NCAAF": "8-4",
-        "Soccer": "12-5-3",
     },
     "opponent_record.last": {
         "NBA": "24-16",
-        "NFL": "10-5",
-        "MLB": "78-69",
-        "NHL": "26-19-7",
-        "NCAAM": "15-8",
-        "NCAAF": "9-3",
-        "Soccer": "13-4-3",
     },
     "opponent_wins": {
         "NBA": "22",
-        "NFL": "8",
-        "MLB": "75",
-        "NHL": "25",
-        "NCAAM": "16",
-        "NCAAF": "10",
-        "Soccer": "14",
     },
     "opponent_wins.next": {
         "NBA": "20",
-        "NFL": "9",
-        "MLB": "70",
-        "NHL": "22",
-        "NCAAM": "14",
-        "NCAAF": "8",
-        "Soccer": "12",
     },
     "opponent_wins.last": {
         "NBA": "24",
-        "NFL": "10",
-        "MLB": "78",
-        "NHL": "26",
-        "NCAAM": "15",
-        "NCAAF": "9",
-        "Soccer": "13",
     },
     "opponent_losses": {
         "NBA": "18",
-        "NFL": "6",
-        "MLB": "72",
-        "NHL": "20",
-        "NCAAM": "7",
-        "NCAAF": "2",
-        "Soccer": "4",
     },
     "opponent_losses.next": {
         "NBA": "20",
-        "NFL": "6",
-        "MLB": "77",
-        "NHL": "22",
-        "NCAAM": "9",
-        "NCAAF": "4",
-        "Soccer": "5",
     },
     "opponent_losses.last": {
         "NBA": "16",
-        "NFL": "5",
-        "MLB": "69",
-        "NHL": "19",
-        "NCAAM": "8",
-        "NCAAF": "3",
-        "Soccer": "4",
     },
     "opponent_ties": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "7",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "2",
     },
     "opponent_ties.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "8",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "3",
     },
     "opponent_ties.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "7",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "3",
     },
     "opponent_win_pct": {
         "NBA": ".550",
-        "NFL": ".571",
-        "MLB": ".510",
-        "NHL": ".548",
-        "NCAAM": ".696",
-        "NCAAF": ".833",
-        "Soccer": ".750",
     },
     "opponent_win_pct.next": {
         "NBA": ".500",
-        "NFL": ".600",
-        "MLB": ".476",
-        "NHL": ".500",
-        "NCAAM": ".609",
-        "NCAAF": ".667",
-        "Soccer": ".675",
     },
     "opponent_win_pct.last": {
         "NBA": ".600",
-        "NFL": ".667",
-        "MLB": ".531",
-        "NHL": ".567",
-        "NCAAM": ".652",
-        "NCAAF": ".750",
-        "Soccer": ".725",
     },
-    # Positional team records
     "home_team_record": {
         "NBA": "25-15",
-        "NFL": "10-4",
-        "MLB": "82-65",
-        "NHL": "28-18-6",
-        "NCAAM": "18-5",
-        "NCAAF": "11-1",
-        "Soccer": "15-3-2",
     },
     "home_team_record.next": {
         "NBA": "26-15",
-        "NFL": "11-4",
-        "MLB": "83-65",
-        "NHL": "29-18-6",
-        "NCAAM": "19-5",
-        "NCAAF": "12-1",
-        "Soccer": "16-3-2",
     },
     "home_team_record.last": {
         "NBA": "24-16",
-        "NFL": "10-5",
-        "MLB": "78-69",
-        "NHL": "26-19-7",
-        "NCAAM": "15-8",
-        "NCAAF": "9-3",
-        "Soccer": "13-4-3",
     },
     "away_team_record": {
         "NBA": "22-18",
-        "NFL": "8-6",
-        "MLB": "75-72",
-        "NHL": "25-20-7",
-        "NCAAM": "16-7",
-        "NCAAF": "10-2",
-        "Soccer": "14-4-2",
     },
     "away_team_record.next": {
         "NBA": "20-20",
-        "NFL": "9-6",
-        "MLB": "70-77",
-        "NHL": "22-22-8",
-        "NCAAM": "14-9",
-        "NCAAF": "8-4",
-        "Soccer": "12-5-3",
     },
     "away_team_record.last": {
         "NBA": "24-16",
-        "NFL": "9-5",
-        "MLB": "81-66",
-        "NHL": "27-18-6",
-        "NCAAM": "17-6",
-        "NCAAF": "10-2",
-        "Soccer": "14-4-2",
     },
-    # Seeds
     "home_team_seed": {
         "NBA": "4",
-        "NFL": "2",
-        "MLB": "",
-        "NHL": "3",
-        "NCAAM": "2",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_seed.next": {
         "NBA": "3",
-        "NFL": "1",
-        "MLB": "",
-        "NHL": "2",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_seed.last": {
         "NBA": "5",
-        "NFL": "4",
-        "MLB": "",
-        "NHL": "5",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_seed": {
         "NBA": "6",
-        "NFL": "5",
-        "MLB": "",
-        "NHL": "6",
-        "NCAAM": "7",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_seed.next": {
         "NBA": "4",
-        "NFL": "2",
-        "MLB": "",
-        "NHL": "3",
-        "NCAAM": "2",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_seed.last": {
         "NBA": "4",
-        "NFL": "2",
-        "MLB": "",
-        "NHL": "3",
-        "NCAAM": "2",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # ==========================================================================
-    # STREAKS - Win/loss streaks
-    # ==========================================================================
     "streak": {
         "NBA": "W3",
-        "NFL": "W2",
-        "MLB": "W4",
-        "NHL": "L2",
-        "NCAAM": "W5",
-        "NCAAF": "W8",
-        "Soccer": "W4",
     },
     "streak_length": {
         "NBA": "3",
-        "NFL": "2",
-        "MLB": "4",
-        "NHL": "2",
-        "NCAAM": "5",
-        "NCAAF": "8",
-        "Soccer": "4",
     },
     "streak_type": {
         "NBA": "win",
-        "NFL": "win",
-        "MLB": "win",
-        "NHL": "loss",
-        "NCAAM": "win",
-        "NCAAF": "win",
-        "Soccer": "win",
     },
     "win_streak": {
         "NBA": "3",
-        "NFL": "2",
-        "MLB": "4",
-        "NHL": "",
-        "NCAAM": "5",
-        "NCAAF": "8",
-        "Soccer": "4",
     },
     "loss_streak": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "2",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # Opponent streaks
     "opponent_streak": {
         "NBA": "L3",
-        "NFL": "L1",
-        "MLB": "W2",
-        "NHL": "W4",
-        "NCAAM": "L2",
-        "NCAAF": "W3",
-        "Soccer": "L1",
     },
     "opponent_streak.next": {
         "NBA": "W2",
-        "NFL": "W3",
-        "MLB": "L1",
-        "NHL": "W2",
-        "NCAAM": "W4",
-        "NCAAF": "L2",
-        "Soccer": "W3",
     },
     "opponent_streak.last": {
         "NBA": "W1",
-        "NFL": "L2",
-        "MLB": "W3",
-        "NHL": "L1",
-        "NCAAM": "W2",
-        "NCAAF": "W5",
-        "Soccer": "L2",
     },
     "opponent_streak_length": {
         "NBA": "3",
-        "NFL": "1",
-        "MLB": "2",
-        "NHL": "4",
-        "NCAAM": "2",
-        "NCAAF": "3",
-        "Soccer": "1",
     },
     "opponent_streak_length.next": {
         "NBA": "2",
-        "NFL": "3",
-        "MLB": "1",
-        "NHL": "2",
-        "NCAAM": "4",
-        "NCAAF": "2",
-        "Soccer": "3",
     },
     "opponent_streak_length.last": {
         "NBA": "1",
-        "NFL": "2",
-        "MLB": "3",
-        "NHL": "1",
-        "NCAAM": "2",
-        "NCAAF": "5",
-        "Soccer": "2",
     },
     "opponent_streak_type": {
         "NBA": "loss",
-        "NFL": "loss",
-        "MLB": "win",
-        "NHL": "win",
-        "NCAAM": "loss",
-        "NCAAF": "win",
-        "Soccer": "loss",
     },
     "opponent_streak_type.next": {
         "NBA": "win",
-        "NFL": "win",
-        "MLB": "loss",
-        "NHL": "win",
-        "NCAAM": "win",
-        "NCAAF": "loss",
-        "Soccer": "win",
     },
     "opponent_streak_type.last": {
         "NBA": "win",
-        "NFL": "loss",
-        "MLB": "win",
-        "NHL": "loss",
-        "NCAAM": "win",
-        "NCAAF": "win",
-        "Soccer": "loss",
     },
     "opponent_win_streak": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "2",
-        "NHL": "4",
-        "NCAAM": "",
-        "NCAAF": "3",
-        "Soccer": "",
     },
     "opponent_win_streak.next": {
         "NBA": "2",
-        "NFL": "3",
-        "MLB": "",
-        "NHL": "2",
-        "NCAAM": "4",
-        "NCAAF": "",
-        "Soccer": "3",
     },
     "opponent_win_streak.last": {
         "NBA": "1",
-        "NFL": "",
-        "MLB": "3",
-        "NHL": "",
-        "NCAAM": "2",
-        "NCAAF": "5",
-        "Soccer": "",
     },
     "opponent_loss_streak": {
         "NBA": "3",
-        "NFL": "1",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "2",
-        "NCAAF": "",
-        "Soccer": "1",
     },
     "opponent_loss_streak.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "1",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "2",
-        "Soccer": "",
     },
     "opponent_loss_streak.last": {
         "NBA": "",
-        "NFL": "2",
-        "MLB": "",
-        "NHL": "1",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "2",
     },
-    # Home team streaks
     "home_team_streak": {
         "NBA": "W3",
-        "NFL": "W2",
-        "MLB": "W4",
-        "NHL": "L2",
-        "NCAAM": "W5",
-        "NCAAF": "W8",
-        "Soccer": "W4",
     },
     "home_team_streak.next": {
         "NBA": "W4",
-        "NFL": "W3",
-        "MLB": "L2",
-        "NHL": "W5",
-        "NCAAM": "W6",
-        "NCAAF": "W9",
-        "Soccer": "W5",
     },
     "home_team_streak.last": {
         "NBA": "W2",
-        "NFL": "W1",
-        "MLB": "W3",
-        "NHL": "L1",
-        "NCAAM": "W4",
-        "NCAAF": "W7",
-        "Soccer": "W3",
     },
     "home_team_streak_length": {
         "NBA": "3",
-        "NFL": "2",
-        "MLB": "4",
-        "NHL": "2",
-        "NCAAM": "5",
-        "NCAAF": "8",
-        "Soccer": "4",
     },
     "home_team_streak_length.next": {
         "NBA": "4",
-        "NFL": "3",
-        "MLB": "2",
-        "NHL": "5",
-        "NCAAM": "6",
-        "NCAAF": "9",
-        "Soccer": "5",
     },
     "home_team_streak_length.last": {
         "NBA": "2",
-        "NFL": "1",
-        "MLB": "3",
-        "NHL": "1",
-        "NCAAM": "4",
-        "NCAAF": "7",
-        "Soccer": "3",
     },
     "home_team_win_streak": {
         "NBA": "3",
-        "NFL": "2",
-        "MLB": "4",
-        "NHL": "",
-        "NCAAM": "5",
-        "NCAAF": "8",
-        "Soccer": "4",
     },
     "home_team_win_streak.next": {
         "NBA": "4",
-        "NFL": "3",
-        "MLB": "",
-        "NHL": "5",
-        "NCAAM": "6",
-        "NCAAF": "9",
-        "Soccer": "5",
     },
     "home_team_win_streak.last": {
         "NBA": "2",
-        "NFL": "1",
-        "MLB": "3",
-        "NHL": "",
-        "NCAAM": "4",
-        "NCAAF": "7",
-        "Soccer": "3",
     },
     "home_team_loss_streak": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "2",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_loss_streak.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "2",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_loss_streak.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "1",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # Away team streaks
     "away_team_streak": {
         "NBA": "L3",
-        "NFL": "L1",
-        "MLB": "W2",
-        "NHL": "W4",
-        "NCAAM": "L2",
-        "NCAAF": "W3",
-        "Soccer": "L1",
     },
     "away_team_streak.next": {
         "NBA": "L2",
-        "NFL": "W2",
-        "MLB": "W1",
-        "NHL": "W3",
-        "NCAAM": "L1",
-        "NCAAF": "W4",
-        "Soccer": "L2",
     },
     "away_team_streak.last": {
         "NBA": "L4",
-        "NFL": "L2",
-        "MLB": "W1",
-        "NHL": "W5",
-        "NCAAM": "L3",
-        "NCAAF": "W2",
-        "Soccer": "L1",
     },
     "away_team_streak_length": {
         "NBA": "3",
-        "NFL": "1",
-        "MLB": "2",
-        "NHL": "4",
-        "NCAAM": "2",
-        "NCAAF": "3",
-        "Soccer": "1",
     },
     "away_team_streak_length.next": {
         "NBA": "2",
-        "NFL": "2",
-        "MLB": "1",
-        "NHL": "3",
-        "NCAAM": "1",
-        "NCAAF": "4",
-        "Soccer": "2",
     },
     "away_team_streak_length.last": {
         "NBA": "4",
-        "NFL": "2",
-        "MLB": "1",
-        "NHL": "5",
-        "NCAAM": "3",
-        "NCAAF": "2",
-        "Soccer": "1",
     },
     "away_team_win_streak": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "2",
-        "NHL": "4",
-        "NCAAM": "",
-        "NCAAF": "3",
-        "Soccer": "",
     },
     "away_team_win_streak.next": {
         "NBA": "",
-        "NFL": "2",
-        "MLB": "1",
-        "NHL": "3",
-        "NCAAM": "",
-        "NCAAF": "4",
-        "Soccer": "",
     },
     "away_team_win_streak.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "1",
-        "NHL": "5",
-        "NCAAM": "",
-        "NCAAF": "2",
-        "Soccer": "",
     },
     "away_team_loss_streak": {
         "NBA": "3",
-        "NFL": "1",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "2",
-        "NCAAF": "",
-        "Soccer": "1",
     },
     "away_team_loss_streak.next": {
         "NBA": "2",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "1",
-        "NCAAF": "",
-        "Soccer": "2",
     },
     "away_team_loss_streak.last": {
         "NBA": "4",
-        "NFL": "2",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "3",
-        "NCAAF": "",
-        "Soccer": "1",
     },
-    # ==========================================================================
-    # SCORES - Game scores and results
-    # ==========================================================================
     "team_score": {
         "NBA": "112",
-        "NFL": "31",
-        "MLB": "5",
-        "NHL": "4",
-        "NCAAM": "78",
-        "NCAAF": "42",
-        "Soccer": "2",
     },
     "team_score.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "team_score.last": {
         "NBA": "108",
-        "NFL": "28",
-        "MLB": "7",
-        "NHL": "3",
-        "NCAAM": "85",
-        "NCAAF": "35",
-        "Soccer": "3",
     },
     "opponent_score": {
         "NBA": "105",
-        "NFL": "24",
-        "MLB": "3",
-        "NHL": "2",
-        "NCAAM": "65",
-        "NCAAF": "27",
-        "Soccer": "1",
     },
     "opponent_score.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_score.last": {
         "NBA": "102",
-        "NFL": "21",
-        "MLB": "4",
-        "NHL": "2",
-        "NCAAM": "72",
-        "NCAAF": "28",
-        "Soccer": "0",
     },
     "score": {
         "NBA": "112-105",
-        "NFL": "31-24",
-        "MLB": "5-3",
-        "NHL": "4-2",
-        "NCAAM": "78-65",
-        "NCAAF": "42-27",
-        "Soccer": "2-1",
     },
     "score.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "score.last": {
         "NBA": "108-102",
-        "NFL": "28-21",
-        "MLB": "7-4",
-        "NHL": "3-2",
-        "NCAAM": "85-72",
-        "NCAAF": "35-28",
-        "Soccer": "3-0",
     },
     "final_score": {
         "NBA": "112-105",
-        "NFL": "31-24",
-        "MLB": "5-3",
-        "NHL": "4-2",
-        "NCAAM": "78-65",
-        "NCAAF": "42-27",
-        "Soccer": "2-1",
     },
     "final_score.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "final_score.last": {
         "NBA": "108-102",
-        "NFL": "28-21",
-        "MLB": "7-4",
-        "NHL": "3-2",
-        "NCAAM": "85-72",
-        "NCAAF": "35-28",
-        "Soccer": "3-0",
     },
-    # Positional scores
     "home_team_score": {
         "NBA": "112",
-        "NFL": "31",
-        "MLB": "5",
-        "NHL": "4",
-        "NCAAM": "78",
-        "NCAAF": "42",
-        "Soccer": "2",
     },
     "home_team_score.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_score.last": {
         "NBA": "102",
-        "NFL": "21",
-        "MLB": "4",
-        "NHL": "2",
-        "NCAAM": "72",
-        "NCAAF": "28",
-        "Soccer": "0",
     },
     "away_team_score": {
         "NBA": "105",
-        "NFL": "24",
-        "MLB": "3",
-        "NHL": "2",
-        "NCAAM": "65",
-        "NCAAF": "27",
-        "Soccer": "1",
     },
     "away_team_score.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_score.last": {
         "NBA": "108",
-        "NFL": "28",
-        "MLB": "7",
-        "NHL": "3",
-        "NCAAM": "85",
-        "NCAAF": "35",
-        "Soccer": "3",
     },
-    # Score differentials
     "score_diff": {
         "NBA": "+7",
-        "NFL": "+7",
-        "MLB": "+2",
-        "NHL": "+2",
-        "NCAAM": "+13",
-        "NCAAF": "+15",
-        "Soccer": "+1",
     },
     "score_diff.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "score_diff.last": {
         "NBA": "+6",
-        "NFL": "+7",
-        "MLB": "+3",
-        "NHL": "+1",
-        "NCAAM": "+13",
-        "NCAAF": "+7",
-        "Soccer": "+3",
     },
     "score_differential": {
         "NBA": "7",
-        "NFL": "7",
-        "MLB": "2",
-        "NHL": "2",
-        "NCAAM": "13",
-        "NCAAF": "15",
-        "Soccer": "1",
     },
     "score_differential.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "score_differential.last": {
         "NBA": "6",
-        "NFL": "7",
-        "MLB": "3",
-        "NHL": "1",
-        "NCAAM": "13",
-        "NCAAF": "7",
-        "Soccer": "3",
     },
     "score_differential_text": {
         "NBA": "by 7",
-        "NFL": "by 7",
-        "MLB": "by 2",
-        "NHL": "by 2",
-        "NCAAM": "by 13",
-        "NCAAF": "by 15",
-        "Soccer": "by 1",
     },
     "score_differential_text.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "score_differential_text.last": {
         "NBA": "by 6",
-        "NFL": "by 7",
-        "MLB": "by 3",
-        "NHL": "by 1",
-        "NCAAM": "by 13",
-        "NCAAF": "by 7",
-        "Soccer": "by 3",
     },
-    # Event results
     "event_result": {
         "NBA": "Detroit Pistons 112 - Chicago Bulls 105",
-        "NFL": "Detroit Lions 31 - Chicago Bears 24",
-        "MLB": "Detroit Tigers 5 - Chicago White Sox 3",
-        "NHL": "Detroit Red Wings 4 - Chicago Blackhawks 2",
-        "NCAAM": "Michigan Wolverines 78 - Ohio State Buckeyes 65",
-        "NCAAF": "Michigan Wolverines 42 - Ohio State Buckeyes 27",
-        "Soccer": "Liverpool 2 - Manchester City 1",
     },
     "event_result.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "event_result.last": {
         "NBA": "Detroit Pistons 108 - Cleveland Cavaliers 102",
-        "NFL": "Detroit Lions 28 - Minnesota Vikings 21",
-        "MLB": "Detroit Tigers 7 - Minnesota Twins 4",
-        "NHL": "Detroit Red Wings 3 - Minnesota Wild 2",
-        "NCAAM": "Michigan Wolverines 85 - Michigan State Spartans 72",
-        "NCAAF": "Michigan Wolverines 35 - Michigan State Spartans 28",
-        "Soccer": "Liverpool 3 - Chelsea 0",
     },
     "event_result_abbrev": {
         "NBA": "DET 112 - CHI 105",
-        "NFL": "DET 31 - CHI 24",
-        "MLB": "DET 5 - CWS 3",
-        "NHL": "DET 4 - CHI 2",
-        "NCAAM": "MICH 78 - OSU 65",
-        "NCAAF": "MICH 42 - OSU 27",
-        "Soccer": "LIV 2 - MCI 1",
     },
     "event_result_abbrev.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "event_result_abbrev.last": {
         "NBA": "DET 108 - CLE 102",
-        "NFL": "DET 28 - MIN 21",
-        "MLB": "DET 7 - MIN 4",
-        "NHL": "DET 3 - MIN 2",
-        "NCAAM": "MICH 85 - MSU 72",
-        "NCAAF": "MICH 35 - MSU 28",
-        "Soccer": "LIV 3 - CHE 0",
     },
-    # Winner/loser
     "winner": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "winner.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "winner.last": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "winner_abbrev": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
     },
     "winner_abbrev.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "winner_abbrev.last": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
     },
     "loser": {
         "NBA": "Chicago Bulls",
-        "NFL": "Chicago Bears",
-        "MLB": "Chicago White Sox",
-        "NHL": "Chicago Blackhawks",
-        "NCAAM": "Ohio State Buckeyes",
-        "NCAAF": "Ohio State Buckeyes",
-        "Soccer": "Manchester City",
     },
     "loser.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "loser.last": {
         "NBA": "Cleveland Cavaliers",
-        "NFL": "Minnesota Vikings",
-        "MLB": "Minnesota Twins",
-        "NHL": "Minnesota Wild",
-        "NCAAM": "Michigan State Spartans",
-        "NCAAF": "Michigan State Spartans",
-        "Soccer": "Chelsea",
     },
     "loser_abbrev": {
         "NBA": "CHI",
-        "NFL": "CHI",
-        "MLB": "CWS",
-        "NHL": "CHI",
-        "NCAAM": "OSU",
-        "NCAAF": "OSU",
-        "Soccer": "MCI",
     },
     "loser_abbrev.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "loser_abbrev.last": {
         "NBA": "CLE",
-        "NFL": "MIN",
-        "MLB": "MIN",
-        "NHL": "MIN",
-        "NCAAM": "MSU",
-        "NCAAF": "MSU",
-        "Soccer": "CHE",
     },
-    # ==========================================================================
-    # OUTCOME - Game outcome indicators
-    # ==========================================================================
     "result": {
         "NBA": "W",
-        "NFL": "W",
-        "MLB": "W",
-        "NHL": "W",
-        "NCAAM": "W",
-        "NCAAF": "W",
-        "Soccer": "W",
     },
     "result.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "result.last": {
         "NBA": "W",
-        "NFL": "W",
-        "MLB": "W",
-        "NHL": "W",
-        "NCAAM": "W",
-        "NCAAF": "W",
-        "Soccer": "W",
-    },
-    "result_lower": {
-        "NBA": "w",
-        "NFL": "w",
-        "MLB": "w",
-        "NHL": "w",
-        "NCAAM": "w",
-        "NCAAF": "w",
-        "Soccer": "w",
-    },
-    "result_lower.next": {
-        "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
-    },
-    "result_lower.last": {
-        "NBA": "w",
-        "NFL": "w",
-        "MLB": "w",
-        "NHL": "w",
-        "NCAAM": "w",
-        "NCAAF": "w",
-        "Soccer": "w",
     },
     "result_text": {
         "NBA": "defeated",
-        "NFL": "defeated",
-        "MLB": "defeated",
-        "NHL": "defeated",
-        "NCAAM": "defeated",
-        "NCAAF": "defeated",
-        "Soccer": "defeated",
     },
     "result_text.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "result_text.last": {
         "NBA": "defeated",
-        "NFL": "beat",
-        "MLB": "beat",
-        "NHL": "beat",
-        "NCAAM": "defeated",
-        "NCAAF": "defeated",
-        "Soccer": "beat",
     },
     "overtime_text": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "in overtime",
-        "NCAAM": "",
-        "NCAAF": "in overtime",
-        "Soccer": "",
     },
     "overtime_text.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "overtime_text.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "in overtime",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "overtime_short": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "OT",
-        "NCAAM": "",
-        "NCAAF": "OT",
-        "Soccer": "",
     },
     "overtime_short.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "overtime_short.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "OT",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # ==========================================================================
-    # STANDINGS - Playoff seeds and games back
-    # ==========================================================================
     "playoff_seed": {
         "NBA": "4",
-        "NFL": "2",
-        "MLB": "",
-        "NHL": "3",
-        "NCAAM": "2",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "games_back": {
         "NBA": "3.5",
-        "NFL": "-",
-        "MLB": "8",
-        "NHL": "5",
-        "NCAAM": "-",
-        "NCAAF": "",
-        "Soccer": "4",
     },
     "opponent_playoff_seed": {
         "NBA": "6",
-        "NFL": "5",
-        "MLB": "",
-        "NHL": "6",
-        "NCAAM": "7",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_playoff_seed.next": {
         "NBA": "3",
-        "NFL": "1",
-        "MLB": "",
-        "NHL": "2",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_playoff_seed.last": {
         "NBA": "5",
-        "NFL": "4",
-        "MLB": "",
-        "NHL": "5",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_games_back": {
         "NBA": "7",
-        "NFL": "-",
-        "MLB": "15",
-        "NHL": "10",
-        "NCAAM": "-",
-        "NCAAF": "",
-        "Soccer": "12",
     },
     "opponent_games_back.next": {
         "NBA": "2",
-        "NFL": "-",
-        "MLB": "12",
-        "NHL": "3",
-        "NCAAM": "-",
-        "NCAAF": "",
-        "Soccer": "8",
     },
     "opponent_games_back.last": {
         "NBA": "5",
-        "NFL": "-",
-        "MLB": "10",
-        "NHL": "7",
-        "NCAAM": "-",
-        "NCAAF": "",
-        "Soccer": "6",
     },
-    # ==========================================================================
-    # STATISTICS - PPG/PAPG
-    # ==========================================================================
     "team_ppg": {
         "NBA": "112.5",
-        "NFL": "28.4",
-        "MLB": "4.8",
-        "NHL": "3.2",
-        "NCAAM": "78.3",
-        "NCAAF": "35.2",
-        "Soccer": "2.1",
     },
     "team_papg": {
         "NBA": "108.2",
-        "NFL": "21.6",
-        "MLB": "4.2",
-        "NHL": "2.8",
-        "NCAAM": "68.5",
-        "NCAAF": "18.4",
-        "Soccer": "0.9",
     },
     "opponent_ppg": {
         "NBA": "109.8",
-        "NFL": "24.2",
-        "MLB": "4.5",
-        "NHL": "3.0",
-        "NCAAM": "72.1",
-        "NCAAF": "31.8",
-        "Soccer": "1.8",
     },
     "opponent_ppg.next": {
         "NBA": "115.2",
-        "NFL": "22.1",
-        "MLB": "4.2",
-        "NHL": "2.9",
-        "NCAAM": "68.4",
-        "NCAAF": "28.5",
-        "Soccer": "1.5",
     },
     "opponent_ppg.last": {
         "NBA": "110.8",
-        "NFL": "25.3",
-        "MLB": "4.7",
-        "NHL": "3.1",
-        "NCAAM": "74.2",
-        "NCAAF": "30.2",
-        "Soccer": "1.9",
     },
     "opponent_papg": {
         "NBA": "110.5",
-        "NFL": "22.8",
-        "MLB": "4.6",
-        "NHL": "3.1",
-        "NCAAM": "70.2",
-        "NCAAF": "24.6",
-        "Soccer": "1.2",
     },
     "opponent_papg.next": {
         "NBA": "112.8",
-        "NFL": "24.5",
-        "MLB": "4.8",
-        "NHL": "3.2",
-        "NCAAM": "72.1",
-        "NCAAF": "22.8",
-        "Soccer": "1.4",
     },
     "opponent_papg.last": {
         "NBA": "108.5",
-        "NFL": "21.8",
-        "MLB": "4.3",
-        "NHL": "2.9",
-        "NCAAM": "68.8",
-        "NCAAF": "20.5",
-        "Soccer": "1.1",
     },
-    # Positional PPG
     "home_team_ppg": {
         "NBA": "112.5",
-        "NFL": "28.4",
-        "MLB": "4.8",
-        "NHL": "3.2",
-        "NCAAM": "78.3",
-        "NCAAF": "35.2",
-        "Soccer": "2.1",
     },
     "home_team_ppg.next": {
         "NBA": "115.2",
-        "NFL": "22.1",
-        "MLB": "4.2",
-        "NHL": "2.9",
-        "NCAAM": "68.4",
-        "NCAAF": "28.5",
-        "Soccer": "1.5",
     },
     "home_team_ppg.last": {
         "NBA": "110.8",
-        "NFL": "25.3",
-        "MLB": "4.7",
-        "NHL": "3.1",
-        "NCAAM": "74.2",
-        "NCAAF": "30.2",
-        "Soccer": "1.9",
     },
     "away_team_ppg": {
         "NBA": "109.8",
-        "NFL": "24.2",
-        "MLB": "4.5",
-        "NHL": "3.0",
-        "NCAAM": "72.1",
-        "NCAAF": "31.8",
-        "Soccer": "1.8",
     },
     "away_team_ppg.next": {
         "NBA": "112.5",
-        "NFL": "28.4",
-        "MLB": "4.8",
-        "NHL": "3.2",
-        "NCAAM": "78.3",
-        "NCAAF": "35.2",
-        "Soccer": "2.1",
     },
     "away_team_ppg.last": {
         "NBA": "112.5",
-        "NFL": "28.4",
-        "MLB": "4.8",
-        "NHL": "3.2",
-        "NCAAM": "78.3",
-        "NCAAF": "35.2",
-        "Soccer": "2.1",
     },
-    # ==========================================================================
-    # PLAYOFFS - Season type indicators
-    # ==========================================================================
     "season_type": {
         "NBA": "Regular Season",
-        "NFL": "Regular Season",
-        "MLB": "Regular Season",
-        "NHL": "Regular Season",
-        "NCAAM": "Regular Season",
-        "NCAAF": "Bowl Season",
-        "Soccer": "Premier League",
     },
     "season_type.next": {
         "NBA": "Regular Season",
-        "NFL": "Playoffs",
-        "MLB": "Regular Season",
-        "NHL": "Regular Season",
-        "NCAAM": "Regular Season",
-        "NCAAF": "Bowl Season",
-        "Soccer": "FA Cup",
     },
     "season_type.last": {
         "NBA": "Regular Season",
-        "NFL": "Regular Season",
-        "MLB": "Regular Season",
-        "NHL": "Regular Season",
-        "NCAAM": "Regular Season",
-        "NCAAF": "Regular Season",
-        "Soccer": "Premier League",
     },
     "is_playoff": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "is_playoff.next": {
         "NBA": "",
-        "NFL": "true",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "is_playoff.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "is_preseason": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "is_preseason.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "is_preseason.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "is_regular_season": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "",
-        "Soccer": "true",
     },
     "is_regular_season.next": {
         "NBA": "true",
-        "NFL": "",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "is_regular_season.last": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "true",
     },
-    # ==========================================================================
-    # ODDS - Betting lines (BASE_NEXT_ONLY)
-    # ==========================================================================
     "odds_spread": {
         "NBA": "-4.5",
-        "NFL": "-3.0",
-        "MLB": "-1.5",
-        "NHL": "-1.5",
-        "NCAAM": "-7.0",
-        "NCAAF": "-14.5",
-        "Soccer": "-0.5",
     },
     "odds_spread.next": {
         "NBA": "+2.5",
-        "NFL": "-6.5",
-        "MLB": "+1.5",
-        "NHL": "+1.5",
-        "NCAAM": "+3.0",
-        "NCAAF": "-7.5",
-        "Soccer": "+0.5",
     },
     "odds_moneyline": {
         "NBA": "-180",
-        "NFL": "-150",
-        "MLB": "-130",
-        "NHL": "-140",
-        "NCAAM": "-275",
-        "NCAAF": "-500",
-        "Soccer": "-120",
     },
     "odds_moneyline.next": {
         "NBA": "+120",
-        "NFL": "-250",
-        "MLB": "+110",
-        "NHL": "+130",
-        "NCAAM": "+130",
-        "NCAAF": "-300",
-        "Soccer": "+140",
     },
     "odds_over_under": {
         "NBA": "225.5",
-        "NFL": "48.5",
-        "MLB": "8.5",
-        "NHL": "6.5",
-        "NCAAM": "145.5",
-        "NCAAF": "54.5",
-        "Soccer": "2.5",
     },
     "odds_over_under.next": {
         "NBA": "228.5",
-        "NFL": "45.5",
-        "MLB": "9.0",
-        "NHL": "6.0",
-        "NCAAM": "148.5",
-        "NCAAF": "52.5",
-        "Soccer": "2.5",
     },
     "odds_provider": {
         "NBA": "ESPN BET",
-        "NFL": "ESPN BET",
-        "MLB": "ESPN BET",
-        "NHL": "ESPN BET",
-        "NCAAM": "ESPN BET",
-        "NCAAF": "ESPN BET",
-        "Soccer": "ESPN BET",
     },
     "odds_provider.next": {
         "NBA": "ESPN BET",
-        "NFL": "ESPN BET",
-        "MLB": "ESPN BET",
-        "NHL": "ESPN BET",
-        "NCAAM": "ESPN BET",
-        "NCAAF": "ESPN BET",
-        "Soccer": "ESPN BET",
     },
     "odds_details": {
         "NBA": "DET -4.5, O/U 225.5",
-        "NFL": "DET -3.0, O/U 48.5",
-        "MLB": "DET -1.5, O/U 8.5",
-        "NHL": "DET -1.5, O/U 6.5",
-        "NCAAM": "MICH -7.0, O/U 145.5",
-        "NCAAF": "MICH -14.5, O/U 54.5",
-        "Soccer": "LIV -0.5, O/U 2.5",
     },
     "odds_details.next": {
         "NBA": "DET +2.5, O/U 228.5",
-        "NFL": "DET -6.5, O/U 45.5",
-        "MLB": "DET +1.5, O/U 9.0",
-        "NHL": "DET +1.5, O/U 6.0",
-        "NCAAM": "MICH +3.0, O/U 148.5",
-        "NCAAF": "MICH -7.5, O/U 52.5",
-        "Soccer": "LIV +0.5, O/U 2.5",
     },
     "odds_opponent_moneyline": {
         "NBA": "+160",
-        "NFL": "+130",
-        "MLB": "+110",
-        "NHL": "+120",
-        "NCAAM": "+225",
-        "NCAAF": "+400",
-        "Soccer": "+100",
     },
     "odds_opponent_moneyline.next": {
         "NBA": "-140",
-        "NFL": "+210",
-        "MLB": "-130",
-        "NHL": "-150",
-        "NCAAM": "-150",
-        "NCAAF": "+250",
-        "Soccer": "-160",
     },
     "has_odds": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "true",
     },
     "has_odds.next": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "true",
     },
-    # ==========================================================================
-    # BROADCAST - TV networks
-    # ==========================================================================
     "broadcast_network": {
         "NBA": "ESPN",
-        "NFL": "FOX",
-        "MLB": "Bally Sports Detroit",
-        "NHL": "Bally Sports Detroit",
-        "NCAAM": "CBS",
-        "NCAAF": "ABC",
-        "Soccer": "NBC",
     },
     "broadcast_network.next": {
         "NBA": "TNT",
-        "NFL": "CBS",
-        "MLB": "ESPN",
-        "NHL": "ESPN",
-        "NCAAM": "ESPN",
-        "NCAAF": "FOX",
-        "Soccer": "Peacock",
     },
     "broadcast_network.last": {
         "NBA": "Bally Sports Detroit",
-        "NFL": "FOX",
-        "MLB": "Bally Sports Detroit",
-        "NHL": "Bally Sports Detroit",
-        "NCAAM": "Big Ten Network",
-        "NCAAF": "Big Ten Network",
-        "Soccer": "NBC",
     },
     "broadcast_simple": {
         "NBA": "ESPN, Bally Sports Detroit",
-        "NFL": "FOX, NFL Network",
-        "MLB": "Bally Sports Detroit",
-        "NHL": "Bally Sports Detroit",
-        "NCAAM": "CBS",
-        "NCAAF": "ABC, ESPN",
-        "Soccer": "NBC, Peacock",
     },
     "broadcast_simple.next": {
         "NBA": "TNT",
-        "NFL": "CBS",
-        "MLB": "ESPN",
-        "NHL": "ESPN",
-        "NCAAM": "ESPN",
-        "NCAAF": "FOX",
-        "Soccer": "Peacock",
     },
     "broadcast_simple.last": {
         "NBA": "Bally Sports Detroit",
-        "NFL": "FOX",
-        "MLB": "Bally Sports Detroit",
-        "NHL": "Bally Sports Detroit",
-        "NCAAM": "Big Ten Network",
-        "NCAAF": "Big Ten Network",
-        "Soccer": "NBC",
     },
     "broadcast_national_network": {
         "NBA": "ESPN",
-        "NFL": "FOX",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "CBS",
-        "NCAAF": "ABC, ESPN",
-        "Soccer": "NBC",
     },
     "broadcast_national_network.next": {
         "NBA": "TNT",
-        "NFL": "CBS",
-        "MLB": "ESPN",
-        "NHL": "ESPN",
-        "NCAAM": "ESPN",
-        "NCAAF": "FOX",
-        "Soccer": "",
     },
     "broadcast_national_network.last": {
         "NBA": "",
-        "NFL": "FOX",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "NBC",
     },
     "is_national_broadcast": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "false",
-        "NHL": "false",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "true",
     },
     "is_national_broadcast.next": {
         "NBA": "true",
-        "NFL": "true",
-        "MLB": "true",
-        "NHL": "true",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "false",
     },
     "is_national_broadcast.last": {
         "NBA": "false",
-        "NFL": "true",
-        "MLB": "false",
-        "NHL": "false",
-        "NCAAM": "false",
-        "NCAAF": "false",
-        "Soccer": "true",
     },
-    # ==========================================================================
-    # RANKINGS - College rankings
-    # ==========================================================================
     "team_rank": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "8",
-        "NCAAF": "3",
-        "Soccer": "",
     },
     "team_rank_display": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "#8",
-        "NCAAF": "#3",
-        "Soccer": "",
     },
     "is_ranked": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "opponent_rank": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "12",
-        "NCAAF": "7",
-        "Soccer": "",
     },
     "opponent_rank.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "15",
-        "Soccer": "",
     },
     "opponent_rank.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "18",
-        "NCAAF": "10",
-        "Soccer": "",
     },
     "opponent_rank_display": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "#12",
-        "NCAAF": "#7",
-        "Soccer": "",
     },
     "opponent_rank_display.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "#15",
-        "Soccer": "",
     },
     "opponent_rank_display.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "#18",
-        "NCAAF": "#10",
-        "Soccer": "",
     },
     "opponent_is_ranked": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "opponent_is_ranked.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "opponent_is_ranked.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "is_ranked_matchup": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "is_ranked_matchup.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "true",
-        "Soccer": "",
     },
     "is_ranked_matchup.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "true",
-        "NCAAF": "true",
-        "Soccer": "",
     },
-    # Positional rankings
     "home_team_rank": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "8",
-        "NCAAF": "3",
-        "Soccer": "",
     },
     "home_team_rank.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "15",
-        "Soccer": "",
     },
     "home_team_rank.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "18",
-        "NCAAF": "10",
-        "Soccer": "",
     },
     "away_team_rank": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "12",
-        "NCAAF": "7",
-        "Soccer": "",
     },
     "away_team_rank.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "8",
-        "NCAAF": "3",
-        "Soccer": "",
     },
     "away_team_rank.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "8",
-        "NCAAF": "3",
-        "Soccer": "",
     },
-    # ==========================================================================
-    # CONFERENCE - College and pro conferences
-    # ==========================================================================
-    # College conferences (our team)
     "college_conference": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "college_conference_abbrev": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
-    # College conferences (opponent)
     "opponent_college_conference": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "opponent_college_conference.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "opponent_college_conference.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "opponent_college_conference_abbrev": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "opponent_college_conference_abbrev.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "opponent_college_conference_abbrev.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
-    # College conferences (positional)
     "home_team_college_conference": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "home_team_college_conference.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "home_team_college_conference.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "home_team_college_conference_abbrev": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "home_team_college_conference_abbrev.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "home_team_college_conference_abbrev.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "away_team_college_conference": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "away_team_college_conference.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "away_team_college_conference.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "Big Ten",
-        "NCAAF": "Big Ten",
-        "Soccer": "",
     },
     "away_team_college_conference_abbrev": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "away_team_college_conference_abbrev.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
     "away_team_college_conference_abbrev.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "B1G",
-        "NCAAF": "B1G",
-        "Soccer": "",
     },
-    # Pro conferences (our team)
     "pro_conference": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Eastern",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "pro_conference_abbrev": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "East",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "pro_division": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Atlantic",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # Pro conferences (opponent)
     "opponent_pro_conference": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Western",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_conference.next": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Eastern",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_conference.last": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Western",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_conference_abbrev": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "West",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_conference_abbrev.next": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "East",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_conference_abbrev.last": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "West",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_division": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Central",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_division.next": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Metropolitan",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "opponent_pro_division.last": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Central",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # Pro conferences (positional)
     "home_team_pro_conference": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Eastern",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_conference.next": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Eastern",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_conference.last": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Western",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_conference_abbrev": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "East",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_conference_abbrev.next": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "East",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_conference_abbrev.last": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "West",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_division": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Atlantic",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_division.next": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Metropolitan",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "home_team_pro_division.last": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Central",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_conference": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Western",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_conference.next": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Eastern",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_conference.last": {
         "NBA": "Eastern",
-        "NFL": "NFC",
-        "MLB": "American",
-        "NHL": "Eastern",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_conference_abbrev": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "West",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_conference_abbrev.next": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "East",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_conference_abbrev.last": {
         "NBA": "East",
-        "NFL": "NFC",
-        "MLB": "AL",
-        "NHL": "East",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_division": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Central",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_division.next": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Atlantic",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
     "away_team_pro_division.last": {
         "NBA": "Central",
-        "NFL": "NFC North",
-        "MLB": "AL Central",
-        "NHL": "Atlantic",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # ==========================================================================
-    # SOCCER - Soccer-specific variables
-    # ==========================================================================
     "soccer_primary_league": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "Premier League",
     },
     "soccer_primary_league_id": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "eng.1",
     },
     "soccer_match_league": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "EPL",
     },
     "soccer_match_league.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "FA Cup",
     },
     "soccer_match_league.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "Premier League",
     },
     "soccer_match_league_name": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "English Premier League",
     },
     "soccer_match_league_name.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "FA Cup",
     },
     "soccer_match_league_name.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "English Premier League",
     },
     "soccer_match_league_id": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "eng.1",
     },
     "soccer_match_league_id.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "eng.fa",
     },
     "soccer_match_league_id.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "eng.1",
     },
     "soccer_match_league_logo": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
     },
     "soccer_match_league_logo.next": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
     },
     "soccer_match_league_logo.last": {
         "NBA": "",
-        "NFL": "",
-        "MLB": "",
-        "NHL": "",
-        "NCAAM": "",
-        "NCAAF": "",
-        "Soccer": "",
     },
-    # ==========================================================================
-    # COMBAT SPORTS - UFC/MMA specific variables (event EPG only, no .next/.last)
-    # ==========================================================================
     "fighter1": {
         "UFC": "Alex Volkanovski",
+    },
+    "fighter1_last": {
+        "UFC": "Volkanovski",
+    },
+    "fighter2_last": {
+        "UFC": "Lopes",
     },
     "fighter2": {
         "UFC": "Diego Lopes",
@@ -3827,7 +1293,6 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "early_prelims_bouts": {
         "UFC": "Mauricio Ruffy vs Jamie Mullarkey\nOtar Kentchadze vs Ismael Bonfim",
     },
-    # Fight result variables (for finished fights)
     "fight_result": {
         "UFC": "TKO",
     },
@@ -3861,52 +1326,17 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     "fight_summary": {
         "UFC": "TKO R2 4:31",
     },
-    # Feed separation (event-only): sample models a channel carrying the HOME
-    # team's broadcast feed, so feed_* mirrors the home team and is_home_feed=true.
     "feed_team": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
     },
     "feed_team_short": {
         "NBA": "Pistons",
-        "NFL": "Lions",
-        "MLB": "Tigers",
-        "NHL": "Red Wings",
-        "NCAAM": "Wolverines",
-        "NCAAF": "Wolverines",
-        "Soccer": "Liverpool",
     },
     "feed_team_abbrev": {
         "NBA": "DET",
-        "NFL": "DET",
-        "MLB": "DET",
-        "NHL": "DET",
-        "NCAAM": "MICH",
-        "NCAAF": "MICH",
-        "Soccer": "LIV",
-    },
-    "feed_team_abbrev_lower": {
-        "NBA": "det",
-        "NFL": "det",
-        "MLB": "det",
-        "NHL": "det",
-        "NCAAM": "mich",
-        "NCAAF": "mich",
-        "Soccer": "liv",
     },
     "feed_team_logo": {
         "NBA": "https://a.espncdn.com/i/teamlogos/nba/500/8.png",
-        "NFL": "https://a.espncdn.com/i/teamlogos/nfl/500/16.png",
-        "MLB": "https://a.espncdn.com/i/teamlogos/mlb/500/9.png",
-        "NHL": "https://a.espncdn.com/i/teamlogos/nhl/500/30.png",
-        "NCAAM": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
-        "NCAAF": "https://a.espncdn.com/i/teamlogos/ncaa/500/127.png",
-        "Soccer": "https://a.espncdn.com/i/teamlogos/soccer/500/364.png",
     },
     "is_home_feed": {
         "NBA": "true",
@@ -3922,57 +1352,684 @@ SAMPLE_DATA: dict[str, dict[str, str]] = {
     },
     "broadcast_feed_team": {
         "NBA": "Detroit Pistons",
-        "NFL": "Detroit Lions",
-        "MLB": "Detroit Tigers",
-        "NHL": "Detroit Red Wings",
-        "NCAAM": "Michigan Wolverines",
-        "NCAAF": "Michigan Wolverines",
-        "Soccer": "Liverpool",
+    },
+    # ==========================================================================
+    # MOTORSPORTS - F1/NASCAR/IndyCar/MotoGP specific variables (event EPG only)
+    # ==========================================================================
+    "race_name": {
+        "F1": "Monaco Grand Prix",
+    },
+    "circuit_name": {
+        "F1": "Circuit de Monaco",
+    },
+    "session_name": {
+        "F1": "Qualifying",
+    },
+    "session_type": {
+        "F1": "qualifying",
+    },
+    "next_session_name": {
+        "F1": "Race",
+    },
+    "next_session_time": {
+        "F1": "1:00 PM EST",
+    },
+    "pole_position": {
+        "F1": "Charles Leclerc",
+    },
+    "pole_team": {
+        "F1": "Ferrari",
+    },
+    "grid": {
+        "F1": (
+            "1. Charles Leclerc (Ferrari)\n"
+            "2. Max Verstappen (Red Bull Racing)\n"
+            "3. Lando Norris (McLaren)"
+        ),
+    },
+    "race_winner": {
+        "F1": "Max Verstappen",
+    },
+    "podium_2": {
+        "F1": "Charles Leclerc",
+    },
+    "podium_3": {
+        "F1": "Lando Norris",
+    },
+    "podium": {
+        "F1": "1. Max Verstappen, 2. Charles Leclerc, 3. Lando Norris",
+    },
+    "results": {
+        "F1": (
+            "1. Max Verstappen (Red Bull Racing)\n"
+            "2. Charles Leclerc (Ferrari)\n"
+            "3. Lando Norris (McLaren)"
+        ),
+    },
+    "fastest_lap_driver": {
+        "F1": "Max Verstappen",
     },
 }
 
 
-def get_sample_value(var_name: str, sport: str) -> str:
-    """Get sample value for a variable and sport.
+# Derive league_abbrev samples from each profile's league sample so the preview
+# matches what the live extractor produces (same construction rule).
+def _seed_league_abbrev_samples() -> None:
 
-    Falls back through: exact match -> base var -> default
+    abbrev = SAMPLE_DATA.setdefault("league_abbrev", {})
+    for _profile, _league in SAMPLE_DATA.get("league", {}).items():
+        abbrev.setdefault(_profile, construct_league_abbrev(_league))
+
+
+_seed_league_abbrev_samples()
+
+
+# --------------------------------------------------------------------------
+# SHAPES — generic, FICTITIOUS sample identities (epic gruy .1/.2)
+#
+# Instead of previewing against a real league's identity (which looks wrong
+# whenever the league guess is off), every league resolves to one of three
+# generic *shapes* — "team", "combat", "racing" — each populated with funny,
+# obviously-fake placeholder identities. A shape borrows all sport-agnostic
+# values (dates, broadcast timeslots, generic flags, odds, statistics) from a
+# base profile (NBA / UFC / F1) and overrides every variable that would
+# otherwise read as a real league/sport identity.
+#
+# The shape data here LAYERS on top of the legacy 18 profiles, which are left
+# intact for now (their removal is gruy.7). Direct profile names ("NBA", ...)
+# still resolve exactly as before.
+# --------------------------------------------------------------------------
+
+# Each shape borrows non-identity values (dates/broadcast/flags) from this base.
+_SHAPE_TO_BASE: dict[str, str] = {"team": "NBA", "combat": "UFC", "racing": "F1"}
+_SHAPES = frozenset(_SHAPE_TO_BASE)
+
+
+def resolve_shape(sport: str | None) -> str:
+    """Map a league's sport onto one of the three generic sample shapes."""
+    s = (sport or "").lower()
+    if s in {"boxing", "mma"}:
+        return "combat"
+    if s == "racing":
+        return "racing"
+    return "team"
+
+
+# Fictitious, in-theme identity/score/standings/venue overrides per shape.
+# Anything NOT listed here falls through to the shape's base profile (so generic
+# categories stay realistic). The team shape deliberately carries BOTH pro-style
+# fields (conference/division) AND college-style fields (AP rank/ranking) so pro
+# and college templates both preview fully — no single real league has both.
+_SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
+    # ===================== TEAM (base NBA) =====================
+    "team": {
+        # --- focus team / opponent identity ---
+        "team_name": "Flint Tropics",
+        "team_short": "Tropics",
+        "team_abbrev": "FLT",
+        "opponent": "Greenwich Mean Time",
+        "opponent.next": "Baltimore Pinchy Crabs",
+        "opponent.last": "Denver Mile High Club",
+        "opponent_short": "Mean Time",
+        "opponent_short.next": "Pinchy Crabs",
+        "opponent_short.last": "Mile High Club",
+        "opponent_abbrev": "GMT",
+        "opponent_abbrev.next": "CRB",
+        "opponent_abbrev.last": "MHC",
+        "matchup": "Greenwich Mean Time @ Flint Tropics",
+        "matchup.next": "Flint Tropics @ Baltimore Pinchy Crabs",
+        "matchup.last": "Flint Tropics @ Denver Mile High Club",
+        "matchup_abbrev": "GMT @ FLT",
+        "matchup_abbrev.next": "FLT @ CRB",
+        "matchup_abbrev.last": "FLT @ MHC",
+        "matchup_short": "Mean Time @ Tropics",
+        "matchup_short.next": "Tropics @ Pinchy Crabs",
+        "matchup_short.last": "Tropics @ Mile High Club",
+        "team_name_the": "the Flint Tropics",
+        "opponent_the": "the Greenwich Mean Time",
+        "opponent_the.next": "the Baltimore Pinchy Crabs",
+        "opponent_the.last": "the Denver Mile High Club",
+        "home_team_the": "the Flint Tropics",
+        "home_team_the.next": "the Baltimore Pinchy Crabs",
+        "home_team_the.last": "the Denver Mile High Club",
+        "away_team_the": "the Greenwich Mean Time",
+        "away_team_the.next": "the Flint Tropics",
+        "away_team_the.last": "the Flint Tropics",
+        # --- league / sport identity ---
+        "league": "Placeholder Premier League",
+        "league_name": "Placeholder Premier League",
+        "league_code": "ppl",
+        "league_id": "ppl",
+        "sport": "Placeholderball",
+        "gracenote_category": "Placeholder Premier League",
+        # --- home / away identity ---
+        "home_team": "Flint Tropics",
+        "home_team.next": "Baltimore Pinchy Crabs",
+        "home_team.last": "Denver Mile High Club",
+        "home_team_short": "Tropics",
+        "home_team_short.next": "Pinchy Crabs",
+        "home_team_short.last": "Mile High Club",
+        "home_team_abbrev": "FLT",
+        "home_team_abbrev.next": "CRB",
+        "home_team_abbrev.last": "MHC",
+        "away_team": "Greenwich Mean Time",
+        "away_team.next": "Flint Tropics",
+        "away_team.last": "Flint Tropics",
+        "away_team_short": "Mean Time",
+        "away_team_short.next": "Tropics",
+        "away_team_short.last": "Tropics",
+        "away_team_abbrev": "GMT",
+        "away_team_abbrev.next": "FLT",
+        "away_team_abbrev.last": "FLT",
+        "feed_team": "Flint Tropics",
+        "feed_team_short": "Tropics",
+        "feed_team_abbrev": "FLT",
+        "broadcast_feed_team": "Flint Tropics",
+        # --- venue ---
+        "venue": "The Coconut Coliseum",
+        "venue.next": "The Crab Pot Pavilion",
+        "venue.last": "The Thin Air Arena",
+        "venue_city": "Flint",
+        "venue_city.next": "Baltimore",
+        "venue_city.last": "Denver",
+        "venue_state": "ZZ",
+        "venue_state.next": "ZZ",
+        "venue_state.last": "ZZ",
+        "venue_full": "The Coconut Coliseum, Flint, ZZ",
+        "venue_full.next": "The Crab Pot Pavilion, Baltimore, ZZ",
+        "venue_full.last": "The Thin Air Arena, Denver, ZZ",
+        # --- summary / context copy ---
+        "game_recap": "The Tropics rode a 40-point fourth quarter to bury the Mean Time.",
+        "game_recap.last": "Flint edged the Mile High Club in double overtime last week.",
+        "game_event_note": "Placeholder Premier League Finals - Game 4",
+        "game_event_note.next": "Placeholder Premier League Finals - Game 5",
+        "game_event_note.last": "Placeholder Premier League Semifinals - Game 7",
+        "soccer_match_note": "Placeholder Premier League, Group Z",
+        "game_preview": "The Tropics look to close out the series against the Mean Time.",
+        "game_preview.next": "Flint visits the Pinchy Crabs to open the next round.",
+        "series_summary": "Tropics lead series 3-1",
+        "home_last_five": "4-1",
+        "away_last_five": "2-3",
+        "last_five_summary": (
+            "the Greenwich Mean Time have won 2 of their last five; "
+            "the Flint Tropics have won 4 of their last five."
+        ),
+        "series_summary.last": "Tropics won series 4-2",
+        # --- scores / outcome ---
+        "team_score": "3",
+        "team_score.last": "3",
+        "opponent_score": "1",
+        "opponent_score.last": "1",
+        "home_team_score": "3",
+        "home_team_score.last": "3",
+        "away_team_score": "1",
+        "away_team_score.last": "1",
+        "score": "3-1",
+        "score.last": "3-1",
+        "final_score": "3-1",
+        "final_score.last": "3-1",
+        "winner": "Flint Tropics",
+        "winner.last": "Flint Tropics",
+        "winner_abbrev": "FLT",
+        "winner_abbrev.last": "FLT",
+        "loser": "Greenwich Mean Time",
+        "loser.last": "Greenwich Mean Time",
+        "loser_abbrev": "GMT",
+        "loser_abbrev.last": "GMT",
+        "event_result": "Flint Tropics 3 - Greenwich Mean Time 1",
+        "event_result.last": "Flint Tropics 3 - Greenwich Mean Time 1",
+        "event_result_abbrev": "FLT 3 - GMT 1",
+        "event_result_abbrev.last": "FLT 3 - GMT 1",
+        # --- records ---
+        "team_record": "10-2",
+        "team_wins": "10",
+        "team_losses": "2",
+        "opponent_record": "8-4",
+        "opponent_record.next": "9-3",
+        "opponent_record.last": "7-5",
+        "opponent_wins": "8",
+        "opponent_losses": "4",
+        "home_record": "6-0",
+        "away_record": "4-2",
+        "home_team_record": "10-2",
+        "home_team_record.next": "9-3",
+        "home_team_record.last": "7-5",
+        "away_team_record": "8-4",
+        "away_team_record.next": "10-2",
+        "away_team_record.last": "10-2",
+        "home_team_seed": "1",
+        "home_team_seed.next": "3",
+        "home_team_seed.last": "5",
+        "away_team_seed": "2",
+        "away_team_seed.next": "1",
+        "away_team_seed.last": "1",
+        # --- streaks ---
+        "streak": "W3",
+        "win_streak": "3",
+        "home_team_streak": "W3",
+        "home_team_streak.next": "W4",
+        "home_team_streak.last": "W2",
+        "away_team_streak": "L1",
+        "away_team_streak.next": "W3",
+        "away_team_streak.last": "W3",
+        "opponent_streak": "L1",
+        "opponent_streak.next": "W2",
+        "opponent_streak.last": "W1",
+        # --- standings ---
+        "playoff_seed": "1",
+        "opponent_playoff_seed": "2",
+        "opponent_playoff_seed.next": "1",
+        "opponent_playoff_seed.last": "3",
+        # --- conference / division (pro-style) ---
+        "pro_conference": "Cryptid Conference",
+        "pro_conference_abbrev": "Cryptid",
+        "pro_division": "Folklore Division",
+        "college_conference": "Tall Tales Conference",
+        "college_conference_abbrev": "TTC",
+        "opponent_pro_conference": "Cryptid Conference",
+        "opponent_pro_conference.next": "Cryptid Conference",
+        "opponent_pro_conference.last": "Cryptid Conference",
+        "opponent_pro_conference_abbrev": "Cryptid",
+        "opponent_pro_conference_abbrev.next": "Cryptid",
+        "opponent_pro_conference_abbrev.last": "Cryptid",
+        "opponent_pro_division": "Folklore Division",
+        "opponent_pro_division.next": "Folklore Division",
+        "opponent_pro_division.last": "Folklore Division",
+        "opponent_college_conference": "Tall Tales Conference",
+        "opponent_college_conference_abbrev": "TTC",
+        "home_team_pro_conference": "Cryptid Conference",
+        "home_team_pro_conference.next": "Cryptid Conference",
+        "home_team_pro_conference.last": "Cryptid Conference",
+        "home_team_pro_conference_abbrev": "Cryptid",
+        "home_team_pro_conference_abbrev.next": "Cryptid",
+        "home_team_pro_conference_abbrev.last": "Cryptid",
+        "home_team_pro_division": "Folklore Division",
+        "home_team_pro_division.next": "Folklore Division",
+        "home_team_pro_division.last": "Folklore Division",
+        "home_team_college_conference": "Tall Tales Conference",
+        "home_team_college_conference_abbrev": "TTC",
+        "away_team_pro_conference": "Cryptid Conference",
+        "away_team_pro_conference.next": "Cryptid Conference",
+        "away_team_pro_conference.last": "Cryptid Conference",
+        "away_team_pro_conference_abbrev": "Cryptid",
+        "away_team_pro_conference_abbrev.next": "Cryptid",
+        "away_team_pro_conference_abbrev.last": "Cryptid",
+        "away_team_pro_division": "Folklore Division",
+        "away_team_pro_division.next": "Folklore Division",
+        "away_team_pro_division.last": "Folklore Division",
+        "away_team_college_conference": "Tall Tales Conference",
+        "away_team_college_conference_abbrev": "TTC",
+        # --- rankings (college/AP-style, so college templates render) ---
+        "team_rank": "7",
+        "team_rank_display": "#7",
+        "is_ranked": "true",
+        "opponent_rank": "14",
+        "opponent_rank_display": "#14",
+        "opponent_is_ranked": "true",
+        "is_ranked_matchup": "true",
+        "home_team_rank": "7",
+        "home_team_rank.next": "5",
+        "home_team_rank.last": "9",
+        "away_team_rank": "14",
+        "away_team_rank.next": "7",
+        "away_team_rank.last": "7",
+        "home_team_rank_display": "No. 7",
+        "home_team_rank_display.next": "No. 5",
+        "home_team_rank_display.last": "No. 9",
+        "away_team_rank_display": "No. 14",
+        "away_team_rank_display.next": "No. 7",
+        "away_team_rank_display.last": "No. 7",
+        # Composed rank+article names (#359). The .next opponent is deliberately
+        # unranked so the preview demonstrates the graceful article fallback.
+        "home_team_ranked_the": "the No. 7 Flint Tropics",
+        "home_team_ranked_the.next": "the Baltimore Pinchy Crabs",
+        "home_team_ranked_the.last": "the No. 9 Denver Mile High Club",
+        "away_team_ranked_the": "the No. 14 Greenwich Mean Time",
+        "away_team_ranked_the.next": "the No. 7 Flint Tropics",
+        "away_team_ranked_the.last": "the No. 7 Flint Tropics",
+        "team_name_ranked_the": "the No. 7 Flint Tropics",
+        "opponent_ranked_the": "the No. 14 Greenwich Mean Time",
+        "opponent_ranked_the.next": "the Baltimore Pinchy Crabs",
+        "opponent_ranked_the.last": "the No. 9 Denver Mile High Club",
+        # --- odds (de-NBA the spread/details so no DET sneaks in) ---
+        "odds_details": "FLT -3.5, O/U 210.5",
+        "odds_details.next": "FLT -1.5, O/U 214.5",
+        # --- broadcast (generic so no real RSN/city leaks) ---
+        "broadcast_network": "Sample Sports Network",
+        "broadcast_network.next": "Sample Sports Network",
+        "broadcast_network.last": "Sample Sports Network",
+        "broadcast_simple": "Sample Sports Network",
+        "broadcast_simple.next": "Sample Sports Network",
+        "broadcast_simple.last": "Sample Sports Network",
+    },
+    # ================= COMBAT (base UFC) — Punch-Out!! roster =================
+    "combat": {
+        "fighter1": "Little Mac",
+        "fighter2": "Super Macho Man",
+        "fighter1_record": "12-0-0",
+        "fighter2_record": "27-1-0",
+        "event_title": "WVBA Title Night",
+        "event_number": "1",
+        "matchup": "Super Macho Man @ Little Mac",
+        "matchup.next": "Bald Bull @ King Hippo",
+        "matchup.last": "Glass Joe @ Soda Popinski",
+        "matchup_combat": "Little Mac vs Super Macho Man",
+        "weight_class": "Heavyweight",
+        "weight_class_short": "HW",
+        "fight_result": "KO",
+        "fight_result_short": "KO",
+        "fight_summary": "KO R2 0:45",
+        "finish_round": "2",
+        "finish_time": "0:45",
+        "finish_info": "R2 0:45",
+        "judge_scores": "—",
+        "fight_card": (
+            "Little Mac vs Super Macho Man\nMr. Sandman vs King Hippo\nBald Bull vs Soda Popinski"
+        ),
+        "main_card_bouts": ("Little Mac vs Super Macho Man\nMr. Sandman vs King Hippo"),
+        "prelims_bouts": ("Great Tiger vs Don Flamenco\nPiston Honda vs Bald Bull"),
+        "early_prelims_bouts": ("Glass Joe vs Von Kaiser\nKing Hippo vs Soda Popinski"),
+        "bout_count": "11",
+        "league": "World Video Boxing Association",
+        "league_name": "World Video Boxing Association",
+        "league_code": "wvba",
+        "league_id": "wvba",
+        "sport": "Boxing",
+        "gracenote_category": "World Video Boxing Association",
+        "venue": "Madison Square Pixels",
+        "venue_city": "New York",
+        "venue_state": "ZZ",
+        "venue_full": "Madison Square Pixels, New York, ZZ",
+        "exception_keyword": "PPV",
+        "game_recap": "Little Mac dropped Super Macho Man in the third to take the title.",
+        "game_event_note": "WVBA Title Night - Main Event",
+        "game_preview": "Little Mac takes on Super Macho Man for the WVBA title tonight.",
+    },
+    # ============== RACING (base F1) — Ricky Bobby x Cars (Pixar) ==============
+    "racing": {
+        "race_name": "Piston Cup 500",
+        "race_winner": "Ricky Bobby",
+        "pole_position": "Lightning McQueen",
+        "pole_team": "Rust-eze",
+        "podium": "1. Ricky Bobby, 2. Lightning McQueen, 3. Cal Naughton Jr.",
+        "podium_2": "Lightning McQueen",
+        "podium_3": "Cal Naughton Jr.",
+        "fastest_lap_driver": "Jackson Storm",
+        "circuit_name": "Radiator Springs Speedway",
+        "session_name": "Qualifying",
+        "session_type": "qualifying",
+        "next_session_name": "Race",
+        "grid": (
+            "1. Lightning McQueen (Rust-eze)\n"
+            "2. Ricky Bobby (Wonder Bread)\n"
+            "3. Jackson Storm (Team IGNTR)"
+        ),
+        "results": (
+            "1. Ricky Bobby (Wonder Bread)\n"
+            "2. Lightning McQueen (Rust-eze)\n"
+            "3. Cal Naughton Jr. (Magic Man)"
+        ),
+        "league": "Piston Cup Series",
+        "league_name": "Piston Cup Series",
+        "league_code": "pcs",
+        "league_id": "pcs",
+        "sport": "Stock Car Racing",
+        "gracenote_category": "Piston Cup Series",
+        "venue": "Radiator Springs Speedway",
+        "venue_city": "Radiator Springs",
+        "venue_state": "ZZ",
+        "venue_full": "Radiator Springs Speedway, Radiator Springs, ZZ",
+        "exception_keyword": "4K",
+        "game_recap": "Ricky Bobby held off Lightning McQueen on the final lap.",
+        "game_event_note": "Piston Cup 500 - Championship Race",
+        "game_preview": "Ricky Bobby starts second as the Piston Cup field rolls out.",
+    },
+}
+
+
+def _seed_shape_league_abbrevs() -> None:
+    """Derive each shape's ``league_abbrev`` from its ``league`` override.
+
+    Mirrors the live extractor's construction rule (e.g. "Placeholder Premier
+    League" -> "PPL"), keeping the shape preview consistent with real output.
     """
-    # Try exact match first
-    if var_name in SAMPLE_DATA:
-        sport_data = SAMPLE_DATA[var_name]
-        if sport in sport_data:
-            return sport_data[sport]
-        # Fall back to first available sport
-        return next(iter(sport_data.values()), "")
 
-    # Try base variable (without .next/.last suffix)
+    for overrides in _SHAPE_OVERRIDES.values():
+        league = overrides.get("league")
+        if league:
+            overrides.setdefault("league_abbrev", construct_league_abbrev(league))
+
+
+_seed_shape_league_abbrevs()
+
+
+# --------------------------------------------------------------------------
+# League -> shape resolution. Every league previews against one of three
+# generic, fictitious shapes ("team" / "combat" / "racing"), keyed off its
+# sport (from the `leagues` record). Runtime-added custom leagues resolve for
+# free since the mapping is intrinsic to the sport, not a hardcoded code list.
+# --------------------------------------------------------------------------
+
+
+def resolve_profile_for_league(
+    league_code: str, sport: str | None = None, provider: str | None = None
+) -> str:
+    """Resolve the sample SHAPE a league should preview against.
+
+    Every league previews against one of three generic, fictitious shapes
+    ("team" / "combat" / "racing"), keyed off its sport. When the sport is
+    unknown (no DB record), the name heuristic still resolves to a shape via the
+    underlying sport guess, defaulting to "team".
+    """
+    if sport:
+        return resolve_shape(sport)
+    # Name-heuristic fallback: derive the sport, then the shape (defaults team).
+
+    return resolve_shape(get_sport_from_league(league_code).lower())
+
+
+# --------------------------------------------------------------------------
+# Resolution precedence: curated SAMPLE_DATA -> inline registry sample ->
+# category auto-default. Iterating the registry (not just SAMPLE_DATA keys)
+# means a newly-registered variable is auto-adopted into previews with a
+# sensible value even before anyone curates it here.
+# --------------------------------------------------------------------------
+
+# Categories whose curated values are sport-agnostic enough to borrow from
+# another profile when the requested profile has no curated value (e.g. a
+# generic date/broadcast). Identity/venue/score/etc. are NOT here because
+# borrowing them would leak another sport's team or venue into the preview.
+_GENERIC_FALLBACK_CATEGORIES = frozenset({"DATETIME", "BROADCAST", "PLAYOFFS"})
+
+
+def _suffix_variants(suffix_rules_name: str) -> list[str]:
+    """Suffix strings a variable supports, given its SuffixRules enum name."""
+    if suffix_rules_name == "ALL":
+        return ["", ".next", ".last"]
+    if suffix_rules_name == "BASE_NEXT_ONLY":
+        return ["", ".next"]
+    if suffix_rules_name == "LAST_ONLY":
+        return [".last"]
+    return [""]  # BASE_ONLY
+
+
+def _curated_value(full_name: str, profile: str, generic_ok: bool) -> str | None:
+    """Curated sample for a variable+profile, or None if not curated.
+
+    Tries exact name then the base name (without .next/.last), looking the
+    profile (one of the shape bases NBA/UFC/F1) up directly. For generic
+    categories, falls back to any profile's curated value so shared values
+    (dates, broadcast networks) stay realistic without per-profile curation.
+    """
+    for name in (full_name, full_name.replace(".next", "").replace(".last", "")):
+        sport_data = SAMPLE_DATA.get(name)
+        if not sport_data:
+            continue
+        if profile in sport_data:
+            return sport_data[profile]
+        if generic_ok:
+            return next(iter(sport_data.values()), None)
+    return None
+
+
+def _category_default(category_name: str, full_name: str) -> str:
+    """Synthesize a deterministic, sport-neutral placeholder.
+
+    Last-resort value so any registered variable always previews as something
+    plausible and never leaks another sport's identity. Name heuristics take
+    priority over the category fallback.
+    """
+    name = full_name.lower()
+
+    # Name heuristics (cut across categories)
+    if name.startswith(("is_", "has_")) or name.endswith(("_flag", "_bool")):
+        return "true"
+    if "time" in name:
+        return "7:00 PM"
+    if "date" in name:
+        return "Saturday, January 18"
+    if "pct" in name or "percentage" in name:
+        return ".625"
+    if name.endswith("_abbrev") or name.endswith("_abbreviation"):
+        return "SAM"
+    if name.endswith("_lower"):
+        return "sample"
+    if "logo" in name or "url" in name or "image" in name or name.endswith("_art"):
+        return ""
+
+    defaults = {
+        "IDENTITY": "Sample Team",
+        "DATETIME": "Saturday, January 18",
+        "VENUE": "Sample Arena",
+        "HOME_AWAY": "vs",
+        "RECORDS": "20-10",
+        "STREAKS": "W3",
+        "SCORES": "3",
+        "OUTCOME": "Win",
+        "STANDINGS": "1",
+        "STATISTICS": "100.0",
+        "PLAYOFFS": "Regular Season",
+        "ODDS": "-3.5",
+        "BROADCAST": "ESPN",
+        "RANKINGS": "10",
+        "CONFERENCE": "Sample Conference",
+        "SOCCER": "Premier League",
+        "COMBAT": "Sample Fighter",
+        "MOTORSPORTS": "Sample Grand Prix",
+    }
+    return defaults.get(category_name, "Sample")
+
+
+def _shape_override(shape: str, full_name: str) -> str | None:
+    """Funny per-shape override for a variable, or None if not overridden.
+
+    Tries the exact name then the suffix-stripped base name, so a single base
+    override (e.g. ``team_record``) covers ``.next``/``.last`` unless those are
+    overridden explicitly.
+    """
+    overrides = _SHAPE_OVERRIDES.get(shape, {})
+    base = full_name.replace(".next", "").replace(".last", "")
+    for name in (full_name, base):
+        if name in overrides:
+            return overrides[name]
+    return None
+
+
+def _resolve_one(var_def, full_name: str, profile: str) -> str:
+    """Resolve a single variable for a profile/shape via the precedence chain.
+
+    For the three generic shapes, funny shape overrides win first; everything
+    else borrows from the shape's base profile (NBA/UFC/F1) so sport-agnostic
+    values (dates, broadcast, flags) stay realistic.
+    """
+    category_name = var_def.category.name
+    generic_ok = category_name in _GENERIC_FALLBACK_CATEGORIES
+
+    if profile in _SHAPES:
+        override = _shape_override(profile, full_name)
+        if override is not None:
+            return override
+        # Borrow non-identity values from the shape's base profile.
+        profile = _SHAPE_TO_BASE[profile]
+
+    curated = _curated_value(full_name, profile, generic_ok)
+    if curated is not None:
+        return curated
+    if var_def.sample is not None:
+        return var_def.sample
+    return _category_default(category_name, full_name)
+
+
+def get_sample_value(var_name: str, sport: str) -> str:
+    """Get the sample value for a single variable and sport/profile.
+
+    Resolves via curated SAMPLE_DATA -> inline registry sample -> category
+    default, so unknown/new variables still return a plausible placeholder.
+    """
+
+    registry = get_registry()
     base_var = var_name.replace(".next", "").replace(".last", "")
-    if base_var in SAMPLE_DATA:
-        sport_data = SAMPLE_DATA[base_var]
-        if sport in sport_data:
-            return sport_data[sport]
-        return next(iter(sport_data.values()), "")
+    var_def = registry.get(base_var)
+    if var_def is not None:
+        return _resolve_one(var_def, var_name, sport)
 
-    return ""
+    # Not a registered variable - fall back to raw curated lookup.
+    if sport in _SHAPES:
+        override = _shape_override(sport, var_name)
+        if override is not None:
+            return override
+        sport = _SHAPE_TO_BASE[sport]
+    value = _curated_value(var_name, sport, generic_ok=True)
+    return value if value is not None else ""
 
 
 def get_all_sample_data(sport: str) -> dict[str, str]:
-    """Get all sample values for a given sport.
+    """Get all sample values for a given sport/profile.
+
+    Iterates the variable registry (the source of truth for what variables
+    exist) and resolves each via the precedence chain, so a newly-registered
+    variable is auto-adopted with a sensible value. Any extra curated keys not
+    backed by a registered variable are included too, for safety.
 
     Time-related variables are formatted according to user's display settings
     (12h/24h format, show/hide timezone).
     """
-    result = {}
-    for var_name, sport_data in SAMPLE_DATA.items():
-        if sport in sport_data:
-            result[var_name] = sport_data[sport]
-        elif sport_data:
-            # Fall back to first available
-            result[var_name] = next(iter(sport_data.values()))
+
+    registry = get_registry()
+    result: dict[str, str] = {}
+
+    for var_def in registry.all_variables():
+        for suffix in _suffix_variants(var_def.suffix_rules.name):
+            full_name = f"{var_def.name}{suffix}"
+            result[full_name] = _resolve_one(var_def, full_name, sport)
+
+    # Include any curated keys not backed by a registered variable (defensive).
+    lookup = _SHAPE_TO_BASE.get(sport, sport)
+    for name, sport_data in SAMPLE_DATA.items():
+        if name not in result and sport_data:
+            override = _shape_override(sport, name) if sport in _SHAPES else None
+            if override is not None:
+                result[name] = override
+            else:
+                result[name] = sport_data.get(lookup) or next(iter(sport_data.values()))
 
     # Post-process time-related variables to honor user settings
     result = _format_time_samples(result)
     return result
+
+
+def get_all_sample_data_for_league(
+    league_code: str, sport: str | None = None, provider: str | None = None
+) -> dict[str, str]:
+    """Get all sample values for a specific league.
+
+    Resolves the league's shape from its sport/provider (passed from the league
+    record) or, when those are absent, a name heuristic, then builds the full
+    sample set for that shape. Shapes use fictitious identities by design (epic
+    gruy), so a preview never looks like a real (and likely wrong-league) game.
+    """
+    shape = resolve_profile_for_league(league_code, sport, provider)
+    return get_all_sample_data(shape)
 
 
 # Variables that contain time values needing format conversion
@@ -3984,6 +2041,8 @@ _TIME_VARIABLES = {
     "main_card_time",
     "prelims_time",
     "early_prelims_time",
+    # Motorsports next-session time (base only, no .next/.last for event EPG)
+    "next_session_time",
 }
 
 
@@ -3992,7 +2051,6 @@ def _format_time_samples(samples: dict[str, str]) -> dict[str, str]:
 
     Converts hardcoded time strings like "7:00 PM EST" to user's preferred format.
     """
-    from teamarr.config import get_show_timezone, get_time_format, get_user_timezone_str
 
     time_format = get_time_format()
     show_tz = get_show_timezone()

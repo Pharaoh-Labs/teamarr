@@ -12,11 +12,13 @@ Integrates with FastAPI lifespan for clean startup/shutdown.
 
 import logging
 import threading
-import time
 from datetime import datetime
 from typing import Any
 
 from croniter import croniter
+
+from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client, get_dispatcharr_connection
+from teamarr.services import create_cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +96,7 @@ class SubTaskScheduler:
                 wait_seconds,
             )
             while wait_seconds > 0 and not self._stop_event.is_set():
-                time.sleep(min(1.0, wait_seconds))
+                self._stop_event.wait(min(1.0, wait_seconds))
                 wait_seconds = (self._next_run - datetime.now()).total_seconds()
             if self._stop_event.is_set():
                 return
@@ -327,8 +329,7 @@ class CronScheduler:
 
             # Wait until next run time (checking stop event every second)
             while wait_seconds > 0 and not self._stop_event.is_set():
-                sleep_time = min(1.0, wait_seconds)
-                time.sleep(sleep_time)
+                self._stop_event.wait(min(1.0, wait_seconds))
                 wait_seconds = (self._next_run - datetime.now()).total_seconds()
 
             if self._stop_event.is_set():
@@ -400,7 +401,6 @@ class CronScheduler:
 
         logger.info("[CRON] Running scheduled channel reset")
 
-        from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 
         client = get_dispatcharr_client(self._db_factory)
         if not client:
@@ -497,7 +497,6 @@ class CronScheduler:
         Returns:
             Dict with refresh status
         """
-        from teamarr.services import create_cache_service
 
         cache_service = create_cache_service(self._db_factory)
         refreshed = cache_service.refresh_if_needed(max_age_days=1)
@@ -531,13 +530,13 @@ class CronScheduler:
         Returns:
             Dict with generation stats
         """
-        from teamarr.api.generation_status import (
+        from teamarr.consumers.generation import run_full_generation
+        from teamarr.consumers.generation_status import (
             complete_generation,
             fail_generation,
             start_generation,
             update_status,
         )
-        from teamarr.consumers.generation import run_full_generation
 
         # Mark generation as started (enables UI polling)
         if not start_generation():
@@ -565,7 +564,6 @@ class CronScheduler:
 
         # Get fresh Dispatcharr connection from factory
         # (stored reference may be stale if settings were updated)
-        from teamarr.dispatcharr import get_dispatcharr_connection
 
         dispatcharr_client = get_dispatcharr_connection(self._db_factory)
 

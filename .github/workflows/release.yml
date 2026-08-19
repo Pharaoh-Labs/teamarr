@@ -1,5 +1,8 @@
 name: Create Release
 
+# Fallback release creation for raw tag pushes. The documented /release flow
+# creates the release manually (gh release create, curated notes) — when that
+# release already exists for the tag, this workflow leaves it untouched.
 on:
   push:
     tags:
@@ -8,14 +11,48 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+
 jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/test.yml
+
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: tests
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Verify tag matches pyproject version
+        run: |
+          PYVER=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$PYVER" != "$TAG" ]; then
+            echo "::error::pyproject.toml version ($PYVER) does not match tag ($GITHUB_REF_NAME)"
+            exit 1
+          fi
+
+      - name: Check for existing release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Query the API directly so DRAFT releases count too — a pending
+          # draft from the Cut Release workflow must not be clobbered by an
+          # auto-generated fallback release.
+          if gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' | grep -qx "$GITHUB_REF_NAME"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $GITHUB_REF_NAME already exists (manual /release or Cut Release flow) — skipping"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release (fallback with auto-generated notes)
+        if: steps.existing.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v3.0.2
         with:
           generate_release_notes: true

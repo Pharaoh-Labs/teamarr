@@ -92,6 +92,10 @@ class EPGSettings:
     epg_channel_source_groups: list[int] = field(default_factory=list)
     epg_stream_pre_buffer_minutes: int = 60
     epg_stream_post_buffer_minutes: int = 60
+    # Tennis: only match/attach grand-slam tournaments (#283 first slice) —
+    # ESPN marks tournaments major=true; smaller events are filtered at the
+    # tennis matcher so junk-tour channels never get created.
+    tennis_majors_only: bool = False
     # Game-thumbs base URL (epic z02s): optional prefix for relative art paths in
     # templates. Empty = no prefixing. Absolute (http(s)://) art values bypass it.
     art_base_url: str = ""
@@ -123,7 +127,7 @@ class DisplaySettings:
 
     time_format: str = "12h"
     show_timezone: bool = True
-    channel_id_format: str = "{team_name_pascal}.{league_id}"
+    channel_id_format: str = "{team_name|pascal}.{league_id}"
     xmltv_generator_name: str = "Teamarr"
     xmltv_generator_url: str = "https://github.com/Pharaoh-Labs/teamarr"
     tsdb_api_key: str | None = None
@@ -163,28 +167,52 @@ class TeamFilterSettings:
     include_teams: list[dict] | None = None
     exclude_teams: list[dict] | None = None
     mode: str = "include"  # 'include' or 'exclude'
-    bypass_filter_for_playoffs: bool = False  # Include all playoff games regardless of filter
+    bypass_filter_for_playoffs: bool = False  # Include all playoff/All-Star games regardless
 
 
 @dataclass
 class StreamOrderingRule:
     """A single stream ordering rule.
 
-    Rules are evaluated in priority order (lowest number first).
-    First matching rule determines the stream's sort position within a channel.
+    Two rule classes, discriminated by ``mode`` (epic teamarr-5ag):
+
+    - ``mode="priority"`` (hard): an ordered, first-match-wins list. The first
+      priority rule a stream matches sets its *band*; ``priority`` (1-99, lower
+      first) orders these rules and becomes the band weight. This is the legacy
+      behaviour and the strict-precedence escape hatch.
+    - ``mode="score"`` (soft): additive. A stream *sums* ``points`` (signed)
+      across every score rule it matches; the total ranks streams within a band
+      (and is the sole ranking when no priority rule matches). Negative points
+      demote a stream below the baseline.
+
+    The dataclass default is ``mode="priority"`` — the legacy-safe fallback, so
+    any rule constructed or deserialized without an explicit mode behaves exactly
+    as it did before scoring existed. "New rules default to score" is a UI/API
+    concern (the add-rule form and request model default to score); it is
+    deliberately not baked into this storage type, which must preserve old data.
     """
 
-    type: str  # "m3u", "group", "regex", "stream_type", "team_feed", "not_team_feed", "catch_all"
+    # One of VALID_RULE_TYPES below (m3u/group/regex/stream_type/team_feed/
+    # not_team_feed/epg_match/dispatcharr_group/home_feed/away_feed/
+    # stats_metric/catch_all)
+    type: str
     value: str  # Account name, group name, regex pattern, or team key(s)
-    priority: int  # 1-99, lower = higher priority
+    priority: int  # 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
+    mode: str = "priority"  # 'priority' (hard, first-match band) or 'score' (soft, additive)
+    points: int = 0  # signed; summed across matched 'score' rules (ignored for 'priority' mode)
 
 
 VALID_RULE_TYPES: frozenset[str] = frozenset({
     "m3u", "group", "regex", "stream_type",
-    "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "catch_all",
+    "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
+    "home_feed", "away_feed",
+    "stats_metric", "catch_all",
 })
+VALID_RULE_MODES: frozenset[str] = frozenset({"priority", "score"})
+# Legacy rows (pre epic teamarr-5ag) carry no 'mode'; they are hard priority rules.
+LEGACY_RULE_MODE: str = "priority"
 NO_VALUE_RULE_TYPES: frozenset[str] = frozenset(
-    {"team_feed", "not_team_feed", "epg_match", "catch_all"}
+    {"team_feed", "not_team_feed", "epg_match", "home_feed", "away_feed", "catch_all"}
 )
 
 
@@ -253,6 +281,13 @@ class ChannelNumberingSettings:
     league_channel_starts: dict = field(default_factory=dict)  # {"nfl": 1001, ...}
     global_consolidation_mode: str = "consolidate"  # 'consolidate', 'separate'
 
+    # Stability (AUTO mode only): how existing numbers behave across runs.
+    channel_stability_mode: str = "compact"  # 'compact', 'gap', 'strict'
+    channel_gap_size: int = 3  # spacing between channels in 'gap' mode
+    channel_daily_reset_enabled: bool = True  # run the periodic full re-layout
+    channel_daily_reset_time: str = "04:00"  # local HH:MM reset window
+    force_channel_relayout_pending: bool = False  # one-shot re-grid armed for next run
+
 
 @dataclass
 class FeedSeparationSettings:
@@ -271,35 +306,58 @@ class FeedSeparationSettings:
 
 
 @dataclass
-class EmbySettings:
-    """Emby integration settings for Live TV guide refresh."""
+class MediaServerEntry:
+    """One Emby/Jellyfin server target for post-generation guide refresh (#471)."""
 
-    enabled: bool = False
+    name: str = ""
     url: str | None = None
     username: str | None = None
     password: str | None = None
     api_key: str | None = None
+
+
+@dataclass
+class EmbySettings:
+    """Emby integration settings for Live TV guide refresh.
+
+    Multi-server (#471): refresh fans out over every entry in `servers`.
+    """
+
+    enabled: bool = False
+    servers: list[MediaServerEntry] = field(default_factory=list)
 
 
 @dataclass
 class JellyfinSettings:
-    """Jellyfin integration settings for Live TV guide refresh."""
+    """Jellyfin integration settings for Live TV guide refresh.
+
+    Multi-server (#471): refresh fans out over every entry in `servers`.
+    """
 
     enabled: bool = False
+    servers: list[MediaServerEntry] = field(default_factory=list)
+
+
+@dataclass
+class ChannelsDVRServer:
+    """One Channels DVR server target for post-generation refresh (#381)."""
+
+    name: str = ""
     url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
+    source_name: str | None = None
+    lineup_id: str | None = None
 
 
 @dataclass
 class ChannelsDVRSettings:
-    """Channels DVR integration settings for M3U + XMLTV refresh."""
+    """Channels DVR integration settings for M3U + XMLTV refresh.
+
+    Multi-server (#381): refresh fans out over every entry in `servers`.
+    All servers receive the same channel set/EPG from one Dispatcharr.
+    """
 
     enabled: bool = False
-    url: str | None = None
-    source_name: str | None = None
-    lineup_id: str | None = None
+    servers: list[ChannelsDVRServer] = field(default_factory=list)
 
 
 @dataclass

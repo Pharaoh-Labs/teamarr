@@ -35,6 +35,8 @@ from datetime import date, datetime
 import httpx
 
 from teamarr.core import LeagueMappingSource
+from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -117,9 +119,10 @@ class RateLimiter:
 
     Tracks all wait events for UI feedback. Never fails - always waits and continues.
 
-    Rate limits per TSDB tier:
-    - Free: 30 req/min, 10 teams/search, 5 events/day
-    - Premium: 100 req/min, 3000 teams/search, 3000 events/season
+    Rate limits per TSDB tier (measured 2026-08-04):
+    - Free: 30 req/min; rolling 1-event next/past; league-filtered eventsday
+      returns nothing (filter is premium-gated); 15-event season cap
+    - Premium: 100 req/min, 20-event next/past, 3000 events/season
     """
 
     # Cooldown duration when internal limit is hit (seconds)
@@ -203,7 +206,7 @@ class RateLimiter:
             self._requests.append(time.time())
 
 
-class TSDBClient:
+class TSDBClient(BaseHTTPClient):
     """Low-level TheSportsDB API client with rate limiting.
 
     API key resolution:
@@ -212,13 +215,26 @@ class TSDBClient:
 
     Configure premium key in Settings UI.
 
-    Free tier limitations:
+    Free tier limitations (measured 2026-08-04 — TSDB tightened these in 2026):
     - 30 requests/minute
-    - Team schedule (eventsnext.php) only shows HOME events
-    - No livescores or highlights
+    - eventsnextleague/eventspastleague: 1 event (rolling window). The
+      pipeline's per-date polling still harvests every game as it becomes
+      the league's next (see provider.get_events), but with short lead time.
+    - eventsday WITH a league filter returns nothing — the l= filter is
+      premium-gated (unfiltered free returns the global top-3 events/day).
+      Our get_events_by_date always filters, so it yields 0 keyless; this
+      is why get_team_schedule (eventsday-only) is empty on free.
+    - eventsseason: 15-event cap; all_leagues: sample only
 
     League mappings provided via LeagueMappingSource (no direct database access).
+
+    Keeps a custom ``_request`` (instead of BaseHTTPClient._request_json):
+    TSDB needs the sliding-window rate limiter, 404 fast-fail (GH #217), and
+    a much harsher 429 backoff (5-120s) than the shared default.
     """
+
+    PROVIDER = "tsdb"
+    LOG_TAG = "TSDB"
 
     # Free test key
     FREE_API_KEY = "123"
@@ -232,13 +248,15 @@ class TSDBClient:
         retry_delay: float = 1.0,
         requests_per_minute: int = 30,  # TSDB free tier limit
     ):
+        super().__init__(
+            timeout=timeout,
+            retry_count=retry_count,
+            max_connections=10,
+            max_keepalive_connections=5,
+        )
         self._league_mapping_source = league_mapping_source
         self._explicit_key = api_key
-        self._timeout = timeout
-        self._retry_count = retry_count
         self._retry_delay = retry_delay
-        self._client: httpx.Client | None = None
-        self._client_lock = threading.Lock()
         self._requests_per_minute = requests_per_minute
         # Rate limiter initialized lazily after we can check is_premium
         self._rate_limiter: RateLimiter | None = None
@@ -271,17 +289,6 @@ class TSDBClient:
             if self.is_premium:
                 logger.info("[TSDB] Using premium API key (100 req/min)")
         return self._rate_limiter
-
-    def _get_client(self) -> httpx.Client:
-        if self._client is None:
-            with self._client_lock:
-                # Double-check after acquiring lock
-                if self._client is None:
-                    self._client = httpx.Client(
-                        timeout=self._timeout,
-                        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-                    )
-        return self._client
 
     # Exponential backoff for 429 responses
     # Starts at 5s, doubles each retry, caps at 120s
@@ -348,6 +355,7 @@ class TSDBClient:
                         f"TSDB request succeeded after {backoff_attempt} rate limit retry(ies)"
                     )
 
+                call_metrics.record_call("tsdb", endpoint)
                 return response.json()
 
             except httpx.HTTPStatusError as e:
@@ -374,16 +382,6 @@ class TSDBClient:
                 return None
 
         return None
-
-    def _reset_client(self) -> None:
-        """Reset the HTTP client to clear stale connections."""
-        with self._client_lock:
-            if self._client:
-                try:
-                    self._client.close()
-                except Exception as e:
-                    logger.debug("[TSDB] Error closing HTTP client: %s", e)
-                self._client = None
 
     def supports_league(self, league: str) -> bool:
         """Check if we have mapping for this league."""
@@ -482,6 +480,28 @@ class TSDBClient:
             self._cache.set(cache_key, result, TSDB_CACHE_TTL_NEXT_EVENTS)
         return result
 
+    def get_league_past_events(self, league: str) -> dict | None:
+        """Fetch the most recent (finished) events for a league.
+
+        The complement of :meth:`get_league_next_events` — one call returns the
+        last ~15 finished events, used to find a just-completed game for sample
+        previews (recap/score/outcome vars need a final event). Cached 1 hour.
+        """
+        cache_key = make_cache_key("tsdb", "pastleague", league)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            logger.debug("[TSDB] Cache hit: %s", cache_key)
+            return cached
+
+        league_id = self.get_league_id(league)
+        if not league_id:
+            return None
+
+        result = self._request("eventspastleague.php", {"id": league_id})
+        if result:
+            self._cache.set(cache_key, result, TSDB_CACHE_TTL_NEXT_EVENTS)
+        return result
+
     # ------------------------------------------------------------------
     # Raw lookups (no DB mapping) — used by custom-league validation (eqz.3),
     # where the league is not yet a saved row so there is no canonical code to
@@ -504,6 +524,32 @@ class TSDBClient:
         """eventsnextleague.php by raw league ID, no DB mapping."""
         return self._request("eventsnextleague.php", {"id": league_id})
 
+    def _season_candidates(self, league: str) -> list[str]:
+        """Season strings to try, most likely format first (#60 pgtq.5).
+
+        TSDB's season format varies by league WITHIN a sport: Brazilian
+        state championships and Scandinavian soccer run calendar years
+        ("2026") while European soccer runs fall-spring ("2025-2026").
+        Callers try candidates in order and fall through on empty, so a
+        wrong first guess costs one extra request and self-heals instead
+        of silently returning 0 events.
+        """
+        from datetime import date
+
+        today = date.today()
+        calendar = str(today.year)
+        if today.month < 8:
+            fall_spring = f"{today.year - 1}-{today.year}"
+        else:
+            fall_spring = f"{today.year}-{today.year + 1}"
+
+        sport = (self.get_sport(league) or "").lower()
+        if sport in ("cricket", "boxing", "soccer"):
+            # TSDB's soccer set skews calendar-year (Brazilian state,
+            # Scandinavian); European fall-spring soccer is served by ESPN.
+            return [calendar, fall_spring]
+        return [fall_spring, calendar]
+
     def get_events_by_season(self, league: str, season: str | None = None) -> dict | None:
         """Fetch all events for a league season.
 
@@ -512,6 +558,9 @@ class TSDBClient:
         (e.g., Unrivaled). Replaces the former eventsround.php path, which
         TheSportsDB has removed — it returns 404 for every league, including
         TSDB's own documented examples (see GH #217).
+
+        Without an explicit season, both season formats are tried in
+        likelihood order (see _season_candidates) — first non-empty wins.
 
         Args:
             league: Canonical league code
@@ -524,26 +573,30 @@ class TSDBClient:
         if not league_id:
             return None
 
-        if not season:
-            # Use current year for calendar-year leagues
-            season = str(date.today().year)
+        candidates = [season] if season else self._season_candidates(league)
 
-        cache_key = make_cache_key("tsdb", "eventsseason", league, season)
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            logger.debug("[TSDB] Cache hit: %s", cache_key)
-            return cached
+        last_result: dict | None = None
+        for s in candidates:
+            cache_key = make_cache_key("tsdb", "eventsseason", league, s)
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                logger.debug("[TSDB] Cache hit: %s", cache_key)
+                if cached.get("events"):
+                    return cached
+                last_result = cached
+                continue  # cached-empty: try the other format, don't re-request
 
-        result = self._request("eventsseason.php", {"id": league_id, "s": season})
-        if result:
-            # Cache for 2 hours (same as eventsday)
-            self._cache.set(cache_key, result, 2 * 60 * 60)
-        return result
+            result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            if result:
+                # Cache for 2 hours (same as eventsday)
+                self._cache.set(cache_key, result, 2 * 60 * 60)
+            if result and result.get("events"):
+                return result
+            last_result = result or last_result
+        return last_result
 
     def get_team_next_events(self, team_id: str) -> dict | None:
         """Fetch upcoming events for a team.
-
-        Note: Free tier only returns HOME events.
 
         Args:
             team_id: TSDB team ID
@@ -551,6 +604,8 @@ class TSDBClient:
         Returns:
             Raw TSDB response or None
         """
+        # TODO: PRUNE? — no in-tree callers (verified Aug 2026), dead along
+        # with get_team_last_events; verify with user
         return self._request("eventsnext.php", {"id": team_id})
 
     def get_team_last_events(self, team_id: str) -> dict | None:
@@ -620,10 +675,12 @@ class TSDBClient:
 
         Args:
             league: Canonical league code
-            season: Season string. Format varies by sport:
-                    - Hockey: "2024-2025" (fall-spring)
-                    - Cricket: "2024" (calendar year)
-                    - Boxing: "2024" (calendar year)
+            season: Season string. Format varies BY LEAGUE, not just sport
+                    (#60): "2024-2025" fall-spring vs "2024" calendar year.
+                    When omitted, both formats are tried in likelihood order
+                    (see _season_candidates) — Brazilian state championships
+                    previously got a fall-spring guess, returned 0 events,
+                    and silently capped team discovery at 10.
 
         Returns:
             Raw TSDB response or None
@@ -632,26 +689,15 @@ class TSDBClient:
         if not league_id:
             return None
 
-        if not season:
-            from datetime import date
+        candidates = [season] if season else self._season_candidates(league)
 
-            year = date.today().year
-            month = date.today().month
-            sport = self.get_sport(league).lower()
-
-            # Different sports use different season formats
-            if sport in ("cricket", "boxing"):
-                # Calendar year seasons
-                season = str(year)
-            else:
-                # Fall-spring seasons (hockey, etc.)
-                # Use previous year if before August
-                if month < 8:
-                    season = f"{year - 1}-{year}"
-                else:
-                    season = f"{year}-{year + 1}"
-
-        return self._request("eventsseason.php", {"id": league_id, "s": season})
+        last_result: dict | None = None
+        for s in candidates:
+            result = self._request("eventsseason.php", {"id": league_id, "s": s})
+            if result and result.get("events"):
+                return result
+            last_result = result or last_result
+        return last_result
 
     def get_teams_in_league(self, league: str) -> dict | None:
         """Get all teams in a league.
@@ -764,9 +810,3 @@ class TSDBClient:
         Call at the start of EPG generation to get clean stats for that run.
         """
         self._get_rate_limiter().reset_stats()
-
-    def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            self._client.close()
-            self._client = None

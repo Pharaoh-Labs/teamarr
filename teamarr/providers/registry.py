@@ -48,6 +48,7 @@ class ProviderConfig:
                 self._instance = self.factory()
             else:
                 self._instance = self.provider_class(**self.config)
+        assert self._instance is not None  # both branches above set it
         return self._instance
 
     def reset_instance(self) -> None:
@@ -244,7 +245,8 @@ class ProviderRegistry:
 
         # Check if provider exposes an is_premium property
         if hasattr(provider, "is_premium"):
-            return provider.is_premium
+            # Duck-typed: not all SportsProvider subclasses declare is_premium.
+            return provider.is_premium  # type: ignore[attr-defined]
 
         # Assume full capability if provider doesn't track premium status
         return True

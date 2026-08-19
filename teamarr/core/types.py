@@ -69,6 +69,37 @@ class Bout:
     order: int  # Position on card (0 = opener, higher = later)
 
 
+@dataclass(frozen=True)
+class RacingResult:
+    """A single driver's result/grid slot for a racing session.
+
+    Used for motorsports (F1, NASCAR, IndyCar, MotoGP, etc.) where each
+    session (practice, qualifying, race) has its own ordered list of
+    competitors.
+    """
+
+    driver_name: str
+    team_name: str | None = None  # Constructor/team name
+    position: int | None = None  # Finishing position (None if not yet run)
+    grid_position: int | None = None  # Starting position for this session
+    points: float | None = None  # Championship points earned
+    fastest_lap: bool = False
+    status: str | None = None  # "Finished", "DNF", "DNS", "+1 Lap", etc.
+
+
+@dataclass(frozen=True)
+class RacingSession:
+    """A single session within a racing event (race weekend).
+
+    Examples: Practice 1/2/3, Qualifying, Sprint, Race.
+    """
+
+    code: str  # "fp1", "fp2", "fp3", "qualifying", "sprint", "race"
+    name: str  # "Practice 1", "Qualifying", "Race"
+    start_time: datetime
+    results: list["RacingResult"] = field(default_factory=list)
+
+
 @dataclass
 class Event:
     """A single sporting event (game/match)."""
@@ -91,8 +122,36 @@ class Event:
     season_year: int | None = None
     season_type: str | None = None
 
+    # Neutral-site flag (ESPN competitions[].neutralSite): bowls, CFP/NCAA
+    # tournament rounds, showcase games. Flips matchup framing to 'vs.' and
+    # drops host framing (Gracenote convention, #355 item 3).
+    neutral_site: bool = False
+
+    # Broadcast name → market ('national'/'home'/'away') from ESPN
+    # broadcasts[] — data-driven feed discrimination for team-branded and
+    # regional channels ('Brewers.TV', 'YES') that carry no HOME/AWAY term
+    # (#343). broadcasts above keeps the flat name list for display.
+    broadcast_markets: dict[str, str] = field(default_factory=dict)
+
     # Betting odds (from scoreboard API, usually same-day only)
     odds_data: dict | None = None
+
+    # Editorial/context copy from the provider — EPG-friendly form, dateline dash
+    # stripped (empty when absent). All three come free from the scoreboard
+    # payload — no per-event call. See
+    # docs/reference/architecture/gracenote-template-design.md.
+    game_recap: str = ""  # scoreboard headlines[type=Recap].shortLinkText (clean headline)
+    game_event_note: str = ""  # notes[0].headline, e.g. "NBA Finals - Game 5"
+    soccer_match_note: str = ""  # altGameNote, e.g. "FIFA World Cup, Group J"
+    # Per-event tier — from the summary endpoint (overlaid by refresh_event_status,
+    # which already fetches it, so zero extra calls).
+    game_preview: str = ""  # summary article[type=Preview].description (pregame)
+    series_summary: str = ""  # summary seasonseries[0].summary, e.g. "Series tied 1-1"
+    # Structured preview (tvnk.15): recent form from summary lastFiveGames —
+    # W-L over each team's last five ("4-1"). Available days ahead, unlike
+    # preview prose which only populates ~T-0/T-1.
+    home_last_five: str = ""
+    away_last_five: str = ""
 
     # MMA-specific: when main card begins (prelims start at start_time)
     main_card_start: datetime | None = None
@@ -114,6 +173,30 @@ class Event:
     # Judge scores for decisions (list of total scores per judge)
     fighter1_scores: list[int] | None = None  # home_team/fighter1 scores
     fighter2_scores: list[int] | None = None  # away_team/fighter2 scores
+
+    # Racing-specific: circuit/track name (e.g., "Circuit de Monaco")
+    circuit_name: str | None = None
+
+    # Racing-specific: all sessions for the race weekend (Practice,
+    # Qualifying, Race, etc.), ordered by start_time
+    sessions: list["RacingSession"] = field(default_factory=list)
+
+    # Racing-specific: scheduled lap count and distance (miles)
+    race_laps: int | None = None
+    race_distance_miles: float | None = None
+
+    # Racing-specific: per-stage lap counts [stage1, stage2, stage3, ...]
+    # Cumulative stage end laps: cumsum(stage_laps)
+    stage_laps: list[int] = field(default_factory=list)
+
+    # Tennis-specific: one Event per match; players ride home_team/away_team.
+    # The tournament is context, not the event (ESPN: 1 scoreboard event =
+    # 1 tournament, matches under groupings[].competitions[]).
+    tournament_name: str | None = None  # e.g., "Wimbledon"
+    round_name: str | None = None  # e.g., "Round 4", "Qualifying 1st Round"
+    court: str | None = None  # e.g., "Centre Court", "No. 1 Court"
+    draw_type: str | None = None  # e.g., "Men's Singles", "Mixed Doubles"
+    is_major: bool = False  # ESPN tournament major flag (grand slams)
 
 
 @dataclass(frozen=True)
@@ -151,6 +234,12 @@ class TeamStats:
     # Scoring stats
     ppg: float | None = None  # Points per game
     papg: float | None = None  # Points allowed per game
+
+    # Racing-specific: championship standings
+    championship_points: float | None = None
+    championship_position: int | None = None
+    constructor_name: str | None = None
+    constructor_points: float | None = None
 
 
 @dataclass

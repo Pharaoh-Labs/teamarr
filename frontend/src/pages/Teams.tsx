@@ -1,20 +1,26 @@
 import { useState, useEffect, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import {
   Plus,
   Trash2,
   Pencil,
-  Loader2,
+  LoaderCircle,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { StickyActionBar } from "@/components/ui/sticky-action-bar"
+import { Spinner } from "@/components/ui/spinner"
 import { Card } from "@/components/ui/card"
 import { Alert } from "@/components/ui/alert"
 import { TeamEpgSettingsCard } from "@/components/TeamEpgSettingsCard"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useDisplaySettings } from "@/hooks/useSettings"
+import { useTableSort } from "@/hooks/useTableSort"
+import { useRowSelection } from "@/hooks/useRowSelection"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -50,10 +56,18 @@ import type { Team } from "@/api/teams"
 import { getLeagues } from "@/api/teams"
 import { statsApi } from "@/api/stats"
 import { useQuery } from "@tanstack/react-query"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 type ActiveFilter = "" | "active" | "inactive"
-type SortColumn = "team" | "league" | "sport" | "template" | "channel" | "status" | null
-type SortDirection = "asc" | "desc"
+type SortColumn = "team" | "league" | "sport" | "template" | "channel" | "status"
+
+const byString = (get: (t: Team) => string) => (a: Team, b: Team) => {
+  const x = get(a).toLowerCase()
+  const y = get(b).toLowerCase()
+  if (x < y) return -1
+  if (x > y) return 1
+  return 0
+}
 
 interface TeamUpdate {
   team_name?: string
@@ -165,7 +179,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSaving}>
-            {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isSaving && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
             Update
           </Button>
         </DialogFooter>
@@ -175,6 +189,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
 }
 
 export function Teams() {
+  const { timezone } = useDateFormat()
   const navigate = useNavigate()
   const { data: teams, isLoading, error, refetch } = useTeams()
   const { data: templates } = useTemplates()
@@ -211,13 +226,7 @@ export function Teams() {
   const [templateFilter, setTemplateFilter] = useState<string>("")
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("")
 
-  // Sorting state
-  const [sortColumn, setSortColumn] = useState<SortColumn>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
-
   // Bulk selection state
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null)
   const [bulkTemplateId, setBulkTemplateId] = useState<number | null>(null)
   const [showBulkTemplate, setShowBulkTemplate] = useState(false)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
@@ -225,7 +234,13 @@ export function Teams() {
   const [channelIdMode, setChannelIdMode] = useState<"default" | "custom">("default")
   const [customChannelIdFormat, setCustomChannelIdFormat] = useState("")
   const [isUpdatingChannelIds, setIsUpdatingChannelIds] = useState(false)
-  const defaultChannelIdFormat = "{team_name_pascal}.{league_id}"
+  // The dialog's "Use Global Default Format" option reads the actual
+  // channel_id_format setting (#522) — the same template team import now uses,
+  // so the two paths can't silently disagree. Falls back to the dataclass
+  // default when settings haven't loaded yet.
+  const { data: displaySettings } = useDisplaySettings()
+  const defaultChannelIdFormat =
+    displaySettings?.channel_id_format || "{team_name|pascal}.{league_id}"
 
   // Edit dialog state
   const [showDialog, setShowDialog] = useState(false)
@@ -275,12 +290,26 @@ export function Teams() {
     }
   }, [teams])
 
-  // Filter and sort teams
-  const filteredTeams = useMemo(() => {
+  // Ascending comparator per sortable column; useTableSort negates for desc.
+  const comparators = useMemo(
+    () => ({
+      team: byString((t) => t.team_name),
+      league: byString((t) => t.primary_league),
+      sport: byString((t) => t.sport),
+      template: byString(
+        (t) => teamTemplates.find((tpl) => tpl.id === t.template_id)?.name ?? "zzz"
+      ),
+      channel: byString((t) => t.channel_id),
+      status: byString((t) => (t.active ? "active" : "inactive")),
+    }),
+    [teamTemplates]
+  )
+
+  // Filter teams
+  const matchingTeams = useMemo(() => {
     if (!teams) return []
 
-    // First filter
-    let result = teams.filter((team) => {
+    return teams.filter((team) => {
       // Name filter
       if (nameFilter && !team.team_name.toLowerCase().includes(nameFilter.toLowerCase())) return false
 
@@ -305,68 +334,23 @@ export function Teams() {
 
       return true
     })
+  }, [teams, nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter])
 
-    // Then sort
-    if (sortColumn) {
-      result = [...result].sort((a, b) => {
-        let aVal: string
-        let bVal: string
+  const { sortColumn, sortDirection, handleSort, sortedRows: filteredTeams } =
+    useTableSort<Team, SortColumn>({ rows: matchingTeams, comparators })
 
-        switch (sortColumn) {
-          case "team":
-            aVal = a.team_name.toLowerCase()
-            bVal = b.team_name.toLowerCase()
-            break
-          case "league":
-            aVal = a.primary_league.toLowerCase()
-            bVal = b.primary_league.toLowerCase()
-            break
-          case "sport":
-            aVal = a.sport.toLowerCase()
-            bVal = b.sport.toLowerCase()
-            break
-          case "template":
-            aVal = (teamTemplates.find((t) => t.id === a.template_id)?.name ?? "zzz").toLowerCase()
-            bVal = (teamTemplates.find((t) => t.id === b.template_id)?.name ?? "zzz").toLowerCase()
-            break
-          case "channel":
-            aVal = a.channel_id.toLowerCase()
-            bVal = b.channel_id.toLowerCase()
-            break
-          case "status":
-            aVal = a.active ? "active" : "inactive"
-            bVal = b.active ? "active" : "inactive"
-            break
-          default:
-            return 0
-        }
-
-        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1
-        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1
-        return 0
-      })
-    }
-
-    return result
-  }, [teams, nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter, sortColumn, sortDirection, teamTemplates])
+  const {
+    selectedIds,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+    clear: clearSelection,
+    setSelectedIds,
+  } = useRowSelection(filteredTeams)
 
   // Clear selection when filters change
   useEffect(() => {
-    setSelectedIds(new Set())
-    setLastClickedIndex(null)
-  }, [nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter])
-
-  // Handle column sort
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      // Toggle direction if same column
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-    } else {
-      // New column, start with ascending
-      setSortColumn(column)
-      setSortDirection("asc")
-    }
-  }
+    clearSelection()
+  }, [nameFilter, leagueFilter, sportFilter, templateFilter, activeFilter, clearSelection])
 
   // Render sort icon
   const renderSortIcon = (column: SortColumn) => {
@@ -408,42 +392,6 @@ export function Teams() {
   }
 
   // Bulk actions
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredTeams.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filteredTeams.map((t) => t.id)))
-    }
-  }
-
-  const toggleSelect = (id: number, index: number, shiftKey: boolean) => {
-    if (shiftKey && lastClickedIndex !== null) {
-      // Shift-click: select range
-      const start = Math.min(lastClickedIndex, index)
-      const end = Math.max(lastClickedIndex, index)
-
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        for (let i = start; i <= end; i++) {
-          next.add(filteredTeams[i].id)
-        }
-        return next
-      })
-    } else {
-      // Regular click: toggle single item
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        if (next.has(id)) {
-          next.delete(id)
-        } else {
-          next.add(id)
-        }
-        return next
-      })
-    }
-    setLastClickedIndex(index)
-  }
-
   const handleBulkToggleActive = async (active: boolean) => {
     const ids = Array.from(selectedIds)
     let succeeded = 0
@@ -668,7 +616,7 @@ export function Teams() {
                         </div>
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{event.league}</span>
-                          <span>Started {new Date(event.start_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                          <span>Started {new Date(event.start_time).toLocaleTimeString("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" })}</span>
                         </div>
                       </div>
                     ))}
@@ -682,13 +630,13 @@ export function Teams() {
 
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container max-w-screen-xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
+        <StickyActionBar
+          label={
+            <>
                 {selectedIds.size} team{selectedIds.size > 1 ? "s" : ""} selected
-              </span>
-              <div className="flex items-center gap-1">
+            </>
+          }
+        >
                 <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                   Clear
                 </Button>
@@ -708,18 +656,13 @@ export function Teams() {
                   <Trash2 className="h-3 w-3 mr-1" />
                   Delete
                 </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </StickyActionBar>
       )}
 
       {/* Teams Table - No card wrapper for more compact look */}
       <div className="border border-border rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Spinner />
           ) : teams?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No teams configured. Add a team to generate team-based EPG.
@@ -1025,25 +968,15 @@ export function Teams() {
       )}
 
       {/* Delete Confirmation */}
-      <Dialog open={deleteConfirm !== null} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Team</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm?.team_name}"? This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        onOpenChange={(open) => !open && setDeleteConfirm(null)}
+        title="Delete Team"
+        description={`Are you sure you want to delete "${deleteConfirm?.team_name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Bulk Assign Template Dialog */}
       <Dialog open={showBulkTemplate} onOpenChange={setShowBulkTemplate}>
@@ -1074,7 +1007,7 @@ export function Teams() {
               Cancel
             </Button>
             <Button onClick={handleBulkAssignTemplate} disabled={updateMutation.isPending}>
-              {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {updateMutation.isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Assign
             </Button>
           </DialogFooter>
@@ -1082,30 +1015,24 @@ export function Teams() {
       </Dialog>
 
       {/* Bulk Delete Confirmation */}
-      <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
-        <DialogContent onClose={() => setShowBulkDelete(false)}>
-          <DialogHeader>
-            <DialogTitle>Delete Teams</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} team{selectedIds.size !== 1 && "s"}?
-              This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete {selectedIds.size} Team{selectedIds.size !== 1 && "s"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showBulkDelete}
+        onOpenChange={setShowBulkDelete}
+        title="Delete Teams"
+        description={
+          <>
+            Are you sure you want to delete {selectedIds.size} team
+            {selectedIds.size !== 1 && "s"}? This cannot be undone.
+          </>
+        }
+        confirmLabel={
+          <>
+            Delete {selectedIds.size} Team{selectedIds.size !== 1 && "s"}
+          </>
+        }
+        isPending={deleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+      />
 
       {/* Change Channel ID Modal */}
       <Dialog open={showBulkChannelId} onOpenChange={setShowBulkChannelId}>
@@ -1151,12 +1078,12 @@ export function Teams() {
                   <Input
                     value={customChannelIdFormat}
                     onChange={(e) => setCustomChannelIdFormat(e.target.value)}
-                    placeholder="{team_name_pascal}.{league_id}"
+                    placeholder="{team_name|pascal}.{league_id}"
                   />
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p className="font-medium">Available variables:</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                      <span><code>{"{team_name_pascal}"}</code> - PascalCase</span>
+                      <span><code>{"{team_name|pascal}"}</code> - PascalCase</span>
                       <span><code>{"{team_abbrev}"}</code> - Abbreviation</span>
                       <span><code>{"{team_name}"}</code> - lowercase-dashes</span>
                       <span><code>{"{league_id}"}</code> - league code</span>
@@ -1174,7 +1101,7 @@ export function Teams() {
               Cancel
             </Button>
             <Button onClick={handleBulkUpdateChannelIds} disabled={isUpdatingChannelIds}>
-              {isUpdatingChannelIds && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {isUpdatingChannelIds && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Apply to {selectedIds.size} Team{selectedIds.size !== 1 && "s"}
             </Button>
           </DialogFooter>

@@ -2,17 +2,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   listManagedChannels,
   deleteManagedChannel,
-  syncLifecycle,
   getReconciliationStatus,
-  runReconciliation,
   getPendingDeletions,
 } from "@/api/channels"
 
-export function useManagedChannels(groupId?: number, includeDeleted = false) {
+export function useManagedChannels(
+  groupId?: number,
+  includeDeleted = false,
+  opts?: { poll?: boolean }
+) {
   return useQuery({
     queryKey: ["managedChannels", { groupId, includeDeleted }],
     queryFn: () => listManagedChannels(groupId, includeDeleted),
-    refetchInterval: 30000, // Refresh every 30s
+    // Poll by default; pass poll: false for secondary views (e.g. the
+    // Recently Deleted list) so they refresh via invalidation only instead
+    // of doubling the 30s full-table poll.
+    refetchInterval: opts?.poll === false ? undefined : 30000,
   })
 }
 
@@ -27,33 +32,10 @@ export function useDeleteManagedChannel() {
   })
 }
 
-export function useSyncLifecycle() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: syncLifecycle,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
-    },
-  })
-}
-
 export function useReconciliationStatus() {
   return useQuery({
     queryKey: ["reconciliationStatus"],
     queryFn: () => getReconciliationStatus(),
-  })
-}
-
-export function useRunReconciliation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (autoFix: boolean) => runReconciliation(autoFix),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
-      queryClient.invalidateQueries({ queryKey: ["reconciliationStatus"] })
-    },
   })
 }
 

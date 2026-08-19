@@ -11,12 +11,10 @@ API keys are constants since they're public keys from official league websites.
 """
 
 import logging
-import threading
 from datetime import date
 
-import httpx
-
 from teamarr.core.interfaces import LeagueMappingSource
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -80,7 +78,7 @@ API_KEYS: dict[str, str] = {
 }
 
 
-class HockeyTechClient:
+class HockeyTechClient(BaseHTTPClient):
     """Low-level HockeyTech API client.
 
     Provides access to CHL league data (OHL, WHL, QMJHL) plus AHL, PWHL, USHL
@@ -90,29 +88,23 @@ class HockeyTechClient:
     contains the HockeyTech client_code (ohl, whl, lhjmq, etc.).
     """
 
+    PROVIDER = "hockeytech"
+    LOG_TAG = "HOCKEYTECH"
+
     def __init__(
         self,
         league_mapping_source: LeagueMappingSource | None = None,
         timeout: float = 10.0,
         retry_count: int = 3,
     ):
+        super().__init__(
+            timeout=timeout,
+            retry_count=retry_count,
+            max_connections=100,
+            max_keepalive_connections=50,
+        )
         self._league_mapping_source = league_mapping_source
-        self._timeout = timeout
-        self._retry_count = retry_count
-        self._client: httpx.Client | None = None
-        self._client_lock = threading.Lock()
         self._cache = TTLCache()
-
-    def _get_client(self) -> httpx.Client:
-        """Get or create HTTP client (thread-safe)."""
-        if self._client is None:
-            with self._client_lock:
-                if self._client is None:
-                    self._client = httpx.Client(
-                        timeout=self._timeout,
-                        limits=httpx.Limits(max_connections=100, max_keepalive_connections=50),
-                    )
-        return self._client
 
     def supports_league(self, league: str) -> bool:
         """Check if we support this league via LeagueMappingSource."""
@@ -181,30 +173,7 @@ class HockeyTechClient:
         if extra_params:
             params.update(extra_params)
 
-        for attempt in range(self._retry_count):
-            try:
-                client = self._get_client()
-                response = client.get(HOCKEYTECH_BASE_URL, params=params)
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPStatusError as e:
-                logger.warning(
-                    f"HockeyTech HTTP {e.response.status_code} for {view} "
-                    f"(attempt {attempt + 1}/{self._retry_count})"
-                )
-                if attempt < self._retry_count - 1:
-                    continue
-                return None
-            except (httpx.RequestError, RuntimeError, OSError) as e:
-                logger.warning(
-                    f"HockeyTech request failed for {view}: {e} "
-                    f"(attempt {attempt + 1}/{self._retry_count})"
-                )
-                if attempt < self._retry_count - 1:
-                    continue
-                return None
-
-        return None
+        return self._request_json(HOCKEYTECH_BASE_URL, params, label=view)
 
     def get_schedule(self, league: str) -> list[dict]:
         """Get full season schedule for a league.
@@ -418,9 +387,3 @@ class HockeyTechClient:
     def clear_cache(self) -> None:
         """Clear all cached data."""
         self._cache.clear()
-
-    def close(self) -> None:
-        """Close the HTTP client."""
-        if self._client:
-            self._client.close()
-            self._client = None

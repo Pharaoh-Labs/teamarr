@@ -1,0 +1,117 @@
+<tv generator-info-name="Teamarr">
+  <channel id="teamarr-team-1">
+    <display-name>Boston Celtics</display-name>
+  </channel>
+  <programme start="20260710090000 +0000" stop="20260710100000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: NBA Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
+    <desc lang="en">The 8-4 Detroit Pistons travel to Auburn Hills, MI to play the 10-2 Boston Celtics today at 3:00 PM EDT.</desc>
+    <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710100000 +0000" stop="20260710160000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: NBA Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
+    <desc lang="en">The 8-4 Detroit Pistons travel to Auburn Hills, MI to play the 10-2 Boston Celtics today at 3:00 PM EDT.</desc>
+    <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710160000 +0000" stop="20260710190000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: NBA Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
+    <desc lang="en">The 8-4 Detroit Pistons travel to Auburn Hills, MI to play the 10-2 Boston Celtics today at 3:00 PM EDT.</desc>
+    <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260710190000 +0000" stop="20260710220000 +0000" channel="teamarr-team-1">
+    <title lang="en">NBA Basketball</title>
+    <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
+    <desc lang="en">The 8-4 Detroit Pistons travel to Auburn Hills, MI to take on the 10-2 Boston Celtics at The Palace. the Detroit Pistons have won 2 of their last five; the Boston Celtics have won 4 of their last five. Series tied 1-1</desc>
+    <date>20260710</date>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <category lang="en">Sports event</category>
+    <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+    <new />
+    <live />
+  </programme>
+  <programme start="20260710220000 +0000" stop="20260711040000 +0000" channel="teamarr-team-1">
+    <title lang="en">NBA Basketball: Boston Celtics Postgame</title>
+    <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
+    <desc lang="en">The game between the Boston Celtics and the Detroit Pistons on Friday, July 10, 2026 has not yet ended as of the last update.</desc>
+    <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260711040000 +0000" stop="20260711100000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Chicago Bulls</sub-title>
+    <desc lang="en">The Boston Celtics last played against the Detroit Pistons on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260711100000 +0000" stop="20260711160000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Chicago Bulls</sub-title>
+    <desc lang="en">The Boston Celtics last played against the Detroit Pistons on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260711160000 +0000" stop="20260711220000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Chicago Bulls</sub-title>
+    <desc lang="en">The Boston Celtics last played against the Detroit Pistons on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260711220000 +0000" stop="20260712040000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">Next game: Sunday, July 12, 2026 at 3:00 PM EDT vs the Chicago Bulls</sub-title>
+    <desc lang="en">The Boston Celtics last played against the Detroit Pistons on Friday, July 10, 2026.</desc>
+  </programme>
+  <programme start="20260712040000 +0000" stop="20260712100000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: NBA Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Chicago Bulls at Boston Celtics</sub-title>
+    <desc lang="en">The 6-6 Chicago Bulls travel to Auburn Hills, MI to play the 10-2 Boston Celtics today at 3:00 PM EDT.</desc>
+    <icon src="nba/ChicagoBulls/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260712100000 +0000" stop="20260712160000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: NBA Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Chicago Bulls at Boston Celtics</sub-title>
+    <desc lang="en">The 6-6 Chicago Bulls travel to Auburn Hills, MI to play the 10-2 Boston Celtics today at 3:00 PM EDT.</desc>
+    <icon src="nba/ChicagoBulls/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260712160000 +0000" stop="20260712190000 +0000" channel="teamarr-team-1">
+    <title lang="en">Coming up: NBA Basketball at 3:00 PM EDT</title>
+    <sub-title lang="en">Chicago Bulls at Boston Celtics</sub-title>
+    <desc lang="en">The 6-6 Chicago Bulls travel to Auburn Hills, MI to play the 10-2 Boston Celtics today at 3:00 PM EDT.</desc>
+    <icon src="nba/ChicagoBulls/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260712190000 +0000" stop="20260712220000 +0000" channel="teamarr-team-1">
+    <title lang="en">NBA Basketball</title>
+    <sub-title lang="en">Chicago Bulls at Boston Celtics</sub-title>
+    <desc lang="en">The 6-6 Chicago Bulls travel to Auburn Hills, MI to take on the 10-2 Boston Celtics at The Palace.</desc>
+    <date>20260712</date>
+    <category lang="en">Sports</category>
+    <category lang="en">Basketball</category>
+    <category lang="en">Sports event</category>
+    <icon src="nba/ChicagoBulls/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+    <new />
+    <live />
+  </programme>
+  <programme start="20260712220000 +0000" stop="20260713040000 +0000" channel="teamarr-team-1">
+    <title lang="en">NBA Basketball: Boston Celtics Postgame</title>
+    <sub-title lang="en">Chicago Bulls at Boston Celtics</sub-title>
+    <desc lang="en">The game between the Boston Celtics and the Chicago Bulls on Sunday, July 12, 2026 has not yet ended as of the last update.</desc>
+    <icon src="nba/ChicagoBulls/BostonCeltics/cover.png?style=1&amp;logo=true&amp;fallback=true" />
+  </programme>
+  <programme start="20260713040000 +0000" stop="20260713100000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Boston Celtics games scheduled.</desc>
+  </programme>
+  <programme start="20260713100000 +0000" stop="20260713160000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Boston Celtics games scheduled.</desc>
+  </programme>
+  <programme start="20260713160000 +0000" stop="20260713220000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Boston Celtics games scheduled.</desc>
+  </programme>
+  <programme start="20260713220000 +0000" stop="20260714040000 +0000" channel="teamarr-team-1">
+    <title lang="en">No Boston Celtics Game Today</title>
+    <sub-title lang="en">No upcoming game currently on schedule in next 30 days</sub-title>
+    <desc lang="en">No upcoming Boston Celtics games scheduled.</desc>
+  </programme>
+</tv>

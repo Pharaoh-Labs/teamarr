@@ -8,10 +8,12 @@ import os
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 
 from teamarr.core import SportsProvider
 from teamarr.database import get_db
+from teamarr.providers import ProviderRegistry
+from teamarr.providers.espn.client import ESPNClient
+from teamarr.utilities.tz import utcnow_iso
 
 from .queries import TeamLeagueCache
 
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Expected league counts per provider (for progress estimation)
 # These are approximate and used for work-proportional progress allocation
 EXPECTED_LEAGUES = {
-    "espn": 280,  # ~52 configured + ~228 discovered soccer leagues
+    "espn": 280,  # ~98 configured + ~180 discovered soccer leagues
     "tsdb": 6,  # NRL, Boxing, IPL, BBL, SA20, Svenska Cupen + free tier leagues
     "hockeytech": 6,
     "mlbstats": 5,  # AAA, AA, High-A, Single-A, Rookie
@@ -91,7 +93,6 @@ class CacheRefresher:
         Returns:
             Dict with refresh statistics
         """
-        from teamarr.providers import ProviderRegistry
 
         start_time = time.time()
 
@@ -239,7 +240,6 @@ class CacheRefresher:
         Returns:
             ``{success, league_code, team_count, error}``
         """
-        from teamarr.providers import ProviderRegistry
 
         def fail(msg: str) -> dict:
             logger.warning("[CACHE_REFRESH] Scoped refresh of %s failed: %s", league_code, msg)
@@ -322,7 +322,7 @@ class CacheRefresher:
         upserts ``league_cache`` and the league's count columns in one
         transaction.
         """
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         seen: set = set()
         rows = []
@@ -461,7 +461,6 @@ class CacheRefresher:
                 # Fall back to ESPN API if not in leagues table
                 if (not logo_url or not league_name) and provider_name == "espn":
                     try:
-                        from teamarr.providers.espn.client import ESPNClient
 
                         client = ESPNClient()
                         league_info_api = client.get_league_info(league_slug)
@@ -661,7 +660,7 @@ class CacheRefresher:
 
     def _save_cache(self, teams: list[dict], leagues: list[dict]) -> None:
         """Save teams and leagues to database using batch inserts."""
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         with self._db() as conn:
             cursor = conn.cursor()
@@ -746,7 +745,7 @@ class CacheRefresher:
         Updates the cached team count for configured leagues based on
         what we discovered during cache refresh.
         """
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         for league in leagues:
             league_slug = league["league_slug"]
@@ -769,7 +768,7 @@ class CacheRefresher:
         error: str | None,
     ) -> None:
         """Update cache metadata."""
-        now = datetime.utcnow().isoformat() + "Z"
+        now = utcnow_iso()
 
         with self._db() as conn:
             cursor = conn.cursor()

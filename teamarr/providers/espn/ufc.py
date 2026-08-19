@@ -5,6 +5,7 @@ No API calls, no date filtering - that's the provider's responsibility.
 """
 
 import logging
+from typing import TYPE_CHECKING, Any
 
 from teamarr.core import Bout, Event, EventStatus, Team
 
@@ -20,6 +21,14 @@ class UFCParserMixin:
         - self.name: Provider name ('espn')
         - self._parse_datetime(date_str): Parse datetime from string
     """
+
+    if TYPE_CHECKING:
+        # Provided by the host provider class (ESPNProvider).
+        from datetime import datetime
+
+        name: str
+
+        def _parse_datetime(self, date_str: str) -> "datetime | None": ...
 
     def _parse_ufc_events(self, data: dict) -> list[Event]:
         """Parse UFC scoreboard response into Event objects.
@@ -77,7 +86,7 @@ class UFCParserMixin:
             sorted_times = sorted(bout_times)
 
             # Build segment_times dict based on number of distinct times
-            segment_times: dict[str, any] = {}
+            segment_times: dict[str, Any] = {}
             time_to_segment: dict[str, str] = {}  # Map raw time strings to segment names
 
             if len(sorted_times) == 3:

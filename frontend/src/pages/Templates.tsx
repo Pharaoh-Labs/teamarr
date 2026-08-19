@@ -1,8 +1,9 @@
 import { useState, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, Loader2, Copy, Download, Upload, Tv, User } from "lucide-react"
+import { Plus, Trash2, Pencil, LoaderCircle, Copy, Download, Upload, Tv, User, RotateCcw } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
+import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,11 +28,17 @@ import {
   useCreateTemplate,
   useDeleteTemplate,
 } from "@/hooks/useTemplates"
-import { getTemplate, type Template } from "@/api/templates"
+import { getTemplate, restoreDefaultTemplates, type Template } from "@/api/templates"
+import { useQuery } from "@tanstack/react-query"
+import { getLeagues } from "@/api/teams"
+import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
+import { useSports } from "@/hooks/useSports"
 import { TemplateAssignmentManager } from "@/components/TemplateAssignmentModal"
 import { useSubscription } from "@/hooks/useSubscription"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
 export function Templates() {
+  const { formatDate } = useDateFormat()
   const navigate = useNavigate()
   const { data: templates, isLoading, error, refetch } = useTemplates()
   const { data: subscription } = useSubscription()
@@ -39,7 +46,35 @@ export function Templates() {
   const createMutation = useCreateTemplate()
   const deleteMutation = useDeleteTemplate()
 
+  // Friendly names for the Usage chips (league slugs like "fifa.world" are
+  // not user-facing). Query is shared/cached with the assignment manager below.
+  const { data: leaguesResponse } = useQuery({ queryKey: ["leagues"], queryFn: () => getLeagues() })
+  const leagueName = (slug: string) => {
+    const lg = leaguesResponse?.leagues?.find((l) => l.slug === slug)
+    return lg ? getLeagueDisplayName(lg, true) : slug.toUpperCase()
+  }
+  const { data: sportsData } = useSports()
+  const sportName = (s: string) => getSportDisplayName(s, sportsData?.sports)
+
   const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
+  const [isRestoring, setIsRestoring] = useState(false)
+
+  const handleRestoreDefaults = async () => {
+    setIsRestoring(true)
+    try {
+      const result = await restoreDefaultTemplates()
+      if (result.restored > 0) {
+        toast.success(`Restored ${result.restored} starter template(s)`)
+        refetch()
+      } else {
+        toast.info("All starter templates are already present")
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed")
+    } finally {
+      setIsRestoring(false)
+    }
+  }
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -105,6 +140,12 @@ export function Templates() {
             idle_content: template.idle_content,
             idle_conditional: template.idle_conditional,
             idle_offseason: template.idle_offseason,
+            // Explicit [] when absent (pre-#420 exports): the schema's seeded
+            // postgame default would otherwise shadow an imported legacy
+            // conditional (non-empty rows win over the legacy shim).
+            pregame_conditional_rows: template.pregame_conditional_rows ?? [],
+            postgame_conditional_rows: template.postgame_conditional_rows ?? [],
+            idle_conditional_rows: template.idle_conditional_rows ?? [],
             conditional_descriptions: template.conditional_descriptions,
             event_channel_name: template.event_channel_name,
             event_channel_logo_url: template.event_channel_logo_url,
@@ -159,6 +200,9 @@ export function Templates() {
         idle_content: fullTemplate.idle_content,
         idle_conditional: fullTemplate.idle_conditional,
         idle_offseason: fullTemplate.idle_offseason,
+        pregame_conditional_rows: fullTemplate.pregame_conditional_rows ?? [],
+        postgame_conditional_rows: fullTemplate.postgame_conditional_rows ?? [],
+        idle_conditional_rows: fullTemplate.idle_conditional_rows ?? [],
         conditional_descriptions: fullTemplate.conditional_descriptions,
         event_channel_name: fullTemplate.event_channel_name,
         event_channel_logo_url: fullTemplate.event_channel_logo_url,
@@ -216,7 +260,7 @@ export function Templates() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
             {isImporting ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
             ) : (
               <Upload className="h-4 w-4 mr-1" />
             )}
@@ -236,11 +280,36 @@ export function Templates() {
         />
       </div>
 
+      {/* Seeded-set scoping hint (tvnk.1 decision d): shown while any curated
+          starter template is still unassigned. Names mirror the backend set
+          (teamarr/database/default_templates.py). */}
+      {(() => {
+        const SEEDED_NAMES = new Set([
+          "Default Team (Starter)", "Soccer Team (Starter)", "College Team (Starter)",
+          "Default Event (Starter)", "College Event (Starter)", "Soccer Club Event (Starter)",
+          "Combat Event (Starter)", "International Event (Starter)", "Tennis Event (Starter)",
+        ])
+        const unassignedSeeded = (templates ?? []).filter(
+          (t) =>
+            SEEDED_NAMES.has(t.name) &&
+            !(t.team_count && t.team_count > 0) &&
+            !(t.global_assignments && t.global_assignments.length > 0)
+        )
+        if (unassignedSeeded.length === 0) return null
+        return (
+          <Alert variant="info" className="mb-3">
+            {unassignedSeeded.length} starter template{unassignedSeeded.length !== 1 ? "s are" : " is"} not
+            assigned yet. Recommended scoping — Default Team/Event: global defaults ·
+            Soccer Team/Club Event: soccer leagues · College Team/Event: NCAA ·
+            Combat: UFC/boxing · International: national-team tournaments ·
+            Tennis: ATP/WTA. Assign below or via Template Assignments.
+          </Alert>
+        )
+      })()}
+
       <div className="border border-border rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Spinner />
           ) : templates?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No templates configured. Create one to get started.
@@ -287,14 +356,14 @@ export function Templates() {
                               if (a.leagues?.length) {
                                 return (
                                   <Badge key={i} variant="outline" className="text-xs">
-                                    {a.leagues.join(", ")}
+                                    {a.leagues.map(leagueName).join(", ")}
                                   </Badge>
                                 )
                               }
                               if (a.sports?.length) {
                                 return (
                                   <Badge key={i} variant="outline" className="text-xs">
-                                    {a.sports.join(", ")}
+                                    {a.sports.map(sportName).join(", ")}
                                   </Badge>
                                 )
                               }
@@ -313,13 +382,7 @@ export function Templates() {
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {template.created_at
-                        ? new Date(template.created_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
+                      {template.created_at ? formatDate(template.created_at) : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -367,6 +430,24 @@ export function Templates() {
               </TableBody>
             </Table>
           )}
+
+        {/* Deleted or renamed starters never reseed on their own (#487) —
+            this is the explicit way back. */}
+        <div className="flex justify-end pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRestoreDefaults}
+            disabled={isRestoring}
+          >
+            {isRestoring ? (
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4 mr-1" />
+            )}
+            Restore Starter Templates
+          </Button>
+        </div>
       </div>
 
       {/* Template Assignments — the manager owns its own header + add button */}
@@ -411,7 +492,7 @@ export function Templates() {
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {deleteMutation.isPending && <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />}
               Delete
             </Button>
           </DialogFooter>

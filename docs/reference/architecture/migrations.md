@@ -2,8 +2,7 @@
 title: Database Migrations
 parent: Architecture
 grand_parent: Technical Reference
-nav_order: 6
-docs_version: "2.3.1"
+nav_order: 8
 ---
 
 # Database Migrations
@@ -23,7 +22,7 @@ Fresh Install          Existing Database (v2-v42)      Existing Database (v43+)
                                 │
                                 ▼
                     v44, v45, ... incremental
-                    migrations (connection.py)
+                    migrations (migrations/versioned.py)
 ```
 
 ### Key Principles
@@ -39,7 +38,9 @@ Fresh Install          Existing Database (v2-v42)      Existing Database (v43+)
 | `teamarr/database/schema.sql` | Authoritative schema for fresh installs AND the reference for reconciliation |
 | `teamarr/database/checkpoint_v43.py` | Consolidates v2-v43 into single operation |
 | `teamarr/database/reconciliation.py` | Compares real DB columns against `schema.sql`, adds any that are missing |
-| `teamarr/database/connection.py` | `_run_migrations()` orchestrates everything |
+| `teamarr/database/connection.py` | `init_db()` startup orchestration |
+| `teamarr/database/migrations/pre.py` | Structural pre-migrations (renames, table rebuilds) |
+| `teamarr/database/migrations/versioned.py` | `_run_migrations()` + versioned data migrations |
 
 ## How It Works
 
@@ -69,7 +70,7 @@ Since v2.4.0, reconciliation handles missing columns automatically. Just edit `s
 CREATE TABLE settings (
     ...
     my_new_setting TEXT DEFAULT 'value',  -- Added
-    schema_version INTEGER DEFAULT 73
+    schema_version INTEGER DEFAULT 87
 );
 ```
 
@@ -86,18 +87,18 @@ When the change requires transforming data (not just adding a column), use a ver
 1. **Bump `schema_version` DEFAULT** in `schema.sql`:
 
    ```sql
-   schema_version INTEGER DEFAULT 73  -- was 72
+   schema_version INTEGER DEFAULT 88  -- was 87
    ```
 
 2. **Add a migration block** after the checkpoint call in `_run_migrations()`:
 
    ```python
-   # v72: Transform my_field from legacy format
-   if current_version < 72:
+   # v85: Transform my_field from legacy format
+   if current_version < 85:
        conn.execute("UPDATE settings SET my_field = ... WHERE my_field = ...")
-       conn.execute("UPDATE settings SET schema_version = 72 WHERE id = 1")
-       logger.info("[MIGRATE] Schema upgraded to version 72")
-       current_version = 72
+       conn.execute("UPDATE settings SET schema_version = 85 WHERE id = 1")
+       logger.info("[MIGRATE] Schema upgraded to version 85")
+       current_version = 85
    ```
 
    Column additions that pair with the data change can use `_add_column_if_not_exists` inside the block as a safety net for tests that call `_run_migrations` directly — reconciliation will also pick them up on real startups.
@@ -113,42 +114,12 @@ When the change requires transforming data (not just adding a column), use a ver
 
 ### Pattern C — Table rebuild (CHECK constraint changes)
 
-For changes SQLite can't do via ALTER (e.g., tightening a CHECK constraint), use a pre-migration that backs up the table, drops it, and lets `executescript` recreate it from `schema.sql`. See `_migrate_settings_for_v65` in `connection.py` for the pattern.
+For changes SQLite can't do via ALTER (e.g., tightening a CHECK constraint), use a pre-migration that backs up the table, drops it, and lets `executescript` recreate it from `schema.sql`. See `_migrate_settings_for_v65` in `migrations/pre.py` for the pattern.
 
 ## Best Practices
 
-### Use Idempotent Operations
-
-```python
-# Safe to run multiple times
-_add_column_if_not_exists(conn, "table", "col", "TYPE DEFAULT val")
-
-# Safe INSERT
-conn.execute("INSERT OR IGNORE INTO sports (code, name) VALUES ('x', 'X')")
-
-# Safe UPDATE
-conn.execute("UPDATE t SET col = 'new' WHERE col IS NULL")
-```
-
-### Check Before Operating
-
-```python
-if _table_exists(conn, "my_table"):
-    columns = _get_table_columns(conn, "my_table")
-    if "target_col" in columns:
-        conn.execute("UPDATE my_table SET target_col = ...")
-```
-
-### Avoid Non-Constant Defaults
-
-```python
-# BAD: SQLite can't add CURRENT_TIMESTAMP default
-_add_column_if_not_exists(conn, "t", "created", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-
-# GOOD: Add with NULL, populate separately
-_add_column_if_not_exists(conn, "t", "created", "TIMESTAMP")
-conn.execute("UPDATE t SET created = CURRENT_TIMESTAMP WHERE created IS NULL")
-```
+- Use idempotent operations (`_add_column_if_not_exists`, `INSERT OR IGNORE`, `UPDATE ... WHERE col IS NULL`) — see Key Principles above.
+- Avoid non-constant defaults: SQLite can't `ALTER TABLE ADD COLUMN` with `DEFAULT CURRENT_TIMESTAMP`; add the column as NULL and populate with a separate `UPDATE`.
 
 ## Available Helper Functions
 
@@ -159,40 +130,24 @@ conn.execute("UPDATE t SET created = CURRENT_TIMESTAMP WHERE created IS NULL")
 | `_get_table_columns(conn, table)` | Get column names as set |
 | `_index_exists(conn, name)` | Check if index exists |
 
-## When to Create a New Checkpoint
-
-Consider a new checkpoint when:
-- 15-20+ migrations accumulated since last checkpoint
-- Major schema restructure planned
-- Migration code becoming unwieldy
-
-To create:
-1. Copy `checkpoint_v43.py` to `checkpoint_vXX.py`
-2. Update all schema definitions to match current `schema.sql`
-3. Update `connection.py` to use new checkpoint
-4. Old checkpoint can be removed (or kept for users on very old versions)
-
 ## Pre-Migrations
 
-Some schema changes need to happen **before** the checkpoint runs (e.g., renaming columns that the checkpoint references). These are handled by dedicated functions called before `apply_checkpoint_v43()`:
+Some schema changes need to happen **before** the checkpoint runs (e.g., renaming columns that the checkpoint references). These live in `teamarr/database/migrations/pre.py` and run via `run_pre_migrations()`:
 
 | Function | Purpose |
 |----------|---------|
 | `_rename_league_id_column_if_needed` | Renames legacy `league_id` column |
-| `_add_league_alias_column_if_needed` | Adds `league_alias` column |
-| `_add_gracenote_category_column_if_needed` | Adds `gracenote_category` column |
-| `_add_logo_url_dark_column_if_needed` | Adds `logo_url_dark` column |
-| `_add_series_slug_pattern_column_if_needed` | Adds `series_slug_pattern` column |
-| `_add_fallback_columns_if_needed` | Adds `fallback_provider` and `fallback_league_id` |
-| `_add_tsdb_tier_column_if_needed` | Adds `tsdb_tier` for TSDB free/premium classification |
 | `_migrate_exception_keywords_columns` | Restructures exception keyword storage |
-| `_migrate_settings_for_v65` | Channel lifecycle overhaul (v62) |
+| `_migrate_settings_for_v65` | Settings table rebuild (channel lifecycle overhaul) |
+| `_migrate_detection_keywords_check` | Rebuilds detection_keywords for a new CHECK constraint |
+| `_migrate_stream_match_cache_check` | Rebuilds stream_match_cache for a new CHECK constraint |
 
+(Column additions that used to be pre-migrations are now handled by schema reconciliation.)
 Pre-migrations are idempotent and only modify the schema if the target column/table doesn't already exist.
 
 ## Schema Reconciliation (v2.4.0+)
 
-`reconcile_schema()` runs on every startup after the checkpoint and before `_run_migrations()`. It:
+`reconcile_schema()` runs on every startup after the structural pre-migrations and before `_run_migrations()` (which itself calls the checkpoint internally — so reconciliation runs **before** the checkpoint). It:
 
 1. Builds an **in-memory reference database** from `schema.sql`.
 2. For each real table (except `sqlite_sequence`), compares its columns to the reference.
@@ -206,25 +161,11 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 74** (32 incremental migrations since checkpoint)
+**Current schema version: 84** (32 migration blocks across the 41 versions since the checkpoint — not every version number has a block)
 
 | Version | Type | Description |
 |---------|------|-------------|
 | 2 | Base | Initial V2 schema |
 | 3-42 | Consolidated | Merged into checkpoint_v43 |
 | 43 | Checkpoint | Checkpoint baseline |
-| 44-71 | Incremental | Individual migrations in `connection.py` |
-
-## Troubleshooting
-
-### "no such column" during migration
-Add column existence check before UPDATE operations.
-
-### Migration runs but nothing changes
-Verify `schema_version` is being updated in the migration.
-
-### Fresh install has wrong version
-Update `schema_version` default in `schema.sql`.
-
-### User reports partial state
-The checkpoint handles this - it fills in missing pieces idempotently.
+| 44-84 | Incremental | Individual migrations in `migrations/versioned.py` |

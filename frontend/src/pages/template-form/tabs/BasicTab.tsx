@@ -3,7 +3,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { TabProps } from "../types"
 
-export function BasicTab({ formData, setFormData, fieldRefs, setLastFocusedField, resolveTemplate: _resolveTemplate }: TabProps) {
+// fieldRefs aliased to a *Ref name so the React Compiler recognizes it as a
+// ref and allows the ref-callback mutation (its ref detection is name-based).
+export function BasicTab({ formData, setFormData, fieldRefs: fieldRefsRef, setLastFocusedField }: TabProps) {
   return (
     <div className="space-y-6">
       {/* Template Name */}
@@ -17,7 +19,7 @@ export function BasicTab({ formData, setFormData, fieldRefs, setLastFocusedField
             <Input
               id="name"
               ref={(el) => {
-                if (fieldRefs) fieldRefs.current["name"] = el
+                if (fieldRefsRef) fieldRefsRef.current["name"] = el
               }}
               value={formData.name}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}

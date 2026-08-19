@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { api } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,7 +16,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { Loader2, Tv, Eye, Plus, AlertCircle, Info, Check } from "lucide-react"
+import { LoaderCircle, Tv, Eye, Plus, CircleAlert, Info, Check } from "lucide-react"
 import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
 
 // Types
@@ -92,6 +92,7 @@ export function EventGroupImport() {
   const [showBulkModal, setShowBulkModal] = useState(false)
   const [bulkStreamTimezone, setBulkStreamTimezone] = useState<string | null>(null)
   const [bulkEnabled, setBulkEnabled] = useState(true)
+  const [bulkNameMatch, setBulkNameMatch] = useState(true)
   const [bulkTeamStreams, setBulkTeamStreams] = useState(false)
   const [bulkEPGMatch, setBulkEPGMatch] = useState(false)
   const [bulkImporting, setBulkImporting] = useState(false)
@@ -224,6 +225,7 @@ export function EventGroupImport() {
         settings: {
           stream_timezone: bulkStreamTimezone,
           enabled: bulkEnabled,
+          name_match_enabled: bulkNameMatch,
           team_streams_enabled: bulkTeamStreams,
           epg_match_enabled: bulkEPGMatch,
         },
@@ -252,6 +254,7 @@ export function EventGroupImport() {
   const openBulkModal = () => {
     setBulkStreamTimezone(null)
     setBulkEnabled(true)
+    setBulkNameMatch(true)
     setShowBulkModal(true)
   }
 
@@ -269,11 +272,11 @@ export function EventGroupImport() {
 
         {accountsQuery.isLoading ? (
           <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : accountsQuery.error ? (
           <div className="p-4 text-center">
-            <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+            <CircleAlert className="h-8 w-8 text-destructive mx-auto mb-2" />
             <p className="text-sm text-destructive">Connection failed</p>
             <p className="text-xs text-muted-foreground mt-1">
               Check Dispatcharr settings
@@ -366,7 +369,7 @@ export function EventGroupImport() {
                     disabled={groupsQuery.isFetching}
                   >
                     {groupsQuery.isFetching ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
                     ) : (
                       "Reload"
                     )}
@@ -385,7 +388,7 @@ export function EventGroupImport() {
             <div className="flex-1 overflow-y-auto p-4 pb-20">
               {groupsQuery.isLoading ? (
                 <div className="flex items-center justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : groupsQuery.error ? (
                 <div className="text-center text-destructive p-8">
@@ -522,7 +525,7 @@ export function EventGroupImport() {
           <div className="flex-1 overflow-hidden flex flex-col">
             {streamsQuery.isLoading ? (
               <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
+                <LoaderCircle className="h-6 w-6 animate-spin" />
               </div>
             ) : streamsQuery.error ? (
               <div className="text-center text-destructive p-8">
@@ -595,6 +598,18 @@ export function EventGroupImport() {
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Stream name matching</Label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Switch
+                      checked={bulkNameMatch}
+                      onCheckedChange={setBulkNameMatch}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {bulkNameMatch ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Team stream source</Label>
                   <div className="flex items-center gap-2 h-9">
                     <Switch
@@ -647,7 +662,7 @@ export function EventGroupImport() {
             >
               {bulkImporting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
                   Importing...
                 </>
               ) : (

@@ -13,10 +13,8 @@ We satisfy these by:
 - Caching the season schedule in-process via TTLCache
 """
 import logging
-import threading
 
-import httpx
-
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -34,7 +32,7 @@ _TTL_TEAMS = 24 * 60 * 60   # 24 hours — 18 teams, never changes mid-season
 _TTL_STANDINGS = 6 * 60 * 60  # 6 hours — ladder updates once per round (~weekly)
 
 
-class SquiggleClient:
+class SquiggleClient(BaseHTTPClient):
     """Low-level Squiggle API client with in-process caching.
 
     Squiggle has no hard rate limits but requires caching and a proper
@@ -42,35 +40,15 @@ class SquiggleClient:
     in-process rather than making per-round or per-date API calls.
     """
 
+    PROVIDER = "squiggle"
+    LOG_TAG = "SQUIGGLE"
+
     def __init__(self, timeout: float = 15.0):
-        self._timeout = timeout
-        self._http: httpx.Client | None = None
-        self._lock = threading.Lock()
+        super().__init__(timeout=timeout, headers={"User-Agent": USER_AGENT})
         self._cache = TTLCache()
 
-    def _get_http(self) -> httpx.Client:
-        if self._http is None:
-            with self._lock:
-                if self._http is None:
-                    self._http = httpx.Client(
-                        timeout=self._timeout,
-                        headers={"User-Agent": USER_AGENT},
-                    )
-        return self._http
-
     def _get(self, params: dict) -> dict | None:
-        url = BASE_URL
-        try:
-            resp = self._get_http().get(url, params=params)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "[SQUIGGLE] HTTP %d for %s params=%s", e.response.status_code, url, params
-            )
-        except Exception as e:
-            logger.warning("[SQUIGGLE] Request failed params=%s: %s", params, e)
-        return None
+        return self._request_json(BASE_URL, params, label=str(params.get("q", "api")))
 
     def get_teams(self) -> list[dict]:
         """Fetch all 18 AFL teams. Cached for 24 hours."""

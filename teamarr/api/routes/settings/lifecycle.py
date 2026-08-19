@@ -2,13 +2,21 @@
 
 from fastapi import APIRouter, HTTPException, status
 
+from teamarr.consumers.scheduler import (
+    restart_scheduler_sub_task,
+    start_lifecycle_scheduler,
+    stop_lifecycle_scheduler,
+)
 from teamarr.database import get_db
+from teamarr.dispatcharr import get_dispatcharr_client
+from teamarr.services import create_scheduler_service
 
 from .models import (
     LifecycleSettingsModel,
     SchedulerSettingsModel,
     SchedulerSettingsUpdate,
     SchedulerStatusResponse,
+    to_model,
 )
 
 router = APIRouter()
@@ -27,14 +35,7 @@ def get_lifecycle_settings():
     with get_db() as conn:
         settings = get_lifecycle_settings(conn)
 
-    return LifecycleSettingsModel(
-        channel_create_timing=settings.channel_create_timing,
-        channel_delete_timing=settings.channel_delete_timing,
-        channel_pre_buffer_minutes=settings.channel_pre_buffer_minutes,
-        channel_post_buffer_minutes=settings.channel_post_buffer_minutes,
-        channel_range_start=settings.channel_range_start,
-        channel_range_end=settings.channel_range_end,
-    )
+    return to_model(LifecycleSettingsModel, settings)
 
 
 @router.put("/settings/lifecycle", response_model=LifecycleSettingsModel)
@@ -86,14 +87,7 @@ def update_lifecycle_settings(update: LifecycleSettingsModel):
     with get_db() as conn:
         settings = get_lifecycle_settings(conn)
 
-    return LifecycleSettingsModel(
-        channel_create_timing=settings.channel_create_timing,
-        channel_delete_timing=settings.channel_delete_timing,
-        channel_pre_buffer_minutes=settings.channel_pre_buffer_minutes,
-        channel_post_buffer_minutes=settings.channel_post_buffer_minutes,
-        channel_range_start=settings.channel_range_start,
-        channel_range_end=settings.channel_range_end,
-    )
+    return to_model(LifecycleSettingsModel, settings)
 
 
 # =============================================================================
@@ -109,12 +103,7 @@ def get_scheduler_settings():
     with get_db() as conn:
         settings = get_scheduler_settings(conn)
 
-    return SchedulerSettingsModel(
-        enabled=settings.enabled,
-        interval_minutes=settings.interval_minutes,
-        channel_reset_enabled=settings.channel_reset_enabled,
-        channel_reset_cron=settings.channel_reset_cron,
-    )
+    return to_model(SchedulerSettingsModel, settings)
 
 
 @router.put("/settings/scheduler", response_model=SchedulerSettingsModel)
@@ -122,10 +111,6 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
     """Update scheduler settings."""
     from croniter import croniter
 
-    from teamarr.consumers.scheduler import (
-        start_lifecycle_scheduler,
-        stop_lifecycle_scheduler,
-    )
     from teamarr.database.settings import (
         get_scheduler_settings,
         update_scheduler_settings,
@@ -164,25 +149,18 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
 
     # Restart channel reset sub-scheduler if its settings changed
     if update.channel_reset_enabled is not None or update.channel_reset_cron is not None:
-        from teamarr.consumers.scheduler import restart_scheduler_sub_task
 
         restart_scheduler_sub_task("channel_reset")
 
     with get_db() as conn:
         settings = get_scheduler_settings(conn)
 
-    return SchedulerSettingsModel(
-        enabled=settings.enabled,
-        interval_minutes=settings.interval_minutes,
-        channel_reset_enabled=settings.channel_reset_enabled,
-        channel_reset_cron=settings.channel_reset_cron,
-    )
+    return to_model(SchedulerSettingsModel, settings)
 
 
 @router.get("/scheduler/status", response_model=SchedulerStatusResponse)
 def get_scheduler_status():
     """Get current scheduler status."""
-    from teamarr.services import create_scheduler_service
 
     scheduler_service = create_scheduler_service(get_db)
     status = scheduler_service.get_status()
@@ -198,8 +176,6 @@ def get_scheduler_status():
 @router.post("/scheduler/run")
 def trigger_scheduler_run() -> dict:
     """Manually trigger a scheduler run."""
-    from teamarr.dispatcharr import get_dispatcharr_client
-    from teamarr.services import create_scheduler_service
 
     try:
         client = get_dispatcharr_client(get_db)

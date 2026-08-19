@@ -12,6 +12,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from teamarr.channelsdvr.client import ChannelsDVRClient
+from teamarr.dispatcharr import EPGManager, M3UManager
+from teamarr.dispatcharr.factory import DispatcharrConnection
+from teamarr.dispatcharr.managers import ChannelManager
+from teamarr.emby.client import EmbyClient
+from teamarr.jellyfin.client import JellyfinClient
+from teamarr.services import create_default_service
+from teamarr.services.sports_data import flush_shared_cache
+from teamarr.services.stream_ordering import StreamOrderingService
+from teamarr.utilities import call_metrics
+from teamarr.utilities.xmltv import merge_xmltv_content
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +78,23 @@ class GenerationResult:
     # For stats run tracking
     run_id: int | None = None
 
+    # Wall-clock seconds per generation phase (persisted to run stats so any
+    # two runs — local or live — can be compared phase-by-phase).
+    phase_timings: dict = field(default_factory=dict)
+
+
+class _PhaseTimer:
+    """Records elapsed wall time between phase marks."""
+
+    def __init__(self, timings: dict):
+        self._timings = timings
+        self._last = time.time()
+
+    def mark(self, phase: str) -> None:
+        now = time.time()
+        self._timings[phase] = round(self._timings.get(phase, 0.0) + (now - self._last), 2)
+        self._last = now
+
 
 # Type alias for progress callback
 # (phase: str, percent: int, message: str, current: int, total: int, item_name: str) -> None
@@ -76,6 +105,7 @@ def run_full_generation(
     db_factory: Callable[[], Any],
     dispatcharr_client: Any | None = None,
     progress_callback: ProgressCallback | None = None,
+    manual: bool = False,
 ) -> GenerationResult:
     """Run the complete EPG generation workflow.
 
@@ -95,6 +125,9 @@ def run_full_generation(
         db_factory: Factory function returning database connection context manager
         dispatcharr_client: Optional DispatcharrClient for Dispatcharr operations
         progress_callback: Optional callback for progress updates
+        manual: True for user-triggered runs (API endpoints); bypasses the
+            live-event #1 stream pin (#232) so a wrong pin can be corrected.
+            Scheduled runs leave this False.
 
     Returns:
         GenerationResult with all stats and sub-task results
@@ -135,9 +168,6 @@ def run_full_generation(
         get_epg_settings,
     )
     from teamarr.database.stats import create_run
-    from teamarr.dispatcharr import EPGManager
-    from teamarr.services import create_default_service
-    from teamarr.utilities.xmltv import merge_xmltv_content
 
     result = GenerationResult()
     result.started_at = time.time()
@@ -204,7 +234,7 @@ def run_full_generation(
             return result
 
     # Import cancellation helpers
-    from teamarr.api.generation_status import cancel_generation, is_cancellation_requested
+    from teamarr.consumers.generation_status import cancel_generation, is_cancellation_requested
 
     def check_cancelled():
         """Check if cancellation was requested and raise if so."""
@@ -219,6 +249,12 @@ def run_full_generation(
         current_generation = increment_generation_counter(db_factory)
         logger.info("[GENERATION] Starting with cache generation %d", current_generation)
 
+        # Reset the run-scoped provider-call counter so this run's totals start
+        # clean. Runs are serialized (duplicate runs are rejected above), so a
+        # single process-global counter is safe. Snapshot is persisted at run end.
+
+        call_metrics.reset()
+
         # Create a single SportsDataService instance to share across all processing
         # This ensures the event cache stays warm throughout the entire run
         # (Previously each consumer created its own service with a cold cache)
@@ -230,11 +266,14 @@ def run_full_generation(
             dispatcharr_settings = get_dispatcharr_settings(conn)
             display_settings = get_display_settings(conn)
 
+        timer = _PhaseTimer(result.phase_timings)
+
         # Step 1: Refresh M3U accounts (0-5%)
         check_cancelled()
         update_progress("init", 3, "Refreshing M3U accounts...")
         if dispatcharr_client:
             result.m3u_refresh = _refresh_m3u_accounts(db_factory, dispatcharr_client)
+        timer.mark("m3u_refresh")
 
         # Step 2: Process all teams (5-50%) - 45% budget
         check_cancelled()
@@ -260,6 +299,7 @@ def run_full_generation(
         team_result = process_all_teams(db_factory=db_factory, progress_callback=team_progress)
         result.teams_processed = team_result.teams_processed
         result.teams_programmes = team_result.total_programmes
+        timer.mark("teams")
 
         # Transition message - teams done, starting groups
         logger.info("[GENERATION] Sending transition message: teams -> groups")
@@ -300,11 +340,10 @@ def run_full_generation(
         # Compute external occupied channel numbers once for the entire run (#146)
         # This prevents Teamarr from assigning numbers already used by non-Teamarr channels
         from teamarr.consumers.lifecycle import compute_external_occupied
-        from teamarr.dispatcharr.factory import DispatcharrConnection as _DC
 
         _channel_mgr = (
             dispatcharr_client.channels
-            if isinstance(dispatcharr_client, _DC)
+            if isinstance(dispatcharr_client, DispatcharrConnection)
             else None
         )
         external_occupied = compute_external_occupied(db_factory, _channel_mgr)
@@ -325,6 +364,7 @@ def run_full_generation(
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes
         result.programmes_total = result.teams_programmes + result.groups_programmes
+        timer.mark("groups")
 
         # Step 3b: Global channel reassignment (if enabled)
         check_cancelled()
@@ -332,13 +372,15 @@ def run_full_generation(
             db_factory, dispatcharr_client, update_progress,
             external_occupied=external_occupied,
         )
+        timer.mark("channel_reassign")
 
         # Step 3b: Apply stream ordering rules to all channels (93-95%)
         check_cancelled()
         update_progress("ordering", 93, "Applying stream ordering rules...")
         result.stream_ordering = _apply_stream_ordering(
-            db_factory, dispatcharr_client, update_progress
+            db_factory, dispatcharr_client, update_progress, manual=manual
         )
+        timer.mark("stream_ordering")
 
         # Step 4: Merge and save XMLTV (95-96%)
         check_cancelled()
@@ -367,6 +409,7 @@ def run_full_generation(
             logger.info(
                 "[GENERATION] EPG written to %s (%s bytes)", output_path, f"{result.file_size:,}"
             )
+        timer.mark("xmltv_save")
 
         # Create lifecycle service once for steps 5-6
         # Reuse shared_service to maintain cache warmth
@@ -382,7 +425,6 @@ def run_full_generation(
         check_cancelled()
         if dispatcharr_client and dispatcharr_settings.epg_id:
             update_progress("dispatcharr", 96, "Refreshing Dispatcharr EPG...")
-            from teamarr.dispatcharr.factory import DispatcharrConnection
 
             raw_client = (
                 dispatcharr_client.client
@@ -405,197 +447,87 @@ def run_full_generation(
             result.epg_association = lifecycle_service.associate_epg_with_channels(
                 dispatcharr_settings.epg_id
             )
+        timer.mark("dispatcharr_epg_refresh")
 
-        # Step 5b: Emby Live TV guide refresh
+        # Steps 5b-5d: media-server guide refreshes — Emby, Jellyfin, and
+        # Channels DVR servers ALL refresh in parallel (#471). They are
+        # independent HTTP targets; per-server failures are isolated and
+        # non-blocking, and one slow/offline server never delays the rest.
         check_cancelled()
         try:
-            from teamarr.database.settings import get_emby_settings
+            from teamarr.database.settings import (
+                get_channelsdvr_settings,
+                get_emby_settings,
+                get_jellyfin_settings,
+            )
 
             with db_factory() as conn:
                 emby_settings = get_emby_settings(conn)
-
-            if emby_settings.enabled and emby_settings.url:
-                update_progress("emby", 97, "Refreshing Emby guide...")
-                from teamarr.emby.client import EmbyClient
-
-                client = EmbyClient(
-                    base_url=emby_settings.url,
-                    username=emby_settings.username or "",
-                    password=emby_settings.password or "",
-                    api_key=emby_settings.api_key,
-                )
-
-                def on_emby_progress(pct):
-                    update_progress(
-                        "emby", 97, f"Refreshing Emby guide... {pct:.0f}%"
-                    )
-
-                emby_result = client.trigger_guide_refresh(
-                    timeout=300,
-                    on_progress=on_emby_progress,
-                    cancellation_check=is_cancellation_requested,
-                )
-                result.emby_refresh = emby_result
-                if emby_result.get("success"):
-                    logger.info(
-                        "[EMBY] Guide refresh completed in %.1fs",
-                        emby_result.get("duration", 0),
-                    )
-                else:
-                    logger.warning(
-                        "[EMBY] Guide refresh failed: %s",
-                        emby_result.get("message"),
-                    )
-        except Exception as e:
-            logger.warning("[EMBY] Guide refresh failed (non-blocking): %s", e)
-            result.emby_refresh = {"success": False, "error": str(e)}
-
-        # Step 5c: Jellyfin Live TV guide refresh
-        check_cancelled()
-        try:
-            from teamarr.database.settings import get_jellyfin_settings
-
-            with db_factory() as conn:
                 jellyfin_settings = get_jellyfin_settings(conn)
-
-            if jellyfin_settings.enabled and jellyfin_settings.url:
-                update_progress("jellyfin", 97, "Refreshing Jellyfin guide...")
-                from teamarr.jellyfin.client import JellyfinClient
-
-                client = JellyfinClient(
-                    base_url=jellyfin_settings.url,
-                    username=jellyfin_settings.username or "",
-                    password=jellyfin_settings.password or "",
-                    api_key=jellyfin_settings.api_key,
-                )
-
-                def on_jellyfin_progress(pct):
-                    update_progress(
-                        "jellyfin", 97, f"Refreshing Jellyfin guide... {pct:.0f}%"
-                    )
-
-                jellyfin_result = client.trigger_guide_refresh(
-                    timeout=300,
-                    on_progress=on_jellyfin_progress,
-                    cancellation_check=is_cancellation_requested,
-                )
-                result.jellyfin_refresh = jellyfin_result
-                if jellyfin_result.get("success"):
-                    logger.info(
-                        "[JELLYFIN] Guide refresh completed in %.1fs",
-                        jellyfin_result.get("duration", 0),
-                    )
-                else:
-                    logger.warning(
-                        "[JELLYFIN] Guide refresh failed: %s",
-                        jellyfin_result.get("message"),
-                    )
-        except Exception as e:
-            logger.warning("[JELLYFIN] Guide refresh failed (non-blocking): %s", e)
-            result.jellyfin_refresh = {"success": False, "error": str(e)}
-
-        # Step 5d: Channels DVR M3U source + XMLTV lineup refresh
-        # CDVR splits channel-list and EPG into two providers — without the
-        # lineup PUT the channels are fresh but the guide is stale.
-        check_cancelled()
-        try:
-            from teamarr.database.settings import get_channelsdvr_settings
-
-            with db_factory() as conn:
                 channelsdvr_settings = get_channelsdvr_settings(conn)
 
-            if not (channelsdvr_settings.enabled and channelsdvr_settings.url):
-                pass  # integration off or unconfigured — nothing to do
-            else:
-                from teamarr.channelsdvr.client import ChannelsDVRClient
+            jobs: list[tuple[str, Any]] = []
+            if emby_settings.enabled:
+                jobs += [("emby", s) for s in emby_settings.servers if s.url]
+            if jellyfin_settings.enabled:
+                jobs += [("jellyfin", s) for s in jellyfin_settings.servers if s.url]
+            if channelsdvr_settings.enabled:
+                jobs += [("channelsdvr", s) for s in channelsdvr_settings.servers if s.url]
 
-                # The client derives lineup_id as "XMLTV-<source_name>" when no
-                # lineup is explicitly configured, so the guide refresh fires
-                # even if the user only set the M3U source.
-                client = ChannelsDVRClient(
-                    base_url=channelsdvr_settings.url,
-                    source_name=channelsdvr_settings.source_name or "",
-                    lineup_id=channelsdvr_settings.lineup_id or "",
+            if jobs:
+                update_progress(
+                    "media_servers", 97,
+                    f"Refreshing {len(jobs)} media server(s) in parallel...",
+                )
+                outcomes = _run_media_server_refreshes(
+                    jobs, update_progress, is_cancellation_requested
                 )
 
-                if not (client.source_name or client.lineup_id):
-                    logger.warning(
-                        "[CHANNELSDVR] Enabled but no source name or XMLTV lineup "
-                        "configured — nothing to refresh. Set a source name "
-                        "(and optionally a lineup) in Settings."
-                    )
-                else:
-                    # Sequence the two refreshes on real evidence: wait for the
-                    # M3U channel-list refresh to actually finish before firing
-                    # the guide PUT, so the guide doesn't index against a stale
-                    # channel list. Both waits poll CDVR /log (see client docs).
-                    if client.source_name:
-                        update_progress(
-                            "channelsdvr", 97, "Refreshing Channels DVR channels..."
-                        )
-                        m3u_result = client.trigger_m3u_refresh(
-                            timeout=60, wait_for_completion=bool(client.lineup_id)
-                        )
-                        result.channelsdvr_refresh = m3u_result
-                        if m3u_result.get("success"):
-                            logger.info(
-                                "[CHANNELSDVR] M3U refresh triggered in %.1fs (completion: %s)",
-                                m3u_result.get("duration", 0),
-                                m3u_result.get("completed", "not awaited"),
-                            )
-                        else:
-                            logger.warning(
-                                "[CHANNELSDVR] M3U refresh failed: %s",
-                                m3u_result.get("message"),
-                            )
+                emby_results = [
+                    {"server": label, **o["guide"]}
+                    for kind, label, o in outcomes
+                    if kind == "emby" and o.get("guide") is not None
+                ]
+                if emby_results:
+                    result.emby_refresh = {
+                        "success": all(r.get("success") for r in emby_results),
+                        "servers": emby_results,
+                    }
 
-                    if client.lineup_id:
-                        if client.lineup_derived:
-                            logger.info(
-                                "[CHANNELSDVR] No XMLTV lineup configured; "
-                                "derived '%s' from source '%s'",
-                                client.lineup_id,
-                                client.source_name,
-                            )
-                        update_progress(
-                            "channelsdvr", 97, "Refreshing Channels DVR guide..."
-                        )
-                        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
-                        result.channelsdvr_epg_refresh = epg_result
-                        if not epg_result.get("success"):
-                            logger.warning(
-                                "[CHANNELSDVR] EPG refresh failed: %s",
-                                epg_result.get("message"),
-                            )
-                        else:
-                            verification = epg_result.get("verification") or {}
-                            status = verification.get("status")
-                            if status == "no_fetch":
-                                logger.warning(
-                                    "[CHANNELSDVR] EPG refresh accepted but guide "
-                                    "'%s' was not re-fetched — guide may be stale",
-                                    client.lineup_id,
-                                )
-                            else:
-                                logger.info(
-                                    "[CHANNELSDVR] EPG refresh for lineup '%s' in "
-                                    "%.1fs (verification: %s)",
-                                    client.lineup_id,
-                                    epg_result.get("duration", 0),
-                                    status or "not verified",
-                                )
-                    else:
-                        logger.warning(
-                            "[CHANNELSDVR] Skipping EPG/guide refresh: no XMLTV "
-                            "lineup configured and none could be derived (set a "
-                            "source name so the lineup can be inferred). The "
-                            "guide will stay stale until refreshed manually."
-                        )
+                jellyfin_results = [
+                    {"server": label, **o["guide"]}
+                    for kind, label, o in outcomes
+                    if kind == "jellyfin" and o.get("guide") is not None
+                ]
+                if jellyfin_results:
+                    result.jellyfin_refresh = {
+                        "success": all(r.get("success") for r in jellyfin_results),
+                        "servers": jellyfin_results,
+                    }
+
+                cdvr_m3u = [
+                    {"server": label, **o["m3u"]}
+                    for kind, label, o in outcomes
+                    if kind == "channelsdvr" and o.get("m3u") is not None
+                ]
+                if cdvr_m3u:
+                    result.channelsdvr_refresh = {
+                        "success": all(r.get("success") for r in cdvr_m3u),
+                        "servers": cdvr_m3u,
+                    }
+                cdvr_epg = [
+                    {"server": label, **o["epg"]}
+                    for kind, label, o in outcomes
+                    if kind == "channelsdvr" and o.get("epg") is not None
+                ]
+                if cdvr_epg:
+                    result.channelsdvr_epg_refresh = {
+                        "success": all(r.get("success") for r in cdvr_epg),
+                        "servers": cdvr_epg,
+                    }
         except Exception as e:
-            logger.warning(
-                "[CHANNELSDVR] Refresh failed (non-blocking): %s", e
-            )
-            result.channelsdvr_refresh = {"success": False, "error": str(e)}
+            logger.warning("[MEDIA_SERVERS] Refresh failed (non-blocking): %s", e)
+        timer.mark("media_server_refresh")
 
         # Step 6: Process scheduled deletions (98-99%)
         check_cancelled()
@@ -613,6 +545,7 @@ def run_full_generation(
         except Exception as e:
             logger.warning("[GENERATION] Scheduled deletions failed: %s", e)
             result.deletions = {"error": str(e)}
+        timer.mark("deletions")
 
         # Step 7: Run reconciliation + cleanup (99-100%)
         check_cancelled()
@@ -629,6 +562,7 @@ def run_full_generation(
         except Exception as e:
             logger.warning("[RECONCILE] Failed: %s", e)
             result.reconciliation = {"error": str(e)}
+        timer.mark("reconciliation")
 
         # Step 7b: Stale source-group detection (lylt.1) — flag enabled groups
         # whose Dispatcharr M3U source channel-group no longer exists.
@@ -642,6 +576,7 @@ def run_full_generation(
             _run_stream_audit(db_factory, dispatcharr_client)
         except Exception as e:
             logger.warning("[STREAM_AUDIT] Post-generation audit failed: %s", e)
+        timer.mark("stream_audit")
 
         # Cleanup (history, old runs, unused logos — part of step 7)
         check_cancelled()
@@ -649,6 +584,8 @@ def run_full_generation(
         cleanup_results = _run_cleanup_tasks(db_factory, dispatcharr_client, update_progress)
         result.cleanup = cleanup_results["history"]
         result.logo_cleanup = cleanup_results["logos"]
+        timer.mark("cleanup")
+        logger.info("[GENERATION] Phase timings (s): %s", result.phase_timings)
 
         # Update and save stats run
         _finalize_stats_run(
@@ -663,7 +600,6 @@ def run_full_generation(
         update_progress("complete", 100, "Generation complete")
 
         # Flush the service cache to SQLite for immediate persistence
-        from teamarr.services.sports_data import flush_shared_cache
 
         flushed = flush_shared_cache()
         if flushed > 0:
@@ -713,10 +649,207 @@ def run_full_generation(
     return result
 
 
+def _run_media_server_refreshes(
+    jobs: list[tuple[str, Any]],
+    update_progress: Callable[..., None],
+    is_cancellation_requested: Callable[[], bool],
+) -> list[tuple[str, str, dict]]:
+    """Run every media-server refresh job concurrently (#471).
+
+    Each job is (kind, server) with kind in emby/jellyfin/channelsdvr.
+    Returns (kind, label, outcome) triples where outcome carries "guide"
+    (Emby/Jellyfin) or "m3u"/"epg" (Channels DVR) result dicts. A job that
+    raises yields a failed "guide" outcome — never an exception.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    results: list[tuple[str, str, dict]] = []
+    with ThreadPoolExecutor(
+        max_workers=min(8, len(jobs)), thread_name_prefix="media-refresh"
+    ) as pool:
+        futures = {
+            pool.submit(
+                _refresh_one_media_server,
+                kind,
+                server,
+                update_progress,
+                is_cancellation_requested,
+            ): (kind, server)
+            for kind, server in jobs
+        }
+        for future, (kind, server) in futures.items():
+            label = server.name or server.url or ""
+            try:
+                results.append((kind, label, future.result()))
+            except Exception as e:  # noqa: BLE001 — per-server isolation
+                logger.warning(
+                    "[%s] %s: refresh failed (non-blocking): %s",
+                    kind.upper(),
+                    label,
+                    e,
+                )
+                results.append(
+                    (kind, label, {"guide": {"success": False, "error": str(e)}})
+                )
+    return results
+
+
+def _refresh_one_media_server(
+    kind: str,
+    server: Any,
+    update_progress: Callable[..., None],
+    is_cancellation_requested: Callable[[], bool],
+) -> dict:
+    """Refresh a single media server (runs on a worker thread)."""
+    label = server.name or server.url or ""
+
+    if kind == "channelsdvr":
+        m3u_res, epg_res = _refresh_channelsdvr_server(
+            server,
+            label,
+            lambda msg: update_progress("channelsdvr", 97, f"{msg} ({label})"),
+        )
+        return {"m3u": m3u_res, "epg": epg_res}
+
+    title = "Emby" if kind == "emby" else "Jellyfin"
+    client_cls = EmbyClient if kind == "emby" else JellyfinClient
+    client = client_cls(
+        base_url=server.url,
+        username=server.username or "",
+        password=server.password or "",
+        api_key=server.api_key,
+    )
+
+    update_progress(kind, 97, f"Refreshing {title} guide... ({label})")
+
+    def on_progress(pct):
+        update_progress(kind, 97, f"Refreshing {title} guide... ({label}) {pct:.0f}%")
+
+    guide_result = client.trigger_guide_refresh(
+        timeout=300,
+        on_progress=on_progress,
+        cancellation_check=is_cancellation_requested,
+    )
+    if guide_result.get("success"):
+        logger.info(
+            "[%s] %s: guide refresh completed in %.1fs",
+            kind.upper(),
+            label,
+            guide_result.get("duration", 0),
+        )
+    else:
+        logger.warning(
+            "[%s] %s: guide refresh failed: %s",
+            kind.upper(),
+            label,
+            guide_result.get("message"),
+        )
+    return {"guide": guide_result}
+
+
+def _refresh_channelsdvr_server(
+    server: Any,
+    label: str,
+    progress: Callable[[str], None],
+) -> tuple[dict | None, dict | None]:
+    """Refresh one Channels DVR server's M3U source, then its XMLTV lineup.
+
+    Sequences the two refreshes on real evidence: waits for the M3U
+    channel-list refresh to actually finish before firing the guide PUT,
+    so the guide doesn't index against a stale channel list. Both waits
+    poll CDVR /log (see client docs).
+
+    Returns (m3u_result, epg_result); either is None when that phase
+    didn't run (no source / no lineup configured).
+    """
+    # The client derives lineup_id as "XMLTV-<source_name>" when no lineup
+    # is explicitly configured, so the guide refresh fires even if the
+    # user only set the M3U source.
+    client = ChannelsDVRClient(
+        base_url=server.url,
+        source_name=server.source_name or "",
+        lineup_id=server.lineup_id or "",
+    )
+
+    if not (client.source_name or client.lineup_id):
+        logger.warning(
+            "[CHANNELSDVR] %s: enabled but no source name or XMLTV lineup "
+            "configured — nothing to refresh. Set a source name "
+            "(and optionally a lineup) in Settings.",
+            label,
+        )
+        return None, None
+
+    m3u_result: dict | None = None
+    if client.source_name:
+        progress("Refreshing Channels DVR channels...")
+        m3u_result = client.trigger_m3u_refresh(
+            timeout=60, wait_for_completion=bool(client.lineup_id)
+        )
+        if m3u_result.get("success"):
+            logger.info(
+                "[CHANNELSDVR] %s: M3U refresh triggered in %.1fs (completion: %s)",
+                label,
+                m3u_result.get("duration", 0),
+                m3u_result.get("completed", "not awaited"),
+            )
+        else:
+            logger.warning(
+                "[CHANNELSDVR] %s: M3U refresh failed: %s",
+                label,
+                m3u_result.get("message"),
+            )
+
+    epg_result: dict | None = None
+    if client.lineup_id:
+        if client.lineup_derived:
+            logger.info(
+                "[CHANNELSDVR] %s: no XMLTV lineup configured; derived '%s' from source '%s'",
+                label,
+                client.lineup_id,
+                client.source_name,
+            )
+        progress("Refreshing Channels DVR guide...")
+        epg_result = client.trigger_epg_refresh(timeout=60, verify=True)
+        if not epg_result.get("success"):
+            logger.warning(
+                "[CHANNELSDVR] %s: EPG refresh failed: %s",
+                label,
+                epg_result.get("message"),
+            )
+        else:
+            verification = epg_result.get("verification") or {}
+            status = verification.get("status")
+            if status == "no_fetch":
+                logger.warning(
+                    "[CHANNELSDVR] %s: EPG refresh accepted but guide '%s' "
+                    "was not re-fetched — guide may be stale",
+                    label,
+                    client.lineup_id,
+                )
+            else:
+                logger.info(
+                    "[CHANNELSDVR] %s: EPG refresh for lineup '%s' in %.1fs (verification: %s)",
+                    label,
+                    client.lineup_id,
+                    epg_result.get("duration", 0),
+                    status or "not verified",
+                )
+    else:
+        logger.warning(
+            "[CHANNELSDVR] %s: skipping EPG/guide refresh: no XMLTV lineup "
+            "configured and none could be derived (set a source name so the "
+            "lineup can be inferred). The guide will stay stale until "
+            "refreshed manually.",
+            label,
+        )
+
+    return m3u_result, epg_result
+
+
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:
     """Refresh M3U accounts for all event groups."""
     from teamarr.database.groups import get_all_groups
-    from teamarr.dispatcharr import M3UManager
 
     result = {"refreshed": 0, "skipped": 0, "failed": 0, "account_ids": []}
 
@@ -735,7 +868,6 @@ def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any
     result["account_ids"] = list(account_ids)
 
     # Refresh all accounts in parallel
-    from teamarr.dispatcharr.factory import DispatcharrConnection
 
     raw_client = (
         dispatcharr_client.client
@@ -830,12 +962,26 @@ def _sync_global_channels(
     update_progress: Callable,
     external_occupied: set[int] | None = None,
 ) -> None:
-    """Reassign channel numbers globally by sort priority."""
-    from teamarr.database.channel_numbers import reassign_all_channels
+    """Reassign channel numbers globally by sort priority.
+
+    This is the single authoritative pass that pushes numbers to Dispatcharr.
+    In sticky (gap/strict) modes it places only new channels, unless the daily
+    reset window has arrived (should_run_channel_reset) — then it re-grids
+    everything once.
+    """
+    from teamarr.database.channel_numbers import (
+        reassign_all_channels,
+        should_run_channel_reset,
+    )
 
     update_progress("groups", 94, "Reassigning channels globally by sport/league priority...")
     with db_factory() as conn:
-        global_result = reassign_all_channels(conn, external_occupied=external_occupied)
+        force_reset = should_run_channel_reset(conn)
+        if force_reset:
+            update_progress("groups", 94, "Daily channel re-layout (low-traffic reset)...")
+        global_result = reassign_all_channels(
+            conn, external_occupied=external_occupied, force_reset=force_reset
+        )
         if global_result["channels_moved"] == 0:
             return
 
@@ -872,8 +1018,17 @@ def _apply_stream_ordering(
     db_factory: Callable[[], Any],
     dispatcharr_client: Any | None,
     update_progress: Callable,
+    manual: bool = False,
 ) -> dict:
-    """Apply stream ordering rules to all managed channels."""
+    """Apply stream ordering rules to all managed channels.
+
+    ``manual`` (#232): a user-triggered run bypasses the live-event #1 pin —
+    the escape hatch when the pinned stream is wrong. Scheduled runs keep the
+    top slot of an in-window event's channel stable so a re-gen can't displace
+    the stream a viewer is currently watching; rule-truth priorities are still
+    persisted, so normal ordering resumes on the first post-event push.
+    """
+    from teamarr.consumers.lifecycle import is_channel_event_live
     from teamarr.database.channels import (
         get_all_managed_channels,
         get_channel_streams,
@@ -881,7 +1036,6 @@ def _apply_stream_ordering(
         update_stream_priority,
     )
     from teamarr.database.settings import get_stream_ordering_settings
-    from teamarr.services.stream_ordering import StreamOrderingService
 
     reorder_result: dict = {
         "channels_reordered": 0,
@@ -911,8 +1065,6 @@ def _apply_stream_ordering(
             # Setup Dispatcharr channel manager once if available
             channel_mgr = None
             if dispatcharr_client:
-                from teamarr.dispatcharr.factory import DispatcharrConnection
-                from teamarr.dispatcharr.managers import ChannelManager
 
                 raw_client = (
                     dispatcharr_client.client
@@ -928,6 +1080,16 @@ def _apply_stream_ordering(
                 streams = get_channel_streams(conn, channel.id)
                 if not streams:
                     continue
+
+                # Live-event #1 pin (#232): capture the currently-pushed top
+                # stream BEFORE priorities are recomputed, so the push below
+                # can keep it in the top slot mid-broadcast.
+                pinned_top: int | None = None
+                if not manual and is_channel_event_live(
+                    channel.event_date, channel.scheduled_delete_at
+                ):
+                    pre_order = get_ordered_stream_ids(conn, channel.id)
+                    pinned_top = pre_order[0] if pre_order else None
 
                 reordered_count = 0
                 if ordering_service:
@@ -951,6 +1113,24 @@ def _apply_stream_ordering(
                     channel_mgr and channel.dispatcharr_channel_id
                 ):
                     ordered_ids = get_ordered_stream_ids(conn, channel.id)
+                    if (
+                        pinned_top is not None
+                        and ordered_ids
+                        and ordered_ids[0] != pinned_top
+                        and pinned_top in ordered_ids
+                    ):
+                        # Event is live: rule-truth priorities are in the DB,
+                        # but the push keeps the current #1 on top so the
+                        # stream being watched isn't displaced mid-broadcast.
+                        ordered_ids.remove(pinned_top)
+                        ordered_ids.insert(0, pinned_top)
+                        logger.info(
+                            "[STREAM_AUDIT] pin: ch='%s' (d_id=%s) live event — "
+                            "kept stream %d at #1 (#232)",
+                            channel.channel_name,
+                            channel.dispatcharr_channel_id,
+                            pinned_top,
+                        )
                     if has_windowed:
                         reorder_result["windows_synced"] += 1
                     logger.info(
@@ -1009,7 +1189,6 @@ def _run_stream_audit(
     assignments. This is diagnostic-only — no changes are made.
     """
     from teamarr.database.channels import get_all_managed_channels, get_ordered_stream_ids
-    from teamarr.dispatcharr.managers.channels import ChannelManager
 
     if not dispatcharr_client:
         return
@@ -1157,6 +1336,27 @@ def _finalize_stats_run(
     stats_run.extra_metrics["teams_processed"] = result.teams_processed
     stats_run.extra_metrics["groups_processed"] = result.groups_processed
     stats_run.extra_metrics["file_written"] = result.file_written
+
+    # Post-processing enforcement outcomes (iua3.7): one record per step with
+    # ok/count/error, so a silently failing enforcement step shows up in the
+    # run summary instead of only in warning logs.
+    if getattr(group_result, "enforcement", None):
+        stats_run.extra_metrics["enforcement"] = [
+            step.to_dict() for step in group_result.enforcement
+        ]
+
+    # Provider HTTP call volume for this run (kbbk). The per-endpoint breakdown
+    # and total let the run summary surface calls-per-channel, making a
+    # call-volume regression (the #254 refetch bug class) visible. Snapshot the
+    # run-scoped counter that was reset at run start.
+
+    stats_run.extra_metrics["provider_calls"] = call_metrics.snapshot()
+    stats_run.extra_metrics["provider_calls_total"] = call_metrics.total()
+
+    # Per-phase wall time so run-to-run comparisons (and perf regressions)
+    # are visible in the run summary instead of requiring log archaeology.
+    if result.phase_timings:
+        stats_run.extra_metrics["phase_timings"] = dict(result.phase_timings)
 
     with db_factory() as conn:
         active_channels = get_all_managed_channels(conn, include_deleted=False)

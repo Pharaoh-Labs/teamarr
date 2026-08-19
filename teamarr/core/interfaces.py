@@ -62,6 +62,10 @@ class LeagueMappingSource(Protocol):
         """
         ...
 
+    def get_league_sport(self, league_code: str) -> str | None:
+        """Get canonical sport code for a league (any provider)."""
+        ...
+
     def register_discovered_league(
         self,
         league_code: str,

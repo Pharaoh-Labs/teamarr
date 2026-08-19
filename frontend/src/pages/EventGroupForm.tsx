@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from "react"
-import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useState, useMemo, useCallback, useEffect } from "react"
+import { useNavigate, useParams, useSearchParams } from "react-router"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, FlaskConical } from "lucide-react"
+import { ArrowLeft, LoaderCircle, FlaskConical } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { SaveButton } from "@/components/ui/save-button"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
@@ -25,6 +26,7 @@ import { LeaguePicker } from "@/components/LeaguePicker"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { getLeagues } from "@/api/teams"
 import { getSubscription } from "@/api/subscription"
+import { previewGroupPattern, type GroupPatternPreview } from "@/api/groups"
 import type { SoccerFollowedTeam } from "@/api/types"
 
 export function EventGroupForm() {
@@ -86,7 +88,10 @@ export function EventGroupForm() {
     queryKey: ["leagues"],
     queryFn: () => getLeagues(),
   })
-  const allLeagues = leaguesData?.leagues || []
+  // useMemo (not `|| []`): a fresh fallback array would destabilize every
+  // downstream hook dependency (react-hooks/exhaustive-deps).
+  const leaguesList = leaguesData?.leagues
+  const allLeagues = useMemo(() => leaguesList ?? [], [leaguesList])
 
   const matchGlobal = useCallback(async () => {
     setMatchingGlobal(true)
@@ -142,8 +147,14 @@ export function EventGroupForm() {
     custom_regex_event_name_enabled: formData.custom_regex_event_name_enabled ?? false,
   }), [formData])
 
-  // Populate form when editing
-  useEffect(() => {
+  // Populate form when editing (render-time "adjust state when props change"
+  // pattern — see DispatcharrOutputSettings.tsx).
+  const [syncedGroup, setSyncedGroup] = useState<{
+    group: typeof group
+    allLeagues: typeof allLeagues
+  } | null>(null)
+  if (syncedGroup?.group !== group || syncedGroup?.allLeagues !== allLeagues) {
+    setSyncedGroup({ group, allLeagues })
     if (group) {
       setFormData({
         name: group.name,
@@ -156,6 +167,11 @@ export function EventGroupForm() {
         m3u_group_name: group.m3u_group_name,
         m3u_account_id: group.m3u_account_id,
         m3u_account_name: group.m3u_account_name,
+        // Group-name pattern binding (#450)
+        m3u_group_name_pattern: group.m3u_group_name_pattern
+          ? pythonToJs(group.m3u_group_name_pattern)
+          : null,
+        m3u_group_name_pattern_enabled: group.m3u_group_name_pattern_enabled,
         // Stream filtering
         stream_include_regex: group.stream_include_regex ? pythonToJs(group.stream_include_regex) : null,
         stream_include_regex_enabled: group.stream_include_regex_enabled,
@@ -179,6 +195,7 @@ export function EventGroupForm() {
         custom_regex_event_name: group.custom_regex_event_name ? pythonToJs(group.custom_regex_event_name) : null,
         custom_regex_event_name_enabled: group.custom_regex_event_name_enabled,
         skip_builtin_filter: group.skip_builtin_filter,
+        name_match_enabled: group.name_match_enabled,
         team_streams_enabled: group.team_streams_enabled,
         epg_match_enabled: group.epg_match_enabled,
         // Team filtering
@@ -215,7 +232,7 @@ export function EventGroupForm() {
         setOverrideFollowedTeams(group.subscription_soccer_followed_teams || [])
       }
     }
-  }, [group, allLeagues])
+  }
 
   // `overrides` lets callers (e.g. Apply-to-Form) save with freshly-merged
   // patterns without waiting for the async setFormData to flush.
@@ -226,9 +243,20 @@ export function EventGroupForm() {
       return
     }
 
+    // At least one matching type must be enabled (name defaults ON when undefined)
+    if (
+      (data.name_match_enabled ?? true) === false &&
+      !data.team_streams_enabled &&
+      !data.epg_match_enabled
+    ) {
+      toast.error("Enable at least one matching type")
+      return
+    }
+
     try {
       const submitData = {
         ...data,
+        m3u_group_name_pattern: data.m3u_group_name_pattern ? jsToPython(data.m3u_group_name_pattern) : null,
         stream_include_regex: data.stream_include_regex ? jsToPython(data.stream_include_regex) : null,
         stream_exclude_regex: data.stream_exclude_regex ? jsToPython(data.stream_exclude_regex) : null,
         custom_regex_teams: data.custom_regex_teams ? jsToPython(data.custom_regex_teams) : null,
@@ -264,6 +292,9 @@ export function EventGroupForm() {
           if (shouldClear(group.stream_timezone, data.stream_timezone)) {
             updateData.clear_stream_timezone = true
           }
+          if (shouldClear(group.m3u_group_name_pattern, data.m3u_group_name_pattern)) {
+            updateData.clear_m3u_group_name_pattern = true
+          }
           // Clear subscription override when switching back to global
           if (useGlobalSubscription && group.subscription_leagues !== null) {
             updateData.clear_subscription_leagues = true
@@ -295,9 +326,7 @@ export function EventGroupForm() {
 
   if (isEdit && isLoadingGroup) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <Spinner size="lg" className="py-12" />
     )
   }
 
@@ -360,13 +389,26 @@ export function EventGroupForm() {
 
                 <div className="flex items-center gap-2">
                   <Switch
+                    checked={formData.name_match_enabled ?? true}
+                    onCheckedChange={(checked) => setFormData({ ...formData, name_match_enabled: checked })}
+                  />
+                  <div>
+                    <Label className="font-normal">Stream name matching</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Match streams named after a specific event (e.g. "Bills vs Dolphins").
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
                     checked={formData.team_streams_enabled || false}
                     onCheckedChange={(checked) => setFormData({ ...formData, team_streams_enabled: checked })}
                   />
                   <div>
-                    <Label className="font-normal">Team stream source</Label>
+                    <Label className="font-normal">Team matching</Label>
                     <p className="text-xs text-muted-foreground">
-                      Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
+                      Match a team's branded stream (e.g. "NHL | Maple Leafs") to that team's games.
                     </p>
                   </div>
                 </div>
@@ -377,9 +419,9 @@ export function EventGroupForm() {
                     onCheckedChange={(checked) => setFormData({ ...formData, epg_match_enabled: checked })}
                   />
                   <div>
-                    <Label className="font-normal">EPG program matching</Label>
+                    <Label className="font-normal">EPG matching</Label>
                     <p className="text-xs text-muted-foreground">
-                      Match static-named linear channels (e.g. "ESPN", "NBA1") to events using Dispatcharr's program guide, and time-share one stream across multiple event channels near game time. Requires the global EPG matching switch (Settings &rarr; EPG). Built-in filtering is bypassed for this group.
+                      Match static linear channels (e.g. "ESPN", "NBA1") to events via EPG.
                     </p>
                   </div>
                 </div>
@@ -425,6 +467,8 @@ export function EventGroupForm() {
                 </div>
               )}
 
+              <PatternBindingFields formData={formData} setFormData={setFormData} />
+
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.enabled}
@@ -435,13 +479,26 @@ export function EventGroupForm() {
 
               <div className="flex items-center gap-2">
                 <Switch
+                  checked={formData.name_match_enabled ?? true}
+                  onCheckedChange={(checked) => setFormData({ ...formData, name_match_enabled: checked })}
+                />
+                <div>
+                  <Label className="font-normal">Stream name matching</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Match streams named after a specific event (e.g. "Bills vs Dolphins").
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
                   checked={formData.team_streams_enabled || false}
                   onCheckedChange={(checked) => setFormData({ ...formData, team_streams_enabled: checked })}
                 />
                 <div>
-                  <Label className="font-normal">Team stream source</Label>
+                  <Label className="font-normal">Team matching</Label>
                   <p className="text-xs text-muted-foreground">
-                    Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events where that team plays. Built-in stream filtering is automatically bypassed for this group.
+                    Match a team's branded stream (e.g. "NHL | Maple Leafs") to that team's games.
                   </p>
                 </div>
               </div>
@@ -452,9 +509,9 @@ export function EventGroupForm() {
                   onCheckedChange={(checked) => setFormData({ ...formData, epg_match_enabled: checked })}
                 />
                 <div>
-                  <Label className="font-normal">EPG program matching</Label>
+                  <Label className="font-normal">EPG matching</Label>
                   <p className="text-xs text-muted-foreground">
-                    Match static-named linear channels (e.g. "ESPN", "NBA1") to events using Dispatcharr's program guide, and time-share one stream across multiple event channels near game time. Requires the global EPG matching switch (Settings &rarr; EPG). Built-in filtering is bypassed for this group.
+                    Match static linear channels (e.g. "ESPN", "NBA1") to events via EPG.
                   </p>
                 </div>
               </div>
@@ -507,7 +564,7 @@ export function EventGroupForm() {
                         onClick={matchGlobal}
                         disabled={matchingGlobal}
                       >
-                        {matchingGlobal ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                        {matchingGlobal ? <LoaderCircle className="h-3 w-3 mr-1 animate-spin" /> : null}
                         Match Global
                       </Button>
                     </div>
@@ -571,7 +628,7 @@ export function EventGroupForm() {
                       }}
                     />
                     <span className="text-sm font-normal">
-                      Use default team filter (set in Global Defaults above)
+                      Use default team filter (set in Global Defaults on the Subscriptions page)
                     </span>
                   </label>
 
@@ -662,11 +719,11 @@ export function EventGroupForm() {
                           }
                         />
                         <span className="text-sm">
-                          Include all playoff games (bypass team filter for postseason)
+                          Include all playoff &amp; All-Star games (bypass team filter for postseason and All-Star events)
                         </span>
                       </label>
                       <p className="text-xs text-muted-foreground -mt-1 ml-6">
-                        Unchecked uses the global default from Settings
+                        Unchecked uses the global default from Global Defaults on the Subscriptions page
                       </p>
 
                       <div className="space-y-1 mt-2">
@@ -865,7 +922,7 @@ export function EventGroupForm() {
                           onChange={(e) =>
                             setFormData({ ...formData, custom_regex_date: e.target.value || null })
                           }
-                          placeholder="(?<date>\d{1,2}/\d{1,2})"
+                          placeholder="(?<day>\d{1,2})/(?<month>\d{1,2})/(?<year>\d{2,4})"
                           disabled={!formData.custom_regex_date_enabled}
                           className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
                         />
@@ -1044,7 +1101,7 @@ export function EventGroupForm() {
                           onChange={(e) =>
                             setFormData({ ...formData, custom_regex_date: e.target.value || null })
                           }
-                          placeholder="(?<date>\d{1,2}/\d{1,2})"
+                          placeholder="(?<day>\d{1,2})/(?<month>\d{1,2})/(?<year>\d{2,4})"
                           disabled={!formData.custom_regex_date_enabled}
                           className={cn("font-mono text-sm", !formData.custom_regex_date_enabled && "opacity-50")}
                         />
@@ -1158,6 +1215,93 @@ export function EventGroupForm() {
         initialPatterns={currentPatterns}
         onApply={handlePatternsApply}
       />
+    </div>
+  )
+}
+
+/** Group-name pattern binding (#450): opt-in regex binding to live M3U group
+ * names so provider renames (which spawn a new Dispatcharr group id) re-bind
+ * automatically. Shows a debounced live "matches N groups" preview. */
+function PatternBindingFields({
+  formData,
+  setFormData,
+}: {
+  formData: EventGroupCreate
+  setFormData: React.Dispatch<React.SetStateAction<EventGroupCreate>>
+}) {
+  const enabled = formData.m3u_group_name_pattern_enabled || false
+  const pattern = formData.m3u_group_name_pattern || ""
+  // Result keyed by the pattern it was computed for: staleness and "checking"
+  // are derived at render time, so the effect never calls setState
+  // synchronously (react-hooks/set-state-in-effect).
+  const [result, setResult] = useState<{
+    forPattern: string
+    data: GroupPatternPreview | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (!enabled || !pattern.trim()) return
+    const handle = setTimeout(async () => {
+      try {
+        setResult({ forPattern: pattern, data: await previewGroupPattern(jsToPython(pattern)) })
+      } catch {
+        setResult({ forPattern: pattern, data: null })
+      }
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [enabled, pattern])
+
+  const preview = result?.forPattern === pattern ? result.data : undefined
+  const previewLoading = enabled && !!pattern.trim() && preview === undefined
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={enabled}
+          onCheckedChange={(checked) =>
+            setFormData((prev) => ({ ...prev, m3u_group_name_pattern_enabled: checked }))
+          }
+        />
+        <div>
+          <Label className="font-normal">Bind by name pattern</Label>
+          <p className="text-xs text-muted-foreground">
+            Match M3U groups by a name regex instead of the pinned group above —
+            survives provider renames like "EPL (MW1)" → "EPL (MW2)".
+          </p>
+        </div>
+      </div>
+      {enabled && (
+        <div className="space-y-1 pl-10">
+          <Input
+            value={pattern}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                m3u_group_name_pattern: e.target.value || null,
+              }))
+            }
+            placeholder={String.raw`e.g. EPL \(MW\d+\)`}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            {!pattern.trim()
+              ? "Enter a pattern to see which live M3U groups it matches."
+              : previewLoading || preview === undefined
+                ? "Checking…"
+                : preview === null
+                  ? "Preview unavailable (Dispatcharr not reachable)."
+                  : !preview.valid
+                    ? "Invalid regular expression."
+                    : preview.total === 0
+                      ? "Matches no live M3U groups — the source would be treated as stale."
+                      : `Matches ${preview.total} group${preview.total === 1 ? "" : "s"}: ${preview.matches
+                          .slice(0, 5)
+                          .map((m) => m.name)
+                          .join(", ")}${preview.total > 5 ? ", …" : ""}`}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

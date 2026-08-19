@@ -11,17 +11,19 @@ Reuses:
 
 import logging
 from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from datetime import datetime, timedelta
 
 from teamarr.consumers.event_epg import POSTPONED_LABEL, is_event_postponed
 from teamarr.core import Event, Programme, TeamStats
 from teamarr.services.sports_data import SportsDataService
+from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, Odds, TeamChannelContext, TemplateContext
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import create_filler_chunks
 
-from .types import ConditionalFillerTemplate, FillerTemplate
+from .types import FillerTemplate, legacy_conditional_to_rows
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +47,12 @@ class EventFillerConfig:
     postgame_template: FillerTemplate = field(
         default_factory=lambda: FillerTemplate(title="", description="")
     )
-    postgame_conditional: ConditionalFillerTemplate = field(
-        default_factory=ConditionalFillerTemplate
-    )
+
+    # Condition rows per register (#420) — hehg.2 row shape, evaluated
+    # against the channel's event (it IS the reference game for both
+    # registers on the event path).
+    pregame_rows: list[dict] = field(default_factory=list)
+    postgame_rows: list[dict] = field(default_factory=list)
 
     # XMLTV categories applied to filler programmes only (#199). Independent
     # from the parent template's event categories — empty list means no
@@ -157,10 +162,16 @@ class EventFillerGenerator:
 
         # Generate pregame filler
         if config.pregame_enabled and epg_start < event_start:
+            pregame_template = self._select_register_template(
+                base=config.pregame_template,
+                rows=config.pregame_rows,
+                context=context,
+                refresh=False,
+            )
             pregame_programmes = self._generate_filler(
                 start_dt=epg_start,
                 end_dt=event_start,
-                template=config.pregame_template,
+                template=pregame_template,
                 context=context,
                 channel_id=channel_id,
                 config=config,
@@ -178,8 +189,13 @@ class EventFillerGenerator:
 
         # Generate postgame filler
         if config.postgame_enabled and event_end < epg_end:
-            # Select postgame template (conditional if enabled)
-            postgame_template = self._select_postgame_template(event, config)
+            # Select postgame template (condition rows, refreshed status)
+            postgame_template = self._select_register_template(
+                base=config.postgame_template,
+                rows=config.postgame_rows,
+                context=context,
+                refresh=True,
+            )
 
             postgame_programmes = self._generate_filler(
                 start_dt=event_end,
@@ -239,10 +255,16 @@ class EventFillerGenerator:
 
         # Generate pregame filler
         if config.pregame_enabled and epg_start < event_start:
+            pregame_template = self._select_register_template(
+                base=config.pregame_template,
+                rows=config.pregame_rows,
+                context=context,
+                refresh=False,
+            )
             pregame_programmes = self._generate_filler(
                 start_dt=epg_start,
                 end_dt=event_start,
-                template=config.pregame_template,
+                template=pregame_template,
                 context=context,
                 channel_id=channel_id,
                 config=config,
@@ -256,7 +278,12 @@ class EventFillerGenerator:
 
         # Generate postgame filler
         if config.postgame_enabled and event_end < epg_end:
-            postgame_template = self._select_postgame_template(event, config)
+            postgame_template = self._select_register_template(
+                base=config.postgame_template,
+                rows=config.postgame_rows,
+                context=context,
+                refresh=True,
+            )
 
             postgame_programmes = self._generate_filler(
                 start_dt=event_end,
@@ -305,9 +332,16 @@ class EventFillerGenerator:
         for chunk_start, chunk_end in chunks:
             # Resolve templates
             title = self._resolver.resolve(template.title, context)
+            # Provider-copy primaries (e.g. {game_recap}) may resolve empty
+            # before the copy exists — walk the cascade until one renders
+            # non-empty (winning row → other matching rows → base).
             description = ""
-            if template.description:
-                description = self._resolver.resolve(template.description, context)
+            for candidate in (template.description, *template.description_fallbacks):
+                if not candidate:
+                    continue
+                description = self._resolver.resolve(candidate, context)
+                if description.strip():
+                    break
             subtitle = None
             if template.subtitle:
                 subtitle = self._resolver.resolve(template.subtitle, context)
@@ -447,53 +481,50 @@ class EventFillerGenerator:
                 self._stats_cache[cache_key] = None
         return self._stats_cache[cache_key]
 
-    def _select_postgame_template(self, event: Event, config: EventFillerConfig) -> FillerTemplate:
-        """Select appropriate postgame template based on game status.
+    def _select_register_template(
+        self,
+        base: FillerTemplate,
+        rows: list[dict],
+        context: TemplateContext,
+        refresh: bool,
+    ) -> FillerTemplate:
+        """Select the register's template, applying condition rows (#420).
 
-        Supports conditional descriptions (final vs in-progress).
-        Fetches fresh status from provider for accurate final detection.
+        Rows evaluate against the channel's event (the reference game for
+        both registers on the event path) with per-field highest-priority-
+        match-wins semantics. The description keeps its cascade-on-empty
+        (tvnk.14, #329): winning row → other matching rows → base register.
+        ``refresh=True`` (postgame) overlays fresh provider status onto the
+        event first so finality-dependent rows see accurate state.
         """
-        if not config.postgame_conditional.enabled:
-            return config.postgame_template
+        if not rows:
+            return base
 
-        # Refresh event status for accurate final detection
-        is_final = self._check_event_final(event)
-
-        if is_final and config.postgame_conditional.description_final:
-            return FillerTemplate(
-                title=config.postgame_template.title,
-                subtitle=config.postgame_template.subtitle,
-                description=config.postgame_conditional.description_final,
-                art_url=config.postgame_template.art_url,
-            )
-        elif not is_final and config.postgame_conditional.description_not_final:
-            return FillerTemplate(
-                title=config.postgame_template.title,
-                subtitle=config.postgame_template.subtitle,
-                description=config.postgame_conditional.description_not_final,
-                art_url=config.postgame_template.art_url,
+        game_ctx = context.game_context
+        if refresh and game_ctx and game_ctx.event and self._service:
+            game_ctx = dc_replace(
+                game_ctx, event=self._service.refresh_event_status(game_ctx.event)
             )
 
-        return config.postgame_template
+        fields, runner_up_descriptions, _ = get_condition_selector().select_filler_fields(
+            rows, context, game_ctx
+        )
+        if not fields:
+            return base
 
-    def _check_event_final(self, event: Event) -> bool:
-        """Check if event is final, refreshing status from provider if needed.
+        description = fields.get("description") or base.description
+        fallbacks = list(runner_up_descriptions) if "description" in fields else []
+        if "description" in fields and base.description:
+            fallbacks.append(base.description)
+        fallbacks.extend(base.description_fallbacks)
 
-        Fetches fresh status via summary endpoint to get accurate final detection.
-        """
-        if not event:
-            return False
-
-        # Refresh event status from provider for accurate final detection
-        if self._service:
-            refreshed = self._service.refresh_event_status(event)
-        else:
-            refreshed = event
-
-        # Use unified final status check
-        from teamarr.utilities.event_status import is_event_final
-
-        return is_event_final(refreshed)
+        return FillerTemplate(
+            title=fields.get("title") or base.title,
+            subtitle=fields.get("subtitle") or base.subtitle,
+            description=description,
+            art_url=base.art_url,
+            description_fallbacks=fallbacks,
+        )
 
 
 def template_to_event_filler_config(template) -> EventFillerConfig:
@@ -507,11 +538,13 @@ def template_to_event_filler_config(template) -> EventFillerConfig:
     """
     # Build pregame template from fallback (no hardcoded defaults - schema provides them)
     pregame_fb = getattr(template, "pregame_fallback", None) or {}
+    pregame_fallback_desc = pregame_fb.get("description_fallback")
     pregame_template = FillerTemplate(
         title=pregame_fb.get("title", ""),
         subtitle=pregame_fb.get("subtitle"),
         description=pregame_fb.get("description", ""),
         art_url=pregame_fb.get("art_url"),
+        description_fallbacks=[pregame_fallback_desc] if pregame_fallback_desc else [],
     )
 
     # Build postgame template from fallback (no hardcoded defaults - schema provides them)
@@ -523,13 +556,11 @@ def template_to_event_filler_config(template) -> EventFillerConfig:
         art_url=postgame_fb.get("art_url"),
     )
 
-    # Postgame conditional
-    pg_cond = getattr(template, "postgame_conditional", None) or {}
-    postgame_conditional = ConditionalFillerTemplate(
-        enabled=pg_cond.get("enabled", False),
-        description_final=pg_cond.get("description_final"),
-        description_not_final=pg_cond.get("description_not_final"),
-    )
+    # Condition rows (#420); empty rows fall back to converting the legacy
+    # final/not-final conditional in memory (pre-cajd.4 UI still writes it).
+    postgame_rows = getattr(
+        template, "postgame_conditional_rows", None
+    ) or legacy_conditional_to_rows(getattr(template, "postgame_conditional", None))
 
     # Filler categories are independent from event categories (#199).
     filler_categories = getattr(template, "xmltv_filler_categories", None) or []
@@ -539,6 +570,7 @@ def template_to_event_filler_config(template) -> EventFillerConfig:
         pregame_template=pregame_template,
         postgame_enabled=getattr(template, "postgame_enabled", True),
         postgame_template=postgame_template,
-        postgame_conditional=postgame_conditional,
+        pregame_rows=getattr(template, "pregame_conditional_rows", None) or [],
+        postgame_rows=postgame_rows,
         xmltv_categories=filler_categories,
     )

@@ -34,6 +34,11 @@ class NormalizedStream:
 
     # Extracted metadata (may be None)
     extracted_date: date | None = None
+    # Whether the date's format is verified (#474): True for built-in
+    # extraction and for custom regex with declared (month/day/year groups)
+    # or learned formats; False when the date came from blind per-string
+    # format guessing. Unverified dates rank candidates instead of gating them.
+    extracted_date_trusted: bool = True
     extracted_time: time | None = None
     extracted_tz: str | None = None  # IANA timezone (e.g., 'America/New_York')
     league_hint: str | None = None
@@ -74,8 +79,54 @@ MOJIBAKE_PATTERNS = [
 ]
 
 
+def try_fix_double_encoded(text: str) -> str:
+    """Attempt to repair double-encoded UTF-8 text via a latin-1/utf-8 round trip.
+
+    Mojibake like "MÃ¼nchen" (for "München") typically happens when UTF-8
+    bytes get mis-decoded as latin-1 somewhere upstream (latin-1 is a
+    lossless 1:1 byte<->codepoint mapping, so no information is lost -- it
+    can be reversed). Reversing it means re-encoding the broken text back to
+    latin-1 bytes, then decoding those bytes as UTF-8.
+
+    This is intentionally conservative and safe to call on arbitrary,
+    possibly-already-correct text: if the round trip raises (the text wasn't
+    actually latin-1-of-utf8, e.g. legitimate "SÃO PAULO FC") or produces a
+    U+FFFD replacement character (a silently swallowed decode error), the
+    original text is returned unchanged rather than mangled. It is also
+    idempotent -- re-running it on already-correct text is a no-op, since
+    re-encoding proper unicode text as latin-1 generally fails or decoding
+    the result as UTF-8 does.
+
+    Args:
+        text: Potentially double-encoded text
+
+    Returns:
+        The repaired text, or the original text unchanged if the round trip
+        wasn't safely reversible.
+    """
+    if not text:
+        return text
+
+    try:
+        candidate = text.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+
+    if "�" in candidate:
+        return text
+
+    return candidate
+
+
 def fix_mojibake(text: str) -> str:
-    """Fix common mojibake patterns from double-encoded UTF-8.
+    """Fix mojibake (double-encoded UTF-8) in text.
+
+    Tries the generic, guarded latin-1/utf-8 round trip first
+    (``try_fix_double_encoded``), which covers any double-encoded script
+    (Nordic, Polish, etc.), not just the hard-coded patterns below. Falls
+    back to the hard-coded MOJIBAKE_PATTERNS replacements when the generic
+    round trip doesn't change anything, to preserve any prior behavior it
+    doesn't cover.
 
     Args:
         text: Potentially mojibake'd text
@@ -86,9 +137,10 @@ def fix_mojibake(text: str) -> str:
     if not text:
         return text
 
-    result = text
-    for pattern, replacement in MOJIBAKE_PATTERNS:
-        result = result.replace(pattern, replacement)
+    result = try_fix_double_encoded(text)
+    if result == text:
+        for pattern, replacement in MOJIBAKE_PATTERNS:
+            result = result.replace(pattern, replacement)
 
     if result != text:
         logger.debug("[MOJIBAKE] Fixed: '%s' -> '%s'", text[:40], result[:40])
@@ -199,18 +251,28 @@ def apply_city_translations(text: str) -> str:
 
 # Date patterns to extract and mask
 _MONTHS = r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
+# Abbrev or full month name, \b-anchored. Avoids the old `(Jan|...)[a-z]*`
+# which let "Mar" swallow "Marauders" -> mis-read as "Mar 30".
+_MONTH_NAMES = (
+    r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
+)
 DATE_PATTERNS = [
     # ISO format: 2026-01-09 (YYYY-MM-DD) - must be before MM/DD/YYYY pattern
     (r"\b(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})\b", "DATE_MASK_ISO"),
     # 12/31/25, 12/31/2025 (MM/DD/YY or MM/DD/YYYY)
     (r"\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})\b", "DATE_MASK"),
+    # 30 @ Jun - reversed day-@-month tail (some MiLB feeds). Masking removes the
+    # stray "@" so it can't beat " at " as the matchup separator. Month NAME
+    # required so real matchups ("LAL @ BOS") are untouched.
+    (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s*@\s*(?:{_MONTH_NAMES})\b", "DATE_MASK"),
     # 1/17, 12/31 (MM/DD without year) - infer year based on proximity to today
     # Must come after MM/DD/YYYY to avoid partial matches
     (r"\b(\d{1,2})[/\-](\d{1,2})\b", "DATE_MASK_NO_YEAR"),
     # 31 Dec, 31 December - check this BEFORE "Dec 31" to prefer "14 Jan" over "Jan 11"
-    (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTHS})[a-z]*\b", "DATE_MASK"),
+    (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:{_MONTH_NAMES})\b", "DATE_MASK"),
     # Dec 31, December 31 - use negative lookahead (?!:) to avoid matching "Jan 11:45pm"
-    (rf"\b({_MONTHS})[a-z]*\s+(\d{{1,2}})(?:st|nd|rd|th)?(?!:)\b", "DATE_MASK"),
+    (rf"\b(?:{_MONTH_NAMES})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?!:)\b", "DATE_MASK"),
 ]
 
 # Time patterns to extract and mask (with optional TZ suffix)
@@ -236,6 +298,24 @@ TIME_PATTERNS = [
 
 # Standalone TZ pattern (after time has been masked, e.g., "@ ET" at end)
 TZ_STANDALONE_PATTERN = rf"\s*@?\s*({_TZ_ABBREVS})\s*$"
+
+# Catchup/timeshift metadata some providers append to stream names (#495):
+#   "Dodgers x Yankees start:2026-07-19 17:35:00 stop:2026-07-20 00:48:20"
+# The start timestamp doubles as the stream's date/time, but the WHOLE tail has
+# to go before separator/team detection: generic masking replaces only the
+# first date+time, so the stop timestamp would survive and corrupt team
+# extraction ("Yankees start:" reads as a show-name prefix, leaving
+# team2="stop:2026-07-20 00:48:20").
+CATCHUP_START_PATTERN = re.compile(
+    r"\bstart\s*[:=]\s*(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::\d{2})?",
+    re.IGNORECASE,
+)
+# Stop timestamp may be truncated by provider name-length limits ("stop:20"),
+# so accept any digit-led date/time fragment after the label.
+CATCHUP_STOP_PATTERN = re.compile(
+    r"\bstop\s*[:=]\s*\d[\d/\-]*(?:[ T]\d{1,2}(?::\d{2}){0,2})?",
+    re.IGNORECASE,
+)
 
 # Map timezone abbreviations to IANA timezone names
 TZ_ABBREVIATION_MAP = {
@@ -357,13 +437,27 @@ def extract_and_mask_datetime(text: str) -> tuple[str, date | None, time | None,
     extracted_time = None
     extracted_tz = None
 
+    # Catchup metadata (#495): take date/time from the start timestamp, then
+    # strip both start and stop labels entirely.
+    catchup_match = CATCHUP_START_PATTERN.search(result)
+    if catchup_match:
+        try:
+            year, month, day, hour, minute = (int(g) for g in catchup_match.groups())
+            extracted_date = date(year, month, day)
+            extracted_time = time(hour, minute)
+        except ValueError:
+            pass
+        result = CATCHUP_START_PATTERN.sub(" ", result)
+    result = CATCHUP_STOP_PATTERN.sub(" ", result)
+
     # Extract and mask dates
     for pattern, mask in DATE_PATTERNS:
         match = re.search(pattern, result, re.IGNORECASE)
         if match:
             is_iso = mask == "DATE_MASK_ISO"
             no_year = mask == "DATE_MASK_NO_YEAR"
-            extracted_date = _parse_date_match(match, is_iso=is_iso, no_year=no_year)
+            if extracted_date is None:
+                extracted_date = _parse_date_match(match, is_iso=is_iso, no_year=no_year)
             result = re.sub(pattern, " DATE_MASK ", result, count=1, flags=re.IGNORECASE)
             break
 
@@ -371,7 +465,10 @@ def extract_and_mask_datetime(text: str) -> tuple[str, date | None, time | None,
     for pattern, mask in TIME_PATTERNS:
         match = re.search(pattern, result, re.IGNORECASE)
         if match:
-            extracted_time, extracted_tz = _parse_time_match(match)
+            parsed_time, parsed_tz = _parse_time_match(match)
+            if extracted_time is None:
+                extracted_time = parsed_time
+            extracted_tz = extracted_tz or parsed_tz
             result = re.sub(pattern, f" {mask} ", result, count=1, flags=re.IGNORECASE)
             break
 

@@ -2,26 +2,23 @@
 title: Home
 layout: home
 nav_order: 1
-docs_version: "2.3.0"
 ---
 
 <div style="text-align: center; margin-bottom: 2rem;">
-  <h1 style="margin-bottom: 0.5rem;">Teamarr</h1>
-  <img src="assets/images/logo.svg" alt="Teamarr" width="100" height="100" style="margin: 1rem 0;">
-  <p style="font-size: 1.25rem; color: #666;">Sports EPG Generator for Dispatcharr</p>
+  <img src="assets/images/teamarr_electric_blue.png" alt="Teamarr — Sports EPG Generator for Dispatcharr" width="340" style="margin: 1rem 0; border-radius: 12px;">
 </div>
 
 ## What is Teamarr?
 
-Teamarr is an add-on for [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) that generates enriched EPG for sports channels. While EPG generation can technically work standalone, Teamarr is designed for use alongside Dispatcharr.
+Teamarr is an add-on for [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) that generates enriched EPG for sports channels. It pulls rich sports data from providers (ESPN, TheSportsDB, HockeyTech, MLB Stats, NASCAR, Squiggle, and more) — schedules, venues, records, scores, standings, broadcasts — and uses it to manage your IPTV sports channels in Dispatcharr.
 
-Teamarr pulls rich sports data from providers (ESPN, TSDB, HockeyTech, etc.) - schedules, venues, records, scores, standings, broadcasts, and more - and uses it to manage your IPTV sports channels in Dispatcharr.
+The workflow is simple: point Teamarr at your IPTV stream groups, tell it which leagues you follow, and it matches streams to real sporting events, creates and manages channels in Dispatcharr, and generates the guide. It works with several kinds of stream source:
 
-**Two workflows:**
+- **Event streams** — ephemeral streams created for a single game (e.g. `NFL: Bills vs Dolphins`) that appear around game time and vanish afterward. Matched by stream name.
+- **Team streams** — persistent channels dedicated to one team (e.g. "New York Yankees"), matched to that team's scheduled events.
+- **Linear channels** — static-named channels (ESPN, FS1, TNT) whose game info lives in the program guide, not the stream name. Teamarr matches guide programs to events and time-shares the stream across event channels. See [EPG Program Matching](guide/matching/program-matching).
 
-- **Event-based** - Many IPTV providers offer sports through ephemeral streams created to serve a single game. These appear around game time (often the morning of, or a day before) and disappear after the event concludes (typically end of day or the following morning). Streams are typically organized into groups - either by league (NFL, NBA, NHL) or by source (ESPN+, DAZN, TSN+, FloSports). A group may contain events from a single sport or league, or intermixed events from multiple leagues and sports. As long as stream names contain enough information to match to real-world events (e.g., "NFL: Bills vs Dolphins" or "DAZN: Man City vs Arsenal"), these IPTV groups can be used as source groups in Teamarr.
-
-- **Team-based** - Some IPTV providers offer persistent channels dedicated to a single team (e.g., "New York Yankees", "LA Lakers"). These channels exist continuously but only have programming when that team plays. Teamarr looks up the team's schedule and populates the guide with their upcoming games.
+There is also a secondary **Team EPG** mode that generates a schedule-based guide for team channels you don't manage through the main workflow — see [Team EPG](guide/epg/teams).
 
 **Example:**
 
@@ -41,22 +38,22 @@ EPG:     Kansas City Chiefs @ Philadelphia Eagles
 
 **What Teamarr doesn't do:**
 
-- **Linear/traditional TV channels** - Teamarr does not support 24/7 channels like TSN, ESPN, or Sportsnet where game info lives in EPG metadata, not the stream name. Matching them would require parsing external EPG sources and correlating schedules - a fundamentally different architecture.
-
-- **Create team-based channels** - Team channels are static and already exist in your IPTV provider. Teamarr only generates EPG for them.
-
-- **Match incomplete stream names** - If your IPTV provider doesn't include enough information in the stream name to identify the event (e.g., just "NBA 1" with no teams listed), Teamarr cannot match it.
+- **Create team-based channels** — Team channels are static and already exist in your IPTV provider. Teamarr only generates EPG for them.
+- **Match incomplete event stream names** — If a stream name has no team or event information (e.g. just `NBA 1`) *and* no program-guide data to match against, Teamarr cannot identify the event.
 
 ## Features
 
-- **350+ leagues across 13 sports** - Football, basketball, hockey, baseball, soccer (~250 leagues via ESPN discovery), cricket, lacrosse, MMA, boxing, rugby, volleyball, Australian football, and softball. 127 pre-configured leagues plus dynamically discovered soccer leagues.
-- **207 template variables** - Customize channel names and EPG with team records, scores, venues, broadcasts, standings, playoff status, and more
-- **Flexible matching** - Aliases, fuzzy matching, and configurable stream ordering to handle inconsistent IPTV naming
-- **Channel groups & profiles** - Use existing Dispatcharr groups/profiles or create them dynamically using variables and wildcards
-- **Smart sorting** - Configurable stream and channel sorting modes based on priority rules
-- **Scheduled automation** - Cron-based EPG generation and channel lifecycle management
+- **172 pre-configured leagues across 15 sports**, plus ~228 more soccer leagues discovered live from ESPN — football, basketball, hockey, baseball, soccer, cricket, lacrosse, MMA, boxing, rugby, volleyball, Australian football, softball, racing (F1, NASCAR, IndyCar, IMSA, WEC), and tennis (ATP, WTA)
+- **Custom leagues** — add any competition from TheSportsDB (premium key required)
+- **252 template variables + chainable filters** — customize channel names and EPG with records, scores, venues, broadcasts, standings, playoff status, motorsports sessions, tennis context, and more
+- **Flexible matching** — stream-name matching, team streams, and EPG program matching per source; aliases, fuzzy matching, and custom regex extractors for inconsistent IPTV naming
+- **Channel management** — automatic create/update/delete lifecycle, numbering strategies, consolidation, feed separation, and stream priority rules
+- **Dynamic groups & profiles** — use existing Dispatcharr groups/profiles or create them on the fly with `{sport}` / `{league}` wildcards
+- **Media server integration** — trigger guide refreshes on Emby, Jellyfin, and Channels DVR (multiple servers, in parallel) after each generation
+- **Artwork** — per-template art URLs with [Game Thumbs](guide/epg/game-thumbs) integration for matchup thumbnails
+- **Scheduled automation** — cron-based generation, scheduled backups, and a [Homepage dashboard widget](guide/homepage-widget)
 
 ## Quick Links
 
-- [User Guide](guide/) - Get started with Teamarr
-- [Technical Reference](reference/) - Architecture and API documentation
+- [User Guide](guide/) — get started with Teamarr
+- [Technical Reference](reference/) — architecture and API documentation

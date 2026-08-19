@@ -3,7 +3,6 @@ title: Database
 parent: Architecture
 grand_parent: Technical Reference
 nav_order: 5
-docs_version: "2.3.1"
 ---
 
 # Database
@@ -23,7 +22,7 @@ row_factory = sqlite3.Row   (dict-like access)
 
 ## Schema Version
 
-**Current version: 69** (stored in `settings.schema_version`)
+**Current version: 84** (stored in `settings.schema_version`)
 
 Schema changes use the [checkpoint + incremental migration](migrations) system. The schema source of truth is `teamarr/database/schema.sql`.
 
@@ -31,22 +30,24 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 
 | Table | Purpose |
 |-------|---------|
-| `settings` | Single-row global configuration (67 columns) |
+| `settings` | Single-row global configuration (123 columns) |
 | `templates` | EPG title/description/filler templates |
 | `teams` | Per-team EPG configuration (provider, leagues, logo, template, XMLTV channel id) |
 | `event_epg_groups` | Event group config (leagues, filters, M3U account, template) |
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
 | `managed_channels` | Channels created in Dispatcharr (tvg_id, delete_at, profiles) |
 | `detection_keywords` | User-defined stream classification patterns |
-| `aliases` | Team name aliases for matching |
+| `team_aliases` | Team name aliases for matching |
 | `team_cache` | Cached team data from providers |
 | `service_cache` | Cached events/teams/stats with TTL |
 | `stream_match_cache` | Fingerprint cache for stream matching |
-| `processing_runs` | EPG generation run statistics |
+| `processing_runs` | EPG generation run statistics (28 columns) |
+
+The schema contains **34 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed stream membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
 
 ## Settings Table
 
-The settings table is a single row with 67 columns, organized into these groups:
+The settings table is a single row with 123 columns, organized into these groups (a sample of columns per group is shown):
 
 ### Lookahead Windows
 
@@ -106,19 +107,24 @@ The settings table is a single row with 67 columns, organized into these groups:
 
 ## Database Modules
 
-19 Python modules in `teamarr/database/`:
+22 top-level Python modules plus 3 subpackages (`channels/`, `migrations/`, `settings/`) in `teamarr/database/`:
 
 | Module | Purpose |
 |--------|---------|
-| `connection.py` | Connection management, schema init, migrations |
+| `connection.py` | Connection management, schema init |
+| `migrations/` | Structural pre-migrations + versioned data migrations |
+| `reconciliation.py` | Schema reconciliation against `schema.sql` |
 | `teams.py` | Team CRUD with parsed leagues |
-| `groups.py` | Event group CRUD (28-field `EventEPGGroup` dataclass) |
+| `groups.py` | Event group CRUD (73-field `EventEPGGroup` dataclass) |
 | `templates.py` | Template CRUD |
+| `default_templates.py` | Default template seeding |
 | `leagues.py` | League queries, sport lookup, league ID resolution |
-| `settings.py` | Settings CRUD (`AllSettings` dataclass with 14 sub-groups) |
-| `channels.py` | Managed channel CRUD, history, reconciliation |
+| `settings/` | Settings package (`AllSettings` dataclass with 18 sub-groups; `types.py`, `registry.py`, `read.py`, `update.py`) |
+| `channels/` | Managed channel package: channel CRUD, history, stream membership (`streams.py`) |
 | `channel_numbers.py` | Channel allocation algorithm |
-| `stats.py` | Processing run tracking (16 metrics per run) |
+| `stats.py` | Processing run tracking (`processing_runs`, 28 columns) |
+| `priority_teams.py` | Priority-team channel ordering preferences |
+| `seed.py` | Seeds team/league cache from bundled TSDB seed data |
 | `detection_keywords.py` | Detection keyword CRUD, import/export |
 | `aliases.py` | Team alias CRUD |
 | `subscription.py` | Subscription override management |
@@ -152,6 +158,7 @@ The allocator respects:
 | File | Purpose |
 |------|---------|
 | `teamarr/database/schema.sql` | Authoritative schema for fresh installs |
-| `teamarr/database/connection.py` | Connection manager, migrations |
-| `teamarr/database/settings.py` | Settings with typed dataclasses |
+| `teamarr/database/connection.py` | Connection manager, startup orchestration |
+| `teamarr/database/migrations/` | Pre-migrations (`pre.py`) + versioned migrations (`versioned.py`) |
+| `teamarr/database/settings/` | Settings package: typed dataclasses (`types.py`), declarative field registry mapping each field to its DB column and serialization (`registry.py`), registry-driven readers (`read.py`) and updaters (`update.py`) |
 | `teamarr/database/channel_numbers.py` | Numbering algorithm |

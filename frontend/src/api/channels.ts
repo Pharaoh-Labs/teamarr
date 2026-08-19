@@ -12,7 +12,9 @@ export interface ManagedChannel {
   dispatcharr_channel_id: number | null
   dispatcharr_uuid: string | null
   home_team: string | null
+  home_team_abbrev: string | null
   away_team: string | null
+  away_team_abbrev: string | null
   event_date: string | null
   event_name: string | null
   league: string | null
@@ -161,4 +163,51 @@ export async function previewResetChannels(): Promise<ResetPreviewResponse> {
 
 export async function executeResetChannels(): Promise<ResetExecuteResponse> {
   return api.post("/channels/reset", {})
+}
+
+export interface StreamRuleMatch {
+  type: string
+  value: string
+  priority: number
+  is_winner: boolean          // the priority-mode rule that set the band
+  mode: "priority" | "score"  // 'priority' (band) or 'score' (additive contributor)
+  points: number              // signed contribution for score-mode rules
+}
+
+export interface ChannelStreamEntry {
+  dispatcharr_stream_id: number
+  stream_name: string | null
+  source_group: string | null
+  m3u_account_name: string | null
+  match_method: string | null
+  match_type: string | null
+  exception_keyword: string | null
+  priority: number            // stored sort key from the last generation run
+  expected_priority: number   // recomputed under current rules (for staleness)
+  feed_side?: string | null   // 'home' | 'away' | null = unknown (#533); null is a real answer
+  stream_stats: Record<string, unknown> | null
+  stream_stats_updated_at: string | null
+  matched_rules: StreamRuleMatch[]
+  matched_event: string | null
+  matched_league: string | null
+  cache_match_method: string | null
+  cache_created_at: string | null
+  match_aliases: StreamNameMatch[]
+  match_patterns: StreamNameMatch[]
+  user_corrected: boolean
+  corrected_at: string | null
+}
+
+export interface StreamNameMatch {
+  text: string
+  team: string
+}
+
+export interface ChannelStreamsResponse {
+  streams: ChannelStreamEntry[]
+  stats_refreshed: boolean
+}
+
+export async function getChannelStreams(channelId: number): Promise<ChannelStreamsResponse> {
+  return api.get(`/channels/managed/${channelId}/streams`)
 }

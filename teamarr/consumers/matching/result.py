@@ -98,6 +98,12 @@ class FailedReason(Enum):
     # Event card failures (UFC, boxing)
     NO_EVENT_CARD_MATCH = "no_event_card_match"  # Could not match to event card
 
+    # Racing event failures (F1, NASCAR, etc.)
+    NO_RACING_MATCH = "no_racing_match"  # Could not match to a racing event
+
+    # Tennis match failures (ATP, WTA)
+    NO_TENNIS_MATCH = "no_tennis_match"  # Could not match to a tennis match
+
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
 
@@ -206,6 +212,12 @@ class MatchOutcome:
     parsed_team1: str | None = None
     parsed_team2: str | None = None
 
+    # For TEAM_ONLY matches (#489): which side of the event the stream's team
+    # is ("home"/"away"). The lifecycle resolves it to that side's team id and
+    # persists it per-stream so team_feed/not_team_feed ordering rules can
+    # match team-branded streams. None for TEAM_VS_TEAM/other categories.
+    matched_side: str | None = None
+
     # For EXCLUDED/LEAGUE_NOT_INCLUDED - the league that was found (for display)
     found_league: str | None = None
     found_league_name: str | None = None
@@ -231,7 +243,7 @@ class MatchOutcome:
     @classmethod
     def failed(
         cls,
-        reason: FailedReason,
+        reason: FailedReason | None,
         *,
         stream_name: str | None = None,
         stream_id: int | None = None,
@@ -265,6 +277,7 @@ class MatchOutcome:
         origin_match_method: str | None = None,
         epg_program_start: datetime | None = None,
         epg_program_end: datetime | None = None,
+        matched_side: str | None = None,
     ) -> "MatchOutcome":
         """Create a MATCHED result.
 
@@ -280,6 +293,7 @@ class MatchOutcome:
             origin_match_method: For CACHE hits, the original method used (e.g., "fuzzy")
             epg_program_start: For EPG matches, the program's broadcast start
             epg_program_end: For EPG matches, the program's broadcast end
+            matched_side: For TEAM_ONLY matches, which event side the team is (#489)
         """
         return cls(
             category=ResultCategory.MATCHED,
@@ -294,6 +308,7 @@ class MatchOutcome:
             origin_match_method=origin_match_method,
             epg_program_start=epg_program_start,
             epg_program_end=epg_program_end,
+            matched_side=matched_side,
         )
 
     @classmethod
@@ -393,7 +408,7 @@ class MatchOutcome:
 # DISPLAY TEXT - Human-readable descriptions
 # =============================================================================
 
-FILTERED_DISPLAY: dict[FilteredReason, str] = {
+FILTERED_DISPLAY: dict[FilteredReason | None, str] = {
     FilteredReason.NOT_EVENT: "Not an event stream",
     FilteredReason.INCLUDE_REGEX: "Didn't match include regex",
     FilteredReason.EXCLUDE_REGEX: "Matched exclude regex",
@@ -402,7 +417,7 @@ FILTERED_DISPLAY: dict[FilteredReason, str] = {
     FilteredReason.SPORT_NOT_SUPPORTED: "Sport not supported",
 }
 
-FAILED_DISPLAY: dict[FailedReason, str] = {
+FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.TEAMS_NOT_PARSED: "Could not parse team names",
     FailedReason.TEAM1_NOT_FOUND: "First team not found",
     FailedReason.TEAM2_NOT_FOUND: "Second team not found",
@@ -412,10 +427,12 @@ FAILED_DISPLAY: dict[FailedReason, str] = {
     FailedReason.AMBIGUOUS_LEAGUE: "Multiple leagues possible",
     FailedReason.NO_EVENT_FOUND: "No scheduled event found",
     FailedReason.NO_EVENT_CARD_MATCH: "No matching event card",
+    FailedReason.NO_RACING_MATCH: "No matching racing event",
+    FailedReason.NO_TENNIS_MATCH: "No matching tennis match",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 
-METHOD_DISPLAY: dict[MatchMethod, str] = {
+METHOD_DISPLAY: dict[MatchMethod | None, str] = {
     MatchMethod.CACHE: "Cache hit",
     MatchMethod.USER_CORRECTED: "User corrected",
     MatchMethod.ALIAS: "Alias match",
@@ -425,7 +442,7 @@ METHOD_DISPLAY: dict[MatchMethod, str] = {
     MatchMethod.DIRECT: "Direct assignment",
 }
 
-EXCLUDED_DISPLAY: dict[ExcludedReason, str] = {
+EXCLUDED_DISPLAY: dict[ExcludedReason | None, str] = {
     ExcludedReason.LEAGUE_NOT_INCLUDED: "League not in group",
     ExcludedReason.EVENT_FINAL: "Event is final",
     ExcludedReason.EVENT_PAST: "Event already ended",

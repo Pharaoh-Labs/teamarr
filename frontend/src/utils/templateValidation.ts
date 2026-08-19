@@ -4,6 +4,9 @@
  * Validates template strings for:
  * 1. Invalid/unknown variables
  * 2. Suffixed variables in event templates (not allowed)
+ *
+ * Extraction mirrors the backend resolver's VARIABLE_PATTERN so the validator and
+ * the engine agree on what counts as a variable — see VARIABLE_PATTERN below.
  */
 
 import type { VariableCategory } from "@/api/variables"
@@ -51,26 +54,59 @@ export function buildValidVariableSet(categories: VariableCategory[]): {
 }
 
 /**
- * Extract all variable references from a template string.
- * Returns array of variable names (without braces).
+ * Mirror of the backend resolver's VARIABLE_PATTERN (teamarr/templates/resolver.py).
+ *
+ * The engine only treats a braced token as a variable when it matches this shape:
+ * a lowercase/underscore-led name (digits, `_`, `@` allowed — e.g. `vs_@`) with an
+ * optional single dotted suffix and an optional trailing `|filter` modifier (e.g.
+ * `{race_name|urlencode}`, #478). Anything else inside braces — `{2024}`, `{1-0}`,
+ * `{Team Name}`, `{a.b.c}` — is literal text the resolver leaves untouched, so the
+ * validator must ignore it too rather than cry "unknown variable". Group 1 is the
+ * variable name (validated); the filter in group 2 is ignored here. The backend
+ * lowercases the captured name before lookup, so matching is case-insensitive.
+ */
+const VARIABLE_PATTERN = /\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)(?:\|[a-z_]+)*\}/gi
+
+/**
+ * Extract variable references the engine would actually resolve, lowercased to
+ * match the backend (which calls `.lower()` on each captured name).
  */
 export function extractVariables(template: string): string[] {
   if (!template) return []
-  const matches = template.match(/\{([^}]+)\}/g)
-  if (!matches) return []
-  return matches.map(m => m.slice(1, -1))
+  const names: string[] = []
+  for (const match of template.matchAll(VARIABLE_PATTERN)) {
+    names.push(match[1].toLowerCase())
+  }
+  return names
 }
 
 /**
- * Check if a variable name has a suffix (.next, .last).
+ * Check if a variable name ends with a real suffix (.next, .last). Anchored so it
+ * only fires on a trailing suffix, not a substring (e.g. a name containing "next").
  */
 export function hasSuffix(varName: string): boolean {
-  return varName.includes(".next") || varName.includes(".last")
+  return /\.(next|last)$/.test(varName)
 }
 
 /**
  * Validate a single template string.
  */
+// Retired pure-transform variables (#484): the resolver aliases them forever
+// (team_name_pascal -> team_name|pascal), so they're valid — just no longer in
+// the picker or the /variables response. Suffix legality follows the base var.
+const LEGACY_ALIAS_BASES: Record<string, string> = {
+  team_name_pascal: "team_name",
+  home_team_pascal: "home_team",
+  away_team_pascal: "away_team",
+  team_abbrev_lower: "team_abbrev",
+  home_team_abbrev_lower: "home_team_abbrev",
+  away_team_abbrev_lower: "away_team_abbrev",
+  opponent_abbrev_lower: "opponent_abbrev",
+  feed_team_abbrev_lower: "feed_team_abbrev",
+  result_lower: "result",
+  sport_lower: "sport",
+}
+
 export function validateTemplate(
   template: string,
   validNames: Set<string>,
@@ -78,7 +114,15 @@ export function validateTemplate(
   isEventTemplate: boolean
 ): ValidationWarning[] {
   const warnings: ValidationWarning[] = []
-  const variables = extractVariables(template)
+  const variables = extractVariables(template).map((varName) => {
+    // Map retired aliases onto their base variable so validation follows the
+    // same resolution the engine applies (#484).
+    const dot = varName.indexOf(".")
+    const base = dot === -1 ? varName : varName.slice(0, dot)
+    const aliased = LEGACY_ALIAS_BASES[base]
+    if (!aliased) return varName
+    return aliased + (dot === -1 ? "" : varName.slice(dot))
+  })
 
   for (const varName of variables) {
     // Check for suffixed variables in event templates

@@ -22,6 +22,8 @@ from typing import Any
 from teamarr.consumers.team_epg import TeamEPGGenerator, TeamEPGOptions
 from teamarr.core import Programme
 from teamarr.services import SportsDataService, create_default_service
+from teamarr.utilities.art_url import read_art_base_url
+from teamarr.utilities.tz import now_utc
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
 # Number of parallel workers for team processing
@@ -57,7 +59,7 @@ class TeamProcessingResult:
     team_id: int
     team_name: str
     channel_id: str
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=now_utc)
     completed_at: datetime | None = None
 
     # EPG generation
@@ -93,7 +95,7 @@ class TeamProcessingResult:
 class BatchTeamResult:
     """Result of processing multiple teams."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=now_utc)
     completed_at: datetime | None = None
     results: list[TeamProcessingResult] = field(default_factory=list)
     total_xmltv: str = ""
@@ -166,7 +168,6 @@ class TeamProcessor:
         """
         self._db_factory = db_factory
         self._service = service or create_default_service()
-        from teamarr.utilities.art_url import read_art_base_url
 
         self._epg_generator = TeamEPGGenerator(
             self._service, art_base_url=read_art_base_url(db_factory)
@@ -190,7 +191,7 @@ class TeamProcessor:
                     channel_id="unknown",
                 )
                 result.errors.append(f"Team {team_id} not found")
-                result.completed_at = datetime.now()
+                result.completed_at = now_utc()
                 return result
 
             return self._process_team_internal(conn, team)
@@ -216,7 +217,7 @@ class TeamProcessor:
             teams = self._get_active_teams(conn)
 
         if not teams:
-            batch_result.completed_at = datetime.now()
+            batch_result.completed_at = now_utc()
             return batch_result
 
         total_teams = len(teams)
@@ -287,7 +288,7 @@ class TeamProcessor:
                             channel_id=team.channel_id,
                         )
                         error_result.errors.append(str(e))
-                        error_result.completed_at = datetime.now()
+                        error_result.completed_at = now_utc()
                         batch_result.results.append(error_result)
 
                     # Report progress with remaining in-progress teams
@@ -356,7 +357,7 @@ class TeamProcessor:
                         channel_id=team.channel_id,
                     )
                     error_result.errors.append(str(e))
-                    error_result.completed_at = datetime.now()
+                    error_result.completed_at = now_utc()
                     batch_result.results.append(error_result)
 
                 # Report progress
@@ -366,7 +367,7 @@ class TeamProcessor:
         # Note: Combined XMLTV is read from database in generation.py
         # Each team's XMLTV is already stored during _process_team_internal
 
-        batch_result.completed_at = datetime.now()
+        batch_result.completed_at = now_utc()
         logger.info("[TEAM_BATCH] Completed: %d teams", len(teams))
         return batch_result
 
@@ -391,7 +392,7 @@ class TeamProcessor:
         if team.template_id is None:
             logger.warning("[TEAM_SKIP] %s: no template assigned", team.team_name)
             result.errors.append("No template assigned - EPG generation requires a template")
-            result.completed_at = datetime.now()
+            result.completed_at = now_utc()
             return result
 
         try:
@@ -450,7 +451,7 @@ class TeamProcessor:
             logger.exception("[TEAM_ERROR] %s: %s", team.team_name, e)
             result.errors.append(str(e))
 
-        result.completed_at = datetime.now()
+        result.completed_at = now_utc()
         return result
 
     def _build_options(self, conn: Connection, team: TeamConfig) -> TeamEPGOptions:

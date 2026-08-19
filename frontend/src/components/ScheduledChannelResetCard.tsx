@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -22,7 +22,7 @@ const RESET_PRESETS: { label: string; cron: string }[] = [
  * Scheduled Channel Reset — periodically purges all Teamarr channels in
  * Dispatcharr so the media server's guide refresh picks up fresh logos/data.
  * A media-server-agnostic workaround (originally documented for Jellyfin stale
- * logos); lives in the Media Servers tab as of the v2.7.0 IA overhaul.
+ * logos); lives in the Advanced tab as of the v2.7.0 IA overhaul.
  *
  * Self-contained via its own scheduler hooks. Saves only the channel_reset_*
  * fields — the scheduler update is a merge, so this never touches the
@@ -35,12 +35,16 @@ export function ScheduledChannelResetCard() {
   const [enabled, setEnabled] = useState(false)
   const [cron, setCron] = useState("")
 
-  useEffect(() => {
-    if (schedulerData) {
-      setEnabled(schedulerData.channel_reset_enabled)
-      setCron(schedulerData.channel_reset_cron ?? "")
-    }
-  }, [schedulerData])
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedSchedulerData, setSyncedSchedulerData] =
+    useState<typeof schedulerData>(undefined)
+  if (schedulerData && schedulerData !== syncedSchedulerData) {
+    setSyncedSchedulerData(schedulerData)
+    setEnabled(schedulerData.channel_reset_enabled)
+    setCron(schedulerData.channel_reset_cron ?? "")
+  }
 
   const handleSave = async () => {
     try {

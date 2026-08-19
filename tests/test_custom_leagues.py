@@ -7,7 +7,6 @@ the write path (eqz.2) and the test-fetch validator (eqz.3) will both enforce.
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -33,8 +32,9 @@ from teamarr.services.custom_leagues import (
     validate_event_type,
     validate_tsdb_sport_matches,
 )
+from tests.helpers import SCHEMA_PATH
 
-SCHEMA = Path(__file__).resolve().parents[1] / "teamarr" / "database" / "schema.sql"
+SCHEMA = SCHEMA_PATH
 
 
 def _db() -> sqlite3.Connection:
@@ -177,10 +177,15 @@ def test_cross_check_rejects_unmapped_sport():
 # ---------------------------------------------------------------------------
 
 
-def test_capability_endpoint_shape():
+def test_capability_endpoint_shape(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     from teamarr.api.app import app
+    from teamarr.database import init_db
+
+    # Fresh temp DB — the live-app endpoint must not depend on the host's DB.
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
 
     resp = TestClient(app).get("/api/v1/leagues/custom/capability")
     assert resp.status_code == 200
@@ -513,9 +518,9 @@ class _FakeTSDBClient:
 
 
 def _patch_client(monkeypatch, cls=_FakeTSDBClient):
-    import teamarr.providers.tsdb as tsdb_pkg
+    import teamarr.services.custom_leagues as custom_leagues_mod
 
-    monkeypatch.setattr(tsdb_pkg, "TSDBClient", cls)
+    monkeypatch.setattr(custom_leagues_mod, "TSDBClient", cls)
 
 
 def test_test_fetch_requires_premium(monkeypatch):
@@ -890,7 +895,7 @@ def test_refresh_custom_league_teams_wrapper_never_raises(monkeypatch):
             raise RuntimeError("kaboom")
 
     monkeypatch.setattr(
-        "teamarr.consumers.cache.refresh.CacheRefresher", lambda *a, **k: _Exploding()
+        "teamarr.services.custom_leagues.CacheRefresher", lambda *a, **k: _Exploding()
     )
     out = svc.refresh_custom_league_teams("swe.1")
     assert out["success"] is False

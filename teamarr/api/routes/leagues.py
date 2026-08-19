@@ -11,6 +11,7 @@ reject any non-TSDB provider; edits and deletes only ever touch user-added
 """
 
 import logging
+from typing import NoReturn
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,6 +29,12 @@ from teamarr.services.custom_leagues import (
     run_custom_league_test_fetch,
     supported_custom_league_sports,
     update_custom_league,
+)
+from teamarr.services.league_overrides import (
+    LeagueNotFoundError,
+    get_gracenote_override_state,
+    list_gracenote_overrides,
+    set_gracenote_override,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,7 +92,7 @@ class CustomLeagueTestFetch(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _raise_http(exc: Exception) -> None:
+def _raise_http(exc: Exception) -> NoReturn:
     """Translate a custom-league service exception into an HTTPException."""
     if isinstance(exc, CustomLeagueGateError):
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -101,6 +108,47 @@ def _raise_http(exc: Exception) -> None:
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+class GracenoteOverrideBody(BaseModel):
+    """Body for setting the {gracenote_category} override. Empty/None clears
+    the override back to the curated/derived default."""
+
+    value: str | None = Field(None, description="Override text; null/empty clears")
+
+
+@router.get("/overrides/gracenote")
+def get_gracenote_overrides() -> dict:
+    """List all {gracenote_category} user overrides (#371).
+
+    Overrides live in league_overrides — NOT the leagues table, whose rows
+    are replaced wholesale by the seed on every startup — and win over the
+    curated value at template-render time.
+
+    Returns:
+        ``{overrides: [{league_code, gracenote_category, default}]}``
+    """
+    return {"overrides": list_gracenote_overrides()}
+
+
+@router.get("/{league_code}/gracenote-category")
+def get_league_gracenote_category(league_code: str) -> dict:
+    """Current override/default/effective {gracenote_category} for a league."""
+    try:
+        return get_gracenote_override_state(league_code)
+    except LeagueNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.put("/{league_code}/gracenote-category")
+def put_league_gracenote_category(league_code: str, body: GracenoteOverrideBody) -> dict:
+    """Set (or clear, with a null/empty value) the {gracenote_category}
+    override for a league. Takes effect immediately — the league mapping
+    cache is reloaded on write."""
+    try:
+        return set_gracenote_override(league_code, body.value)
+    except LeagueNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/custom/capability")

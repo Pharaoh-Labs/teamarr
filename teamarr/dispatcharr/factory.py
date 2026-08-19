@@ -9,6 +9,8 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
+from teamarr.database.settings import get_dispatcharr_settings
+from teamarr.database.settings.read import get_all_settings
 from teamarr.dispatcharr.client import DispatcharrClient
 from teamarr.dispatcharr.managers.channels import ChannelManager
 from teamarr.dispatcharr.managers.epg import EPGManager
@@ -73,7 +75,6 @@ class DispatcharrFactory:
     @property
     def is_configured(self) -> bool:
         """Check if Dispatcharr settings are configured."""
-        from teamarr.database.settings import get_dispatcharr_settings
 
         with self._db_factory() as conn:
             settings = get_dispatcharr_settings(conn)
@@ -152,8 +153,6 @@ class DispatcharrFactory:
         Returns:
             ConnectionTestResult with success status and details
         """
-        from teamarr.database.settings import get_dispatcharr_settings
-        from teamarr.database.settings.read import get_all_settings
 
         # Get settings
         if url and username and password:
@@ -275,8 +274,6 @@ class DispatcharrFactory:
         Returns:
             DispatcharrConnection or None if not configured
         """
-        from teamarr.database.settings import get_dispatcharr_settings
-        from teamarr.database.settings.read import get_all_settings
 
         with self._db_factory() as conn:
             settings = get_dispatcharr_settings(conn)
@@ -320,7 +317,6 @@ class DispatcharrFactory:
 
     def _get_settings_hash(self) -> str:
         """Get a hash of current settings for change detection."""
-        from teamarr.database.settings import get_dispatcharr_settings
 
         with self._db_factory() as conn:
             settings = get_dispatcharr_settings(conn)
@@ -343,7 +339,7 @@ class ConnectionTestResult:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
-        result = {"success": self.success}
+        result: dict[str, Any] = {"success": self.success}
         if self.url:
             result["url"] = self.url
         if self.username:

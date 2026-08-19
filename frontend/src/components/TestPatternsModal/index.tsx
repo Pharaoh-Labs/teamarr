@@ -9,7 +9,7 @@
  * 5. Syncs patterns bidirectionally with the form (reads on open, writes on Apply)
  */
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Dialog,
@@ -20,11 +20,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { getRawStreams } from "@/api/groups"
+import { getRawStreams, testExtraction } from "@/api/groups"
+import type { ExtractionPatterns, StreamExtractionResult } from "@/api/groups"
+import { jsToPython } from "@/lib/regex-utils"
 import { StreamList } from "./StreamList"
 import { PatternPanel } from "./PatternPanel"
 import { InteractiveSelector } from "./InteractiveSelector"
-import { FlaskConical, Loader2 } from "lucide-react"
+import { FlaskConical, LoaderCircle, TriangleAlert } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types — shared across child components
@@ -56,7 +58,7 @@ export interface PatternState {
   custom_regex_event_name_enabled: boolean
 }
 
-export const EMPTY_PATTERNS: PatternState = {
+const EMPTY_PATTERNS: PatternState = {
   skip_builtin_filter: false,
   stream_include_regex: null,
   stream_include_regex_enabled: false,
@@ -116,12 +118,20 @@ export function TestPatternsModal({
     streamName: string
   } | null>(null)
 
-  // Sync form → modal when opening
-  useEffect(() => {
+  // Sync form → modal when opening. Seeded during render (React's "adjusting
+  // state when a prop changes" pattern) — fires on exactly the same trigger as
+  // the previous effect: any change to `open` or `initialPatterns`, seeding
+  // only while the modal is open, without the extra effect render pass.
+  const [syncedSeedProps, setSyncedSeedProps] = useState<{
+    open: boolean
+    initialPatterns: Partial<PatternState> | undefined
+  }>({ open: false, initialPatterns: undefined })
+  if (open !== syncedSeedProps.open || initialPatterns !== syncedSeedProps.initialPatterns) {
+    setSyncedSeedProps({ open, initialPatterns })
     if (open && initialPatterns) {
       setPatterns({ ...EMPTY_PATTERNS, ...initialPatterns })
     }
-  }, [open, initialPatterns])
+  }
 
   // Fetch raw streams
   const {
@@ -136,6 +146,83 @@ export function TestPatternsModal({
   })
 
   const streams = streamsData?.streams ?? []
+
+  // ------------------------------------------------------------------
+  // Pipeline-truth extraction (#458): debounce the pattern state, then
+  // run the REAL Python extraction functions server-side. JS highlighting
+  // stays instant; the backend verdict arrives ~half a second later.
+  // ------------------------------------------------------------------
+  const [debouncedPatterns, setDebouncedPatterns] = useState(patterns)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPatterns(patterns), 500)
+    return () => clearTimeout(t)
+  }, [patterns])
+
+  const extractionRequest: ExtractionPatterns | null = useMemo(() => {
+    const p = debouncedPatterns
+    const anyEnabled =
+      (p.custom_regex_teams_enabled && p.custom_regex_teams) ||
+      (p.custom_regex_date_enabled && p.custom_regex_date) ||
+      (p.custom_regex_month_enabled && p.custom_regex_month) ||
+      (p.custom_regex_day_enabled && p.custom_regex_day) ||
+      (p.custom_regex_time_enabled && p.custom_regex_time) ||
+      (p.custom_regex_league_enabled && p.custom_regex_league) ||
+      (p.custom_regex_fighters_enabled && p.custom_regex_fighters) ||
+      (p.custom_regex_event_name_enabled && p.custom_regex_event_name)
+    if (!anyEnabled) return null
+    // The form (and this modal) hold patterns in JS syntax — convert to
+    // Python before the backend compiles them with `re` (#494), exactly
+    // like the form's save path does.
+    const py = (s: string | null) => (s ? jsToPython(s) : s)
+    return {
+      teams_pattern: py(p.custom_regex_teams),
+      teams_enabled: p.custom_regex_teams_enabled,
+      date_pattern: py(p.custom_regex_date),
+      date_enabled: p.custom_regex_date_enabled,
+      month_pattern: py(p.custom_regex_month),
+      month_enabled: p.custom_regex_month_enabled,
+      day_pattern: py(p.custom_regex_day),
+      day_enabled: p.custom_regex_day_enabled,
+      time_pattern: py(p.custom_regex_time),
+      time_enabled: p.custom_regex_time_enabled,
+      league_pattern: py(p.custom_regex_league),
+      league_enabled: p.custom_regex_league_enabled,
+      fighters_pattern: py(p.custom_regex_fighters),
+      fighters_enabled: p.custom_regex_fighters_enabled,
+      event_name_pattern: py(p.custom_regex_event_name),
+      event_name_enabled: p.custom_regex_event_name_enabled,
+    }
+  }, [debouncedPatterns])
+
+  const { data: extractionData, isFetching: extractionLoading } = useQuery({
+    queryKey: ["testExtraction", groupId, extractionRequest],
+    queryFn: () =>
+      testExtraction(
+        streams.map((s) => s.stream_name),
+        extractionRequest!
+      ),
+    enabled: open && extractionRequest !== null && streams.length > 0,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev, // keep old verdicts while retesting
+  })
+
+  const pipelineResults = useMemo(() => {
+    const map = new Map<string, StreamExtractionResult>()
+    if (extractionRequest !== null && extractionData) {
+      for (const r of extractionData.results) map.set(r.stream_name, r)
+    }
+    return map
+  }, [extractionData, extractionRequest])
+
+  const patternErrors = extractionRequest !== null
+    ? extractionData?.pattern_errors ?? {}
+    : {}
+  const learnedDateFormat = extractionRequest !== null
+    ? extractionData?.learned_date_format ?? null
+    : null
+  const pipelineWarnings = extractionRequest !== null
+    ? extractionData?.warnings ?? []
+    : []
 
   const handlePatternChange = useCallback((update: Partial<PatternState>) => {
     setPatterns((prev) => ({ ...prev, ...update }))
@@ -186,7 +273,7 @@ export function TestPatternsModal({
           <div className="flex-1 flex flex-col min-w-0">
             {isLoading && (
               <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-sm text-muted-foreground">
                   Loading streams...
                 </span>
@@ -209,10 +296,35 @@ export function TestPatternsModal({
               </div>
             )}
 
+            {learnedDateFormat && (
+              <div className="px-3 py-1 text-xs border-b border-border bg-secondary/30 text-muted-foreground">
+                Learned date format from these streams: <code className="px-1 rounded bg-muted">{learnedDateFormat}</code>
+                {" "}— applied to every stream. Label pieces with (?P&lt;day&gt;…)(?P&lt;month&gt;…)(?P&lt;year&gt;…) to declare it explicitly.
+              </div>
+            )}
+            {(Object.keys(patternErrors).length > 0 || pipelineWarnings.length > 0) && (
+              <div className="px-3 py-1.5 text-xs border-b border-border bg-yellow-500/10 space-y-0.5">
+                {Object.entries(patternErrors).map(([field, err]) => (
+                  <div key={field} className="text-destructive flex items-center gap-1.5">
+                    <TriangleAlert className="h-3 w-3 shrink-0" />
+                    <span><span className="font-semibold">{field}</span> pattern is invalid in Python: {err}</span>
+                  </div>
+                ))}
+                {pipelineWarnings.map((w, i) => (
+                  <div key={i} className="text-yellow-500 flex items-center gap-1.5">
+                    <TriangleAlert className="h-3 w-3 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {!isLoading && !error && streams.length > 0 && (
               <StreamList
                 streams={streams}
                 patterns={patterns}
+                pipelineResults={pipelineResults}
+                pipelineLoading={extractionLoading}
                 onTextSelect={handleTextSelect}
               />
             )}
@@ -229,8 +341,9 @@ export function TestPatternsModal({
         <DialogFooter className="px-4 py-3 border-t border-border shrink-0">
           <div className="flex items-center justify-between w-full">
             <span className="text-xs text-muted-foreground">
-              Patterns are tested client-side using JavaScript regex.
-              Named groups use Python syntax (?P&lt;name&gt;...) for backend compatibility.
+              Highlighting is client-side JavaScript regex; the ✓/✗ badges are
+              the real Python extraction pipeline. Named groups accept both
+              (?&lt;name&gt;...) and Python&apos;s (?P&lt;name&gt;...).
             </span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleClose}>

@@ -14,6 +14,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from re import Pattern
+from typing import Any, cast
 
 from teamarr.services.detection_keywords import DetectionKeywordService
 
@@ -42,6 +43,7 @@ except ImportError:
 
 # Sports that can be detected but are not currently supported by Teamarr
 # These sports don't have team-based schedules we can match against
+# (Tennis graduated to a supported sport — ATP/WTA per-match events)
 UNSUPPORTED_SPORTS = frozenset(
     [
         "Swimming",
@@ -49,7 +51,6 @@ UNSUPPORTED_SPORTS = frozenset(
         "Gymnastics",
         "Wrestling",
         "Track and Field",
-        "Tennis",
         "Golf",
     ]
 )
@@ -144,7 +145,9 @@ BUILTIN_EVENT_PATTERNS = [
 ]
 
 # Compiled regex for event stream detection
-_BUILTIN_EVENT_REGEX: Pattern | None = None
+# Typed Any: compiled by REGEX_MODULE (third-party `regex` lib or stdlib `re`),
+# whose pattern types differ and aren't mutually assignable.
+_BUILTIN_EVENT_REGEX: Any = None
 
 
 def get_builtin_event_pattern() -> Pattern:
@@ -237,7 +240,7 @@ def compile_pattern(pattern: str | None, ignore_case: bool = True) -> Pattern | 
     flags = REGEX_MODULE.IGNORECASE if ignore_case else 0
 
     try:
-        return REGEX_MODULE.compile(pattern.strip(), flags)
+        return cast("Pattern | None", REGEX_MODULE.compile(pattern.strip(), flags))
     except Exception as e:
         logger.debug("[FILTER] Failed to compile regex pattern '%s': %s", pattern, e)
         return None

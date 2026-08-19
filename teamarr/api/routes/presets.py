@@ -9,6 +9,22 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from teamarr.database import get_db
+from teamarr.database.condition_presets import (
+    create_preset as db_create_preset,
+)
+from teamarr.database.condition_presets import (
+    delete_preset as db_delete_preset,
+)
+from teamarr.database.condition_presets import (
+    get_all_presets,
+    get_preset_by_name,
+)
+from teamarr.database.condition_presets import (
+    get_preset as db_get_preset,
+)
+from teamarr.database.condition_presets import (
+    update_preset as db_update_preset,
+)
 
 router = APIRouter()
 
@@ -60,13 +76,14 @@ class ConditionPresetListResponse(BaseModel):
 @router.get("", response_model=ConditionPresetListResponse)
 def list_presets():
     """List all condition presets."""
-    from teamarr.database.condition_presets import get_all_presets
 
     with get_db() as conn:
         presets = get_all_presets(conn)
 
-    return ConditionPresetListResponse(
-        presets=[
+    responses = []
+    for p in presets:
+        assert p.id is not None  # persisted rows always have an id
+        responses.append(
             ConditionPresetResponse(
                 id=p.id,
                 name=p.name,
@@ -74,8 +91,10 @@ def list_presets():
                 conditions=p.conditions,
                 created_at=p.created_at.isoformat() if p.created_at else None,
             )
-            for p in presets
-        ],
+        )
+
+    return ConditionPresetListResponse(
+        presets=responses,
         total=len(presets),
     )
 
@@ -83,7 +102,6 @@ def list_presets():
 @router.get("/{preset_id}", response_model=ConditionPresetResponse)
 def get_preset(preset_id: int):
     """Get a single condition preset by ID."""
-    from teamarr.database.condition_presets import get_preset as db_get_preset
 
     with get_db() as conn:
         preset = db_get_preset(conn, preset_id)
@@ -94,6 +112,7 @@ def get_preset(preset_id: int):
             detail=f"Preset {preset_id} not found",
         )
 
+    assert preset.id is not None  # persisted rows always have an id
     return ConditionPresetResponse(
         id=preset.id,
         name=preset.name,
@@ -106,15 +125,6 @@ def get_preset(preset_id: int):
 @router.post("", response_model=ConditionPresetResponse, status_code=status.HTTP_201_CREATED)
 def create_preset(request: ConditionPresetCreate):
     """Create a new condition preset."""
-    from teamarr.database.condition_presets import (
-        create_preset as db_create_preset,
-    )
-    from teamarr.database.condition_presets import (
-        get_preset as db_get_preset,
-    )
-    from teamarr.database.condition_presets import (
-        get_preset_by_name,
-    )
 
     with get_db() as conn:
         # Check for duplicate name
@@ -133,6 +143,13 @@ def create_preset(request: ConditionPresetCreate):
         )
         preset = db_get_preset(conn, preset_id)
 
+    if preset is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Preset could not be retrieved after creation",
+        )
+
+    assert preset.id is not None  # persisted rows always have an id
     return ConditionPresetResponse(
         id=preset.id,
         name=preset.name,
@@ -145,15 +162,6 @@ def create_preset(request: ConditionPresetCreate):
 @router.put("/{preset_id}", response_model=ConditionPresetResponse)
 def update_preset(preset_id: int, request: ConditionPresetUpdate):
     """Update a condition preset."""
-    from teamarr.database.condition_presets import (
-        get_preset as db_get_preset,
-    )
-    from teamarr.database.condition_presets import (
-        get_preset_by_name,
-    )
-    from teamarr.database.condition_presets import (
-        update_preset as db_update_preset,
-    )
 
     with get_db() as conn:
         preset = db_get_preset(conn, preset_id)
@@ -182,6 +190,13 @@ def update_preset(preset_id: int, request: ConditionPresetUpdate):
         )
         preset = db_get_preset(conn, preset_id)
 
+    if preset is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Preset could not be retrieved after update",
+        )
+
+    assert preset.id is not None  # persisted rows always have an id
     return ConditionPresetResponse(
         id=preset.id,
         name=preset.name,
@@ -194,12 +209,6 @@ def update_preset(preset_id: int, request: ConditionPresetUpdate):
 @router.delete("/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_preset(preset_id: int):
     """Delete a condition preset."""
-    from teamarr.database.condition_presets import (
-        delete_preset as db_delete_preset,
-    )
-    from teamarr.database.condition_presets import (
-        get_preset as db_get_preset,
-    )
 
     with get_db() as conn:
         preset = db_get_preset(conn, preset_id)

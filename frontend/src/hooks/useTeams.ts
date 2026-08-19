@@ -1,28 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  listTeams,
-  createTeam,
-  updateTeam,
-  deleteTeam,
-  searchTeams,
-} from "@/api/teams"
-import type { TeamCreate, TeamUpdate } from "@/api/teams"
+import { listTeams, updateTeam, deleteTeam } from "@/api/teams"
+import type { TeamUpdate } from "@/api/teams"
 
 export function useTeams(activeOnly = false) {
   return useQuery({
     queryKey: ["teams", { activeOnly }],
     queryFn: () => listTeams(activeOnly),
-  })
-}
-
-export function useCreateTeam() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: TeamCreate) => createTeam(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["teams"] })
-    },
   })
 }
 
@@ -47,13 +30,5 @@ export function useDeleteTeam() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teams"] })
     },
-  })
-}
-
-export function useTeamSearch(query: string, league?: string, sport?: string) {
-  return useQuery({
-    queryKey: ["teamSearch", query, league, sport],
-    queryFn: () => searchTeams(query, league, sport),
-    enabled: query.length >= 2,
   })
 }

@@ -3,10 +3,12 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.database.settings import update_feed_separation_settings as db_update
 
 from .models import (
     FeedSeparationSettingsModel,
     FeedSeparationSettingsUpdate,
+    to_model,
 )
 
 router = APIRouter()
@@ -20,13 +22,7 @@ def get_feed_separation_settings():
     with get_db() as conn:
         settings = get_feed_separation_settings(conn)
 
-    return FeedSeparationSettingsModel(
-        enabled=settings.enabled,
-        home_terms=settings.home_terms,
-        away_terms=settings.away_terms,
-        detect_team_names=settings.detect_team_names,
-        label_style=settings.label_style,
-    )
+    return to_model(FeedSeparationSettingsModel, settings)
 
 
 @router.put("/settings/feed-separation", response_model=FeedSeparationSettingsModel)
@@ -35,27 +31,11 @@ def update_feed_separation_settings(update: FeedSeparationSettingsUpdate):
     from teamarr.database.settings import (
         get_feed_separation_settings,
     )
-    from teamarr.database.settings import (
-        update_feed_separation_settings as db_update,
-    )
 
     with get_db() as conn:
-        db_update(
-            conn,
-            enabled=update.enabled,
-            home_terms=update.home_terms,
-            away_terms=update.away_terms,
-            detect_team_names=update.detect_team_names,
-            label_style=update.label_style,
-        )
+        db_update(conn, **update.model_dump())
 
     with get_db() as conn:
         settings = get_feed_separation_settings(conn)
 
-    return FeedSeparationSettingsModel(
-        enabled=settings.enabled,
-        home_terms=settings.home_terms,
-        away_terms=settings.away_terms,
-        detect_team_names=settings.detect_team_names,
-        label_style=settings.label_style,
-    )
+    return to_model(FeedSeparationSettingsModel, settings)

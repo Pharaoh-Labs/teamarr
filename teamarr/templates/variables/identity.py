@@ -4,6 +4,8 @@ These variables identify teams and the competition context.
 Most are BASE_ONLY since they don't change between games.
 """
 
+from teamarr.core.naming import ranked_with_article, team_with_article
+from teamarr.services.league_mappings import get_league_mapping_service
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -11,26 +13,6 @@ from teamarr.templates.variables.registry import (
     TemplateScope,
     register_variable,
 )
-
-
-def _to_pascal_case(name: str) -> str:
-    """Convert team name to PascalCase for channel IDs.
-
-    Strips non-alphanumeric characters and normalizes accents.
-    Examples:
-        "Detroit Lions" → "DetroitLions"
-        "D.C. United" → "DcUnited"
-        "Atlético Madrid" → "AtleticoMadrid"
-    """
-    import re
-    import unicodedata
-
-    # Normalize unicode (é → e)
-    normalized = unicodedata.normalize("NFKD", name)
-    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
-    # Keep only alphanumeric, split on non-alpha
-    words = re.split(r"[^a-zA-Z0-9]+", ascii_name)
-    return "".join(word.capitalize() for word in words if word)
 
 
 def _get_opponent(ctx: TemplateContext, game_ctx: GameContext | None):
@@ -66,18 +48,6 @@ def extract_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> s
 
 
 @register_variable(
-    name="team_abbrev_lower",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Team abbreviation lowercase (e.g., 'det')",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    abbrev = ctx.team_config.team_abbrev or ""
-    return abbrev.lower()
-
-
-@register_variable(
     name="team_short",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.BASE_ONLY,
@@ -86,17 +56,6 @@ def extract_team_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None
 )
 def extract_team_short(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     return ctx.team_config.team_short_name or ""
-
-
-@register_variable(
-    name="team_name_pascal",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Team name in PascalCase for channel IDs (e.g., 'DetroitLions')",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_team_name_pascal(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    return _to_pascal_case(ctx.team_config.team_name or "")
 
 
 @register_variable(
@@ -121,18 +80,6 @@ def extract_opponent(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 def extract_opponent_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     opponent = _get_opponent(ctx, game_ctx)
     return opponent.abbreviation.upper() if opponent else ""
-
-
-@register_variable(
-    name="opponent_abbrev_lower",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.ALL,
-    description="Opponent abbreviation lowercase",
-    scope=TemplateScope.TEAM_ONLY,
-)
-def extract_opponent_abbrev_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    opponent = _get_opponent(ctx, game_ctx)
-    return opponent.abbreviation.lower() if opponent else ""
 
 
 @register_variable(
@@ -208,10 +155,66 @@ def extract_league(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_alias(ctx.team_config.league)
+
+
+def construct_league_abbrev(name: str) -> str:
+    """Build an all-caps abbreviation from a league name.
+
+    Keeps any letters that are already uppercase, digits, and the first letter
+    of every word (word boundaries are whitespace only, so an apostrophe doesn't
+    start a new word). Already-uppercase names pass through unchanged.
+
+    Examples:
+        NBA → NBA
+        World Cup → WC
+        Premier League → PL
+        La Liga → LL
+        Serie A → SA
+        UEFA Champions League → UEFACL
+        F1 → F1
+    """
+    out: list[str] = []
+    at_word_start = True
+    for ch in name:
+        if ch.isalnum():
+            if at_word_start or ch.isupper() or ch.isdigit():
+                out.append(ch.upper())
+            at_word_start = False
+        else:
+            at_word_start = ch.isspace()
+    return "".join(out)
+
+
+@register_variable(
+    name="league_abbrev",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description=(
+        "League abbreviation built from the league name — existing capitals "
+        "plus the first letter of each word (e.g., 'World Cup' → 'WC', 'NBA' → 'NBA')"
+    ),
+    sample="NBA",
+)
+def extract_league_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Return an abbreviation constructed from the league display name.
+
+    Unlike {league} (a curated alias), this is derived on the fly so it works
+    for any league. Falls back to the raw league code when no display name is
+    available.
+
+    THREAD-SAFE: Uses in-memory cache, no DB access.
+    """
+
+    service = get_league_mapping_service()
+    name = service.get_league_alias(ctx.team_config.league)
+    abbrev = construct_league_abbrev(name or "")
+
+    if abbrev:
+        return abbrev
+    return construct_league_abbrev(ctx.team_config.league or "")
 
 
 @register_variable(
@@ -235,7 +238,6 @@ def extract_league_name(ctx: TemplateContext, game_ctx: GameContext | None) -> s
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_display_name(ctx.team_config.league)
@@ -259,21 +261,9 @@ def extract_sport(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not sport_code:
         return ""
 
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_sport_display_name(sport_code)
-
-
-@register_variable(
-    name="sport_lower",
-    category=Category.IDENTITY,
-    suffix_rules=SuffixRules.BASE_ONLY,
-    description="Sport in lowercase (e.g., 'football')",
-)
-def extract_sport_lower(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    sport = ctx.team_config.sport or ""
-    return sport.lower()
 
 
 @register_variable(
@@ -296,7 +286,6 @@ def extract_league_id(ctx: TemplateContext, game_ctx: GameContext | None) -> str
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_league_id(ctx.team_config.league)
@@ -323,17 +312,26 @@ def extract_gracenote_category(ctx: TemplateContext, game_ctx: GameContext | Non
     """Return Gracenote-compatible category.
 
     Fallback chain:
+        0. User override from league_overrides (Settings → Advanced, #371)
         1. gracenote_category from leagues table (curated value)
-        2. Auto-generated: "{display_name} {Sport}" (e.g., 'NFL Football')
+        2. Auto-generated by the league's event_type:
+           - team_vs_team: "{display_name} {Sport}" (e.g., 'NFL Football')
+           - event/event_card: display_name alone (e.g., 'NASCAR Cup Series' —
+             Gracenote titles racing/combat by series or promotion name)
+
+    International tournaments are curated WITHOUT a sport suffix (real
+    Gracenote is branded + year: 'FIFA World Cup 2026'); compose the year in
+    templates via '{gracenote_category} {year}'.
 
     Examples:
         nfl → NFL Football
         mens-college-basketball → College Basketball (if curated)
-        eng.1 → English Premier League Soccer
+        eng.1 → Premier League Soccer (curated; club soccer keeps the suffix)
+        fifa.world → FIFA World Cup
+        nascar-truck → NASCAR Craftsman Truck Series
 
     THREAD-SAFE: Uses in-memory cache, no DB access.
     """
-    from teamarr.services.league_mappings import get_league_mapping_service
 
     service = get_league_mapping_service()
     return service.get_gracenote_category(ctx.team_config.league)
@@ -366,3 +364,64 @@ def extract_exception_keyword(ctx: TemplateContext, game_ctx: GameContext | None
     # Value is injected via extra_vars on TemplateContext
     # This extractor exists for validation, UI display, and as fallback
     return ""
+
+
+# --- Article-aware naming (tvnk.7, #329) ---
+
+
+@register_variable(
+    name="team_name_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Team name with Gracenote-convention article — 'the Detroit "
+    "Pistons' for clubs, 'Netherlands' for national teams",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_team_name_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    cfg = ctx.team_config
+    return team_with_article(cfg.team_name or "", cfg.league, cfg.sport)
+
+
+@register_variable(
+    name="opponent_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.ALL,
+    description="Opponent name with Gracenote-convention article — 'the Green "
+    "Bay Packers' for clubs, 'Japan' for national teams",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_opponent_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    opponent = _get_opponent(ctx, game_ctx)
+    if not opponent:
+        return ""
+    return team_with_article(opponent.name, opponent.league, opponent.sport)
+
+
+@register_variable(
+    name="team_name_ranked_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.BASE_ONLY,
+    description="Team name with rank and Gracenote article composed — "
+    "'the No. 7 Boston Celtics' ranked, 'the Boston Celtics' unranked",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_team_name_ranked_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    cfg = ctx.team_config
+    rank = ctx.team_stats.rank if ctx.team_stats else None
+    return ranked_with_article(cfg.team_name or "", cfg.league, cfg.sport, rank)
+
+
+@register_variable(
+    name="opponent_ranked_the",
+    category=Category.IDENTITY,
+    suffix_rules=SuffixRules.ALL,
+    description="Opponent with rank and Gracenote article composed — "
+    "'the No. 14 Green Bay Packers' ranked, 'the Green Bay Packers' unranked",
+    scope=TemplateScope.TEAM_ONLY,
+)
+def extract_opponent_ranked_the(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    opponent = _get_opponent(ctx, game_ctx)
+    if not opponent:
+        return ""
+    rank = game_ctx.opponent_stats.rank if game_ctx and game_ctx.opponent_stats else None
+    return ranked_with_article(opponent.name, opponent.league, opponent.sport, rank)

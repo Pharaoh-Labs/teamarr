@@ -1,7 +1,17 @@
 """Stream ordering service.
 
-Computes stream priorities based on user-defined rules.
-Rules are evaluated in priority order (lowest first); first match wins.
+Computes stream priorities from two classes of user-defined rule (epic
+teamarr-5ag):
+
+- Priority rules (``mode="priority"``): an ordered, first-match-wins list. The
+  first one a stream matches sets its hard *band*. This is the legacy behaviour
+  and the strict-precedence escape hatch.
+- Score rules (``mode="score"``): additive. A stream sums the ``points`` of
+  every score rule it matches; the total ranks streams within a band (signed —
+  negatives demote below the baseline).
+
+The two collapse into a single sortable priority int (lower = higher priority);
+pure-priority rulesets keep their legacy small values unchanged.
 """
 
 import logging
@@ -10,12 +20,24 @@ from dataclasses import dataclass
 from sqlite3 import Connection
 
 from teamarr.database.channels.types import ManagedChannelStream
+from teamarr.database.settings import get_stream_ordering_settings
 from teamarr.database.settings.types import StreamOrderingRule
 
 logger = logging.getLogger(__name__)
 
-# Default priority for streams that don't match any rule
+# Default priority for streams that don't match any rule (baseline band)
 NO_MATCH_PRIORITY = 999
+
+# Additive scoring (epic teamarr-5ag): when any score rule is present, a stream's
+# hard band and its summed points are collapsed into one sortable int:
+#     final = band * BAND_STRIDE - clamped_score      (lower sorts first)
+# The stride keeps priority bands strictly separated no matter how points
+# accumulate; the clamp guarantees no realistic score sum can bleed across a band
+# boundary. Pure-priority rulesets (every legacy/migrated config, and all existing
+# tests) skip this entirely and keep their original small 1-99/999 values, so
+# migration is byte-identical, not merely order-preserving.
+BAND_STRIDE = 1_000_000
+_SCORE_CLAMP = BAND_STRIDE // 2 - 1
 
 # Generic words that never disambiguate a team. Dropping them from the
 # team-feed/presence term set avoids over-broad matches (e.g. a club literally
@@ -31,15 +53,30 @@ class StreamWithPriority:
 
     stream: ManagedChannelStream
     computed_priority: int
-    matched_rule_type: str | None = None  # Which rule type matched
+    matched_rule_type: str | None = None  # Which rule type set the band (priority-mode winner)
+    band: int = NO_MATCH_PRIORITY  # Hard band (priority-mode winner or baseline)
+    score: int = 0  # Summed points from matched score-mode rules
+
+
+@dataclass
+class RuleEvaluation:
+    """One ordering rule that matched a stream, for the priority explainer popup."""
+
+    type: str
+    value: str
+    priority: int
+    is_winner: bool  # True for the priority-mode rule that set the band (the band winner)
+    mode: str = "priority"  # 'priority' (band) or 'score' (additive contributor)
+    points: int = 0  # signed contribution for score-mode rules (0 for priority-mode)
 
 
 class StreamOrderingService:
     """Service for computing stream ordering based on rules.
 
-    Rules are evaluated in priority order (lowest number first).
-    First matching rule determines the stream's position.
-    Non-matching streams get priority 999 (sorted to end).
+    A stream's priority is (hard band, additive score) collapsed into one int:
+    the first-matching priority-mode rule (or the catch_all/NO_MATCH baseline)
+    sets the band; matched score-mode rules sum their points to rank within it.
+    Non-matching streams fall to the baseline band (priority 999) with score 0.
     """
 
     def __init__(
@@ -55,31 +92,73 @@ class StreamOrderingService:
         """
         self.rules = sorted(rules, key=lambda r: r.priority)
         self.conn = conn
+        # Only widen the priority scale when scoring is actually in play; a
+        # pure-priority ruleset keeps its legacy small values (see BAND_STRIDE).
+        self._has_score_rules = any(
+            r.mode == "score" and r.type != "catch_all" for r in self.rules
+        )
         self._compiled_regex: dict[str, re.Pattern] = {}
         self._group_name_cache: dict[int, str] = {}
         # Keyed by rule.value string so different team selections cache separately
         self._team_feed_patterns: dict[str, re.Pattern | None] = {}
+        # Rule value → provider team ids it selects (#489); compared against a
+        # stream's persisted feed_team_id ahead of the name regex
+        self._team_feed_ids: dict[str, frozenset[str] | None] = {}
         # Keyed by sorted comma-joined keys for simple team-presence patterns
         self._team_presence_patterns: dict[str, re.Pattern | None] = {}
 
-    def _find_matching_rule(
+    def _resolve_band_and_score(
         self,
         stream: ManagedChannelStream,
         source_group_name: str | None,
-    ) -> tuple[StreamOrderingRule | None, int]:
-        """Return (matched_rule_or_None, catch_all_priority).
+    ) -> tuple[int, StreamOrderingRule | None, int]:
+        """Resolve a stream's hard band and additive score in one pass.
 
-        Iterates rules in priority order, skipping catch_all (which sets the
-        fallback rather than acting as a matcher).
+        Returns (band, band_rule_or_None, total_score):
+
+        - band: the first-matching priority-mode rule's ``priority``; else the
+          catch_all baseline; else NO_MATCH_PRIORITY. This is the hard band.
+        - band_rule: the priority-mode rule that set the band (None if the
+          baseline applied — nothing matched, or only score rules matched).
+        - total_score: sum of ``points`` over every matched score-mode rule.
+
+        catch_all is always a baseline, never a band matcher or score contributor.
+        Priority-mode rules resolve the band first-match-wins (rules are already
+        priority-sorted); score-mode rules all contribute regardless of band.
         """
         catch_all_priority = NO_MATCH_PRIORITY
+        band = NO_MATCH_PRIORITY
+        band_rule: StreamOrderingRule | None = None
+        total_score = 0
+
         for rule in self.rules:
             if rule.type == "catch_all":
                 catch_all_priority = rule.priority
                 continue
-            if self._matches(stream, rule, source_group_name):
-                return rule, catch_all_priority
-        return None, catch_all_priority
+            if not self._matches(stream, rule, source_group_name):
+                continue
+            if rule.mode == "score":
+                total_score += rule.points
+            elif band_rule is None:
+                # First matching priority-mode rule wins the band.
+                band = rule.priority
+                band_rule = rule
+
+        if band_rule is None:
+            band = catch_all_priority
+        return band, band_rule, total_score
+
+    def _collapse(self, band: int, total_score: int) -> int:
+        """Collapse (band, score) into one sortable int (lower = higher priority).
+
+        Pure-priority rulesets keep the legacy plain band value so existing
+        configs are unchanged. When scoring is in play, higher score sorts a
+        stream earlier within its band via ``band * BAND_STRIDE - score``.
+        """
+        if not self._has_score_rules:
+            return band
+        clamped = max(-_SCORE_CLAMP, min(_SCORE_CLAMP, total_score))
+        return band * BAND_STRIDE - clamped
 
     def compute_priority(
         self,
@@ -95,8 +174,8 @@ class StreamOrderingService:
         Returns:
             Priority number (lower = higher priority)
         """
-        matched_rule, catch_all_priority = self._find_matching_rule(stream, source_group_name)
-        return matched_rule.priority if matched_rule else catch_all_priority
+        band, _, total_score = self._resolve_band_and_score(stream, source_group_name)
+        return self._collapse(band, total_score)
 
     def compute_priority_with_details(
         self,
@@ -110,20 +189,81 @@ class StreamOrderingService:
             source_group_name: Optional pre-fetched group name
 
         Returns:
-            StreamWithPriority with computed priority and match info
+            StreamWithPriority with computed priority, band, and summed score
         """
-        matched_rule, catch_all_priority = self._find_matching_rule(stream, source_group_name)
-        if matched_rule:
-            return StreamWithPriority(
-                stream=stream,
-                computed_priority=matched_rule.priority,
-                matched_rule_type=matched_rule.type,
-            )
+        band, band_rule, total_score = self._resolve_band_and_score(stream, source_group_name)
+        matched_type = band_rule.type if band_rule else None
+        if matched_type is None and band != NO_MATCH_PRIORITY:
+            # Band came from an explicit catch_all baseline rule.
+            matched_type = "catch_all"
         return StreamWithPriority(
             stream=stream,
-            computed_priority=catch_all_priority,
-            matched_rule_type="catch_all" if catch_all_priority != NO_MATCH_PRIORITY else None,
+            computed_priority=self._collapse(band, total_score),
+            matched_rule_type=matched_type,
+            band=band,
+            score=total_score,
         )
+
+    def evaluate_rules(
+        self,
+        stream: ManagedChannelStream,
+        source_group_name: str | None = None,
+    ) -> list[RuleEvaluation]:
+        """Return the rules that matched a stream, marking which set the band.
+
+        Reports every matching rule (not just the band winner) so the UI can
+        explain a stream's priority: the priority-mode rule that won the band
+        (is_winner=True), each score-mode contributor (with its points), and the
+        "everything else" baseline. Rules are already priority-sorted.
+
+        Args:
+            stream: The stream to evaluate
+            source_group_name: Optional pre-fetched group name (for 'group' rules)
+
+        Returns:
+            Matched rules in priority order, always followed by the baseline
+            (the configured catch_all rule, or the implicit no-match default).
+            is_winner marks the priority-mode rule that set the band — or the
+            baseline when no priority rule matched. Score rules never carry the
+            winner flag; they contribute additively regardless of band.
+        """
+        matched: list[RuleEvaluation] = []
+        catch_all: StreamOrderingRule | None = None
+        band_won = False
+
+        for rule in self.rules:
+            if rule.type == "catch_all":
+                catch_all = rule
+                continue
+            if not self._matches(stream, rule, source_group_name):
+                continue
+            if rule.mode == "score":
+                matched.append(
+                    RuleEvaluation(
+                        rule.type, rule.value, rule.priority, False,
+                        mode="score", points=rule.points,
+                    )
+                )
+            else:
+                is_winner = not band_won
+                band_won = band_won or is_winner
+                matched.append(
+                    RuleEvaluation(
+                        rule.type, rule.value, rule.priority, is_winner, mode="priority"
+                    )
+                )
+
+        # Always surface the baseline so the popup shows what "everything else"
+        # falls back to, even when a specific rule won the band.
+        baseline_priority = catch_all.priority if catch_all else NO_MATCH_PRIORITY
+        baseline_value = catch_all.value if catch_all else ""
+        matched.append(
+            RuleEvaluation(
+                "catch_all", baseline_value, baseline_priority, not band_won, mode="priority"
+            )
+        )
+
+        return matched
 
     def sort_streams(
         self,
@@ -181,10 +321,16 @@ class StreamOrderingService:
             return self._match_team_feed(stream, rule.value)
         elif rule.type == "not_team_feed":
             return self._match_not_team_feed(stream, rule.value)
+        elif rule.type == "home_feed":
+            return self._match_feed_side(stream, "home")
+        elif rule.type == "away_feed":
+            return self._match_feed_side(stream, "away")
         elif rule.type == "epg_match":
             return self._match_epg_match(stream)
         elif rule.type == "dispatcharr_group":
             return self._match_dispatcharr_group(stream, rule.value)
+        elif rule.type == "stats_metric":
+            return self._match_stats_metric(stream, rule.value)
         return False
 
     def _match_m3u(self, stream: ManagedChannelStream, account_name: str) -> bool:
@@ -231,7 +377,17 @@ class StreamOrderingService:
     )
 
     def _match_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
-        """Match stream name against the dynamic team-feed pattern."""
+        """Match a stream against the rule's team selection (#489).
+
+        The persisted feed_team_id (matching layer's resolution: broadcast
+        markets, tvg-id, team-branded names like 'Brewers.TV', TEAM_ONLY
+        matched side) is authoritative when present — it covers streams the
+        name regex can't see. Rows without one (NULL) fall back to the name
+        regex, so pre-column rows and unresolved streams keep working.
+        """
+        if stream.feed_team_id:
+            team_ids = self._get_team_feed_ids(rule_value)
+            return team_ids is not None and stream.feed_team_id in team_ids
         if not stream.stream_name:
             return False
         pattern = self._get_team_feed_pattern(rule_value)
@@ -240,7 +396,15 @@ class StreamOrderingService:
         return bool(pattern.search(stream.stream_name))
 
     def _match_not_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
-        """Match streams that have feed indicators but are NOT this team's feed."""
+        """Match streams that are team feeds but NOT this team's feed.
+
+        A persisted feed_team_id means the stream IS a team feed — match when
+        it belongs to a different team than the rule selects. NULL falls back
+        to the regex path, which requires an explicit feed indicator first.
+        """
+        if stream.feed_team_id:
+            team_ids = self._get_team_feed_ids(rule_value)
+            return team_ids is not None and stream.feed_team_id not in team_ids
         if not stream.stream_name:
             return False
         if not self._FEED_INDICATOR_RE.search(stream.stream_name):
@@ -249,6 +413,23 @@ class StreamOrderingService:
         if pattern is None:
             return False
         return not bool(pattern.search(stream.stream_name))
+
+    @staticmethod
+    def _match_feed_side(stream: ManagedChannelStream, side: str) -> bool:
+        """Match streams whose persisted feed side is exactly `side` (#533).
+
+        Tri-state, deliberately strict: feed_side is 'home', 'away', or NULL
+        meaning UNKNOWN. An unknown stream matches NEITHER home_feed nor
+        away_feed and falls through to the catch-all band — it is never
+        treated as the opposite side just because it isn't this one.
+
+        No name-regex fallback, unlike team_feed. The stream-name feed marker
+        is already consumed upstream (classifier.detect_and_strip_feed_hint →
+        resolve_feed_side) and persisted here, so re-deriving it at ranking
+        time would be a second, weaker copy of a decision already made with
+        the event in scope.
+        """
+        return stream.feed_side == side
 
     def _match_epg_match(self, stream: ManagedChannelStream) -> bool:
         """Match streams attached via EPG program-data matching (epic 183).
@@ -268,8 +449,96 @@ class StreamOrderingService:
             return False
         return stream.dispatcharr_channel_group.lower() == group_name.lower()
 
+    _STATS_OPERATORS = {
+        ">": lambda a, b: a > b,
+        "<": lambda a, b: a < b,
+        ">=": lambda a, b: a >= b,
+        "<=": lambda a, b: a <= b,
+        "=": lambda a, b: a == b,
+    }
+
+    def _resolve_stat_value(self, stats: dict, metric: str) -> float | None:
+        """Resolve a metric name to a float, including virtual derived fields.
+
+        resolution_width / resolution_height extract from the "1920x1080" string
+        that Dispatcharr stores in the 'resolution' key.
+        """
+        if metric == "resolution_width":
+            res = str(stats.get("resolution") or "")
+            if "x" in res:
+                try:
+                    return float(res.split("x")[0])
+                except (ValueError, IndexError):
+                    return None
+            return None
+        if metric == "resolution_height":
+            res = str(stats.get("resolution") or "")
+            if "x" in res:
+                try:
+                    return float(res.split("x")[1])
+                except (ValueError, IndexError):
+                    return None
+            return None
+        raw = stats.get(metric)
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            return None
+
+    def _match_stats_metric(self, stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match stream by numeric stat comparisons encoded in rule_value.
+
+        Supports multiple AND conditions separated by ";":
+          "ffmpeg_output_bitrate|>=|4000;source_fps|>=|50"
+
+        Each condition is "metric|operator|threshold". Actual field names match
+        Dispatcharr's stream_stats JSON: resolution, source_fps,
+        ffmpeg_output_bitrate, audio_bitrate, sample_rate. Virtual metrics
+        resolution_width / resolution_height are derived from the resolution string.
+        """
+        if not rule_value:
+            return False
+        try:
+            for cond in rule_value.split(";"):
+                parts = cond.split("|", 2)
+                if len(parts) < 2:
+                    return False
+                metric, operator = parts[0], parts[1]
+                threshold_str = parts[2] if len(parts) > 2 else ""
+
+                if operator == "is_unknown":
+                    # Matches when stats are absent entirely OR this metric has no value
+                    has_value = (
+                        stream.stream_stats is not None
+                        and self._resolve_stat_value(stream.stream_stats, metric) is not None
+                    )
+                    if has_value:
+                        return False
+                else:
+                    if not stream.stream_stats:
+                        return False
+                    val = self._resolve_stat_value(stream.stream_stats, metric)
+                    if val is None:
+                        return False
+                    compare = self._STATS_OPERATORS.get(operator)
+                    if compare is None:
+                        return False
+                    if not compare(val, float(threshold_str)):
+                        return False
+            return True
+        except (ValueError, TypeError, AttributeError):
+            return False
+
     def _match_stream_type(self, stream: ManagedChannelStream, rule_value: str) -> bool:
         """Match stream by type, with optional team filter (value may be 'team|key1,key2')."""
+        # The UI offers event / team / EPG as one mutually-exclusive Stream Type
+        # select (EPG stores as rule type epg_match). EPG-matched streams also
+        # carry match_type event/team, so without this gate an event/team rule
+        # listed above the EPG rule captures them first (#448).
+        if stream.match_method == "epg":
+            return False
         if "|" not in rule_value:
             return stream.match_type == rule_value
         stream_type, team_keys_str = rule_value.split("|", 1)
@@ -382,6 +651,49 @@ class StreamOrderingService:
             ).fetchall()
 
         return rows
+
+    def _get_team_feed_ids(self, rule_value: str) -> frozenset[str] | None:
+        """Resolve a team_feed rule value to the provider team ids it selects (#489).
+
+        Compared against a stream's persisted feed_team_id (which holds the
+        provider team id, same namespace as managed_channels.feed_team_id).
+        Keyed formats carry the id directly ('espn:mlb:158' → '158'); the
+        legacy integer format holds teams-table row ids and needs a lookup.
+        Returns None when nothing resolves (rule matches no resolved stream).
+        Results are cached per rule_value string.
+        """
+        if rule_value in self._team_feed_ids:
+            return self._team_feed_ids[rule_value]
+
+        ids: set[str] = set()
+        if rule_value:
+            if ":" in rule_value:
+                for key in rule_value.split(","):
+                    key = key.strip()
+                    if ":" in key:
+                        # 2-part provider:id or 3-part provider:league:id —
+                        # the provider team id is always the last segment
+                        ids.add(key.split(":")[-1])
+            elif self.conn:
+                row_ids = [int(x) for x in rule_value.split(",") if x.strip().isdigit()]
+                if row_ids:
+                    placeholders = ",".join("?" * len(row_ids))
+                    try:
+                        rows = self.conn.execute(
+                            f"SELECT provider_team_id FROM teams"
+                            f" WHERE id IN ({placeholders}) AND active = 1",
+                            row_ids,
+                        ).fetchall()
+                        ids.update(str(r[0]) for r in rows if r[0] is not None)
+                    except Exception as e:
+                        logger.warning(
+                            "[STREAM_ORDER] Failed to resolve team ids for team_feed rule: %s",
+                            e,
+                        )
+
+        result = frozenset(ids) if ids else None
+        self._team_feed_ids[rule_value] = result
+        return result
 
     def _get_team_feed_pattern(self, rule_value: str) -> re.Pattern | None:
         """Build and cache the team-feed regex.
@@ -508,7 +820,6 @@ def get_stream_ordering_service(conn: Connection) -> StreamOrderingService:
     Returns:
         Configured StreamOrderingService
     """
-    from teamarr.database.settings import get_stream_ordering_settings
 
     settings = get_stream_ordering_settings(conn)
     return StreamOrderingService(rules=settings.rules, conn=conn)

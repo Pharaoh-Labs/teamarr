@@ -8,7 +8,7 @@ import { cn, getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { toast } from "sonner"
 import type { CachedLeague } from "@/api/teams"
 import { getLeagues, getSports } from "@/api/teams"
-import { ChevronRight, Loader2, Check, Search, X } from "lucide-react"
+import { ChevronRight, LoaderCircle, Check, Search, X } from "lucide-react"
 import { useThemedLogo } from "@/hooks/useTheme"
 
 // Types
@@ -370,7 +370,7 @@ export function TeamImport() {
 
           {leaguesQuery.isLoading ? (
             <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : leaguesQuery.error ? (
             <div className="p-4 text-sm text-destructive">
@@ -379,7 +379,7 @@ export function TeamImport() {
           ) : Object.keys(leaguesBySport).length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
               <p className="mb-2">No leagues cached.</p>
-              <p>Go to Settings → Cache to refresh the team/league cache.</p>
+              <p>Go to Settings → Advanced (Data Caches) to refresh the team/league cache.</p>
             </div>
           ) : (
             <div className="py-1">
@@ -467,7 +467,7 @@ export function TeamImport() {
                 <div className="flex-1 overflow-y-auto p-4">
                   {searchTeamsQuery.isLoading ? (
                     <div className="flex items-center justify-center p-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                   ) : groupedTeams.length === 0 ? (
                     <div className="text-center text-muted-foreground py-8">
@@ -583,7 +583,7 @@ export function TeamImport() {
                   >
                     {importMutation.isPending ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
                         Importing...
                       </>
                     ) : (
@@ -641,7 +641,7 @@ export function TeamImport() {
               <div className="flex-1 overflow-y-auto p-4">
                 {teamsQuery.isLoading ? (
                   <div className="flex items-center justify-center p-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : teamsQuery.error ? (
                   <div className="text-center text-destructive p-8">
@@ -741,7 +741,7 @@ export function TeamImport() {
                 >
                   {importMutation.isPending ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <LoaderCircle className="h-4 w-4 animate-spin mr-2" />
                       Importing...
                     </>
                   ) : (

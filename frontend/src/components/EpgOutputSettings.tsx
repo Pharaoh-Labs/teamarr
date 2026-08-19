@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,9 +39,14 @@ export function EpgOutputSettings() {
 
   const [epg, setEPG] = useState<EPGSettings | null>(null)
 
-  useEffect(() => {
-    if (epgData) setEPG(epgData)
-  }, [epgData])
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setEPG(epgData)
+  }
 
   const handleSaveOutput = async () => {
     try {
@@ -113,7 +118,7 @@ export function EpgOutputSettings() {
             />
             <p className="text-xs text-muted-foreground">
               Optional. Prefixed onto relative art paths in templates (e.g. a template
-              value of <code>/{"{league}"}/{"{home_team}"}/cover.png</code> becomes the full
+              value of <code>{"{league}"}/{"{home_team}"}/cover.png</code> becomes the full
               URL). Absolute URLs in templates are left unchanged. See the{" "}
               <a
                 href={GAMETHUMBS_REPO_URL}
@@ -144,9 +149,15 @@ export function DefaultDurations() {
 
   const [durations, setDurations] = useState<DurationSettings | null>(null)
 
-  useEffect(() => {
-    if (durationsData) setDurations(durationsData)
-  }, [durationsData])
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedDurationsData, setSyncedDurationsData] =
+    useState<typeof durationsData>(undefined)
+  if (durationsData && durationsData !== syncedDurationsData) {
+    setSyncedDurationsData(durationsData)
+    setDurations(durationsData)
+  }
 
   const { data: sportsData } = useQuery({
     queryKey: ["sports"],

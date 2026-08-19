@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { SaveButton as SaveButtonBase } from "@/components/ui/save-button"
@@ -7,11 +6,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Select } from "@/components/ui/select"
-import {
-  ChannelProfileSelector,
-  profileIdsToApi,
-  apiToProfileIds,
-} from "@/components/ChannelProfileSelector"
+import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
+import { profileIdsToApi, apiToProfileIds } from "@/lib/channel-profile-ids"
 import { StreamProfileSelector } from "@/components/StreamProfileSelector"
 import {
   useSettings,
@@ -19,6 +15,8 @@ import {
   useUpdateDispatcharrSettings,
 } from "@/hooks/useSettings"
 import type { DispatcharrSettings } from "@/api/settings"
+import { useChannelProfiles, useChannelGroups } from "@/hooks/useDispatcharr"
+import type { ChannelGroup } from "@/api/dispatcharr"
 
 /**
  * Dispatcharr Output — default channel profiles, stream profile, and channel
@@ -41,39 +39,22 @@ export function DispatcharrOutputSettings() {
   const updateDispatcharr = useUpdateDispatcharrSettings()
 
   // Fetch channel profiles for conversion helpers
-  const channelProfilesQuery = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  const channelProfilesQuery = useChannelProfiles(
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   // Always fetch the full group list (with from_m3u flag) so a saved M3U-sourced
   // group always has a matching <option> to bind to (teamarrv2-t6d). The
   // includeM3uGroups toggle filters the displayed list; the selected group is
   // always kept visible.
   const [includeM3uGroups, setIncludeM3uGroups] = useState(false)
-  const channelGroupsQuery = useQuery({
-    queryKey: ["dispatcharr-channel-groups"],
-    queryFn: async () => {
-      const response = await fetch(
-        "/api/v1/dispatcharr/channel-groups?exclude_m3u=false"
-      )
-      if (!response.ok) return []
-      return response.json() as Promise<
-        { id: number; name: string; from_m3u: boolean }[]
-      >
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  const channelGroupsQuery = useChannelGroups(
+    false,
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   const visibleChannelGroups = (
-    all: { id: number; name: string; from_m3u: boolean }[],
+    all: ChannelGroup[],
     selectedId: number | null | undefined,
   ) => {
     if (includeM3uGroups) return all
@@ -85,34 +66,43 @@ export function DispatcharrOutputSettings() {
   const [dispatcharr, setDispatcharr] = useState<Partial<DispatcharrSettings>>({})
   const [selectedProfileIds, setSelectedProfileIds] = useState<(number | string)[]>([])
 
-  useEffect(() => {
-    if (settings) {
-      setDispatcharr({
-        enabled: settings.dispatcharr.enabled,
-        url: settings.dispatcharr.url,
-        username: settings.dispatcharr.username,
-        password: "", // Don't show masked password
-        epg_id: settings.dispatcharr.epg_id,
-        default_channel_profile_ids: settings.dispatcharr.default_channel_profile_ids,
-        default_stream_profile_id: settings.dispatcharr.default_stream_profile_id,
-        default_channel_group_id: settings.dispatcharr.default_channel_group_id,
-        default_channel_group_mode: settings.dispatcharr.default_channel_group_mode,
-        cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
-      })
-    }
-  }, [settings])
+  // Sync the form from the server blob during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every settings refetch,
+  // exactly like the previous effect, without the extra effect render pass.
+  const [syncedSettings, setSyncedSettings] = useState<typeof settings>(undefined)
+  if (settings && settings !== syncedSettings) {
+    setSyncedSettings(settings)
+    setDispatcharr({
+      enabled: settings.dispatcharr.enabled,
+      url: settings.dispatcharr.url,
+      username: settings.dispatcharr.username,
+      password: "", // Don't show masked password
+      epg_id: settings.dispatcharr.epg_id,
+      default_channel_profile_ids: settings.dispatcharr.default_channel_profile_ids,
+      default_stream_profile_id: settings.dispatcharr.default_stream_profile_id,
+      default_channel_group_id: settings.dispatcharr.default_channel_group_id,
+      default_channel_group_mode: settings.dispatcharr.default_channel_group_mode,
+      cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
+    })
+  }
 
   // Convert API profile IDs to display IDs when profiles are loaded
-  useEffect(() => {
-    if (channelProfilesQuery.data && settings) {
-      const allProfileIds = channelProfilesQuery.data.map((p) => p.id)
-      const displayIds = apiToProfileIds(
-        settings.dispatcharr.default_channel_profile_ids,
-        allProfileIds
-      )
-      setSelectedProfileIds(displayIds)
-    }
-  }, [channelProfilesQuery.data, settings])
+  const profilesData = channelProfilesQuery.data
+  const [syncedProfiles, setSyncedProfiles] = useState<{
+    profiles: typeof profilesData
+    settings: typeof settings
+  } | null>(null)
+  if (
+    profilesData &&
+    settings &&
+    (syncedProfiles?.profiles !== profilesData || syncedProfiles?.settings !== settings)
+  ) {
+    setSyncedProfiles({ profiles: profilesData, settings })
+    const allProfileIds = profilesData.map((p) => p.id)
+    setSelectedProfileIds(
+      apiToProfileIds(settings.dispatcharr.default_channel_profile_ids, allProfileIds)
+    )
+  }
 
   const handleSave = async () => {
     try {
@@ -145,7 +135,7 @@ export function DispatcharrOutputSettings() {
     }
   }
 
-  const SaveButton = () => (
+  const saveButton = (
     <SaveButtonBase onClick={handleSave} pending={updateDispatcharr.isPending} />
   )
 
@@ -169,7 +159,7 @@ export function DispatcharrOutputSettings() {
               Profile assignment is enforced on every EPG generation run.
             </p>
           </div>
-          <SaveButton />
+          {saveButton}
         </CardContent>
       </Card>
 
@@ -192,7 +182,7 @@ export function DispatcharrOutputSettings() {
               This default applies to all groups unless overridden.
             </p>
           </div>
-          <SaveButton />
+          {saveButton}
         </CardContent>
       </Card>
 
@@ -295,7 +285,7 @@ export function DispatcharrOutputSettings() {
             </div>
           )}
 
-          <SaveButton />
+          {saveButton}
         </CardContent>
       </Card>
     </div>

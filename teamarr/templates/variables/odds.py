@@ -25,9 +25,10 @@ def _has_odds(game_ctx: GameContext | None) -> bool:
     description="Odds provider name (e.g., 'ESPN BET')",
 )
 def extract_odds_provider(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if _has_odds(game_ctx):
-        return game_ctx.odds.provider
-    return ""
+    odds = game_ctx.odds if game_ctx else None
+    if odds is None:
+        return ""
+    return odds.provider
 
 
 @register_variable(
@@ -37,8 +38,9 @@ def extract_odds_provider(ctx: TemplateContext, game_ctx: GameContext | None) ->
     description="Point spread (absolute value, e.g., '7')",
 )
 def extract_odds_spread(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if _has_odds(game_ctx) and game_ctx.odds.spread:
-        spread = game_ctx.odds.spread
+    odds = game_ctx.odds if game_ctx else None
+    if odds is not None and odds.spread:
+        spread = odds.spread
         # Format as integer if whole number
         if spread == int(spread):
             return str(int(spread))
@@ -53,8 +55,9 @@ def extract_odds_spread(ctx: TemplateContext, game_ctx: GameContext | None) -> s
     description="Over/under total (e.g., '47.5')",
 )
 def extract_odds_over_under(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if _has_odds(game_ctx) and game_ctx.odds.over_under:
-        ou = game_ctx.odds.over_under
+    odds = game_ctx.odds if game_ctx else None
+    if odds is not None and odds.over_under:
+        ou = odds.over_under
         if ou == int(ou):
             return str(int(ou))
         return str(ou)
@@ -68,9 +71,10 @@ def extract_odds_over_under(ctx: TemplateContext, game_ctx: GameContext | None) 
     description="Full odds description string",
 )
 def extract_odds_details(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if _has_odds(game_ctx):
-        return game_ctx.odds.details
-    return ""
+    odds = game_ctx.odds if game_ctx else None
+    if odds is None:
+        return ""
+    return odds.details
 
 
 @register_variable(
@@ -81,8 +85,9 @@ def extract_odds_details(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     scope=TemplateScope.TEAM_ONLY,
 )
 def extract_odds_moneyline(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if _has_odds(game_ctx) and game_ctx.odds.team_moneyline:
-        ml = game_ctx.odds.team_moneyline
+    odds = game_ctx.odds if game_ctx else None
+    if odds is not None and odds.team_moneyline:
+        ml = odds.team_moneyline
         if ml > 0:
             return f"+{ml}"
         return str(ml)
@@ -97,8 +102,9 @@ def extract_odds_moneyline(ctx: TemplateContext, game_ctx: GameContext | None) -
     scope=TemplateScope.TEAM_ONLY,
 )
 def extract_odds_opponent_moneyline(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if _has_odds(game_ctx) and game_ctx.odds.opponent_moneyline:
-        ml = game_ctx.odds.opponent_moneyline
+    odds = game_ctx.odds if game_ctx else None
+    if odds is not None and odds.opponent_moneyline:
+        ml = odds.opponent_moneyline
         if ml > 0:
             return f"+{ml}"
         return str(ml)

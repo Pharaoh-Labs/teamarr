@@ -3,7 +3,8 @@
 All request/response models for settings endpoints.
 """
 
-from typing import Any
+from dataclasses import asdict
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -11,10 +12,41 @@ from pydantic import BaseModel, Field, field_serializer, field_validator
 # Update handlers should treat this as "unchanged" (skip update).
 MASKED_SECRET = "********"
 
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def to_model(model_cls: type[_ModelT], settings_obj: Any) -> _ModelT:
+    """Build an API model from a settings dataclass.
+
+    Field names match by construction (guarded by tests/test_settings_registry.py);
+    dataclass fields the model doesn't expose are ignored.
+    """
+    return model_cls(**asdict(settings_obj))
+
 
 def unmask_or_skip(value: str | None) -> str | None:
     """Convert masked secret back to None so DB update skips the field."""
     return None if value == MASKED_SECRET else value
+
+
+def merge_masked_servers(incoming: list[dict], stored: list[Any]) -> list[dict]:
+    """Resolve MASKED_SECRET password/api_key values from stored entries (#471).
+
+    Server lists are full-replace on update, and the UI round-trips the
+    masked sentinel for secrets the user didn't touch. Each incoming entry
+    is matched to a stored entry by URL first (rows can be reordered), then
+    by position, and masked secrets are swapped for the stored values.
+    """
+    by_url = {s.url: s for s in stored if getattr(s, "url", None)}
+    merged: list[dict] = []
+    for i, entry in enumerate(incoming):
+        e = dict(entry)
+        match = by_url.get(e.get("url")) or (stored[i] if i < len(stored) else None)
+        for secret in ("password", "api_key"):
+            if e.get(secret) == MASKED_SECRET:
+                e[secret] = getattr(match, secret, None) if match else None
+        merged.append(e)
+    return merged
 
 
 def _validate_profile_ids(v: Any) -> list[str | int] | None:
@@ -212,6 +244,7 @@ class EPGSettingsModel(BaseModel):
     epg_channel_source_groups: list[int] = []
     epg_stream_pre_buffer_minutes: int = 60
     epg_stream_post_buffer_minutes: int = 60
+    tennis_majors_only: bool = False
     art_base_url: str = ""
 
 
@@ -234,7 +267,7 @@ class DisplaySettingsModel(BaseModel):
 
     time_format: str = "12h"
     show_timezone: bool = True
-    channel_id_format: str = "{team_name_pascal}.{league_id}"
+    channel_id_format: str = "{team_name|pascal}.{league_id}"
     xmltv_generator_name: str = "Teamarr"
     xmltv_generator_url: str = "https://github.com/Pharaoh-Labs/teamarr"
     tsdb_api_key: str | None = None  # Optional TheSportsDB premium API key
@@ -271,7 +304,7 @@ class TeamFilterSettingsModel(BaseModel):
     include_teams: list[dict] | None = None
     exclude_teams: list[dict] | None = None
     mode: str = "include"
-    bypass_filter_for_playoffs: bool = False  # Include all playoff games
+    bypass_filter_for_playoffs: bool = False  # Include all playoff and All-Star games
 
 
 class TeamFilterSettingsUpdate(BaseModel):
@@ -297,6 +330,11 @@ class ChannelNumberingSettingsModel(BaseModel):
     global_channel_mode: str = "auto"  # 'auto', 'manual'
     league_channel_starts: dict = {}  # {"nfl": 1001, "nba": 2001}
     global_consolidation_mode: str = "consolidate"  # 'consolidate', 'separate'
+    channel_stability_mode: str = "compact"  # 'compact', 'gap', 'strict'
+    channel_gap_size: int = 3
+    channel_daily_reset_enabled: bool = True
+    channel_daily_reset_time: str = "04:00"
+    force_channel_relayout_pending: bool = False  # one-shot re-grid armed for next run
 
 
 class ChannelNumberingSettingsUpdate(BaseModel):
@@ -305,6 +343,10 @@ class ChannelNumberingSettingsUpdate(BaseModel):
     global_channel_mode: str | None = None
     league_channel_starts: dict | None = None
     global_consolidation_mode: str | None = None
+    channel_stability_mode: str | None = None
+    channel_gap_size: int | None = None
+    channel_daily_reset_enabled: bool | None = None
+    channel_daily_reset_time: str | None = None
 
 
 # =============================================================================
@@ -313,11 +355,25 @@ class ChannelNumberingSettingsUpdate(BaseModel):
 
 
 class StreamOrderingRuleModel(BaseModel):
-    """A single stream ordering rule."""
+    """A single stream ordering rule.
+
+    Two rule classes (epic teamarr-5ag), discriminated by ``mode``:
+    'priority' (hard, first-match band; ordered by ``priority``) and 'score'
+    (soft, additive; ``points`` are summed across matched score rules). ``mode``
+    defaults to 'priority' — the legacy-safe fallback, so a request that omits it
+    (old client, pre-feature import) keeps hard behaviour. The add-rule UI sends
+    'score' explicitly for new rules.
+    """
 
     type: str = Field(..., description="Rule type: 'm3u', 'group', or 'regex'")
     value: str = Field(..., description="M3U account name, group name, or regex pattern")
     priority: int = Field(..., ge=1, le=99, description="Priority (1-99, lower = higher)")
+    mode: Literal["priority", "score"] = Field(
+        "priority", description="'priority' (hard band) or 'score' (additive)"
+    )
+    points: int = Field(
+        0, ge=-100000, le=100000, description="Signed points, summed for score-mode rules"
+    )
 
 
 class StreamOrderingSettingsModel(BaseModel):
@@ -409,10 +465,10 @@ class FeedSeparationSettingsUpdate(BaseModel):
 # =============================================================================
 
 
-class EmbySettingsModel(BaseModel):
-    """Emby integration settings."""
+class MediaServerEntryModel(BaseModel):
+    """One Emby/Jellyfin server target (#471). Secrets are masked per entry."""
 
-    enabled: bool = False
+    name: str = ""
     url: str | None = None
     username: str | None = None
     password: str | None = None
@@ -429,14 +485,37 @@ class EmbySettingsModel(BaseModel):
         return MASKED_SECRET if v else None
 
 
-class EmbySettingsUpdate(BaseModel):
-    """Update model for Emby settings (all fields optional)."""
+class MediaServerEntryUpdateModel(BaseModel):
+    """Update-path twin of MediaServerEntryModel — NO masking serializers.
 
-    enabled: bool | None = None
+    The response model's field_serializers also run during model_dump(),
+    which masked freshly-entered secrets in the update route before the
+    merge step could see them — new credentials stored as None (#491).
+    Updates must carry values verbatim; merge_masked_servers handles the
+    masked sentinels the UI round-trips for untouched fields.
+    """
+
+    name: str = ""
     url: str | None = None
     username: str | None = None
     password: str | None = None
     api_key: str | None = None
+
+
+class EmbySettingsModel(BaseModel):
+    """Emby integration settings."""
+
+    enabled: bool = False
+    servers: list[MediaServerEntryModel] = []
+
+
+class EmbySettingsUpdate(BaseModel):
+    """Update model for Emby settings (all fields optional)."""
+
+    enabled: bool | None = None
+    # Full-replace: send the complete list. Untouched secrets may be sent as
+    # the masked sentinel; the route merges stored values back per entry.
+    servers: list[MediaServerEntryUpdateModel] | None = None
 
 
 class EmbyConnectionTestRequest(BaseModel):
@@ -468,30 +547,16 @@ class JellyfinSettingsModel(BaseModel):
     """Jellyfin integration settings."""
 
     enabled: bool = False
-    url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
-
-    @field_serializer("password")
-    @classmethod
-    def _mask_password(cls, v: str | None) -> str | None:
-        return MASKED_SECRET if v else None
-
-    @field_serializer("api_key")
-    @classmethod
-    def _mask_api_key(cls, v: str | None) -> str | None:
-        return MASKED_SECRET if v else None
+    servers: list[MediaServerEntryModel] = []
 
 
 class JellyfinSettingsUpdate(BaseModel):
     """Update model for Jellyfin settings (all fields optional)."""
 
     enabled: bool | None = None
-    url: str | None = None
-    username: str | None = None
-    password: str | None = None
-    api_key: str | None = None
+    # Full-replace: send the complete list. Untouched secrets may be sent as
+    # the masked sentinel; the route merges stored values back per entry.
+    servers: list[MediaServerEntryUpdateModel] | None = None
 
 
 class JellyfinConnectionTestRequest(BaseModel):
@@ -519,22 +584,30 @@ class JellyfinConnectionTestResponse(BaseModel):
 # =============================================================================
 
 
+class ChannelsDVRServerModel(BaseModel):
+    """One Channels DVR server target (#381)."""
+
+    name: str = ""
+    url: str | None = None
+    source_name: str | None = None
+    lineup_id: str | None = None
+
+
 class ChannelsDVRSettingsModel(BaseModel):
     """Channels DVR integration settings."""
 
     enabled: bool = False
-    url: str | None = None
-    source_name: str | None = None
-    lineup_id: str | None = None
+    servers: list[ChannelsDVRServerModel] = []
 
 
 class ChannelsDVRSettingsUpdate(BaseModel):
-    """Update model for Channels DVR settings (all fields optional)."""
+    """Update model for Channels DVR settings (all fields optional).
+
+    `servers` is full-replace: send the complete list.
+    """
 
     enabled: bool | None = None
-    url: str | None = None
-    source_name: str | None = None
-    lineup_id: str | None = None
+    servers: list[ChannelsDVRServerModel] | None = None
 
 
 class ChannelsDVRConnectionTestRequest(BaseModel):

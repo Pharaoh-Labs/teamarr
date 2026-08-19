@@ -3,8 +3,13 @@
 CRUD operations for managed_channel_streams table.
 """
 
+import json
 import logging
+import re
 from sqlite3 import Connection
+
+from teamarr.database.aliases import list_aliases
+from teamarr.dispatcharr.factory import get_dispatcharr_client
 
 from .types import ManagedChannelStream
 
@@ -33,7 +38,7 @@ def add_stream_to_channel(
         ID of created stream record
     """
     columns = ["managed_channel_id", "dispatcharr_stream_id", "priority"]
-    values = [managed_channel_id, dispatcharr_stream_id, priority]
+    values: list = [managed_channel_id, dispatcharr_stream_id, priority]
 
     if stream_name:
         columns.append("stream_name")
@@ -47,6 +52,8 @@ def add_stream_to_channel(
         "exception_keyword",
         "match_type",
         "match_method",  # how matched ('epg', 'fuzzy', …); drives the epg_match ordering rule
+        "feed_team_id",  # resolved feed/matched team; drives team_feed rules (#489)
+        "feed_side",  # 'home'/'away'; NULL = unknown. Drives home_feed/away_feed rules (#533)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
         "attach_at",   # time-windowed membership (183.5); None = full-life
         "detach_at",
@@ -65,6 +72,7 @@ def add_stream_to_channel(
         values,
     )
     stream_id = cursor.lastrowid
+    assert stream_id is not None  # just-inserted row always has a rowid
     logger.debug(
         "[ATTACHED] Stream %d to channel %d priority=%d",
         dispatcharr_stream_id,
@@ -173,17 +181,36 @@ def compute_stream_priority_from_rules(
     stream_name: str | None = None,
     m3u_account_name: str | None = None,
     source_group_id: int | None = None,
+    match_type: str = "event",
+    match_method: str | None = None,
+    dispatcharr_channel_group: str | None = None,
+    feed_team_id: str | None = None,
+    feed_side: str | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
     If rules are defined, computes priority based on first matching rule.
     If no rules or no match, returns 999 (sort to end).
 
+    Callers should pass every field they have (#379): rule types match on
+    match_type (stream_type rules), match_method (epg_match rules),
+    dispatcharr_channel_group (dispatcharr_group rules), feed_team_id
+    (team_feed/not_team_feed rules, #489), and feed_side (home_feed/away_feed
+    rules, #533) — omitting them makes those rules silently non-matching at
+    attach time, so the order pushed to Dispatcharr is wrong until the
+    end-of-generation reorder pass corrects it.
+
     Args:
         conn: Database connection
         stream_name: Stream display name (for regex matching)
         m3u_account_name: M3U account name (for m3u type matching)
         source_group_id: Source group ID (for group type matching)
+        match_type: 'event' or 'team' (for stream_type rules)
+        match_method: 'epg', 'fuzzy', etc. (for epg_match rules)
+        dispatcharr_channel_group: DP channel group name (for dispatcharr_group rules)
+        feed_team_id: Resolved feed/matched team id (for team_feed rules)
+        feed_side: 'home'/'away', or None = unknown (for home_feed/away_feed
+            rules). Unknown matches neither rule — never coerced to a side.
 
     Returns:
         Computed priority (lower = higher priority)
@@ -204,6 +231,11 @@ def compute_stream_priority_from_rules(
         stream_name=stream_name,
         m3u_account_name=m3u_account_name,
         source_group_id=source_group_id,
+        match_type=match_type,
+        match_method=match_method,
+        dispatcharr_channel_group=dispatcharr_channel_group,
+        feed_team_id=feed_team_id,
+        feed_side=feed_side,
     )
 
     return ordering_service.compute_priority(temp_stream)
@@ -259,6 +291,133 @@ def update_stream_name(
             managed_channel_id,
             dispatcharr_stream_id,
             new_name,
+        )
+    return cursor.rowcount > 0
+
+
+def update_stream_account_name(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    account_name: str,
+    account_id: int | None = None,
+) -> bool:
+    """Refresh the stored M3U account name (and optionally id) for an active stream.
+
+    Self-heal for #297: rows attached before per-stream account resolution carry
+    the group's single configured account name, mislabeling multi-login streams.
+    Called each generation for already-attached streams; the WHERE guard makes it
+    a no-op when the stored values already match.
+
+    Returns:
+        True if a row was updated (values actually changed), False otherwise
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET m3u_account_name = ?,
+               m3u_account_id = COALESCE(?, m3u_account_id)
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND (m3u_account_name IS NOT ?
+                  OR (? IS NOT NULL AND m3u_account_id IS NOT ?))""",
+        (
+            account_name,
+            account_id,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            account_name,
+            account_id,
+            account_id,
+        ),
+    )
+    if cursor.rowcount > 0:
+        logger.debug(
+            "Updated M3U account for channel=%d stream=%d: %s",
+            managed_channel_id,
+            dispatcharr_stream_id,
+            account_name,
+        )
+    return cursor.rowcount > 0
+
+
+def update_stream_feed_team(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    feed_team_id: str,
+) -> bool:
+    """Backfill/refresh the resolved feed team of an attached stream (#489).
+
+    Rows attached before the feed_team_id column existed carry NULL; called
+    each generation for already-attached streams so team_feed/not_team_feed
+    ordering rules see the resolved team without waiting for re-attach.
+    Guarded on a resolved value — never nulls on a transient resolution miss.
+
+    Returns:
+        True if a row was updated (value actually changed), False otherwise
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET feed_team_id = ?
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND feed_team_id IS NOT ?""",
+        (
+            feed_team_id,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            feed_team_id,
+        ),
+    )
+    if cursor.rowcount > 0:
+        logger.debug(
+            "[FEED] Stream %d on channel %d feed_team_id -> %s",
+            dispatcharr_stream_id,
+            managed_channel_id,
+            feed_team_id,
+        )
+    return cursor.rowcount > 0
+
+
+def update_stream_feed_side(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    feed_side: str,
+) -> bool:
+    """Backfill/refresh the resolved feed side of an attached stream (#533).
+
+    Rows attached before the feed_side column existed carry NULL (unknown);
+    called each generation for already-attached streams so home_feed/away_feed
+    ordering rules see the resolved side without waiting for re-attach.
+
+    Guarded on a resolved value — the caller must not pass None. An unknown
+    side is left as NULL rather than written, so a transient resolution miss
+    can never overwrite a good row, and NULL keeps meaning "we don't know"
+    instead of being confused with a negative answer.
+
+    Returns:
+        True if a row was updated (value actually changed), False otherwise
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET feed_side = ?
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND feed_side IS NOT ?""",
+        (
+            feed_side,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            feed_side,
+        ),
+    )
+    if cursor.rowcount > 0:
+        logger.debug(
+            "[FEED] Stream %d on channel %d feed_side -> %s",
+            dispatcharr_stream_id,
+            managed_channel_id,
+            feed_side,
         )
     return cursor.rowcount > 0
 
@@ -384,6 +543,216 @@ def reorder_channel_streams(
         )
 
     return updated_count
+
+
+def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
+    """Fetch and cache stream_stats from Dispatcharr for a managed channel's active streams.
+
+    Pulls stats from Dispatcharr's /api/channels/streams/by-ids/ endpoint and
+    updates the stream_stats / stream_stats_updated_at columns in
+    managed_channel_streams. Streams Dispatcharr hasn't probed yet return
+    stream_stats=null and are left unchanged.
+
+    Args:
+        conn: Database connection
+        managed_channel_id: Managed channel whose streams should be refreshed
+
+    Returns:
+        Number of streams whose stats were updated
+    """
+
+    cursor = conn.execute(
+        """SELECT dispatcharr_stream_id FROM managed_channel_streams
+           WHERE managed_channel_id = ? AND removed_at IS NULL""",
+        (managed_channel_id,),
+    )
+    stream_ids = [row[0] for row in cursor.fetchall()]
+    if not stream_ids:
+        return 0
+
+    client = get_dispatcharr_client()
+    if client is None:
+        return 0
+
+    stats_list = client.get_stream_stats_by_ids(stream_ids)
+    if not stats_list:
+        return 0
+
+    updated = 0
+    for entry in stats_list:
+        sid = entry.get("id")
+        raw_stats = entry.get("stream_stats")
+        updated_at = entry.get("stream_stats_updated_at")
+        if sid is None or raw_stats is None:
+            continue
+        stats_json = json.dumps(raw_stats) if isinstance(raw_stats, dict) else raw_stats
+        result = conn.execute(
+            """UPDATE managed_channel_streams
+               SET stream_stats = ?, stream_stats_updated_at = ?
+               WHERE managed_channel_id = ? AND dispatcharr_stream_id = ? AND removed_at IS NULL""",
+            (stats_json, updated_at, managed_channel_id, sid),
+        )
+        if result.rowcount > 0:
+            updated += 1
+
+    if updated:
+        logger.debug("[STREAM STATS] Updated stats for %d/%d streams on channel %d",
+                     updated, len(stream_ids), managed_channel_id)
+    return updated
+
+
+def get_stream_match_details(
+    conn: Connection, pairs: list[tuple[int, int]]
+) -> dict[tuple[int, int], dict]:
+    """Fetch cached match details for (source_group_id, stream_id) pairs.
+
+    Reads stream_match_cache to explain how a stream matched its event: the
+    matched event name/league, the finer match method, and any user correction.
+    Returns the most recent entry per pair. Pairs with no cache row (e.g. EPG or
+    dedicated/exact matches, which don't use the fingerprint cache) are absent.
+
+    Each value dict has: event_name, league, match_method, user_corrected,
+    corrected_at, created_at, aliases (list of {alias, team} for alias matches),
+    patterns (list of {token, team} for pattern matches).
+    """
+    if not pairs:
+        return {}
+
+    group_ids = {g for g, _ in pairs}
+    stream_ids = {s for _, s in pairs}
+    gp = ",".join("?" * len(group_ids))
+    sp = ",".join("?" * len(stream_ids))
+    rows = conn.execute(
+        f"""SELECT group_id, stream_id, stream_name, event_id, league,
+                   cached_event_data, match_method, user_corrected, corrected_at,
+                   created_at
+            FROM stream_match_cache
+            WHERE group_id IN ({gp}) AND stream_id IN ({sp})
+            ORDER BY updated_at ASC""",
+        [*group_ids, *stream_ids],
+    ).fetchall()
+
+    wanted = set(pairs)
+    aliases_by_league: dict[str, list] = {}  # memoize per league within this call
+    out: dict[tuple[int, int], dict] = {}
+    for r in rows:
+        key = (r["group_id"], r["stream_id"])
+        if key not in wanted or r["event_id"] == "__FAILED__":
+            continue
+        data = {}
+        event_name = None
+        if r["cached_event_data"]:
+            try:
+                data = json.loads(r["cached_event_data"])
+                event_name = data.get("name") or data.get("short_name")
+            except (ValueError, AttributeError):
+                data = {}
+        # Newer rows overwrite older ones (rows are ordered oldest-first).
+        out[key] = {
+            "event_name": event_name,
+            "league": r["league"],
+            "match_method": r["match_method"],
+            "user_corrected": bool(r["user_corrected"]),
+            "corrected_at": r["corrected_at"],
+            "created_at": r["created_at"],
+            "aliases": _reconstruct_aliases(conn, r, data, aliases_by_league),
+            "patterns": _reconstruct_patterns(r, data),
+        }
+    return out
+
+
+def _reconstruct_aliases(
+    conn: Connection, row, event_data: dict, cache: dict[str, list]
+) -> list[dict]:
+    """Find which user-defined alias(es) produced an alias match, for display.
+
+    Returns [{alias, team}] for aliases whose text appears in the cached stream
+    name and whose team is one of the matched event's teams. Non-alias matches
+    return []. Best-effort (substring match), purely informational.
+    """
+    if row["match_method"] != "alias" or not event_data:
+        return []
+
+    home = event_data.get("home_team") or {}
+    away = event_data.get("away_team") or {}
+    team_ids = {str(home.get("id")), str(away.get("id"))} - {"None"}
+    if not team_ids:
+        return []
+    league = (row["league"] or "").lower()
+    if league not in cache:
+        cache[league] = list_aliases(conn, league=league)
+    name_lower = (row["stream_name"] or "").lower()
+    return [
+        {"alias": a.alias, "team": a.team_name}
+        for a in cache[league]
+        if str(a.team_id) in team_ids and a.alias.lower() in name_lower
+    ]
+
+
+def _reconstruct_patterns(row, event_data: dict) -> list[dict]:
+    """Find which team-name form produced a pattern match, for display.
+
+    Returns [{token, team}] for the matched event's teams whose name / short
+    name / abbreviation appears in the cached stream name. Non-pattern matches
+    return []. Best-effort and purely informational: the longest (most specific)
+    form is preferred, and abbreviations match only on a word boundary to avoid
+    short-token false positives.
+    """
+    if row["match_method"] != "pattern" or not event_data:
+        return []
+    name_lower = (row["stream_name"] or "").lower()
+    if not name_lower:
+        return []
+
+    out: list[dict] = []
+    for side in ("home_team", "away_team"):
+        team = event_data.get(side) or {}
+        team_name = team.get("name")
+        if not team_name:
+            continue
+        token = None
+        for cand in (team.get("name"), team.get("short_name")):
+            if cand and cand.lower() in name_lower:
+                token = cand
+                break
+        if not token:
+            abbr = team.get("abbreviation")
+            if abbr and re.search(rf"\b{re.escape(abbr.lower())}\b", name_lower):
+                token = abbr
+        if token:
+            out.append({"token": token, "team": team_name})
+    return out
+
+
+def clear_stream_stats(conn: Connection, group_id: int | None = None) -> int:
+    """Null cached stream stats so they're freshly pulled from Dispatcharr next run.
+
+    Called when a group's match cache is cleared. With ``group_id`` set, scopes to
+    streams sourced from that event group (managed_channel_streams.source_group_id);
+    with ``group_id=None``, clears every active stream (the clear-all path). The
+    "already null" guard keeps the returned count to rows that actually changed.
+
+    Args:
+        conn: Database connection
+        group_id: Event group ID to scope to, or None to clear all active streams
+
+    Returns:
+        Number of stream rows whose stats were cleared
+    """
+    where = (
+        "removed_at IS NULL "
+        "AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)"
+    )
+    params: tuple = ()
+    if group_id is not None:
+        where = "source_group_id = ? AND " + where
+        params = (group_id,)
+    cursor = conn.execute(
+        f"UPDATE managed_channel_streams "
+        f"SET stream_stats = NULL, stream_stats_updated_at = NULL WHERE {where}",
+        params,
+    )
+    return cursor.rowcount
 
 
 def get_ordered_stream_ids(

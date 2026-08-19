@@ -1,16 +1,16 @@
 import React, { useState, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Search,
   Trash2,
   Pencil,
-  Loader2,
+  LoaderCircle,
   Plus,
   X,
   Check,
-  AlertCircle,
+  CircleAlert,
   GripVertical,
   ArrowUp,
   ArrowDown,
@@ -18,6 +18,8 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
+import { StickyActionBar } from "@/components/ui/sticky-action-bar"
+import { Spinner } from "@/components/ui/spinner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -41,9 +43,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { FilterSelect } from "@/components/ui/filter-select"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useTableSort } from "@/hooks/useTableSort"
+import { useRowSelection } from "@/hooks/useRowSelection"
 import { Input } from "@/components/ui/input"
 import {
-  useBulkUpdateGroups,
   useClearGroupMatchCache,
   useClearGroupsMatchCache,
   useGroups,
@@ -53,17 +57,29 @@ import {
   useReorderGroups,
 } from "@/hooks/useGroups"
 import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
-import type { EventGroup, PreviewGroupResponse, TeamFilterEntry } from "@/api/types"
-import { getStaleGroups } from "@/api/groups"
+import type { EventGroup, PreviewGroupResponse } from "@/api/types"
+import {
+  getStaleGroups,
+  getStaleRebindSuggestions,
+  rebindGroup,
+  type StaleRebindSuggestion,
+} from "@/api/groups"
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
-import { StreamTimezoneSelector } from "@/components/StreamTimezoneSelector"
-import { TeamPicker } from "@/components/TeamPicker"
-import { Label } from "@/components/ui/label"
+import { BulkEditDialog } from "./event-groups/BulkEditDialog"
 import { getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
 const getDisplayName = (group: EventGroup) => group.display_name || group.name
+
+const SORT_COMPARATORS = {
+  name: (a: EventGroup, b: EventGroup) => getDisplayName(a).localeCompare(getDisplayName(b)),
+  matched: (a: EventGroup, b: EventGroup) => (a.matched_count || 0) - (b.matched_count || 0),
+  status: (a: EventGroup, b: EventGroup) => (a.enabled ? 1 : 0) - (b.enabled ? 1 : 0),
+}
+
+const BY_SORT_ORDER = (a: EventGroup, b: EventGroup) =>
+  (a.sort_order ?? 0) - (b.sort_order ?? 0)
 
 export function EventGroups() {
   const navigate = useNavigate()
@@ -72,7 +88,7 @@ export function EventGroups() {
   const cachedLeagues = leaguesResponse?.leagues
   const allLeagueSlugs = useMemo(() => cachedLeagues?.map(l => l.slug) ?? [], [cachedLeagues])
   const deleteMutation = useDeleteGroup()
-  const { formatRelativeTime } = useDateFormat()
+  const { formatRelativeTime, formatDateTime } = useDateFormat()
   // Stale source groups (lylt.2) — their Dispatcharr M3U group is gone.
   const { data: staleGroups = [] } = useQuery({
     queryKey: ["groups", "stale"],
@@ -81,8 +97,19 @@ export function EventGroups() {
   const [showStaleDelete, setShowStaleDelete] = useState(false)
   const [deletingStale, setDeletingStale] = useState(false)
   const staleIds = useMemo(() => new Set(staleGroups.map((g) => g.id)), [staleGroups])
+  // Re-bind suggestions (#450): likely-renamed live groups for the stale sources.
+  const queryClient = useQueryClient()
+  const { data: rebindSuggestions = [] } = useQuery({
+    queryKey: ["groups", "stale", "suggestions"],
+    queryFn: getStaleRebindSuggestions,
+    enabled: staleGroups.length > 0,
+  })
+  const suggestionByGroupId = useMemo(
+    () => new Map(rebindSuggestions.map((s) => [s.group_id, s])),
+    [rebindSuggestions],
+  )
+  const [rebindingId, setRebindingId] = useState<number | null>(null)
   const toggleMutation = useToggleGroup()
-  const bulkUpdateMutation = useBulkUpdateGroups()
   const previewMutation = usePreviewGroup()
   const clearCacheMutation = useClearGroupMatchCache()
   const clearCachesBulkMutation = useClearGroupsMatchCache()
@@ -100,9 +127,6 @@ export function EventGroups() {
   const [clearCacheConfirm, setClearCacheConfirm] = useState<EventGroup | null>(null)
   const [showBulkClearCache, setShowBulkClearCache] = useState(false)
 
-  // Selection state
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-
   // Filter state
   const [nameFilter, setNameFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | "enabled" | "disabled">("")
@@ -110,46 +134,34 @@ export function EventGroups() {
   const [deleteConfirm, setDeleteConfirm] = useState<EventGroup | null>(null)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
-  // Bulk edit form state - checkboxes control which fields to update
-  const [bulkEditStreamTimezoneEnabled, setBulkEditStreamTimezoneEnabled] = useState(false)
-  const [bulkEditStreamTimezone, setBulkEditStreamTimezone] = useState<string | null>(null)
-  const [bulkEditClearStreamTimezone, setBulkEditClearStreamTimezone] = useState(false)
-  // Team filter bulk edit state
-  const [bulkEditTeamFilterEnabled, setBulkEditTeamFilterEnabled] = useState(false)
-  const [bulkEditTeamFilterAction, setBulkEditTeamFilterAction] = useState<"set" | "clear">("set")
-  const [bulkEditTeamFilterMode, setBulkEditTeamFilterMode] = useState<"include" | "exclude">("include")
-  const [bulkEditTeamFilterTeams, setBulkEditTeamFilterTeams] = useState<TeamFilterEntry[]>([])
-  const [bulkEditBypassPlayoffs, setBulkEditBypassPlayoffs] = useState(false)
-  const [bulkEditTeamStreamsEnabled, setBulkEditTeamStreamsEnabled] = useState(false)
-  const [bulkEditTeamStreams, setBulkEditTeamStreams] = useState(false)
-  const [bulkEditEPGMatchEnabled, setBulkEditEPGMatchEnabled] = useState(false)
-  const [bulkEditEPGMatch, setBulkEditEPGMatch] = useState(false)
-  // Column sorting state
-  type SortColumn = "name" | "matched" | "status" | null
-  type SortDirection = "asc" | "desc"
-  const [sortColumn, setSortColumn] = useState<SortColumn>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
+  // Filter groups
+  const allGroups = data?.groups
+  const filteredGroups = useMemo(() => {
+    if (!allGroups) return []
 
-  // Handle column sort (3-click cycle: asc → desc → reset to sort_order)
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      if (sortDirection === "asc") {
-        setSortDirection("desc")
-      } else {
-        // Third click: reset to default sort_order
-        setSortColumn(null)
-        setSortDirection("asc")
-      }
-    } else {
-      setSortColumn(column)
-      setSortDirection("asc")
-    }
-  }
+    return allGroups.filter((group) => {
+      if (nameFilter && !group.name.toLowerCase().includes(nameFilter.toLowerCase())) return false
+      if (statusFilter === "enabled" && !group.enabled) return false
+      if (statusFilter === "disabled" && group.enabled) return false
+      return true
+    })
+  }, [allGroups, nameFilter, statusFilter])
+
+  // Column sort: 3-click cycle (asc → desc → reset to persisted sort_order).
+  // DnD reordering is only active while unsorted.
+  const { sortColumn, sortDirection, handleSort, clearSort, sortedRows: sortedGroups } =
+    useTableSort<EventGroup, "name" | "matched" | "status">({
+      rows: filteredGroups,
+      comparators: SORT_COMPARATORS,
+      cycleToNull: true,
+      defaultCompare: BY_SORT_ORDER,
+    })
 
   const isDndActive = sortColumn === null
 
-  // Sort icon component
-  const SortIcon = ({ column }: { column: SortColumn }) => {
+  // Sort icon — a plain render helper, not a component (components created
+  // during render reset identity; react-hooks/static-components).
+  const sortIcon = (column: "name" | "matched" | "status") => {
     if (sortColumn !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />
     return sortDirection === "asc" ? (
       <ArrowUp className="h-3 w-3 ml-1" />
@@ -158,42 +170,12 @@ export function EventGroups() {
     )
   }
 
-  // Filter groups
-  const filteredGroups = useMemo(() => {
-    if (!data?.groups) return []
-
-    return data.groups.filter((group) => {
-      if (nameFilter && !group.name.toLowerCase().includes(nameFilter.toLowerCase())) return false
-      if (statusFilter === "enabled" && !group.enabled) return false
-      if (statusFilter === "disabled" && group.enabled) return false
-      return true
-    })
-  }, [data?.groups, nameFilter, statusFilter])
-
-  // Apply column sorting when a column header is clicked, default to sort_order
-  const sortedGroups = useMemo(() => {
-    if (!sortColumn) {
-      return [...filteredGroups].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    }
-
-    const sortFn = (a: EventGroup, b: EventGroup) => {
-      let cmp = 0
-      switch (sortColumn) {
-        case "name":
-          cmp = getDisplayName(a).localeCompare(getDisplayName(b))
-          break
-        case "matched":
-          cmp = (a.matched_count || 0) - (b.matched_count || 0)
-          break
-        case "status":
-          cmp = (a.enabled ? 1 : 0) - (b.enabled ? 1 : 0)
-          break
-      }
-      return sortDirection === "asc" ? cmp : -cmp
-    }
-
-    return [...filteredGroups].sort(sortFn)
-  }, [filteredGroups, sortColumn, sortDirection])
+  const {
+    selectedIds,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+    setSelectedIds,
+  } = useRowSelection(sortedGroups)
 
   // Overall match rate (shared definition via useMatchRate)
   const matchRate = useMatchRate()
@@ -238,6 +220,27 @@ export function EventGroups() {
       toast.error(err instanceof Error ? err.message : "Failed to delete stale sources")
     } finally {
       setDeletingStale(false)
+    }
+  }
+
+  const handleRebind = async (s: StaleRebindSuggestion, adoptPattern: boolean) => {
+    setRebindingId(s.group_id)
+    try {
+      await rebindGroup(s.group_id, {
+        m3u_group_id: s.candidate_group_id,
+        m3u_group_name: s.candidate_group_name,
+        pattern: adoptPattern ? s.suggested_pattern : undefined,
+      })
+      toast.success(
+        adoptPattern
+          ? `Re-bound "${s.group_name}" with rename-proof pattern`
+          : `Re-bound "${s.group_name}" to "${s.candidate_group_name}"`,
+      )
+      queryClient.invalidateQueries({ queryKey: ["groups"] })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to re-bind source")
+    } finally {
+      setRebindingId(null)
     }
   }
 
@@ -331,27 +334,6 @@ export function EventGroups() {
     setDragOverGroupId(null)
   }
 
-  // Selection handlers
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === sortedGroups.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(sortedGroups.map((g) => g.id)))
-    }
-  }
-
   // Bulk actions
   const handleBulkToggle = async (enable: boolean) => {
     const groupsToToggle = sortedGroups.filter(
@@ -381,77 +363,6 @@ export function EventGroups() {
     toast.success(`Deleted ${deleted} groups`)
     setSelectedIds(new Set())
     setShowBulkDelete(false)
-  }
-
-  // Reset bulk edit form state
-  const resetBulkEditForm = () => {
-    setBulkEditStreamTimezoneEnabled(false)
-    setBulkEditStreamTimezone(null)
-    setBulkEditClearStreamTimezone(false)
-    setBulkEditTeamFilterEnabled(false)
-    setBulkEditTeamFilterAction("set")
-    setBulkEditTeamFilterMode("include")
-    setBulkEditTeamFilterTeams([])
-    setBulkEditBypassPlayoffs(false)
-    setBulkEditTeamStreamsEnabled(false)
-    setBulkEditTeamStreams(false)
-  }
-
-  const handleBulkEdit = async () => {
-    const ids = Array.from(selectedIds)
-
-    // Build request with only enabled fields
-    const request: Record<string, unknown> & { group_ids: number[] } = { group_ids: ids }
-
-    if (bulkEditStreamTimezoneEnabled) {
-      if (bulkEditClearStreamTimezone) {
-        request.clear_stream_timezone = true
-      } else if (bulkEditStreamTimezone) {
-        request.stream_timezone = bulkEditStreamTimezone
-      }
-    }
-
-    if (bulkEditTeamStreamsEnabled) {
-      request.team_streams_enabled = bulkEditTeamStreams
-    }
-
-    if (bulkEditEPGMatchEnabled) {
-      request.epg_match_enabled = bulkEditEPGMatch
-    }
-
-    if (bulkEditTeamFilterEnabled) {
-      if (bulkEditTeamFilterAction === "clear") {
-        // Reset to global default
-        request.clear_include_teams = true
-        request.clear_exclude_teams = true
-        request.clear_bypass_filter_for_playoffs = true
-      } else {
-        // Set custom filter
-        request.team_filter_mode = bulkEditTeamFilterMode
-        request.bypass_filter_for_playoffs = bulkEditBypassPlayoffs
-        if (bulkEditTeamFilterMode === "include") {
-          request.include_teams = bulkEditTeamFilterTeams
-          request.clear_exclude_teams = true
-        } else {
-          request.exclude_teams = bulkEditTeamFilterTeams
-          request.clear_include_teams = true
-        }
-      }
-    }
-
-    try {
-      const result = await bulkUpdateMutation.mutateAsync(request)
-      if (result.total_failed > 0) {
-        toast.warning(`Updated ${result.total_updated} groups, ${result.total_failed} failed`)
-      } else {
-        toast.success(`Updated ${result.total_updated} groups`)
-      }
-      setSelectedIds(new Set())
-      setShowBulkEdit(false)
-      resetBulkEditForm()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update groups")
-    }
   }
 
   const clearFilters = () => {
@@ -502,7 +413,7 @@ export function EventGroups() {
       {staleGroups.length > 0 && (
         <Alert
           variant="warning"
-          icon={<AlertCircle />}
+          icon={<CircleAlert />}
           title={`${staleGroups.length} stream source${staleGroups.length === 1 ? "" : "s"} missing from Dispatcharr`}
         >
           <div className="space-y-2">
@@ -510,21 +421,64 @@ export function EventGroups() {
               {staleGroups.length === 1
                 ? "Its M3U group was removed or renamed in Dispatcharr, so it can no longer pull streams. Delete it, or restore the source in Dispatcharr."
                 : "Their M3U groups were removed or renamed in Dispatcharr, so they can no longer pull streams. Delete them, or restore the sources in Dispatcharr."}
+              {rebindSuggestions.length > 0 &&
+                " Teamarr found likely renames — re-bind in one click below."}
             </p>
-            <ul className="space-y-0.5 text-sm">
-              {staleGroups.map((g) => (
-                <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-medium">{g.display_name || g.name}</span>
-                  {g.m3u_group_name && (
-                    <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
-                  )}
-                  {g.source_last_seen && (
-                    <span className="text-xs text-muted-foreground">
-                      · last seen {formatRelativeTime(g.source_last_seen)}
-                    </span>
-                  )}
-                </li>
-              ))}
+            <ul className="space-y-1.5 text-sm">
+              {staleGroups.map((g) => {
+                const suggestion = suggestionByGroupId.get(g.id)
+                return (
+                  <li key={g.id} className="space-y-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium">{g.display_name || g.name}</span>
+                      {g.m3u_group_name && (
+                        <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
+                      )}
+                      {g.source_last_seen && (
+                        <span className="text-xs text-muted-foreground">
+                          · last seen {formatRelativeTime(g.source_last_seen)}
+                        </span>
+                      )}
+                    </div>
+                    {/* Rename flywheel (#450): likely-renamed live group → one-click re-bind */}
+                    {suggestion && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4">
+                        <span>
+                          Likely renamed to{" "}
+                          <span className="font-medium">&ldquo;{suggestion.candidate_group_name}&rdquo;</span>
+                          <span className="text-xs text-muted-foreground">
+                            {" "}({Math.round(suggestion.similarity * 100)}% similar)
+                          </span>
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={rebindingId === g.id}
+                          onClick={() => handleRebind(suggestion, false)}
+                        >
+                          Re-bind
+                        </Button>
+                        {suggestion.suggested_pattern && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={rebindingId === g.id}
+                              title="Re-bind AND enable pattern binding with the suggested pattern, so future renames re-bind automatically"
+                              onClick={() => handleRebind(suggestion, true)}
+                            >
+                              Re-bind + pattern
+                            </Button>
+                            <code className="text-xs text-muted-foreground break-all">
+                              {suggestion.suggested_pattern}
+                            </code>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
             <Button
               variant="destructive"
@@ -540,13 +494,13 @@ export function EventGroups() {
 
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container max-w-screen-xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
+        <StickyActionBar
+          label={
+            <>
                 {selectedIds.size} stream source{selectedIds.size > 1 ? "s" : ""} selected
-              </span>
-              <div className="flex items-center gap-1">
+            </>
+          }
+        >
                 <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
                   Clear
                 </Button>
@@ -585,18 +539,13 @@ export function EventGroups() {
                   <Trash2 className="h-3 w-3 mr-1" />
                   Delete
                 </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </StickyActionBar>
       )}
 
       {/* Groups Table - No card wrapper for more compact look */}
       <div className="border border-border rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Spinner />
           ) : data?.groups.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No stream sources configured. Add one to get started.
@@ -617,7 +566,7 @@ export function EventGroups() {
                     onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center">
-                      Name <SortIcon column="name" />
+                      Name {sortIcon("name")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -625,7 +574,7 @@ export function EventGroups() {
                     onClick={() => handleSort("matched")}
                   >
                     <div className="flex items-center justify-center">
-                      Matched <SortIcon column="matched" />
+                      Matched {sortIcon("matched")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -633,7 +582,7 @@ export function EventGroups() {
                     onClick={() => handleSort("status")}
                   >
                     <div className="flex items-center">
-                      Status <SortIcon column="status" />
+                      Status {sortIcon("status")}
                     </div>
                   </TableHead>
                   <TableHead className="w-28 text-right">
@@ -642,7 +591,7 @@ export function EventGroups() {
                         variant="ghost"
                         size="sm"
                         className="h-5 px-1.5 text-xs"
-                        onClick={() => { setSortColumn(null); setSortDirection("asc") }}
+                        onClick={clearSort}
                         title="Reset to priority order"
                       >
                         <RotateCcw className="h-3 w-3 mr-1" />
@@ -765,6 +714,9 @@ export function EventGroups() {
                               group.custom_regex_month_enabled ||
                               group.custom_regex_day_enabled ||
                               group.custom_regex_time_enabled ||
+                              group.custom_regex_league_enabled ||
+                              group.custom_regex_fighters_enabled ||
+                              group.custom_regex_event_name_enabled ||
                               group.stream_include_regex_enabled ||
                               group.stream_exclude_regex_enabled) && (
                               <Badge
@@ -776,11 +728,24 @@ export function EventGroups() {
                                   group.custom_regex_month_enabled && "month",
                                   group.custom_regex_day_enabled && "day",
                                   group.custom_regex_time_enabled && "time",
+                                  group.custom_regex_league_enabled && "league",
+                                  group.custom_regex_fighters_enabled && "fighters",
+                                  group.custom_regex_event_name_enabled && "event name",
                                   group.stream_include_regex_enabled && "include",
                                   group.stream_exclude_regex_enabled && "exclude",
                                 ].filter(Boolean).join(", ")}`}
                               >
                                 Regex
+                              </Badge>
+                            )}
+                            {/* Stream Name Matching badge */}
+                            {group.name_match_enabled && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-sky-500/15 text-sky-400 border-sky-500/30 text-xs"
+                                title="Stream name matching: streams whose name identifies a specific event (e.g. &quot;Bills vs Dolphins&quot;)"
+                              >
+                                Stream Name
                               </Badge>
                             )}
                             {/* Team Streams badge */}
@@ -790,7 +755,7 @@ export function EventGroups() {
                                 className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs"
                                 title="Team stream source: team-branded streams match events where that team plays"
                               >
-                                Team Streams
+                                Team
                               </Badge>
                             )}
                             {/* EPG Program Matching badge */}
@@ -800,15 +765,18 @@ export function EventGroups() {
                                 className="bg-violet-500/15 text-violet-400 border-violet-500/30 text-xs"
                                 title="EPG program matching: static-named linear channels matched to events via Dispatcharr's program guide"
                               >
-                                EPG Matched
+                                EPG
                               </Badge>
                             )}
                           </div>
                         </TableCell>
                     {/* Matched Column with Progress Bar */}
                     <TableCell className="text-center">
-                      {group.team_streams_enabled ? (
-                        <span className="text-[0.65rem] text-muted-foreground" title={`Last: ${group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}`}>
+                      {/* Coverage % is only meaningful when Stream Name matching is on
+                          (~1 stream → 1 event). A pure Team/EPG source fans one stream
+                          out to many events, so show raw stream volume instead. */}
+                      {!group.name_match_enabled ? (
+                        <span className="text-[0.65rem] text-muted-foreground" title={`Last: ${group.last_refresh ? formatDateTime(group.last_refresh) : 'Never'}`}>
                           {group.stream_count ?? 0} streams
                         </span>
                       ) : group.stream_count && group.stream_count > 0 ? (
@@ -820,7 +788,7 @@ export function EventGroups() {
                               {(group.match_result_count ?? 0) > (group.matched_count ?? 0) && (
                                 <div className="text-muted-foreground">EPG time-sharing: streams matched to multiple events</div>
                               )}
-                              <div className="text-muted-foreground">Last: {group.last_refresh ? new Date(group.last_refresh).toLocaleString() : 'Never'}</div>
+                              <div className="text-muted-foreground">Last: {group.last_refresh ? formatDateTime(group.last_refresh) : 'Never'}</div>
                             </div>
                           }
                         >
@@ -865,7 +833,7 @@ export function EventGroups() {
                         >
                           {previewMutation.isPending &&
                           previewMutation.variables === group.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
                           ) : (
                             <Search className="h-4 w-4" />
                           )}
@@ -880,7 +848,7 @@ export function EventGroups() {
                         >
                           {clearCacheMutation.isPending &&
                           clearCacheMutation.variables === group.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
                           ) : (
                             <RotateCcw className="h-4 w-4" />
                           )}
@@ -917,341 +885,70 @@ export function EventGroups() {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirm !== null}
         onOpenChange={(open) => !open && setDeleteConfirm(null)}
-      >
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Stream Source</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm ? getDisplayName(deleteConfirm) : ''}"? This will
-              also delete all {deleteConfirm?.channel_count ?? 0} managed
-              channels associated with this stream source.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete Stream Source"
+        description={`Are you sure you want to delete "${deleteConfirm ? getDisplayName(deleteConfirm) : ""}"? This will also delete all ${deleteConfirm?.channel_count ?? 0} managed channels associated with this stream source.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Clear Cache Confirmation Dialog */}
-      <Dialog
+      <ConfirmDialog
         open={clearCacheConfirm !== null}
         onOpenChange={(open) => !open && setClearCacheConfirm(null)}
-      >
-        <DialogContent onClose={() => setClearCacheConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Clear Match Cache</DialogTitle>
-            <DialogDescription>
-              Clear the stream match cache for "{clearCacheConfirm ? getDisplayName(clearCacheConfirm) : ''}"?
-              This will force re-matching on the next EPG generation run.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearCacheConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => clearCacheConfirm && handleClearCache(clearCacheConfirm)}
-              disabled={clearCacheMutation.isPending}
-            >
-              {clearCacheMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Clear Cache
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Clear Match Cache"
+        description={`Clear the stream match cache for "${clearCacheConfirm ? getDisplayName(clearCacheConfirm) : ""}"? This will force re-matching on the next EPG generation run.`}
+        confirmLabel="Clear Cache"
+        confirmVariant="default"
+        isPending={clearCacheMutation.isPending}
+        onConfirm={() => clearCacheConfirm && handleClearCache(clearCacheConfirm)}
+      />
 
       {/* Bulk Clear Cache Confirmation Dialog */}
-      <Dialog open={showBulkClearCache} onOpenChange={setShowBulkClearCache}>
-        <DialogContent onClose={() => setShowBulkClearCache(false)}>
-          <DialogHeader>
-            <DialogTitle>Clear Match Cache for {selectedIds.size} Stream Sources</DialogTitle>
-            <DialogDescription>
-              Clear the stream match cache for {selectedIds.size} selected stream sources?
-              This will force re-matching on the next EPG generation run.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkClearCache(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkClearCache}
-              disabled={clearCachesBulkMutation.isPending}
-            >
-              {clearCachesBulkMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Clear Cache for {selectedIds.size} Stream Sources
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showBulkClearCache}
+        onOpenChange={setShowBulkClearCache}
+        title={`Clear Match Cache for ${selectedIds.size} Stream Sources`}
+        description={`Clear the stream match cache for ${selectedIds.size} selected stream sources? This will force re-matching on the next EPG generation run.`}
+        confirmLabel={`Clear Cache for ${selectedIds.size} Stream Sources`}
+        confirmVariant="default"
+        isPending={clearCachesBulkMutation.isPending}
+        onConfirm={handleBulkClearCache}
+      />
 
       {/* Bulk Edit Dialog */}
-      <Dialog open={showBulkEdit} onOpenChange={(open) => {
-        setShowBulkEdit(open)
-        if (!open) resetBulkEditForm()
-      }}>
-        <DialogContent onClose={() => setShowBulkEdit(false)} className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Bulk Edit ({selectedIds.size} stream sources)</DialogTitle>
-            <DialogDescription>
-              Only checked fields will be updated. Use "Clear" to remove values.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4 px-1 max-h-[60vh] overflow-y-auto">
-            {/* Stream Timezone */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditStreamTimezoneEnabled}
-                  onCheckedChange={(checked) => setBulkEditStreamTimezoneEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Stream Timezone</span>
-              </label>
-              {bulkEditStreamTimezoneEnabled && (
-                <div className="space-y-2 pl-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={bulkEditClearStreamTimezone}
-                      onCheckedChange={(checked) => {
-                        setBulkEditClearStreamTimezone(!!checked)
-                        if (checked) {
-                          setBulkEditStreamTimezone(null)
-                        }
-                      }}
-                    />
-                    <span className="text-sm font-normal">
-                      Auto-detect from stream
-                    </span>
-                  </label>
-                  <StreamTimezoneSelector
-                    value={bulkEditStreamTimezone}
-                    onChange={setBulkEditStreamTimezone}
-                    disabled={bulkEditClearStreamTimezone}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Timezone used in stream names for date matching
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Team Filter */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditTeamFilterEnabled}
-                  onCheckedChange={(checked) => setBulkEditTeamFilterEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Team Filter</span>
-              </label>
-              {bulkEditTeamFilterEnabled && (
-                <div className="space-y-3 pl-6">
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="bulk-team-filter-action"
-                        checked={bulkEditTeamFilterAction === "set"}
-                        onChange={() => setBulkEditTeamFilterAction("set")}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">Set custom filter</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="bulk-team-filter-action"
-                        checked={bulkEditTeamFilterAction === "clear"}
-                        onChange={() => setBulkEditTeamFilterAction("clear")}
-                        className="accent-primary"
-                      />
-                      <span className="text-sm">Reset to global default</span>
-                    </label>
-                  </div>
-
-                  {bulkEditTeamFilterAction === "set" && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-4">
-                        <Label>Mode:</Label>
-                        <div className="flex gap-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="bulk-team-filter-mode"
-                              checked={bulkEditTeamFilterMode === "include"}
-                              onChange={() => setBulkEditTeamFilterMode("include")}
-                              className="accent-primary"
-                            />
-                            <span className="text-sm">Include only</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="bulk-team-filter-mode"
-                              checked={bulkEditTeamFilterMode === "exclude"}
-                              onChange={() => setBulkEditTeamFilterMode("exclude")}
-                              className="accent-primary"
-                            />
-                            <span className="text-sm">Exclude</span>
-                          </label>
-                        </div>
-                      </div>
-                      <TeamPicker
-                        leagues={allLeagueSlugs}
-                        selectedTeams={bulkEditTeamFilterTeams}
-                        onSelectionChange={setBulkEditTeamFilterTeams}
-                        placeholder="Search teams..."
-                      />
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox
-                          checked={bulkEditBypassPlayoffs}
-                          onCheckedChange={(checked) => setBulkEditBypassPlayoffs(!!checked)}
-                        />
-                        <span className="text-sm">Include all playoff games</span>
-                      </label>
-                    </div>
-                  )}
-
-                  {bulkEditTeamFilterAction === "clear" && (
-                    <p className="text-xs text-muted-foreground">
-                      Removes per-source team filter overrides. Stream sources will use the global default filter.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Team Stream Source */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditTeamStreamsEnabled}
-                  onCheckedChange={(checked) => setBulkEditTeamStreamsEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">Team stream source</span>
-              </label>
-              {bulkEditTeamStreamsEnabled && (
-                <div className="flex items-center gap-3 pl-6">
-                  <Switch
-                    checked={bulkEditTeamStreams}
-                    onCheckedChange={setBulkEditTeamStreams}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {bulkEditTeamStreams ? "Enabled — team-branded streams will match events where that team plays" : "Disabled"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* EPG Program Matching */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={bulkEditEPGMatchEnabled}
-                  onCheckedChange={(checked) => setBulkEditEPGMatchEnabled(!!checked)}
-                />
-                <span className="text-sm font-medium">EPG program matching</span>
-              </label>
-              {bulkEditEPGMatchEnabled && (
-                <div className="flex items-center gap-3 pl-6">
-                  <Switch
-                    checked={bulkEditEPGMatch}
-                    onCheckedChange={setBulkEditEPGMatch}
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {bulkEditEPGMatch ? "Enabled — match static-named linear channels to events via Dispatcharr's program guide (requires the global EPG matching switch)" : "Disabled"}
-                  </span>
-                </div>
-              )}
-            </div>
-
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkEdit(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkEdit}
-              disabled={bulkUpdateMutation.isPending || !(bulkEditStreamTimezoneEnabled || bulkEditTeamFilterEnabled || bulkEditTeamStreamsEnabled || bulkEditEPGMatchEnabled)}
-            >
-              {bulkUpdateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Apply to {selectedIds.size} groups
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkEditDialog
+        open={showBulkEdit}
+        onOpenChange={setShowBulkEdit}
+        selectedIds={selectedIds}
+        allLeagueSlugs={allLeagueSlugs}
+        onSuccess={() => setSelectedIds(new Set())}
+      />
 
       {/* Bulk Delete Confirmation Dialog */}
-      <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
-        <DialogContent onClose={() => setShowBulkDelete(false)}>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Stream Sources</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} stream sources? This will
-              also delete all managed channels associated with them.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete {selectedIds.size} Groups
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showBulkDelete}
+        onOpenChange={setShowBulkDelete}
+        title={`Delete ${selectedIds.size} Stream Sources`}
+        description={`Are you sure you want to delete ${selectedIds.size} stream sources? This will also delete all managed channels associated with them.`}
+        confirmLabel={`Delete ${selectedIds.size} Groups`}
+        isPending={deleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+      />
 
       {/* Delete-all-stale confirmation */}
-      <Dialog open={showStaleDelete} onOpenChange={setShowStaleDelete}>
-        <DialogContent onClose={() => setShowStaleDelete(false)}>
-          <DialogHeader>
-            <DialogTitle>
-              Delete {staleGroups.length} stale source{staleGroups.length === 1 ? "" : "s"}
-            </DialogTitle>
-            <DialogDescription>
-              These sources&apos; M3U groups no longer exist in Dispatcharr. Deleting them also
-              removes their managed channels. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStaleDelete(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteAllStale} disabled={deletingStale}>
-              {deletingStale && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete all stale
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showStaleDelete}
+        onOpenChange={setShowStaleDelete}
+        title={`Delete ${staleGroups.length} stale source${staleGroups.length === 1 ? "" : "s"}`}
+        description="These sources' M3U groups no longer exist in Dispatcharr. Deleting them also removes their managed channels. This cannot be undone."
+        confirmLabel="Delete all stale"
+        isPending={deletingStale}
+        onConfirm={handleDeleteAllStale}
+      />
 
       {/* Stream Preview Modal */}
       <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
@@ -1323,7 +1020,7 @@ export function EventGroups() {
                           {stream.matched ? (
                             <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                           ) : (
-                            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                           )}
                         </TableCell>
                         <TableCell className="font-mono text-xs">
@@ -1342,7 +1039,7 @@ export function EventGroups() {
                               <div className="font-medium">{stream.event_name}</div>
                               {stream.start_time && (
                                 <div className="text-muted-foreground text-xs">
-                                  {new Date(stream.start_time).toLocaleString()}
+                                  {formatDateTime(stream.start_time)}
                                 </div>
                               )}
                             </div>

@@ -1,57 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   getSortPriorities,
-  getActiveSortPriorities,
-  createSortPriority,
-  deleteSortPrioritySport,
-  deleteSortPriorityLeague,
   reorderSortPriorities,
   autoPopulateSortPriorities,
   getPriorityTeams,
   addPriorityTeam,
   deletePriorityTeam,
 } from "@/api/sortPriorities"
-import type { SortPriorityCreate, SortPriorityReorderItem } from "@/api/sortPriorities"
+import type { SortPriorityReorderItem } from "@/api/sortPriorities"
 import type { TeamFilterEntry } from "@/api/types"
 
 export function useSortPriorities() {
   return useQuery({
     queryKey: ["sort-priorities"],
     queryFn: getSortPriorities,
-  })
-}
-
-export function useActiveSortPriorities() {
-  return useQuery({
-    queryKey: ["sort-priorities", "active"],
-    queryFn: getActiveSortPriorities,
-  })
-}
-
-export function useCreateSortPriority() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: SortPriorityCreate) => createSortPriority(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sort-priorities"] })
-    },
-  })
-}
-
-export function useDeleteSortPriority() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ sport, leagueCode }: { sport: string; leagueCode?: string | null }) => {
-      if (leagueCode) {
-        return deleteSortPriorityLeague(sport, leagueCode)
-      }
-      return deleteSortPrioritySport(sport)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sort-priorities"] })
-    },
   })
 }
 

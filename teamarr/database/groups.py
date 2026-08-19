@@ -11,6 +11,8 @@ from datetime import datetime
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.utilities.tz import parse_db_timestamp
+
 logger = logging.getLogger(__name__)
 
 
@@ -84,6 +86,10 @@ class EventEPGGroup:
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
+    # Group-name pattern binding (#450): regex over live M3U group names,
+    # re-resolved at stream-fetch time for provider-rename resilience.
+    m3u_group_name_pattern: str | None = None
+    m3u_group_name_pattern_enabled: bool = False
     # Processing stats
     last_refresh: datetime | None = None
     stream_count: int = 0
@@ -116,7 +122,8 @@ class EventEPGGroup:
     include_teams: list[dict] | None = None
     exclude_teams: list[dict] | None = None
     team_filter_mode: str = "include"
-    bypass_filter_for_playoffs: bool | None = None  # NULL=use default, True/False=override
+    bypass_filter_for_playoffs: bool | None = None  # NULL=default (playoff + All-Star bypass)
+    name_match_enabled: bool = True  # (ahow) match streams that name a specific event
     team_streams_enabled: bool = False
     epg_match_enabled: bool = False  # (183.6) opt this group into EPG program-data matching
     # (183.9) system group sourcing candidates from curated Dispatcharr channels
@@ -157,17 +164,20 @@ def _row_to_group(row) -> EventEPGGroup:
         except (ValueError, TypeError):
             pass
 
+    # parse_db_timestamp, not bare fromisoformat (#511): these columns hold
+    # SQLite-canonical naive UTC — the aware result keeps downstream
+    # .isoformat() serialization carrying an explicit offset for the browser.
     updated_at = None
     if row["updated_at"]:
         try:
-            updated_at = datetime.fromisoformat(row["updated_at"])
+            updated_at = parse_db_timestamp(row["updated_at"])
         except (ValueError, TypeError):
             pass
 
     last_refresh = None
     if row["last_refresh"]:
         try:
-            last_refresh = datetime.fromisoformat(row["last_refresh"])
+            last_refresh = parse_db_timestamp(row["last_refresh"])
         except (ValueError, TypeError):
             pass
 
@@ -193,6 +203,14 @@ def _row_to_group(row) -> EventEPGGroup:
         m3u_group_name=row["m3u_group_name"],
         m3u_account_id=row["m3u_account_id"],
         m3u_account_name=row["m3u_account_name"],
+        m3u_group_name_pattern=(
+            row["m3u_group_name_pattern"] if "m3u_group_name_pattern" in row.keys() else None
+        ),
+        m3u_group_name_pattern_enabled=(
+            bool(row["m3u_group_name_pattern_enabled"])
+            if "m3u_group_name_pattern_enabled" in row.keys()
+            else False
+        ),
         last_refresh=last_refresh,
         stream_count=row["stream_count"] or 0,
         matched_count=row["matched_count"] or 0,
@@ -251,6 +269,9 @@ def _row_to_group(row) -> EventEPGGroup:
             if "bypass_filter_for_playoffs" in row.keys()
             and row["bypass_filter_for_playoffs"] is not None
             else None
+        ),
+        name_match_enabled=(
+            bool(row["name_match_enabled"]) if "name_match_enabled" in row.keys() else True
         ),
         team_streams_enabled=(
             bool(row["team_streams_enabled"]) if "team_streams_enabled" in row.keys() else False
@@ -369,7 +390,8 @@ def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
         group_id = row["id"]
         conn.execute(
             "UPDATE event_epg_groups SET enabled = ?, epg_match_enabled = 1, "
-            "skip_builtin_filter = 1, team_streams_enabled = 1 WHERE id = ?",
+            "skip_builtin_filter = 1, team_streams_enabled = 0, name_match_enabled = 0 "
+            "WHERE id = ?",
             (int(enabled), group_id),
         )
         conn.commit()
@@ -381,8 +403,9 @@ def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
         display_name="Dispatcharr Channels (EPG source)",
         leagues=[],
         duplicate_event_handling="consolidate",
+        name_match_enabled=False,  # (ahow.7, #406) EPG-source group: matched via EPG only
         epg_match_enabled=True,
-        team_streams_enabled=True,
+        team_streams_enabled=False,
         skip_builtin_filter=True,
         is_channel_source=True,
         enabled=enabled,
@@ -492,6 +515,8 @@ def create_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
+    m3u_group_name_pattern: str | None = None,
+    m3u_group_name_pattern_enabled: bool = False,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool = False,
@@ -515,6 +540,7 @@ def create_group(
     custom_regex_event_name: str | None = None,
     custom_regex_event_name_enabled: bool = False,
     skip_builtin_filter: bool = False,
+    name_match_enabled: bool = True,
     team_streams_enabled: bool = False,
     epg_match_enabled: bool = False,
     is_channel_source: bool = False,
@@ -567,6 +593,7 @@ def create_group(
             stream_timezone, duplicate_event_handling,
             channel_assignment_mode, sort_order, total_stream_count,
             m3u_group_id, m3u_group_name, m3u_account_id, m3u_account_name,
+            m3u_group_name_pattern, m3u_group_name_pattern_enabled,
             stream_include_regex, stream_include_regex_enabled,
             stream_exclude_regex, stream_exclude_regex_enabled,
             custom_regex_teams, custom_regex_teams_enabled,
@@ -577,11 +604,12 @@ def create_group(
             custom_regex_league, custom_regex_league_enabled,
             custom_regex_fighters, custom_regex_fighters_enabled,
             custom_regex_event_name, custom_regex_event_name_enabled,
-            skip_builtin_filter, team_streams_enabled, epg_match_enabled, is_channel_source,
+            skip_builtin_filter, name_match_enabled, team_streams_enabled, epg_match_enabled,
+            is_channel_source,
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -599,6 +627,8 @@ def create_group(
             m3u_group_name,
             m3u_account_id,
             m3u_account_name,
+            m3u_group_name_pattern,
+            int(m3u_group_name_pattern_enabled),
             stream_include_regex,
             int(stream_include_regex_enabled),
             stream_exclude_regex,
@@ -620,6 +650,7 @@ def create_group(
             custom_regex_event_name,
             int(custom_regex_event_name_enabled),
             int(skip_builtin_filter),
+            int(name_match_enabled),
             int(team_streams_enabled),
             int(epg_match_enabled),
             int(is_channel_source),
@@ -636,6 +667,7 @@ def create_group(
         ),
     )
     group_id = cursor.lastrowid
+    assert group_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Event group id=%d name=%s", group_id, name)
     return group_id
 
@@ -663,6 +695,8 @@ def update_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
+    m3u_group_name_pattern: str | None = None,
+    m3u_group_name_pattern_enabled: bool | None = None,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool | None = None,
@@ -686,6 +720,7 @@ def update_group(
     custom_regex_event_name: str | None = None,
     custom_regex_event_name_enabled: bool | None = None,
     skip_builtin_filter: bool | None = None,
+    name_match_enabled: bool | None = None,
     team_streams_enabled: bool | None = None,
     epg_match_enabled: bool | None = None,
     # Team filtering
@@ -705,6 +740,7 @@ def update_group(
     clear_m3u_group_name: bool = False,
     clear_m3u_account_id: bool = False,
     clear_m3u_account_name: bool = False,
+    clear_m3u_group_name_pattern: bool = False,
     clear_stream_include_regex: bool = False,
     clear_stream_exclude_regex: bool = False,
     clear_custom_regex_teams: bool = False,
@@ -767,6 +803,10 @@ def update_group(
     builder.set_("m3u_group_name", m3u_group_name, clear=clear_m3u_group_name)
     builder.set_("m3u_account_id", m3u_account_id, clear=clear_m3u_account_id)
     builder.set_("m3u_account_name", m3u_account_name, clear=clear_m3u_account_name)
+    builder.set_(
+        "m3u_group_name_pattern", m3u_group_name_pattern, clear=clear_m3u_group_name_pattern
+    )
+    builder.set_("m3u_group_name_pattern_enabled", m3u_group_name_pattern_enabled, encoder=int)
 
     # Stream filtering
     builder.set_("stream_include_regex", stream_include_regex, clear=clear_stream_include_regex)
@@ -792,6 +832,7 @@ def update_group(
     )
     builder.set_("custom_regex_event_name_enabled", custom_regex_event_name_enabled, encoder=int)
     builder.set_("skip_builtin_filter", skip_builtin_filter, encoder=int)
+    builder.set_("name_match_enabled", name_match_enabled, encoder=int)
     builder.set_("team_streams_enabled", team_streams_enabled, encoder=int)
     builder.set_("epg_match_enabled", epg_match_enabled, encoder=int)
 
@@ -1025,13 +1066,24 @@ def get_stale_groups(conn: Connection) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, name, display_name, m3u_group_id, m3u_group_name,
-               m3u_account_name, source_last_seen, total_stream_count
+               m3u_account_id, m3u_account_name, source_last_seen, total_stream_count
         FROM event_epg_groups
         WHERE enabled = 1 AND source_missing = 1 AND COALESCE(is_channel_source, 0) = 0
         ORDER BY name
         """
     ).fetchall()
-    return [dict(row) for row in rows]
+    out = []
+    for row in rows:
+        d = dict(row)
+        # Naive-UTC column → offset-bearing ISO for the browser (#511).
+        if d.get("source_last_seen"):
+            try:
+                parsed = parse_db_timestamp(d["source_last_seen"])
+                d["source_last_seen"] = parsed.isoformat() if parsed else None
+            except (ValueError, TypeError):
+                pass
+        out.append(d)
+    return out
 
 
 # =============================================================================
@@ -1102,6 +1154,22 @@ def get_existing_group_ids(conn: Connection, group_ids: list[int]) -> set[int]:
         group_ids,
     ).fetchall()
     return {row["id"] for row in rows}
+
+
+def get_group_names_by_ids(conn: Connection, group_ids: list[int]) -> dict[int, str]:
+    """Resolve a batch of group IDs to their names in one query.
+
+    Returns:
+        ``{group_id: name}`` for the IDs that exist (missing IDs are omitted).
+    """
+    if not group_ids:
+        return {}
+    placeholders = ",".join("?" * len(group_ids))
+    rows = conn.execute(
+        f"SELECT id, name FROM event_epg_groups WHERE id IN ({placeholders})",
+        list(group_ids),
+    ).fetchall()
+    return {row["id"]: row["name"] for row in rows}
 
 
 def get_group_channel_count(conn: Connection, group_id: int) -> int:

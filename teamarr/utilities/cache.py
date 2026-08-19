@@ -20,9 +20,13 @@ import atexit
 import json
 import logging
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
+
+from teamarr.database.connection import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +245,12 @@ class PersistentTTLCache:
         self._deleted_keys: set[str] = set()
         self._dirty_lock = threading.Lock()
 
+        # Per-key locks for single-flight fetches (see lock_key). Refcounted so
+        # an idle key's lock is dropped once no callers hold or wait on it,
+        # keeping the map bounded to keys with in-flight fetches.
+        self._keylocks: dict[str, list] = {}
+        self._keylocks_guard = threading.Lock()
+
         # Background flush thread
         self._flush_timer: threading.Timer | None = None
         self._shutdown = False
@@ -256,7 +266,6 @@ class PersistentTTLCache:
 
     def _load_from_sqlite(self) -> None:
         """Load non-expired entries from SQLite into memory."""
-        from teamarr.database.connection import get_db
 
         now = datetime.now()
         loaded = 0
@@ -342,9 +351,47 @@ class PersistentTTLCache:
             self._deleted_keys.add(key)
             self._dirty_keys.discard(key)
 
+    @contextmanager
+    def lock_key(self, key: str) -> Iterator[None]:
+        """Serialize work for a single cache key across threads (single-flight).
+
+        Callers use the double-checked pattern: read the cache, and only on a
+        miss enter ``lock_key`` and re-read before fetching. This collapses a
+        burst of concurrent identical fetches (e.g. parallel stream matching all
+        wanting the same league/date scoreboard) into one upstream request — the
+        first thread fetches and populates the cache, the rest wait and read it.
+
+        Locks are refcounted and removed when idle so the map stays bounded.
+
+        Non-reentrant: this is a plain ``threading.Lock``, so a caller holding
+        the lock for ``key`` must not re-enter ``lock_key`` for that same key
+        (it would self-deadlock). The double-checked fetch bodies today stay
+        flat — they read the cache and call the provider, never back into a
+        lock-wrapped ``get_events``/``get_event`` for the same key.
+        """
+        with self._keylocks_guard:
+            entry = self._keylocks.get(key)
+            if entry is None:
+                entry = [threading.Lock(), 0]
+                self._keylocks[key] = entry
+            entry[1] += 1  # register as a waiter before releasing the guard
+            lock = entry[0]
+
+        lock.acquire()
+        try:
+            yield
+        finally:
+            lock.release()
+            # Our own refcount kept this exact entry in the map for the whole
+            # critical section (no other thread can drop it while count > 0), so
+            # the captured local is still the live entry — decrement and evict.
+            with self._keylocks_guard:
+                entry[1] -= 1
+                if entry[1] <= 0:
+                    del self._keylocks[key]
+
     def clear(self) -> None:
         """Clear all cached values."""
-        from teamarr.database.connection import get_db
 
         self._memory_cache.clear()
 
@@ -362,7 +409,6 @@ class PersistentTTLCache:
 
     def cleanup_expired(self) -> int:
         """Remove expired entries from memory and SQLite."""
-        from teamarr.database.connection import get_db
 
         # Clean memory
         removed = self._memory_cache.cleanup_expired()
@@ -384,7 +430,6 @@ class PersistentTTLCache:
         Returns number of entries written.
         Call this after EPG generation for immediate persistence.
         """
-        from teamarr.database.connection import get_db
 
         # Atomically grab dirty/deleted keys
         with self._dirty_lock:
@@ -471,6 +516,7 @@ CACHE_TTL_SCHEDULE = 8 * 60 * 60  # 8 hours - team schedules rarely change
 CACHE_TTL_EVENTS = 8 * 60 * 60  # 8 hours - scoreboard (league events list)
 CACHE_TTL_SINGLE_EVENT = 30 * 60  # 30 minutes - individual event (scores, odds)
 CACHE_TTL_TEAM_INFO = 24 * 60 * 60  # 24 hours - static team data
+CACHE_TTL_NEGATIVE = 4 * 60 * 60  # 4 hours - provider returned nothing (off-season etc.)
 
 
 def make_cache_key(*parts: str) -> str:

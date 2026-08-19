@@ -1,5 +1,5 @@
 import { type ReactNode } from "react"
-import { NavLink } from "react-router-dom"
+import { NavLink } from "react-router"
 import { cn } from "@/lib/utils"
 
 export interface SubNavItem {
@@ -11,6 +11,8 @@ export interface SubNavItem {
   end?: boolean
   /** Optional leading icon. */
   icon?: ReactNode
+  /** Optional trailing indicator (e.g. a completion-hint dot/check). */
+  badge?: ReactNode
   disabled?: boolean
   /** Tooltip (e.g. why an item is disabled). */
   title?: string
@@ -51,6 +53,7 @@ export function SubNav({ items, value, onChange, className }: SubNavProps) {
           <>
             {item.icon}
             {item.label}
+            {item.badge}
           </>
         )
 

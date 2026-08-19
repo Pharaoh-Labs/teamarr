@@ -2,58 +2,18 @@
 title: Detection Keyword Service
 parent: Architecture
 grand_parent: Technical Reference
-nav_order: 6
-docs_version: "2.3.1"
+nav_order: 4
 ---
 
 # Detection Keyword Service
 
-The `DetectionKeywordService` provides centralized pattern-based detection for stream classification. This service abstracts the source of detection patterns, enabling future database-backed customization.
+The `DetectionKeywordService` provides centralized pattern-based detection for stream classification. It abstracts the source of detection patterns: built-in constants from `teamarr/utilities/constants.py` merged with user-defined patterns from the `detection_keywords` database table (managed via the Detection Library UI).
 
-## Architecture Overview
+Consumers (`classifier.py`, `stream_filter.py`) call the service instead of importing pattern constants. The service exposes:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        API / Consumer Layer                          │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  classifier.py              │  stream_filter.py                      │
-│  - classify_stream()        │  - is_placeholder()                    │
-│  - is_event_card()          │  - detect_sport_hint()                 │
-│  - detect_league_hint()     │  - FilterService                       │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    DetectionKeywordService                           │
-│  ─────────────────────────────────────────────────────────────────  │
-│  Pattern Accessors:                                                  │
-│  - get_combat_keywords()       - get_league_hints()                  │
-│  - get_sport_hints()           - get_placeholder_patterns()          │
-│  - get_card_segment_patterns() - get_exclusion_patterns()            │
-│  - get_separators()                                                  │
-│  ─────────────────────────────────────────────────────────────────  │
-│  Detection Methods:                                                  │
-│  - is_combat_sport(text)       - detect_league(text)                 │
-│  - detect_sport(text)          - is_placeholder(text)                │
-│  - detect_card_segment(text)   - is_excluded(text)                   │
-│  - find_separator(text)                                              │
-│  ─────────────────────────────────────────────────────────────────  │
-│  Cache Management:                                                   │
-│  - invalidate_cache()          - warm_cache()                        │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Phase 1: constants.py          │  Phase 2: Database (future)        │
-│  - COMBAT_SPORTS_KEYWORDS       │  - detection_keywords table         │
-│  - LEAGUE_HINT_PATTERNS         │  - User-defined patterns            │
-│  - PLACEHOLDER_PATTERNS         │  - Runtime customization            │
-│  - ...                          │                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
+- **Pattern accessors** — `get_combat_keywords()`, `get_league_hints()`, `get_sport_hints()`, `get_placeholder_patterns()`, `get_card_segment_patterns()`, `get_exclusion_patterns()`, `get_separators()`
+- **Detection methods** — `is_combat_sport()`, `detect_league()`, `detect_sport()`, `is_placeholder()`, `detect_card_segment()`, `is_excluded()`, `find_separator()`
+- **Cache management** — `invalidate_cache()`, `warm_cache()`
 
 ## Design Principles
 
@@ -71,21 +31,17 @@ The `DetectionKeywordService` provides centralized pattern-based detection for s
 
 ### 2. Pattern Sources
 
-**Phase 1 (Current):** Built-in patterns from `teamarr/utilities/constants.py` plus user-defined patterns from the `detection_keywords` database table (managed via the Detection Library UI).
+Built-in patterns come from `teamarr/utilities/constants.py`:
 
-- COMBAT_SPORTS_KEYWORDS (100+ keywords)
-- LEAGUE_HINT_PATTERNS (70+ patterns, including multi-league umbrellas)
-- SPORT_HINT_PATTERNS (38 patterns, including multi-sport hints)
-- PLACEHOLDER_PATTERNS (19 patterns)
-- CARD_SEGMENT_PATTERNS (8 patterns)
-- COMBAT_SPORTS_EXCLUDE_PATTERNS (13 patterns)
-- GAME_SEPARATORS (10 separators: vs, @, at, v, x, contre, gegen, contra)
+- EVENT_TYPE_KEYWORDS (keywords per event type: `EVENT_CARD`, `TEAM_VS_TEAM`, `FIELD_EVENT`; combat keywords are derived via `get_event_type_keywords().get("EVENT_CARD")` — there is no separate combat constant)
+- LEAGUE_HINT_PATTERNS (59 patterns, including multi-league umbrellas)
+- SPORT_HINT_PATTERNS (33 patterns, including multi-sport hints)
+- PLACEHOLDER_PATTERNS (15 patterns)
+- CARD_SEGMENT_PATTERNS (12 patterns)
+- COMBAT_SPORTS_EXCLUDE_PATTERNS (14 patterns)
+- GAME_SEPARATORS (10 separators: `vs.`, `vs`, `v.`, `v`, `@`, `at`, `x`, `contre`, `gegen`, `contra`)
 
-User-defined patterns (league hints, sport hints, event type keywords) are stored in the `detection_keywords` table and managed through **Detection Library** in the UI. These extend the built-in patterns.
-
-**Phase 2 (Future):** Full database-backed override of all pattern categories
-- User patterns override built-in defaults
-- Runtime modification without restart
+User-defined patterns (league hints, sport hints, event type keywords) are stored in the `detection_keywords` table and managed through **Detection Library** in the UI. The service merges them with the built-in patterns at runtime — no restart required.
 
 ### 3. Pattern Caching
 
@@ -183,7 +139,7 @@ league = DetectionKeywordService.detect_league("EFL: Team A vs Team B")
 
 # Pre-warm cache on startup
 stats = DetectionKeywordService.warm_cache()
-# Returns: {'combat_keywords': 45, 'league_hints': 59, ...}
+# Returns per-category pattern counts, e.g. {'combat_keywords': ..., 'league_hints': ..., ...}
 ```
 
 ## API Endpoints
@@ -193,6 +149,7 @@ stats = DetectionKeywordService.warm_cache()
 | GET | `/api/v1/detection-keywords` | List all keywords |
 | GET | `/api/v1/detection-keywords/categories` | Describe available categories |
 | GET | `/api/v1/detection-keywords/{category}` | Filter by category |
+| GET | `/api/v1/detection-keywords/id/{id}` | Get single keyword by id |
 | POST | `/api/v1/detection-keywords` | Create keyword |
 | PUT | `/api/v1/detection-keywords/id/{id}` | Update keyword |
 | DELETE | `/api/v1/detection-keywords/id/{id}` | Delete keyword |

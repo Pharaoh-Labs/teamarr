@@ -45,7 +45,6 @@ from .types import (
     UpdateCheckSettings,
 )
 from .update import (
-    increment_epg_generation_counter,
     update_backup_settings,
     update_channel_numbering_settings,
     update_channelsdvr_settings,
@@ -120,5 +119,4 @@ __all__ = [
     "update_update_check_settings",
     "update_backup_settings",
     "update_feed_separation_settings",
-    "increment_epg_generation_counter",
 ]

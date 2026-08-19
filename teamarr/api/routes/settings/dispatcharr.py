@@ -3,12 +3,15 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
+from teamarr.dispatcharr.factory import DispatcharrFactory
 
 from .models import (
     ConnectionTestRequest,
     ConnectionTestResponse,
     DispatcharrSettingsModel,
     DispatcharrSettingsUpdate,
+    to_model,
     unmask_or_skip,
 )
 
@@ -23,18 +26,7 @@ def get_dispatcharr_settings():
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
 
-    return DispatcharrSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        epg_id=settings.epg_id,
-        default_channel_profile_ids=settings.default_channel_profile_ids,
-        default_stream_profile_id=settings.default_stream_profile_id,
-        default_channel_group_id=settings.default_channel_group_id,
-        default_channel_group_mode=settings.default_channel_group_mode,
-        cleanup_unused_logos=settings.cleanup_unused_logos,
-    )
+    return to_model(DispatcharrSettingsModel, settings)
 
 
 @router.put("/settings/dispatcharr", response_model=DispatcharrSettingsModel)
@@ -44,7 +36,6 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
         get_dispatcharr_settings,
         update_dispatcharr_settings,
     )
-    from teamarr.dispatcharr import get_factory
 
     with get_db() as conn:
         update_dispatcharr_settings(
@@ -72,18 +63,7 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
     with get_db() as conn:
         settings = get_dispatcharr_settings(conn)
 
-    return DispatcharrSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        epg_id=settings.epg_id,
-        default_channel_profile_ids=settings.default_channel_profile_ids,
-        default_stream_profile_id=settings.default_stream_profile_id,
-        default_channel_group_id=settings.default_channel_group_id,
-        default_channel_group_mode=settings.default_channel_group_mode,
-        cleanup_unused_logos=settings.cleanup_unused_logos,
-    )
+    return to_model(DispatcharrSettingsModel, settings)
 
 
 @router.post("/dispatcharr/test", response_model=ConnectionTestResponse)
@@ -92,13 +72,11 @@ def test_dispatcharr_connection(request: ConnectionTestRequest | None = None):
 
     If no parameters provided, tests with saved settings.
     """
-    from teamarr.dispatcharr import get_factory
 
     try:
         factory = get_factory(get_db)
     except RuntimeError:
         # Factory not initialized, create one
-        from teamarr.dispatcharr.factory import DispatcharrFactory
 
         factory = DispatcharrFactory(get_db)
 
@@ -135,7 +113,6 @@ def get_dispatcharr_status() -> dict:
         connected: Connection test succeeded
         error: Error message if connection failed (only present on failure)
     """
-    from teamarr.dispatcharr import get_factory
 
     try:
         factory = get_factory(get_db)
@@ -149,7 +126,7 @@ def get_dispatcharr_status() -> dict:
         # Actually test the connection to verify it works
         result = factory.test_connection()
 
-        response = {
+        response: dict[str, object] = {
             "configured": True,
             "connected": result.success,
         }
@@ -173,7 +150,6 @@ def get_dispatcharr_epg_sources() -> dict:
     Returns list of EPG sources that can be selected for EPG ID.
     Requires Dispatcharr to be configured and connected.
     """
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     try:
         conn = get_dispatcharr_connection(get_db)

@@ -139,3 +139,32 @@ def extract_away_team_rank(ctx: TemplateContext, game_ctx: GameContext | None) -
     elif is_home and game_ctx.opponent_stats and game_ctx.opponent_stats.rank:
         return str(game_ctx.opponent_stats.rank)
     return ""
+
+
+# Empty-safe Gracenote-form rank prefixes (#354): render 'No. 20' or nothing,
+# so prose like '{home_team_rank_display} {home_team}' degrades gracefully for
+# unranked teams instead of leaving an orphan 'No. '. Gracenote's college
+# register spells 'No. 20'; the shorter '#20' form is the *_rank_display pair
+# above (team perspective).
+
+
+@register_variable(
+    name="home_team_rank_display",
+    category=Category.RANKINGS,
+    suffix_rules=SuffixRules.ALL,
+    description="Home team's rank in Gracenote prose form ('No. 20'), empty when unranked",
+)
+def extract_home_team_rank_display(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    rank = extract_home_team_rank(ctx, game_ctx)
+    return f"No. {rank}" if rank else ""
+
+
+@register_variable(
+    name="away_team_rank_display",
+    category=Category.RANKINGS,
+    suffix_rules=SuffixRules.ALL,
+    description="Away team's rank in Gracenote prose form ('No. 15'), empty when unranked",
+)
+def extract_away_team_rank_display(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    rank = extract_away_team_rank(ctx, game_ctx)
+    return f"No. {rank}" if rank else ""

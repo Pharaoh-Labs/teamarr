@@ -10,15 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from teamarr.api.dependencies import get_sports_service
-from teamarr.api.generation_status import (
-    complete_generation,
-    fail_generation,
-    get_status,
-    is_in_progress,
-    request_cancellation,
-    start_generation,
-    update_status,
-)
 from teamarr.api.models import (
     EPGGenerateRequest,
     EPGGenerateResponse,
@@ -29,7 +20,36 @@ from teamarr.api.models import (
     MatchCorrectionResponse,
     MatchStats,
 )
+from teamarr.consumers.generation import run_full_generation
+from teamarr.consumers.generation_status import (
+    complete_generation,
+    fail_generation,
+    get_status,
+    is_in_progress,
+    request_cancellation,
+    start_generation,
+    update_status,
+)
+from teamarr.consumers.stream_match_cache import (
+    StreamMatchCache,
+    compute_fingerprint,
+    event_to_cache_data,
+)
 from teamarr.database import get_db
+from teamarr.database.channels.crud import count_active_managed_channels
+from teamarr.database.leagues import get_all_leagues
+from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
+from teamarr.database.stats import (
+    get_epg_analysis_stats,
+    get_match_stats_summary,
+)
+from teamarr.database.stats import (
+    get_failed_matches as db_get_failed,
+)
+from teamarr.database.stats import (
+    get_matched_streams as db_get_matched,
+)
+from teamarr.dispatcharr import get_dispatcharr_connection
 from teamarr.services import SportsDataService
 
 logger = logging.getLogger(__name__)
@@ -58,9 +78,6 @@ def generate_epg(
 
     For real-time progress, use GET /epg/generate/stream instead.
     """
-    from teamarr.consumers.generation import run_full_generation
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     # Get Dispatcharr connection if configured (not just client)
     # Must use get_dispatcharr_connection() to get DispatcharrConnection
@@ -105,6 +122,7 @@ def generate_epg(
             db_factory=get_db,
             dispatcharr_client=dispatcharr_client,
             progress_callback=progress_callback,
+            manual=True,
         )
 
         if not result.success:
@@ -147,7 +165,6 @@ def generate_epg(
         match_rate=0.0,
     )
     if result.run_id:
-        from teamarr.database.stats import get_match_stats_summary
 
         with get_db() as conn:
             stats = get_match_stats_summary(conn, run_id=result.run_id)
@@ -222,9 +239,6 @@ def generate_epg_stream():
     - Reconciliation (detect issues)
     - History cleanup
     """
-    from teamarr.consumers.generation import run_full_generation
-    from teamarr.database.settings import get_dispatcharr_settings
-    from teamarr.dispatcharr import get_dispatcharr_connection
 
     # Check if already in progress
     if is_in_progress():
@@ -281,13 +295,13 @@ def generate_epg_stream():
                 db_factory=get_db,
                 dispatcharr_client=dispatcharr_client,
                 progress_callback=progress_callback,
+                manual=True,
             )
 
             if result.success:
                 # Fetch match stats from database
                 match_stats = {}
                 if result.run_id:
-                    from teamarr.database.stats import get_match_stats_summary
 
                     with get_db() as conn:
                         stats = get_match_stats_summary(conn, run_id=result.run_id)
@@ -379,7 +393,6 @@ def get_xmltv():
 
     from fastapi.responses import FileResponse
 
-    from teamarr.database.settings import get_epg_settings
 
     with get_db() as conn:
         epg_settings = get_epg_settings(conn)
@@ -426,7 +439,6 @@ def _get_combined_xmltv() -> str:
     """
     from pathlib import Path
 
-    from teamarr.database.settings import get_epg_settings
 
     with get_db() as conn:
         epg_settings = get_epg_settings(conn)
@@ -598,7 +610,6 @@ def get_epg_analysis():
 
     # Override programme counts with stats from latest full_epg processing run
     # (XML comments may not survive serialization, so use DB stats instead)
-    from teamarr.database.stats import get_epg_analysis_stats
 
     with get_db() as conn:
         epg_stats = get_epg_analysis_stats(conn)
@@ -613,7 +624,6 @@ def get_epg_analysis():
 
         # Get actual managed channel count from database (not XMLTV)
         # This is more accurate as event channels may not be in XMLTV yet
-        from teamarr.database.channels.crud import count_active_managed_channels
 
         event_channel_count = count_active_managed_channels(conn)
         result["channels"]["event_based"] = event_channel_count
@@ -669,7 +679,6 @@ def get_matched_streams(
 
     Returns list of streams that were successfully matched to events.
     """
-    from teamarr.database.stats import get_matched_streams as db_get_matched
 
     with get_db() as conn:
         streams = db_get_matched(conn, run_id=run_id, group_id=group_id, limit=limit)
@@ -698,7 +707,6 @@ def get_failed_matches(
     - excluded_league: Matched but event is in non-configured league
     - exception: Stream contains exception keyword
     """
-    from teamarr.database.stats import get_failed_matches as db_get_failed
 
     with get_db() as conn:
         failures = db_get_failed(conn, run_id=run_id, group_id=group_id, reason=reason, limit=limit)
@@ -710,26 +718,6 @@ def get_failed_matches(
         "reason_filter": reason,
         "failures": failures,
     }
-
-
-@router.get("/epg/match-stats")
-def get_match_stats(
-    run_id: int | None = Query(None, description="Processing run ID (defaults to latest)"),
-):
-    """Get match statistics summary for an EPG generation run.
-
-    Returns:
-    - Total matched/unmatched/cached counts
-    - Match rate percentage
-    - Breakdown by group and league
-    - Failure reasons breakdown
-    """
-    from teamarr.database.stats import get_match_stats_summary
-
-    with get_db() as conn:
-        stats = get_match_stats_summary(conn, run_id=run_id)
-
-    return stats
 
 
 # =============================================================================
@@ -749,11 +737,6 @@ def correct_stream_match(
 
     Use correct_event_id=None to mark a stream as "no event" (explicit skip).
     """
-    from teamarr.consumers.stream_match_cache import (
-        StreamMatchCache,
-        compute_fingerprint,
-        event_to_cache_data,
-    )
 
     cache = StreamMatchCache(get_db)
 
@@ -814,7 +797,6 @@ def remove_stream_correction(
     This deletes the user-corrected cache entry. On next EPG generation,
     the stream will be matched algorithmically again.
     """
-    from teamarr.consumers.stream_match_cache import StreamMatchCache, compute_fingerprint
 
     cache = StreamMatchCache(get_db)
 
@@ -864,7 +846,6 @@ def search_events(
     Returns events matching the search criteria. Use this to find the
     correct event when manually correcting a failed or incorrect match.
     """
-    from teamarr.database.leagues import get_all_leagues
 
     target = _parse_date(target_date) if target_date else date.today()
     results: list[EventSearchResult] = []
@@ -920,26 +901,6 @@ def search_events(
         "count": len(results),
         "target_date": target.isoformat(),
         "events": [r.model_dump() for r in results],
-    }
-
-
-@router.get("/epg/streams/corrections")
-def list_user_corrections(
-    group_id: int | None = Query(None, description="Filter by group ID"),
-    limit: int = Query(100, ge=1, le=500, description="Max results"),
-):
-    """List all user-corrected stream matches.
-
-    Returns streams where users have manually overridden the match.
-    """
-    from teamarr.consumers.stream_match_cache import get_user_corrections
-
-    with get_db() as conn:
-        corrections = get_user_corrections(conn, group_id=group_id, limit=limit)
-
-    return {
-        "count": len(corrections),
-        "corrections": corrections,
     }
 
 

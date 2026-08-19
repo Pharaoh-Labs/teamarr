@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  listTemplates,
-  createTemplate,
-  updateTemplate,
-  deleteTemplate,
-} from "@/api/templates"
-import type { TemplateCreate, TemplateUpdate } from "@/api/templates"
+import { listTemplates, createTemplate, deleteTemplate } from "@/api/templates"
+import type { TemplateCreate } from "@/api/templates"
 
 export function useTemplates() {
   return useQuery({
@@ -21,24 +16,6 @@ export function useCreateTemplate() {
     mutationFn: (data: TemplateCreate) => createTemplate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["templates"] })
-    },
-  })
-}
-
-export function useUpdateTemplate() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({
-      templateId,
-      data,
-    }: {
-      templateId: number
-      data: TemplateUpdate
-    }) => updateTemplate(templateId, data),
-    onSuccess: (_, { templateId }) => {
-      queryClient.invalidateQueries({ queryKey: ["templates"] })
-      queryClient.invalidateQueries({ queryKey: ["template", templateId] })
     },
   })
 }

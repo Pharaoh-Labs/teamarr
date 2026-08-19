@@ -12,10 +12,13 @@ Uses PersistentTTLCache for all caching:
 
 import logging
 import threading
+import time
 from dataclasses import replace
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, cast, overload
 
 from teamarr.core import Event, SportsProvider, Team, TeamStats
+from teamarr.database import get_db
 from teamarr.database.provider_cache import (
     dict_to_event,
     dict_to_stats,
@@ -27,6 +30,7 @@ from teamarr.database.provider_cache import (
 from teamarr.database.team_cache import get_team_identity
 from teamarr.providers import ProviderRegistry
 from teamarr.utilities.cache import (
+    CACHE_TTL_NEGATIVE,
     CACHE_TTL_SCHEDULE,
     CACHE_TTL_SINGLE_EVENT,
     CACHE_TTL_TEAM_INFO,
@@ -38,6 +42,68 @@ from teamarr.utilities.cache import (
 from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
+
+# Coalesce window for refresh_event_status. The same event is matched to many
+# channels and re-checked by the filler, so during one generation run an event
+# can be refreshed dozens-to-hundreds of times — each call invalidating the
+# event cache and re-hitting the provider summary endpoint serially. The marker
+# lives in the shared cache (so the teams and event-group passes coordinate),
+# and the window is short enough that separate scheduled runs still pull fresh
+# scores. Must stay well under CACHE_TTL_SINGLE_EVENT so get_event can serve the
+# cached event during the window.
+REFRESH_COALESCE_TTL = 300  # seconds
+
+# Negative-cache marker for get_event. A failed provider fetch must also be
+# cached: the refresh coalesce marker only skips the cache *delete*, so without
+# a negative entry every per-channel refresh of an event whose summary fetch
+# fails (e.g. ESPN 404) falls through to another serial provider call —
+# hundreds of live 404s per run for a single event.
+_EVENT_NOT_FOUND = {"__event_not_found__": True}
+
+# Negative-cache marker for get_team / get_team_stats. Lookups that return
+# nothing (off-season teams, leagues without records) were never cached, so
+# every generation run repeated the same failing provider calls — a steady
+# ~250+ `espn:teams` calls per hourly run. Cached with CACHE_TTL_NEGATIVE so
+# a team that comes back into season is picked up within a few hours.
+_NOT_FOUND = {"__not_found__": True}
+
+# Sentinel distinguishing "no usable cache entry" from a legitimately cached
+# empty result (e.g. a league with no games that day, cached as []). A distinct
+# class (not bare object()) lets callers narrow the load_from_cache() union with
+# isinstance, so the real payload type flows through without a type: ignore.
+class _CacheMiss:
+    __slots__ = ()
+
+
+_CACHE_MISS = _CacheMiss()
+
+# In-memory memo for team_cache identity lookups. Enrichment runs for the home
+# and away team of every event on every get_events cache hit, so without this
+# each degraded team costs a fresh SQLite connection (+3 PRAGMAs) per event —
+# multiplied by streams × leagues × dates in the multi-league match fallback.
+# Team identity is effectively static; the TTL bounds staleness from mid-run
+# short-name heals. Misses (None) are memoized too: a team absent from
+# team_cache would otherwise re-query on every event it appears in.
+_TEAM_IDENTITY_MEMO: dict[tuple[str, str, str], tuple[float, dict | None]] = {}
+_TEAM_IDENTITY_MEMO_TTL = 900.0  # seconds
+_TEAM_IDENTITY_MEMO_MAX = 8192
+
+
+def _cached_team_identity(provider: str, team_id: str, league: str) -> dict | None:
+    key = (provider, team_id, league)
+    now = time.monotonic()
+    hit = _TEAM_IDENTITY_MEMO.get(key)
+    if hit is not None and now - hit[0] < _TEAM_IDENTITY_MEMO_TTL:
+        return hit[1]
+
+
+    with get_db() as conn:
+        cached = get_team_identity(conn, provider, team_id, league)
+
+    if len(_TEAM_IDENTITY_MEMO) >= _TEAM_IDENTITY_MEMO_MAX:
+        _TEAM_IDENTITY_MEMO.clear()
+    _TEAM_IDENTITY_MEMO[key] = (now, cached)
+    return cached
 
 
 def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
@@ -53,11 +119,8 @@ def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     if team.short_name and team.abbreviation and team.name:
         return team
 
-    from teamarr.database import get_db
-
     try:
-        with get_db() as conn:
-            cached = get_team_identity(conn, team.provider, team.id, league)
+        cached = _cached_team_identity(team.provider, team.id, league)
     except Exception as e:
         logger.debug("[TEAM_BACKFILL] lookup failed for %s/%s: %s", team.provider, team.id, e)
         return team
@@ -74,6 +137,10 @@ def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     )
 
 
+@overload
+def _enrich_event_teams(event: Event) -> Event: ...
+@overload
+def _enrich_event_teams(event: None) -> None: ...
 def _enrich_event_teams(event: Event | None) -> Event | None:
     """Backfill home_team and away_team from team_cache where fields are empty."""
     if event is None:
@@ -141,7 +208,6 @@ def _ensure_registry_initialized() -> None:
     if ProviderRegistry.is_initialized():
         return
 
-    from teamarr.database import get_db
     from teamarr.services.league_mappings import init_league_mapping_service
 
     league_mapping_service = init_league_mapping_service(get_db)
@@ -183,6 +249,14 @@ class SportsDataService:
     def __init__(self, providers: list[SportsProvider] | None = None):
         self._providers: list[SportsProvider] = providers or []
         self._cache = _get_shared_cache()
+        # Let providers that scan day-by-day (ESPN team schedules) reuse the
+        # cached, league-wide get_events so a league's daily scoreboard is
+        # fetched once per run instead of once per team. Providers that don't
+        # expose the hook are unaffected.
+        for provider in self._providers:
+            setter = getattr(provider, "set_cached_events_fn", None)
+            if callable(setter):
+                setter(self.get_events)
 
     def add_provider(self, provider: SportsProvider) -> None:
         """Register a provider."""
@@ -202,9 +276,11 @@ class SportsDataService:
         """
         cache_key = make_cache_key("events", league, target_date.isoformat())
 
-        # Check cache (deserialize from dict)
-        cached = self._cache.get(cache_key)
-        if cached is not None:
+        def load_from_cache() -> list[Event] | _CacheMiss:
+            """Return cached events, or _CACHE_MISS if absent/stale/corrupt."""
+            cached = self._cache.get(cache_key)
+            if cached is None:
+                return _CACHE_MISS
             if isinstance(cached, list) and any(
                 _event_dict_is_stale(e) for e in cached if isinstance(e, dict)
             ):
@@ -213,30 +289,105 @@ class SportsDataService:
                     cache_key,
                 )
                 self._cache.delete(cache_key)
-            else:
-                logger.debug("[CACHE_HIT] %s", cache_key)
-                try:
-                    return [_enrich_event_teams(dict_to_event(e)) for e in cached]
-                except (KeyError, TypeError) as e:
-                    logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+                return _CACHE_MISS
+            logger.debug("[CACHE_HIT] %s", cache_key)
+            try:
+                return [_enrich_event_teams(dict_to_event(e)) for e in cached]
+            except (KeyError, TypeError) as e:
+                logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+                return _CACHE_MISS
+
+        hit = load_from_cache()
+        if not isinstance(hit, _CacheMiss):
+            return hit
 
         # If cache_only, don't fetch from API
         if cache_only:
             return []
 
-        # Iterate through providers
-        for provider in self._providers:
-            if provider.supports_league(league):
-                events = provider.get_events(league, target_date)
-                # Check if all events are final (for past dates, enables 30-day cache)
-                # Empty list counts as "all final" (no games = nothing to update)
-                all_final = len(events) == 0 or all(is_event_final(e) for e in events)
-                ttl = get_events_cache_ttl(target_date, all_events_final=all_final)
-                # Cache ALL results including empty lists to avoid repeated API calls
-                # for leagues with no events on a given day
-                self._cache.set(cache_key, [event_to_dict(e) for e in events], ttl)
-                return [_enrich_event_teams(e) for e in events]
+        # Single-flight: one thread fetches a given (league, date); concurrent
+        # callers (parallel stream matching, the team scan) wait and read the
+        # freshly cached result instead of each issuing a duplicate scoreboard
+        # request.
+        with self._cache.lock_key(cache_key):
+            hit = load_from_cache()
+            if not isinstance(hit, _CacheMiss):
+                return hit
+
+            # Iterate through providers
+            for provider in self._providers:
+                if provider.supports_league(league):
+                    events = provider.get_events(league, target_date)
+                    # Check if all events are final (for past dates, enables 30-day
+                    # cache). Empty list counts as "all final" (nothing to update).
+                    all_final = len(events) == 0 or all(is_event_final(e) for e in events)
+                    ttl = get_events_cache_ttl(target_date, all_events_final=all_final)
+                    # Cache ALL results including empty lists to avoid repeated API
+                    # calls for leagues with no events on a given day
+                    self._cache.set(cache_key, [event_to_dict(e) for e in events], ttl)
+                    return [_enrich_event_teams(e) for e in events]
         return []
+
+    def get_sample_event(self, league: str) -> Event | None:
+        """Pick the single best real event for a template sample preview.
+
+        Selection rule (applies to ALL providers): prefer the most-recent
+        FINAL game with two identifiable teams, so postgame variables (recap,
+        scores, outcome, margin) populate — a just-completed game is the richest
+        sample. Falls back to the nearest upcoming/in-progress game when nothing
+        recent has finished.
+
+        Candidate gathering is provider-aware only for *efficiency*: TSDB exposes
+        a 2-call recent+upcoming bulk fetch (``get_sample_candidates``) so the
+        preview can't hammer its rate-limited free tier; every other provider
+        uses a small bounded scan of recent + near-future days (which captures
+        their finals just the same).
+        """
+        candidates: list[Event] = []
+        today = date.today()
+        chosen = None
+        for provider in self._providers:
+            if not provider.supports_league(league):
+                continue
+            chosen = provider
+            bulk = getattr(provider, "get_sample_candidates", None)
+            if callable(bulk):
+                candidates = cast("list[Event]", bulk(league))
+            else:
+                # Recent days first (their finals), then a couple upcoming.
+                for d in (
+                    today,
+                    today - timedelta(days=1),
+                    today - timedelta(days=2),
+                    today + timedelta(days=1),
+                    today + timedelta(days=7),
+                ):
+                    candidates.extend(self.get_events(league, d))
+            break
+
+        candidates = [e for e in candidates if e.home_team and e.away_team]
+
+        finals = [e for e in candidates if is_event_final(e)]
+        if finals:
+            # Most-recently-completed game in the slate is the richest sample.
+            return _enrich_event_teams(max(finals, key=lambda e: e.start_time))
+
+        # No recent final in the primary slate — between seasons, try a deep
+        # look-back for the last completed game (e.g. NFL in June → the Super
+        # Bowl). A finished game populates every postgame variable.
+        deep = getattr(chosen, "get_recent_final", None) if chosen else None
+        if callable(deep):
+            ev = cast("Event | None", deep(league))
+            if ev and ev.home_team and ev.away_team:
+                return _enrich_event_teams(ev)
+
+        if not candidates:
+            return None
+        # Else the nearest game to now (in-progress or soonest upcoming).
+        now = datetime.now(UTC)
+        return _enrich_event_teams(
+            min(candidates, key=lambda e: abs((e.start_time - now).total_seconds()))
+        )
 
     def get_team_schedule(
         self,
@@ -283,6 +434,9 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
+            if cached == _NOT_FOUND:
+                logger.debug("[CACHE_HIT] %s (negative)", cache_key)
+                return None
             if _team_dict_is_stale(cached):
                 logger.debug(
                     "[CACHE_STALE] %s — team data missing short_name, re-fetching",
@@ -304,6 +458,7 @@ class SportsDataService:
                     # Serialize to dict before caching
                     self._cache.set(cache_key, team_to_dict(team), CACHE_TTL_TEAM_INFO)
                     return team
+        self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
         return None
 
     def get_event(self, event_id: str, league: str) -> Event | None:
@@ -320,29 +475,51 @@ class SportsDataService:
 
         cache_key = make_cache_key("event", league, event_id)
 
-        # Check cache (deserialize from dict)
-        cached = self._cache.get(cache_key)
-        if cached is not None:
+        def load_from_cache() -> Event | None | _CacheMiss:
+            """Return cached event, or _CACHE_MISS if absent/stale/corrupt."""
+            cached = self._cache.get(cache_key)
+            if cached is None:
+                return _CACHE_MISS
+            if isinstance(cached, dict) and cached.get("__event_not_found__"):
+                logger.debug("[CACHE_HIT] %s (negative — provider miss)", cache_key)
+                return None
             if isinstance(cached, dict) and _event_dict_is_stale(cached):
                 logger.debug(
                     "[CACHE_STALE] %s — team data missing short_name, re-fetching",
                     cache_key,
                 )
                 self._cache.delete(cache_key)
-            else:
-                logger.debug("[CACHE_HIT] %s", cache_key)
-                try:
-                    return _enrich_event_teams(dict_to_event(cached))
-                except (KeyError, TypeError) as e:
-                    logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+                return _CACHE_MISS
+            logger.debug("[CACHE_HIT] %s", cache_key)
+            try:
+                return _enrich_event_teams(dict_to_event(cached))
+            except (KeyError, TypeError) as e:
+                logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
+                return _CACHE_MISS
 
-        for provider in self._providers:
-            if provider.supports_league(league):
-                event = provider.get_event(event_id, league)
-                if event:
-                    # Serialize to dict before caching
-                    self._cache.set(cache_key, event_to_dict(event), CACHE_TTL_SINGLE_EVENT)
-                    return _enrich_event_teams(event)
+        hit = load_from_cache()
+        if not isinstance(hit, _CacheMiss):
+            return hit
+
+        # Single-flight: collapse concurrent identical summary fetches (the
+        # coalesce marker in refresh_event_status has a check-then-act race when
+        # two threads enter together) into one upstream request.
+        with self._cache.lock_key(cache_key):
+            hit = load_from_cache()
+            if not isinstance(hit, _CacheMiss):
+                return hit
+
+            for provider in self._providers:
+                if provider.supports_league(league):
+                    event = provider.get_event(event_id, league)
+                    if event:
+                        # Serialize to dict before caching
+                        self._cache.set(cache_key, event_to_dict(event), CACHE_TTL_SINGLE_EVENT)
+                        return _enrich_event_teams(event)
+
+            # Short TTL: don't mask an event that becomes available, just absorb
+            # the per-channel refresh fan-out within one coalesce window.
+            self._cache.set(cache_key, _EVENT_NOT_FOUND, REFRESH_COALESCE_TTL)
         return None
 
     # Fields refreshed onto the original event by refresh_event_status. Anything
@@ -359,6 +536,14 @@ class SportsDataService:
         "fight_result_method",
         "finish_round",
         "finish_time",
+        # Per-event editorial copy — only the summary endpoint carries these, so
+        # they must overlay from the fresh fetch (the scoreboard-parsed original
+        # has them empty). The summary call is already made here; zero extra cost.
+        "game_preview",
+        "series_summary",
+        # Structured preview (tvnk.15) — same summary payload, zero extra cost.
+        "home_last_five",
+        "away_last_five",
     )
 
     def refresh_event_status(self, event: Event) -> Event:
@@ -380,9 +565,19 @@ class SportsDataService:
         if not event:
             return event
 
-        # Invalidate cache to force fresh fetch from provider
+        # Coalesce repeated refreshes of the same event within a run. Normally we
+        # invalidate the event cache to force a fresh provider fetch, but the same
+        # event is refreshed once per channel (and again by the filler), so a
+        # popular event would otherwise trigger many identical serial summary
+        # fetches. Skip the invalidating delete when we've already refreshed this
+        # event inside the coalesce window — get_event then serves the fresh-enough
+        # copy from the (30-min) event cache. The marker is in the shared cache so
+        # the teams and event-group passes coordinate.
         cache_key = make_cache_key("event", event.league, event.id)
-        self._cache.delete(cache_key)
+        coalesce_key = make_cache_key("event_refresh", event.league, event.id)
+        if not self._cache.get(coalesce_key):
+            self._cache.delete(cache_key)
+            self._cache.set(coalesce_key, True, REFRESH_COALESCE_TTL)
 
         fresh_event = self.get_event(event.id, event.league)
         if not fresh_event:
@@ -415,6 +610,73 @@ class SportsDataService:
                 overlay[field_name] = fresh_val if fresh_val else orig_val
         return replace(event, **overlay)
 
+    # --- Days-ahead structured preview enrichment (tvnk.15, #329) ---
+    # Matched events already carry structured-preview fields via the
+    # refresh_event_status overlay above (same summary payload). This path
+    # exists for FUTURE games nothing refreshes — a team channel's next game
+    # days out — and is deliberately budgeted: each miss costs one per-event
+    # summary call.
+    PREVIEW_LOOKAHEAD_DAYS = 7
+    PREVIEW_CACHE_TTL = 6 * 3600  # parsed preview fields; clamped to gametime
+    PREVIEW_FETCH_BUDGET = 40  # summary fetches per budget window
+    PREVIEW_BUDGET_WINDOW = 3600
+
+    _PREVIEW_FIELDS = ("game_preview", "series_summary", "home_last_five", "away_last_five")
+
+    def enrich_event_preview(self, event: Event) -> Event:
+        """Overlay days-ahead preview fields onto a future event, cheaply.
+
+        Gate: only future events within PREVIEW_LOOKAHEAD_DAYS that don't
+        already carry structured-preview data. Cache: parsed fields per event
+        (TTL capped at gametime). Budget: at most PREVIEW_FETCH_BUDGET summary
+        fetches per window — when exhausted, events render without Tier-2 data
+        until the next window (the template chain falls back to constructed
+        prose, so this degrades gracefully).
+        """
+        if not event or not event.start_time:
+            return event
+        if event.home_last_five or event.away_last_five:
+            return event  # already enriched (e.g. via refresh overlay)
+        now = datetime.now(UTC)
+        start = event.start_time
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+        seconds_to_start = (start - now).total_seconds()
+        if seconds_to_start <= 0 or seconds_to_start > self.PREVIEW_LOOKAHEAD_DAYS * 86400:
+            return event
+
+        preview_key = make_cache_key("event_preview", event.league, event.id)
+        cached = self._cache.get(preview_key)
+        if isinstance(cached, dict):
+            return replace(
+                event,
+                **{f: cached.get(f) or getattr(event, f) for f in self._PREVIEW_FIELDS},
+            )
+
+        budget_key = make_cache_key("event_preview_budget", "window")
+        spent = self._cache.get(budget_key) or 0
+        if spent >= self.PREVIEW_FETCH_BUDGET:
+            logger.debug(
+                "[PREVIEW] budget exhausted (%d/%d) — skipping enrich for %s",
+                spent,
+                self.PREVIEW_FETCH_BUDGET,
+                event.id,
+            )
+            return event
+        self._cache.set(budget_key, spent + 1, self.PREVIEW_BUDGET_WINDOW)
+
+        fresh = self.get_event(event.id, event.league)
+        fields = {
+            f: (getattr(fresh, f, "") or "") if fresh else "" for f in self._PREVIEW_FIELDS
+        }
+        ttl = max(300, min(self.PREVIEW_CACHE_TTL, int(seconds_to_start)))
+        # Negative results cache too — a league without lastFiveGames data
+        # shouldn't re-spend budget every run.
+        self._cache.set(preview_key, fields, ttl)
+        if not any(fields.values()):
+            return event
+        return replace(event, **{f: fields[f] or getattr(event, f) for f in self._PREVIEW_FIELDS})
+
     def get_team_stats(self, team_id: str, league: str) -> TeamStats | None:
         """Get detailed team statistics."""
         cache_key = make_cache_key("stats", league, team_id)
@@ -422,6 +684,9 @@ class SportsDataService:
         # Check cache (deserialize from dict)
         cached = self._cache.get(cache_key)
         if cached is not None:
+            if cached == _NOT_FOUND:
+                logger.debug("[CACHE_HIT] %s (negative)", cache_key)
+                return None
             logger.debug("[CACHE_HIT] %s", cache_key)
             try:
                 return dict_to_stats(cached)
@@ -436,6 +701,7 @@ class SportsDataService:
                     # Serialize to dict before caching
                     self._cache.set(cache_key, stats_to_dict(stats), CACHE_TTL_TEAM_STATS)
                     return stats
+        self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
         return None
 
     # Cache management
@@ -501,7 +767,7 @@ class SportsDataService:
 
             # Check for TSDB-specific stats
             if hasattr(provider, "_client"):
-                client = provider._client
+                client: Any = getattr(provider, "_client", None)
                 if hasattr(client, "rate_limit_stats"):
                     provider_stats["has_rate_limit"] = True
                     provider_stats["rate_limit"] = client.rate_limit_stats().to_dict()
@@ -519,7 +785,7 @@ class SportsDataService:
         """
         for provider in self._providers:
             if hasattr(provider, "_client"):
-                client = provider._client
+                client: Any = getattr(provider, "_client", None)
                 if hasattr(client, "reset_rate_limit_stats"):
                     client.reset_rate_limit_stats()
 

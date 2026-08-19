@@ -5,10 +5,9 @@
  * Provides league selection, date picker, event search, and correction/skip actions.
  */
 
-import { useState, useMemo, useCallback } from "react"
-import { toast } from "sonner"
+import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, XCircle, Search, Check } from "lucide-react"
+import { LoaderCircle, CircleX, Search, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -29,136 +28,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  searchEvents,
-  correctStreamMatch,
-} from "@/api/epg"
 import { getLeagues } from "@/api/teams"
-import type { FailedMatch, MatchedStream, EventSearchResult, CorrectableStream } from "@/api/epg"
+import type { EventSearchResult, CorrectableStream } from "@/api/epg"
 import type { CachedLeague } from "@/api/teams"
 import { getLeagueDisplayName } from "@/lib/utils"
 import { useDateFormat } from "@/hooks/useDateFormat"
-
-// ---------------------------------------------------------------------------
-// Hook — manages all event matcher state and actions
-// ---------------------------------------------------------------------------
-
-export function useEventMatcher() {
-  const [open, setOpen] = useState(false)
-  const [stream, setStream] = useState<CorrectableStream | null>(null)
-  const [league, setLeague] = useState("")
-  const [targetDate, setTargetDate] = useState(() => {
-    return new Date().toISOString().split("T")[0]
-  })
-  const [teamFilter, setTeamFilter] = useState("")
-  const [events, setEvents] = useState<EventSearchResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
-
-  const handleOpen = useCallback((incoming: FailedMatch | MatchedStream) => {
-    const correctable: CorrectableStream = {
-      group_id: incoming.group_id,
-      stream_id: incoming.stream_id,
-      stream_name: incoming.stream_name,
-      group_name: incoming.group_name,
-      league_hint: "detected_league" in incoming ? incoming.detected_league : incoming.league,
-      current_event_id: "event_id" in incoming ? incoming.event_id : null,
-    }
-    setStream(correctable)
-    setLeague(correctable.league_hint ?? "")
-    setTeamFilter("")
-    setEvents([])
-    setSelectedEventId(null)
-    setOpen(true)
-  }, [])
-
-  const handleSearch = useCallback(async () => {
-    if (!league) return
-    setLoading(true)
-    try {
-      const result = await searchEvents(league, teamFilter || undefined, targetDate || undefined, 50)
-      setEvents(result.events)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to search events")
-    } finally {
-      setLoading(false)
-    }
-  }, [league, teamFilter, targetDate])
-
-  const handleCorrect = useCallback(async () => {
-    if (!stream || !selectedEventId || !league) return
-    if (stream.stream_id === null) {
-      toast.error("Cannot correct: stream_id is missing")
-      return
-    }
-    setSubmitting(true)
-    try {
-      await correctStreamMatch({
-        group_id: stream.group_id,
-        stream_id: stream.stream_id,
-        stream_name: stream.stream_name,
-        correct_event_id: selectedEventId,
-        correct_league: league,
-      })
-      toast.success("Stream matched to event", {
-        description: "Changes will apply on next EPG generation",
-      })
-      setOpen(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to apply correction")
-    } finally {
-      setSubmitting(false)
-    }
-  }, [stream, selectedEventId, league])
-
-  const handleSkip = useCallback(async () => {
-    if (!stream) return
-    if (stream.stream_id === null) {
-      toast.error("Cannot correct: stream_id is missing")
-      return
-    }
-    setSubmitting(true)
-    try {
-      await correctStreamMatch({
-        group_id: stream.group_id,
-        stream_id: stream.stream_id,
-        stream_name: stream.stream_name,
-        correct_event_id: null,
-        correct_league: null,
-      })
-      toast.success("Stream marked as 'no event'", {
-        description: "Changes will apply on next EPG generation",
-      })
-      setOpen(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to mark as no event")
-    } finally {
-      setSubmitting(false)
-    }
-  }, [stream])
-
-  return {
-    open,
-    setOpen,
-    stream,
-    league,
-    setLeague,
-    targetDate,
-    setTargetDate,
-    teamFilter,
-    setTeamFilter,
-    events,
-    loading,
-    submitting,
-    selectedEventId,
-    setSelectedEventId,
-    handleOpen,
-    handleSearch,
-    handleCorrect,
-    handleSkip,
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -212,14 +86,16 @@ export function EventMatcherModal({
     staleTime: 5 * 60 * 1000,
   })
 
+  const leagues = leaguesData?.leagues
+
   const sortedLeagues = useMemo(() => {
-    if (!leaguesData?.leagues) return []
-    return [...leaguesData.leagues].sort((a, b) => {
+    if (!leagues) return []
+    return [...leagues].sort((a, b) => {
       const sportCompare = (a.sport ?? "").localeCompare(b.sport ?? "")
       if (sportCompare !== 0) return sportCompare
       return (a.name ?? a.slug ?? "").localeCompare(b.name ?? b.slug ?? "")
     })
-  }, [leaguesData?.leagues])
+  }, [leagues])
 
   const leaguesBySport = useMemo(() => {
     const grouped: Record<string, CachedLeague[]> = {}
@@ -272,7 +148,7 @@ export function EventMatcherModal({
           <div className="flex gap-2">
             {leaguesLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoaderCircle className="h-4 w-4 animate-spin" />
                 Loading leagues...
               </div>
             ) : (
@@ -312,7 +188,7 @@ export function EventMatcherModal({
                   disabled={!league || loading}
                 >
                   {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
                   ) : (
                     <Search className="h-4 w-4" />
                   )}
@@ -386,9 +262,9 @@ export function EventMatcherModal({
             title="Mark this stream to be skipped (no event match)"
           >
             {submitting ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <XCircle className="h-4 w-4 mr-2" />
+              <CircleX className="h-4 w-4 mr-2" />
             )}
             Skip Stream
           </Button>
@@ -402,7 +278,7 @@ export function EventMatcherModal({
             >
               {submitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
                   Applying...
                 </>
               ) : (

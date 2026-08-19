@@ -18,10 +18,17 @@ from rapidfuzz import fuzz
 from teamarr.consumers.matching import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.classifier import ClassifiedStream, StreamCategory
 from teamarr.consumers.matching.constants import (
+    ALTERNATE_TEAM_CODES,
     BOTH_TEAMS_THRESHOLD,
     HIGH_CONFIDENCE_THRESHOLD,
+    SHORT_CODE_MAX_LEN,
 )
-from teamarr.consumers.matching.country_resolver import CountryNameResolver
+from teamarr.consumers.matching.country_resolver import (
+    CountryNameResolver,
+)
+from teamarr.consumers.matching.country_resolver import (
+    _normalize as _normalize_country,
+)
 from teamarr.consumers.matching.normalizer import normalize_for_matching
 from teamarr.consumers.matching.result import (
     FailedReason,
@@ -30,7 +37,7 @@ from teamarr.consumers.matching.result import (
     MatchOutcome,
 )
 from teamarr.consumers.stream_match_cache import StreamMatchCache, event_to_cache_data
-from teamarr.core.types import Event, Team
+from teamarr.core.types import Event, EventStatus, RacingResult, RacingSession, Team, Venue
 from teamarr.services.sports_data import SportsDataService
 from teamarr.utilities.constants import TEAM_ALIASES
 from teamarr.utilities.fuzzy_match import get_matcher, normalize_text
@@ -53,6 +60,23 @@ logger = logging.getLogger(__name__)
 # no EPG stream (safe no-match) rather than a wrong-occurrence bind.
 ANCHOR_MATCH_TOLERANCE_SECONDS = 90 * 60
 
+# "All-Star(s)" token used to recognise All-Star pseudo-teams in event names.
+_ALL_STAR_TEAM_RE = re.compile(r"all[\s\-]?stars?", re.IGNORECASE)
+
+
+def is_all_star_event(event: Event) -> bool:
+    """True when both competitors are All-Star squads.
+
+    ESPN names both sides of an All-Star game with an "All-Star(s)" token
+    ("American All-Stars"/"National All-Stars" for MLB, "MLS All-Stars"/"Liga MX
+    All-Stars" for MLS). Requiring the token on *both* sides is a precise,
+    name-agnostic signal that survives the yearly change of opponents and does
+    not misfire on a regular game against an all-star-branded club.
+    """
+    home = event.home_team.name if event.home_team else ""
+    away = event.away_team.name if event.away_team else ""
+    return bool(_ALL_STAR_TEAM_RE.search(home)) and bool(_ALL_STAR_TEAM_RE.search(away))
+
 
 def _sport_hint_matches(sport_hint: str | list[str], event_sport: str) -> bool:
     """Check if a sport hint matches an event's sport.
@@ -68,6 +92,101 @@ def _sport_hint_matches(sport_hint: str | list[str], event_sport: str) -> bool:
 
 # Type alias for user-defined aliases: (alias_text, league) -> team_name
 UserAliasCache = dict[tuple[str, str], str]
+
+
+# Built-in aliases keyed by matcher-normalized text (#480): TEAM_ALIASES keys
+# are hand-written and a few contain punctuation ("miami-oh", "texas a&m-cc")
+# that the stream side never has after normalize_for_matching — those entries
+# could never fire. Lookups go through this view so store and lookup agree.
+_NORMALIZED_TEAM_ALIASES: dict[str, str] = {
+    normalize_text(k): v for k, v in TEAM_ALIASES.items()
+}
+
+
+def _is_short_code(normalized: str) -> bool:
+    """A single token this short is an abbreviation, not a team name (#472)."""
+    return len(normalized) <= SHORT_CODE_MAX_LEN and " " not in normalized
+
+
+def _resolve_alt_codes(tokens: set[str]) -> set[str]:
+    """Expand stream tokens with canonical provider codes (AZ -> ARI, ...)."""
+    return tokens | {
+        ALTERNATE_TEAM_CODES[t] for t in tokens if t in ALTERNATE_TEAM_CODES
+    }
+
+
+def _abbrev_equals(stream_code: str, event_abbrev: str | None) -> bool:
+    """Does a short stream code equal the event team's abbreviation (#472)?"""
+    if not event_abbrev:
+        return False
+    code = ALTERNATE_TEAM_CODES.get(stream_code, stream_code)
+    return code == normalize_text(event_abbrev)
+
+
+def _initialism(tokens: list[str]) -> str:
+    """First letter of each token, in order ("san francisco" -> "sf")."""
+    return "".join(t[0] for t in tokens if t)
+
+
+def _short_name_leg_is_safe(stream_norm: str, name_norm: str, short_norm: str, abbrev: str) -> bool:
+    """May the short_name score stand in for this stream candidate? (#569)
+
+    token_set_ratio returns 100 whenever the short name is a token subset of
+    the stream — so a bare nickname short_name makes every team sharing that
+    nickname interchangeable. ESPN hands both the NFL and MLB Giants
+    short_name "Giants", so "san francisco giants" scored 100 against the New
+    York Giants (57 on the full name) and SF streams landed on NFL channels.
+
+    The discriminator is whatever the full name carries beyond the nickname
+    ("new york" for NYG). Accept the short_name leg only when the stream's own
+    residual tokens are consistent with that discriminator — its own words,
+    its initialism ("ny"), or the provider abbreviation. This keeps #480's
+    "d backs" working, keeps "SF Giants" on the MLB side, and additionally
+    pins "NY Giants" to the NFL side, which is ambiguous today.
+    """
+    short_tokens = set(short_norm.split())
+    name_tokens = name_norm.split()
+    discriminator = [t for t in name_tokens if t not in short_tokens]
+    stream_residual = [t for t in stream_norm.split() if t not in short_tokens]
+
+    # Bare nickname on either side carries no location to contradict.
+    if not stream_residual or not discriminator:
+        return True
+
+    allowed = set(discriminator)
+    allowed.add(_initialism(discriminator))
+    allowed.add(_initialism(name_tokens))
+    if abbrev:
+        allowed.add(abbrev)
+    return all(token in allowed for token in stream_residual)
+
+
+def _best_name_score(stream_norm: str, event_team) -> float:
+    """token_set_ratio against the best of the team's name and short_name.
+
+    Official nicknames often share no words with the full name — ESPN's
+    short_name for Arizona is literally "D-backs", which scores ~50 against
+    "Arizona Diamondbacks" (#480). Streams use whichever form the provider
+    liked, so both are fair game — but the short_name leg is gated by
+    _short_name_leg_is_safe so a shared nickname can't erase the location
+    that tells two teams apart (#569).
+    """
+    name_norm = normalize_text(event_team.name)
+    score = fuzz.token_set_ratio(stream_norm, name_norm)
+
+    short = getattr(event_team, "short_name", None)
+    if not short or short == event_team.name:
+        return score
+
+    short_norm = normalize_text(short)
+    short_score = fuzz.token_set_ratio(stream_norm, short_norm)
+    if short_score <= score:
+        return score
+
+    abbrev = normalize_text(getattr(event_team, "abbreviation", "") or "")
+    if _short_name_leg_is_safe(stream_norm, name_norm, short_norm, abbrev):
+        return short_score
+    return score
 
 
 @dataclass
@@ -154,6 +273,10 @@ class TeamMatcher:
         self._reverse_aliases: dict[str, list[tuple[str, str]]] = self._build_reverse_cache()
         # Locale-aware country name resolver (e.g. "brasil" → "Brazil")
         self._country_resolver = CountryNameResolver()
+        # Memoize country resolution per team name: it's deterministic and the
+        # same names are re-checked against every candidate event. Without this
+        # the [ALIAS] log line repeats once per candidate (147x in #256).
+        self._country_resolve_cache: dict[str, str | None] = {}
 
     def reload_aliases(self) -> None:
         """Reload aliases from database.
@@ -518,7 +641,7 @@ class TeamMatcher:
                 anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
                 if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
-            score, _side = self._score_single_team_against_event(team_norm, event)
+            score, side = self._score_single_team_against_event(team_norm, event)
             if score is None:
                 continue
             seen_event_ids.add(event.id)
@@ -538,6 +661,9 @@ class TeamMatcher:
                 stream_name=stream_name,
                 stream_id=stream_id,
                 parsed_team1=classified.team1,
+                # Which event side the branded team is (#489) — the lifecycle
+                # persists that side's team id per-stream for ordering rules.
+                matched_side=side,
             ))
 
         if matched_outcomes:
@@ -549,6 +675,132 @@ class TeamMatcher:
             stream_id=stream_id,
             detail=f"No event found for team '{classified.team1}'",
             parsed_team1=classified.team1,
+        )]
+
+    def match_all_star(
+        self,
+        classified: ClassifiedStream,
+        enabled_leagues: list[str],
+        target_date: date,
+        group_id: int,
+        stream_id: int,
+        generation: int,
+        user_tz: ZoneInfo,
+        sport_durations: dict[str, float] | None = None,
+        prefetched_events: dict[str, list[Event]] | None = None,
+        stream_tz: ZoneInfo | None = None,
+        anchor_dt: "datetime | None" = None,
+    ) -> list[MatchOutcome]:
+        """Match an All-Star stream (ALL_STAR) to the league's All-Star event.
+
+        ESPN serves All-Star games inside the normal league scoreboard as two
+        pseudo-teams whose names both carry an "All-Star(s)" token. We resolve
+        the classified stream to the event in the hinted league(s) whose
+        competitors are both All-Star squads (see ``is_all_star_event``) —
+        name-agnostic, so the yearly-varying opponent needs no hardcoding.
+        There is one All-Star event per league per season, so this normally
+        returns a single outcome.
+
+        Args:
+            classified: Pre-classified stream (category must be ALL_STAR)
+            enabled_leagues: League codes subscribed for this group
+            target_date: Date to anchor the search window
+            group_id: Event group ID (unused; kept for call-site symmetry)
+            stream_id: Stream ID (for logging/outcomes)
+            generation: Cache generation counter (unused; symmetry)
+            user_tz: User timezone for the date window
+            sport_durations: Sport duration settings (unused; symmetry)
+            prefetched_events: Optional pre-fetched events by league
+            stream_tz: Timezone for interpreting stream dates (unused; symmetry)
+            anchor_dt: EPG path — gate to the live occurrence near this instant
+
+        Returns:
+            List of MatchOutcome — one per matched All-Star event, or a single
+            filtered/failed outcome if nothing matched.
+        """
+        if classified.category != StreamCategory.ALL_STAR:
+            return [MatchOutcome.filtered(
+                FilteredReason.NOT_EVENT,
+                stream_name=classified.normalized.original,
+                stream_id=stream_id,
+            )]
+
+        stream_name = classified.normalized.original
+
+        # An ALL_STAR classification always carries a league hint (enforced by
+        # the classifier); narrow to the hinted leagues this group subscribes to.
+        league_hint = classified.league_hint
+        hint_leagues = (
+            [league_hint] if isinstance(league_hint, str) else list(league_hint or [])
+        )
+        leagues_to_search = [lg for lg in hint_leagues if lg in enabled_leagues]
+        if not leagues_to_search:
+            hint_display = ", ".join(hint_leagues) if hint_leagues else "?"
+            return [MatchOutcome.filtered(
+                FilteredReason.LEAGUE_NOT_INCLUDED,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail=f"League '{hint_display}' not in enabled leagues",
+            )]
+
+        # Narrow date window to ±2 days to minimise false positives.
+        window_days = 2
+        all_events: list[tuple[str, Event]] = []
+        if prefetched_events:
+            for league in leagues_to_search:
+                for event in prefetched_events.get(league, []):
+                    event_date = event.start_time.astimezone(user_tz).date()
+                    if abs((event_date - target_date).days) <= window_days:
+                        all_events.append((league, event))
+        else:
+            for league in leagues_to_search:
+                is_tsdb = self._service.get_provider_name(league) == "tsdb"
+                for offset in range(-window_days, window_days + 1):
+                    fetch_date = target_date + timedelta(days=offset)
+                    cache_only = is_tsdb or offset < 0
+                    events = self._service.get_events(league, fetch_date, cache_only=cache_only)
+                    for event in events:
+                        all_events.append((league, event))
+
+        matched_outcomes: list[MatchOutcome] = []
+        seen_event_ids: set[str] = set()
+        for league, event in all_events:
+            if event.id in seen_event_ids:
+                continue
+            if not is_all_star_event(event):
+                continue
+            # EPG anchored matching (bead t5e): gate to the live occurrence near
+            # the program's broadcast instant.
+            if anchor_dt is not None:
+                anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
+                if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
+                    continue
+            seen_event_ids.add(event.id)
+            logger.debug(
+                "[ALL_STAR] Matched: stream_id=%d league=%s event=%s (%s vs %s)",
+                stream_id,
+                league,
+                event.id,
+                event.away_team.name,
+                event.home_team.name,
+            )
+            matched_outcomes.append(MatchOutcome.matched(
+                MatchMethod.FUZZY,
+                event,
+                detected_league=league,
+                confidence=1.0,
+                stream_name=stream_name,
+                stream_id=stream_id,
+            ))
+
+        if matched_outcomes:
+            return matched_outcomes
+
+        return [MatchOutcome.failed(
+            FailedReason.NO_EVENT_FOUND,
+            stream_name=stream_name,
+            stream_id=stream_id,
+            detail=f"No All-Star event in window ±{window_days}d for {target_date}",
         )]
 
     # =========================================================================
@@ -683,6 +935,8 @@ class TeamMatcher:
         best_date_distance: int = 999  # Absolute days from target_date
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
+        best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
+        date_rejected = 0  # Candidates gated by a trusted stream date (#474)
 
         for event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -701,14 +955,23 @@ class TeamMatcher:
 
             event_date = event.start_time.astimezone(ctx.user_tz).date()
 
-            # Check for date mismatch from stream (if extracted)
-            # Use stream_tz if available - the date in the stream name is in the provider's timezone
+            # Date validation from the stream (#474). A trusted date (built-in
+            # extraction, declared component groups, or a learned per-source
+            # format) gates candidates with ±1 day of tolerance for provider
+            # timezone day-boundaries. An untrusted date (blind per-string
+            # format guess) never rejects — it ranks candidates instead, so a
+            # misread date can no longer zero out the whole group.
+            stream_date_dist = 0
             if ctx.classified.normalized.extracted_date:
-                # Get event date in the stream's timezone (or user_tz as fallback)
+                # The date in the stream name is in the provider's timezone
                 compare_tz = ctx.stream_tz or ctx.user_tz
                 event_date_in_stream_tz = event.start_time.astimezone(compare_tz).date()
-                if ctx.classified.normalized.extracted_date != event_date_in_stream_tz:
-                    continue
+                stream_date_dist = abs(
+                    (
+                        ctx.classified.normalized.extracted_date
+                        - event_date_in_stream_tz
+                    ).days
+                )
 
             # Check for sport mismatch from stream (if detected)
             # Skip when league hint is present - league is more specific and avoids
@@ -733,6 +996,19 @@ class TeamMatcher:
                 match_result = self._match_teams_to_event(
                     fallback_t1, fallback_t2, event, has_date_validation
                 )
+
+            # Trusted-date gate (#474), applied AFTER team scoring (#480):
+            # only candidates whose teams actually matched count as date
+            # rejections, so DATE_MISMATCH is reported only when the date is
+            # what killed an otherwise-good match — not whenever unrelated
+            # games elsewhere in the window were skipped.
+            if (
+                match_result
+                and stream_date_dist > 1
+                and ctx.classified.normalized.extracted_date_trusted
+            ):
+                date_rejected += 1
+                continue
 
             if match_result:
                 method, score = match_result
@@ -762,7 +1038,11 @@ class TeamMatcher:
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if ctx.anchor_dt is not None:
+                    if stream_date_dist != best_stream_date_dist:
+                        # Agreement with the stream's declared date is the
+                        # strongest equal-score disambiguator (#474)
+                        is_better = stream_date_dist < best_stream_date_dist
+                    elif ctx.anchor_dt is not None:
                         is_better = anchor_dist < best_anchor_dist
                     elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
@@ -783,6 +1063,7 @@ class TeamMatcher:
                     best_date_distance = abs_distance
                     best_time_distance = time_distance
                     best_anchor_dist = anchor_dist
+                    best_stream_date_dist = stream_date_dist
 
         if best_match:
             logger.debug(
@@ -808,6 +1089,10 @@ class TeamMatcher:
             reason = FailedReason.TEAM2_NOT_FOUND
         elif team2_normalized and not team1_normalized:
             reason = FailedReason.TEAM1_NOT_FOUND
+        elif date_rejected:
+            # Candidates existed but every one was gated by the stream's
+            # date — say so instead of a generic "no event found" (#474)
+            reason = FailedReason.DATE_MISMATCH
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
@@ -817,6 +1102,9 @@ class TeamMatcher:
             reason.value,
             ctx.team1,
             ctx.team2,
+        )
+        self._log_near_miss(
+            ctx, list(events), team1_normalized, team2_normalized, date_rejected
         )
         return MatchOutcome.failed(
             reason,
@@ -871,6 +1159,8 @@ class TeamMatcher:
         best_date_distance: int = 999  # Absolute days from target_date
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
+        best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
+        date_rejected = 0  # Candidates gated by a trusted stream date (#474)
 
         for league, event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -889,14 +1179,23 @@ class TeamMatcher:
 
             event_date = event.start_time.astimezone(ctx.user_tz).date()
 
-            # Check for date mismatch from stream (if extracted)
-            # Use stream_tz if available - the date in the stream name is in the provider's timezone
+            # Date validation from the stream (#474). A trusted date (built-in
+            # extraction, declared component groups, or a learned per-source
+            # format) gates candidates with ±1 day of tolerance for provider
+            # timezone day-boundaries. An untrusted date (blind per-string
+            # format guess) never rejects — it ranks candidates instead, so a
+            # misread date can no longer zero out the whole group.
+            stream_date_dist = 0
             if ctx.classified.normalized.extracted_date:
-                # Get event date in the stream's timezone (or user_tz as fallback)
+                # The date in the stream name is in the provider's timezone
                 compare_tz = ctx.stream_tz or ctx.user_tz
                 event_date_in_stream_tz = event.start_time.astimezone(compare_tz).date()
-                if ctx.classified.normalized.extracted_date != event_date_in_stream_tz:
-                    continue
+                stream_date_dist = abs(
+                    (
+                        ctx.classified.normalized.extracted_date
+                        - event_date_in_stream_tz
+                    ).days
+                )
 
             # Check for sport mismatch from stream (if detected)
             # Skip when league hint is present - league is more specific and avoids
@@ -921,6 +1220,19 @@ class TeamMatcher:
                 match_result = self._match_teams_to_event(
                     fallback_t1, fallback_t2, event, has_date_validation
                 )
+
+            # Trusted-date gate (#474), applied AFTER team scoring (#480):
+            # only candidates whose teams actually matched count as date
+            # rejections, so DATE_MISMATCH is reported only when the date is
+            # what killed an otherwise-good match — not whenever unrelated
+            # games elsewhere in the window were skipped.
+            if (
+                match_result
+                and stream_date_dist > 1
+                and ctx.classified.normalized.extracted_date_trusted
+            ):
+                date_rejected += 1
+                continue
 
             if match_result:
                 method, score = match_result
@@ -950,7 +1262,11 @@ class TeamMatcher:
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if ctx.anchor_dt is not None:
+                    if stream_date_dist != best_stream_date_dist:
+                        # Agreement with the stream's declared date is the
+                        # strongest equal-score disambiguator (#474)
+                        is_better = stream_date_dist < best_stream_date_dist
+                    elif ctx.anchor_dt is not None:
                         is_better = anchor_dist < best_anchor_dist
                     elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
@@ -972,6 +1288,7 @@ class TeamMatcher:
                     best_date_distance = abs_distance
                     best_anchor_dist = anchor_dist
                     best_time_distance = time_distance
+                    best_stream_date_dist = stream_date_dist
 
         if best_match and best_league:
             logger.debug(
@@ -998,6 +1315,10 @@ class TeamMatcher:
             reason = FailedReason.TEAM2_NOT_FOUND
         elif team2_normalized and not team1_normalized:
             reason = FailedReason.TEAM1_NOT_FOUND
+        elif date_rejected:
+            # Candidates existed but every one was gated by the stream's
+            # date — say so instead of a generic "no event found" (#474)
+            reason = FailedReason.DATE_MISMATCH
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
@@ -1008,12 +1329,88 @@ class TeamMatcher:
             ctx.team1,
             ctx.team2,
         )
+        self._log_near_miss(
+            ctx,
+            [e for _, e in events],
+            team1_normalized,
+            team2_normalized,
+            date_rejected,
+        )
         return MatchOutcome.failed(
             reason,
             stream_name=ctx.stream_name,
             stream_id=ctx.stream_id,
             parsed_team1=ctx.team1,
             parsed_team2=ctx.team2,
+        )
+
+    def _log_near_miss(
+        self,
+        ctx: MatchContext,
+        candidates: list[Event],
+        team1_norm: str | None,
+        team2_norm: str | None,
+        date_rejected: int,
+    ) -> None:
+        """DEBUG-only near-miss report for match failures (#480).
+
+        A bare "reason=no_event_found" hides everything a bug report needs:
+        which candidate came closest, the per-side scores vs the threshold,
+        and whether aliases resolved. This prints the single best-scoring
+        candidate so a log line is enough to diagnose misses like
+        'D-backs' scoring 50 against the Diamondbacks.
+        """
+        if not logger.isEnabledFor(logging.DEBUG):
+            return
+
+        def side(stream_norm: str | None, team) -> float:
+            if not stream_norm:
+                return 0.0
+            if _is_short_code(stream_norm):
+                return 100.0 if _abbrev_equals(stream_norm, team.abbreviation) else 0.0
+            return _best_name_score(stream_norm, team)
+
+        best: tuple[float, float, float, Event] | None = None
+        for event in candidates[:300]:
+            o1 = min(side(team1_norm, event.home_team), side(team2_norm, event.away_team))
+            o2 = min(side(team1_norm, event.away_team), side(team2_norm, event.home_team))
+            pair = max(
+                (o1, side(team1_norm, event.home_team), side(team2_norm, event.away_team)),
+                (o2, side(team1_norm, event.away_team), side(team2_norm, event.home_team)),
+            )
+            if best is None or pair[0] > best[0]:
+                best = (pair[0], pair[1], pair[2], event)
+
+        if best is None:
+            logger.debug(
+                "[NEAR_MISS] stream_id=%d no candidates in window; date_gated=%d",
+                ctx.stream_id,
+                date_rejected,
+            )
+            return
+
+        _, s1, s2, event = best
+        # Resolve against the candidate's league — user aliases are
+        # league-scoped, so league=None under-reports ("alias2=none" for an
+        # alias that WOULD fire in the real path).
+        alias1 = self._resolve_alias(team1_norm, event.league) if team1_norm else None
+        alias2 = self._resolve_alias(team2_norm, event.league) if team2_norm else None
+        logger.debug(
+            "[NEAR_MISS] stream_id=%d best='%s vs %s' (%s %s) scores %s=%.0f / %s=%.0f "
+            "(need %.0f) alias1=%s alias2=%s date_gated=%d",
+            ctx.stream_id,
+            event.home_team.name,
+            event.away_team.name,
+            event.league,
+            event.start_time.date(),
+            ctx.team1,
+            s1,
+            ctx.team2,
+            s2,
+            BOTH_TEAMS_THRESHOLD,
+            alias1 or "none",
+            alias2 or "none",
+            date_rejected,
         )
 
     def _check_abbreviation_match(
@@ -1028,8 +1425,14 @@ class TeamMatcher:
         "SWE" matches abbreviation "SWE", "ITA (M Group B)" contains token "ita"
         matching "ITA".
 
-        Requires both abbreviations to be >= 3 chars to avoid matching 2-letter codes
-        (SF, NE, KC) that are more likely to appear as noise tokens.
+        With BOTH teams extracted, 2-letter abbreviations are allowed (#472):
+        requiring the two stream teams to hit DIFFERENT event abbreviations
+        makes noise hits vanishingly unlikely, and MLB's official codes (SF,
+        SD, KC, TB) are 2 letters — the old >=3 guard made those teams
+        unmatchable by code. Single-team streams keep the >=3 guard (a lone
+        2-letter token really is noise-prone). Well-known alternate codes
+        (AZ for ARI, Baseball-Reference forms) resolve via
+        ALTERNATE_TEAM_CODES.
         """
         home_abbr = (
             normalize_text(event.home_team.abbreviation)
@@ -1042,11 +1445,11 @@ class TeamMatcher:
             else ""
         )
 
-        if not home_abbr or not away_abbr or len(home_abbr) < 3 or len(away_abbr) < 3:
+        if not home_abbr or not away_abbr or len(home_abbr) < 2 or len(away_abbr) < 2:
             return None
 
-        t1_tokens = set(normalize_text(team1).split()) if team1 else set()
-        t2_tokens = set(normalize_text(team2).split()) if team2 else set()
+        t1_tokens = _resolve_alt_codes(set(normalize_text(team1).split())) if team1 else set()
+        t2_tokens = _resolve_alt_codes(set(normalize_text(team2).split())) if team2 else set()
 
         # Both teams must match different event teams
         if team1 and team2:
@@ -1054,12 +1457,13 @@ class TeamMatcher:
             opt2 = away_abbr in t1_tokens and home_abbr in t2_tokens
             if opt1 or opt2:
                 return (MatchMethod.FUZZY, 100.0)
-        elif team1:
-            if home_abbr in t1_tokens or away_abbr in t1_tokens:
-                return (MatchMethod.FUZZY, 100.0)
-        elif team2:
-            if home_abbr in t2_tokens or away_abbr in t2_tokens:
-                return (MatchMethod.FUZZY, 100.0)
+        elif len(home_abbr) >= 3 and len(away_abbr) >= 3:
+            if team1:
+                if home_abbr in t1_tokens or away_abbr in t1_tokens:
+                    return (MatchMethod.FUZZY, 100.0)
+            elif team2:
+                if home_abbr in t2_tokens or away_abbr in t2_tokens:
+                    return (MatchMethod.FUZZY, 100.0)
 
         return None
 
@@ -1168,11 +1572,36 @@ class TeamMatcher:
             t1_norm = normalize_text(team1)
             t2_norm = normalize_text(team2)
 
-            # Score each stream team against each event team
-            t1_vs_home = fuzz.token_set_ratio(t1_norm, home_normalized)
-            t1_vs_away = fuzz.token_set_ratio(t1_norm, away_normalized)
-            t2_vs_home = fuzz.token_set_ratio(t2_norm, home_normalized)
-            t2_vs_away = fuzz.token_set_ratio(t2_norm, away_normalized)
+            # Score each stream team against each event team. Short codes
+            # score by abbreviation equality ONLY (#472): token_set_ratio
+            # gives a spurious 100 when a code is a literal word of an
+            # unrelated name ("SEA" in "Portland Sea Dogs") and useless
+            # scores for real abbreviations ("SF" vs the Giants = 9).
+            def _side_score(stream_norm: str, event_team, event_name_norm: str) -> float:
+                # Per-side alias resolution (#480 round 2): an alias is a
+                # statement about ONE team, so its canonical name scores
+                # this side directly — a single-sided alias must be able to
+                # carry its side while the opponent matches by fuzz/abbrev.
+                # (_check_alias_match's both-sides path remains as the fast
+                # path when every side is aliased.)
+                alias_score = 0.0
+                canonical = self._resolve_alias(stream_norm, event.league)
+                if canonical:
+                    alias_score = _best_name_score(canonical, event_team)
+                if _is_short_code(stream_norm):
+                    base = (
+                        100.0
+                        if _abbrev_equals(stream_norm, event_team.abbreviation)
+                        else 0.0
+                    )
+                else:
+                    base = _best_name_score(stream_norm, event_team)
+                return max(base, alias_score)
+
+            t1_vs_home = _side_score(t1_norm, event.home_team, home_normalized)
+            t1_vs_away = _side_score(t1_norm, event.away_team, away_normalized)
+            t2_vs_home = _side_score(t2_norm, event.home_team, home_normalized)
+            t2_vs_away = _side_score(t2_norm, event.away_team, away_normalized)
 
             # Try both valid assignments (each stream team matches a different event team)
             # Option 1: team1 → home, team2 → away
@@ -1193,6 +1622,30 @@ class TeamMatcher:
             # Use stricter threshold since we have less confidence
             single_team = team1 or team2
             single_norm = normalize_text(single_team)
+
+            # Per-side alias resolution (#480 round 2): the canonical name
+            # scores against the combined event name like any full name.
+            canonical = self._resolve_alias(single_norm, event.league)
+            if canonical:
+                event_norm_full = normalize_text(
+                    f"{event.home_team.name} vs {event.away_team.name}"
+                )
+                alias_score = fuzz.token_set_ratio(canonical, event_norm_full)
+                if alias_score >= HIGH_CONFIDENCE_THRESHOLD:
+                    return (MatchMethod.FUZZY, alias_score)
+
+            # Short codes never fuzzy-match a combined event name (#472):
+            # abbreviation equality is the only evidence they can offer, and
+            # the single-team abbreviation path deliberately requires >=3
+            # chars — a lone 2-letter token is noise.
+            if _is_short_code(single_norm):
+                if len(single_norm) >= 3 and (
+                    _abbrev_equals(single_norm, event.home_team.abbreviation)
+                    or _abbrev_equals(single_norm, event.away_team.abbreviation)
+                ):
+                    return (MatchMethod.FUZZY, 100.0)
+                return None
+
             event_name = f"{event.home_team.name} vs {event.away_team.name}"
             event_norm = normalize_text(event_name)
 
@@ -1224,11 +1677,26 @@ class TeamMatcher:
         Returns:
             (score, side) where side is "home" or "away", or (None, None)
         """
-        home_norm = normalize_text(event.home_team.name)
-        away_norm = normalize_text(event.away_team.name)
+        if _is_short_code(team_norm):
+            # Short codes match only by abbreviation equality (#472), and a
+            # lone 2-letter token stays unmatchable (noise guard).
+            if len(team_norm) < 3:
+                return None, None
+            home_score = (
+                100.0 if _abbrev_equals(team_norm, event.home_team.abbreviation) else 0.0
+            )
+            away_score = (
+                100.0 if _abbrev_equals(team_norm, event.away_team.abbreviation) else 0.0
+            )
+        else:
+            home_score = _best_name_score(team_norm, event.home_team)
+            away_score = _best_name_score(team_norm, event.away_team)
 
-        home_score = fuzz.token_set_ratio(team_norm, home_norm)
-        away_score = fuzz.token_set_ratio(team_norm, away_norm)
+        # Per-side alias resolution (#480 round 2)
+        canonical = self._resolve_alias(team_norm, event.league)
+        if canonical:
+            home_score = max(home_score, _best_name_score(canonical, event.home_team))
+            away_score = max(away_score, _best_name_score(canonical, event.away_team))
 
         home_matches = home_score >= HIGH_CONFIDENCE_THRESHOLD
         away_matches = away_score >= HIGH_CONFIDENCE_THRESHOLD
@@ -1245,8 +1713,9 @@ class TeamMatcher:
         """Resolve a team name to its canonical form via alias lookup.
 
         Priority:
-        1. Built-in aliases (TEAM_ALIASES constant) - league-agnostic
-        2. User-defined aliases (database) - league-specific
+        1. User-defined aliases (database, league-specific) — a user's
+           deliberate mapping outranks shipped defaults (#480)
+        2. Built-in aliases (TEAM_ALIASES constant) - league-agnostic
         3. International country name auto-resolution (e.g. "brasil" → "Brazil")
 
         Args:
@@ -1256,28 +1725,35 @@ class TeamMatcher:
         Returns:
             Canonical team name if alias found, None otherwise
         """
-        normalized = team_name.lower()
+        normalized = normalize_text(team_name)
 
-        # First check built-in aliases (league-agnostic)
-        canonical = TEAM_ALIASES.get(normalized)
-        if canonical:
-            return canonical
-
-        # Then check user-defined aliases (league-specific)
+        # User-defined aliases first — deliberate user mappings outrank
+        # shipped defaults (#480)
         if league and self._user_aliases:
             user_canonical = self._lookup_user_alias(normalized, league)
             if user_canonical:
                 return user_canonical
 
-        # Finally, try automatic country name resolution for national-team sports
-        country_canonical = self._country_resolver.resolve(team_name)
-        if country_canonical:
-            logger.debug(
-                "[ALIAS] Country name resolved: %r → %r", team_name, country_canonical
-            )
-            return country_canonical
+        # Then built-in aliases (league-agnostic)
+        canonical = _NORMALIZED_TEAM_ALIASES.get(normalized)
+        if canonical:
+            return canonical
 
-        return None
+        # Finally, try automatic country name resolution for national-team sports.
+        # Memoized: the same stream team names are re-checked against every
+        # candidate event, so resolve + log once per unique name, not per
+        # candidate (the 147x [ALIAS] spam in #256). Self-maps (e.g. an English
+        # name that resolves to itself) are not logged — they carry no signal.
+        if team_name not in self._country_resolve_cache:
+            country_canonical = self._country_resolver.resolve(team_name)
+            self._country_resolve_cache[team_name] = country_canonical
+            if country_canonical and country_canonical != _normalize_country(team_name):
+                logger.debug(
+                    "[ALIAS] Country name resolved: %r → %r",
+                    team_name,
+                    country_canonical,
+                )
+        return self._country_resolve_cache[team_name]
 
     def _check_alias_match(
         self,
@@ -1363,9 +1839,12 @@ class TeamMatcher:
 
             cache: UserAliasCache = {}
             for alias in aliases:
-                # Key by (normalized alias, normalized league)
-                key = (alias.alias.lower(), alias.league.lower())
-                cache[key] = alias.team_name.lower()
+                # Key by (matcher-normalized alias, lowercased league). The
+                # lookup side is normalize_for_matching output — storing the
+                # raw lowercased text meant any alias containing punctuation
+                # ("D-backs", "St. Louis") could never fire (#480).
+                key = (normalize_text(alias.alias), alias.league.lower())
+                cache[key] = normalize_text(alias.team_name)
 
             if cache:
                 logger.debug("[ALIAS] Loaded %d user-defined aliases from database", len(cache))
@@ -1542,7 +2021,7 @@ class TeamMatcher:
         if not self._user_aliases:
             return None
 
-        key = (team_name.lower(), league.lower())
+        key = (normalize_text(team_name), league.lower())
         return self._user_aliases.get(key)
 
     def _disambiguate_by_time(
@@ -1550,7 +2029,7 @@ class TeamMatcher:
         events: list[Event],
         stream_time: time,
         user_tz: ZoneInfo,
-    ) -> Event:
+    ) -> Event | None:
         """Pick event closest to stream time for doubleheaders."""
         if len(events) <= 1:
             return events[0] if events else None
@@ -1589,6 +2068,8 @@ class TeamMatcher:
             start_time = cached_data.get("start_time")
             if isinstance(start_time, str):
                 start_time = datetime.fromisoformat(start_time)
+            if not isinstance(start_time, datetime):
+                return None  # missing/invalid start_time -> treat as cache miss
 
             # Reconstruct teams (use `or {}` to handle explicit None values)
             home_data = cached_data.get("home_team") or {}
@@ -1618,7 +2099,6 @@ class TeamMatcher:
                 color=away_data.get("color"),
             )
 
-            from teamarr.core.types import EventStatus
 
             status_data = cached_data.get("status") or {}
             status = EventStatus(
@@ -1639,7 +2119,6 @@ class TeamMatcher:
             )
 
             # Reconstruct Venue from dict if present
-            from teamarr.core.types import Venue
 
             venue_data = cached_data.get("venue")
             venue = None
@@ -1669,6 +2148,34 @@ class TeamMatcher:
             if isinstance(main_card_start, str):
                 main_card_start = datetime.fromisoformat(main_card_start)
 
+            # Reconstruct racing sessions, if present
+
+            sessions = []
+            for session_data in cached_data.get("sessions") or []:
+                session_start = session_data.get("start_time")
+                if isinstance(session_start, str):
+                    session_start = datetime.fromisoformat(session_start)
+                results = [
+                    RacingResult(
+                        driver_name=r.get("driver_name", ""),
+                        team_name=r.get("team_name"),
+                        position=r.get("position"),
+                        grid_position=r.get("grid_position"),
+                        points=r.get("points"),
+                        fastest_lap=r.get("fastest_lap", False),
+                        status=r.get("status"),
+                    )
+                    for r in session_data.get("results") or []
+                ]
+                sessions.append(
+                    RacingSession(
+                        code=session_data.get("code", ""),
+                        name=session_data.get("name", ""),
+                        start_time=session_start,
+                        results=results,
+                    )
+                )
+
             # Self-heal stale cache rows: every modern provider populates
             # short_name (falling back to the full name when no shorter form
             # exists), so a row with name set but short_name empty is data
@@ -1687,7 +2194,7 @@ class TeamMatcher:
                 id=cached_data.get("id", ""),
                 provider=cached_data.get("provider", ""),
                 name=cached_data.get("name", ""),
-                short_name=cached_data.get("short_name"),
+                short_name=cached_data.get("short_name", ""),
                 start_time=start_time,
                 home_team=home_team,
                 away_team=away_team,
@@ -1699,6 +2206,13 @@ class TeamMatcher:
                 broadcasts=broadcasts,
                 segment_times=segment_times,
                 main_card_start=main_card_start,
+                circuit_name=cached_data.get("circuit_name"),
+                sessions=sessions,
+                tournament_name=cached_data.get("tournament_name"),
+                round_name=cached_data.get("round_name"),
+                court=cached_data.get("court"),
+                draw_type=cached_data.get("draw_type"),
+                is_major=bool(cached_data.get("is_major", False)),
             )
         except Exception as e:
             logger.warning("[MATCH_CACHE] Failed to reconstruct event from cache: %s", e)

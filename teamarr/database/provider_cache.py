@@ -7,6 +7,7 @@ JSON for storage in PersistentTTLCache (SQLite-backed).
 from datetime import datetime
 
 from teamarr.core import Event, EventStatus, Team, TeamStats, Venue
+from teamarr.core.types import Bout, RacingResult, RacingSession
 
 
 def event_to_dict(event: Event) -> dict:
@@ -38,9 +39,88 @@ def event_to_dict(event: Event) -> dict:
         "broadcasts": event.broadcasts,
         "season_year": event.season_year,
         "season_type": event.season_type,
+        "neutral_site": event.neutral_site,
+        "broadcast_markets": event.broadcast_markets,
+        # Editorial/context copy — the has_recap/has_preview/has_event_note/
+        # has_match_note conditions and their template vars read these; a
+        # cache hit must not silently drop them (#363, #365).
+        "game_recap": event.game_recap,
+        "game_event_note": event.game_event_note,
+        "soccer_match_note": event.soccer_match_note,
+        "game_preview": event.game_preview,
+        "series_summary": event.series_summary,
+        "home_last_five": event.home_last_five,
+        "away_last_five": event.away_last_five,
+        # Betting odds — the has_odds condition and odds vars read this; a
+        # cache hit must not silently drop it (#366).
+        "odds_data": event.odds_data,
         # UFC-specific fields
         "segment_times": segment_times_dict,
         "main_card_start": event.main_card_start.isoformat() if event.main_card_start else None,
+        # Combat result fields — the is_knockout/is_submission/is_decision/
+        # is_finish/went_distance conditions and result vars read these (#366).
+        "bouts": [bout_to_dict(b) for b in event.bouts],
+        "fight_result_method": event.fight_result_method,
+        "finish_round": event.finish_round,
+        "finish_time": event.finish_time,
+        "weight_class": event.weight_class,
+        "fighter1_scores": event.fighter1_scores,
+        "fighter2_scores": event.fighter2_scores,
+        # Racing-specific fields
+        "circuit_name": event.circuit_name,
+        "sessions": [racing_session_to_dict(s) for s in event.sessions],
+        "race_laps": event.race_laps,
+        "race_distance_miles": event.race_distance_miles,
+        "stage_laps": event.stage_laps,
+        # Tennis-specific fields
+        "tournament_name": event.tournament_name,
+        "round_name": event.round_name,
+        "court": event.court,
+        "draw_type": event.draw_type,
+        "is_major": event.is_major,
+    }
+
+
+def bout_to_dict(bout: Bout) -> dict:
+    """Serialize Bout to dict."""
+    return {
+        "fighter1": bout.fighter1,
+        "fighter2": bout.fighter2,
+        "segment": bout.segment,
+        "order": bout.order,
+    }
+
+
+def dict_to_bout(data: dict) -> Bout:
+    """Deserialize dict to Bout."""
+    return Bout(
+        fighter1=data["fighter1"],
+        fighter2=data["fighter2"],
+        segment=data.get("segment", "main_card"),
+        order=data.get("order", 0),
+    )
+
+
+def racing_session_to_dict(session: RacingSession) -> dict:
+    """Serialize RacingSession to dict."""
+    return {
+        "code": session.code,
+        "name": session.name,
+        "start_time": session.start_time.isoformat(),
+        "results": [racing_result_to_dict(r) for r in session.results],
+    }
+
+
+def racing_result_to_dict(result: RacingResult) -> dict:
+    """Serialize RacingResult to dict."""
+    return {
+        "driver_name": result.driver_name,
+        "team_name": result.team_name,
+        "position": result.position,
+        "grid_position": result.grid_position,
+        "points": result.points,
+        "fastest_lap": result.fastest_lap,
+        "status": result.status,
     }
 
 
@@ -105,9 +185,65 @@ def dict_to_event(data: dict) -> Event:
         broadcasts=data.get("broadcasts", []),
         season_year=data.get("season_year"),
         season_type=data.get("season_type"),
+        neutral_site=bool(data.get("neutral_site", False)),
+        broadcast_markets=data.get("broadcast_markets") or {},
+        # Editorial/context copy (#363, #365) — absent in pre-upgrade cache
+        # entries, so default to empty.
+        game_recap=data.get("game_recap", ""),
+        game_event_note=data.get("game_event_note", ""),
+        soccer_match_note=data.get("soccer_match_note", ""),
+        game_preview=data.get("game_preview", ""),
+        series_summary=data.get("series_summary", ""),
+        home_last_five=data.get("home_last_five", ""),
+        away_last_five=data.get("away_last_five", ""),
+        # Betting odds (#366) — absent in pre-upgrade cache entries
+        odds_data=data.get("odds_data"),
         # UFC-specific fields
-        segment_times=segment_times,
+        segment_times=segment_times or {},
         main_card_start=main_card_start,
+        # Combat result fields (#366) — absent in pre-upgrade cache entries
+        bouts=[dict_to_bout(b) for b in data.get("bouts", [])],
+        fight_result_method=data.get("fight_result_method"),
+        finish_round=data.get("finish_round"),
+        finish_time=data.get("finish_time"),
+        weight_class=data.get("weight_class"),
+        fighter1_scores=data.get("fighter1_scores"),
+        fighter2_scores=data.get("fighter2_scores"),
+        # Racing-specific fields
+        circuit_name=data.get("circuit_name"),
+        sessions=[dict_to_racing_session(s) for s in data.get("sessions", [])],
+        race_laps=data.get("race_laps"),
+        race_distance_miles=data.get("race_distance_miles"),
+        stage_laps=data.get("stage_laps") or [],
+        # Tennis-specific fields
+        tournament_name=data.get("tournament_name"),
+        round_name=data.get("round_name"),
+        court=data.get("court"),
+        draw_type=data.get("draw_type"),
+        is_major=bool(data.get("is_major", False)),
+    )
+
+
+def dict_to_racing_session(data: dict) -> RacingSession:
+    """Deserialize dict to RacingSession."""
+    return RacingSession(
+        code=data["code"],
+        name=data["name"],
+        start_time=datetime.fromisoformat(data["start_time"]),
+        results=[dict_to_racing_result(r) for r in data.get("results", [])],
+    )
+
+
+def dict_to_racing_result(data: dict) -> RacingResult:
+    """Deserialize dict to RacingResult."""
+    return RacingResult(
+        driver_name=data["driver_name"],
+        team_name=data.get("team_name"),
+        position=data.get("position"),
+        grid_position=data.get("grid_position"),
+        points=data.get("points"),
+        fastest_lap=data.get("fastest_lap", False),
+        status=data.get("status"),
     )
 
 

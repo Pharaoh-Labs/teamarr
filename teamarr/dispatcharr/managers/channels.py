@@ -209,6 +209,43 @@ class ChannelManager:
                 return channel
             return None
 
+    def get_channel_existence(
+        self,
+        channel_id: int,
+        use_cache: bool = True,
+    ) -> tuple[DispatcharrChannel | None, bool]:
+        """Fetch a channel, distinguishing "confirmed gone" from "couldn't verify".
+
+        ``get_channel`` collapses a real 404 and a transient failure (timeout,
+        5xx, auth/network error) into the same ``None`` return. Callers that take
+        a *destructive* action on a missing channel (soft-delete + recreate, or
+        flag as orphan) must not act on a transient blip — doing so abandons the
+        live Dispatcharr channel and recreates a duplicate, which in gap/strict
+        numbering modes appears far away in the range (see lifecycle
+        ``_handle_existing_channel`` and reconciliation orphan detection).
+
+        Returns ``(channel, confirmed_absent)``:
+          - ``(channel, False)`` — exists (cache hit or HTTP 200).
+          - ``(None, True)``    — Dispatcharr returned HTTP 404; really gone.
+          - ``(None, False)``   — inconclusive (no response, 5xx, network/auth
+            error). Treat the channel as still present and re-verify next run.
+        """
+        with self._lock:
+            if use_cache:
+                self._ensure_cache()
+                cached = self._cache.get_by_id(channel_id)
+                if cached:
+                    return cached, False
+
+            response = self._client.get(f"/api/channels/channels/{channel_id}/")
+            if response is not None and response.status_code == 200:
+                channel = DispatcharrChannel.from_api(response.json())
+                if use_cache:
+                    self._cache.update(channel)
+                return channel, False
+            confirmed_absent = response is not None and response.status_code == 404
+            return None, confirmed_absent
+
     def create_channel(
         self,
         name: str,
@@ -681,7 +718,7 @@ class ChannelManager:
             Dict mapping tvg_id to EPGData dict
         """
         epg_data_list = self.get_epg_data_list(epg_source_id)
-        return {e.get("tvg_id"): e for e in epg_data_list if e.get("tvg_id")}
+        return {tvg_id: e for e in epg_data_list if (tvg_id := e.get("tvg_id"))}
 
     def find_epg_data_by_tvg_id(
         self,
@@ -711,7 +748,9 @@ class ChannelManager:
 
         return None
 
-    def get_stream_channel_map(self) -> dict[int, dict]:
+    def get_stream_channel_map(
+        self, exclude_channel_ids: set[int] | None = None
+    ) -> dict[int, dict]:
         """Map each assigned stream id -> the Dispatcharr channel that carries it.
 
         A raw M3U stream's ``tvg_id`` lives in a different namespace from EPG
@@ -726,12 +765,36 @@ class ChannelManager:
             Dict mapping stream id -> channel dict (id, epg_data_id, etc.).
             A stream assigned to multiple channels keeps the last one seen.
         """
+        return self.get_channel_maps(exclude_channel_ids=exclude_channel_ids)[0]
+
+    def get_channel_maps(
+        self, exclude_channel_ids: set[int] | None = None
+    ) -> tuple[dict[int, dict], dict[str, dict]]:
+        """One paginated channel fetch -> (stream id -> channel, uuid -> channel).
+
+        Superset of ``get_stream_channel_map`` for callers that also need the
+        uuid index (loopback-stream EPG resolution: a Dispatcharr-loopback M3U
+        stream's URL names its source channel by uuid) without paying for a
+        second fetch. Uuid keys are lowercased.
+
+        ``exclude_channel_ids`` keeps those channels from claiming stream->
+        channel slots (#512): the map is single-slot last-write-wins, so
+        Teamarr's own OUTPUT channels would otherwise steal a shared stream's
+        slot from the curated channel once the attach window opens — which
+        self-poisons the channel-source candidate pool and degrades curated
+        EPG resolution. Excluded channels still appear in the uuid map.
+        """
         channels = self._client.paginated_get(
             "/api/channels/channels/?page_size=500",
             error_context="channels",
         )
-        mapping: dict[int, dict] = {}
+        stream_map: dict[int, dict] = {}
+        uuid_map: dict[str, dict] = {}
         for ch in channels:
-            for stream_id in ch.get("streams") or []:
-                mapping[stream_id] = ch
-        return mapping
+            if not (exclude_channel_ids and ch.get("id") in exclude_channel_ids):
+                for stream_id in ch.get("streams") or []:
+                    stream_map[stream_id] = ch
+            uuid = ch.get("uuid")
+            if uuid:
+                uuid_map[str(uuid).lower()] = ch
+        return stream_map, uuid_map

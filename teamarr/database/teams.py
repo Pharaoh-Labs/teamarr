@@ -5,7 +5,10 @@ CRUD operations for the teams table.
 
 import json
 import logging
+import re
 from sqlite3 import Connection
+
+from teamarr.database.leagues import get_league_display, get_league_id
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +141,11 @@ def create_team(
         ),
     )
     team_id = cursor.lastrowid
+    assert team_id is not None  # just-inserted row always has a rowid
     logger.info("[CREATED] Team id=%d name=%s", team_id, team_name)
-    return get_team(conn, team_id)
+    team = get_team(conn, team_id)
+    assert team is not None  # just inserted, row must exist
+    return team
 
 
 def update_team(conn: Connection, team_id: int, updates: dict) -> dict | None:
@@ -188,6 +194,70 @@ def delete_team(conn: Connection, team_id: int) -> bool:
     return True
 
 
+def to_pascal_case(name: str) -> str:
+    """PascalCase a team name, dropping non-alphanumeric separators."""
+    return "".join(
+        word.capitalize()
+        for word in "".join(c if c.isalnum() or c.isspace() else "" for c in name).split()
+    )
+
+
+def render_channel_id(
+    format_template: str,
+    *,
+    team_name: str,
+    team_abbrev: str | None = None,
+    provider_team_id: str | None = None,
+    league_id: str = "",
+    league_display: str = "",
+    sport: str | None = None,
+) -> str:
+    """Render a channel ID from a format template (#522).
+
+    Single implementation shared by team import and bulk regeneration, so the
+    `channel_id_format` setting means the same thing in both places.
+
+    Supported tokens:
+    - {team_name|pascal}: Team name in PascalCase ({team_name_pascal} is a
+      permanent legacy alias, #484)
+    - {team_abbrev}: Team abbreviation lowercase
+    - {team_name}: Team name lowercase with dashes
+    - {provider_team_id}: Provider's team ID
+    - {league_id}: League code lowercase
+    - {league}: League display name
+    - {sport}: Sport name lowercase
+
+    Sanitization depends on the tokens used: templates carrying a mixed-case
+    token (pascal name or league display) keep their casing and only drop
+    illegal characters; all-lowercase templates are slugified with dashes.
+
+    Returns:
+        The rendered channel id, or "" if the template renders empty.
+    """
+    channel_id = format_template
+    channel_id = channel_id.replace("{team_name|pascal}", to_pascal_case(team_name))
+    channel_id = channel_id.replace("{team_name_pascal}", to_pascal_case(team_name))
+    channel_id = channel_id.replace("{team_abbrev}", (team_abbrev or "").lower())
+    channel_id = channel_id.replace("{team_name}", team_name.lower().replace(" ", "-"))
+    channel_id = channel_id.replace("{provider_team_id}", str(provider_team_id or ""))
+    channel_id = channel_id.replace("{league_id}", league_id)
+    channel_id = channel_id.replace("{league}", league_display)
+    channel_id = channel_id.replace("{sport}", (sport or "").lower())
+
+    if (
+        "{team_name|pascal}" in format_template
+        or "{team_name_pascal}" in format_template
+        or "{league}" in format_template
+    ):
+        channel_id = re.sub(r"[^a-zA-Z0-9.-]+", "", channel_id)
+    else:
+        channel_id = re.sub(r"[^a-z0-9.-]+", "-", channel_id)
+        channel_id = re.sub(r"-+", "-", channel_id)
+        channel_id = channel_id.strip("-")
+
+    return channel_id
+
+
 def bulk_update_channel_ids(
     conn: Connection,
     team_ids: list[int],
@@ -196,7 +266,8 @@ def bulk_update_channel_ids(
     """Bulk update channel IDs based on a format template.
 
     Supported format variables:
-    - {team_name_pascal}: Team name in PascalCase
+    - {team_name|pascal}: Team name in PascalCase ({team_name_pascal} is a
+      permanent legacy alias, #484)
     - {team_abbrev}: Team abbreviation lowercase
     - {team_name}: Team name lowercase with dashes
     - {provider_team_id}: Provider's team ID
@@ -212,16 +283,6 @@ def bulk_update_channel_ids(
     Returns:
         Tuple of (updated_count, errors list)
     """
-    import re
-
-    from teamarr.database.leagues import get_league_display, get_league_id
-
-    def to_pascal_case(name: str) -> str:
-        return "".join(
-            word.capitalize()
-            for word in "".join(c if c.isalnum() or c.isspace() else "" for c in name).split()
-        )
-
     updated_count = 0
     errors: list[str] = []
 
@@ -238,28 +299,15 @@ def bulk_update_channel_ids(
             league_display = get_league_display(conn, primary_league)
             league_id = get_league_id(conn, primary_league)
 
-            channel_id = format_template
-            channel_id = channel_id.replace("{team_name_pascal}", to_pascal_case(team_name))
-            channel_id = channel_id.replace(
-                "{team_abbrev}", (team_data.get("team_abbrev") or "").lower()
+            channel_id = render_channel_id(
+                format_template,
+                team_name=team_name,
+                team_abbrev=team_data.get("team_abbrev"),
+                provider_team_id=team_data.get("provider_team_id"),
+                league_id=league_id,
+                league_display=league_display,
+                sport=team_data.get("sport"),
             )
-            channel_id = channel_id.replace("{team_name}", team_name.lower().replace(" ", "-"))
-            channel_id = channel_id.replace(
-                "{provider_team_id}", str(team_data.get("provider_team_id") or "")
-            )
-            channel_id = channel_id.replace("{league_id}", league_id)
-            channel_id = channel_id.replace("{league}", league_display)
-            channel_id = channel_id.replace("{sport}", (team_data.get("sport") or "").lower())
-
-            if (
-                "{team_name_pascal}" in format_template
-                or "{league}" in format_template
-            ):
-                channel_id = re.sub(r"[^a-zA-Z0-9.-]+", "", channel_id)
-            else:
-                channel_id = re.sub(r"[^a-z0-9.-]+", "-", channel_id)
-                channel_id = re.sub(r"-+", "-", channel_id)
-                channel_id = channel_id.strip("-")
 
             if not channel_id:
                 errors.append(f"Generated empty channel ID for team '{team_name}'")

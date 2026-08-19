@@ -251,6 +251,138 @@ class TestDetectTeamInStreamName:
         )
         assert result == home_team
 
+    def test_team_branded_channel_token(self, home_team, away_team):
+        """'Yankees.TV' is a team-specific feed even with no feed keyword (#343)."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        result = EventGroupProcessor._detect_team_in_stream_name(
+            "mlb 04: yankees @ orioles (yankees.tv)", home_team, away_team
+        )
+        assert result == away_team
+
+    def test_team_branded_channel_token_variants(self, home_team, away_team):
+        """Spaced and run-together forms count too: 'Yankees TV', 'YankeesTV'."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        for variant in ("yankees @ orioles yankees tv", "yankees @ orioles (yankeestv)"):
+            result = EventGroupProcessor._detect_team_in_stream_name(
+                variant, home_team, away_team
+            )
+            assert result == away_team, variant
+
+    def test_team_branded_domain_suffix(self, home_team, away_team):
+        """Whitelisted domain-style tokens count: 'Yankees.US', 'Yankees.Live'."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        for variant in (
+            "yankees @ orioles (yankees.us)",
+            "yankees @ orioles yankees.live",
+        ):
+            result = EventGroupProcessor._detect_team_in_stream_name(
+                variant, home_team, away_team
+            )
+            assert result == away_team, variant
+
+    def test_dot_separated_stream_name_not_a_feed(self, home_team, away_team):
+        """Dot-separated provider naming ('MLB.Yankees.Orioles.720p') must not
+        read 'Yankees.Orioles' as a domain token — TLDs are whitelisted."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        result = EventGroupProcessor._detect_team_in_stream_name(
+            "mlb.yankees.orioles.720p", home_team, away_team
+        )
+        assert result is None
+
+
+# ===========================================================================
+# Broadcast-market feed detection (#343)
+# ===========================================================================
+
+
+class TestDetectFeedFromBroadcastMarkets:
+    """_detect_feed_from_broadcast_markets() maps ESPN broadcasts[].market
+    names found in the stream name to that side's team."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        return MockEvent(
+            home_team=MockTeam(
+                id="1", provider="espn", name="Chicago Cubs", short_name="Cubs",
+                abbreviation="CHC", league="mlb", sport="baseball",
+            ),
+            away_team=MockTeam(
+                id="2", provider="espn", name="Milwaukee Brewers", short_name="Brewers",
+                abbreviation="MIL", league="mlb", sport="baseball",
+            ),
+            broadcast_markets={
+                "MLB.TV": "national",
+                "Brewers.TV": "away",
+                "Marquee Sports Network": "home",
+            },
+        )
+
+    def _detect(self, stream_name, event):
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        return EventGroupProcessor._detect_feed_from_broadcast_markets(
+            stream_name.lower(), event
+        )
+
+    def test_away_market_name_matches(self, event):
+        """The #343 report: 'Brewers.TV' resolves to the away feed."""
+        assert self._detect("MLB 04: MIL @ CHC (Brewers.TV)", event) == event.away_team
+
+    def test_home_market_name_matches(self, event):
+        """Regional networks with no team token resolve via market too."""
+        assert self._detect("MIL @ CHC Marquee Sports Network", event) == event.home_team
+
+    def test_national_market_never_makes_a_feed(self, event):
+        assert self._detect("MIL @ CHC MLB.TV", event) is None
+
+    def test_both_sides_matching_is_ambiguous(self, event):
+        assert self._detect("Brewers.TV / Marquee Sports Network combo", event) is None
+
+    def test_no_broadcast_data(self, event):
+        event.broadcast_markets = {}
+        assert self._detect("MIL @ CHC (Brewers.TV)", event) is None
+
+    def test_short_names_skipped(self, event):
+        """Names under 3 chars are skipped (false-positive guard)."""
+        event.broadcast_markets = {"TV": "away"}
+        assert self._detect("some tv stream", event) is None
+
+    # -- fuzzy tiers (#343 follow-up): streams rarely quote the listing --
+
+    def test_punctuation_variant_matches(self, event):
+        """'Brewers.TV' listed, stream says 'BREWERS TV'."""
+        assert self._detect("MLB 04: MIL @ CHC BREWERS TV", event) == event.away_team
+
+    def test_run_together_variant_matches(self, event):
+        """'Brewers.TV' listed, stream says 'BrewersTV'."""
+        assert self._detect("MLB 04: MIL @ CHC (BrewersTV)", event) == event.away_team
+
+    def test_abbreviated_multiword_name_fuzzy_matches(self, event):
+        """'Bally Sports Wisconsin' listed, stream says 'Bally Sports WI'."""
+        event.broadcast_markets = {"Bally Sports Wisconsin": "away"}
+        assert self._detect("MIL @ CHC | Bally Sports WI", event) == event.away_team
+
+    def test_short_single_token_stays_exact(self, event):
+        """'YES' must not fuzzy-match into unrelated words."""
+        event.broadcast_markets = {"YES": "home"}
+        assert self._detect("yesterday replay: MIL @ CHC", event) is None
+        assert self._detect("MIL @ CHC on YES", event) == event.home_team
+
+    def test_matchup_team_name_alone_does_not_match(self, event):
+        """'Brewers.TV' listed: a plain matchup title mentioning the Brewers
+        (no channel token) must not become a team feed."""
+        assert self._detect("Milwaukee Brewers @ Chicago Cubs", event) is None
+
 
 # ===========================================================================
 # Feed label generation
@@ -392,10 +524,11 @@ class TestFeedTemplateVarsConstant:
     """FEED_TEMPLATE_VARS is the source of truth for the gating list."""
 
     def test_constant_contents(self):
-        from teamarr.consumers.lifecycle.service import FEED_TEMPLATE_VARS
+        from teamarr.consumers.lifecycle.naming import FEED_TEMPLATE_VARS
 
         # Naming-relevant feed vars only — logo URL and directional booleans
-        # are deliberately excluded.
+        # are deliberately excluded. feed_team_abbrev_lower is a retired
+        # alias (#484) kept for templates that never got migrated.
         assert FEED_TEMPLATE_VARS == frozenset(
             {
                 "feed_team",
@@ -405,6 +538,8 @@ class TestFeedTemplateVarsConstant:
                 "feed_home_away",
                 "broadcast_feed",
                 "broadcast_feed_team",
+                "broadcast_feed_team_short",
+                "broadcast_feed_team_abbrev",
             }
         )
 
@@ -460,7 +595,6 @@ class TestFindExistingChannelFeedTeam:
                 sync_message TEXT,
                 last_verified_at TIMESTAMP,
                 expires_at TIMESTAMP,
-                external_channel_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -623,7 +757,7 @@ class TestFillerChannelIdMatchesLiveProgramme:
 
         from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-        with patch("teamarr.consumers.event_group_processor.create_default_service"):
+        with patch("teamarr.consumers.event_group_processor.processor.create_default_service"):
             return EventGroupProcessor(db_factory=MagicMock())
 
     def _make_event(self, event_id="401815159", provider="espn"):
@@ -685,7 +819,7 @@ class TestFillerChannelIdMatchesLiveProgramme:
             captured_channel_ids.append(kwargs.get("channel_id"))
             return EventFillerResult(programmes=[], pregame_count=0, postgame_count=0)
 
-        with patch("teamarr.consumers.event_group_processor.EventFillerGenerator") as MockGen:
+        with patch("teamarr.consumers.event_group_processor.xmltv.EventFillerGenerator") as MockGen:
             MockGen.return_value.generate_with_counts = fake_generate_with_counts
             processor._generate_filler_for_streams(
                 matched_streams=matched_streams,
@@ -725,7 +859,7 @@ class TestFillerChannelIdMatchesLiveProgramme:
             captured_channel_ids.append(kwargs.get("channel_id"))
             return EventFillerResult(programmes=[], pregame_count=0, postgame_count=0)
 
-        with patch("teamarr.consumers.event_group_processor.EventFillerGenerator") as MockGen:
+        with patch("teamarr.consumers.event_group_processor.xmltv.EventFillerGenerator") as MockGen:
             MockGen.return_value.generate_with_counts = fake_generate_with_counts
             processor._generate_filler_for_streams(
                 matched_streams=matched_streams,
@@ -758,3 +892,231 @@ class TestFillerChannelIdMatchesLiveProgramme:
 
         assert filler_channel_id == live_channel_id
         assert filler_channel_id == "teamarr-event-401815159-feed-18"
+
+
+# ===========================================================================
+# Identifier candidates for feed resolution: name, tvg-id, tvg-name (#489)
+# ===========================================================================
+
+
+class TestResolveFeedTeamsIdentifiers:
+    """_resolve_feed_teams checks tvg-id/tvg-name when the display name
+    gives no signal — a stream whose tvg-id is 'Brewers.TV' is the Brewers
+    feed regardless of the name (#489)."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        return MockEvent(
+            home_team=MockTeam(
+                id="16",
+                provider="espn",
+                name="Chicago Cubs",
+                short_name="Cubs",
+                abbreviation="CHC",
+                league="mlb",
+                sport="baseball",
+            ),
+            away_team=MockTeam(
+                id="158",
+                provider="espn",
+                name="Milwaukee Brewers",
+                short_name="Brewers",
+                abbreviation="MIL",
+                league="mlb",
+                sport="baseball",
+            ),
+            broadcast_markets={"Brewers.TV": "away", "Marquee Sports Network": "home"},
+        )
+
+    def _resolve(
+        self,
+        stream: dict,
+        event,
+        detect_team_names: bool = True,
+        separation_enabled: bool = True,
+    ):
+        from teamarr.consumers.event_group_processor.matching import StreamMatching
+
+        entry = {"stream": stream, "event": event, "feed_hint": None}
+        StreamMatching._resolve_feed_teams(
+            StreamMatching(), [entry], detect_team_names, separation_enabled
+        )
+        self._last_entry = entry
+        return entry["feed_team"]
+
+    def test_tvg_id_matches_broadcast_market(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event) is event.away_team
+
+    def test_tvg_id_team_branded_token(self, event):
+        # No broadcast-market hit ('Brewers.TV' removed) — the team-branded
+        # channel token detector still recognizes the tvg-id.
+        event.broadcast_markets = {}
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event) is event.away_team
+
+    def test_tvg_name_is_also_checked(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": None, "tvg_name": "Brewers.TV"}
+        assert self._resolve(stream, event) is event.away_team
+
+    def test_name_takes_precedence(self, event):
+        # Display name resolves home; a conflicting tvg-id never gets consulted.
+        stream = {
+            "name": "MIL @ CHC on Marquee Sports Network",
+            "tvg_id": "Brewers.TV",
+            "tvg_name": None,
+        }
+        assert self._resolve(stream, event) is event.home_team
+
+    def test_missing_identifier_keys_are_safe(self, event):
+        stream = {"name": "MIL @ CHC"}
+        assert self._resolve(stream, event) is None
+
+    def test_detect_team_names_off_still_uses_broadcast_markets(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event, detect_team_names=False) is event.away_team
+
+    # --- Identification decoupled from separation (#527) ---
+
+    def test_separation_off_still_identifies_stream_feed_team(self, event):
+        # The prioritization lever: with feed separation OFF, resolution still
+        # runs and lands in stream_feed_team (→ persisted feed_team_id →
+        # team_feed ordering rules), while the channel-splitting feed_team
+        # key stays None so no feed-separated channels appear.
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event, separation_enabled=False) is None
+        assert self._last_entry["stream_feed_team"] is event.away_team
+
+    def test_separation_on_populates_both_keys(self, event):
+        stream = {"name": "MIL @ CHC", "tvg_id": "Brewers.TV", "tvg_name": None}
+        assert self._resolve(stream, event, separation_enabled=True) is event.away_team
+        assert self._last_entry["stream_feed_team"] is event.away_team
+
+    def test_separation_off_team_branded_name_identifies(self, event):
+        # FractalBoy's exact case (#527): 'Brewers.TV'-branded stream name,
+        # no broadcast-market data, feed separation off.
+        event.broadcast_markets = {}
+        stream = {"name": "Brewers.TV", "tvg_id": None, "tvg_name": None}
+        assert self._resolve(stream, event, separation_enabled=False) is None
+        assert self._last_entry["stream_feed_team"] is event.away_team
+
+
+# ===========================================================================
+# TEAM_ONLY matched_side splits feed channels (#559)
+# ===========================================================================
+
+
+class TestResolveFeedTeamsMatchedSide:
+    """A TEAM_ONLY match already proves which side's feed the stream is —
+    the whole stream name is one team ('MLB | Miami Marlins'). With
+    detect_team_names on, that matched_side splits the stream into its feed
+    channel (#559); the context-regex detector, which requires feed-specific
+    wording, never fires on bare team names by design (0b306e48)."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        return MockEvent(
+            home_team=MockTeam(
+                id="28",
+                provider="espn",
+                name="Miami Marlins",
+                short_name="Marlins",
+                abbreviation="MIA",
+                league="mlb",
+                sport="baseball",
+            ),
+            away_team=MockTeam(
+                id="23",
+                provider="espn",
+                name="Pittsburgh Pirates",
+                short_name="Pirates",
+                abbreviation="PIT",
+                league="mlb",
+                sport="baseball",
+            ),
+            broadcast_markets={},
+        )
+
+    def _resolve(
+        self,
+        stream: dict,
+        event,
+        matched_side=None,
+        feed_hint=None,
+        detect_team_names: bool = True,
+        separation_enabled: bool = True,
+    ):
+        from teamarr.consumers.event_group_processor.matching import StreamMatching
+
+        entry = {
+            "stream": stream,
+            "event": event,
+            "feed_hint": feed_hint,
+            "matched_side": matched_side,
+        }
+        StreamMatching._resolve_feed_teams(
+            StreamMatching(), [entry], detect_team_names, separation_enabled
+        )
+        self._last_entry = entry
+        return entry["feed_team"]
+
+    def test_matched_side_home_splits_to_home_feed(self, event):
+        stream = {"name": "MLB | Miami Marlins"}
+        assert self._resolve(stream, event, matched_side="home") is event.home_team
+
+    def test_matched_side_away_splits_to_away_feed(self, event):
+        stream = {"name": "US : MLB PITTSBURGH PIRATES"}
+        assert self._resolve(stream, event, matched_side="away") is event.away_team
+
+    def test_feed_hint_takes_precedence_over_matched_side(self, event):
+        stream = {"name": "Miami Marlins HOME"}
+        assert (
+            self._resolve(stream, event, matched_side="away", feed_hint="home")
+            is event.home_team
+        )
+
+    def test_matched_side_takes_precedence_over_broadcast_markets(self, event):
+        # The match is a stronger signal than fuzzy market-name presence.
+        event.broadcast_markets = {"Pirates TV": "away"}
+        stream = {"name": "Pirates TV alternate"}
+        assert self._resolve(stream, event, matched_side="home") is event.home_team
+
+    def test_detect_team_names_off_ignores_matched_side(self, event):
+        # The toggle means "team names are not a feed signal" — the split
+        # stays off; per-stream persistence still happens in the creator's
+        # matched_side fallback, not here.
+        stream = {"name": "MLB | Miami Marlins"}
+        assert (
+            self._resolve(stream, event, matched_side="home", detect_team_names=False)
+            is None
+        )
+        assert self._last_entry["stream_feed_team"] is None
+
+    def test_separation_off_still_identifies_stream_feed_team(self, event):
+        # Identification decoupled from separation (#527): channel-level
+        # feed_team stays None, per-stream identity is still resolved.
+        stream = {"name": "MLB | Miami Marlins"}
+        assert (
+            self._resolve(stream, event, matched_side="home", separation_enabled=False)
+            is None
+        )
+        assert self._last_entry["stream_feed_team"] is event.home_team
+
+    def test_matchup_stream_without_matched_side_never_splits(self, event):
+        # Regression guard for the 0b306e48 false-positive fix: a
+        # TEAM_VS_TEAM stream (no matched_side) whose name merely contains
+        # team names stays a shared feed.
+        stream = {"name": "Pittsburgh Pirates vs Miami Marlins"}
+        assert self._resolve(stream, event, matched_side=None) is None

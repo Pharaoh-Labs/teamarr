@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Loader2, Wand2 } from "lucide-react"
+import { LoaderCircle, WandSparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -100,7 +100,7 @@ function PriorityTeamsCard() {
       <CardContent>
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <TeamPicker
@@ -119,11 +119,6 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
   const { data: priorities, isLoading, refetch } = useSortPriorities()
   const reorderMutation = useReorderSortPriorities()
   const autoPopulateMutation = useAutoPopulateSortPriorities()
-
-  // Don't render if sort_by doesn't match
-  if (currentSortBy !== showWhenSortBy) {
-    return null
-  }
 
   // Transform priorities to HierarchicalItem format
   // First, build a map of sport codes to display names from sport-level entries
@@ -153,6 +148,11 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
       },
     }))
   }, [priorities, sportDisplayNames])
+
+  // Don't render if sort_by doesn't match (after hooks — rules of hooks)
+  if (currentSortBy !== showWhenSortBy) {
+    return null
+  }
 
   const handleReorder = async (newOrder: Array<{ group: string; child: string | null; priority: number }>) => {
     const reorderData: SortPriorityReorderItem[] = newOrder.map(item => ({
@@ -218,7 +218,7 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     )
@@ -243,9 +243,9 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
               disabled={autoPopulateMutation.isPending}
             >
               {autoPopulateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <Wand2 className="h-4 w-4 mr-1" />
+                <WandSparkles className="h-4 w-4 mr-1" />
               )}
               Auto-populate
             </Button>

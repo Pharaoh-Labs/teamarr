@@ -19,5 +19,10 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Rest-destructure omission (`const { drop, ...keep } = obj`) is the
+      // idiomatic way to exclude fields; don't flag the dropped names.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+    },
   },
 ])

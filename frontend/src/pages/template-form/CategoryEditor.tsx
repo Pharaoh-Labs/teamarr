@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,19 +25,26 @@ export function CategoryEditor({
   const customCategories = value.filter((c) => c !== "Sports" && c !== "{sport}")
 
   const [customInput, setCustomInput] = useState(customCategories.join(", "))
+  const [focused, setFocused] = useState(false)
 
   // Sync from outside when the category list changes externally (form reset
-  // or initial load), but not while user is mid-typing.
-  useEffect(() => {
+  // or initial load) — but NEVER while the input is focused (#423): the
+  // derived list legitimately shifts as a consequence of the user's own
+  // keystrokes (e.g. typed text temporarily equals a checkbox-owned name and
+  // dedupes to nothing), and any re-seed mid-typing swallows their text.
+  // Blur canonicalizes the input from the parsed state instead.
+  const joinedCustom = customCategories.join(",")
+  const [syncedJoined, setSyncedJoined] = useState(joinedCustom)
+  if (!focused && joinedCustom !== syncedJoined) {
+    setSyncedJoined(joinedCustom)
     const currentParsed = customInput
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
-    if (customCategories.join(",") !== currentParsed.join(",")) {
+    if (joinedCustom !== currentParsed.join(",")) {
       setCustomInput(customCategories.join(", "))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customCategories.join(",")])
+  }
 
   const toggle = (cat: string, checked: boolean) => {
     if (checked) {
@@ -52,7 +59,12 @@ export function CategoryEditor({
     const custom = text
       .split(",")
       .map((s) => s.trim())
-      .filter(Boolean)
+      // Checkbox-owned names must not enter the custom list (#423): a typed
+      // "Sports" with the Sports checkbox on would duplicate in `value`, the
+      // derived custom list would filter BOTH copies out, and the sync branch
+      // above would clobber the input mid-typing — swallowing "Sports event"
+      // at the final "s" of "Sports".
+      .filter((s) => s && s !== "Sports" && s !== "{sport}")
     const base = [hasSports && "Sports", showSportVarOption && hasSportVar && "{sport}"].filter(
       Boolean,
     ) as string[]
@@ -88,6 +100,14 @@ export function CategoryEditor({
         <Input
           value={customInput}
           onChange={(e) => updateCustom(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false)
+            // Canonicalize from parsed state: drops checkbox-owned names the
+            // user typed (they live in the checkboxes, not the custom list).
+            setCustomInput(customCategories.join(", "))
+            setSyncedJoined(joinedCustom)
+          }}
           placeholder={customPlaceholder}
         />
         <p className="text-xs text-muted-foreground">{helperText}</p>

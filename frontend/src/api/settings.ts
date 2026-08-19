@@ -60,6 +60,7 @@ export interface EPGSettings {
   epg_channel_source_groups: number[]
   epg_stream_pre_buffer_minutes: number
   epg_stream_post_buffer_minutes: number
+  tennis_majors_only: boolean
   /** Game-thumbs base URL prefixed onto relative art paths in templates (z02s). */
   art_base_url: string
 }
@@ -125,22 +126,36 @@ export interface TeamFilterSettingsUpdate {
   bypass_filter_for_playoffs?: boolean
 }
 
+export type ChannelStabilityMode = "compact" | "gap" | "strict"
+
 export interface ChannelNumberingSettings {
   global_channel_mode: "auto" | "manual"
   league_channel_starts: Record<string, number>
   global_consolidation_mode: "consolidate" | "separate"
+  channel_stability_mode: ChannelStabilityMode
+  channel_gap_size: number
+  channel_daily_reset_enabled: boolean
+  channel_daily_reset_time: string
+  // One-shot re-grid armed for the next generation (read-only; set via relayout endpoint)
+  force_channel_relayout_pending: boolean
 }
 
 export interface ChannelNumberingSettingsUpdate {
   global_channel_mode?: "auto" | "manual"
   league_channel_starts?: Record<string, number>
   global_consolidation_mode?: "consolidate" | "separate"
+  channel_stability_mode?: ChannelStabilityMode
+  channel_gap_size?: number
+  channel_daily_reset_enabled?: boolean
+  channel_daily_reset_time?: string
 }
 
 export interface StreamOrderingRule {
-  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "catch_all"
+  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "home_feed" | "away_feed" | "stats_metric" | "catch_all"
   value: string
-  priority: number  // 1-99, lower = higher priority
+  priority: number  // 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
+  mode: "priority" | "score"  // 'priority' = hard first-match band; 'score' = additive
+  points: number  // signed; summed across matched 'score' rules (ignored for 'priority')
 }
 
 export interface StreamOrderingSettings {
@@ -214,12 +229,20 @@ export interface FeedSeparationSettingsUpdate {
   label_style?: "team_name" | "short_name" | "home_away"
 }
 
-export interface EmbySettings {
-  enabled: boolean
+// One Emby/Jellyfin server target (#471). Secrets round-trip masked
+// ("********") for untouched rows; the backend merges stored values back.
+export interface MediaServerEntry {
+  name: string
   url: string | null
   username: string | null
   password: string | null
   api_key: string | null
+}
+
+export interface EmbySettings {
+  enabled: boolean
+  // Full-replace on update: send the complete list
+  servers: MediaServerEntry[]
 }
 
 export interface EmbyTestResponse {
@@ -231,10 +254,7 @@ export interface EmbyTestResponse {
 
 export interface JellyfinSettings {
   enabled: boolean
-  url: string | null
-  username: string | null
-  password: string | null
-  api_key: string | null
+  servers: MediaServerEntry[]
 }
 
 export interface JellyfinTestResponse {
@@ -244,11 +264,17 @@ export interface JellyfinTestResponse {
   error?: string | null
 }
 
-export interface ChannelsDVRSettings {
-  enabled: boolean
+export interface ChannelsDVRServer {
+  name: string
   url: string | null
   source_name: string | null
   lineup_id: string | null
+}
+
+export interface ChannelsDVRSettings {
+  enabled: boolean
+  // Full-replace on update: send the complete list
+  servers: ChannelsDVRServer[]
 }
 
 export interface ChannelsDVRTestResponse {
@@ -493,6 +519,11 @@ export async function updateChannelNumberingSettings(
   data: ChannelNumberingSettingsUpdate
 ): Promise<ChannelNumberingSettings> {
   return api.put("/settings/channel-numbering", data)
+}
+
+// Arm a one-shot full re-grid for the next generation (gap/strict modes only).
+export async function requestChannelRelayout(): Promise<ChannelNumberingSettings> {
+  return api.post("/settings/channel-numbering/relayout", {})
 }
 
 // Stream Ordering Settings API

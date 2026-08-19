@@ -8,11 +8,14 @@ This is critical for thread-safety during parallel team processing.
 """
 
 import logging
-from collections.abc import Callable, Generator
+import sqlite3
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from sqlite3 import Connection
 
 from teamarr.core import LeagueMapping
 from teamarr.core.sports import get_sport_display_names_from_db
+from teamarr.providers import ProviderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ class LeagueMappingService:
 
     def __init__(
         self,
-        db_getter: Callable[[], Generator[Connection, None, None]],
+        db_getter: Callable[[], AbstractContextManager[Connection]],
     ):
         self._db_getter = db_getter
         # Cache all mappings at initialization for thread-safety
@@ -53,6 +56,8 @@ class LeagueMappingService:
         self._gracenote_categories: dict[str, str] = {}
         # Sport per league (for gracenote_category fallback)
         self._league_sports: dict[str, str] = {}
+        # event_type per league (for gracenote_category fallback shape)
+        self._league_event_types: dict[str, str] = {}
         # {soccer_match_league_logo}: logo_url from leagues table
         self._league_logos: dict[str, str] = {}
         # Fallback from league_cache for discovered leagues
@@ -60,6 +65,9 @@ class LeagueMappingService:
         self._league_cache_logos: dict[str, str] = {}
         # {sport}: sport display name (e.g., 'mma' -> 'MMA')
         self._sport_display_names: dict[str, str] = {}
+        # User overrides (league_overrides table, #371) — win over curated
+        # values; kept separate so the curated/derived default stays known.
+        self._gracenote_overrides: dict[str, str] = {}
         self._load_all_mappings()
 
     def _load_all_mappings(self) -> None:
@@ -78,7 +86,7 @@ class LeagueMappingService:
                 SELECT league_code, provider, provider_league_id,
                        provider_league_name, sport, display_name, logo_url,
                        league_alias, league_id, gracenote_category,
-                       fallback_provider, fallback_league_id
+                       event_type, fallback_provider, fallback_league_id
                 FROM leagues
                 WHERE enabled = 1
                 ORDER BY provider, league_code
@@ -134,6 +142,10 @@ class LeagueMappingService:
                 if row["sport"]:
                     self._league_sports[league_code_lower] = row["sport"]
 
+                # Cache event_type for gracenote_category fallback shape
+                if row["event_type"]:
+                    self._league_event_types[league_code_lower] = row["event_type"]
+
             # Also load league names, logos, and sports from league_cache for fallback
             # This covers discovered leagues not in the static leagues table
             cursor = conn.execute(
@@ -155,6 +167,22 @@ class LeagueMappingService:
             # Load sport display names from sports table
             self._sport_display_names = get_sport_display_names_from_db(conn)
 
+            # User overrides (#371) — survive the seed's whole-row
+            # INSERT OR REPLACE and win over curated values at read time.
+            # Guarded: the table arrives via executescript, which runs after
+            # early init callers on fresh databases.
+            try:
+                cursor = conn.execute(
+                    "SELECT league_code, gracenote_category FROM league_overrides"
+                )
+                for row in cursor.fetchall():
+                    if row["gracenote_category"]:
+                        self._gracenote_overrides[row["league_code"].lower()] = row[
+                            "gracenote_category"
+                        ]
+            except sqlite3.OperationalError:
+                pass  # pre-upgrade database; overrides simply absent
+
         logger.info(
             "[LEAGUE_MAPPING] Loaded %d mappings (%d providers, %d aliases, %d sports)",
             len(self._mappings),
@@ -175,7 +203,9 @@ class LeagueMappingService:
         self._league_display_names.clear()
         self._league_logos.clear()
         self._gracenote_categories.clear()
+        self._gracenote_overrides.clear()
         self._league_sports.clear()
+        self._league_event_types.clear()
         self._league_cache_names.clear()
         self._league_cache_logos.clear()
         self._sport_display_names.clear()
@@ -285,8 +315,14 @@ class LeagueMappingService:
         """Get Gracenote-compatible category for {gracenote_category} variable.
 
         Fallback chain:
+            0. User override from league_overrides (#371 — survives re-seeds)
             1. gracenote_category from leagues table (curated value)
-            2. Auto-generated: "{display_name} {Sport}" (e.g., 'NFL Football')
+            2. Auto-generated, shaped by the league's event_type:
+               - team_vs_team: "{display_name} {Sport}" (e.g., 'NFL Football' —
+                 Gracenote suffixes the sport for head-to-head leagues)
+               - event / event_card: display_name alone (e.g., 'NASCAR Cup
+                 Series' — Gracenote titles racing/combat/tournament programming
+                 by the series or promotion name, never '<Series> Racing')
 
         Thread-safe: uses in-memory cache, no DB access.
 
@@ -298,12 +334,31 @@ class LeagueMappingService:
         """
         key = league_code.lower()
 
+        # User override wins (#371)
+        if key in self._gracenote_overrides:
+            return self._gracenote_overrides[key]
+
+        return self.get_default_gracenote_category(league_code)
+
+    def get_default_gracenote_category(self, league_code: str) -> str:
+        """The curated/derived category, ignoring any user override.
+
+        Used by the override editor to show what clearing an override
+        restores. Same chain as get_gracenote_category minus step 0.
+        """
+        key = league_code.lower()
+
         # Try curated gracenote_category
         if key in self._gracenote_categories:
             return self._gracenote_categories[key]
 
-        # Auto-generate from display_name + sport (with proper sport display name)
         display_name = self.get_league_display_name(league_code)
+
+        # Non-head-to-head leagues: the series/promotion name IS the title
+        if self._league_event_types.get(key) in ("event", "event_card"):
+            return display_name
+
+        # Auto-generate from display_name + sport (with proper sport display name)
         sport_code = self._league_sports.get(key, "")
 
         if display_name and sport_code:
@@ -413,7 +468,6 @@ class LeagueMappingService:
             return None
 
         # Check if primary provider has premium/full capabilities
-        from teamarr.providers import ProviderRegistry
 
         if not ProviderRegistry.is_provider_premium(mapping.provider):
             # Primary provider is limited, check for fallback
@@ -502,7 +556,7 @@ _league_mapping_service: LeagueMappingService | None = None
 
 
 def init_league_mapping_service(
-    db_getter: Callable[[], Generator[Connection, None, None]],
+    db_getter: Callable[[], AbstractContextManager[Connection]],
 ) -> LeagueMappingService:
     """Initialize the global league mapping service.
 

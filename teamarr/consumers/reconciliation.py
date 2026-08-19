@@ -22,6 +22,10 @@ from datetime import datetime
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.dispatcharr import ChannelManager
+from teamarr.dispatcharr.factory import DispatcharrConnection, get_dispatcharr_connection
+from teamarr.utilities.tz import now_utc
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,7 +71,7 @@ class ReconciliationIssue:
 class ReconciliationResult:
     """Results from a reconciliation run."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=now_utc)
     completed_at: datetime | None = None
     issues_found: list[ReconciliationIssue] = field(default_factory=list)
     issues_fixed: list[dict] = field(default_factory=list)
@@ -171,7 +175,7 @@ class ChannelReconciler:
 
         if not self.dispatcharr_enabled:
             result.errors.append("Dispatcharr not configured")
-            result.completed_at = datetime.now()
+            result.completed_at = now_utc()
             return result
 
         # Clear channel cache to ensure fresh data from Dispatcharr
@@ -209,7 +213,7 @@ class ChannelReconciler:
             result.errors.append(f"Reconciliation error: {e}")
             logger.exception("Reconciliation failed")
 
-        result.completed_at = datetime.now()
+        result.completed_at = now_utc()
         return result
 
     def _detect_orphan_teamarr(
@@ -233,11 +237,16 @@ class ChannelReconciler:
             if not channel.dispatcharr_channel_id:
                 continue
 
-            # Check if channel exists in Dispatcharr
+            # Check if channel exists in Dispatcharr. Only a confirmed 404 is a
+            # real orphan; a transient failure must not mark a live channel
+            # deleted (that recreates a duplicate next run).
             with self._dispatcharr_lock:
-                dispatcharr_channel = self._channel_manager.get_channel(
+                dispatcharr_channel, confirmed_absent = self._channel_manager.get_channel_existence(
                     channel.dispatcharr_channel_id
                 )
+
+            if dispatcharr_channel is None and not confirmed_absent:
+                continue  # Inconclusive — re-verify next run
 
             if not dispatcharr_channel:
                 issues.append(
@@ -389,9 +398,7 @@ class ChannelReconciler:
                     details={
                         "channel_count": dup["channel_count"],
                         "channel_ids": (
-                            dup.get("channel_ids", "").split(",")
-                            if dup.get("channel_ids")
-                            else []
+                            dup.get("channel_ids", "").split(",") if dup.get("channel_ids") else []
                         ),
                         "channel_names": (
                             dup.get("channel_names", "").split(",")
@@ -401,9 +408,7 @@ class ChannelReconciler:
                         "consolidation_mode": consolidation_mode,
                     },
                     suggested_action="merge",
-                    auto_fixable=self._settings.get(
-                        "auto_fix_duplicates", False
-                    ),
+                    auto_fixable=self._settings.get("auto_fix_duplicates", False),
                 )
             )
 
@@ -631,9 +636,7 @@ class ChannelReconciler:
                                 )
                                 logger.info("[FIXED] Synced drift: %s", issue.channel_name)
                             else:
-                                error_msg = (
-                                    update_result.error if update_result else "no response"
-                                )
+                                error_msg = update_result.error if update_result else "no response"
                                 result.errors.append(
                                     f"Drift fix failed for {issue.channel_name}: {error_msg}"
                                 )
@@ -687,21 +690,24 @@ class ChannelReconciler:
                     suggested_action="sync_to_dispatcharr",
                 )
 
-            # Check if exists in Dispatcharr
+            # Check if exists in Dispatcharr. Only a confirmed 404 is a real
+            # orphan; an inconclusive result is re-verified on a later run.
             with self._dispatcharr_lock:
-                dispatcharr_channel = self._channel_manager.get_channel(
+                dispatcharr_channel, confirmed_absent = self._channel_manager.get_channel_existence(
                     channel.dispatcharr_channel_id
                 )
 
-            if not dispatcharr_channel:
-                return ReconciliationIssue(
-                    issue_type="orphan_teamarr",
-                    severity="warning",
-                    managed_channel_id=channel.id,
-                    dispatcharr_channel_id=channel.dispatcharr_channel_id,
-                    channel_name=channel.channel_name,
-                    suggested_action="mark_deleted",
-                )
+            if dispatcharr_channel is None:
+                if confirmed_absent:
+                    return ReconciliationIssue(
+                        issue_type="orphan_teamarr",
+                        severity="warning",
+                        managed_channel_id=channel.id,
+                        dispatcharr_channel_id=channel.dispatcharr_channel_id,
+                        channel_name=channel.channel_name,
+                        suggested_action="mark_deleted",
+                    )
+                return None  # Inconclusive — re-verify on a later run
 
             # Check for drift
             if channel.tvg_id and channel.tvg_id != dispatcharr_channel.tvg_id:
@@ -756,9 +762,6 @@ def create_reconciler(
     channel_manager = None
 
     if dispatcharr_client and dispatcharr_settings.get("enabled"):
-        from teamarr.dispatcharr import ChannelManager
-        from teamarr.dispatcharr.factory import DispatcharrConnection
-
         # Extract raw client if we received a DispatcharrConnection
         raw_client = (
             dispatcharr_client.client
@@ -800,7 +803,6 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
         mark_group_source_missing,
         mark_group_source_seen,
     )
-    from teamarr.dispatcharr.factory import get_dispatcharr_connection
 
     conn_dc = get_dispatcharr_connection(db_factory=db_factory)
     if conn_dc is None:
@@ -829,14 +831,27 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
     with db_factory() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, m3u_group_id, m3u_group_name
+            SELECT id, name, m3u_group_id, m3u_group_name,
+                   m3u_group_name_pattern, m3u_group_name_pattern_enabled
             FROM event_epg_groups
             WHERE enabled = 1
-              AND m3u_group_id IS NOT NULL
+              AND (m3u_group_id IS NOT NULL
+                   OR COALESCE(m3u_group_name_pattern_enabled, 0) = 1)
               AND COALESCE(is_channel_source, 0) = 0
             """
         ).fetchall()
         for row in rows:
+            # Pattern-bound sources (#450) are judged by pattern resolution,
+            # not by the pinned id: present iff the pattern matches at least
+            # one live M3U-provided group.
+            if row["m3u_group_name_pattern_enabled"] and row["m3u_group_name_pattern"]:
+                from teamarr.services.group_pattern import resolve_group_name_pattern
+
+                if resolve_group_name_pattern(live_groups, row["m3u_group_name_pattern"]):
+                    mark_group_source_seen(conn, row["id"])
+                else:
+                    mark_group_source_missing(conn, row["id"])
+                continue
             if row["m3u_group_id"] in existing_ids:
                 mark_group_source_seen(conn, row["id"])
                 continue

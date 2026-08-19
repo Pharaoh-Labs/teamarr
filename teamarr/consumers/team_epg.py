@@ -16,6 +16,7 @@ from typing import Any
 from teamarr.consumers.event_epg import prepend_postponed_label
 from teamarr.core import Event, Programme, TemplateConfig
 from teamarr.services import SportsDataService
+from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.event_status import is_event_final
@@ -385,6 +386,9 @@ class TeamEPGGenerator:
         options: TeamEPGOptions,
     ) -> Programme | None:
         """Convert an Event to a Programme with template resolution."""
+        # Caller (generate) returns early when options.template is None, so a
+        # template is guaranteed present here.
+        assert options.template is not None
         start = event.start_time - timedelta(minutes=options.pregame_minutes)
         # V1 Parity: Use template custom duration if set
         template_dict = (
@@ -403,25 +407,33 @@ class TeamEPGGenerator:
         )
         stop = event.start_time + timedelta(hours=duration)
 
-        # Resolve templates
-        title = self._resolver.resolve(options.template.title_format, context)
-        subtitle = self._resolver.resolve(options.template.subtitle_format, context)
-
-        # Use conditional description selector if conditions are defined
-        description = None
+        # Conditional rows can override any of title/subtitle/description
+        # (#370 part 2); each field falls through independently to the plain
+        # format string when no row defines it or the winner renders empty.
+        conditional_fields: dict[str, str] = {}
         if options.template.conditional_descriptions:
-            from teamarr.templates.conditions import get_condition_selector
-
             selector = get_condition_selector()
-            selected_template = selector.select(
+            conditional_fields = selector.select_fields(
                 options.template.conditional_descriptions,
                 context,
                 context.game_context,  # GameContext for current event
             )
-            if selected_template:
-                description = self._resolver.resolve(selected_template, context)
 
-        # Fallback to default description format
+        title = None
+        if conditional_fields.get("title"):
+            title = self._resolver.resolve(conditional_fields["title"], context)
+        if not title:
+            title = self._resolver.resolve(options.template.title_format, context)
+
+        subtitle = None
+        if conditional_fields.get("subtitle"):
+            subtitle = self._resolver.resolve(conditional_fields["subtitle"], context)
+        if not subtitle:
+            subtitle = self._resolver.resolve(options.template.subtitle_format, context)
+
+        description = None
+        if conditional_fields.get("description"):
+            description = self._resolver.resolve(conditional_fields["description"], context)
         if not description:
             description = self._resolver.resolve(options.template.description_format, context)
 

@@ -4,8 +4,9 @@ import { toast } from "sonner"
 import {
   Plus,
   Trash2,
-  Loader2,
-  AlertCircle,
+  X,
+  LoaderCircle,
+  CircleAlert,
   ChevronDown,
   Info,
   Download,
@@ -182,7 +183,7 @@ function TeamMultiSelect({
           <div className="max-h-64 overflow-y-auto">
             {isLoading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <LoaderCircle className="h-3 w-3 animate-spin" />
                 Loading teams...
               </div>
             ) : filteredGroups.length === 0 ? (
@@ -270,8 +271,10 @@ const RULE_TYPES = [
   { value: "group", label: "Event Group", description: "Match streams by event group name" },
   { value: "regex", label: "Regex Pattern", description: "Match streams by regex against stream name" },
   { value: "stream_type", label: "Stream Type", description: "Match by how the stream was recognized: event, team, or EPG-matched (time-shared linear)" },
-  { value: "team_feed", label: "Home/Away Feed", description: "Match streams that appear to be a team's own broadcast (home or away feed) for any enabled team" },
+  { value: "team_feed", label: "Specific Team's Feed", description: "Match streams resolved as a particular team's own broadcast — team-branded channels (Brewers.TV), broadcast-market listings, team streams, or home/away markers in the name" },
+  { value: "home_feed", label: "Feed Side", description: "Match the home or away side's feed for whichever teams are playing — no team selection needed. Streams whose side we couldn't determine match neither and fall to Everything Else" },
   { value: "dispatcharr_group", label: "Dispatcharr Group", description: "Match channel-source streams by the Dispatcharr channel group you selected as an EPG source" },
+  { value: "stats_metric", label: "Stream Stats", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
 ] as const
 
 const STREAM_TYPE_OPTIONS = [
@@ -291,12 +294,13 @@ function parseStreamTypeValue(value: string) {
   }
 }
 
-const NO_VALUE_TYPES = new Set(["team_feed", "not_team_feed", "epg_match", "catch_all"])
+const NO_VALUE_TYPES = new Set(["team_feed", "not_team_feed", "epg_match", "home_feed", "away_feed", "catch_all"])
 
 // Mirrors backend VALID_RULE_TYPES (database/settings/types.py) — used to validate imports.
 const VALID_RULE_TYPES = new Set([
   "m3u", "group", "regex", "stream_type",
-  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "catch_all",
+  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
+  "home_feed", "away_feed", "stats_metric", "catch_all",
 ])
 
 interface RuleFormData {
@@ -304,12 +308,22 @@ interface RuleFormData {
   // Without this, keying by array index causes focus to follow DOM position
   // instead of the rule, breaking double-digit priority entry (#198).
   _id: number
-  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "catch_all"
+  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "home_feed" | "away_feed" | "stats_metric" | "catch_all"
   value: string
   priority: number
+  // 'priority' rules form the hard first-match band list; 'score' rules add
+  // signed points that sum within a band (epic teamarr-5ag). catch_all is always
+  // a priority-mode baseline.
+  mode: "priority" | "score"
+  points: number
 }
 
+const DEFAULT_SCORE_POINTS = 10
+
 const TEAM_FEED_FAMILY = new Set<RuleFormData["type"]>(["team_feed", "not_team_feed"])
+// home_feed/away_feed share one UI control (the Feed Side select), collapsed to
+// "home_feed" in the outer rule-type dropdown — same pattern as stream_type/epg_match.
+const FEED_SIDE_FAMILY = new Set<RuleFormData["type"]>(["home_feed", "away_feed"])
 // stream_type and epg_match share one UI control (the Stream Type select). epg_match
 // is the backend type emitted when "EPG matched stream" is chosen — the outer rule-type
 // dropdown collapses both to "stream_type".
@@ -326,9 +340,13 @@ function PriorityInput({
   // Commits on blur or Enter; reverts to last valid value if input is invalid.
   const [text, setText] = useState(String(value))
 
-  useEffect(() => {
+  // Re-sync when the committed value changes externally (render-time "adjust
+  // state when props change" pattern — see DispatcharrOutputSettings.tsx).
+  const [syncedValue, setSyncedValue] = useState(value)
+  if (value !== syncedValue) {
+    setSyncedValue(value)
     setText(String(value))
-  }, [value])
+  }
 
   const commit = () => {
     const parsed = parseInt(text, 10)
@@ -355,6 +373,55 @@ function PriorityInput({
         }
       }}
       className="text-center"
+    />
+  )
+}
+
+function PointsInput({
+  value,
+  onCommit,
+}: {
+  value: number
+  onCommit: (next: number) => void
+}) {
+  // Signed integer points for score-mode rules. Commits on blur/Enter; reverts
+  // to the last valid value on invalid input. Range mirrors the backend bound.
+  const [text, setText] = useState(String(value))
+
+  // Re-sync when the committed value changes externally (render-time "adjust
+  // state when props change" pattern — see PriorityInput above).
+  const [syncedValue, setSyncedValue] = useState(value)
+  if (value !== syncedValue) {
+    setSyncedValue(value)
+    setText(String(value))
+  }
+
+  const commit = () => {
+    const parsed = parseInt(text, 10)
+    if (!isNaN(parsed) && parsed >= -100000 && parsed <= 100000) {
+      if (parsed !== value) onCommit(parsed)
+      else setText(String(value))
+    } else {
+      setText(String(value))
+    }
+  }
+
+  return (
+    <Input
+      type="number"
+      min={-100000}
+      max={100000}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          e.currentTarget.blur()
+        }
+      }}
+      className="text-center"
+      placeholder="±pts"
     />
   )
 }
@@ -403,7 +470,16 @@ function RuleRow({
               onCommit={(priority) => onUpdate(index, { ...rule, priority })}
             />
           </div>
-          <div className="col-span-2 md:col-span-1" />
+          <div className="col-span-2 md:col-span-1 flex justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(index)}
+              className="h-8 w-8 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -417,9 +493,11 @@ function RuleRow({
             value={
               TEAM_FEED_FAMILY.has(rule.type)
                 ? "team_feed"
-                : STREAM_TYPE_FAMILY.has(rule.type)
-                  ? "stream_type"
-                  : rule.type
+                : FEED_SIDE_FAMILY.has(rule.type)
+                  ? "home_feed"
+                  : STREAM_TYPE_FAMILY.has(rule.type)
+                    ? "stream_type"
+                    : rule.type
             }
             onChange={(e) => handleTypeChange(e.target.value as RuleFormData["type"])}
           >
@@ -462,7 +540,7 @@ function RuleRow({
                 ))}
               </Select>
               <RichTooltip
-                content="Sorts streams brought in via Settings → EPG → 'Use Dispatcharr channels as an EPG source'. The list shows the Dispatcharr channel groups you selected there. Only channel-source streams carry a Dispatcharr group; regular matched streams are unaffected."
+                content="Sorts streams brought in via Matching → 'Dispatcharr as a Stream Source'. The list shows the Dispatcharr channel groups you selected there. Only channel-source streams carry a Dispatcharr group; regular matched streams are unaffected."
                 side="top"
               >
                 <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
@@ -528,6 +606,37 @@ function RuleRow({
                 onChange={(ids) => onUpdate(index, { ...rule, value: ids.join(",") })}
               />
             </div>
+          ) : FEED_SIDE_FAMILY.has(rule.type) ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={rule.type}
+                onChange={(e) => onUpdate(index, { ...rule, type: e.target.value as RuleFormData["type"], value: "" })}
+              >
+                <option value="home_feed">Home side's feed</option>
+                <option value="away_feed">Away side's feed</option>
+              </Select>
+              <RichTooltip
+                content="Applies to whichever teams are playing — no team selection needed. A stream whose side couldn't be determined (no feed signal, or a sport with no home/away such as racing) matches NEITHER rule and falls through to Everything Else. It is never treated as the opposite side."
+                side="top"
+              >
+                <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+              </RichTooltip>
+            </div>
+          ) : rule.type === "stats_metric" ? (
+            <div className="flex items-center gap-2">
+              <RichTooltip
+                content="Stat values (resolution, bitrate, fps, etc.) come from Dispatcharr's external stream probe — they're only available after Dispatcharr has probed a stream, so freshly added streams may not match until then."
+                side="top"
+              >
+                <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+              </RichTooltip>
+              <div className="flex-1 min-w-0">
+                <StatsMetricBuilder
+                  value={rule.value}
+                  onChange={(v) => onUpdate(index, { ...rule, value: v })}
+                />
+              </div>
+            </div>
           ) : (
             <Input
               value={rule.value}
@@ -538,10 +647,17 @@ function RuleRow({
         </div>
 
         <div className="col-span-10 md:col-span-2">
-          <PriorityInput
-            value={rule.priority}
-            onCommit={(priority) => onUpdate(index, { ...rule, priority })}
-          />
+          {rule.mode === "score" ? (
+            <PointsInput
+              value={rule.points}
+              onCommit={(points) => onUpdate(index, { ...rule, points })}
+            />
+          ) : (
+            <PriorityInput
+              value={rule.priority}
+              onCommit={(priority) => onUpdate(index, { ...rule, priority })}
+            />
+          )}
         </div>
 
         <div className="col-span-2 md:col-span-1 flex justify-end">
@@ -559,6 +675,138 @@ function RuleRow({
   )
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  resolution_width: "Res W",
+  resolution_height: "Res H",
+  ffmpeg_output_bitrate: "Bitrate",
+  source_fps: "FPS",
+  audio_bitrate: "Audio",
+  sample_rate: "Sample",
+}
+const OP_SYMBOLS: Record<string, string> = {
+  ">=": "≥", "<=": "≤", ">": ">", "<": "<", "=": "=", is_unknown: "?",
+}
+
+function StatsMetricBuilder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  type Cond = { metric: string; operator: string; threshold: string }
+  const conditions: Cond[] = (() => {
+    const parsed = value.split(";").filter(Boolean).map(cond => {
+      const parts = cond.split("|", 3)
+      return { metric: parts[0] ?? "", operator: parts[1] ?? ">=", threshold: parts[2] ?? "" }
+    })
+    return parsed.length > 0 ? parsed : [{ metric: "", operator: ">=", threshold: "" }]
+  })()
+
+  const serialize = (conds: Cond[]) => conds.map(c => `${c.metric}|${c.operator}|${c.threshold}`).join(";")
+  const updateCond = (ci: number, patch: Partial<Cond>) =>
+    onChange(serialize(conditions.map((c, i) => i === ci ? { ...c, ...patch } : c)))
+  const removeCond = (ci: number) => onChange(serialize(conditions.filter((_, i) => i !== ci)))
+  const addCond = () => onChange(serialize([...conditions, { metric: "", operator: ">=", threshold: "" }]))
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false) }
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [])
+
+  const summary = conditions
+    .filter(c => c.metric)
+    .map(c => c.operator === "is_unknown"
+      ? `${METRIC_LABELS[c.metric] ?? c.metric} unknown`
+      : `${METRIC_LABELS[c.metric] ?? c.metric} ${OP_SYMBOLS[c.operator] ?? c.operator} ${c.threshold || "…"}`)
+    .join(" AND ")
+
+  const isMulti = conditions.length > 1
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(o => !o)}
+        className={cn(
+          "flex h-9 w-full items-center justify-between rounded-md border border-input px-3 text-sm shadow-sm transition-colors",
+          "bg-secondary text-foreground cursor-pointer",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-primary",
+          isOpen && "ring-1 ring-ring border-primary",
+        )}
+      >
+        <span className={cn("truncate", !summary && "text-muted-foreground italic text-sm")}>
+          {summary || "Configure conditions…"}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 ml-2 shrink-0 text-muted-foreground opacity-50 transition-transform", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 mt-1 w-full min-w-[360px] rounded-md border border-border bg-card shadow-lg p-3 flex flex-col gap-2">
+          {conditions.map((cond, ci) => (
+            <div key={ci} className="flex items-center gap-1.5">
+              {isMulti && (
+                <span className="w-7 shrink-0 text-center text-[10px] font-semibold text-muted-foreground">
+                  {ci === 0 ? "" : "AND"}
+                </span>
+              )}
+              <div className="grid gap-1.5 grid-cols-[1fr_68px_84px] flex-1 min-w-0 items-center">
+                <Select value={cond.metric} onChange={(e) => updateCond(ci, { metric: e.target.value })}>
+                  <option value="">Metric…</option>
+                  <option value="resolution_width">Resolution Width (px)</option>
+                  <option value="resolution_height">Resolution Height (px)</option>
+                  <option value="ffmpeg_output_bitrate">Bitrate (kbps)</option>
+                  <option value="source_fps">FPS</option>
+                  <option value="audio_bitrate">Audio Bitrate (kbps)</option>
+                  <option value="sample_rate">Sample Rate (Hz)</option>
+                </Select>
+                <Select value={cond.operator} onChange={(e) => updateCond(ci, { operator: e.target.value })}>
+                  <option value=">=">≥</option>
+                  <option value="<=">≤</option>
+                  <option value=">">{">"}</option>
+                  <option value="<">{"<"}</option>
+                  <option value="=">=</option>
+                  <option value="is_unknown">Unknown</option>
+                </Select>
+                <Input
+                  type="number"
+                  value={cond.threshold}
+                  onChange={(e) => updateCond(ci, { threshold: e.target.value })}
+                  placeholder="Value"
+                  disabled={cond.operator === "is_unknown"}
+                />
+              </div>
+              {isMulti && (
+                <button type="button" onClick={() => removeCond(ci)} className="shrink-0 text-muted-foreground hover:text-destructive">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addCond}
+            className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground mt-0.5"
+          >
+            <Plus className="h-3 w-3" />
+            AND condition
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Monotonic source for RuleFormData._id — module-level (not a ref) so it is
+// safe to call during render; ids only need to be unique, gaps are fine.
+let nextRuleId = 0
+const allocateId = () => ++nextRuleId
+
 export function StreamOrderingManager() {
   const { data: settings, isLoading, error } = useStreamOrderingSettings()
   const updateSettings = useUpdateStreamOrderingSettings()
@@ -569,8 +817,6 @@ export function StreamOrderingManager() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportWarning, setExportWarning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const nextIdRef = useRef(0)
-  const allocateId = () => ++nextIdRef.current
 
   // Extract unique M3U account names and group names from groups
   const { m3uAccounts, groupNames } = useMemo(() => {
@@ -610,34 +856,56 @@ export function StreamOrderingManager() {
     return dpChannelGroups.filter(g => selected.has(g.id)).map(g => g.name).sort()
   }, [appSettings, dpChannelGroups])
 
-  // Initialize rules from settings; auto-inject catch_all if absent
-  useEffect(() => {
-    if (settings?.rules) {
-      const loaded: RuleFormData[] = settings.rules.map(r => ({
-        _id: allocateId(),
-        type: r.type,
-        value: r.value,
-        priority: r.priority,
-      }))
-      if (!loaded.some(r => r.type === "catch_all")) {
-        loaded.push({ _id: allocateId(), type: "catch_all", value: "", priority: 99 })
-      }
-      setRules(loaded)
-      setHasChanges(false)
-    }
-  }, [settings])
+  // Initialize rules from settings. Legacy rows without mode default to
+  // 'priority' (backend already coerces, but guard here for safety). The
+  // catch_all baseline is optional — no longer auto-injected.
+  // (render-time "adjust state when props change" pattern — see
+  // DispatcharrOutputSettings.tsx).
+  const [syncedSettings, setSyncedSettings] = useState<typeof settings>(undefined)
+  if (settings?.rules && settings !== syncedSettings) {
+    setSyncedSettings(settings)
+    const loaded: RuleFormData[] = settings.rules.map(r => ({
+      _id: allocateId(),
+      type: r.type,
+      value: r.value,
+      priority: r.priority,
+      mode: r.mode ?? "priority",
+      points: r.points ?? 0,
+    }))
+    setRules(loaded)
+    setHasChanges(false)
+  }
 
-  const handleAddRule = () => {
-    // Find next available priority (skip 99 if catch_all is using it)
-    const usedPriorities = new Set(rules.map(r => r.priority))
+  // New rules default to Score (the common case); the Priority section adds
+  // hard-band rules explicitly.
+  const handleAddScoreRule = () => {
+    setRules([
+      ...rules,
+      { _id: allocateId(), type: "regex", value: "", priority: 99, mode: "score", points: DEFAULT_SCORE_POINTS },
+    ])
+    setHasChanges(true)
+  }
+
+  const handleAddPriorityRule = () => {
+    // Find next available priority among priority-mode rules.
+    const usedPriorities = new Set(
+      rules.filter(r => r.mode === "priority").map(r => r.priority)
+    )
     let nextPriority = 1
     while (usedPriorities.has(nextPriority) && nextPriority < 99) {
       nextPriority++
     }
-
     setRules([
       ...rules,
-      { _id: allocateId(), type: "m3u", value: "", priority: nextPriority },
+      { _id: allocateId(), type: "m3u", value: "", priority: nextPriority, mode: "priority", points: 0 },
+    ])
+    setHasChanges(true)
+  }
+
+  const handleAddBaseline = () => {
+    setRules([
+      ...rules,
+      { _id: allocateId(), type: "catch_all", value: "", priority: 99, mode: "priority", points: 0 },
     ])
     setHasChanges(true)
   }
@@ -650,7 +918,6 @@ export function StreamOrderingManager() {
   }
 
   const handleDeleteRule = (index: number) => {
-    if (rules[index].type === "catch_all") return
     setRules(rules.filter((_, i) => i !== index))
     setHasChanges(true)
   }
@@ -670,11 +937,13 @@ export function StreamOrderingManager() {
           type: r.type,
           value: r.value.trim(),
           priority: r.priority,
+          mode: r.mode,
+          points: r.mode === "score" ? r.points : 0,
         })),
       })
       toast.success("Stream ordering rules saved")
       setHasChanges(false)
-    } catch (err) {
+    } catch {
       toast.error("Failed to save stream ordering rules")
     }
   }
@@ -686,6 +955,8 @@ export function StreamOrderingManager() {
         type: r.type,
         value: r.value,
         priority: r.priority,
+        mode: r.mode,
+        points: r.points,
       })),
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
@@ -728,14 +999,27 @@ export function StreamOrderingManager() {
       }
 
       // Validate against the same constraints the backend PUT enforces.
-      const clean: { type: RuleFormData["type"]; value: string; priority: number }[] = []
+      // Legacy files predate mode/points: missing mode → 'priority', points → 0.
+      const clean: {
+        type: RuleFormData["type"]
+        value: string
+        priority: number
+        mode: RuleFormData["mode"]
+        points: number
+      }[] = []
       for (const r of importedRules) {
         if (!r || typeof r.type !== "string" || !VALID_RULE_TYPES.has(r.type)) continue
         const priority = Number(r.priority)
         if (!Number.isInteger(priority) || priority < 1 || priority > 99) continue
         const value = typeof r.value === "string" ? r.value.trim() : ""
         if (!NO_VALUE_TYPES.has(r.type) && !value) continue
-        clean.push({ type: r.type as RuleFormData["type"], value, priority })
+        const mode: RuleFormData["mode"] = r.mode === "score" ? "score" : "priority"
+        const pointsRaw = Number(r.points)
+        const points =
+          mode === "score" && Number.isInteger(pointsRaw)
+            ? Math.max(-100000, Math.min(100000, pointsRaw))
+            : 0
+        clean.push({ type: r.type as RuleFormData["type"], value, priority, mode, points })
       }
 
       if (clean.length === 0) {
@@ -744,10 +1028,7 @@ export function StreamOrderingManager() {
 
       const accepted = clean.length
       const skipped = importedRules.length - accepted
-      // Always keep a catch_all so unmatched streams have a defined priority.
-      if (!clean.some((r) => r.type === "catch_all")) {
-        clean.push({ type: "catch_all", value: "", priority: 99 })
-      }
+      // catch_all is optional now — do not force-inject one on import.
 
       await updateSettings.mutateAsync({ rules: clean })
       const message = skipped > 0
@@ -769,7 +1050,7 @@ export function StreamOrderingManager() {
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     )
@@ -779,12 +1060,31 @@ export function StreamOrderingManager() {
     return (
       <Card>
         <CardContent className="flex items-center gap-2 py-8 text-destructive">
-          <AlertCircle className="h-5 w-5" />
+          <CircleAlert className="h-5 w-5" />
           <span>Failed to load stream ordering settings</span>
         </CardContent>
       </Card>
     )
   }
+
+  // Split rules by class for the two sections. catch_all is the optional
+  // baseline, rendered at the end of the Priority section.
+  const priorityRules = rules.filter(r => r.mode === "priority" && r.type !== "catch_all")
+  const scoreRules = rules.filter(r => r.mode === "score")
+  const catchAll = rules.find(r => r.type === "catch_all")
+
+  const renderRow = (rule: RuleFormData) => (
+    <RuleRow
+      key={rule._id}
+      rule={rule}
+      index={rules.indexOf(rule)}
+      onUpdate={handleUpdateRule}
+      onDelete={handleDeleteRule}
+      m3uAccounts={m3uAccounts}
+      groupNames={groupNames}
+      dpGroupNames={dpGroupNames}
+    />
+  )
 
   return (
     <>
@@ -794,8 +1094,8 @@ export function StreamOrderingManager() {
           <div className="space-y-1.5">
             <CardTitle>Stream Priority</CardTitle>
             <CardDescription>
-              Prioritize streams within channels based on M3U account, event group, or custom patterns.
-              Lower priority numbers appear first. Streams not matching any rule are sorted to the end.
+              Order streams within a channel. <strong>Scoring</strong> rules add up points (highest
+              total first); <strong>Priority</strong> rules set hard bands that always outrank scoring.
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -805,7 +1105,7 @@ export function StreamOrderingManager() {
             </Button>
             <Button variant="outline" size="sm" onClick={handleImportClick} disabled={isImporting}>
               {isImporting ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <Upload className="h-4 w-4 mr-1" />
               )}
@@ -821,49 +1121,81 @@ export function StreamOrderingManager() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {rules.length > 0 && (
-          <div className="space-y-2">
-            {/* Header row */}
-            <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
-              <div className="col-span-2">Type</div>
-              <div className="col-span-7">Value</div>
-              <div className="col-span-2 text-center">Priority</div>
-              <div className="col-span-1"></div>
-            </div>
-
-            {/* Rules */}
-            {rules
-              .slice()
-              .sort((a, b) => a.priority - b.priority)
-              .map((rule) => (
-                <RuleRow
-                  key={rule._id}
-                  rule={rule}
-                  index={rules.indexOf(rule)}
-                  onUpdate={handleUpdateRule}
-                  onDelete={handleDeleteRule}
-                  m3uAccounts={m3uAccounts}
-                  groupNames={groupNames}
-                  dpGroupNames={dpGroupNames}
-                />
-              ))}
+      <CardContent className="space-y-6">
+        {/* Scoring section (primary — new rules default here) */}
+        <div className="space-y-2">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold">Scoring</h3>
+            <p className="text-xs text-muted-foreground">
+              Every matching rule adds its points; streams sort by total (highest first) within
+              their band. Use negative points to push streams down.
+            </p>
           </div>
-        )}
+
+          {scoreRules.length > 0 && (
+            <div className="space-y-2">
+              <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                <div className="col-span-2">Type</div>
+                <div className="col-span-7">Value</div>
+                <div className="col-span-2 text-center">Points</div>
+                <div className="col-span-1"></div>
+              </div>
+              {scoreRules.map(renderRow)}
+            </div>
+          )}
+
+          <Button variant="outline" size="sm" onClick={handleAddScoreRule}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add scoring rule
+          </Button>
+        </div>
+
+        {/* Priority section (hard-order escape hatch) */}
+        <div className="space-y-2 border-t pt-4">
+          <div className="space-y-0.5">
+            <h3 className="text-sm font-semibold">
+              Priority <span className="font-normal text-muted-foreground">— hard order</span>
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              The first rule a stream matches sets its band, and bands always outrank scoring — use
+              these for “must always win/lose”. Lower number = higher. Optional.
+            </p>
+          </div>
+
+          {(priorityRules.length > 0 || catchAll) && (
+            <div className="space-y-2">
+              <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
+                <div className="col-span-2">Type</div>
+                <div className="col-span-7">Value</div>
+                <div className="col-span-2 text-center">Priority</div>
+                <div className="col-span-1"></div>
+              </div>
+              {priorityRules.slice().sort((a, b) => a.priority - b.priority).map(renderRow)}
+              {catchAll && renderRow(catchAll)}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleAddPriorityRule}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add priority rule
+            </Button>
+            {!catchAll && (
+              <Button variant="ghost" size="sm" onClick={handleAddBaseline}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add baseline (Everything Else)
+              </Button>
+            )}
+          </div>
+        </div>
 
         {rules.length === 0 && (
-          <div className="text-center py-6 text-muted-foreground">
-            <p className="text-sm">No ordering rules configured.</p>
-            <p className="text-xs mt-1">Streams will be ordered by addition time.</p>
-          </div>
+          <p className="text-center text-xs text-muted-foreground pt-1">
+            No rules yet — streams keep their addition order.
+          </p>
         )}
 
-        <div className="flex items-center justify-between pt-2">
-          <Button variant="outline" onClick={handleAddRule}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Rule
-          </Button>
-
+        <div className="flex items-center justify-end pt-2 border-t">
           <SaveButton
             onClick={handleSave}
             pending={updateSettings.isPending}

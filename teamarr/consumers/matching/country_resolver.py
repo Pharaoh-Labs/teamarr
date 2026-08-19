@@ -88,6 +88,13 @@ _FIFA_OVERRIDES: dict[str, str] = {
     "taiwan": "Chinese Taipei",
     "chinese taipei": "Chinese Taipei",
     "taipei chinos": "Chinese Taipei",
+    # Common colloquial abbreviations that babel/pycountry never supply (full
+    # localized names only). Keys are the _normalize() form, so "EE. UU.",
+    # "EE.UU." and "EE UU" all collapse to "ee uu" — one entry covers them.
+    "ee uu": "United States",  # Spanish "Estados Unidos" abbreviation
+    "eeuu": "United States",  # no-space variant
+    "eua": "United States",  # Portuguese "Estados Unidos da América"
+    "usa": "United States",
 }
 
 

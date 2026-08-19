@@ -91,6 +91,54 @@ def is_stream_in_window(
     return attach_at <= now < detach_at
 
 
+def is_channel_event_live(
+    event_date: "str | datetime | None",
+    scheduled_delete_at: "str | datetime | None",
+    now: datetime | None = None,
+) -> bool:
+    """Whether a managed channel's event is in its live window right now (#232).
+
+    Live window = ``[event_date, scheduled_delete_at]``. ``scheduled_delete_at``
+    is computed at channel creation from the sessions-aware event-end estimate
+    plus the post buffer (or 23:59 same-day), so it already IS the best
+    "broadcast over" bound we have — no duration lookup needed here. When it is
+    missing, fall back to ``event_date + 6h`` (conservative team-sport bound).
+
+    Used to pin a live channel's #1 stream against re-generation rewrites: the
+    top slot is what a viewer is watching, and re-gen runs must not displace it
+    mid-broadcast. Returns False when ``event_date`` is unknown or unparseable —
+    unknown timing must not freeze a channel forever.
+    """
+    start = _parse_channel_dt(event_date)
+    if start is None:
+        return False
+    if now is None:
+        now = datetime.now(UTC)
+    end = _parse_channel_dt(scheduled_delete_at)
+    if end is None:
+        end = start + timedelta(hours=6)
+    return start <= now <= end
+
+
+def _parse_channel_dt(value: "str | datetime | None") -> datetime | None:
+    """Parse a managed_channels timestamp (ISO string from ``.isoformat()``).
+
+    Naive values are assumed UTC — providers hand us aware UTC datetimes and
+    the creator stores them via ``.isoformat()``, so naive only appears in
+    legacy rows/tests.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value
+
+
 class ChannelLifecycleManager:
     """Manages event channel creation and deletion timing.
 
@@ -259,10 +307,7 @@ class ChannelLifecycleManager:
         Uses sport-specific duration when available.
         """
         event_start = to_user_tz(event.start_time)
-        duration_hours = get_sport_duration(
-            event.sport, self.sport_durations, self.default_duration_hours
-        )
-        event_end = event_start + timedelta(hours=duration_hours)
+        event_end = self.get_event_end_time(event)
 
         if self.delete_timing == "after_event":
             return event_end + timedelta(minutes=self.post_buffer_minutes)
@@ -283,7 +328,22 @@ class ChannelLifecycleManager:
         return self._calculate_delete_threshold(event)
 
     def get_event_end_time(self, event: Event) -> datetime:
-        """Calculate estimated event end time using sport-specific duration."""
+        """Calculate estimated event end time using sport-specific duration.
+
+        Racing events anchor `event.start_time` to the first session (e.g.
+        Friday practice), which would otherwise make a multi-day race weekend
+        look "over" as soon as practice ends. For events with sessions, use
+        the last session's start time + its duration instead.
+        """
+        if event.sessions:
+            from teamarr.consumers.racing_segments import _session_duration_hours
+
+            last_session = max(event.sessions, key=lambda s: s.start_time)
+            duration_hours = _session_duration_hours(
+                last_session.code, self.sport_durations, event.league, event.name
+            )
+            return to_user_tz(last_session.start_time) + timedelta(hours=duration_hours)
+
         duration_hours = get_sport_duration(
             event.sport, self.sport_durations, self.default_duration_hours
         )

@@ -3,13 +3,16 @@
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.jellyfin.client import JellyfinClient
 
 from .models import (
+    MASKED_SECRET,
     JellyfinConnectionTestRequest,
     JellyfinConnectionTestResponse,
     JellyfinSettingsModel,
     JellyfinSettingsUpdate,
-    unmask_or_skip,
+    merge_masked_servers,
+    to_model,
 )
 
 router = APIRouter()
@@ -23,13 +26,7 @@ def get_jellyfin_settings():
     with get_db() as conn:
         settings = get_jellyfin_settings(conn)
 
-    return JellyfinSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        api_key=settings.api_key,
-    )
+    return to_model(JellyfinSettingsModel, settings)
 
 
 @router.put("/settings/jellyfin", response_model=JellyfinSettingsModel)
@@ -40,26 +37,21 @@ def update_jellyfin_settings(update: JellyfinSettingsUpdate):
         update_jellyfin_settings,
     )
 
-    with get_db() as conn:
-        update_jellyfin_settings(
-            conn,
-            enabled=update.enabled,
-            url=update.url,
-            username=update.username,
-            password=unmask_or_skip(update.password),
-            api_key=unmask_or_skip(update.api_key),
+    servers = None
+    if update.servers is not None:
+        with get_db() as conn:
+            stored = get_jellyfin_settings(conn).servers
+        servers = merge_masked_servers(
+            [s.model_dump() for s in update.servers], stored
         )
+
+    with get_db() as conn:
+        update_jellyfin_settings(conn, enabled=update.enabled, servers=servers)
 
     with get_db() as conn:
         settings = get_jellyfin_settings(conn)
 
-    return JellyfinSettingsModel(
-        enabled=settings.enabled,
-        url=settings.url,
-        username=settings.username,
-        password=settings.password,
-        api_key=settings.api_key,
-    )
+    return to_model(JellyfinSettingsModel, settings)
 
 
 @router.post("/jellyfin/test", response_model=JellyfinConnectionTestResponse)
@@ -72,20 +64,36 @@ def test_jellyfin_connection(
     Accepts optional url/username/password overrides.
     """
     from teamarr.database.settings import get_jellyfin_settings
-    from teamarr.jellyfin.client import JellyfinClient
 
     with get_db() as conn:
         saved = get_jellyfin_settings(conn)
 
-    url = (request.url if request and request.url else saved.url) or ""
+    # Multi-server (#471): the UI passes explicit fields per server row;
+    # the saved fallback uses the first configured server. A row's untouched
+    # secret fields arrive as the masked sentinel — resolve them against the
+    # saved server matching the request URL (fallback: first server).
+    first = saved.servers[0] if saved.servers else None
+    if request:
+        match = next(
+            (s for s in saved.servers if s.url and s.url == request.url), first
+        )
+        if request.password == MASKED_SECRET:
+            request.password = match.password if match else None
+        if request.api_key == MASKED_SECRET:
+            request.api_key = match.api_key if match else None
+    url = (request.url if request and request.url else (first.url if first else None)) or ""
     username = (
-        request.username if request and request.username else saved.username
+        request.username
+        if request and request.username
+        else (first.username if first else None)
     ) or ""
     password = (
-        request.password if request and request.password else saved.password
+        request.password
+        if request and request.password
+        else (first.password if first else None)
     ) or ""
     api_key = (
-        request.api_key if request and request.api_key else saved.api_key
+        request.api_key if request and request.api_key else (first.api_key if first else None)
     )
 
     if not url:

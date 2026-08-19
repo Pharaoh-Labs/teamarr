@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import type { ConditionalDescription } from "@/api/templates"
 import { TemplateField } from "../TemplateField"
 import type { TabProps } from "../types"
@@ -238,20 +237,19 @@ export function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, 
                         placeholder="e.g., 'Generic', 'Exciting', 'Classic'"
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Description Template *</Label>
-                      <Textarea
-                        value={fallback.template}
-                        onChange={(e) => updateFallback(index, "template", e.target.value)}
-                        placeholder="{matchup} | {venue_full}"
-                        rows={3}
-                      />
-                      {fallback.template && (
-                        <p className="text-xs text-muted-foreground">
-                          Preview: {resolveTemplate(fallback.template)}
-                        </p>
-                      )}
-                    </div>
+                    <TemplateField
+                      id={`fallback_template_${index}`}
+                      label="Description Template *"
+                      multiline
+                      value={fallback.template}
+                      onChange={(v) => updateFallback(index, "template", v)}
+                      placeholder="{matchup} | {venue_full}"
+                      fieldRefs={fieldRefs}
+                      setLastFocusedField={setLastFocusedField}
+                      resolveTemplate={resolveTemplate}
+                      validationData={validationData}
+                      isEventTemplate={isEventTemplate}
+                    />
                   </div>
                 )}
               </div>

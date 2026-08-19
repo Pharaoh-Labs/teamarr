@@ -13,13 +13,56 @@ from typing import Any
 
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TemplateContext
+from teamarr.templates.filters import FILTERS
 from teamarr.templates.variables import SuffixRules, get_registry
+from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
 
-# Pattern matches: {variable} or {variable.next} or {variable.last}
-# Note: @ is allowed to support {vs_@} variable
-VARIABLE_PATTERN = re.compile(r"\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)\}", re.IGNORECASE)
+# Pattern matches: {variable}, {variable.next}, {variable.last}, and an optional
+# chain of trailing `|filter` modifiers (e.g. {race_name|urlencode},
+# {team_name|pascal|url} — applied left-to-right, #484). Group 1 is the
+# variable token (name + optional suffix); group 2 is the filter chain, if any.
+# Note: @ is allowed to support {vs_@} variable.
+VARIABLE_PATTERN = re.compile(
+    r"\{([a-z_][a-z0-9_@]*(?:\.[a-z]+)?)((?:\|[a-z_]+)*)\}", re.IGNORECASE
+)
+
+# Retired pure-transform variables (#484) resolve FOREVER as base|filter so
+# pre-migration backups, Discord-shared templates, and community guides keep
+# working. They are gone from the picker, docs, and the variable count — but
+# never from here. sport_lower maps to |slug (not |lower) because it returned
+# the hyphenated sport CODE ('australian-football'), not the display name.
+_LEGACY_ALIASES: dict[str, tuple[str, str]] = {
+    "team_name_pascal": ("team_name", "pascal"),
+    "home_team_pascal": ("home_team", "pascal"),
+    "away_team_pascal": ("away_team", "pascal"),
+    "team_abbrev_lower": ("team_abbrev", "lower"),
+    "home_team_abbrev_lower": ("home_team_abbrev", "lower"),
+    "away_team_abbrev_lower": ("away_team_abbrev", "lower"),
+    "opponent_abbrev_lower": ("opponent_abbrev", "lower"),
+    "feed_team_abbrev_lower": ("feed_team_abbrev", "lower"),
+    "result_lower": ("result", "lower"),
+    "sport_lower": ("sport", "slug"),
+}
+
+
+def rewrite_legacy_tokens(text: str) -> str:
+    """Rewrite retired transform tokens to their base|filter form (#484).
+
+    ``{team_name_pascal}`` -> ``{team_name|pascal}``; suffixes carry over and
+    an existing filter chain stays appended. Rendering is identical either way
+    (the resolver aliases the old names forever) — this exists for comparison
+    and migration paths that need old- and new-form text to look the same.
+    """
+    for old, (new, filt) in _LEGACY_ALIASES.items():
+        text = re.sub(
+            r"\{" + old + r"(\.[a-z]+)?((?:\|[a-z_]+)*)\}",
+            r"{" + new + r"\g<1>|" + filt + r"\g<2>}",
+            text,
+            flags=re.IGNORECASE,
+        )
+    return text
 
 
 class TemplateResolver:
@@ -50,7 +93,6 @@ class TemplateResolver:
         happens in one place and propagates to every consumer. Relative paths get
         the base prefixed; absolute URLs pass through unchanged (idempotent).
         """
-        from teamarr.utilities.art_url import apply_art_base_url
 
         return apply_art_base_url(self.resolve(template, context), self.art_base_url) or ""
 
@@ -68,18 +110,63 @@ class TemplateResolver:
             return ""
 
         # Build all variables (base + suffixed)
-        variables = self._build_all_variables(context)
+        return self.resolve_with_map(template, self._build_all_variables(context))
+
+    def resolve_with_map(self, template: str, variables: dict[str, str]) -> str:
+        """Replace {variable} placeholders from a pre-built name -> value map.
+
+        The substitution/cleanup core of resolve(), exposed for callers that
+        have a variable map but no TemplateContext — e.g. the preview endpoint
+        rendering against static sample data (#357). Unknown variables stay
+        literal; known-but-empty values are replaced then cleaned up, exactly
+        as in context-based resolution.
+        """
+        if not template:
+            return ""
 
         unreplaced = []
 
         def replace(match: re.Match) -> str:
             var_name = match.group(1).lower()
+            # Filter chain: "|pascal|url" -> ["pascal", "url"], applied
+            # left-to-right (#484).
+            filter_names = [f for f in (match.group(2) or "").lower().split("|") if f]
+
             # Keep unknown variables literal (helps users identify typos)
             # Known variables with empty values still get replaced with ""
+            legacy = None
             if var_name not in variables:
+                legacy = self._resolve_legacy_alias(var_name, variables)
+            if var_name in variables:
+                value = variables[var_name]
+            elif legacy is not None:
+                # Retired transform variable (#484): resolve the base and
+                # prepend its implied filter to the chain.
+                value, alias_filter = legacy
+                filter_names.insert(0, alias_filter)
+            elif self._is_contextless_suffix(var_name):
+                # A VALID registry variable with a LEGAL suffix that's simply
+                # missing its game context (no next/last game — offseason,
+                # season end) resolves to empty like any known-but-empty value
+                # (#418) — raw {game_time.next} braces must never reach a real
+                # guide. Typos and illegal suffix usage (e.g. .next on a
+                # BASE_ONLY variable) still stay literal.
+                value = ""
+            else:
                 unreplaced.append(var_name)
                 return match.group(0)  # Return original {variable} unchanged
-            return variables[var_name]
+
+            # Apply the `|filter` chain (e.g. |urlencode #478, |pascal #484).
+            # An unknown filter anywhere in the chain is treated like a typo:
+            # keep the whole token literal so the author can see and fix it,
+            # rather than silently dropping it.
+            for filter_name in filter_names:
+                filter_fn = FILTERS.get(filter_name)
+                if filter_fn is None:
+                    unreplaced.append(match.group(0))
+                    return match.group(0)
+                value = filter_fn(value)
+            return value
 
         result = VARIABLE_PATTERN.sub(replace, template)
 
@@ -91,6 +178,45 @@ class TemplateResolver:
 
         return result
 
+    def _resolve_legacy_alias(
+        self, var_name: str, variables: dict[str, str]
+    ) -> tuple[str, str] | None:
+        """Resolve a retired transform variable (#484) to (base value, filter).
+
+        ``team_name_pascal`` -> value of ``team_name`` + implied ``pascal``;
+        suffixes carry over (``home_team_pascal.next`` -> ``home_team.next``).
+        Returns None when var_name isn't a legacy alias or its base can't
+        resolve — the caller then falls through to the normal literal path.
+        """
+        base, sep, suffix = var_name.partition(".")
+        alias = _LEGACY_ALIASES.get(base)
+        if alias is None:
+            return None
+        real_name = alias[0] + (sep + suffix if sep else "")
+        if real_name in variables:
+            return variables[real_name], alias[1]
+        if self._is_contextless_suffix(real_name):
+            return "", alias[1]
+        return None
+
+    def _is_contextless_suffix(self, var_name: str) -> bool:
+        """True for a valid variable + legal suffix that lacks game context.
+
+        ``{game_time.next}`` when there is no next game is valid authoring —
+        the context is missing, not the variable. Anything else absent from
+        the map (unknown base name, illegal suffix for the variable's rules)
+        is a template error and must stay literal so the author can see it.
+        """
+        base, sep, suffix = var_name.partition(".")
+        if not sep or suffix not in ("next", "last"):
+            return False
+        var_def = self._registry.get(base)
+        if var_def is None:
+            return False
+        if suffix == "next":
+            return var_def.suffix_rules in (SuffixRules.ALL, SuffixRules.BASE_NEXT_ONLY)
+        return var_def.suffix_rules in (SuffixRules.ALL, SuffixRules.LAST_ONLY)
+
     def _cleanup_result(self, text: str) -> str:
         """Clean up artifacts left when variables resolve to empty strings.
 
@@ -99,14 +225,36 @@ class TemplateResolver:
         - Multiple consecutive spaces
         - Leading/trailing whitespace
         """
-        # Remove empty parentheses and brackets
-        text = re.sub(r"\s*\(\s*\)", "", text)
-        text = re.sub(r"\s*\[\s*\]", "", text)
-
-        # Collapse multiple spaces into one
+        # Collapse runs of spaces first so wrapper removal sees at most one
+        # space in any position — keeps the patterns below bounded (no adjacent
+        # unbounded quantifiers; CodeQL py/polynomial-redos).
         text = re.sub(r" {2,}", " ", text)
 
-        return text.strip()
+        # Remove empty parentheses and brackets
+        text = re.sub(r" ?\( ?\)", "", text)
+        text = re.sub(r" ?\[ ?\]", "", text)
+
+        # Wrapper removal can leave one double space behind ("a () b" -> "a  b")
+        text = re.sub(r" {2,}", " ", text)
+
+        text = text.strip()
+
+        # Article-aware vars ({team_name_the}, {tournament_name_the}) emit a
+        # lowercase "the " for mid-sentence use; capitalize it when it opens
+        # the rendered text (Gracenote: "The Washington Mystics play…").
+        if text.startswith("the "):
+            text = f"T{text[1:]}"
+
+        return text
+
+    def build_variable_map(self, ctx: TemplateContext) -> dict[str, str]:
+        """Public: resolve every registered variable for a context.
+
+        Returns the full name -> value map (including .next/.last suffixes),
+        the same map used internally during resolution. Useful for previewing
+        a real event against every variable (live sample data).
+        """
+        return self._build_all_variables(ctx)
 
     def _build_all_variables(self, ctx: TemplateContext) -> dict[str, str]:
         """Build complete variable dict with all suffixes.
@@ -200,7 +348,12 @@ class TemplateResolver:
         return self._registry.count()
 
     def get_available_conditions(self) -> list[str]:
-        """Get list of all available condition types."""
+        """Get list of all available condition types.
+
+        TODO: PRUNE? — no callers; stale vs conditions.py (missing combat/
+        racing/summary conditions). The API's /variables/conditions endpoint
+        is the served list; verify with user before removing.
+        """
         return [
             "is_home",
             "is_away",

@@ -1,20 +1,24 @@
-import { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { toast } from "sonner"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
-import { Alert } from "@/components/ui/alert"
+import { StickyActionBar } from "@/components/ui/sticky-action-bar"
+import { Spinner } from "@/components/ui/spinner"
+import { RichTooltip } from "@/components/ui/rich-tooltip"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Trash2,
-  Loader2,
-  RefreshCw,
+  LoaderCircle,
   Clock,
   Tv,
   Search,
-  AlertTriangle,
+  TriangleAlert,
   X,
+  ChevronRight,
+  ChevronDown,
+  Info,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -26,59 +30,412 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import { FilterSelect } from "@/components/ui/filter-select"
 import {
   useManagedChannels,
   useDeleteManagedChannel,
   usePendingDeletions,
-  useReconciliationStatus,
 } from "@/hooks/useChannels"
 import { useGroups } from "@/hooks/useGroups"
 import { useQuery } from "@tanstack/react-query"
 import { getLeagues } from "@/api/teams"
-import {
-  deleteDispatcharrChannel,
-  deleteManagedChannel,
-  previewResetChannels,
-  executeResetChannels,
-} from "@/api/channels"
-import type { ManagedChannel, ResetChannelInfo } from "@/api/channels"
+import { deleteManagedChannel, getChannelStreams } from "@/api/channels"
+import type { ManagedChannel, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
+import { OrphansDialog } from "@/components/managed-channels/OrphansDialog"
+import { ResetAllDialog } from "@/components/managed-channels/ResetAllDialog"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { useSports } from "@/hooks/useSports"
+import { useRowSelection } from "@/hooks/useRowSelection"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useGenerationProgress } from "@/hooks/useGenerationProgress"
+import { useDateFormat } from "@/hooks/useDateFormat"
 
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return "-"
-  const date = new Date(dateStr)
-  return date.toLocaleString()
+// Sports whose events aren't a team-vs-team matchup — the event NAME is the
+// event (fight card, race weekend, tournament), not the participant pair.
+// Mirrors the matcher's EVENT_CARD/RACING categories (classifier.py).
+const NON_MATCHUP_SPORTS = new Set(["mma", "boxing", "wrestling", "racing", "golf"])
+
+/**
+ * Compact event line (#403): "MLB | LAA/MIN". Team abbreviations when the row
+ * has them (rows created before they were populated fall back to full names);
+ * card/racing sports show the event name ("UFC 329: McGregor vs. Holloway 2").
+ * No feed label here — the feed is a stream variant of the event, and lives in
+ * the channel name. Title carries the full matchup.
+ */
+function eventSummary(
+  channel: ManagedChannel,
+  leagueLabel: string | null
+): { text: string; title: string } {
+  const fullMatchup =
+    channel.home_team || channel.away_team
+      ? `${channel.away_team ?? ""} / ${channel.home_team ?? ""}`
+      : null
+  const matchup =
+    channel.sport && NON_MATCHUP_SPORTS.has(channel.sport)
+      ? (channel.event_name ?? fullMatchup ?? "-")
+      : channel.away_team_abbrev && channel.home_team_abbrev
+        ? `${channel.away_team_abbrev}/${channel.home_team_abbrev}`
+        : (fullMatchup ?? channel.event_name ?? "-")
+  const prefix = leagueLabel && leagueLabel !== "-" ? `${leagueLabel} | ` : ""
+  return {
+    text: `${prefix}${matchup}`,
+    title: channel.event_name ?? fullMatchup ?? "",
+  }
 }
 
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "-"
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = date.getTime() - now.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMins / 60)
+function StreamStatsBadges({ stats }: { stats: Record<string, unknown> | null }) {
+  if (!stats) return <span className="text-muted-foreground">—</span>
 
-  if (diffMs < 0) {
-    const absMins = Math.abs(diffMins)
-    const absHours = Math.abs(diffHours)
-    if (absMins < 60) return `${absMins}m ago`
-    if (absHours < 24) return `${absHours}h ago`
-    return formatDateTime(dateStr)
+  const chip = (content: React.ReactNode) => (
+    <span className="inline-flex rounded px-1.5 py-0.5 bg-muted text-[11px] font-mono leading-none text-muted-foreground">
+      {content}
+    </span>
+  )
+
+  const chips: React.ReactNode[] = []
+
+  const resolution = stats.resolution as string | undefined
+  if (resolution && resolution.includes("x")) {
+    chips.push(chip(resolution.replace("x", "×")))
   }
 
-  if (diffMins < 60) return `in ${diffMins}m`
-  if (diffHours < 24) return `in ${diffHours}h`
-  return formatDateTime(dateStr)
+  const fps = stats.source_fps as number | undefined
+  if (fps != null) chips.push(chip(`${fps}fps`))
+
+  const bitrate = stats.ffmpeg_output_bitrate as number | undefined
+  if (bitrate != null) chips.push(chip(bitrate >= 1000 ? `${(bitrate / 1000).toFixed(1)} Mbps` : `${bitrate} kbps`))
+
+  const audioBitrate = stats.audio_bitrate as number | undefined
+  if (audioBitrate != null) chips.push(chip(`${audioBitrate} kbps audio`))
+
+  const sampleRate = stats.sample_rate as number | undefined
+  if (sampleRate != null) chips.push(chip(`${(sampleRate / 1000).toFixed(0)} kHz`))
+
+  if (chips.length === 0) return <span className="text-muted-foreground">—</span>
+
+  return <div className="flex flex-wrap gap-1 items-center">{chips.map((c, i) => <React.Fragment key={i}>{c}</React.Fragment>)}</div>
+}
+
+function getMatchMethodBadge(method: string | null) {
+  if (!method) return null
+  switch (method) {
+    case "epg":
+      return <Badge variant="info" className="text-xs">EPG</Badge>
+    case "fuzzy":
+      return <Badge variant="secondary" className="text-xs">Fuzzy</Badge>
+    case "exact":
+      return <Badge variant="outline" className="text-xs">Exact</Badge>
+    default:
+      return <Badge variant="outline" className="text-xs">{method}</Badge>
+  }
+}
+
+const RULE_TYPE_LABELS: Record<string, string> = {
+  m3u: "M3U Account",
+  group: "Event Group",
+  regex: "Regex",
+  stream_type: "Stream Type",
+  team_feed: "Specific Team's Feed",
+  not_team_feed: "Not That Team's Feed",
+  home_feed: "Home Side's Feed",
+  away_feed: "Away Side's Feed",
+  epg_match: "EPG Match",
+  dispatcharr_group: "Dispatcharr Group",
+  stats_metric: "Stats Metric",
+  catch_all: "Everything else",
+}
+
+// Close a popover on outside-click / Escape. Shared by the click-popovers below
+// (same behavior as StatsMetricBuilder's dropdown).
+function useOutsideDismiss(
+  ref: React.RefObject<HTMLElement | null>,
+  open: boolean,
+  setOpen: (v: boolean) => void,
+) {
+  useEffect(() => {
+    if (!open) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false) }
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [ref, open, setOpen])
+}
+
+// Collapsed-priority stride: once any score rule exists the backend stores
+// priority as band*STRIDE - clamped_score (see services/stream_ordering.py
+// BAND_STRIDE). The score clamp (STRIDE/2 - 1) guarantees collapsed values land
+// >= 500_001, while plain priority/sequential numbers stay <= NO_MATCH_PRIORITY
+// (999). We split on that gap, NOT on STRIDE: a band-1 stream with a positive
+// score collapses to e.g. 999_975, which is < STRIDE but is still a scored value.
+const BAND_STRIDE = 1_000_000
+const NO_MATCH_PRIORITY = 999
+
+function decodePriority(priority: number): { band: number; score: number; scored: boolean } {
+  if (priority <= NO_MATCH_PRIORITY) return { band: priority, score: 0, scored: false }
+  const band = Math.round(priority / BAND_STRIDE)
+  return { band, score: band * BAND_STRIDE - priority, scored: true }
+}
+
+const fmtSigned = (n: number) => (n > 0 ? `+${n}` : String(n))
+
+// Clickable priority → compact popover explaining a stream's ordering: the hard
+// band (priority-mode winner) plus any additive score contributions. The stored
+// number is decoded to band(+score); staleness compares stored vs the freshly
+// recomputed `expected` priority.
+function PriorityCell(
+  { priority, expected, rules, generating }:
+  { priority: number; expected: number; rules: StreamRuleMatch[]; generating: boolean },
+) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideDismiss(ref, open, setOpen)
+
+  // Nothing to explain and not generating → just the number.
+  if (rules.length === 0 && !generating) {
+    return <span className="text-muted-foreground">{priority}</span>
+  }
+
+  const { band, score, scored } = decodePriority(priority)
+
+  // Priority-mode rules (band): winners first, then ascending priority.
+  // Score-mode rules (additive contributors) listed after.
+  const priorityMatches = [...rules]
+    .filter((r) => r.mode !== "score")
+    .sort((a, b) => Number(b.is_winner) - Number(a.is_winner) || a.priority - b.priority)
+  const scoreMatches = rules.filter((r) => r.mode === "score")
+
+  // The popover evaluates CURRENT rules; the stored number is from the last
+  // generation run. If the recomputed `expected` disagrees, rules changed since
+  // this stream was ordered and the stored order is stale until the next run.
+  // While a generation runs the number is mid-update, so show a spinner instead.
+  const stale = !generating && expected !== priority
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 ${
+          stale
+            ? "text-amber-500 decoration-amber-500 hover:text-amber-400"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        title={
+          generating
+            ? "Generation in progress — priority is updating"
+            : stale
+              ? "Rules changed since last sync — click for details"
+              : "Show matched rules"
+        }
+      >
+        {generating ? (
+          <LoaderCircle className="h-3 w-3 animate-spin" />
+        ) : (
+          <>
+            <span>{band}{stale && "*"}</span>
+            {scored && score !== 0 && (
+              <span className={`text-[10px] tabular-nums ${score > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                {fmtSigned(score)}
+              </span>
+            )}
+          </>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-lg">
+          <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Matched rules
+          </div>
+          <div className="space-y-0.5">
+            {priorityMatches.map((r, i) => (
+              <div
+                key={`p${i}`}
+                className={`flex items-start gap-1.5 rounded px-1 py-0.5 ${
+                  r.is_winner ? "bg-primary/10" : ""
+                } ${r.type === "catch_all" && !r.is_winner ? "opacity-50" : ""}`}
+              >
+                <span className="shrink-0 font-mono text-[11px] leading-5 tabular-nums text-muted-foreground">
+                  {r.priority}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium leading-5 truncate">
+                      {RULE_TYPE_LABELS[r.type] ?? r.type}
+                    </span>
+                    {r.is_winner && (
+                      <Badge variant="info" className="shrink-0 text-[9px] px-1 py-0">band</Badge>
+                    )}
+                  </span>
+                  {r.value && (
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
+                      {r.value}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+            {scoreMatches.map((r, i) => (
+              <div key={`s${i}`} className="flex items-start gap-1.5 rounded px-1 py-0.5">
+                <span className={`shrink-0 font-mono text-[11px] leading-5 tabular-nums ${r.points > 0 ? "text-emerald-500" : r.points < 0 ? "text-rose-500" : "text-muted-foreground"}`}>
+                  {fmtSigned(r.points)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-[11px] font-medium leading-5 truncate">
+                    {RULE_TYPE_LABELS[r.type] ?? r.type}
+                  </span>
+                  {r.value && (
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
+                      {r.value}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          {scoreMatches.length > 0 && (
+            <div className="mt-1 border-t pt-1 px-1 text-[10px] leading-snug text-muted-foreground">
+              Band {band} · Score {fmtSigned(scoreMatches.reduce((s, r) => s + (r.points || 0), 0))}
+            </div>
+          )}
+          {generating ? (
+            <div className="mt-1 border-t pt-1 text-[10px] leading-snug text-muted-foreground">
+              Generation in progress — the order is updating.
+            </div>
+          ) : stale ? (
+            <div className="mt-1 border-t pt-1 text-[10px] leading-snug text-amber-500">
+              Rules changed since this stream was ordered. The order above applies on the next
+              generation run.
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const METHOD_INFO: Record<string, { label: string; desc: string }> = {
+  epg: { label: "EPG", desc: "Matched via Dispatcharr's program guide (program title / sub-title)." },
+  fuzzy: { label: "Fuzzy", desc: "Matched by fuzzy comparison of the stream name to the event." },
+  exact: { label: "Exact", desc: "Exact name match." },
+  cache: { label: "Cache", desc: "Reused a previously cached match for this stream." },
+  alias: { label: "Alias", desc: "Matched via a user-defined team alias." },
+  pattern: { label: "Pattern", desc: "Matched via a team-name pattern." },
+  keyword: { label: "Keyword", desc: "Matched via an event keyword (e.g. UFC / boxing cards)." },
+  user_corrected: { label: "Pinned", desc: "Manually corrected by you — pinned, never auto-rematched." },
+  no_match: { label: "No match", desc: "No event matched this stream." },
+}
+
+// Which side of the matchup a stream's feed is (#533). Tri-state: home, away,
+// or unknown — rendered as an em dash, NOT as one of the two sides. Unknown
+// means either no feed signal on the stream or a sport with no home/away at
+// all, and it deliberately matches neither feed-side ordering rule.
+function FeedSideCell({ side }: { side?: string | null }) {
+  if (side !== "home" && side !== "away") {
+    return <span className="text-muted-foreground/60">—</span>
+  }
+  const isHome = side === "home"
+  return (
+    <span
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium ${
+        isHome
+          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+      }`}
+    >
+      {isHome ? "HOME" : "AWAY"}
+    </span>
+  )
+}
+
+// Clickable match-method badge → popover explaining how/why the stream matched
+// its event. Combines fields always on the stream (method, type, exception
+// keyword) with cache-derived detail (matched event, user correction) that's
+// only present for fingerprint-cached matches.
+function MethodCell({ stream }: { stream: ChannelStreamEntry }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useOutsideDismiss(ref, open, setOpen)
+  const { formatRelativeTime } = useDateFormat()
+
+  const badge = getMatchMethodBadge(stream.match_method)
+  if (!badge) return <span className="text-muted-foreground">—</span>
+
+  const info = stream.match_method ? METHOD_INFO[stream.match_method] : undefined
+  // The finer cache method only adds value when it differs from the badge method.
+  const finer =
+    stream.cache_match_method && stream.cache_match_method !== stream.match_method
+      ? METHOD_INFO[stream.cache_match_method] ?? { label: stream.cache_match_method, desc: "" }
+      : undefined
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} title="Show match details" className="cursor-pointer">
+        {badge}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border bg-popover p-2 shadow-lg space-y-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Match details
+          </div>
+          <div>
+            <span className="text-[11px] font-medium">{info?.label ?? stream.match_method}</span>
+            {info?.desc && <p className="text-[10px] text-muted-foreground leading-snug">{info.desc}</p>}
+          </div>
+          {finer && (
+            <div className="text-[10px] text-muted-foreground">
+              Cache method: <span className="font-medium text-foreground">{finer.label}</span>
+            </div>
+          )}
+          {stream.cache_created_at && (
+            <div className="text-[10px] text-muted-foreground">
+              Cached {formatRelativeTime(stream.cache_created_at)}
+            </div>
+          )}
+          {[...stream.match_aliases, ...stream.match_patterns].length > 0 && (
+            <div className="text-[10px] text-muted-foreground">
+              {[...stream.match_aliases, ...stream.match_patterns].map((a, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <span className="font-mono text-foreground">{a.text}</span>
+                  <span className="text-muted-foreground/60">→</span>
+                  <span className="font-medium text-foreground truncate">{a.team}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {stream.matched_event && (
+            <div className="text-[10px] text-muted-foreground">
+              Matched event:{" "}
+              <span className="font-medium text-foreground">{stream.matched_event}</span>
+              {stream.matched_league && <span className="uppercase"> ({stream.matched_league})</span>}
+            </div>
+          )}
+          {stream.match_type && (
+            <div className="text-[10px] text-muted-foreground">
+              Type: <span className="font-medium text-foreground">{stream.match_type === "team" ? "Team" : "Event"}</span>
+            </div>
+          )}
+          {stream.exception_keyword && (
+            <div className="text-[10px] text-muted-foreground">
+              Keyword: <span className="font-mono text-foreground">{stream.exception_keyword}</span>
+            </div>
+          )}
+          {stream.user_corrected && (
+            <div className="flex items-center gap-1.5">
+              <Badge variant="info" className="text-[9px] px-1 py-0">pinned</Badge>
+              <span className="text-[10px] text-muted-foreground">
+                Corrected by you{stream.corrected_at ? ` ${formatRelativeTime(stream.corrected_at)}` : ""}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function getSyncStatusBadge(status: string) {
@@ -100,24 +457,221 @@ function getSyncStatusBadge(status: string) {
   }
 }
 
+interface ChannelRowProps {
+  channel: ManagedChannel
+  expanded: boolean
+  selected: boolean
+  streams: ChannelStreamEntry[] | undefined
+  loading: boolean
+  isGenerating: boolean
+  sportLabel: string
+  leagueLabel: string
+  groupTitle: string | undefined
+  onToggleExpand: (id: number) => void
+  onToggleSelect: (id: number) => void
+  onDelete: (channel: ManagedChannel) => void
+}
+
+// Memoized so per-row state changes (expand, select) don't re-render the whole
+// table. All callbacks passed in are identity-stable.
+const ChannelRow = React.memo(function ChannelRow({
+  channel,
+  expanded,
+  selected,
+  streams,
+  loading,
+  isGenerating,
+  sportLabel,
+  leagueLabel,
+  groupTitle,
+  onToggleExpand,
+  onToggleSelect,
+  onDelete,
+}: ChannelRowProps) {
+  const { formatRelativeTime, timezone } = useDateFormat()
+  return (
+    <>
+      <TableRow className={expanded ? "border-b-0" : ""}>
+        <TableCell className="px-1">
+          <button
+            onClick={() => onToggleExpand(channel.id)}
+            className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
+            aria-label={expanded ? "Collapse" : "Expand"}
+          >
+            {expanded
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />}
+          </button>
+        </TableCell>
+        <TableCell>
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect(channel.id)}
+          />
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            {channel.logo_url && (
+              <img
+                src={channel.logo_url}
+                alt=""
+                className="h-6 w-6 object-contain"
+              />
+            )}
+            <div>
+              <div className="font-medium">{channel.channel_name}</div>
+              <div className="text-xs text-muted-foreground">
+                {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
+                {channel.tvg_id}
+              </div>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell>
+          <div className="max-w-xs">
+            <div className="truncate text-sm" title={eventSummary(channel, leagueLabel).title}>
+              {eventSummary(channel, leagueLabel).text}
+            </div>
+            <div className="truncate text-xs text-muted-foreground">
+              {channel.event_date && (
+                <>
+                  {new Date(channel.event_date).toLocaleString("en-US", {
+                    timeZone: timezone,
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                  {" · "}
+                </>
+              )}
+              <span className="font-mono" title={`${channel.event_provider} event id`}>
+                {channel.event_provider}:{channel.event_id}
+              </span>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="text-sm truncate" title={groupTitle}>
+          {sportLabel}
+        </TableCell>
+        <TableCell>
+          <Badge variant="secondary" className="text-xs">{leagueLabel}</Badge>
+        </TableCell>
+        <TableCell>{getSyncStatusBadge(channel.sync_status)}</TableCell>
+        <TableCell className="text-muted-foreground">
+          {channel.scheduled_delete_at ? formatRelativeTime(channel.scheduled_delete_at) : "-"}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(channel)}
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        </TableCell>
+        <TableCell></TableCell>
+      </TableRow>
+      {expanded && (
+        <TableRow className="hover:bg-transparent border-b border-border/40">
+          <TableCell colSpan={10} className="p-0 pb-2">
+            <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
+            {loading ? (
+              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <LoaderCircle className="h-3 w-3 animate-spin" />
+                Loading streams…
+              </div>
+            ) : (streams ?? []).length === 0 ? (
+              <p className="text-xs text-muted-foreground py-1">No active streams.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <colgroup>
+                  <col className="w-[24%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[6%]" />
+                  <col className="w-[22%]" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Stream</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Group</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Account</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">Method</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-4">
+                      <span className="inline-flex items-center gap-1">
+                        Feed
+                        <RichTooltip
+                          content="Which side of the matchup this stream's feed belongs to. “—” means unknown — either the stream carries no feed signal, or the sport has no home/away at all (racing, combat). Unknown is never assumed to be one side or the other, and it matches neither the Home nor the Away feed-side ordering rule."
+                          side="top"
+                        >
+                          <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                        </RichTooltip>
+                      </span>
+                    </th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5 pr-2">Sort</th>
+                    <th className="text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 pb-1.5">
+                      <span className="inline-flex items-center gap-1">
+                        Stats
+                        <RichTooltip
+                          content="External stream stats (resolution, bitrate, fps, etc.) populated by Dispatcharr's stream probe. Only present once Dispatcharr has probed the stream."
+                          side="top"
+                        >
+                          <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                        </RichTooltip>
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(streams ?? []).map((stream) => (
+                    <tr key={stream.dispatcharr_stream_id} className="border-t border-border/30">
+                      <td className="py-1 pr-4 font-medium">{stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}</td>
+                      <td className="py-1 pr-4 text-muted-foreground">{stream.source_group ?? "—"}</td>
+                      <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
+                      <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
+                      <td className="py-1 pr-4"><FeedSideCell side={stream.feed_side} /></td>
+                      <td className="py-1 pr-4"><PriorityCell priority={stream.priority} expected={stream.expected_priority} rules={stream.matched_rules} generating={isGenerating} /></td>
+                      <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  )
+})
+
 export function ManagedChannelsTable() {
+  const { formatDateTime } = useDateFormat()
   // Filter states
   const [nameFilter, setNameFilter] = useState<string>("")
   const [sportFilter, setSportFilter] = useState<string>("")
   const [leagueFilter, setLeagueFilter] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("")
 
+  // Expand states
+  const [expandedChannels, setExpandedChannels] = useState<Set<number>>(new Set())
+  const [channelStreams, setChannelStreams] = useState<Map<number, ChannelStreamEntry[]>>(new Map())
+  const [loadingStreams, setLoadingStreams] = useState<Set<number>>(new Set())
+
+  const { isGenerating } = useGenerationProgress()
+
   // UI states
   const [deleteConfirm, setDeleteConfirm] = useState<ManagedChannel | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [orphansModalOpen, setOrphansModalOpen] = useState(false)
-  const [deletingOrphanId, setDeletingOrphanId] = useState<number | null>(null)
-  const [deletingAllOrphans, setDeletingAllOrphans] = useState(false)
   const [resetModalOpen, setResetModalOpen] = useState(false)
-  const [resetLoading, setResetLoading] = useState(false)
-  const [resetExecuting, setResetExecuting] = useState(false)
-  const [resetChannels, setResetChannels] = useState<ResetChannelInfo[]>([])
 
   const queryClient = useQueryClient()
 
@@ -137,8 +691,10 @@ export function ManagedChannelsTable() {
   } = useManagedChannels(undefined, false)
   const { data: pendingData } = usePendingDeletions()
 
-  // Fetch all channels including deleted for the Recently Deleted section
-  const { data: allChannelsData } = useManagedChannels(undefined, true)
+  // Fetch all channels including deleted for the Recently Deleted section.
+  // No polling: mutations invalidate ["managedChannels"] so this refreshes on
+  // deletions without a second full-table 30s poll.
+  const { data: allChannelsData } = useManagedChannels(undefined, true, { poll: false })
 
   // Filter to get only deleted channels (last 50, sorted by deletion time)
   const deletedChannels = useMemo(() => {
@@ -154,21 +710,6 @@ export function ManagedChannelsTable() {
   }, [allChannelsData])
 
   const deleteMutation = useDeleteManagedChannel()
-
-  // Fetch reconciliation status (for orphans)
-  const {
-    data: reconciliationData,
-    isLoading: reconciliationLoading,
-    refetch: refetchReconciliation,
-  } = useReconciliationStatus()
-
-  // Filter orphan_dispatcharr issues
-  const orphanChannels = useMemo(() => {
-    if (!reconciliationData?.issues_found) return []
-    return reconciliationData.issues_found.filter(
-      (issue) => issue.issue_type === "orphan_dispatcharr"
-    )
-  }, [reconciliationData])
 
   // Extract unique filter values from data
   const { sports, leagues, statuses } = useMemo(() => {
@@ -231,14 +772,13 @@ export function ManagedChannelsTable() {
     return channels
   }, [channelsData, nameFilter, sportFilter, leagueFilter, statusFilter])
 
-  // Mutation for deleting orphan channel
-  const deleteOrphanMutation = useMutation({
-    mutationFn: deleteDispatcharrChannel,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] })
-      refetchReconciliation()
-    },
-  })
+  const {
+    selectedIds,
+    toggle: toggleSelect,
+    toggleAll: toggleSelectAll,
+    isAllSelected,
+    setSelectedIds,
+  } = useRowSelection(filteredChannels)
 
   // Mutation for bulk delete
   const bulkDeleteMutation = useMutation({
@@ -262,6 +802,58 @@ export function ManagedChannelsTable() {
     },
   })
 
+  // Fetch (or refetch) the stream detail for one channel into local state.
+  const fetchStreams = useCallback(async (channelId: number) => {
+    setLoadingStreams((prev) => new Set(prev).add(channelId))
+    try {
+      const data = await getChannelStreams(channelId)
+      setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
+    } catch {
+      setChannelStreams((prev) => new Map(prev).set(channelId, []))
+    } finally {
+      setLoadingStreams((prev) => { const s = new Set(prev); s.delete(channelId); return s })
+    }
+  }, [])
+
+  // Refs so handleToggleExpand can stay identity-stable for the memo'd rows.
+  // Latest-ref pattern, updated post-commit: only read from event handlers,
+  // which always fire after the effect has run.
+  const channelStreamsRef = useRef(channelStreams)
+  const expandedRef = useRef(expandedChannels)
+  useEffect(() => {
+    channelStreamsRef.current = channelStreams
+    expandedRef.current = expandedChannels
+  }, [channelStreams, expandedChannels])
+
+  const handleToggleExpand = useCallback((channelId: number) => {
+    setExpandedChannels((prev) => {
+      const next = new Set(prev)
+      if (next.has(channelId)) {
+        next.delete(channelId)
+      } else {
+        next.add(channelId)
+      }
+      return next
+    })
+    // Opening (wasn't expanded before) with no cached detail → fetch.
+    if (!expandedRef.current.has(channelId) && !channelStreamsRef.current.has(channelId)) {
+      fetchStreams(channelId)
+    }
+  }, [fetchStreams])
+
+  // When a generation run finishes, stream priorities/membership may have
+  // changed. Refresh the channels list and any expanded stream tables so the
+  // priority spinners resolve to the new ordering.
+  const wasGeneratingRef = useRef(isGenerating)
+  useEffect(() => {
+    if (wasGeneratingRef.current && !isGenerating) {
+      queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
+      expandedRef.current.forEach((id) => { void fetchStreams(id) })
+    }
+    wasGeneratingRef.current = isGenerating
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGenerating])
+
   const handleDelete = async () => {
     if (!deleteConfirm) return
     try {
@@ -277,107 +869,9 @@ export function ManagedChannelsTable() {
     }
   }
 
-  const handleDeleteOrphan = async (channelId: number) => {
-    setDeletingOrphanId(channelId)
-    try {
-      await deleteOrphanMutation.mutateAsync(channelId)
-      toast.success("Orphan channel deleted from Dispatcharr")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete orphan")
-    } finally {
-      setDeletingOrphanId(null)
-    }
-  }
-
-  const handleDeleteAllOrphans = async () => {
-    const channelIds = orphanChannels
-      .map((o) => o.dispatcharr_channel_id)
-      .filter((id): id is number => id !== null && id !== undefined)
-
-    if (channelIds.length === 0) return
-
-    setDeletingAllOrphans(true)
-    try {
-      const results = await Promise.allSettled(
-        channelIds.map((id) => deleteOrphanMutation.mutateAsync(id))
-      )
-      const succeeded = results.filter((r) => r.status === "fulfilled").length
-      const failed = results.filter((r) => r.status === "rejected").length
-
-      if (failed === 0) {
-        toast.success(`Deleted ${succeeded} orphan channels`)
-      } else {
-        toast.warning(`Deleted ${succeeded}, failed ${failed}`)
-      }
-      refetchReconciliation()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete orphans")
-    } finally {
-      setDeletingAllOrphans(false)
-    }
-  }
-
-  const handleOpenResetModal = async () => {
-    setResetModalOpen(true)
-    setResetLoading(true)
-    try {
-      const response = await previewResetChannels()
-      setResetChannels(response.channels)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load reset preview")
-    } finally {
-      setResetLoading(false)
-    }
-  }
-
-  const handleExecuteReset = async () => {
-    setResetExecuting(true)
-    try {
-      const response = await executeResetChannels()
-      if (response.success) {
-        toast.success(`Deleted ${response.deleted_count} channels from Dispatcharr`)
-      } else {
-        toast.warning(
-          `Deleted ${response.deleted_count}, failed ${response.error_count}`
-        )
-      }
-      setResetModalOpen(false)
-      refetch()
-      queryClient.invalidateQueries({ queryKey: ["reconciliation"] })
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset channels")
-    } finally {
-      setResetExecuting(false)
-    }
-  }
-
   const handleBulkDelete = () => {
     bulkDeleteMutation.mutate(Array.from(selectedIds))
   }
-
-  // Selection handlers
-  const toggleSelect = (id: number) => {
-    const newSet = new Set(selectedIds)
-    if (newSet.has(id)) {
-      newSet.delete(id)
-    } else {
-      newSet.add(id)
-    }
-    setSelectedIds(newSet)
-  }
-
-  const toggleSelectAll = () => {
-    if (filteredChannels.length === 0) return
-    if (selectedIds.size === filteredChannels.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filteredChannels.map((c) => c.id)))
-    }
-  }
-
-  const isAllSelected =
-    filteredChannels.length > 0 &&
-    selectedIds.size === filteredChannels.length
 
   if (error) {
     return (
@@ -400,20 +894,21 @@ export function ManagedChannelsTable() {
       <CollapsibleSection
         title="Managed Channels"
         icon={<Tv className="h-5 w-5 text-muted-foreground" />}
-        count={`(${channelsData?.channels.length ?? 0})`}
+        count={
+          filteredChannels.length !== (channelsData?.channels.length ?? 0)
+            ? `(${filteredChannels.length} of ${channelsData?.channels.length ?? 0})`
+            : `(${channelsData?.channels.length ?? 0})`
+        }
         persistKey="channels.active"
       >
 
       {/* Section actions — live inside the collapsible body so they only show
           when the section is expanded. */}
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 mb-3">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            refetchReconciliation()
-            setOrphansModalOpen(true)
-          }}
+          onClick={() => setOrphansModalOpen(true)}
         >
           <Search className="h-4 w-4 mr-1" />
           Find Orphans
@@ -421,22 +916,22 @@ export function ManagedChannelsTable() {
         <Button
           variant="destructive"
           size="sm"
-          onClick={handleOpenResetModal}
+          onClick={() => setResetModalOpen(true)}
         >
-          <AlertTriangle className="h-4 w-4 mr-1" />
+          <TriangleAlert className="h-4 w-4 mr-1" />
           Reset All
         </Button>
       </div>
 
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="container max-w-screen-xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
+        <StickyActionBar
+          label={
+            <>
                 {selectedIds.size} channel{selectedIds.size > 1 ? "s" : ""} selected
-              </span>
-              <div className="flex gap-2">
+            </>
+          }
+        >
                 <Button
                   variant="outline"
                   size="sm"
@@ -452,10 +947,7 @@ export function ManagedChannelsTable() {
                   <Trash2 className="h-4 w-4 mr-1" />
                   Delete Selected
                 </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </StickyActionBar>
       )}
 
       {/* Pending Deletions Info */}
@@ -478,32 +970,17 @@ export function ManagedChannelsTable() {
       )}
 
       {/* Channels List */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
-            <Tv className="h-5 w-5" />
-            Channels ({filteredChannels.length}
-            {filteredChannels.length !== (channelsData?.channels.length ?? 0) && (
-              <span className="text-muted-foreground font-normal">
-                {" "}of {channelsData?.channels.length ?? 0}
-              </span>
-            )}
-            )
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
+            <Spinner />
           ) : (channelsData?.channels.length ?? 0) === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No managed channels found.
             </div>
           ) : (
-            <Table className="table-fixed">
+            <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead className="w-10">
                     <Checkbox
                       checked={isAllSelected}
@@ -517,9 +994,11 @@ export function ManagedChannelsTable() {
                   <TableHead className="w-20">Status</TableHead>
                   <TableHead className="w-24">Delete At</TableHead>
                   <TableHead className="w-16 text-right">Actions</TableHead>
+                  <TableHead className="w-6"></TableHead>
                 </TableRow>
                 {/* Filter row */}
                 <TableRow className="border-b-2 border-border">
+                  <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5">
                     <div className="relative">
@@ -576,90 +1055,36 @@ export function ManagedChannelsTable() {
                   </TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5"></TableHead>
+                  <TableHead className="py-0.5 pb-1.5"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredChannels.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       No channels match the current filters.
                     </TableCell>
                   </TableRow>
                 ) : filteredChannels.map((channel) => (
-                  <TableRow key={channel.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(channel.id)}
-                        onCheckedChange={() => toggleSelect(channel.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {channel.logo_url && (
-                          <img
-                            src={channel.logo_url}
-                            alt=""
-                            className="h-6 w-6 object-contain"
-                          />
-                        )}
-                        <div>
-                          <div className="font-medium">{channel.channel_name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
-                            {channel.tvg_id}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="max-w-xs">
-                        <div className="truncate text-sm">
-                          {channel.home_team || channel.away_team
-                            ? `${channel.away_team ?? ""} @ ${channel.home_team ?? ""}`
-                            : channel.event_name ?? "-"}
-                        </div>
-                        {channel.event_date && (
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(channel.event_date).toLocaleString(undefined, {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm truncate" title={channel.event_epg_group_id ? groupLookup.get(channel.event_epg_group_id) : undefined}>
-                      {channel.sport ? getSportDisplayName(channel.sport, sportsMap) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs">{getLeagueDisplay(channel.league)}</Badge>
-                    </TableCell>
-                    <TableCell>{getSyncStatusBadge(channel.sync_status)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatRelativeTime(channel.scheduled_delete_at)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteConfirm(channel)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <ChannelRow
+                    key={channel.id}
+                    channel={channel}
+                    expanded={expandedChannels.has(channel.id)}
+                    selected={selectedIds.has(channel.id)}
+                    streams={channelStreams.get(channel.id)}
+                    loading={loadingStreams.has(channel.id)}
+                    isGenerating={isGenerating}
+                    sportLabel={channel.sport ? getSportDisplayName(channel.sport, sportsMap) : "-"}
+                    leagueLabel={getLeagueDisplay(channel.league)}
+                    groupTitle={channel.event_epg_group_id ? groupLookup.get(channel.event_epg_group_id) : undefined}
+                    onToggleExpand={handleToggleExpand}
+                    onToggleSelect={toggleSelect}
+                    onDelete={setDeleteConfirm}
+                  />
                 ))}
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
 
       </CollapsibleSection>
 
@@ -700,10 +1125,11 @@ export function ManagedChannelsTable() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-xs truncate text-sm">
-                        {channel.home_team || channel.away_team
-                          ? `${channel.away_team ?? ""} @ ${channel.home_team ?? ""}`
-                          : channel.event_name ?? "-"}
+                      <div
+                        className="max-w-xs truncate text-sm"
+                        title={eventSummary(channel, getLeagueDisplay(channel.league)).title}
+                      >
+                        {eventSummary(channel, getLeagueDisplay(channel.league)).text}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
@@ -713,14 +1139,7 @@ export function ManagedChannelsTable() {
                       <Badge variant="secondary" className="text-xs">{getLeagueDisplay(channel.league)}</Badge>
                     </TableCell>
                     <TableCell className="text-sm">
-                      {channel.deleted_at
-                        ? new Date(channel.deleted_at).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "-"}
+                      {channel.deleted_at ? formatDateTime(channel.deleted_at) : "-"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -730,248 +1149,39 @@ export function ManagedChannelsTable() {
       )}
 
       {/* Delete Confirmation */}
-      <Dialog
+      <ConfirmDialog
         open={deleteConfirm !== null}
         onOpenChange={(open) => !open && setDeleteConfirm(null)}
-      >
-        <DialogContent onClose={() => setDeleteConfirm(null)}>
-          <DialogHeader>
-            <DialogTitle>Delete Channel</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{deleteConfirm?.channel_name}"? This will
-              also remove it from Dispatcharr if configured.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete Channel"
+        description={`Are you sure you want to delete "${deleteConfirm?.channel_name}"? This will also remove it from Dispatcharr if configured.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={handleDelete}
+      />
 
       {/* Bulk Delete Confirmation */}
-      <Dialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
-        <DialogContent onClose={() => setBulkDeleteConfirm(false)}>
-          <DialogHeader>
-            <DialogTitle>Delete {selectedIds.size} Channels</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {selectedIds.size} channel
-              {selectedIds.size > 1 ? "s" : ""}? This will also remove them from
-              Dispatcharr if configured.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDeleteConfirm(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={bulkDeleteMutation.isPending}
-            >
-              {bulkDeleteMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Delete All
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={bulkDeleteConfirm}
+        onOpenChange={setBulkDeleteConfirm}
+        title={`Delete ${selectedIds.size} Channels`}
+        description={`Are you sure you want to delete ${selectedIds.size} channel${selectedIds.size > 1 ? "s" : ""}? This will also remove them from Dispatcharr if configured.`}
+        confirmLabel="Delete All"
+        isPending={bulkDeleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+      />
 
       {/* Find Orphans Modal */}
-      <Dialog open={orphansModalOpen} onOpenChange={setOrphansModalOpen}>
-        <DialogContent onClose={() => setOrphansModalOpen(false)} className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              Orphan Channels
-            </DialogTitle>
-            <DialogDescription>
-              Channels in Dispatcharr that aren't tracked by Teamarr
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            {reconciliationLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : orphanChannels.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No orphan channels found. Everything is in sync!
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Found {orphanChannels.length} orphan channel
-                  {orphanChannels.length > 1 ? "s" : ""}. These exist in Dispatcharr but
-                  aren't tracked by Teamarr.
-                </p>
-                <div className="max-h-[50vh] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Channel Name</TableHead>
-                      <TableHead>Dispatcharr ID</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orphanChannels.map((orphan, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">
-                          {orphan.channel_name ?? "Unknown"}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {orphan.dispatcharr_channel_id}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() =>
-                              orphan.dispatcharr_channel_id &&
-                              handleDeleteOrphan(orphan.dispatcharr_channel_id)
-                            }
-                            disabled={
-                              !orphan.dispatcharr_channel_id ||
-                              deletingOrphanId === orphan.dispatcharr_channel_id
-                            }
-                          >
-                            {deletingOrphanId === orphan.dispatcharr_channel_id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOrphansModalOpen(false)}>
-              Close
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => refetchReconciliation()}
-              disabled={reconciliationLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${reconciliationLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            {orphanChannels.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={handleDeleteAllOrphans}
-                disabled={deletingAllOrphans}
-              >
-                {deletingAllOrphans ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-1" />
-                )}
-                Delete All ({orphanChannels.length})
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OrphansDialog open={orphansModalOpen} onOpenChange={setOrphansModalOpen} />
 
       {/* Reset All Modal */}
-      <Dialog open={resetModalOpen} onOpenChange={setResetModalOpen}>
-        <DialogContent onClose={() => setResetModalOpen(false)} className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Reset All Teamarr Channels
-            </DialogTitle>
-            <DialogDescription>
-              This will delete ALL Teamarr-created channels from Dispatcharr
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            {resetLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : resetChannels.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No Teamarr channels found in Dispatcharr.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Alert variant="destructive" title="⚠️ Warning: Destructive Action">
-                  <p className="text-sm text-muted-foreground">
-                    This will permanently delete {resetChannels.length} channel
-                    {resetChannels.length > 1 ? "s" : ""} from Dispatcharr that have{" "}
-                    <code className="text-xs bg-muted px-1 py-0.5 rounded">teamarr-event-*</code>{" "}
-                    tvg_id.
-                  </p>
-                </Alert>
-                <div className="max-h-[40vh] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Channel Name</TableHead>
-                        <TableHead>Channel #</TableHead>
-                        <TableHead>Streams</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {resetChannels.map((ch) => (
-                        <TableRow key={ch.dispatcharr_channel_id}>
-                          <TableCell className="font-medium">{ch.channel_name}</TableCell>
-                          <TableCell>{ch.channel_number ?? "-"}</TableCell>
-                          <TableCell>{ch.stream_count}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResetModalOpen(false)}>
-              Cancel
-            </Button>
-            {resetChannels.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={handleExecuteReset}
-                disabled={resetExecuting}
-              >
-                {resetExecuting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-1" />
-                )}
-                Delete All ({resetChannels.length})
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ResetAllDialog
+        open={resetModalOpen}
+        onOpenChange={setResetModalOpen}
+        onReset={() => {
+          refetch()
+          queryClient.invalidateQueries({ queryKey: ["reconciliation"] })
+        }}
+      />
     </div>
   )
 }

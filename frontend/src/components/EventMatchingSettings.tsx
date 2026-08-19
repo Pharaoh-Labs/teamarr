@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +13,7 @@ import {
   useDispatcharrStatus,
 } from "@/hooks/useSettings"
 import type { EPGSettings } from "@/api/settings"
+import { useChannelGroups } from "@/hooks/useDispatcharr"
 
 /**
  * EPG Matching settings — how static-named linear channels are matched to events
@@ -30,20 +30,20 @@ export function EpgMatchingSettings() {
   const dispatcharrStatus = useDispatcharrStatus()
 
   const [epg, setEPG] = useState<EPGSettings | null>(null)
-  useEffect(() => {
-    if (epgData) setEPG(epgData)
-  }, [epgData])
 
-  const channelGroupsQuery = useQuery({
-    queryKey: ["dispatcharr-channel-groups"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-groups?exclude_m3u=true")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string; from_m3u: boolean }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setEPG(epgData)
+  }
+
+  const channelGroupsQuery = useChannelGroups(
+    true,
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   return (
     <div className="space-y-4">
@@ -185,9 +185,15 @@ export function EventLookaheadSetting() {
   const updateEPG = useUpdateEPGSettings()
 
   const [epg, setEPG] = useState<EPGSettings | null>(null)
-  useEffect(() => {
-    if (epgData) setEPG(epgData)
-  }, [epgData])
+
+  // Sync the form from the server data during render (React's "adjusting
+  // state when a prop changes" pattern) — re-seeds on every refetch, exactly
+  // like the previous effect, without the extra effect render pass.
+  const [syncedEpgData, setSyncedEpgData] = useState<typeof epgData>(undefined)
+  if (epgData && epgData !== syncedEpgData) {
+    setSyncedEpgData(epgData)
+    setEPG(epgData)
+  }
 
   return (
     <Card>

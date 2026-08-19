@@ -1,16 +1,31 @@
-import type { TemplateCreate } from "@/api/templates"
+import type { ConditionalPreview, FillerRegisterPreview, TemplateCreate } from "@/api/templates"
 import type { VariableCategory } from "@/api/variables"
+import type { CachedLeague } from "@/api/teams"
 
-export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv"
+export type Tab = "basic" | "defaults" | "conditions" | "fillers" | "xmltv" | "assignments"
 
 export interface VariableSidebarProps {
   categories: VariableCategory[]
   onInsert: (varName: string) => void
   lastFocusedField: string | null
   isTeamTemplate: boolean
-  availableSports: string[]
-  previewSport: string
-  onSportChange: (sport: string) => void
+  /** Variable name → sample value (from /variables/samples) for inline examples. */
+  samples?: Record<string, string>
+}
+
+/** Preview-context bar above the tabs (yk4j.10): league + live/sample. */
+export interface PreviewControlsProps {
+  leagues: CachedLeague[]
+  subscribedSlugs: string[]
+  previewLeague: string
+  onLeagueChange: (league: string) => void
+  liveRequested: boolean
+  isLive: boolean
+  onToggleLive: () => void
+  /** Live coverage for the current event: how many relevant variables the real
+   *  event populates vs. total relevant (gaps = relevant variables it can't
+   *  fill). Null when not previewing live. */
+  liveCoverage?: { populated: number; total: number; gaps: string[] } | null
 }
 
 export interface Variable {
@@ -27,6 +42,12 @@ export interface TabProps {
   isTeamTemplate?: boolean
   resolveTemplate: (template: string) => string
   validationData?: { validNames: Set<string>; baseNames: Set<string> }
+  /** Server-side condition trace (#357): which description row fires and why,
+   *  evaluated against the current preview event. Null until the first render
+   *  lands or when the server preview is unavailable. */
+  conditionalPreview?: ConditionalPreview | null
+  /** Per-register filler row results for the preview event (#428). */
+  fillerConditionalPreview?: Record<string, FillerRegisterPreview> | null
 }
 
 // Template field with inline preview and validation

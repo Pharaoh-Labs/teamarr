@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
-  CheckCircle,
-  XCircle,
+  CircleCheckBig,
+  CircleX,
   Ban,
-  Loader2,
+  LoaderCircle,
   Clock,
   Search,
-  AlertTriangle,
+  TriangleAlert,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -49,16 +49,25 @@ function formatBytes(bytes: number | undefined | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// Calls-per-channel is the call-volume regression signal (the #254 refetch bug
+// ran ~16/ch; healthy warm runs are ~2, cold-cache runs ~5). Stay calm/muted in
+// the normal band so the column only lights up when something is off.
+function callsPerChannelClass(ratio: number): string {
+  if (ratio >= 12) return "text-red-600 font-medium"
+  if (ratio >= 6) return "text-amber-600"
+  return "text-muted-foreground"
+}
+
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case "completed":
-      return <CheckCircle className="h-4 w-4 text-green-600" />
+      return <CircleCheckBig className="h-4 w-4 text-green-600" />
     case "failed":
-      return <XCircle className="h-4 w-4 text-red-600" />
+      return <CircleX className="h-4 w-4 text-red-600" />
     case "cancelled":
       return <Ban className="h-4 w-4 text-orange-500" />
     case "running":
-      return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+      return <LoaderCircle className="h-4 w-4 animate-spin text-blue-600" />
     default:
       return <Clock className="h-4 w-4 text-muted-foreground" />
   }
@@ -75,6 +84,8 @@ function getFailedReasonLabel(reason: string): string {
     ambiguous_league: "Ambiguous league",
     no_event_found: "No event found",
     no_event_card_match: "No event card match",
+    no_racing_match: "No racing match",
+    no_tennis_match: "No tennis match",
     date_mismatch: "Date mismatch",
     unmatched: "Unmatched",
   }
@@ -113,7 +124,7 @@ interface RunHistoryTableProps {
 }
 
 export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
-  const { formatDateTime } = useDateFormat()
+  const { formatDateTime, formatDate } = useDateFormat()
 
   // Modal state
   const [matchedModalRunId, setMatchedModalRunId] = useState<number | null>(null)
@@ -147,37 +158,41 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
     staleTime: 5 * 60 * 1000,
   })
 
+  const leagues = leaguesData?.leagues
+  const matchedStreams = matchedData?.streams
+  const failedFailures = failedData?.failures
+
   // League display lookup
   const getLeagueDisplay = useMemo(() => {
     const map = new Map<string, string>()
-    if (leaguesData?.leagues) {
-      for (const league of leaguesData.leagues) {
+    if (leagues) {
+      for (const league of leagues) {
         map.set(league.slug, getLeagueDisplayName(league, true))
       }
     }
     return (code: string | null) => (code ? (map.get(code) ?? code) : "-")
-  }, [leaguesData?.leagues])
+  }, [leagues])
 
   // Group dropdowns
   const matchedGroups = useMemo(() => {
-    if (!matchedData?.streams) return []
+    if (!matchedStreams) return []
     const groups = new Set<string>()
-    for (const s of matchedData.streams) if (s.group_name) groups.add(s.group_name)
+    for (const s of matchedStreams) if (s.group_name) groups.add(s.group_name)
     return Array.from(groups).sort()
-  }, [matchedData?.streams])
+  }, [matchedStreams])
 
   const failedGroups = useMemo(() => {
-    if (!failedData?.failures) return []
+    if (!failedFailures) return []
     const groups = new Set<string>()
-    for (const f of failedData.failures) if (f.group_name) groups.add(f.group_name)
+    for (const f of failedFailures) if (f.group_name) groups.add(f.group_name)
     return Array.from(groups).sort()
-  }, [failedData?.failures])
+  }, [failedFailures])
 
   // Filtered data
   const filteredMatchedStreams = useMemo(() => {
-    if (!matchedData?.streams) return []
+    if (!matchedStreams) return []
     const q = matchedFilter.toLowerCase()
-    return matchedData.streams.filter((s) => {
+    return matchedStreams.filter((s) => {
       if (matchedGroupFilter !== "all" && s.group_name !== matchedGroupFilter) return false
       if (!q) return true
       return (
@@ -188,12 +203,12 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
         s.league?.toLowerCase().includes(q)
       )
     })
-  }, [matchedData?.streams, matchedFilter, matchedGroupFilter])
+  }, [matchedStreams, matchedFilter, matchedGroupFilter])
 
   const filteredFailedMatches = useMemo(() => {
-    if (!failedData?.failures) return []
+    if (!failedFailures) return []
     const q = failedFilter.toLowerCase()
-    return failedData.failures.filter((f) => {
+    return failedFailures.filter((f) => {
       if (failedGroupFilter !== "all" && f.group_name !== failedGroupFilter) return false
       if (!q) return true
       return (
@@ -204,7 +219,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
         f.reason.toLowerCase().includes(q)
       )
     })
-  }, [failedData?.failures, failedFilter, failedGroupFilter])
+  }, [failedFailures, failedFilter, failedGroupFilter])
 
   const closeMatchedModal = () => {
     setMatchedModalRunId(null)
@@ -298,6 +313,30 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
       cell: (run) => <span className="tabular-nums">{run.channels?.active ?? 0}</span>,
     },
     {
+      key: "api_calls",
+      header: "API Calls",
+      align: "center",
+      cell: (run) => {
+        const total = run.extra_metrics?.provider_calls_total as number | undefined
+        // Runs before kbbk.2 have no telemetry — show a dash, not a fake 0.
+        if (total == null) return <span className="text-muted-foreground">—</span>
+        const calls = (run.extra_metrics?.provider_calls as Record<string, number>) ?? {}
+        const channels = run.channels?.active ?? 0
+        const ratio = channels > 0 ? total / channels : total
+        const rows = [
+          ...Object.entries(calls).map(([label, value]) => ({ label, value })),
+          { label: "Total", value: total },
+        ]
+        return (
+          <RichTooltip title="Provider calls" rows={rows}>
+            <span className={`cursor-help tabular-nums ${callsPerChannelClass(ratio)}`}>
+              {ratio.toFixed(1)}/ch
+            </span>
+          </RichTooltip>
+        )
+      },
+    },
+    {
       key: "duration",
       header: "Duration",
       cell: (run) => formatDuration(run.duration_ms),
@@ -320,7 +359,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
         <DialogContent onClose={closeMatchedModal} className="max-w-6xl h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CircleCheckBig className="h-5 w-5 text-green-600" />
               Matched Streams
             </DialogTitle>
             <DialogDescription>
@@ -352,7 +391,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
 
           {matchedLoading ? (
             <div className="flex-1 flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredMatchedStreams.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -385,7 +424,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
                       </div>
                       {stream.event_date && (
                         <div className="text-xs text-muted-foreground">
-                          {new Date(stream.event_date).toLocaleDateString()}
+                          {formatDate(stream.event_date)}
                         </div>
                       )}
                     </div>
@@ -430,7 +469,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
                           onClick={() => onFixStream(stream)}
                           title="Correct this match"
                         >
-                          <AlertTriangle className="h-4 w-4" />
+                          <TriangleAlert className="h-4 w-4" />
                         </Button>
                       ),
                     }]
@@ -455,7 +494,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
         <DialogContent onClose={closeFailedModal} className="max-w-6xl h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-red-600" />
+              <CircleX className="h-5 w-5 text-red-600" />
               Failed Matches
             </DialogTitle>
             <DialogDescription>
@@ -487,7 +526,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
 
           {failedLoading ? (
             <div className="flex-1 flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredFailedMatches.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -537,7 +576,7 @@ export function RunHistoryTable({ runs, onFixStream }: RunHistoryTableProps) {
                           onClick={() => onFixStream(failure)}
                           title="Fix this stream's match"
                         >
-                          <AlertTriangle className="h-4 w-4" />
+                          <TriangleAlert className="h-4 w-4" />
                         </Button>
                       ),
                     }]

@@ -161,6 +161,10 @@ TEAM_ALIASES: dict[str, str] = {
     "sens": "ottawa senators",
     "jets": "winnipeg jets",
     # MLB
+    # Official club nickname with no matching provider string — ESPN says
+    # "Diamondbacks" in every field, so "D-backs" scores ~53 without this (#480)
+    "d-backs": "arizona diamondbacks",
+    "dbacks": "arizona diamondbacks",
     "yanks": "new york yankees",
     "bosox": "boston red sox",
     "redsox": "boston red sox",
@@ -391,6 +395,13 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bnba[:\s-]", "nba"),
     (r"\bnhl[:\s-]", "nhl"),
     (r"\bmlb[:\s-]", "mlb"),
+    # LLB after MLB (#560): "MLB: Little League Classic" is an MLB game —
+    # the earlier MLB pattern must win. Bare "Little League" / LLWS streams
+    # would otherwise parse team abbreviations (MIL vs. LAD) straight into
+    # MLB matchups.
+    (r"\blittle league\b", "llb"),
+    (r"\bllws\b", "llb"),
+    (r"\bllb[:\s-]", "llb"),
     (r"\bmls[:\s-]", "usa.1"),
     (r"\bwnba[:\s-]", "wnba"),
     (r"\bnwsl[:\s-]", "usa.nwsl"),

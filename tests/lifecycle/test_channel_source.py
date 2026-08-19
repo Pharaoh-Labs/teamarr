@@ -1,0 +1,281 @@
+"""Tests for the Dispatcharr-channels EPG source (epic teamarrv2-183.9).
+
+Covers EventGroupProcessor._fetch_channel_source_streams: building EPG-match
+candidates from streams curated onto Dispatcharr channels, with the right
+exclusions (Teamarr's own output channels, channels without an active EPG link)
+and dedupe (streams already owned by an EPG-match-enabled M3U group).
+"""
+
+from contextlib import contextmanager
+from types import SimpleNamespace
+
+import pytest
+
+from teamarr.database.groups import (
+    ensure_channel_source_group,
+    get_all_groups,
+    get_group,
+)
+from tests.fakes import make_bare_processor
+
+
+def _stream(sid, name, group_id=None):
+    return SimpleNamespace(
+        id=sid,
+        name=name,
+        tvg_id="",  # raw streams carry empty tvg_id; the channel EPG drives matching
+        tvg_name=None,
+        channel_group=None,
+        channel_group_id=group_id,
+        m3u_account_id=7,
+        is_stale=False,
+    )
+
+
+def _make_processor(
+    stream_channel_map, epg_data_list, streams, managed, epg_groups, monkeypatch,
+    dp_groups=None,
+):
+    """Build a processor with mocked Dispatcharr client + DB lookups.
+
+    The map mock honors exclude_channel_ids (#512) like the real builder and
+    records the passed set on ``client.map_exclusions`` for assertions.
+    """
+
+    def _map(exclude_channel_ids=None):
+        client.map_exclusions.append(exclude_channel_ids)
+        if not exclude_channel_ids:
+            return dict(stream_channel_map)
+        return {
+            sid: ch
+            for sid, ch in stream_channel_map.items()
+            if ch.get("id") not in exclude_channel_ids
+        }
+
+    client = SimpleNamespace(
+        map_exclusions=[],
+        channels=SimpleNamespace(
+            get_stream_channel_map=_map,
+            get_epg_data_list=lambda: epg_data_list,
+        ),
+        m3u=SimpleNamespace(
+            list_streams=lambda: streams,
+            # Real channels API has no channel_group_name; names come from here (#379).
+            list_groups=lambda: dp_groups or [],
+        ),
+    )
+
+    @contextmanager
+    def _db():
+        yield None
+
+    proc = make_bare_processor(
+        _dispatcharr_client=client,
+        _db_factory=_db,
+        _active_epg_source_ids=lambda: {10},  # only source id 10 is active
+    )
+
+    monkeypatch.setattr(
+        "teamarr.database.channels.get_all_managed_channels",
+        lambda conn, include_deleted=False: managed,
+    )
+    monkeypatch.setattr(
+        "teamarr.database.groups.get_all_groups",
+        lambda conn, include_disabled=False: epg_groups,
+    )
+    return proc
+
+
+def test_builds_candidates_tagged_with_channel_epg_tvgid(monkeypatch):
+    # Channel 100 (epg_data_id 1 -> tvg 'ESPN.us', active source 10) carries stream 500.
+    proc = _make_processor(
+        stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD", group_id=42)],
+        managed=[],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+    )
+    out = proc._fetch_channel_source_streams()
+    assert len(out) == 1
+    assert out[0]["id"] == 500
+    # Tagged with the CHANNEL's EPG tvg_id (not the empty stream tvg_id).
+    assert out[0]["tvg_id"] == "ESPN.us"
+
+
+def test_excludes_teamarr_managed_channels(monkeypatch):
+    # Stream 500 is on Dispatcharr channel 100, which is a Teamarr OUTPUT channel.
+    proc = _make_processor(
+        stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "X"}},
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD")],
+        managed=[SimpleNamespace(dispatcharr_channel_id=100)],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+    )
+    assert proc._fetch_channel_source_streams() == []
+
+
+def test_excludes_channels_without_active_epg(monkeypatch):
+    # epg_data_id 2 belongs to inactive source 99; channel 101 has no epg link.
+    proc = _make_processor(
+        stream_channel_map={
+            500: {"id": 100, "epg_data_id": 2, "name": "X"},  # inactive source
+            501: {"id": 101, "epg_data_id": None, "name": "Y"},  # no EPG
+        },
+        epg_data_list=[{"id": 2, "tvg_id": "FS1.us", "epg_source": 99}],
+        streams=[_stream(500, "FS1"), _stream(501, "Random")],
+        managed=[],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+    )
+    assert proc._fetch_channel_source_streams() == []
+
+
+def test_dedupes_streams_already_in_epg_match_group(monkeypatch):
+    # Stream 500 lives in M3U group 42, which is an EPG-match-enabled event group,
+    # so the per-group path already handles it → channel source must skip it.
+    epg_group = SimpleNamespace(
+        m3u_group_id=42, epg_match_enabled=True, is_channel_source=False
+    )
+    proc = _make_processor(
+        stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD", group_id=42)],
+        managed=[],
+        epg_groups=[epg_group],
+        monkeypatch=monkeypatch,
+    )
+    assert proc._fetch_channel_source_streams() == []
+
+
+def test_keeps_streams_in_non_epg_group(monkeypatch):
+    # Same as above but the M3U group is NOT EPG-match-enabled → keep it.
+    plain_group = SimpleNamespace(
+        m3u_group_id=42, epg_match_enabled=False, is_channel_source=False
+    )
+    proc = _make_processor(
+        stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD", group_id=42)],
+        managed=[],
+        epg_groups=[plain_group],
+        monkeypatch=monkeypatch,
+    )
+    out = proc._fetch_channel_source_streams()
+    assert [s["id"] for s in out] == [500]
+
+
+def _two_group_processor(monkeypatch):
+    # Channel 100 in DP group 7 (US Sports), channel 101 in group 9 (UK Sports).
+    # Channel dicts carry only channel_group_id — the real API sends no
+    # channel_group_name; names resolve via m3u.list_groups (#379).
+    return _make_processor(
+        stream_channel_map={
+            500: {"id": 100, "epg_data_id": 1, "name": "ESPN", "channel_group_id": 7},
+            501: {"id": 101, "epg_data_id": 1, "name": "FS1", "channel_group_id": 9},
+        },
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD"), _stream(501, "FS1 HD")],
+        managed=[],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+        dp_groups=[
+            SimpleNamespace(id=7, name="US Sports"),
+            SimpleNamespace(id=9, name="UK Sports"),
+        ],
+    )
+
+
+def test_scopes_candidates_to_selected_dp_groups(monkeypatch):
+    # Only DP group 7 is selected → only its channel's stream is a candidate (ybt.2).
+    proc = _two_group_processor(monkeypatch)
+    monkeypatch.setattr(
+        "teamarr.database.settings.get_epg_settings",
+        lambda conn: SimpleNamespace(epg_channel_source_groups=[7]),
+    )
+    out = proc._fetch_channel_source_streams()
+    assert [s["id"] for s in out] == [500]
+    # The DP channel group is stashed for the ordering rule (ybt.3), with the
+    # name resolved from the groups endpoint — not the channel dict (#379).
+    assert out[0]["dp_channel_group_id"] == 7
+    assert out[0]["dp_channel_group"] == "US Sports"
+
+
+def test_dp_group_name_resolves_from_groups_endpoint(monkeypatch):
+    # Even with no group scoping, every candidate gets its DP group NAME from
+    # m3u.list_groups — the channels API only provides the id (#379).
+    proc = _two_group_processor(monkeypatch)
+    monkeypatch.setattr(
+        "teamarr.database.settings.get_epg_settings",
+        lambda conn: SimpleNamespace(epg_channel_source_groups=[]),
+    )
+    out = {s["id"]: s for s in proc._fetch_channel_source_streams()}
+    assert out[500]["dp_channel_group"] == "US Sports"
+    assert out[501]["dp_channel_group"] == "UK Sports"
+
+
+def test_empty_selection_includes_all_groups(monkeypatch):
+    # Back-compat: empty selection = include all DP groups.
+    proc = _two_group_processor(monkeypatch)
+    monkeypatch.setattr(
+        "teamarr.database.settings.get_epg_settings",
+        lambda conn: SimpleNamespace(epg_channel_source_groups=[]),
+    )
+    out = proc._fetch_channel_source_streams()
+    assert sorted(s["id"] for s in out) == [500, 501]
+
+
+def test_ensure_channel_source_group_idempotent_and_synced(db_conn):
+    gid = ensure_channel_source_group(db_conn, enabled=True)
+    g = get_group(db_conn, gid)
+    assert g is not None
+    assert g.is_channel_source is True
+    assert g.epg_match_enabled is True
+    assert g.skip_builtin_filter is True
+    assert g.enabled is True
+    # EPG-only (#406): channel source matches via EPG program data, not name/team.
+    assert g.team_streams_enabled is False
+    assert g.name_match_enabled is False
+
+    # Second call must not create a duplicate; it syncs the enabled flag and
+    # re-asserts the EPG-only matching flags on every run.
+    gid2 = ensure_channel_source_group(db_conn, enabled=False)
+    assert gid2 == gid
+    sources = [g for g in get_all_groups(db_conn, include_disabled=True) if g.is_channel_source]
+    assert len(sources) == 1
+    resynced = get_group(db_conn, gid)
+    assert resynced.enabled is False
+    assert resynced.team_streams_enabled is False
+    assert resynced.name_match_enabled is False
+    assert resynced.epg_match_enabled is True
+
+
+def test_channel_source_group_hidden_from_ui_list(db_conn):
+    gid = ensure_channel_source_group(db_conn, enabled=True)
+    visible = get_all_groups(db_conn, include_disabled=True, exclude_channel_source=True)
+    assert gid not in {g.id for g in visible}
+    # Processing path (no exclusion) still sees it.
+    everything = get_all_groups(db_conn, include_disabled=True)
+    assert gid in {g.id for g in everything}
+
+
+def test_managed_ids_passed_as_map_exclusion(monkeypatch):
+    # #512: the fetcher must hand Teamarr's own channel ids to the map builder
+    # so they can't claim slots for streams shared with curated channels.
+    proc = _make_processor(
+        stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
+        epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
+        streams=[_stream(500, "ESPN HD", group_id=42)],
+        managed=[SimpleNamespace(dispatcharr_channel_id=900)],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+    )
+    out = proc._fetch_channel_source_streams()
+    assert proc._dispatcharr_client.map_exclusions == [{900}]
+    # Curated channel 100 is not managed → its stream stays a candidate.
+    assert [c["id"] for c in out] == [500]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

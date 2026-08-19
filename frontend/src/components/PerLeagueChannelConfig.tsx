@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Search, Trash2, ChevronDown, ChevronRight, X } from "lucide-react"
@@ -18,6 +18,7 @@ import {
   useDeleteLeagueConfig,
 } from "@/hooks/useSettings"
 import { useSubscription } from "@/hooks/useSubscription"
+import { useChannelProfiles, useChannelGroups } from "@/hooks/useDispatcharr"
 import type { SubscriptionLeagueConfig } from "@/api/settings"
 
 function LeagueConfigRow({
@@ -56,8 +57,14 @@ function LeagueConfigRow({
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  // Sync local state when config changes or row expands
-  useEffect(() => {
+  // Sync local state when config changes or row expands (render-time "adjust
+  // state when props change" pattern — see DispatcharrOutputSettings.tsx).
+  const [synced, setSynced] = useState<{
+    isExpanded: boolean
+    config: SubscriptionLeagueConfig | null
+  } | null>(null)
+  if (synced?.isExpanded !== isExpanded || synced?.config !== config) {
+    setSynced({ isExpanded, config })
     if (isExpanded && config) {
       setLocalProfileIds(
         config.channel_profile_ids !== null && config.channel_profile_ids !== undefined
@@ -71,7 +78,7 @@ function LeagueConfigRow({
       setLocalGroupId(null)
       setLocalGroupMode(null)
     }
-  }, [isExpanded, config])
+  }
 
   const profileSummary = (() => {
     if (!config?.channel_profile_ids) return "Default"
@@ -308,28 +315,13 @@ export function PerLeagueChannelConfig() {
   })
   const sportsMap = sportsData?.sports
 
-  const channelProfilesQuery = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
-
-  const [includeM3uGroups] = useState(false)
-  const channelGroupsQuery = useQuery({
-    queryKey: ["dispatcharr-channel-groups"],
-    queryFn: async () => {
-      const response = await fetch("/api/v1/dispatcharr/channel-groups?exclude_m3u=false")
-      if (!response.ok) return []
-      return response.json() as Promise<{ id: number; name: string; from_m3u: boolean }[]>
-    },
-    enabled: dispatcharrStatus.data?.connected ?? false,
-    retry: false,
-  })
+  const channelProfilesQuery = useChannelProfiles(
+    dispatcharrStatus.data?.connected ?? false
+  )
+  const channelGroupsQuery = useChannelGroups(
+    false,
+    dispatcharrStatus.data?.connected ?? false
+  )
 
   const [expandedLeagueConfig, setExpandedLeagueConfig] = useState<string | null>(null)
   const [leagueSearch, setLeagueSearch] = useState("")
@@ -410,7 +402,7 @@ export function PerLeagueChannelConfig() {
                       hasOverride={hasOverride}
                       channelProfiles={channelProfilesQuery.data ?? []}
                       channelGroups={channelGroupsQuery.data ?? []}
-                      includeM3uGroups={includeM3uGroups}
+                      includeM3uGroups={false}
                       dispatcharrConnected={dispatcharrStatus.data?.connected ?? false}
                       onToggleExpand={() =>
                         setExpandedLeagueConfig(isExpanded ? null : league.slug)

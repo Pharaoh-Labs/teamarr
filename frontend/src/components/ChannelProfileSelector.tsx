@@ -1,16 +1,11 @@
 import { useState } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Plus, X, Loader2 } from "lucide-react"
+import { Plus, X, LoaderCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
-
-interface ChannelProfile {
-  id: number
-  name: string
-}
+import { useChannelProfiles, useCreateChannelProfile } from "@/hooks/useDispatcharr"
 
 // Preset wildcard options for dynamic profile assignment
 const WILDCARD_OPTIONS = [
@@ -20,24 +15,6 @@ const WILDCARD_OPTIONS = [
 
 // Check if a string is a preset wildcard
 const PRESET_WILDCARDS = ["{sport}", "{league}"]
-
-async function fetchChannelProfiles(): Promise<ChannelProfile[]> {
-  const response = await fetch("/api/v1/dispatcharr/channel-profiles")
-  if (!response.ok) {
-    if (response.status === 503) return [] // Dispatcharr not connected
-    throw new Error("Failed to fetch channel profiles")
-  }
-  return response.json()
-}
-
-async function createChannelProfile(name: string): Promise<ChannelProfile | null> {
-  const response = await fetch(
-    `/api/v1/dispatcharr/channel-profiles?name=${encodeURIComponent(name)}`,
-    { method: "POST" }
-  )
-  if (!response.ok) return null
-  return response.json()
-}
 
 interface ChannelProfileSelectorProps {
   /** Currently selected profile IDs and/or wildcards */
@@ -68,18 +45,14 @@ export function ChannelProfileSelector({
   className,
   showWildcards = true,
 }: ChannelProfileSelectorProps) {
-  const queryClient = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState("")
-  const [creating, setCreating] = useState(false)
   const [showCustomInput, setShowCustomInput] = useState(false)
   const [customPattern, setCustomPattern] = useState("")
 
-  const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["dispatcharr-channel-profiles"],
-    queryFn: fetchChannelProfiles,
-    retry: false,
-  })
+  const { data: profiles = [], isLoading } = useChannelProfiles()
+  const createProfile = useCreateChannelProfile()
+  const creating = createProfile.isPending
 
   // Separate numeric IDs from wildcards/patterns
   const numericIds = selectedIds.filter((x): x is number => typeof x === "number")
@@ -139,23 +112,16 @@ export function ChannelProfileSelector({
 
   const handleCreate = async () => {
     if (!newName.trim()) return
-    setCreating(true)
     try {
-      const created = await createChannelProfile(newName.trim())
-      if (created) {
-        toast.success(`Created profile "${created.name}"`)
-        // Add to selection
-        onChange([...selectedIds, created.id])
-        setNewName("")
-        setShowCreate(false)
-        queryClient.invalidateQueries({ queryKey: ["dispatcharr-channel-profiles"] })
-      } else {
-        toast.error("Failed to create profile")
-      }
+      const created = await createProfile.mutateAsync(newName.trim())
+      toast.success(`Created profile "${created.name}"`)
+      // Add to selection
+      onChange([...selectedIds, created.id])
+      setNewName("")
+      setShowCreate(false)
     } catch {
       toast.error("Failed to create profile")
     }
-    setCreating(false)
   }
 
   // Count display
@@ -183,7 +149,7 @@ export function ChannelProfileSelector({
   if (isLoading) {
     return (
       <div className={cn("flex items-center justify-center py-4", className)}>
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoaderCircle className="h-4 w-4 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -255,7 +221,7 @@ export function ChannelProfileSelector({
             disabled={creating || !newName.trim()}
             onClick={handleCreate}
           >
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+            {creating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Create"}
           </Button>
           <Button
             type="button"
@@ -415,56 +381,4 @@ export function ChannelProfileSelector({
       )}
     </div>
   )
-}
-
-/**
- * Convert selected IDs to API format.
- * - All profiles selected (no wildcards) → null (backend will use all)
- * - No selections at all → [] (no profiles)
- * - Any specific selections → those IDs/wildcards
- */
-export function profileIdsToApi(
-  selectedIds: (number | string)[],
-  allProfileIds: number[]
-): (number | string)[] | null {
-  if (selectedIds.length === 0) {
-    return [] // No profiles
-  }
-
-  // Separate numeric IDs from wildcards
-  const numericIds = selectedIds.filter((x): x is number => typeof x === "number")
-  const wildcardIds = selectedIds.filter((x): x is string => typeof x === "string")
-
-  // Check if all profiles are selected AND no wildcards
-  const selectedSet = new Set(numericIds)
-  const allSelected = allProfileIds.length > 0 &&
-    allProfileIds.every(id => selectedSet.has(id))
-
-  // If all profiles selected with no wildcards, return null (meaning all)
-  if (allSelected && wildcardIds.length === 0) {
-    return null
-  }
-
-  return selectedIds
-}
-
-/**
- * Convert API format to selected IDs for display.
- * - null → select all profiles (no wildcards)
- * - [] → select none
- * - [...] → those specific IDs/wildcards
- */
-export function apiToProfileIds(
-  apiValue: (number | string)[] | null | undefined,
-  allProfileIds: number[]
-): (number | string)[] {
-  if (apiValue === null || apiValue === undefined) {
-    // null = all profiles (no wildcards)
-    return [...allProfileIds]
-  }
-  if (apiValue.length === 1 && apiValue[0] === 0) {
-    // [0] sentinel = all profiles (legacy format)
-    return [...allProfileIds]
-  }
-  return apiValue
 }

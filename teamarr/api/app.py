@@ -33,6 +33,17 @@ from teamarr.api.routes import (
     variables,
 )
 from teamarr.api.startup_state import StartupPhase, get_startup_state
+from teamarr.config import BASE_VERSION, set_display_settings, set_timezone
+from teamarr.database import get_db, init_db
+from teamarr.database.settings import get_display_settings, get_epg_settings, get_scheduler_settings
+from teamarr.database.stats import cleanup_stuck_runs
+from teamarr.dispatcharr import close_dispatcharr, get_factory
+from teamarr.providers import ProviderRegistry
+from teamarr.services import (
+    create_cache_service,
+    create_scheduler_service,
+    init_league_mapping_service,
+)
 from teamarr.utilities.logging import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -132,15 +143,6 @@ def _run_ufc_segment_migration(db_factory, migration_name: str = "ufc_segment_fi
 
 def _run_startup_tasks():
     """Run startup tasks in background thread."""
-    from teamarr.database import get_db
-    from teamarr.database.settings import get_scheduler_settings
-    from teamarr.dispatcharr import get_factory
-    from teamarr.providers import ProviderRegistry
-    from teamarr.services import (
-        create_cache_service,
-        create_scheduler_service,
-        init_league_mapping_service,
-    )
 
     startup_state = get_startup_state()
 
@@ -179,8 +181,6 @@ def _run_startup_tasks():
 
         # Load display settings from database into config cache
         startup_state.set_phase(StartupPhase.LOADING_SETTINGS)
-        from teamarr.config import set_display_settings, set_timezone
-        from teamarr.database.settings import get_display_settings, get_epg_settings
 
         with get_db() as conn:
             # Load timezone
@@ -213,7 +213,6 @@ def _run_startup_tasks():
 
         # Start background scheduler if enabled
         startup_state.set_phase(StartupPhase.STARTING_SCHEDULER)
-        from teamarr.database.settings import get_epg_settings
 
         with get_db() as conn:
             scheduler_settings = get_scheduler_settings(conn)
@@ -260,8 +259,6 @@ _app_state: dict = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler - runs on startup and shutdown."""
-    from teamarr.database import get_db, init_db
-    from teamarr.dispatcharr import close_dispatcharr
 
     # Startup - minimal blocking, then background tasks
     setup_logging()
@@ -271,7 +268,6 @@ async def lifespan(app: FastAPI):
     init_db()
 
     # Cleanup any stuck processing runs from previous crashes
-    from teamarr.database.stats import cleanup_stuck_runs
 
     with get_db() as conn:
         cleanup_stuck_runs(conn)
@@ -301,7 +297,6 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    from teamarr.config import BASE_VERSION
 
     app = FastAPI(
         title="Teamarr API",

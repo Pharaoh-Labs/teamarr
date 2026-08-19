@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, ImageOff, Loader2 } from "lucide-react"
+import { TriangleAlert, ImageOff, LoaderCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -63,7 +63,7 @@ function ImagePreview({ url }: { url: string }) {
   return (
     <div className={PREVIEW_BOX}>
       {status === "loading" && (
-        <Loader2 className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+        <LoaderCircle className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
       )}
       <img
         src={url}
@@ -83,7 +83,9 @@ export function TemplateField({
   onChange,
   placeholder,
   helpText,
-  fieldRefs,
+  // Aliased to a *Ref name so the React Compiler recognizes it as a ref and
+  // allows the ref-callback mutation below (its ref detection is name-based).
+  fieldRefs: fieldRefsRef,
   setLastFocusedField,
   multiline = false,
   resolveTemplate = defaultResolver,
@@ -122,7 +124,7 @@ export function TemplateField({
         <Textarea
           id={id}
           ref={(el) => {
-            if (fieldRefs) fieldRefs.current[id] = el
+            if (fieldRefsRef) fieldRefsRef.current[id] = el
           }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -134,7 +136,7 @@ export function TemplateField({
         <Input
           id={id}
           ref={(el) => {
-            if (fieldRefs) fieldRefs.current[id] = el
+            if (fieldRefsRef) fieldRefsRef.current[id] = el
           }}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -147,7 +149,7 @@ export function TemplateField({
       {hasWarnings && (
         <div className="mt-1 px-2 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-sm">
           <div className="flex items-start gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <TriangleAlert className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               {warnings.map((w, i) => (
                 <p key={i} className="text-xs text-amber-400">

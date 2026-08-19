@@ -10,7 +10,7 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { StreamItem } from "./StreamItem"
 import { getMatchRanges, testMatch } from "@/lib/regex-utils"
 import type { PatternState } from "./index"
-import type { RawStream } from "@/api/groups"
+import type { RawStream, StreamExtractionResult } from "@/api/groups"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +19,9 @@ import type { RawStream } from "@/api/groups"
 interface StreamListProps {
   streams: RawStream[]
   patterns: PatternState
+  /** Pipeline-truth extraction results keyed by stream name (#458) */
+  pipelineResults: Map<string, StreamExtractionResult>
+  pipelineLoading: boolean
   onTextSelect?: (text: string, streamName: string) => void
 }
 
@@ -26,7 +29,7 @@ interface StreamListProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function StreamList({ streams, patterns, onTextSelect }: StreamListProps) {
+export function StreamList({ streams, patterns, pipelineResults, pipelineLoading, onTextSelect }: StreamListProps) {
   const parentRef = useRef<HTMLDivElement>(null)
 
   // Pre-compute match results for all streams
@@ -34,7 +37,7 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
     return streams.map((stream) => {
       const name = stream.stream_name
 
-      // Extraction ranges (teams, date, time, league)
+      // Extraction ranges (teams, date, time, league, fighters, event name)
       const extractionRanges = [
         ...(patterns.custom_regex_teams_enabled && patterns.custom_regex_teams
           ? getMatchRanges(patterns.custom_regex_teams, name)
@@ -69,6 +72,18 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
               group: r.group || "league",
             }))
           : []),
+        ...(patterns.custom_regex_fighters_enabled && patterns.custom_regex_fighters
+          ? getMatchRanges(patterns.custom_regex_fighters, name).map((r) => ({
+              ...r,
+              group: r.group || "fighters",
+            }))
+          : []),
+        ...(patterns.custom_regex_event_name_enabled && patterns.custom_regex_event_name
+          ? getMatchRanges(patterns.custom_regex_event_name, name).map((r) => ({
+              ...r,
+              group: r.group || "event_name",
+            }))
+          : []),
       ]
 
       // Include/exclude (user-defined regex)
@@ -96,6 +111,18 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
     let builtinFiltered = 0
     let withExtractions = 0
 
+    let pipelineExtracted = 0
+    let pipelineRejected = 0
+    for (const s of streams) {
+      const pr = pipelineResults.get(s.stream_name)
+      if (!pr) continue
+      const fields = [pr.teams, pr.fighters, pr.event_name, pr.date, pr.time, pr.league]
+        .filter((f) => f !== null)
+      if (fields.length === 0) continue
+      if (fields.every((f) => f!.matched)) pipelineExtracted++
+      else pipelineRejected++
+    }
+
     for (const r of results) {
       // Count streams matching builtin filters (tracked separately)
       if (r.builtinFilterReason) builtinFiltered++
@@ -116,10 +143,12 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
       excluded,
       builtinFiltered,
       withExtractions,
+      pipelineExtracted,
+      pipelineRejected,
       total: streams.length,
       skipBuiltin: patterns.skip_builtin_filter,
     }
-  }, [results, streams.length, patterns.skip_builtin_filter])
+  }, [results, streams, patterns.skip_builtin_filter, pipelineResults])
 
   const virtualizer = useVirtualizer({
     count: streams.length,
@@ -135,6 +164,17 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
         <span>{stats.total} streams</span>
         {stats.withExtractions > 0 && (
           <span className="text-success">{stats.withExtractions} with extractions</span>
+        )}
+        {pipelineResults.size > 0 && (
+          <span className={pipelineLoading ? "opacity-50" : ""}>
+            pipeline: <span className="text-success">{stats.pipelineExtracted} extracted</span>
+            {stats.pipelineRejected > 0 && (
+              <>
+                {" · "}
+                <span className="text-yellow-500">{stats.pipelineRejected} partial/rejected</span>
+              </>
+            )}
+          </span>
         )}
         {stats.excluded > 0 && (
           <span className="text-destructive">{stats.excluded} excluded</span>
@@ -178,6 +218,7 @@ export function StreamList({ streams, patterns, onTextSelect }: StreamListProps)
                   name={stream.stream_name}
                   index={idx}
                   extractionRanges={r.extractionRanges}
+                  pipelineResult={pipelineResults.get(stream.stream_name) ?? null}
                   includeMatch={r.includeMatch}
                   excludeMatch={r.excludeMatch}
                   builtinFilterReason={r.builtinFilterReason}

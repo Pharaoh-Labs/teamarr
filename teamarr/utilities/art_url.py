@@ -8,6 +8,8 @@ via the resolver's `resolve_art()`, so the reconstruction happens in exactly one
 
 import re
 
+from teamarr.database.settings import get_epg_settings
+
 _ABSOLUTE_URL = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 
 
@@ -19,11 +21,16 @@ def apply_art_base_url(value: str | None, base_url: str) -> str | None:
     function is idempotent (safe to apply more than once). When a base is set and
     the value is relative, they're joined with exactly one slash.
     """
-    if not value or not base_url:
+    if not value:
         return value
-    if _ABSOLUTE_URL.match(value):
+    # Repair values corrupted by the v76 slash normalization (#275): a leading
+    # slash in front of an absolute URL ("/https://…") — treat as absolute.
+    stripped = value.lstrip("/")
+    if _ABSOLUTE_URL.match(stripped):
+        return stripped
+    if not base_url:
         return value
-    return f"{base_url.rstrip('/')}/{value.lstrip('/')}"
+    return f"{base_url.rstrip('/')}/{stripped}"
 
 
 def read_art_base_url(db_factory) -> str:
@@ -33,7 +40,6 @@ def read_art_base_url(db_factory) -> str:
     resolvers at construction. Returns "" on any failure (no prefixing).
     """
     try:
-        from teamarr.database.settings import get_epg_settings
 
         with db_factory() as conn:
             return get_epg_settings(conn).art_base_url or ""

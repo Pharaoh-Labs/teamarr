@@ -56,6 +56,29 @@ def get_league(conn: sqlite3.Connection, league_code: str) -> dict | None:
     return dict(row)
 
 
+def get_leagues_bulk(conn: sqlite3.Connection, league_codes: list[str]) -> dict[str, dict]:
+    """Get league info for many leagues in one query.
+
+    Same shape as get_league per entry; missing/disabled leagues are simply
+    absent from the result. Used by the matcher, whose search space can span
+    hundreds of leagues (channel-source groups) — one query instead of one
+    per league.
+    """
+    if not league_codes:
+        return {}
+    codes = [code.lower() for code in league_codes]
+    placeholders = ",".join("?" * len(codes))
+    cursor = conn.execute(
+        f"""
+        SELECT league_code, provider, display_name, sport, event_type
+        FROM leagues
+        WHERE league_code IN ({placeholders}) AND enabled = 1
+        """,
+        codes,
+    )
+    return {row["league_code"]: dict(row) for row in cursor.fetchall()}
+
+
 def get_league_id(conn: sqlite3.Connection, league_code: str) -> str:
     """Get the URL-safe league ID for a league.
 

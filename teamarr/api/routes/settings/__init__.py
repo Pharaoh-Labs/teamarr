@@ -10,7 +10,9 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
+from teamarr.config import get_ui_timezone_str, is_ui_timezone_from_env
 from teamarr.database import get_db
+from teamarr.database.settings import get_all_settings
 
 from .channel_numbering import router as channel_numbering_router
 from .channelsdvr import router as channelsdvr_router
@@ -69,134 +71,16 @@ router.include_router(feed_separation_router)
 @router.get("/settings", response_model=AllSettingsModel)
 def get_settings():
     """Get all application settings."""
-    from teamarr.config import get_ui_timezone_str, is_ui_timezone_from_env
-    from teamarr.database.settings import get_all_settings
 
     with get_db() as conn:
         settings = get_all_settings(conn)
 
+    # Field names match the dataclasses by construction (guarded by
+    # tests/test_settings_registry.py); Pydantic coerces the nested dicts
+    # and drops dataclass groups the API model doesn't expose.
+    data = asdict(settings)
     return AllSettingsModel(
-        dispatcharr=DispatcharrSettingsModel(
-            enabled=settings.dispatcharr.enabled,
-            url=settings.dispatcharr.url,
-            username=settings.dispatcharr.username,
-            password=settings.dispatcharr.password,
-            epg_id=settings.dispatcharr.epg_id,
-            default_channel_profile_ids=settings.dispatcharr.default_channel_profile_ids,
-            default_stream_profile_id=settings.dispatcharr.default_stream_profile_id,
-            default_channel_group_id=settings.dispatcharr.default_channel_group_id,
-            default_channel_group_mode=settings.dispatcharr.default_channel_group_mode,
-            cleanup_unused_logos=settings.dispatcharr.cleanup_unused_logos,
-        ),
-        lifecycle=LifecycleSettingsModel(
-            channel_create_timing=settings.lifecycle.channel_create_timing,
-            channel_delete_timing=settings.lifecycle.channel_delete_timing,
-            channel_pre_buffer_minutes=settings.lifecycle.channel_pre_buffer_minutes,
-            channel_post_buffer_minutes=settings.lifecycle.channel_post_buffer_minutes,
-            channel_range_start=settings.lifecycle.channel_range_start,
-            channel_range_end=settings.lifecycle.channel_range_end,
-        ),
-        reconciliation=ReconciliationSettingsModel(
-            reconcile_on_epg_generation=settings.reconciliation.reconcile_on_epg_generation,
-            reconcile_on_startup=settings.reconciliation.reconcile_on_startup,
-            auto_fix_orphan_teamarr=settings.reconciliation.auto_fix_orphan_teamarr,
-            auto_fix_orphan_dispatcharr=settings.reconciliation.auto_fix_orphan_dispatcharr,
-            auto_fix_duplicates=settings.reconciliation.auto_fix_duplicates,
-            default_duplicate_event_handling=settings.reconciliation.default_duplicate_event_handling,
-            channel_history_retention_days=settings.reconciliation.channel_history_retention_days,
-        ),
-        scheduler=SchedulerSettingsModel(
-            enabled=settings.scheduler.enabled,
-            interval_minutes=settings.scheduler.interval_minutes,
-            channel_reset_enabled=settings.scheduler.channel_reset_enabled,
-            channel_reset_cron=settings.scheduler.channel_reset_cron,
-        ),
-        epg=EPGSettingsModel(
-            team_schedule_days_ahead=settings.epg.team_schedule_days_ahead,
-            event_match_days_ahead=settings.epg.event_match_days_ahead,
-            epg_output_days_ahead=settings.epg.epg_output_days_ahead,
-            epg_lookback_hours=settings.epg.epg_lookback_hours,
-            epg_timezone=settings.epg.epg_timezone,
-            epg_output_path=settings.epg.epg_output_path,
-            include_final_events=settings.epg.include_final_events,
-            midnight_crossover_mode=settings.epg.midnight_crossover_mode,
-            cron_expression=settings.epg.cron_expression,
-            epg_xtream_fallback_enabled=settings.epg.epg_xtream_fallback_enabled,
-            epg_xtream_cache_hours=settings.epg.epg_xtream_cache_hours,
-            epg_channel_source_enabled=settings.epg.epg_channel_source_enabled,
-            epg_channel_source_groups=settings.epg.epg_channel_source_groups,
-            epg_stream_pre_buffer_minutes=settings.epg.epg_stream_pre_buffer_minutes,
-            epg_stream_post_buffer_minutes=settings.epg.epg_stream_post_buffer_minutes,
-            art_base_url=settings.epg.art_base_url,
-        ),
-        durations=asdict(settings.durations),
-        display=DisplaySettingsModel(
-            time_format=settings.display.time_format,
-            show_timezone=settings.display.show_timezone,
-            channel_id_format=settings.display.channel_id_format,
-            xmltv_generator_name=settings.display.xmltv_generator_name,
-            xmltv_generator_url=settings.display.xmltv_generator_url,
-            tsdb_api_key=settings.display.tsdb_api_key,
-        ),
-        team_filter=TeamFilterSettingsModel(
-            include_teams=settings.team_filter.include_teams,
-            exclude_teams=settings.team_filter.exclude_teams,
-            mode=settings.team_filter.mode,
-        ),
-        channel_numbering=ChannelNumberingSettingsModel(
-            global_channel_mode=settings.channel_numbering.global_channel_mode,
-            league_channel_starts=settings.channel_numbering.league_channel_starts,
-            global_consolidation_mode=settings.channel_numbering.global_consolidation_mode,
-        ),
-        stream_ordering=StreamOrderingSettingsModel(
-            rules=[
-                StreamOrderingRuleModel(
-                    type=rule.type,
-                    value=rule.value,
-                    priority=rule.priority,
-                )
-                for rule in settings.stream_ordering.rules
-            ]
-        ),
-        update_check=UpdateCheckSettingsModel(
-            enabled=settings.update_check.enabled,
-            notify_stable=settings.update_check.notify_stable,
-            notify_dev=settings.update_check.notify_dev,
-            github_owner=settings.update_check.github_owner,
-            github_repo=settings.update_check.github_repo,
-            dev_branch=settings.update_check.dev_branch,
-            auto_detect_branch=settings.update_check.auto_detect_branch,
-        ),
-        feed_separation=FeedSeparationSettingsModel(
-            enabled=settings.feed_separation.enabled,
-            home_terms=settings.feed_separation.home_terms,
-            away_terms=settings.feed_separation.away_terms,
-            detect_team_names=settings.feed_separation.detect_team_names,
-            label_style=settings.feed_separation.label_style,
-        ),
-        emby=EmbySettingsModel(
-            enabled=settings.emby.enabled,
-            url=settings.emby.url,
-            username=settings.emby.username,
-            password=settings.emby.password,
-            api_key=settings.emby.api_key,
-        ),
-        jellyfin=JellyfinSettingsModel(
-            enabled=settings.jellyfin.enabled,
-            url=settings.jellyfin.url,
-            username=settings.jellyfin.username,
-            password=settings.jellyfin.password,
-            api_key=settings.jellyfin.api_key,
-        ),
-        channelsdvr=ChannelsDVRSettingsModel(
-            enabled=settings.channelsdvr.enabled,
-            url=settings.channelsdvr.url,
-            source_name=settings.channelsdvr.source_name,
-            lineup_id=settings.channelsdvr.lineup_id,
-        ),
-        epg_generation_counter=settings.epg_generation_counter,
-        schema_version=settings.schema_version,
-        # UI timezone info (read-only)
+        **{k: v for k, v in data.items() if k in AllSettingsModel.model_fields},
         ui_timezone=get_ui_timezone_str(),
         ui_timezone_source="env" if is_ui_timezone_from_env() else "epg",
     )

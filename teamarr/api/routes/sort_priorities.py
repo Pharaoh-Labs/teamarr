@@ -9,6 +9,12 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from teamarr.database import get_db
+from teamarr.database.sort_priorities import (
+    delete_sort_priority,
+    get_sort_priorities_with_channel_counts,
+    get_sort_priority,
+    upsert_sort_priority,
+)
 
 router = APIRouter(prefix="/sort-priorities", tags=["Sort Priorities"])
 
@@ -84,7 +90,6 @@ def get_all_sort_priorities():
     Returns all configured sport/league priorities, including those
     that may not have active AUTO groups.
     """
-    from teamarr.database.sort_priorities import get_sort_priorities_with_channel_counts
 
     with get_db() as conn:
         priorities = get_sort_priorities_with_channel_counts(conn)
@@ -132,10 +137,6 @@ def create_sort_priority(data: SortPriorityCreate):
     If an entry for the sport/league_code combination already exists,
     it will be updated with the new priority.
     """
-    from teamarr.database.sort_priorities import (
-        get_sort_priority,
-        upsert_sort_priority,
-    )
 
     with get_db() as conn:
         success = upsert_sort_priority(
@@ -222,7 +223,6 @@ def delete_priority_team(team_pk: int):
 @router.delete("/{sport}")
 def delete_sort_priority_sport(sport: str):
     """Delete a sport-level sort priority entry."""
-    from teamarr.database.sort_priorities import delete_sort_priority
 
     with get_db() as conn:
         delete_sort_priority(conn, sport=sport, league_code=None)
@@ -233,7 +233,6 @@ def delete_sort_priority_sport(sport: str):
 @router.delete("/{sport}/{league_code}")
 def delete_sort_priority_league(sport: str, league_code: str):
     """Delete a league-level sort priority entry."""
-    from teamarr.database.sort_priorities import delete_sort_priority
 
     with get_db() as conn:
         delete_sort_priority(conn, sport=sport, league_code=league_code)

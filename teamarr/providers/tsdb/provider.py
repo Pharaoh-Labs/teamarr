@@ -19,8 +19,13 @@ from teamarr.core import (
     Venue,
 )
 from teamarr.providers.tsdb.client import TSDBClient
+from teamarr.providers.tsdb.racing import parse_racing_events
 
 logger = logging.getLogger(__name__)
+
+# Fighter separators in combat-event names ("A vs. B" / "A vs B" / "A v B").
+# " vs. " must come first so the bare " vs " variant can't half-match it (#510).
+_VS_SEPARATORS = (" vs. ", " vs ", " v ")
 
 # Type alias for team name resolver callback
 # Takes (team_id, league) -> team_name or None
@@ -81,9 +86,10 @@ class TSDBProvider(SportsProvider):
     def is_premium(self) -> bool:
         """Check if TSDB has premium/full API access.
 
-        Premium access has no rate limits on schedule endpoints.
-        Free tier is limited to ~5 events per day via eventsnextleague.
-        Used by ProviderRegistry for fallback resolution.
+        Free tier (measured 2026-08-04) serves only a rolling 1-event
+        next/past window and no league-filtered eventsday — see the
+        TSDBClient docstring. Used by ProviderRegistry for fallback
+        resolution and the cache-prewarm premium gate.
         """
         return self._client.is_premium
 
@@ -93,12 +99,24 @@ class TSDBProvider(SportsProvider):
     def get_events(self, league: str, target_date: date) -> list[Event]:
         """Get events for a league on a specific date.
 
-        Tries multiple endpoints in order:
+        Racing leagues (WEC, IMSA) are session-based: TSDB serves them only
+        via eventsseason.php, never eventsday.php/eventsnextleague.php (both
+        return "Invalid League ID" for these leagues), so they take a fully
+        separate path through `_get_racing_events`.
+
+        Other leagues try multiple endpoints in order:
         1. eventsday.php - Date-specific (works for most leagues)
         2. eventsnextleague.php - Upcoming events filtered by date
         3. eventsseason.php - Full season events filtered by date, gated to
            SEASON_FALLBACK_LEAGUES (sparse leagues like Unrivaled)
         """
+        if self._client.get_sport(league) == "racing":
+            return [
+                event
+                for event in self._get_racing_events(league)
+                if any(s.start_time.date() == target_date for s in event.sessions)
+            ]
+
         date_str = target_date.strftime("%Y-%m-%d")
 
         # Try date-specific endpoint first
@@ -146,6 +164,54 @@ class TSDBProvider(SportsProvider):
 
         return []
 
+    def get_sample_candidates(self, league: str) -> list[Event]:
+        """Recent + upcoming events for a league in two bulk calls.
+
+        Used for the template live preview: pulls the last finished events
+        (eventspastleague) and the next scheduled ones (eventsnextleague) so the
+        caller can prefer a just-completed game (recap/score vars) over an
+        upcoming one. Two calls total — safe for the rate-limited free tier,
+        unlike a per-day scan. Racing leagues go through the season path.
+        """
+        if self._client.get_sport(league) == "racing":
+            return self._get_racing_events(league)
+
+        events: list[Event] = []
+        for fetch in (
+            self._client.get_league_past_events,
+            self._client.get_league_next_events,
+        ):
+            data = fetch(league)
+            rows = (data or {}).get("results") or (data or {}).get("events") or []
+            for row in rows:
+                event = self._parse_event(row, league)
+                if event:
+                    events.append(event)
+        return events
+
+    def _get_racing_events(self, league: str) -> list[Event]:
+        """Get all session-grouped racing events for a league's current season(s).
+
+        Fetches the current year's season, plus next year's if we're in the
+        last quarter (Q4) so January races - e.g. the Rolex 24 - appear ahead
+        of time. Both fetches go through eventsseason.php, which is the only
+        endpoint TSDB serves for these leagues (eventsday.php/
+        eventsnextleague.php return "Invalid League ID").
+        """
+        sport = self._client.get_sport(league)
+        today = date.today()
+        seasons = [str(today.year)]
+        if today.month >= 10:
+            seasons.append(str(today.year + 1))
+
+        raw_events: list[dict] = []
+        for season in seasons:
+            data = self._client.get_events_by_season(league, season=season)
+            if data and data.get("events"):
+                raw_events.extend(data["events"])
+
+        return parse_racing_events(raw_events, league, sport, self.name)
+
     # TSDB rate limit optimization: cap at 14 days regardless of caller request
     # ESPN can handle 30+ days, but TSDB's 25 req/min limit makes that expensive
     TSDB_MAX_DAYS_AHEAD = 14
@@ -159,7 +225,11 @@ class TSDBProvider(SportsProvider):
         """Get schedule for a team including past and future games.
 
         Uses eventsday.php across multiple days to get both HOME and AWAY
-        games (eventsnext.php only returns HOME on free tier).
+        games. FREE-TIER CAVEAT (measured 2026-08-04): league-filtered
+        eventsday returns nothing without a premium key, so this whole
+        method yields [] keyless — team channels require premium. Event
+        channels survive on free via get_events' eventsnextleague fallback
+        (rolling 1-event window harvested by per-date polling).
 
         Scans:
         - Past DAYS_BACK days for .last variable resolution (cached indefinitely)
@@ -336,6 +406,12 @@ class TSDBProvider(SportsProvider):
 
     def get_event(self, event_id: str, league: str) -> Event | None:
         """Get a specific event by ID."""
+        if self._client.get_sport(league) == "racing":
+            for event in self._get_racing_events(league):
+                if event.id == event_id:
+                    return event
+            return None
+
         data = self._client.get_event(event_id)
 
         if not data:
@@ -415,7 +491,9 @@ class TSDBProvider(SportsProvider):
             home_name = data.get("strHomeTeam")
             away_name = data.get("strAwayTeam")
 
-            if not home_name and not away_name and " vs " in event_name:
+            if not home_name and not away_name and any(
+                sep in event_name for sep in _VS_SEPARATORS
+            ):
                 # Parse fighters from event name: "Fighter A vs Fighter B"
                 home_team, away_team = self._parse_fighters_from_event_name(
                     event_name, event_id, league, sport
@@ -497,11 +575,12 @@ class TSDBProvider(SportsProvider):
 
         Returns (home_team, away_team) - first fighter is "home".
         """
-        # Split on " vs " (case insensitive)
-        parts = event_name.split(" vs ")
-        if len(parts) != 2:
-            # Try " v " as fallback
-            parts = event_name.split(" v ")
+        # Try each separator in order (" vs. " first — " vs " never matches it).
+        parts = [event_name]
+        for sep in _VS_SEPARATORS:
+            parts = event_name.split(sep)
+            if len(parts) == 2:
+                break
 
         if len(parts) == 2:
             fighter1 = parts[0].strip()

@@ -11,7 +11,17 @@
 
 export interface TextSelection {
   text: string
-  field: "team1" | "team2" | "date" | "month" | "day" | "time" | "league"
+  field:
+    | "team1"
+    | "team2"
+    | "date"
+    | "month"
+    | "day"
+    | "time"
+    | "league"
+    | "fighter1"
+    | "fighter2"
+    | "event_name"
 }
 
 // ---------------------------------------------------------------------------
@@ -39,17 +49,21 @@ const TEAM_BODY = `[${TEAM_CHARS}][${TEAM_CHARS} .'-]+[${TEAM_CHARS}.]`
  */
 function generalizeForField(
   field: TextSelection["field"],
-  text: string,
-  _streamName: string,
-  _beforeText: string,
-  _afterText: string
+  text: string
 ): string {
   switch (field) {
     case "team1":
     case "team2":
-      // Team names: letters (accent-inclusive), spaces, dots, hyphens,
+    case "fighter1":
+    case "fighter2":
+      // Team / fighter names: letters (accent-inclusive), spaces, dots, hyphens,
       // apostrophes (no digits — avoids grabbing dates)
       return `(${TEAM_BODY})`
+
+    case "event_name":
+      // Event / card name: a multi-word title (letters, digits, spaces and a few
+      // punctuation marks), trimmed so it doesn't grab surrounding whitespace.
+      return "([\\w][\\w '.&:-]+[\\w])"
 
     case "date":
       // Date: digits, slashes, dashes, spaces, month names
@@ -127,7 +141,7 @@ export function generatePattern(
   const after = streamName.slice(idx + text.length)
 
   // Build an anchor from the immediate surrounding context
-  const captureGroup = generalizeForField(field, text, streamName, before, after)
+  const captureGroup = generalizeForField(field, text)
   const namedGroup = `(?<${field}>${captureGroup.slice(1, -1)})`
 
   // Find a stable anchor before the selection
@@ -144,7 +158,7 @@ export function generatePattern(
     }
     // For date-related fields, also anchor on date separators (/, ., -)
     if (!anchorBefore && (field === "month" || field === "day" || field === "date")) {
-      const dateSepMatch = before.match(/[/.\-]\s*$/)
+      const dateSepMatch = before.match(/[/.-]\s*$/)
       if (dateSepMatch) {
         anchorBefore = escapeRegex(dateSepMatch[0])
       }
@@ -163,7 +177,7 @@ export function generatePattern(
     }
     // For date-related fields, also anchor on date separators
     if (!anchorAfter && (field === "month" || field === "day" || field === "date")) {
-      const dateSepMatch = after.match(/^\s*[/.\-]/)
+      const dateSepMatch = after.match(/^\s*[/.-]/)
       if (dateSepMatch) {
         anchorAfter = escapeRegex(dateSepMatch[0])
       }
@@ -184,22 +198,25 @@ export function generatePattern(
 }
 
 /**
- * Build a combined teams regex from two separate selections.
- * Produces: (?<team1>...) separator (?<team2>...)
+ * Build a combined "X vs Y" regex from two separate selections, using the given
+ * named-group labels. Shared by the teams and fighters two-step selectors.
+ * Produces: (?<group1>...) separator (?<group2>...)
  */
-export function generateTeamsPattern(
-  team1Text: string,
-  team2Text: string,
-  streamName: string
+function generateVsPattern(
+  text1: string,
+  text2: string,
+  streamName: string,
+  group1: string,
+  group2: string
 ): string | null {
-  if (!team1Text || !team2Text) return null
+  if (!text1 || !text2) return null
 
-  const idx1 = streamName.indexOf(team1Text)
-  const idx2 = streamName.indexOf(team2Text)
+  const idx1 = streamName.indexOf(text1)
+  const idx2 = streamName.indexOf(text2)
   if (idx1 < 0 || idx2 < 0 || idx1 >= idx2) return null
 
-  // Find what separates team1 and team2
-  const between = streamName.slice(idx1 + team1Text.length, idx2)
+  // Find what separates the two participants
+  const between = streamName.slice(idx1 + text1.length, idx2)
   const sepMatch = between.match(/^\s*(vs\.?|v\.?|@|at|-|–|—)\s*$/i)
   let separator: string
   if (sepMatch) {
@@ -217,8 +234,29 @@ export function generateTeamsPattern(
     separator = "\\s+(?:vs\\.?|v\\.?|@|at)\\s+"
   }
 
-  const team1Group = `(?<team1>${TEAM_BODY})`
-  const team2Group = `(?<team2>${TEAM_BODY})`
+  return `(?<${group1}>${TEAM_BODY})` + separator + `(?<${group2}>${TEAM_BODY})`
+}
 
-  return team1Group + separator + team2Group
+/**
+ * Build a combined teams regex from two separate selections.
+ * Produces: (?<team1>...) separator (?<team2>...)
+ */
+export function generateTeamsPattern(
+  team1Text: string,
+  team2Text: string,
+  streamName: string
+): string | null {
+  return generateVsPattern(team1Text, team2Text, streamName, "team1", "team2")
+}
+
+/**
+ * Build a combined fighters regex from two separate selections (Combat / Event
+ * Card). Produces: (?<fighter1>...) separator (?<fighter2>...)
+ */
+export function generateFightersPattern(
+  fighter1Text: string,
+  fighter2Text: string,
+  streamName: string
+): string | null {
+  return generateVsPattern(fighter1Text, fighter2Text, streamName, "fighter1", "fighter2")
 }

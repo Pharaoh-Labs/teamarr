@@ -1,0 +1,56 @@
+<tv generator-info-name="Teamarr">
+  <channel id="teamarr-event-e1-fp1">
+    <display-name>NASCAR Cup | Practice 1</display-name>
+  </channel>
+  <programme start="20260710090000 +0000" stop="20260710120000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Coming up: Practice 1 at 3:00 PM EDT</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 from Nashville Superspeedway today at 3:00 PM EDT.</desc>
+  </programme>
+  <programme start="20260710120000 +0000" stop="20260710180000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Coming up: Practice 1 at 3:00 PM EDT</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 from Nashville Superspeedway today at 3:00 PM EDT.</desc>
+  </programme>
+  <programme start="20260710180000 +0000" stop="20260710190000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Coming up: Practice 1 at 3:00 PM EDT</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 from Nashville Superspeedway today at 3:00 PM EDT.</desc>
+  </programme>
+  <programme start="20260710190000 +0000" stop="20260710210000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">NASCAR Cup Series</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 at Nashville Superspeedway.</desc>
+    <date>20260710</date>
+    <category lang="en">Sports</category>
+    <category lang="en">Racing</category>
+    <category lang="en">Sports event</category>
+    <new />
+    <live />
+  </programme>
+  <programme start="20260710210000 +0000" stop="20260711000000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Navy 250: Practice 1 Complete</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 has not yet ended as of the last update.</desc>
+  </programme>
+  <programme start="20260711000000 +0000" stop="20260711060000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Navy 250: Practice 1 Complete</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 has not yet ended as of the last update.</desc>
+  </programme>
+  <programme start="20260711060000 +0000" stop="20260711120000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Navy 250: Practice 1 Complete</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 has not yet ended as of the last update.</desc>
+  </programme>
+  <programme start="20260711120000 +0000" stop="20260711180000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Navy 250: Practice 1 Complete</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 has not yet ended as of the last update.</desc>
+  </programme>
+  <programme start="20260711180000 +0000" stop="20260711210000 +0000" channel="teamarr-event-e1-fp1">
+    <title lang="en">Navy 250: Practice 1 Complete</title>
+    <sub-title lang="en">Navy 250, Practice 1</sub-title>
+    <desc lang="en">Navy 250 Practice 1 has not yet ended as of the last update.</desc>
+  </programme>
+</tv>

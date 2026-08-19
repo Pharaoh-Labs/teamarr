@@ -4,8 +4,7 @@ Converts Programme dataclasses to XMLTV format.
 All times are output in the user's configured timezone.
 """
 
-from xml.dom import minidom
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, indent, tostring
 
 from teamarr.core import Programme
 from teamarr.utilities.art_url import apply_art_base_url
@@ -48,8 +47,11 @@ def programmes_to_xmltv(
     for programme in sorted_programmes:
         _add_programme(root, programme, art_base_url)
 
-    xml_str = tostring(root, encoding="unicode")
-    return _prettify(xml_str)
+    # Compact output on purpose: per-channel/per-group XMLTV is stored in the
+    # DB and re-parsed at merge time, where the final document is indented
+    # once. Pretty-printing here would be thrown away (and the old minidom
+    # round-trip held string + DOM + pretty copy simultaneously per group).
+    return tostring(root, encoding="unicode")
 
 
 def _add_channel(root: Element, channel: dict, art_base_url: str = "") -> None:
@@ -128,19 +130,6 @@ def _add_programme(root: Element, programme: Programme, art_base_url: str = "") 
         SubElement(prog_elem, "live")
 
 
-def _prettify(xml_str: str) -> str:
-    """Return pretty-printed XML string.
-
-    Uses minidom for formatting, then removes extra blank lines
-    that toprettyxml adds between elements.
-    """
-    dom = minidom.parseString(xml_str)
-    pretty = dom.toprettyxml(indent="  ")
-    # Remove blank lines (minidom adds whitespace-only text nodes)
-    lines = [line for line in pretty.split("\n") if line.strip()]
-    return "\n".join(lines)
-
-
 def merge_xmltv_content(
     xmltv_contents: list[str],
     generator_name: str = "Teamarr",
@@ -168,7 +157,8 @@ def merge_xmltv_content(
         root.set("generator-info-url", generator_url)
 
     seen_channels: set[str] = set()
-    seen_programmes: set[tuple[str, str, str]] = set()  # (channel, start, stop)
+    # (channel, start, stop)
+    seen_programmes: set[tuple[str | None, str | None, str | None]] = set()
     all_programmes: list[Element] = []
 
     for content in xmltv_contents:
@@ -204,5 +194,8 @@ def merge_xmltv_content(
     for programme in all_programmes:
         root.append(programme)
 
-    xml_str = tostring(root, encoding="unicode")
-    return _prettify(xml_str)
+    # Single prettify for the whole document — in-place on the existing tree,
+    # no second parse (the old minidom round-trip was the generation pipeline's
+    # peak-memory hotspot on large guides).
+    indent(root, space="  ")
+    return tostring(root, encoding="unicode")

@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from "react"
-import { Loader2, CheckCircle, AlertTriangle, Search, Terminal } from "lucide-react"
+import { LoaderCircle, CircleCheckBig, TriangleAlert, Search, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Alert } from "@/components/ui/alert"
@@ -37,11 +38,13 @@ export function EpgOutput() {
     beforeProgram: string
   } | null>(null)
 
+  const epgXml = epgContent?.content
+
   // Search functionality for XML preview
   const searchMatches = useMemo(() => {
-    if (!searchTerm || !epgContent?.content) return []
+    if (!searchTerm || !epgXml) return []
     const matches: number[] = []
-    const lines = epgContent.content.split("\n")
+    const lines = epgXml.split("\n")
     const searchLower = searchTerm.toLowerCase()
     lines.forEach((line, idx) => {
       if (line.toLowerCase().includes(searchLower)) {
@@ -49,7 +52,7 @@ export function EpgOutput() {
       }
     })
     return matches
-  }, [searchTerm, epgContent?.content])
+  }, [searchTerm, epgXml])
 
   const scrollToMatch = useCallback((matchIndex: number) => {
     if (!previewRef.current || searchMatches.length === 0) return
@@ -74,8 +77,8 @@ export function EpgOutput() {
 
   // Highlighted XML content
   const highlightedContent = useMemo(() => {
-    if (!epgContent?.content) return ""
-    const lines = epgContent.content.split("\n")
+    if (!epgXml) return ""
+    const lines = epgXml.split("\n")
 
     if (highlightedGap) {
       const result: string[] = []
@@ -139,7 +142,7 @@ export function EpgOutput() {
       }
       return `${lineNum}${escapeHtml(line)}`
     }).join("\n")
-  }, [epgContent?.content, showLineNumbers, searchTerm, currentMatch, searchMatches, highlightedGap])
+  }, [epgXml, showLineNumbers, searchTerm, currentMatch, searchMatches, highlightedGap])
 
   const hasIssues = (analysis?.unreplaced_variables?.length ?? 0) > 0 ||
                    (analysis?.coverage_gaps?.length ?? 0) > 0
@@ -155,13 +158,13 @@ export function EpgOutput() {
         {/* EPG analysis: issues or all-clear */}
         {analysisLoading ? (
           <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : analysis && hasIssues ? (
           <Alert
             variant="warning"
             className="space-y-2"
-            icon={<AlertTriangle className="h-4 w-4" />}
+            icon={<TriangleAlert className="h-4 w-4" />}
             title="Detected Issues"
           >
             {analysis.unreplaced_variables.length > 0 && (
@@ -226,7 +229,7 @@ export function EpgOutput() {
         ) : analysis ? (
           <Alert
             variant="success"
-            icon={<CheckCircle className="h-4 w-4" />}
+            icon={<CircleCheckBig className="h-4 w-4" />}
             title="No Issues Detected"
           >
             <p className="text-xs text-muted-foreground">
@@ -237,9 +240,7 @@ export function EpgOutput() {
 
         {/* XML content */}
         {contentLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <Spinner />
         ) : epgContent?.content ? (
           <div className="space-y-2">
             {/* Search Bar */}

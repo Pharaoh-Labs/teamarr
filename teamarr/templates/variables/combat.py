@@ -4,7 +4,8 @@ Variables for UFC card segments, fighter names, matchup formatting, and fight re
 
 Fighter Identity:
     fighter1, fighter2: Headline bout fighter names
-    matchup: "Fighter1 vs Fighter2"
+    matchup_combat: "Fighter1 vs Fighter2" (the generic {matchup} is identity's
+        "{away} @ {home}"; this is the fight-conventional form, #411)
     fighter1_record, fighter2_record: W-L-D records (e.g., "28-4-0")
 
 Event Info:
@@ -44,12 +45,20 @@ Usage example:
     -> "Volkanovski defeats Lopes by TKO R2 4:31"
 """
 
+from teamarr.core.naming import surnames
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
     SuffixRules,
     register_variable,
 )
+from teamarr.utilities.tz import format_time
+
+# Sports whose events are fight cards with home/away = headline-bout fighters.
+# Card composition, results, records, and weight class only exist for ESPN UFC
+# data — for boxing (TSDB) those variables stay empty, but fighter/matchup/
+# title variables read fields the provider does populate (#510).
+COMBAT_SPORTS = frozenset({"mma", "boxing"})
 
 
 @register_variable(
@@ -67,7 +76,7 @@ def extract_fighter1(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     if event.home_team and event.home_team.name:
@@ -88,7 +97,7 @@ def extract_fighter2(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     if event.away_team and event.away_team.name:
@@ -98,18 +107,40 @@ def extract_fighter2(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
 
 
 @register_variable(
-    name="matchup",
+    name="fighter1_last",
     category=Category.COMBAT,
     suffix_rules=SuffixRules.BASE_ONLY,  # Event EPG only
-    description="Full matchup (Fighter1 vs Fighter2)",
+    description="First fighter surname (e.g., 'Volkanovski') — Gracenote-style "
+    "'Volkanovski vs. Lopes' titles (tvnk.7)",
 )
-def extract_matchup(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+def extract_fighter1_last(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    return surnames(extract_fighter1(ctx, game_ctx))
+
+
+@register_variable(
+    name="fighter2_last",
+    category=Category.COMBAT,
+    suffix_rules=SuffixRules.BASE_ONLY,  # Event EPG only
+    description="Second fighter surname (e.g., 'Lopes')",
+)
+def extract_fighter2_last(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    return surnames(extract_fighter2(ctx, game_ctx))
+
+
+@register_variable(
+    name="matchup_combat",
+    category=Category.COMBAT,
+    suffix_rules=SuffixRules.BASE_ONLY,  # Event EPG only
+    description="Fight matchup (e.g., 'Volkanovski vs Lopes') — headline fighter "
+    "first with 'vs'; the generic {matchup} renders '{away} @ {home}'",
+)
+def extract_matchup_combat(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract full matchup string from UFC event."""
     if not game_ctx or not game_ctx.event:
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     fighter1 = event.home_team.name if event.home_team else ""
@@ -139,7 +170,7 @@ def extract_event_number(ctx: TemplateContext, game_ctx: GameContext | None) -> 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     # Try to extract number from event name
@@ -168,7 +199,7 @@ def extract_event_title(ctx: TemplateContext, game_ctx: GameContext | None) -> s
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     return event.name
@@ -238,13 +269,12 @@ def extract_card_segment_display(ctx: TemplateContext, game_ctx: GameContext | N
 )
 def extract_main_card_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract main card start time from ESPN segment data."""
-    from teamarr.utilities.tz import format_time
 
     if not game_ctx or not game_ctx.event:
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.segment_times:
+    if event.sport not in COMBAT_SPORTS or not event.segment_times:
         return ""
 
     main_card_dt = event.segment_times.get("main_card")
@@ -262,13 +292,12 @@ def extract_main_card_time(ctx: TemplateContext, game_ctx: GameContext | None) -
 )
 def extract_prelims_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract prelims start time from ESPN segment data."""
-    from teamarr.utilities.tz import format_time
 
     if not game_ctx or not game_ctx.event:
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.segment_times:
+    if event.sport not in COMBAT_SPORTS or not event.segment_times:
         return ""
 
     prelims_dt = event.segment_times.get("prelims")
@@ -286,13 +315,12 @@ def extract_prelims_time(ctx: TemplateContext, game_ctx: GameContext | None) -> 
 )
 def extract_early_prelims_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract early prelims start time from ESPN segment data."""
-    from teamarr.utilities.tz import format_time
 
     if not game_ctx or not game_ctx.event:
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.segment_times:
+    if event.sport not in COMBAT_SPORTS or not event.segment_times:
         return ""
 
     early_dt = event.segment_times.get("early_prelims")
@@ -319,7 +347,7 @@ def extract_bout_count(ctx: TemplateContext, game_ctx: GameContext | None) -> st
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     return str(len(event.bouts)) if event.bouts else ""
@@ -340,7 +368,7 @@ def extract_fight_card(ctx: TemplateContext, game_ctx: GameContext | None) -> st
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.bouts:
+    if event.sport not in COMBAT_SPORTS or not event.bouts:
         return ""
 
     return "\n".join(f"{b.fighter1} vs {b.fighter2}" for b in event.bouts)
@@ -358,7 +386,7 @@ def extract_main_card_bouts(ctx: TemplateContext, game_ctx: GameContext | None) 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.bouts:
+    if event.sport not in COMBAT_SPORTS or not event.bouts:
         return ""
 
     main_bouts = [b for b in event.bouts if b.segment == "main_card"]
@@ -377,7 +405,7 @@ def extract_prelims_bouts(ctx: TemplateContext, game_ctx: GameContext | None) ->
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.bouts:
+    if event.sport not in COMBAT_SPORTS or not event.bouts:
         return ""
 
     prelim_bouts = [b for b in event.bouts if b.segment == "prelims"]
@@ -396,7 +424,7 @@ def extract_early_prelims_bouts(ctx: TemplateContext, game_ctx: GameContext | No
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.bouts:
+    if event.sport not in COMBAT_SPORTS or not event.bouts:
         return ""
 
     early_bouts = [b for b in event.bouts if b.segment == "early_prelims"]
@@ -456,7 +484,7 @@ def extract_fight_result(ctx: TemplateContext, game_ctx: GameContext | None) -> 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.fight_result_method:
+    if event.sport not in COMBAT_SPORTS or not event.fight_result_method:
         return ""
 
     return RESULT_DISPLAY_NAMES.get(event.fight_result_method, event.fight_result_method)
@@ -474,7 +502,7 @@ def extract_fight_result_short(ctx: TemplateContext, game_ctx: GameContext | Non
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.fight_result_method:
+    if event.sport not in COMBAT_SPORTS or not event.fight_result_method:
         return ""
 
     return RESULT_SHORT_NAMES.get(event.fight_result_method, event.fight_result_method.upper())
@@ -492,7 +520,7 @@ def extract_finish_round(ctx: TemplateContext, game_ctx: GameContext | None) -> 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or event.finish_round is None:
+    if event.sport not in COMBAT_SPORTS or event.finish_round is None:
         return ""
 
     return str(event.finish_round)
@@ -510,7 +538,7 @@ def extract_finish_time(ctx: TemplateContext, game_ctx: GameContext | None) -> s
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.finish_time:
+    if event.sport not in COMBAT_SPORTS or not event.finish_time:
         return ""
 
     return event.finish_time
@@ -528,7 +556,7 @@ def extract_finish_info(ctx: TemplateContext, game_ctx: GameContext | None) -> s
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     parts = []
@@ -552,7 +580,7 @@ def extract_weight_class(ctx: TemplateContext, game_ctx: GameContext | None) -> 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.weight_class:
+    if event.sport not in COMBAT_SPORTS or not event.weight_class:
         return ""
 
     return event.weight_class
@@ -570,7 +598,7 @@ def extract_weight_class_short(ctx: TemplateContext, game_ctx: GameContext | Non
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.weight_class:
+    if event.sport not in COMBAT_SPORTS or not event.weight_class:
         return ""
 
     return WEIGHT_CLASS_ABBREV.get(event.weight_class, event.weight_class[:2].upper())
@@ -588,7 +616,7 @@ def extract_fighter1_record(ctx: TemplateContext, game_ctx: GameContext | None) 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     if event.home_team and event.home_team.record_summary:
@@ -609,7 +637,7 @@ def extract_fighter2_record(ctx: TemplateContext, game_ctx: GameContext | None) 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     if event.away_team and event.away_team.record_summary:
@@ -634,7 +662,7 @@ def extract_judge_scores(ctx: TemplateContext, game_ctx: GameContext | None) -> 
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma":
+    if event.sport not in COMBAT_SPORTS:
         return ""
 
     # Only show scores for decisions
@@ -675,7 +703,7 @@ def extract_fight_summary(ctx: TemplateContext, game_ctx: GameContext | None) ->
         return ""
 
     event = game_ctx.event
-    if event.sport != "mma" or not event.fight_result_method:
+    if event.sport not in COMBAT_SPORTS or not event.fight_result_method:
         return ""
 
     method = RESULT_SHORT_NAMES.get(event.fight_result_method, event.fight_result_method.upper())

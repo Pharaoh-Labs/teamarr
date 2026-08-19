@@ -1,97 +1,74 @@
 ---
-title: System
+title: Advanced
 parent: Settings
 grand_parent: User Guide
-nav_order: 7
-docs_version: "2.3.1"
+nav_order: 4
 ---
 
-# System Settings
+# Advanced
 
-Update notifications, backup/restore, local caching, and API configuration.
-
-## Update Notifications
-
-Teamarr can check for new versions and notify you when updates are available.
-
-### Current Version
-
-Displays your current version and the latest available version. For dev builds, shows commit hashes; for stable builds, shows version numbers.
-
-The release date of the latest version is shown in your configured timezone.
-
-### Settings
-
-| Setting | Description |
-|---------|-------------|
-| **Enable Automatic Update Checks** | Toggle update checking on/off |
-| **Notify about stable releases** | Get notified about new stable versions |
-| **Notify about dev builds** | Get notified about new dev commits (if running dev) |
-
-### Check Now
-
-Manually trigger an update check. Results are cached for 1 hour.
+Backup & restore (including scheduled backups), scheduled channel reset, Gracenote category overrides, and the data caches.
 
 ## Backup & Restore
 
-### Download Backup
+A backup is a **complete copy of the Teamarr database** — teams, templates, sources, settings, history, everything. The card has three sub-sections:
 
-Download a complete backup of your Teamarr database, including:
-- All teams and their configurations
-- Templates and presets
-- Event groups
-- Settings
+![Settings → Advanced — scheduled backups, backup files, and restore](../../assets/images/settings-advanced.png)
 
-### Restore Backup
+### Scheduled Backups
 
-Upload a `.db` backup file to restore. A backup of your current data is automatically created before restoring.
+Automatic backups on a cron schedule:
+
+| Field | Description |
+|-------|-------------|
+| **Enable Scheduled Backups** | Toggle the schedule on/off |
+| **Schedule (Cron Expression)** | Standard cron; presets: Daily 3 AM (`0 3 * * *`), Weekly Sun (`0 3 * * 0`), Monthly 1st (`0 3 1 * *`) |
+| **Max backups to keep** | 3 / 5 / 7 / 14 / 30 — the oldest backup is deleted when the limit is exceeded |
+
+Backups are written to `./data/backups` (the path is settable via `PUT /backup/settings`; no UI field).
+
+### Backup Files
+
+**Create Backup** takes a manual backup on demand. A dropdown below lists your backups; selecting one shows its size, date, and **manual**/**scheduled** type badge, with actions for the selected file:
+
+- **Download** the file
+- **Restore** from it
+- **Protect/unprotect** — a protected backup is excluded from rotation and can't be deleted
+- **Delete**
+
+### Restore from File
+
+Upload a `.db` backup file to restore. A backup of your current data is automatically created first (its path is shown in the confirmation toast).
 
 {: .warning }
-Restoring a backup replaces ALL current data. The application needs to be restarted after restore.
+Restoring a backup replaces ALL current data. Restart the application after a restore.
 
-## Local Caching
+## Scheduled Channel Reset
 
-Teamarr caches team and league data from ESPN and TheSportsDB to improve performance and enable offline matching.
+For users experiencing stale channel logos in their media server (e.g. Jellyfin). Schedule a periodic purge of all Teamarr channels before your media server's guide refresh; the channels are recreated on the next EPG generation. Leave disabled unless you're seeing this problem.
 
-### Cache Status
-
-View the current cache state:
-- **Leagues** - Number of leagues cached
-- **Teams** - Number of teams cached
-- **Last Refresh Duration** - How long the last refresh took
-- **Last Refresh** - When the cache was last updated
-
-A **Stale** badge appears if the cache needs refreshing.
-
-### Refresh Cache
-
-Manually refresh the cache to pull the latest team and league data. This fetches data from ESPN and TheSportsDB APIs.
+| Field | Description |
+|-------|-------------|
+| **Enable Scheduled Channel Reset** | Toggle the periodic reset on/off |
+| **Reset Schedule (Cron Expression)** | Standard cron format; presets at 2:30 / 3:30 / 4:30 / 5:30 AM. A plain-English description confirms the expression |
 
 {: .note }
-Cache refresh runs automatically on first startup. Manual refresh is useful after adding new leagues or when team rosters change significantly.
+Set this to run shortly *before* your media server's scheduled guide refresh.
 
-## TheSportsDB API Key
+## Gracenote Category Overrides
 
-Optional premium API key for TheSportsDB. The card header shows your current tier (Free Tier / Premium).
+Customize what the `{gracenote_category}` template variable renders for any league — the value professional guides use as the program title ("NFL Football", "NASCAR Cup Series"). Two facts worth knowing: overrides **survive Teamarr updates** (built-in league data is re-seeded on every startup; overrides live separately and always win), and clearing an override restores the built-in value, which is shown alongside each entry.
 
-| Tier | Rate Limit | Events per Query | Cost |
-|------|------------|-----------------|------|
-| **Free** | 30 req/min | 5 per day per league | Free |
-| **Premium** | 100 req/min | Full coverage | ~$9/mo |
+## Data Caches
 
-Some TSDB leagues (CFL, Unrivaled, boxing, Norwegian hockey) work fine on the free tier. Premium leagues — AFL, cricket (IPL, BBL, SA20), and Svenska Cupen — need a premium key for full event coverage. The league picker shows a crown icon on premium leagues.
+Teamarr maintains several caches, each with a tile and a clear/refresh action. Tiles show live counts where available; the Directory tile also shows the last refresh time, duration, and any error.
 
-Use the **Validate** button to test your key before saving. Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
+| Cache | Contents | Action |
+|-------|----------|--------|
+| **Team & League Directory** | Cached teams and leagues from ESPN and TheSportsDB (enables offline matching) | **Refresh Directory** — pull the latest team/league data. A *Directory Stale* badge appears when the directory is over a week old |
+| **Game Data Cache** | Schedules, scores, and odds (shows active entries and pending writes) | **Clear Game Cache** |
+| **Stream Match Cache** | Stream-to-event fingerprint matches | **Clear Match Cache** |
+| **Run History** | Processing-run logs and statistics (auto-cleaned to 30 days after each run) | **Clear Run History** |
 
-See [TSDB Provider](../../reference/providers/tsdb.md) for technical details.
-
-## XMLTV Generator Metadata
-
-Customize the generator information included in the XMLTV output file.
-
-| Field | Default |
-|-------|---------|
-| **Generator Name** | Teamarr |
-| **Generator URL** | https://github.com/Pharaoh-Labs/teamarr |
-
-These values appear in the XMLTV file header and are used by some media servers to identify the EPG source.
+{: .note }
+The Team & League Directory refreshes automatically on **every startup** unless the `SKIP_CACHE_REFRESH` environment variable is set. Manual refresh is useful after adding new leagues or when team rosters change significantly. Clearing the game-data or match caches forces fresh lookups on the next generation run.
