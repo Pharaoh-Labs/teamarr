@@ -117,6 +117,7 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 | Alberta Junior Hockey League | `ajhl` | HockeyTech |
 | Manitoba Junior Hockey League | `mjhl` | HockeyTech |
 | Maritime Junior Hockey League | `mhl` | HockeyTech |
+| Greater Ontario Hockey League | `gohl` | HockeyTech |
 
 ### European
 
