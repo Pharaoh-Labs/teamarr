@@ -340,6 +340,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _advance_version(conn, 94, "scoped stream-ordering rulesets")
         current_version = 94
 
+    if current_version < 95:
+        _advance_version(conn, 95, "reconciliation: team_broadcaster_mappings table")
+        current_version = 95
 
 # =============================================================================
 # Migration helpers

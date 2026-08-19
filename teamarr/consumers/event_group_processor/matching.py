@@ -533,6 +533,7 @@ class StreamMatching:
         detect_team_names: bool,
         separation_enabled: bool,
         separation_sports: list[str] | None = None,
+        user_broadcaster_mappings: list | None = None,
     ) -> list[dict]:
         """Resolve feed hints to actual teams (Phase 2 feed separation).
 
@@ -541,10 +542,12 @@ class StreamMatching:
         - matched_side + detect_team_names → that side's team. Set only by
           TEAM_ONLY matches (#489), where the stream name IS a team name —
           the match itself is the feed signal, no rescanning needed (#559).
+        - User-defined broadcaster / RSN mappings (highest precedence RSN signal)
         - No hint → match the stream's identifiers against the event's
-          home/away-market broadcast names (ESPN broadcasts[].market:
+          home/away-market broadcast names (ESPN/MLBStats broadcasts[].market:
           'Brewers.TV' → away, 'YES' → home) — catches team-branded and
           regional channels no term list or team name covers (#343)
+        - Pre-seeded 1:1 RSN catalog (YES → NYY, NESN → BOS, etc.)
         - Still nothing + detect_team_names → scan the identifiers for team
           name/short_name in a feed-specific context
         - No match → feed_team = None (normal channel)
@@ -568,7 +571,18 @@ class StreamMatching:
                 None means every sport — the pre-#732 behavior, and what
                 existing installs upgrade to. Narrows the master toggle only;
                 it can never turn separation on where the toggle is off.
+            user_broadcaster_mappings: Optional list of user-defined BroadcasterMapping objects
         """
+        if user_broadcaster_mappings is None and getattr(self, "_db_factory", None):
+            try:
+                from teamarr.database.broadcaster_mappings import list_broadcaster_mappings
+
+                with self._db_factory() as conn:
+                    user_broadcaster_mappings = list_broadcaster_mappings(conn, active_only=True)
+            except Exception as e:
+                logger.debug("[FEED] could not load user broadcaster mappings: %s", e)
+                user_broadcaster_mappings = []
+
         for entry in matched_streams:
             event = entry.get("event")
             feed_hint = entry.get("feed_hint")
@@ -593,11 +607,23 @@ class StreamMatching:
                     value = stream.get(key)
                     if value and value.lower() not in candidates:
                         candidates.append(value.lower())
-                for text in candidates:
-                    feed_team = self._detect_feed_from_broadcast_markets(text, event)
-                    if feed_team:
-                        source = "broadcast_market"
-                        break
+                if user_broadcaster_mappings:
+                    for text in candidates:
+                        feed_team = self._detect_feed_from_user_mappings(
+                            text,
+                            event,
+                            user_broadcaster_mappings,
+                            tvg_id=stream.get("tvg_id"),
+                        )
+                        if feed_team:
+                            source = "user_mapping"
+                            break
+                if feed_team is None:
+                    for text in candidates:
+                        feed_team = self._detect_feed_from_broadcast_markets(text, event)
+                        if feed_team:
+                            source = "broadcast_market"
+                            break
                 if feed_team is None:
                     for text in candidates:
                         feed_team = self._detect_feed_from_rsn_catalog(text, event)
@@ -754,6 +780,39 @@ class StreamMatching:
         if len(a) >= 2 and len(b) >= 2 and (a.startswith(b) or b.startswith(a)):
             return True
         return len(a) >= 4 and len(b) >= 4 and fuzz.ratio(a, b) >= 80
+
+    @staticmethod
+    def _detect_feed_from_user_mappings(
+        stream_text: str,
+        event,
+        user_mappings: list,
+        tvg_id: str | None = None,
+    ):
+        """Match candidate text against user-defined broadcaster mappings."""
+        from teamarr.core.rsn_catalog import team_matches_rsn
+        from teamarr.database.broadcaster_mappings import match_user_broadcaster
+
+        league = getattr(event, "league", "mlb") or "mlb"
+        mapped_team_id = match_user_broadcaster(
+            stream_text, league, user_mappings, tvg_id=tvg_id
+        )
+        if not mapped_team_id:
+            return None
+
+        # Check if mapped_team_id matches home or away team
+        if event.home_team and (
+            str(event.home_team.id) == str(mapped_team_id)
+            or team_matches_rsn(event.home_team, mapped_team_id)
+        ):
+            return event.home_team
+
+        if event.away_team and (
+            str(event.away_team.id) == str(mapped_team_id)
+            or team_matches_rsn(event.away_team, mapped_team_id)
+        ):
+            return event.away_team
+
+        return None
 
     @staticmethod
     def _detect_feed_from_broadcast_markets(stream_name_lower: str, event):

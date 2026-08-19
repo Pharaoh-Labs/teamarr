@@ -15,6 +15,7 @@ from teamarr.api.cache_refresh import start_cache_refresh
 from teamarr.api.routes import (
     aliases,
     backup,
+    broadcasters,
     cache,
     channels,
     detection_keywords,
@@ -382,6 +383,7 @@ def create_app() -> FastAPI:
     app.include_router(presets.router, prefix="/api/v1/presets", tags=["Condition Presets"])
     app.include_router(groups.router, prefix="/api/v1/groups", tags=["Event Groups"])
     app.include_router(aliases.router, prefix="/api/v1", tags=["Team Aliases"])
+    app.include_router(broadcasters.router, prefix="/api/v1", tags=["Broadcasters"])
     app.include_router(epg.router, prefix="/api/v1", tags=["EPG"])
     app.include_router(keywords.router, prefix="/api/v1/keywords", tags=["Exception Keywords"])
     app.include_router(race_feeds.router, prefix="/api/v1/race-feeds", tags=["Race Feeds"])

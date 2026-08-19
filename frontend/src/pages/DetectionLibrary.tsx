@@ -2,11 +2,12 @@ import { useState } from "react"
 import { EpgMatchingSettings, EventLookaheadSetting } from "@/components/EventMatchingSettings"
 import { SubNav } from "@/components/ui/sub-nav"
 import { AliasesSection } from "./detection-library/AliasesSection"
+import { BroadcastersSection } from "./detection-library/BroadcastersSection"
 import { KeywordSections } from "./detection-library/KeywordSections"
 
 /**
  * Matching page — EPG matching settings, event lookahead, and the custom-rules
- * detection library (team aliases + keyword categories, each self-contained in
+ * detection library (team aliases + keyword categories + broadcasters, each self-contained in
  * pages/detection-library/).
  */
 export function DetectionLibrary() {
@@ -44,6 +45,7 @@ export function DetectionLibrary() {
 
       {activeView === "custom_rules" && (
         <div className="space-y-4">
+          <BroadcastersSection />
           <AliasesSection />
           <KeywordSections />
         </div>

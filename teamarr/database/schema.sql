@@ -483,7 +483,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 94
+    schema_version INTEGER DEFAULT 95
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -1796,6 +1796,30 @@ CREATE TABLE IF NOT EXISTS team_aliases (
 
 CREATE INDEX IF NOT EXISTS idx_team_aliases_league ON team_aliases(league);
 CREATE INDEX IF NOT EXISTS idx_team_aliases_alias ON team_aliases(alias);
+
+
+-- =============================================================================
+-- TEAM_BROADCASTER_MAPPINGS TABLE
+-- User-defined broadcaster / RSN mappings to teams
+-- Overrides or disambiguates automatic RSN detection
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS team_broadcaster_mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    pattern TEXT NOT NULL,
+    pattern_type TEXT NOT NULL DEFAULT 'regex'
+        CHECK(pattern_type IN ('regex', 'exact', 'tvg_id', 'channel_id')),
+    team_id TEXT NOT NULL,
+    team_name TEXT,
+    league TEXT NOT NULL DEFAULT 'mlb',
+    is_active BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_broadcaster_mappings_league ON team_broadcaster_mappings(league);
+CREATE INDEX IF NOT EXISTS idx_broadcaster_mappings_team_id ON team_broadcaster_mappings(team_id);
 
 
 -- =============================================================================

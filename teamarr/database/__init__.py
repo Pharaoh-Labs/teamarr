@@ -11,6 +11,15 @@ from teamarr.database.aliases import (
     list_aliases,
     update_alias,
 )
+from teamarr.database.broadcaster_mappings import (
+    BroadcasterMapping,
+    create_broadcaster_mapping,
+    delete_broadcaster_mapping,
+    get_broadcaster_mapping,
+    list_broadcaster_mappings,
+    match_user_broadcaster,
+    update_broadcaster_mapping,
+)
 from teamarr.database.connection import get_connection, get_db, init_db, reset_db
 from teamarr.database.leagues import (
     LeagueMapping,
@@ -59,6 +68,14 @@ __all__ = [
     "get_alias_by_text",
     "list_aliases",
     "update_alias",
+    # Broadcaster Mappings
+    "BroadcasterMapping",
+    "create_broadcaster_mapping",
+    "delete_broadcaster_mapping",
+    "get_broadcaster_mapping",
+    "list_broadcaster_mappings",
+    "match_user_broadcaster",
+    "update_broadcaster_mapping",
     # Connection
     "get_connection",
     "get_db",
