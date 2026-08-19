@@ -38,7 +38,7 @@ Request for league data
 | [Squiggle](squiggle) | 30 | 1 (AFL) | None (free) | No hard limit — cache required |
 | [NASCAR](nascar) | 35 | 3 | None (public API) | None observed — season schedule cached 6h |
 | [MLB Stats](mlbstats) | 40 | 5 | None (public API) | None observed |
-| [HockeyTech](hockeytech) | 50 | 14 | Public client keys | None observed |
+| [HockeyTech](hockeytech) | 50 | 15 | Public client keys | None observed |
 | [Supabase](supabase) | 55 | 1 (CBL) | None (credentials auto-extracted, cached 7 days) | None observed |
 | [TSDB](tsdb) | 100 | 48 | API key in URL path | 30/min free, 100/min premium |
 

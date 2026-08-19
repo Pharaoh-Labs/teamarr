@@ -75,6 +75,7 @@ API_KEYS: dict[str, str] = {
     "ajhl": "cbe60a1d91c44ade",  # Alberta Junior Hockey League
     "mjhl": "f894c324fe5fd8f0",  # Manitoba Junior Hockey League
     "mhl": "4a948e7faf5ee58d",  # Maritime Junior Hockey League
+    "gojhl": "34b10d4d34d7b59a",  # Greater Ontario Hockey League
 }
 
 

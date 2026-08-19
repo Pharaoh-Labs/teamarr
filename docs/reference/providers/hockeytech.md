@@ -22,37 +22,38 @@ HockeyTech serves Canadian and US junior/minor hockey leagues via an undocumente
 
 ### CHL & Member Leagues
 
-| League | Code | Client Key |
-|--------|------|------------|
+| League | Client Code | Client Key |
+|--------|-------------|------------|
 | Canadian Hockey League | `chl` | `f1aa699db3d81487` |
 | Ontario Hockey League | `ohl` | `f1aa699db3d81487` |
 | Western Hockey League | `whl` | `f1aa699db3d81487` |
-| Quebec Major Junior Hockey League | `qmjhl` | `f1aa699db3d81487` |
+| Quebec Major Junior Hockey League | `lhjmq` | `f1aa699db3d81487` |
 
 ### Professional
 
-| League | Code | Client Key |
-|--------|------|------------|
+| League | Client Code | Client Key |
+|--------|-------------|------------|
 | American Hockey League | `ahl` | `50c2cd9b5e18e390` |
 | East Coast Hockey League | `echl` | `2c2b89ea7345cae8` |
 | Professional Women's Hockey League | `pwhl` | `446521baf8c38984` |
 
 ### US Junior
 
-| League | Code | Client Key |
-|--------|------|------------|
+| League | Client Code | Client Key |
+|--------|-------------|------------|
 | United States Hockey League | `ushl` | `e828f89b243dc43f` |
 
 ### Canadian Junior A
 
-| League | Code | Client Key |
-|--------|------|------------|
+| League | Client Code | Client Key |
+|--------|-------------|------------|
 | Ontario Junior Hockey League | `ojhl` | `77a0bd73d9d363d3` |
 | British Columbia Hockey League | `bchl` | `ca4e9e599d4dae55` |
 | Saskatchewan Junior Hockey League | `sjhl` | `2fb5c2e84bf3e4a8` |
 | Alberta Junior Hockey League | `ajhl` | `cbe60a1d91c44ade` |
 | Manitoba Junior Hockey League | `mjhl` | `f894c324fe5fd8f0` |
 | Maritime Junior Hockey League | `mhl` | `4a948e7faf5ee58d` |
+| Greater Ontario Hockey League | `gojhl` | `34b10d4d34d7b59a` |
 
 ## API Request Format
 
