@@ -1111,14 +1111,25 @@ def _clean_team_name(name: str) -> str:
 # =============================================================================
 
 
+# Bracket characters that wrap a league tag ("US (MLB) Mariners", "[NBA] Lakers").
+# The built-in hint patterns end in [:\s-], so a bracketed code never matched (#580).
+_BRACKETS_RE = re.compile(r"[()\[\]{}]")
+
+
 def detect_league_hint(text: str) -> str | list[str] | None:
-    """Detect league from stream name patterns.
+    r"""Detect league from stream name patterns.
 
     Examples:
         "NHL: Bruins vs Rangers" → "nhl"
         "EPL - Arsenal vs Chelsea" → "eng.1"
         "UFC 315: Main Card" → "ufc"
         "EFL: Portsmouth vs Southampton" → ["eng.2", "eng.3", "eng.4"]
+        "US (MLB) Seattle Mariners (S)" → "mlb"
+
+    Providers commonly bracket the league tag, which the built-in patterns miss
+    because they require a ``[:\s-]`` delimiter after the code. Detection is
+    retried once on a de-bracketed copy — raw text first, so user-defined hint
+    patterns that contain literal brackets keep winning (#580).
 
     Args:
         text: Stream name (should be normalized)
@@ -1129,7 +1140,15 @@ def detect_league_hint(text: str) -> str | list[str] | None:
     if not text:
         return None
 
-    return DetectionKeywordService.detect_league(text)
+    hint = DetectionKeywordService.detect_league(text)
+    if hint is not None:
+        return hint
+
+    debracketed = _BRACKETS_RE.sub(" ", text)
+    if debracketed == text:
+        return None
+
+    return DetectionKeywordService.detect_league(debracketed)
 
 
 # Gender keywords that indicate women's leagues. English (W)/Women plus
