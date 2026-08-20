@@ -38,6 +38,13 @@ COL = _team("Colorado Rockies", "COL", "Rockies", "mlb", "baseball")
 DBACKS = _team("Arizona Diamondbacks", "ARI", "Diamondbacks", "mlb", "baseball")
 ITALY_U17 = _team("Italy U17", "ITA", "Italy", "fifa.world.u17", "soccer")
 
+# Same city, different sports. ESPN's MLS short_name is the bare city
+# "Seattle", which is the same subset trap one league over (#580 report).
+SOUNDERS = _team("Seattle Sounders FC", "SEA", "Seattle", "usa.1", "soccer")
+ATX = _team("Austin FC", "ATX", "Austin", "usa.1", "soccer")
+MARINERS = _team("Seattle Mariners", "SEA", "Mariners", "mlb", "baseball")
+SEAHAWKS = _team("Seattle Seahawks", "SEA", "Seahawks", "nfl", "football")
+
 
 def _event(home, away, eid, league, sport):
     start = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=19)
@@ -128,3 +135,41 @@ class TestTeamVsTeamScoring:
         )
         assert result is not None
         assert result[1] >= 85
+
+
+class TestSharedCityCrosstalk:
+    """Same-city teams in different leagues (#580 report).
+
+    ESPN hands MLS teams a bare-city short_name ("Seattle" for the Sounders),
+    so every Seattle-branded stream scored 100 against an MLS Sounders event
+    and MLB/NFL streams were attached to the soccer channel. The discriminator
+    here is the nickname rather than the location, but the gate is the same.
+    """
+
+    def test_mariners_stream_does_not_match_the_sounders(self):
+        assert _best_name_score("us seattle mariners a", SOUNDERS) < 85
+
+    def test_seahawks_stream_does_not_match_the_sounders(self):
+        assert _best_name_score("nfl seattle seahawks p", SOUNDERS) < 85
+
+    def test_seattle_streams_still_match_their_own_teams(self):
+        assert _best_name_score("us seattle mariners a", MARINERS) == 100
+        assert _best_name_score("nfl seattle seahawks p", SEAHAWKS) == 100
+
+    def test_sounders_stream_still_matches_its_own_event(self):
+        matcher = make_team_matcher()
+        mls = _event(SOUNDERS, ATX, "mls-1", "usa.1", "soccer")
+        score, side = matcher._score_single_team_against_event(
+            "us seattle sounders a", mls
+        )
+        assert score is not None
+        assert side == "home"
+
+    def test_mariners_stream_skips_the_mls_event(self):
+        matcher = make_team_matcher()
+        mls = _event(SOUNDERS, ATX, "mls-1", "usa.1", "soccer")
+        score, side = matcher._score_single_team_against_event(
+            "us seattle mariners a", mls
+        )
+        assert score is None
+        assert side is None

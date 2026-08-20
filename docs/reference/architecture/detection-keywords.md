@@ -120,6 +120,18 @@ League hints can map to multiple leagues for umbrella brands:
 
 When a stream matches a multi-league hint, the matcher tries events from all listed leagues.
 
+## Bracketed League Tags
+
+Built-in league hint patterns require a delimiter after the code (`\bmlb[:\s-]`), so a
+bracketed tag — `US (MLB) Seattle Mariners`, `[NBA] Lakers vs Celtics` — would otherwise
+go undetected. When detection on the raw stream name finds nothing, it is retried once on
+a de-bracketed copy (`(`, `)`, `[`, `]`, `{`, `}` → space).
+
+The raw name is always tried first, so a user-defined hint written with literal brackets
+still takes priority. A stream with no league hint is scored against **every** league its
+group subscribes to, which is how cross-league false positives arise — detecting the
+bracketed tag scopes the stream to its own league instead.
+
 ## Usage Examples
 
 ```python
