@@ -61,4 +61,4 @@
 # - github.org
 # - github.repo
 
-sync.remote: "git+https://github.com/Pharaoh-Labs/teamarr.git"
+sync.remote: "git+ssh://git@github.com/Pharaoh-Labs/teamarr.git"
