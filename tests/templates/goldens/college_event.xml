@@ -1,7 +1,7 @@
 <tv generator-info-name="Teamarr">
   <channel id="teamarr-event-e1">
     <display-name>NCAAM | TAMU/ARK</display-name>
-    <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/logo.png?style=1&amp;logo=true&amp;fallback=true&amp;badge=%20" />
+    <icon src="mens-college-basketball/TexasAMAggies/ArkansasRazorbacks/logo.png?style=1&amp;logo=true&amp;fallback=true&amp;badge=%20" />
   </channel>
   <programme start="20260710090000 +0000" stop="20260710120000 +0000" channel="teamarr-event-e1">
     <title lang="en">Coming up: College Basketball at 3:00 PM EDT</title>

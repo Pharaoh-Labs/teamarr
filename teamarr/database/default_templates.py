@@ -73,7 +73,7 @@ _EVENT_ART = _ART_PATH + _EVENT_PARAMS
 _ART_NEXT = "{league_id}/{away_team.next|pascal}/{home_team.next|pascal}/cover.png" + _TEAM_PARAMS
 _ART_LAST = "{league_id}/{away_team.last|pascal}/{home_team.last|pascal}/cover.png" + _TEAM_PARAMS
 _EVENT_LOGO = (
-    "{league_id}/{away_team|pascal}/{home_team|pascal}/logo.png"
+    "{league_code}/{away_team|pascal}/{home_team|pascal}/logo.png"
     "?style=1&logo=true&fallback=true"
     "&badge={broadcast_national_network}%20{exception_keyword}"
 )
@@ -213,7 +213,12 @@ def _art_matches(row_value, spec_value) -> bool:
     Retired transform tokens (#484) compare as their base|filter form."""
     art = rewrite_legacy_tokens(row_value or "")
     spec_art = spec_value or ""
-    return art in (spec_art, spec_art.split("?")[0])
+    candidates = {spec_art, spec_art.split("?")[0]}
+    if "{league_code}" in spec_art:
+        id_variant = spec_art.replace("{league_code}", "{league_id}")
+        candidates.add(id_variant)
+        candidates.add(id_variant.split("?")[0])
+    return art in candidates
 
 
 def _content_matches(row, spec: dict) -> bool:
