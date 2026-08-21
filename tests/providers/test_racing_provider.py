@@ -147,6 +147,64 @@ F1_MID_WEEKEND_EVENT = {
 }
 
 
+# Sprint weekend: FP1, Sprint Shootout (SS), Sprint Race (SR), Qualifying (Qual), Race
+F1_SPRINT_WEEKEND_EVENT = {
+    "id": "600125",
+    "name": "Dutch Grand Prix",
+    "shortName": "Dutch GP",
+    "date": "2026-08-23T13:00Z",
+    "status": {"type": {"state": "pre"}},
+    "circuit": {"fullName": "Circuit Zandvoort"},
+    "competitions": [
+        {
+            "date": "2026-08-21T10:30Z",
+            "type": {"abbreviation": "FP1"},
+            "status": {"type": {"state": "post"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Lando Norris"),
+            ],
+        },
+        {
+            "date": "2026-08-21T14:30Z",
+            "type": {"abbreviation": "SS"},
+            "status": {"type": {"state": "post"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Oscar Piastri"),
+            ],
+        },
+        {
+            "date": "2026-08-22T10:00Z",
+            "type": {"abbreviation": "SR"},
+            "status": {"type": {"state": "pre"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Oscar Piastri"),
+            ],
+        },
+        {
+            "date": "2026-08-22T14:00Z",
+            "type": {"abbreviation": "Qual"},
+            "status": {"type": {"state": "pre"}},
+            "competitors": [
+                _competitor(1, "Lando Norris"),
+                _competitor(2, "Max Verstappen"),
+            ],
+        },
+        {
+            "date": "2026-08-23T13:00Z",
+            "type": {"abbreviation": "Race"},
+            "status": {"type": {"state": "pre"}},
+            "competitors": [
+                _competitor(1, "Max Verstappen"),
+                _competitor(2, "Lando Norris"),
+            ],
+        },
+    ],
+}
+
+
 # NASCAR-style: a single competition with no `type` block.
 NASCAR_SCOREBOARD_EVENT = {
     "id": "401700001",
@@ -254,6 +312,29 @@ class TestF1MidWeekendStatus:
 
         codes = [s.code for s in event.sessions]
         assert codes == ["fp1", "fp2", "race"]
+
+
+class TestF1SprintWeekend:
+    def test_sprint_sessions_parsed_correctly(self):
+        event = provider._parse_racing_event(F1_SPRINT_WEEKEND_EVENT, "f1", "racing")
+
+        assert event is not None
+        codes = [s.code for s in event.sessions]
+        assert codes == ["fp1", "sprint_qualifying", "sprint", "qualifying", "race"]
+
+        names = [s.name for s in event.sessions]
+        assert names == ["Practice 1", "Sprint Qualifying", "Sprint", "Qualifying", "Race"]
+
+    def test_sprint_shootout_and_race_results(self):
+        event = provider._parse_racing_event(F1_SPRINT_WEEKEND_EVENT, "f1", "racing")
+
+        ss = next(s for s in event.sessions if s.code == "sprint_qualifying")
+        pole = next(r for r in ss.results if r.driver_name == "Max Verstappen")
+        assert pole.position == 1
+
+        sr = next(s for s in event.sessions if s.code == "sprint")
+        front_row = next(r for r in sr.results if r.driver_name == "Max Verstappen")
+        assert front_row.grid_position == 1
 
 
 class TestNASCARSingleSession:
