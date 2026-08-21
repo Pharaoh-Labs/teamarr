@@ -8,7 +8,9 @@ from teamarr.consumers.matching.matcher import BatchMatchResult, MatchedStreamRe
 
 def test_build_matched_stream_list_same_title_distinct_stream_ids():
     """Identical stream names on different M3U lines map to separate stream dicts."""
-    proc = EventGroupProcessor(db_factory=MagicMock())
+    # service= skips create_default_service(), which would otherwise
+    # initialize the ProviderRegistry against the real database (absent in CI).
+    proc = EventGroupProcessor(db_factory=MagicMock(), service=MagicMock())
     event = MagicMock()
     event.id = "evt-soccer-1"
     event.sport = "soccer"
