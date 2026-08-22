@@ -10,6 +10,8 @@ import threading
 from datetime import date
 from unittest.mock import MagicMock
 
+import pytest
+
 from teamarr.consumers.cache.refresh import CacheRefresher
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
 from teamarr.providers.tsdb.provider import TSDBProvider
@@ -203,6 +205,71 @@ def test_fallback_league_uses_season_endpoint():
 def test_unrivaled_is_gated():
     assert "unrivaled" in TSDBProvider.SEASON_FALLBACK_LEAGUES
     assert "cfl" not in TSDBProvider.SEASON_FALLBACK_LEAGUES
+
+
+# ===========================================================================
+# UTC/local date-boundary filtering
+# ===========================================================================
+
+
+def _boxing_event(date_event: str, date_event_local: str | None) -> dict:
+    return {
+        "idEvent": "2528767",
+        "strEvent": "Rolando Romero vs Teofimo Lopez",
+        "dateEvent": date_event,
+        "dateEventLocal": date_event_local,
+        "strTimestamp": "2026-08-23T01:00:00",
+        "strTime": "01:00:00",
+        "strStatus": "Not Started",
+    }
+
+
+@pytest.mark.parametrize(
+    ("date_event", "date_event_local", "included"),
+    [
+        ("2026-08-22", None, True),
+        ("2026-08-23", "2026-08-22", True),
+        ("2026-08-23", "2026-08-23", False),
+    ],
+)
+def test_next_events_accept_utc_or_local_calendar_date(date_event, date_event_local, included):
+    client = MagicMock()
+    client.get_sport.return_value = "boxing"
+    client.get_events_by_date.return_value = {"events": []}
+    client.get_league_next_events.return_value = {
+        "events": [_boxing_event(date_event, date_event_local)]
+    }
+    provider = TSDBProvider(client=client)
+
+    events = provider.get_events("boxing", date(2026, 8, 22))
+
+    assert bool(events) is included
+
+
+def test_season_fallback_accepts_local_calendar_date():
+    provider, client = _provider_with_empty_day_endpoints()
+    client.get_sport.return_value = "basketball"
+    client.get_events_by_season.return_value = {
+        "events": [_boxing_event("2026-08-23", "2026-08-22")]
+    }
+
+    events = provider.get_events("unrivaled", date(2026, 8, 22))
+
+    assert [event.id for event in events] == ["2528767"]
+
+
+def test_boxing_boundary_event_retains_utc_timestamp():
+    client = MagicMock()
+    client.get_sport.return_value = "boxing"
+    client.get_events_by_date.return_value = {"events": []}
+    client.get_league_next_events.return_value = {
+        "events": [_boxing_event("2026-08-23", "2026-08-22")]
+    }
+    provider = TSDBProvider(client=client)
+
+    event = provider.get_events("boxing", date(2026, 8, 22))[0]
+
+    assert event.start_time.isoformat() == "2026-08-23T01:00:00+00:00"
 
 
 # ===========================================================================

@@ -134,9 +134,11 @@ class TSDBProvider(SportsProvider):
         if data and data.get("events"):
             events = []
             for event_data in data["events"]:
-                # Filter to target date
-                event_date = event_data.get("dateEvent")
-                if event_date != date_str:
+                # TSDB's canonical date is UTC for some events, while
+                # dateEventLocal is the venue-local calendar date.  Accept
+                # either so events crossing midnight UTC remain discoverable
+                # from the date users see on the schedule.
+                if not self._event_matches_date(event_data, date_str):
                     continue
                 event = self._parse_event(event_data, league)
                 if event:
@@ -153,9 +155,7 @@ class TSDBProvider(SportsProvider):
         if data and data.get("events"):
             events = []
             for event_data in data["events"]:
-                # Filter to target date
-                event_date = event_data.get("dateEvent")
-                if event_date != date_str:
+                if not self._event_matches_date(event_data, date_str):
                     continue
                 event = self._parse_event(event_data, league)
                 if event:
@@ -304,7 +304,7 @@ class TSDBProvider(SportsProvider):
             team_events = []
             for event_data in data["events"]:
                 # Filter by date and team
-                if event_data.get("dateEvent") != date_str:
+                if not self._event_matches_date(event_data, date_str):
                     continue
                 event = self._parse_event(event_data, league)
                 if event and self._team_in_event(team_name, event):
@@ -316,6 +316,20 @@ class TSDBProvider(SportsProvider):
     def _team_in_event(self, team_name: str, event: Event) -> bool:
         """Check if team is playing in this event."""
         return team_name in (event.home_team.name, event.away_team.name)
+
+    @staticmethod
+    def _event_matches_date(event_data: dict, date_str: str) -> bool:
+        """Return whether either TSDB calendar date matches ``date_str``.
+
+        ``dateEvent`` is retained as the primary/legacy field.  Some TSDB
+        records additionally expose ``dateEventLocal`` for the venue-local
+        date, which can differ when an event crosses a UTC date boundary.
+        Missing local dates therefore preserve the previous behavior.
+        """
+        return date_str in (
+            event_data.get("dateEvent"),
+            event_data.get("dateEventLocal"),
+        )
 
     def _get_team_name(self, team_id: str, league: str) -> str | None:
         """Get team name from ID using injected resolver.

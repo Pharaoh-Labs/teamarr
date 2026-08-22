@@ -274,7 +274,10 @@ class SportsDataService:
         Returns:
             List of events (may be empty if cache_only and not cached)
         """
-        cache_key = make_cache_key("events", league, target_date.isoformat())
+        # v2 invalidates persisted empty results produced before TSDB's
+        # dateEventLocal boundary handling. Keep the version at this seam so
+        # stale entries cannot mask newly discoverable events after upgrade.
+        cache_key = make_cache_key("events_v2", league, target_date.isoformat())
 
         def load_from_cache() -> list[Event] | _CacheMiss:
             """Return cached events, or _CACHE_MISS if absent/stale/corrupt."""
