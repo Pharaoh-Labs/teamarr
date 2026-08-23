@@ -11,7 +11,7 @@ API keys are constants since they're public keys from official league websites.
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 from teamarr.core.interfaces import LeagueMappingSource
 from teamarr.providers.base_client import BaseHTTPClient
@@ -221,9 +221,13 @@ class HockeyTechClient(BaseHTTPClient):
             List of game dicts for that date
         """
         schedule = self.get_schedule(league)
-        date_str = target_date.strftime("%Y-%m-%d")
-
-        return [game for game in schedule if game.get("date_played") == date_str]
+        # ±1-day superset — `date_played` is the venue's calendar, not the
+        # user's; exact membership is the service seam's job (#590).
+        near = {
+            (target_date + timedelta(days=offset)).strftime("%Y-%m-%d")
+            for offset in (-1, 0, 1)
+        }
+        return [game for game in schedule if game.get("date_played") in near]
 
     def get_seasons_info(self, league: str) -> dict[str, dict]:
         """Get season metadata keyed by season_id.

@@ -39,7 +39,9 @@ from teamarr.utilities.cache import (
     get_events_cache_ttl,
     make_cache_key,
 )
+from teamarr.utilities.event_dates import event_intersects, user_day_window
 from teamarr.utilities.event_status import is_event_final
+from teamarr.utilities.tz import get_user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +276,13 @@ class SportsDataService:
         Returns:
             List of events (may be empty if cache_only and not cached)
         """
-        cache_key = make_cache_key("events", league, target_date.isoformat())
+        # v2 (#590): results are filtered to the user-local day window below,
+        # so the cache entry's meaning depends on the user's timezone — key it
+        # by tz and version the namespace so pre-#590 entries (filtered by
+        # provider calendars) can't mask newly discoverable events.
+        cache_key = make_cache_key(
+            "events_v2", league, target_date.isoformat(), str(get_user_timezone())
+        )
 
         def load_from_cache() -> list[Event] | _CacheMiss:
             """Return cached events, or _CACHE_MISS if absent/stale/corrupt."""
@@ -317,7 +325,16 @@ class SportsDataService:
             # Iterate through providers
             for provider in self._providers:
                 if provider.supports_league(league):
-                    events = provider.get_events(league, target_date)
+                    # THE date-membership seam (#590): providers return a
+                    # superset (their raw prefilters are ±1 day wide); the
+                    # user-local day window decides what "on target_date"
+                    # means, exactly once, for every provider.
+                    window = user_day_window(target_date)
+                    events = [
+                        e
+                        for e in provider.get_events(league, target_date)
+                        if event_intersects(e, window)
+                    ]
                     # Check if all events are final (for past dates, enables 30-day
                     # cache). Empty list counts as "all final" (nothing to update).
                     all_final = len(events) == 0 or all(is_event_final(e) for e in events)

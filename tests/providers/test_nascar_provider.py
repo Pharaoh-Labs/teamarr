@@ -251,9 +251,16 @@ def test_get_events_race_day():
     assert events[0].name == "DAYTONA 500"
 
 
+def test_get_events_adjacent_day_in_superset():
+    """±1-day superset (#590): the seam decides exact membership."""
+    p = _provider_with_data(cup=_CUP_RESPONSE)
+    events = p.get_events("nascar-cup", date(2026, 2, 10))  # day before practice
+    assert len(events) == 1
+
+
 def test_get_events_off_day_returns_empty():
     p = _provider_with_data(cup=_CUP_RESPONSE)
-    events = p.get_events("nascar-cup", date(2026, 2, 10))  # day before any session
+    events = p.get_events("nascar-cup", date(2026, 2, 9))  # ≥2 days before any session
     assert events == []
 
 

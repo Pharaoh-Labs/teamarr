@@ -486,10 +486,15 @@ class SupabaseLeagueClient(BaseHTTPClient):
     def get_events_by_date(self, league: str, target_date: date) -> list[dict]:
         """Get schedule entries for a specific date, merged with scores."""
         schedule = self.get_schedule(league)
-        date_str = target_date.strftime("%Y-%m-%d")
+        # ±1-day superset — `game_date_override` is the league's calendar,
+        # not the user's; exact membership is the service seam's job (#590).
+        near = {
+            (target_date + timedelta(days=offset)).strftime("%Y-%m-%d")
+            for offset in (-1, 0, 1)
+        }
         day_entries = [
             g for g in schedule
-            if g.get("game_date_override") == date_str
+            if g.get("game_date_override") in near
             and g.get("status") != "postponed"
         ]
         if not day_entries:

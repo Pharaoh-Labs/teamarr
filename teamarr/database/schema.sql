@@ -1460,7 +1460,7 @@ INSERT OR IGNORE INTO cache_meta (id) VALUES (1);
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS service_cache (
-    -- Cache key (e.g., "events:nfl:2026-01-06")
+    -- Cache key (e.g., "events_v2:nfl:2026-01-06:America/Detroit")
     cache_key TEXT PRIMARY KEY,
 
     -- Cached data (JSON serialized)

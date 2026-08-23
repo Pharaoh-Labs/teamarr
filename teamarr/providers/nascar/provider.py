@@ -116,9 +116,11 @@ class NASCARProvider(SportsProvider):
         if not self.supports_league(league):
             return []
         self._ensure_loaded()
+        # ±1-day superset by UTC session date; exact membership is decided by
+        # the user-day window at the service seam (#590).
         return [
             e for e in self._events_by_league.get(league, [])
-            if any(s.start_time.date() == target_date for s in e.sessions)
+            if any(abs((s.start_time.date() - target_date).days) <= 1 for s in e.sessions)
         ]
 
     def get_team_schedule(self, team_id: str, league: str, days_ahead: int = 14) -> list[Event]:
