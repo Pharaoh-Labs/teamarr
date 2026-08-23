@@ -20,6 +20,8 @@ Controls when event channels are created in and deleted from Dispatcharr.
 
 The **Pre-Event Buffer (hours)** field is greyed out until **Before event + buffer** is selected; it sets how many hours before the event to create the channel (0–336 hours, default 1).
 
+For session-based events (race weekends, UFC card segments), each session's channel is timed against that session's own start — the Sunday race channel appears on race day (or race start minus buffer), not when Friday practice enters the window.
+
 Channels are never created for events that are already over: final events are excluded (an API-only `include_final_events` setting can override this), an event not yet reported final is treated as final two hours after its estimated end, and an event already past its delete threshold is skipped entirely.
 
 ## Delete Timing

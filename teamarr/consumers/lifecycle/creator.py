@@ -300,6 +300,7 @@ class ChannelCreator(_LifecycleHost):
                         decision = self._timing_manager.should_create_channel(
                             event,
                             stream_exists=True,
+                            segment_start=segment_start,
                         )
 
                         if not decision.should_act:
