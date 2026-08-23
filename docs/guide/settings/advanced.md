@@ -59,6 +59,15 @@ Set this to run shortly *before* your media server's scheduled guide refresh.
 
 Customize what the `{gracenote_category}` template variable renders for any league — the value professional guides use as the program title ("NFL Football", "NASCAR Cup Series"). Two facts worth knowing: overrides **survive Teamarr updates** (built-in league data is re-seeded on every startup; overrides live separately and always win), and clearing an override restores the built-in value, which is shown alongside each entry.
 
+## Logging
+
+**Console log level** changes the verbosity of the console/`docker logs` stream at runtime — no restart needed. Pick DEBUG for temporary troubleshooting, *arr-style.
+
+Two things to know:
+
+- **It's temporary by design.** A restart returns to the `LOG_LEVEL` environment default (INFO unless overridden). If you want a permanently different level, set `LOG_LEVEL` instead.
+- **The log file always captures DEBUG.** `data/logs/teamarr.log` records full debug detail at all times regardless of this setting — if something already went wrong, the debug trail is on disk.
+
 ## Data Caches
 
 Teamarr maintains several caches, each with a tile and a clear/refresh action. Tiles show live counts where available; the Directory tile also shows the last refresh time, duration, and any error.

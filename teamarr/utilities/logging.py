@@ -32,6 +32,14 @@ from teamarr.config import VERSION
 # Track if logging has been configured
 _configured = False
 
+# The console StreamHandler, kept for runtime level changes (#585). The file
+# handlers are deliberately NOT adjustable: teamarr.log always captures DEBUG.
+_console_handler: logging.Handler | None = None
+
+# Levels offered by the runtime control. CRITICAL is omitted on purpose —
+# silencing errors from the console is a footgun, not a verbosity setting.
+RUNTIME_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
+
 
 class JSONFormatter(logging.Formatter):
     """JSON formatter for structured logging.
@@ -157,6 +165,10 @@ def setup_logging(
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(formatter)
 
+    # Keep a handle for runtime level changes (#585)
+    global _console_handler
+    _console_handler = console_handler
+
     # === Configure Root Logger ===
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)  # Handlers filter from here
@@ -198,3 +210,34 @@ def setup_logging(
     logger.info("[STARTUP] Log directory: %s", log_path)
     logger.info("[STARTUP] Log format: %s", "JSON" if use_json else "text")
     logger.info("[STARTUP] " + "=" * 60)
+
+
+def default_log_level() -> str:
+    """The configured startup level name (LOG_LEVEL env, default INFO)."""
+    return logging.getLevelName(_get_log_level())
+
+
+def get_console_log_level() -> str:
+    """The console handler's current minimum level name."""
+    if _console_handler is not None:
+        return logging.getLevelName(_console_handler.level)
+    return default_log_level()
+
+
+def set_console_log_level(level_name: str) -> str:
+    """Set the console handler's minimum at runtime (#585).
+
+    Runtime-only by design (*arr-style temporary debug): a restart returns
+    to the LOG_LEVEL default. File handlers are untouched — teamarr.log
+    always captures DEBUG regardless of this setting.
+
+    Returns the applied level name; raises ValueError for unknown levels
+    and RuntimeError when logging was never configured.
+    """
+    normalized = level_name.upper()
+    if normalized not in RUNTIME_LOG_LEVELS:
+        raise ValueError(f"invalid log level: {level_name!r}")
+    if _console_handler is None:
+        raise RuntimeError("logging is not configured")
+    _console_handler.setLevel(getattr(logging, normalized))
+    return normalized
