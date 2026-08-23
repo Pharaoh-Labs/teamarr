@@ -30,7 +30,6 @@ from teamarr.providers.espn.tennis import TennisParserMixin
 from teamarr.providers.espn.tournament import TournamentParserMixin
 from teamarr.providers.espn.ufc import UFCParserMixin
 from teamarr.utilities.event_status import is_event_final
-from teamarr.utilities.tz import to_user_tz
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +194,11 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             data = self._client.get_ufc_scoreboard(window)
             if not data:
                 return []
-            # Mixin handles: pure parsing only
-            events = self._parse_ufc_events(data)
-            # Provider handles: date filtering — keep cards with ANY segment
-            # touching target_date, not just those starting on it.
-            return [e for e in events if self._ufc_card_covers_date(e, target_date)]
+            # Mixin handles: pure parsing only. The ±1-day fetch window IS the
+            # superset; segment-aware date membership (a card touching two
+            # days belongs to both, #345) is decided by the user-day window
+            # at the service seam (#590).
+            return self._parse_ufc_events(data)
 
         # Get sport/league from database config
         sport_league = self._get_sport_league_from_db(league)
@@ -210,23 +209,6 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             return self._get_tournament_events(league, target_date, sport, sport_league)
 
         return self._get_scoreboard_events(league, target_date, sport_league)
-
-    @staticmethod
-    def _ufc_card_covers_date(event: Event, target_date: date) -> bool:
-        """True when any part of the card falls on target_date in user tz.
-
-        A PPV rolls past midnight: early prelims Saturday, main card early
-        Sunday (user tz). Filtering on start_time alone drops the card for
-        one of the days its segments span (#345).
-        """
-        times = list(event.segment_times.values())
-        if not times and event.start_time:
-            times = [event.start_time]
-        if not times:
-            return False
-        first = min(times)
-        last = max(times) + timedelta(hours=3)  # last segment runs ~3h
-        return to_user_tz(first).date() <= target_date <= to_user_tz(last).date()
 
     def _get_scoreboard_events(
         self,

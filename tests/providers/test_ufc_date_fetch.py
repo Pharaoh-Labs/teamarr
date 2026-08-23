@@ -1,15 +1,15 @@
-"""UFC event fetch must be date-aware (#345).
+"""UFC event fetch must be date-aware (#345, #590).
 
 ESPN's default MMA scoreboard returns ONLY the current featured card, so
 get_events("ufc", <any other card's date>) came back empty and those streams
-failed with no_event_card_match. The fix passes a ±1-day dates= window and
-filters by card coverage (any segment touching target_date), which also
-handles PPVs rolling past midnight.
+failed with no_event_card_match. The fix passes a ±1-day dates= window.
+
+Since #590 the provider returns everything in that window as a SUPERSET —
+segment-aware day membership (a PPV rolling past midnight belongs to both
+days) is decided by the user-day window at the service seam, not here.
 """
 
 from datetime import date
-
-import pytest
 
 from teamarr.providers.espn.provider import ESPNProvider
 
@@ -45,14 +45,6 @@ class CapturingClient:
         return self.payload
 
 
-@pytest.fixture(autouse=True)
-def _utc_user_tz(monkeypatch):
-    """Pin to_user_tz to identity so assertions are TZ-independent."""
-    monkeypatch.setattr(
-        "teamarr.providers.espn.provider.to_user_tz", lambda dt: dt
-    )
-
-
 def test_ufc_fetch_passes_date_window():
     client = CapturingClient({"events": []})
     provider = ESPNProvider(client=client)
@@ -80,35 +72,25 @@ def test_future_card_visible_on_its_date():
     assert [e.id for e in events] == ["401"]
 
 
-def test_midnight_spanning_ppv_covers_both_days():
-    # PPV: early prelims 23:00 Aug 8, prelims 00:30 Aug 9, main card 02:00 Aug 9
+def test_windowed_cards_pass_through_as_superset():
+    """Everything ESPN returns for the ±1-day window comes back (#590).
+
+    The neighbouring card is no longer dropped here — exact day membership
+    (including midnight-spanning PPV coverage) is the service seam's job,
+    pinned in tests/services/test_event_date_seam.py.
+    """
     payload = {
         "events": [
+            _card("403", "UFC on ABC", ["2026-08-07T18:00Z"]),
             _card(
                 "402",
                 "UFC 330: Someone vs Someone Else",
                 ["2026-08-08T23:00Z", "2026-08-09T00:30Z", "2026-08-09T02:00Z"],
-            )
-        ]
-    }
-    provider = ESPNProvider(client=CapturingClient(payload))
-
-    assert [e.id for e in provider.get_events("ufc", date(2026, 8, 8))] == ["402"]
-    assert [e.id for e in provider.get_events("ufc", date(2026, 8, 9))] == ["402"]
-    # But not for an unrelated day
-    assert provider.get_events("ufc", date(2026, 8, 11)) == []
-
-
-def test_unrelated_card_filtered_out():
-    # ESPN may return neighbours inside the window — only covering cards pass.
-    payload = {
-        "events": [
-            _card("403", "UFC on ABC", ["2026-08-07T18:00Z"]),
-            _card("404", "UFC Fight Night", ["2026-08-08T18:00Z"]),
+            ),
         ]
     }
     provider = ESPNProvider(client=CapturingClient(payload))
 
     events = provider.get_events("ufc", date(2026, 8, 8))
 
-    assert [e.id for e in events] == ["404"]
+    assert [e.id for e in events] == ["403", "402"]

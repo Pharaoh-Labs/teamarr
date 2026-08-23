@@ -123,11 +123,16 @@ def test_scheduled_event_hides_scores():
     assert event.away_score is None
 
 
-def test_get_events_filters_to_requested_date():
-    rows = [_event(event_date="2026-08-13"), _event(event_id=2, event_date="2026-08-14")]
+def test_get_events_returns_superset_window():
+    """±1-day superset (#590): exact membership is the service seam's job."""
+    rows = [
+        _event(event_date="2026-08-13"),
+        _event(event_id=2, event_date="2026-08-14"),
+        _event(event_id=3, event_date="2026-08-16"),
+    ]
     events = _provider(rows).get_events("cfl", date(2026, 8, 13))
 
-    assert [event.id for event in events] == ["13419712"]
+    assert [event.id for event in events] == ["13419712", "2"]
 
 
 def test_team_schedule_filters_and_sorts(monkeypatch):

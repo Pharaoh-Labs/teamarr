@@ -183,12 +183,14 @@ def test_parse_game_without_unixtime_returns_none():
 # ---------------------------------------------------------------------------
 
 
-def test_get_events_filters_by_utc_date():
+def test_get_events_prefilters_to_superset_window():
+    """±1-day superset by UTC date (#590); the seam decides exact membership."""
     target = date(2026, 7, 10)
     on_date = _game(gid=1, when=datetime(2026, 7, 10, 23, 0, tzinfo=UTC))
-    off_date = _game(gid=2, when=datetime(2026, 7, 11, 1, 0, tzinfo=UTC))
-    events = _provider(games=[on_date, off_date]).get_events("afl", target)
-    assert [e.id for e in events] == ["1"]
+    next_day = _game(gid=2, when=datetime(2026, 7, 11, 1, 0, tzinfo=UTC))
+    far_off = _game(gid=3, when=datetime(2026, 7, 13, 1, 0, tzinfo=UTC))
+    events = _provider(games=[on_date, next_day, far_off]).get_events("afl", target)
+    assert [e.id for e in events] == ["1", "2"]
 
 
 def test_get_events_unsupported_league_returns_empty():

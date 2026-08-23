@@ -42,10 +42,13 @@ class BellMediaProvider(SportsProvider):
         if not self.supports_league(league):
             return []
         teams = self._teams_by_id(league)
+        # ±1-day superset — the API's `date` field is its own calendar, not
+        # the user's; exact membership is the service seam's job (#590).
         return [
             event
-            for row in self._client.get_events_between(league, target_date, target_date)
-            if row.get("date") == target_date.isoformat()
+            for row in self._client.get_events_between(
+                league, target_date - timedelta(days=1), target_date + timedelta(days=1)
+            )
             if (event := self._parse_event(row, league, teams)) is not None
         ]
 

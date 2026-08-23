@@ -191,6 +191,7 @@ For EPG-matched linear streams, membership in a channel is **time-windowed** so 
 - `PersistentTTLCache` — in-memory during generation (fast), background flush to SQLite every 2 minutes
 - Provider selection by priority (ESPN → MLB Stats → HockeyTech → TSDB)
 - TTLs: 30 days for final events, 8h for schedules, 30m for live events, 24h for team info
+- **Date membership is decided at this seam** (#590): a requested date is the *user-local* day, converted once to a UTC window (`utilities/event_dates.py`) and applied to everything providers return. Providers only prefilter to a ±1-day raw superset — they never compare calendars themselves, so provider/UTC/venue date mismatches (UFC cards and race weekends spanning midnight, AFL's UTC+10 schedule, TSDB's UTC event dates) can't drop events. Event caches are keyed per user timezone (`events_v2:<league>:<date>:<tz>`).
 
 | Method | TTL | Description |
 |--------|-----|-------------|
