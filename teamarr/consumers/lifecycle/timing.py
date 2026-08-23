@@ -186,18 +186,23 @@ class ChannelLifecycleManager:
         self,
         event: Event,
         stream_exists: bool = False,
+        segment_start: datetime | None = None,
     ) -> LifecycleDecision:
         """Determine if a channel should be created for this event.
 
         Args:
             event: The event to check
             stream_exists: Whether a matching stream currently exists
+            segment_start: Segment/session-specific start time (racing
+                sessions, UFC card segments). When given, the create
+                threshold anchors to it instead of `event.start_time`,
+                which for racing points at the weekend's FIRST session.
 
         Returns:
             LifecycleDecision with should_act and reason
         """
         # Calculate create threshold
-        create_threshold = self._calculate_create_threshold(event)
+        create_threshold = self._calculate_create_threshold(event, segment_start)
         now = now_user()
 
         # Check if we're past delete threshold (prevents create-then-delete)
@@ -282,13 +287,21 @@ class ChannelLifecycleManager:
             delete_threshold,
         )
 
-    def _calculate_create_threshold(self, event: Event) -> datetime:
+    def _calculate_create_threshold(
+        self, event: Event, segment_start: datetime | None = None
+    ) -> datetime:
         """Calculate when channel should be created.
 
         - same_day: Midnight (00:00) of event day
         - before_event: event_start - pre_buffer_minutes
+
+        Racing anchors `event.start_time` to the weekend's first session, so
+        per-session channels must derive their threshold from their own
+        session start (`segment_start`) or the race-day channel is created as
+        soon as Friday practice enters the window (#550). Mirrors the
+        session-aware delete side (`get_event_end_time`).
         """
-        event_start = to_user_tz(event.start_time)
+        event_start = to_user_tz(segment_start or event.start_time)
 
         if self.create_timing == "before_event":
             return event_start - timedelta(minutes=self.pre_buffer_minutes)
