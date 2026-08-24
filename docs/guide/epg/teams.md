@@ -35,6 +35,8 @@ Go to **EPG → Team EPG** and click **Add Team** to browse the league cache by 
 3. Select teams individually or use **Select All**
 4. Click **Import Selected Teams**
 
+For NCAA football and basketball, a **conference filter** appears next to the team search — pick a conference (SEC, Big Ten, …) to narrow the list, then **Select All** grabs the whole conference at once. Conference membership comes from ESPN's season-scoped data and refreshes with the team cache, so realignment is picked up automatically. Other college sports have no ESPN conference data, so the filter doesn't appear for them.
+
 Teams are grouped by sport in the sidebar. The badge next to each sport shows how many importable leagues it has; each league shows its cached team count. Leagues with 0 teams haven't had their cache refreshed yet — use the cache refresh on **Settings → Advanced** (Data Caches).
 
 ## Managing Teams

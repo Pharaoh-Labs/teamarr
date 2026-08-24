@@ -281,6 +281,20 @@ def get_league_teams(league_slug: str) -> list[dict]:
         return db_get_league_teams(conn, league_slug)
 
 
+@router.get("/leagues/{league_slug}/conferences")
+def get_league_conferences(league_slug: str) -> list[dict]:
+    """Cached conference groups for a league, with member team ids (#91).
+
+    Serves the Team Importer's conference filter. Empty list for leagues
+    without conference data (only NCAA football/basketball have it) — the
+    UI hides the filter.
+    """
+    from teamarr.database.provider_groups import get_league_groups
+
+    with get_db() as conn:
+        return get_league_groups(conn, league_slug)
+
+
 @router.get("/team-picker-leagues")
 def get_team_picker_leagues() -> dict:
     """Get all leagues from team_cache for the TeamPicker component.

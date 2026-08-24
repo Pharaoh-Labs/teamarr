@@ -255,6 +255,36 @@ class ESPNClient(BaseHTTPClient):
         url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/teams"
         return self._request(url, {"limit": 1000})
 
+    # Core-API season-tree endpoints (#91): conference/division groups. The
+    # site /groups endpoint is deliberately NOT used — it truncates children
+    # at 25 and serves stale membership (verified 2026-07-17, #91 comments).
+
+    def _season_group_url(self, sport: str, espn_league: str, season: int, group_id: str) -> str:
+        return (
+            f"{ESPN_CORE_URL}/{sport}/leagues/{espn_league}"
+            f"/seasons/{season}/types/2/groups/{group_id}"
+        )
+
+    def get_season_group(
+        self, sport: str, espn_league: str, season: int, group_id: str
+    ) -> dict | None:
+        """Fetch one season-tree group (id, name, shortName, isConference)."""
+        return self._request(self._season_group_url(sport, espn_league, season, group_id))
+
+    def get_season_group_children(
+        self, sport: str, espn_league: str, season: int, group_id: str
+    ) -> dict | None:
+        """Fetch a group's children as $ref items (conferences under a division)."""
+        url = self._season_group_url(sport, espn_league, season, group_id) + "/children"
+        return self._request(url, {"limit": 100})
+
+    def get_season_group_teams(
+        self, sport: str, espn_league: str, season: int, group_id: str
+    ) -> dict | None:
+        """Fetch a group's team roster as $ref items (ids parseable from URLs)."""
+        url = self._season_group_url(sport, espn_league, season, group_id) + "/teams"
+        return self._request(url, {"limit": 500})
+
     # UFC-specific endpoints
 
     def get_ufc_scoreboard(self, date_str: str | None = None) -> dict | None:

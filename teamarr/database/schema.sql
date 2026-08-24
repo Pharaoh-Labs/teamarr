@@ -1426,6 +1426,37 @@ CREATE TABLE IF NOT EXISTS league_cache (
 CREATE INDEX IF NOT EXISTS idx_lc_sport ON league_cache(sport);
 CREATE INDEX IF NOT EXISTS idx_lc_provider ON league_cache(provider);
 
+-- =============================================================================
+-- Provider group cache (#91, epic y5l8): conferences/divisions from the ESPN
+-- core-API season tree. Refreshed alongside team cache. Framed generically as
+-- "provider groups" so pro divisions can ride the same tables later; currently
+-- populated for NCAA football/basketball only (ESPN has no conference data for
+-- other college sports).
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS provider_group_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,               -- 'espn'
+    league TEXT NOT NULL,                 -- league slug: 'college-football', 'mens-college-basketball'
+    group_key TEXT NOT NULL,              -- provider's stable group id (SEC=8, Big Ten=5, ...)
+    group_name TEXT NOT NULL,             -- 'Southeastern Conference'
+    group_abbrev TEXT,                    -- 'SEC' (core tree shortName)
+    season INTEGER,                       -- season year the tree was read from
+    last_refreshed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(provider, league, group_key)
+);
+
+CREATE TABLE IF NOT EXISTS provider_group_members (
+    group_cache_id INTEGER NOT NULL REFERENCES provider_group_cache(id) ON DELETE CASCADE,
+    provider_team_id TEXT NOT NULL,       -- joins team_cache.provider_team_id
+
+    UNIQUE(group_cache_id, provider_team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pgc_league ON provider_group_cache(provider, league);
+CREATE INDEX IF NOT EXISTS idx_pgm_team ON provider_group_members(provider_team_id);
+
 
 -- =============================================================================
 -- CACHE_META TABLE

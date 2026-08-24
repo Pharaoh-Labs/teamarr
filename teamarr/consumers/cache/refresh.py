@@ -169,6 +169,11 @@ class CacheRefresher:
             if soccer_updated > 0:
                 report(f"Updated {soccer_updated} soccer teams with new leagues", 98)
 
+            # NCAA conference trees (#91) — best-effort, never fails the refresh
+            conf_count = self.refresh_conferences()
+            if conf_count:
+                report(f"Cached {conf_count} conference groups", 99)
+
             # Update metadata
             duration = time.time() - start_time
             self._update_meta(len(all_leagues), len(all_teams), duration, None)
@@ -201,6 +206,122 @@ class CacheRefresher:
                 "duration_seconds": time.time() - start_time,
                 "error": str(e),
             }
+
+    # NCAA leagues with ESPN core-tree conference data (#91). Values:
+    # (sport, espn_league, root group ids). Basketball group 50 = D-I;
+    # football 80/81 = FBS/FCS. ESPN has no conference data for other
+    # college sports, so this map is the complete set.
+    CONFERENCE_LEAGUES = {
+        "college-football": ("football", "college-football", ("80", "81")),
+        "mens-college-basketball": ("basketball", "mens-college-basketball", ("50",)),
+        "womens-college-basketball": ("basketball", "womens-college-basketball", ("50",)),
+    }
+
+    @staticmethod
+    def _conference_season(sport: str) -> int:
+        """Season year for the core tree, by sport labeling convention.
+
+        Football seasons are labeled by their starting calendar year;
+        basketball by the ending year (2026-27 => seasons/2027). From July
+        onward the upcoming basketball season is the one importers want.
+        """
+        from datetime import date as _date
+
+        today = _date.today()
+        if sport == "basketball" and today.month >= 7:
+            return today.year + 1
+        return today.year
+
+    def refresh_conferences(self, only_league: str | None = None) -> int:
+        """Fetch and cache NCAA conference trees from the ESPN core API (#91).
+
+        Best-effort: any failure logs and returns what was saved so far —
+        conference data is an enhancement, never a reason to fail a team
+        refresh. Returns the number of conference groups saved.
+        """
+        from teamarr.database.provider_groups import save_provider_groups
+
+        saved = 0
+        client = ESPNClient()
+        for league_slug, (sport, espn_league, roots) in self.CONFERENCE_LEAGUES.items():
+            if only_league is not None and league_slug != only_league:
+                continue
+            season = self._conference_season(sport)
+            try:
+                groups = self._fetch_conference_tree(client, sport, espn_league, season, roots)
+                if not groups:
+                    # Wrong season guess (e.g. tree not published yet) — try
+                    # the adjacent year before giving up.
+                    season -= 1
+                    groups = self._fetch_conference_tree(
+                        client, sport, espn_league, season, roots
+                    )
+                if not groups:
+                    logger.warning("[CONFERENCES] No tree for %s — skipped", league_slug)
+                    continue
+                with self._db() as conn:
+                    saved += save_provider_groups(conn, "espn", league_slug, season, groups)
+                logger.info(
+                    "[CONFERENCES] %s: %d conferences (season %d)",
+                    league_slug,
+                    len(groups),
+                    season,
+                )
+            except Exception as e:  # noqa: BLE001 — best-effort by contract
+                logger.warning("[CONFERENCES] Failed for %s: %s", league_slug, e)
+        return saved
+
+    @staticmethod
+    def _fetch_conference_tree(
+        client: ESPNClient,
+        sport: str,
+        espn_league: str,
+        season: int,
+        root_group_ids: tuple[str, ...],
+    ) -> list[dict]:
+        """Walk root groups → conference children → team rosters.
+
+        Children and teams arrive as $ref links; group ids and team ids are
+        parsed from the ref URLs (teams need no follow-up fetch — ids join
+        against team_cache.provider_team_id).
+        """
+
+        def _ref_tail_id(ref: str, segment: str) -> str | None:
+            # ".../{segment}/{id}?lang=..." -> id
+            marker = f"/{segment}/"
+            if marker not in ref:
+                return None
+            return ref.split(marker)[-1].split("?")[0].strip("/") or None
+
+        groups: list[dict] = []
+        for root_id in root_group_ids:
+            children = client.get_season_group_children(sport, espn_league, season, root_id)
+            for item in (children or {}).get("items", []):
+                group_id = _ref_tail_id(item.get("$ref", ""), "groups")
+                if not group_id:
+                    continue
+                meta = client.get_season_group(sport, espn_league, season, group_id)
+                if not meta or not meta.get("isConference"):
+                    continue
+                team_refs = client.get_season_group_teams(sport, espn_league, season, group_id)
+                team_ids = [
+                    tid
+                    for entry in (team_refs or {}).get("items", [])
+                    if (tid := _ref_tail_id(entry.get("$ref", ""), "teams"))
+                ]
+                if not team_ids:
+                    continue
+                groups.append(
+                    {
+                        "key": str(meta.get("id", group_id)),
+                        "name": meta.get("name") or f"Conference {group_id}",
+                        # shortName is the display abbrev ('SEC'); the
+                        # 'abbreviation' field is lowercase ('sec')
+                        "abbrev": meta.get("shortName") or meta.get("abbreviation"),
+                        "team_ids": team_ids,
+                    }
+                )
+        return groups
 
     def refresh_if_needed(self, max_age_days: int = 7) -> bool:
         """Refresh cache if stale.
@@ -303,6 +424,11 @@ class CacheRefresher:
             teams=team_entries,
         )
         logger.info("[CACHE_REFRESH] Scoped refresh of %s cached %d teams", league_code, count)
+
+        # NCAA leagues also refresh their conference tree (#91) — best-effort
+        if league_code in self.CONFERENCE_LEAGUES:
+            self.refresh_conferences(only_league=league_code)
+
         return {"success": True, "league_code": league_code, "team_count": count, "error": None}
 
     def _save_league_teams(

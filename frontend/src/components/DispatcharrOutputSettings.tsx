@@ -263,7 +263,8 @@ export function DispatcharrOutputSettings() {
             </Select>
             <p className="text-xs text-muted-foreground">
               Static uses the group above. Dynamic modes auto-create groups named by sport or league.
-              Custom lets you define a pattern with {"{sport}"} and {"{league}"} placeholders.
+              Custom lets you define a pattern with {"{sport}"}, {"{league}"}, and {"{conference}"}{" "}
+              (NCAA) placeholders.
             </p>
           </div>
 
@@ -280,7 +281,8 @@ export function DispatcharrOutputSettings() {
                 className="w-64"
               />
               <p className="text-xs text-muted-foreground">
-                Use {"{sport}"} and {"{league}"} as placeholders. Example: "{"{sport}"} | {"{league}"}" creates groups like "Hockey | NHL".
+                Use {"{sport}"}, {"{league}"}, and {"{conference}"} (NCAA leagues) as placeholders.
+                Example: "{"{sport}"} | {"{league}"}" creates groups like "Hockey | NHL".
               </p>
             </div>
           )}

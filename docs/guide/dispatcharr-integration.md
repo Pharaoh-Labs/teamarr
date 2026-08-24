@@ -37,7 +37,7 @@ Go to **Channels → Dispatcharr Output** to configure where Teamarr channels la
 
 - **Default Channel Profiles** — which Dispatcharr profiles Teamarr channels appear in
 - **Default Stream Profile** — which stream profile to assign to streams
-- **Default Channel Group** — a static group, or a dynamic pattern like `{sport} | {league}` that auto-creates groups
+- **Default Channel Group** — a static group, or a dynamic pattern like `{sport} | {league}` that auto-creates groups (`{conference}` also available for NCAA leagues)
 
 ![Channels → Dispatcharr Output configuration cards](../assets/images/channels-output.png)
 
@@ -56,7 +56,7 @@ Once connected, each generation run manages the full channel lifecycle in Dispat
 
 ### Profile & Group Sync
 
-Teamarr enforces profile and group assignments on every generation run. If someone manually changes a channel's profiles in Dispatcharr, Teamarr corrects it on the next run. Dynamic wildcards (`{sport}`, `{league}`) automatically create profiles and groups in Dispatcharr if they don't exist.
+Teamarr enforces profile and group assignments on every generation run. If someone manually changes a channel's profiles in Dispatcharr, Teamarr corrects it on the next run. Dynamic wildcards (`{sport}`, `{league}`, and `{conference}` for groups) automatically create profiles and groups in Dispatcharr if they don't exist.
 
 ### Reconciliation
 
