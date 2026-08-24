@@ -288,11 +288,13 @@ Feature planning lives in beads: `bd list --label roadmap`
 
 Legacy plans in `plans/` (gitignored) may have additional context.
 
-## Code Health Audit (`teamarrv2-5hq`)
+## Code Health Audit
 
-**Cyclical epic for keeping the codebase clean.** Run with: `audit`
+**On-demand, not scheduled.** Run with: `audit`
 
-When the user says **"audit"**, claim the next open child bead under `teamarrv2-5hq` and run the full audit:
+The cyclical epic (`teamarrv2-5hq`) was **retired 2026-08-23** — the quarterly cadence collapsed after Apr 2026 and its function migrated to continuous `# TODO: PRUNE/REFACTOR` markers during normal work plus on-demand `/code-review` and `/simplify`. Do NOT create recurring audit beads. File findings as their own beads.
+
+When the user says **"audit"**, run the full sweep:
 
 1. **Dead API endpoints** — cross-reference every route in `teamarr/api/routes/` against the ENTIRE `frontend/src/` directory (not just `api/` — the frontend uses both structured api clients AND direct `fetch()` calls in pages/components) and backend callers. Only flag as dead if zero hits across all search patterns.
 2. **Dead frontend code** — find unused exports in `frontend/src/api/`, `frontend/src/hooks/`, `frontend/src/components/`. Check for dynamic imports and lazy loading in `App.tsx` before flagging components as dead.
@@ -320,11 +322,10 @@ When the user says **"audit"**, claim the next open child bead under `teamarrv2-
 **Ongoing responsibilities (during normal development):**
 - When you encounter dead code while working on features/bugs, mark it with `# TODO: PRUNE — <reason>` immediately.
 - When you notice layer violations or code smell, add `# TODO: REFACTOR — <reason>`.
-- These TODO markers get cleaned up during the next audit cycle.
+- These TODO markers are the standing backlog — they get cleaned up at the next `audit` run, whenever the user calls one.
 - After each audit, update these evaluation principles with any new lessons learned.
-- Create the next child bead (e.g., `Code Health Audit — Mar 2026`) when closing the current one.
 
-**Audit epic details:** `bd show teamarrv2-5hq`
+**Prior audit history (14 passes, Feb–Apr 2026):** `bd show teamarrv2-5hq`
 
 ## Sync Status
 
