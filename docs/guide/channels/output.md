@@ -39,11 +39,11 @@ Pick a static group from the dropdown. By default the list hides M3U-sourced gro
 | **Static** | All channels go to the selected group above |
 | **Dynamic by Sport** | Auto-creates and assigns groups named by sport |
 | **Dynamic by League** | Auto-creates and assigns groups named by league |
-| **Custom pattern** | Define a pattern using `{sport}` and `{league}` placeholders |
+| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, and `{conference}` placeholders |
 
 When **Custom pattern** is selected, a pattern field appears. For example, `{sport} | {league}` creates groups like "Hockey | NHL". Teamarr creates these dynamic groups in Dispatcharr automatically.
 
-In group patterns, `{sport}` resolves to the sport's display name ("Hockey"), and `{league}` to the league's **short alias** — "EPL", not "English Premier League".
+In group patterns, `{sport}` resolves to the sport's display name ("Hockey"), and `{league}` to the league's **short alias** — "EPL", not "English Premier League". `{conference}` resolves to the home team's conference name for NCAA football/basketball events ("Southeastern Conference"); events without conference data fall back to the static group.
 
 A few failure modes are handled gracefully: a pattern whose wildcard can't resolve for an event falls back to the static group; and if a configured static group has been deleted in Dispatcharr, the channels are created **ungrouped** with a log warning telling you to re-select a group.
 

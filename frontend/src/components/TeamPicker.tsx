@@ -3,6 +3,8 @@ import { useQuery, useQueries } from "@tanstack/react-query"
 import { ChevronDown, ChevronRight, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select } from "@/components/ui/select"
+import { conferenceLabel, useConferenceFilter } from "@/hooks/useConferenceFilter"
 import { getLeagueTeams, getTeamPickerLeagues, type CachedTeam } from "@/api/teams"
 import { SelectedBadges } from "@/components/ui/selected-badges"
 import type { TeamFilterEntry } from "@/api/types"
@@ -25,6 +27,126 @@ interface LeagueGroup {
   league: string
   sport: string
   teams: CachedTeam[]
+}
+
+interface LeagueSectionProps {
+  lg: LeagueGroup
+  isExpanded: boolean
+  singleSelect: boolean
+  onToggle: () => void
+  isTeamSelected: (team: CachedTeam) => boolean
+  onToggleTeam: (team: CachedTeam) => void
+  onSelectAll: (teams: CachedTeam[]) => void
+  onClear: (league: string) => void
+  selectedCount: number
+}
+
+/**
+ * One league row: header, optional conference filter, team checkboxes.
+ *
+ * Split out so each league instance can own its own conference query (#91) —
+ * hooks can't run in a loop — which also makes the fetch lazy: conferences
+ * load only for leagues the user actually expands.
+ */
+function LeagueSection({
+  lg,
+  isExpanded,
+  singleSelect,
+  onToggle,
+  isTeamSelected,
+  onToggleTeam,
+  onSelectAll,
+  onClear,
+  selectedCount,
+}: LeagueSectionProps) {
+  const { conferences, selectedConference, setSelectedConference, conferenceTeamIds } =
+    useConferenceFilter(isExpanded ? lg.league : null)
+
+  // Conference filter narrows both the visible list and what Select All takes,
+  // so "SEC + Select All" adds exactly that conference (#91).
+  const visibleTeams = conferenceTeamIds
+    ? lg.teams.filter((t) => conferenceTeamIds.has(t.provider_team_id))
+    : lg.teams
+
+  return (
+    <div className="border-b last:border-b-0">
+      {/* League header — actions as siblings, not nested (5hq.16) */}
+      <div className="flex items-center justify-between p-2 hover:bg-muted/50 text-sm">
+        <button onClick={onToggle} className="flex-1 flex items-center gap-2 text-left">
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          <span className="uppercase text-xs font-medium">{lg.league}</span>
+          <span className="text-muted-foreground font-normal text-xs">
+            ({selectedCount} of {visibleTeams.length})
+          </span>
+        </button>
+        {!singleSelect && (
+          <div className="flex gap-2 text-xs">
+            <button
+              onClick={() => onSelectAll(visibleTeams)}
+              className="text-primary hover:underline"
+            >
+              Select All
+            </button>
+            <button
+              onClick={() => onClear(lg.league)}
+              className="text-muted-foreground hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isExpanded && (
+        <div className="px-2 pb-2 space-y-1 ml-4">
+          {conferences.length > 0 && (
+            <Select
+              value={selectedConference}
+              onChange={(e) => setSelectedConference(e.target.value)}
+              className="w-full h-8 text-xs my-1"
+              aria-label={`Filter ${lg.league} by conference`}
+            >
+              <option value="">All conferences</option>
+              {conferences.map((conf) => (
+                <option key={conf.key} value={conf.key}>
+                  {conferenceLabel(conf)}
+                </option>
+              ))}
+            </Select>
+          )}
+          {visibleTeams.map((team) => (
+            <label
+              key={`${team.provider}-${team.provider_team_id}`}
+              className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
+            >
+              <Checkbox
+                checked={isTeamSelected(team)}
+                onCheckedChange={() => onToggleTeam(team)}
+              />
+              {team.logo_url && (
+                <img
+                  src={team.logo_url}
+                  alt=""
+                  className="h-5 w-5 object-contain"
+                  onError={(e) => {
+                    ;(e.target as HTMLImageElement).style.display = "none"
+                  }}
+                />
+              )}
+              <span className="text-sm">{team.team_name}</span>
+              {team.team_abbrev && (
+                <span className="text-xs text-muted-foreground">({team.team_abbrev})</span>
+              )}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function TeamPicker({
@@ -370,74 +492,18 @@ export function TeamPicker({
             {isSportExpanded(sportGroup.sport) && (
               <div className="ml-4">
                 {sportGroup.leagues.map((lg) => (
-                  <div key={lg.league} className="border-b last:border-b-0">
-                    {/* League header — actions as siblings, not nested (5hq.16) */}
-                    <div className="flex items-center justify-between p-2 hover:bg-muted/50 text-sm">
-                      <button
-                        onClick={() => toggleLeague(lg.league)}
-                        className="flex-1 flex items-center gap-2 text-left"
-                      >
-                        {isLeagueExpanded(lg.league) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                        <span className="uppercase text-xs font-medium">{lg.league}</span>
-                        <span className="text-muted-foreground font-normal text-xs">
-                          ({countSelectedInLeague(lg.league)} of {lg.teams.length})
-                        </span>
-                      </button>
-                      {!singleSelect && (
-                        <div className="flex gap-2 text-xs">
-                          <button
-                            onClick={() => selectAllInLeague(lg.teams)}
-                            className="text-primary hover:underline"
-                          >
-                            Select All
-                          </button>
-                          <button
-                            onClick={() => clearLeague(lg.league)}
-                            className="text-muted-foreground hover:underline"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Teams list */}
-                    {isLeagueExpanded(lg.league) && (
-                      <div className="px-2 pb-2 space-y-1 ml-4">
-                        {lg.teams.map((team) => (
-                          <label
-                            key={`${team.provider}-${team.provider_team_id}`}
-                            className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={isTeamSelected(team)}
-                              onCheckedChange={() => toggleTeam(team)}
-                            />
-                            {team.logo_url && (
-                              <img
-                                src={team.logo_url}
-                                alt=""
-                                className="h-5 w-5 object-contain"
-                                onError={(e) => {
-                                  ;(e.target as HTMLImageElement).style.display = "none"
-                                }}
-                              />
-                            )}
-                            <span className="text-sm">{team.team_name}</span>
-                            {team.team_abbrev && (
-                              <span className="text-xs text-muted-foreground">
-                                ({team.team_abbrev})
-                              </span>
-                            )}
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <LeagueSection
+                    key={lg.league}
+                    lg={lg}
+                    isExpanded={isLeagueExpanded(lg.league)}
+                    singleSelect={singleSelect}
+                    onToggle={() => toggleLeague(lg.league)}
+                    isTeamSelected={isTeamSelected}
+                    onToggleTeam={toggleTeam}
+                    onSelectAll={selectAllInLeague}
+                    onClear={clearLeague}
+                    selectedCount={countSelectedInLeague(lg.league)}
+                  />
                 ))}
               </div>
             )}

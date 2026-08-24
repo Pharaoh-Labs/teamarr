@@ -4,12 +4,14 @@ import { api } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { cn, getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
 import { toast } from "sonner"
 import type { CachedLeague } from "@/api/teams"
 import { getLeagues, getSports } from "@/api/teams"
 import { ChevronRight, LoaderCircle, Check, Search, X } from "lucide-react"
 import { useThemedLogo } from "@/hooks/useTheme"
+import { conferenceLabel, useConferenceFilter } from "@/hooks/useConferenceFilter"
 
 // Types
 interface CacheTeam {
@@ -168,6 +170,15 @@ export function TeamImport() {
     enabled: !!selectedLeague,
   })
 
+  // Conference filter (#91): only NCAA football/basketball return data
+  const {
+    conferences,
+    selectedConference,
+    setSelectedConference,
+    conferenceTeamIds,
+    reset: resetConference,
+  } = useConferenceFilter(selectedLeague?.slug)
+
   // Search teams (when no league selected and query >= 2 chars)
   const searchTeamsQuery = useQuery({
     queryKey: ["search-teams", deferredSearchQuery],
@@ -238,6 +249,10 @@ export function TeamImport() {
     if (selectedLeague) {
       // When a league is selected, use teams from that league
       let teams = teamsQuery.data || []
+      // Conference filter (#91): narrow to the chosen conference's members
+      if (conferenceTeamIds) {
+        teams = teams.filter((t) => conferenceTeamIds.has(t.provider_team_id))
+      }
       // Apply search filter if there's a query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
@@ -254,7 +269,7 @@ export function TeamImport() {
       return searchTeamsQuery.data || []
     }
     return []
-  }, [selectedLeague, teamsQuery.data, searchQuery, searchTeamsQuery.data])
+  }, [selectedLeague, teamsQuery.data, searchQuery, searchTeamsQuery.data, conferenceTeamIds])
 
   // Filter out already imported teams
   const availableTeams = useMemo(() => {
@@ -291,6 +306,7 @@ export function TeamImport() {
     setSelectedLeague(league)
     setSelectedTeamIds(new Set())
     setSearchQuery("")
+    resetConference()
   }
 
   // Selection key: only soccer teams play in multiple leagues (EPL + Champions League + FA Cup)
@@ -618,21 +634,41 @@ export function TeamImport() {
                     </Button>
                   </div>
                 </div>
-                <div className="relative max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Filter teams..."
-                    className="pl-9 pr-9"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                <div className="flex items-center gap-2">
+                  <div className="relative max-w-sm flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Filter teams..."
+                      className="pl-9 pr-9"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  {conferences.length > 0 && (
+                    <Select
+                      value={selectedConference}
+                      onChange={(e) => {
+                        setSelectedConference(e.target.value)
+                        setLastClickedIndex(null)
+                      }}
+                      className="w-64"
+                      aria-label="Filter by conference"
                     >
-                      <X className="h-4 w-4" />
-                    </button>
+                      <option value="">All conferences</option>
+                      {conferences.map((conf) => (
+                        <option key={conf.key} value={conf.key}>
+                          {conferenceLabel(conf)}
+                        </option>
+                      ))}
+                    </Select>
                   )}
                 </div>
               </div>

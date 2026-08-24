@@ -148,6 +148,7 @@ class ChannelSyncer(_LifecycleHost):
                 static_group_id=effective_group_id,
                 event_sport=event_sport,
                 event_league=event_league,
+                event=event,
             )
 
             old_group_id = current_channel.channel_group_id

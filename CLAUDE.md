@@ -265,7 +265,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - API routes build responses with `to_model(Model, dataclass)` from `api/routes/settings/models.py`; frontend hooks are factory-generated with scoped cache invalidation (`frontend/src/hooks/useSettings.ts`).
 
 **Dynamic Groups** (`teamarr/consumers/lifecycle/dynamic_resolver.py`):
-- `{sport}` and `{league}` wildcards
+- `{sport}`, `{league}`, and `{conference}` wildcards (`{conference}` = home team's NCAA conference from `provider_group_cache`, #91)
 - Auto-creates in Dispatcharr
 
 **Per-Source Matching Types** (epic `teamarrv2-ahow`):
