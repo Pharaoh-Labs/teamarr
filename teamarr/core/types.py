@@ -152,6 +152,46 @@ class Event:
     # preview prose which only populates ~T-0/T-1.
     home_last_five: str = ""
     away_last_five: str = ""
+    # Typed, provider-grounded pregame facts. Every field has a matching public
+    # template variable (or reuses an existing one); generated prose reads only
+    # these fields and never consumes odds/betting payloads.
+    home_team_record: str = ""
+    away_team_record: str = ""
+    week: int | None = None
+
+    # Baseball
+    home_probable_starter: str = ""
+    away_probable_starter: str = ""
+    home_home_runs_leader: str = ""
+    away_home_runs_leader: str = ""
+    home_batting_average_leader: str = ""
+    away_batting_average_leader: str = ""
+    home_rbi_leader: str = ""
+    away_rbi_leader: str = ""
+
+    # Football
+    home_passing_leader: str = ""
+    away_passing_leader: str = ""
+    home_rushing_leader: str = ""
+    away_rushing_leader: str = ""
+    home_receiving_leader: str = ""
+    away_receiving_leader: str = ""
+    home_total_yards_per_game: str = ""
+    away_total_yards_per_game: str = ""
+    home_rushing_yards_per_game: str = ""
+    away_rushing_yards_per_game: str = ""
+
+    # Basketball
+    home_points_leader: str = ""
+    away_points_leader: str = ""
+    home_rebounds_leader: str = ""
+    away_rebounds_leader: str = ""
+    home_assists_leader: str = ""
+    away_assists_leader: str = ""
+    home_points_per_game: str = ""
+    away_points_per_game: str = ""
+    home_points_allowed_per_game: str = ""
+    away_points_allowed_per_game: str = ""
 
     # MMA-specific: when main card begins (prelims start at start_time)
     main_card_start: datetime | None = None

@@ -2447,6 +2447,64 @@ class TeamMatcher:
                 season_type=cached_data.get("season_type"),
                 venue=venue,
                 broadcasts=broadcasts,
+                season_year=cached_data.get("season_year"),
+                neutral_site=bool(cached_data.get("neutral_site", False)),
+                broadcast_markets=cached_data.get("broadcast_markets") or {},
+                odds_data=cached_data.get("odds_data"),
+                game_recap=cached_data.get("game_recap", ""),
+                game_event_note=cached_data.get("game_event_note", ""),
+                soccer_match_note=cached_data.get("soccer_match_note", ""),
+                game_preview=cached_data.get("game_preview", ""),
+                series_summary=cached_data.get("series_summary", ""),
+                home_last_five=cached_data.get("home_last_five", ""),
+                away_last_five=cached_data.get("away_last_five", ""),
+                home_team_record=cached_data.get("home_team_record", ""),
+                away_team_record=cached_data.get("away_team_record", ""),
+                week=cached_data.get("week"),
+                home_probable_starter=cached_data.get("home_probable_starter", ""),
+                away_probable_starter=cached_data.get("away_probable_starter", ""),
+                home_home_runs_leader=cached_data.get("home_home_runs_leader", ""),
+                away_home_runs_leader=cached_data.get("away_home_runs_leader", ""),
+                home_batting_average_leader=cached_data.get(
+                    "home_batting_average_leader", ""
+                ),
+                away_batting_average_leader=cached_data.get(
+                    "away_batting_average_leader", ""
+                ),
+                home_rbi_leader=cached_data.get("home_rbi_leader", ""),
+                away_rbi_leader=cached_data.get("away_rbi_leader", ""),
+                home_passing_leader=cached_data.get("home_passing_leader", ""),
+                away_passing_leader=cached_data.get("away_passing_leader", ""),
+                home_rushing_leader=cached_data.get("home_rushing_leader", ""),
+                away_rushing_leader=cached_data.get("away_rushing_leader", ""),
+                home_receiving_leader=cached_data.get("home_receiving_leader", ""),
+                away_receiving_leader=cached_data.get("away_receiving_leader", ""),
+                home_total_yards_per_game=cached_data.get(
+                    "home_total_yards_per_game", ""
+                ),
+                away_total_yards_per_game=cached_data.get(
+                    "away_total_yards_per_game", ""
+                ),
+                home_rushing_yards_per_game=cached_data.get(
+                    "home_rushing_yards_per_game", ""
+                ),
+                away_rushing_yards_per_game=cached_data.get(
+                    "away_rushing_yards_per_game", ""
+                ),
+                home_points_leader=cached_data.get("home_points_leader", ""),
+                away_points_leader=cached_data.get("away_points_leader", ""),
+                home_rebounds_leader=cached_data.get("home_rebounds_leader", ""),
+                away_rebounds_leader=cached_data.get("away_rebounds_leader", ""),
+                home_assists_leader=cached_data.get("home_assists_leader", ""),
+                away_assists_leader=cached_data.get("away_assists_leader", ""),
+                home_points_per_game=cached_data.get("home_points_per_game", ""),
+                away_points_per_game=cached_data.get("away_points_per_game", ""),
+                home_points_allowed_per_game=cached_data.get(
+                    "home_points_allowed_per_game", ""
+                ),
+                away_points_allowed_per_game=cached_data.get(
+                    "away_points_allowed_per_game", ""
+                ),
                 segment_times=segment_times,
                 main_card_start=main_card_start,
                 circuit_name=cached_data.get("circuit_name"),
