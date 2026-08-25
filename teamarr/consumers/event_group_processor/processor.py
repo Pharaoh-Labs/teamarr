@@ -378,18 +378,6 @@ class EventGroupProcessor(
                         f"{group.name} {stats}",
                     )
 
-            # Run enforcement (keyword, cross-group, ordering, orphans)
-            if run_enforcement:
-                enforcement_lifecycle = None
-                if self._dispatcharr_client:
-                    enforcement_lifecycle = self._get_lifecycle_service()
-                all_group_ids = [g.id for g in groups]
-                batch_result.enforcement = self._run_enforcement(
-                    conn,
-                    all_group_ids,
-                    lifecycle_service=enforcement_lifecycle,
-                )
-
             # Aggregate XMLTV from all processed groups
             if aggregate_xmltv and processed_group_ids:
                 xmltv_contents = get_all_group_xmltv(conn, processed_group_ids)
@@ -407,12 +395,37 @@ class EventGroupProcessor(
                         f", {len(batch_result.total_xmltv)} bytes"
                     )
 
+        # Enforcement runs AFTER the connection above has closed, and must keep
+        # doing so (#607). Every enforcer opens its own connection, while this
+        # method's connection writes (store_group_xmltv, per group) and does not
+        # commit until its `with` exits — so running them inside that block put
+        # two connections from one thread on either side of the SQLite write
+        # lock. The enforcer would wait out the full 30s busy_timeout and lose
+        # its write, every run, because the lock could not be released until the
+        # block it was blocking exited.
+        #
+        # Closing first also means the enforcers read the run they are enforcing:
+        # a second connection sees only committed state, so while the groups
+        # phase was mid-transaction they were reading the database as it looked
+        # BEFORE this run.
+        #
+        # Nothing here feeds the XMLTV aggregation above — enforcement moves
+        # streams and deletes channels, it never rewrites a group's stored guide
+        # — so the reordering is safe.
+        if run_enforcement:
+            enforcement_lifecycle = None
+            if self._dispatcharr_client:
+                enforcement_lifecycle = self._get_lifecycle_service()
+            batch_result.enforcement = self._run_enforcement(
+                [g.id for g in groups],
+                lifecycle_service=enforcement_lifecycle,
+            )
+
         batch_result.completed_at = now_utc()
         return batch_result
 
     def _run_enforcement(
         self,
-        conn: Connection,
         multi_league_ids: list[int],
         lifecycle_service=None,
     ) -> list[EnforcementStepResult]:
@@ -430,8 +443,11 @@ class EventGroupProcessor(
         the remaining steps still run. The per-step outcomes are returned (and
         surfaced in run stats) instead of vanishing into warning logs.
 
+        Takes no connection on purpose (#607): every step opens its own, and
+        this must only ever be called once the caller's connection has closed.
+        See the call site in process_all_groups.
+
         Args:
-            conn: Database connection
             multi_league_ids: IDs of multi-league groups for cross-group check
             lifecycle_service: Optional lifecycle service for orphan/disabled cleanup
 
@@ -506,10 +522,11 @@ class EventGroupProcessor(
             #    Followed leagues/teams can change while the source group stays enabled;
             #    the stream sync won't remove those streams (they're still in the M3U),
             #    so the channels linger until a full wipe without this (psoi).
-            run_step(
-                "subscription_cleanup",
-                lambda: self._cleanup_unsubscribed_leagues(conn, lifecycle_service),
-            )
+            def subscription_step() -> int:
+                with self._db_factory() as conn:
+                    return self._cleanup_unsubscribed_leagues(conn, lifecycle_service)
+
+            run_step("subscription_cleanup", subscription_step)
 
         return steps
 
