@@ -54,10 +54,11 @@ These leagues have high event volume or unreliable free-tier data and require a 
 - IMSA and WEC (motor racing). WEC's 62 events/season exceeds the free `eventsseason.php` 15-event cap; IMSA fits it but is gated premium too, so all TSDB racing is premium (no silent truncation if a schedule grows).
 - FIBA Basketball World Cup (M/W: `fiba`, `fibaw`) — gated premium since qualifiers run in parallel across multiple confederations, which can exceed the free tier's 5-events/day/league cap during busy qualifying windows.
 - Uruguayan Segunda División (`uru.2`)
+- English Rugby League Super League (`super-league`) — a 12-team, ~27-round season well past the free tier's caps
 
 The `tsdb_tier` column in `schema.sql` classifies each league as `free` or `premium`.
 
-AFL was formerly a TSDB premium league but is now served by the free [Squiggle](squiggle) provider. NRL and Super Rugby Pacific also migrated from TSDB to ESPN.
+AFL was formerly a TSDB premium league but is now served by the free [Squiggle](squiggle) provider. NRL and Super Rugby Pacific also migrated from TSDB to ESPN. Super League stays on TSDB: ESPN's `rugby-league` tree carries only the NRL.
 
 ## Configuration
 
@@ -67,7 +68,7 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
 ## Supported Leagues
 
-TSDB serves **48 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
+TSDB serves **49 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
 | League | Code | TSDB ID | Sport | Tier |
 |--------|------|---------|-------|------|
@@ -93,6 +94,7 @@ TSDB serves **48 leagues** in total. The table below is representative, not exha
 | Northern Irish Premiership | `nifl.1` | 4659 | Soccer | Premium |
 | IMSA SportsCar Championship | `imsa` | 4488 | Motor Racing | Premium |
 | FIA World Endurance Championship | `wec` | 4413 | Motor Racing | Premium |
+| English Rugby League Super League | `super-league` | 4415 | Rugby | Premium |
 
 ## Event Resolution
 

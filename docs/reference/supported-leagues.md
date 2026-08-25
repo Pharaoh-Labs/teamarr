@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **172 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
+Teamarr supports **174 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -383,6 +383,7 @@ IPL, BBL, and SA20 are TSDB premium tier — a [premium API key](providers/tsdb.
 | Olympic Men's Rugby Sevens | `om7s` | ESPN |
 | Olympic Women's Rugby Sevens | `ow7s` | ESPN |
 | National Rugby League (Australia) | `nrl` | ESPN |
+| English Rugby League Super League | `super-league` | TSDB **P** |
 
 ---
 

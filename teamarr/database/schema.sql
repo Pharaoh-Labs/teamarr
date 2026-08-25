@@ -1211,6 +1211,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('ow7s',  'espn', 'rugby/283',       NULL, 'Olympic Women''s Rugby Sevens',   'rugby', 'https://upload.wikimedia.org/wikipedia/commons/f/f2/Rugby_sevens_pictogram.svg', NULL, 1, 'OW7S',  'ow7s',  'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('nrl',   'espn', 'rugby-league/3',  NULL, 'National Rugby League',           'rugby', 'https://upload.wikimedia.org/wikipedia/en/5/50/National_Rugby_League.svg', NULL, 1, 'NRL',   'nrl',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
+    -- Rugby League (TSDB) - ESPN's rugby-league tree carries only the NRL, so Super League comes from TSDB.
+    -- Premium tier: free-tier eventsseason caps at 5 events and eventspastleague returns 1, so a keyless fetch is near-empty.
+    ('super-league', 'tsdb', '4415', 'English Rugby League Super League', 'English Rugby League Super League', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gp2sfv1641835011.png', NULL, 1, 'SL', 'super-league', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+
     -- Boxing (TSDB) - Combat sport with event cards
     ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free', 1),
 
