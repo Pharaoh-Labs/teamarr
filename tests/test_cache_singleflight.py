@@ -66,8 +66,9 @@ def test_concurrent_same_key_fetches_once(monkeypatch):
 
     _hammer(service, "nba", target, n=20)
 
-    # 20 threads, one cache key -> exactly one upstream fetch.
-    assert provider.calls == 1
+    # 20 threads, one cache key -> one upstream fetch per provider-day bucket
+    # (D-1, D, D+1 since #601), and crucially NOT one per thread.
+    assert provider.calls == 3
 
 
 def test_distinct_keys_not_serialized_away(monkeypatch):
@@ -79,4 +80,36 @@ def test_distinct_keys_not_serialized_away(monkeypatch):
     _hammer(service, "nba", d1, n=10)
     _hammer(service, "nba", d2, n=10)
 
-    assert provider.calls == 2
+    # {d1-1, d1, d1+1} then only d2+1 is new — consecutive days share buckets.
+    assert provider.calls == 4
+
+
+def test_shared_buckets_are_singleflighted_across_target_dates(monkeypatch):
+    """Adjacent target dates overlap on buckets; the overlap must fetch once.
+
+    The outer lock is per user-day, so two threads on *different* target dates
+    hold different locks while sharing two of their three provider-day buckets
+    (#601). Only the raw layer's own lock keeps that from double-fetching.
+    """
+    provider, service = _service(monkeypatch)
+    d1 = date.today() + timedelta(days=3)
+    d2 = d1 + timedelta(days=1)
+
+    barrier = threading.Barrier(2)
+
+    def worker(target):
+        def run():
+            barrier.wait()
+            service.get_events("nba", target)
+
+        return run
+
+    threads = [threading.Thread(target=worker(d)) for d in (d1, d2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Union of {d1-1, d1, d1+1} and {d2-1, d2, d2+1} is 4 distinct buckets.
+    # Without the raw lock the two shared buckets fetch twice -> 6.
+    assert provider.calls == 4

@@ -22,9 +22,21 @@ from teamarr.utilities.event_dates import event_intersects, user_day_window
 NY = ZoneInfo("America/New_York")
 
 
+def _use_tz(monkeypatch, tz):
+    """Pin the user timezone at both sites that resolve it.
+
+    ``event_dates`` and ``sports_data`` each bind ``get_user_timezone`` by
+    ``from``-import, so patching the re-export in ``utilities.tz`` rebinds
+    nothing they can see. Patch the bindings themselves, or these tests
+    silently fall through to the host machine's configured timezone.
+    """
+    for module in ("teamarr.utilities.event_dates", "teamarr.services.sports_data"):
+        monkeypatch.setattr(f"{module}.get_user_timezone", lambda: tz)
+
+
 @pytest.fixture(autouse=True)
 def _ny_user(monkeypatch):
-    monkeypatch.setattr("teamarr.utilities.tz.get_user_timezone", lambda: NY)
+    _use_tz(monkeypatch, NY)
 
 
 def _team(name: str) -> Team:
@@ -182,6 +194,11 @@ def test_seam_filters_provider_superset_to_user_day():
     assert [e.id for e in service.get_events("boxing", date(2026, 8, 23))] == ["sun"]
 
 
+def _resolved(service) -> dict:
+    """The user-day layer of the cache (``events_v2``), without raw buckets."""
+    return {k: v for k, v in service._cache.store.items() if k.startswith("events_v2:")}
+
+
 def test_seam_caches_the_filtered_slate():
     saturday_fight = _event("sat", datetime(2026, 8, 23, 1, 0, tzinfo=UTC))
     off_day = _event("off", datetime(2026, 8, 26, 1, 0, tzinfo=UTC))
@@ -189,7 +206,7 @@ def test_seam_caches_the_filtered_slate():
 
     service.get_events("boxing", date(2026, 8, 22))
 
-    (cached,) = service._cache.store.values()
+    (cached,) = _resolved(service).values()
     assert [e["id"] for e in cached] == ["sat"]
 
 
@@ -197,5 +214,118 @@ def test_cache_key_carries_tz_and_namespace_version():
     service = _service([])
     service.get_events("boxing", date(2026, 8, 22))
 
-    (key,) = service._cache.store.keys()
+    (key,) = _resolved(service).keys()
     assert key == "events_v2:boxing:2026-08-22:America/New_York"
+
+
+# ---------------------------------------------------------------------------
+# Day-bucketed providers (#601)
+# ---------------------------------------------------------------------------
+
+
+class _DayBucketedProvider:
+    """A server-side day-bucketed API: returns ONLY its own calendar day.
+
+    ESPN's scoreboard (``?dates=``) and MLB Stats behave this way — they
+    cannot honour the "±1-day superset" contract, because the bucket is
+    chosen by the server (#601).
+    """
+
+    def __init__(self, events):
+        self.events = events
+        self.days_fetched: list[date] = []
+
+    @property
+    def name(self):
+        return "fake"
+
+    def supports_league(self, league):
+        return True
+
+    def get_events(self, league, target_date):
+        self.days_fetched.append(target_date)
+        return [e for e in self.events if e.start_time.date() == target_date]
+
+
+def _bucketed_service(events):
+    service = SportsDataService(providers=[])
+    service._cache = _FakeCache()
+    provider = _DayBucketedProvider(events)
+    service.add_provider(provider)
+    return service, provider
+
+
+def test_day_bucketed_provider_reaches_events_past_the_local_midnight(monkeypatch):
+    """The #601 regression: Serie A vanished entirely for AEST users.
+
+    ``Parma at Juventus`` kicks off 18:45Z on the 29th — 04:45 on the 30th in
+    Sydney, so it belongs to the user's *30th*. ESPN files it under its own
+    29th, so a lone ``?dates=20260830`` fetch never sees it and the 29th's
+    fetch has it filtered out by the local window. It fell through both ends.
+    """
+    _use_tz(monkeypatch, ZoneInfo("Australia/Sydney"))
+    juventus = _event("juve", datetime(2026, 8, 29, 18, 45, tzinfo=UTC))
+    service, _ = _bucketed_service([juventus])
+
+    assert [e.id for e in service.get_events("ita.1", date(2026, 8, 30))] == ["juve"]
+    # ...and it is NOT double-counted on the provider's own calendar day.
+    assert service.get_events("ita.1", date(2026, 8, 29)) == []
+
+
+def test_span_fetches_neighbouring_buckets_once_each():
+    service, provider = _bucketed_service([])
+    service.get_events("ita.1", date(2026, 8, 29))
+
+    assert provider.days_fetched == [date(2026, 8, 28), date(2026, 8, 29), date(2026, 8, 30)]
+
+
+def test_raw_buckets_are_cached_and_shared_across_target_dates():
+    """Consecutive target dates overlap, so the fan-out is not 3x calls."""
+    service, provider = _bucketed_service([])
+
+    service.get_events("ita.1", date(2026, 8, 29))
+    service.get_events("ita.1", date(2026, 8, 30))
+
+    # 28/29/30 for the first call; only 31 is new for the second.
+    assert provider.days_fetched == [
+        date(2026, 8, 28),
+        date(2026, 8, 29),
+        date(2026, 8, 30),
+        date(2026, 8, 31),
+    ]
+
+
+def test_raw_bucket_cache_is_timezone_independent():
+    service, _ = _bucketed_service([])
+    service.get_events("ita.1", date(2026, 8, 29))
+
+    raw = [k for k in service._cache.store if k.startswith("events_raw:")]
+    assert raw == [
+        "events_raw:_DayBucketedProvider:ita.1:2026-08-28",
+        "events_raw:_DayBucketedProvider:ita.1:2026-08-29",
+        "events_raw:_DayBucketedProvider:ita.1:2026-08-30",
+    ]
+
+
+def test_duplicate_events_across_buckets_are_deduplicated():
+    """A provider that over-returns (the #590 contract) must not yield dupes."""
+    fight = _event("sat", datetime(2026, 8, 23, 1, 0, tzinfo=UTC))
+    service = _service([fight])  # _SupersetProvider returns it for every bucket
+
+    assert [e.id for e in service.get_events("boxing", date(2026, 8, 22))] == ["sat"]
+
+
+def test_failing_neighbour_bucket_does_not_lose_the_requested_day():
+    fight = _event("sat", datetime(2026, 8, 23, 1, 0, tzinfo=UTC))
+
+    class _FlakyNeighbour(_DayBucketedProvider):
+        def get_events(self, league, target_date):
+            if target_date == date(2026, 8, 21):  # the D-1 neighbour
+                raise RuntimeError("provider blew up")
+            return super().get_events(league, target_date)
+
+    service = SportsDataService(providers=[])
+    service._cache = _FakeCache()
+    service.add_provider(_FlakyNeighbour([fight]))
+
+    assert [e.id for e in service.get_events("boxing", date(2026, 8, 22))] == ["sat"]
