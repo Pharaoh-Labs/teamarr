@@ -105,8 +105,34 @@ _NORMALIZED_TEAM_ALIASES: dict[str, str] = {
 }
 
 
-# Sentinel for the alias memo: None is a real, cacheable answer ("no alias").
-_UNRESOLVED = object()
+class _Unresolved:
+    """Sentinel for the alias memo: None is a real, cacheable answer ("no alias").
+
+    A class rather than a bare ``object()`` so callers can narrow the ``get()``
+    union with ``isinstance`` and the real payload type flows through — the same
+    pattern as ``_CacheMiss`` in services/sports_data.py.
+    """
+
+    __slots__ = ()
+
+
+_UNRESOLVED = _Unresolved()
+
+
+@dataclass(frozen=True)
+class _DateWindow:
+    """The +/- day window some candidate builders filter to.
+
+    One object rather than three keyword arguments because the three only ever
+    travel together: a caller either filters by date or does not. Grouping them
+    makes that an invariant the type checker enforces, instead of three
+    independently-optional values the body has to assume are consistent.
+    Frozen so it can key the candidate memo.
+    """
+
+    user_tz: ZoneInfo
+    target_date: date
+    days: int
 
 
 @lru_cache(maxsize=32768)
@@ -348,7 +374,9 @@ class TeamMatcher:
         # _prefetched_candidates). Keyed by league set + date window, and reset
         # whenever a different prefetch dict arrives.
         self._candidates_source: dict[str, list[Event]] | None = None
-        self._candidates_memo: dict[tuple, list[tuple[str, Event]]] = {}
+        self._candidates_memo: dict[
+            tuple[tuple[str, ...], _DateWindow | None], list[tuple[str, Event]]
+        ] = {}
         # Global team identity index (epic goax), built lazily on first use so
         # matchers constructed without a db_factory (tests, racing/tennis paths)
         # cost nothing. _identity_loaded distinguishes "not tried yet" from
@@ -672,9 +700,7 @@ class TeamMatcher:
             all_events = self._prefetched_candidates(
                 prefetched_events,
                 leagues_to_search,
-                user_tz=user_tz,
-                target_date=target_date,
-                window_days=window_days,
+                window=_DateWindow(user_tz, target_date, window_days),
             )
         else:
             is_tsdb_map = {
@@ -829,9 +855,7 @@ class TeamMatcher:
             all_events = self._prefetched_candidates(
                 prefetched_events,
                 leagues_to_search,
-                user_tz=user_tz,
-                target_date=target_date,
-                window_days=window_days,
+                window=_DateWindow(user_tz, target_date, window_days),
             )
         else:
             for league in leagues_to_search:
@@ -893,9 +917,7 @@ class TeamMatcher:
         prefetched_events: dict[str, list[Event]],
         leagues_to_search: list[str],
         *,
-        user_tz: ZoneInfo | None = None,
-        target_date: date | None = None,
-        window_days: int | None = None,
+        window: _DateWindow | None = None,
     ) -> list[tuple[str, Event]]:
         """Flattened ``[(league, event)]`` candidates, memoized for the batch.
 
@@ -912,7 +934,7 @@ class TeamMatcher:
             self._candidates_source = prefetched_events
             self._candidates_memo = {}
 
-        key = (tuple(leagues_to_search), target_date, window_days, user_tz)
+        key = (tuple(leagues_to_search), window)
         cached = self._candidates_memo.get(key)
         if cached is not None:
             return cached
@@ -920,9 +942,9 @@ class TeamMatcher:
         candidates: list[tuple[str, Event]] = []
         for league in leagues_to_search:
             for event in prefetched_events.get(league, ()):
-                if window_days is not None:
-                    event_date = _local_date(event.start_time, user_tz)
-                    if abs((event_date - target_date).days) > window_days:
+                if window is not None:
+                    event_date = _local_date(event.start_time, window.user_tz)
+                    if abs((event_date - window.target_date).days) > window.days:
                         continue
                 candidates.append((league, event))
 
@@ -1895,7 +1917,7 @@ class TeamMatcher:
         # once per candidate over a pool of at most a few leagues.
         memo_key = (team_name, league)
         cached = self._alias_resolve_cache.get(memo_key, _UNRESOLVED)
-        if cached is not _UNRESOLVED:
+        if not isinstance(cached, _Unresolved):
             return cached
         resolved = self._resolve_alias_uncached(team_name, league)
         self._alias_resolve_cache[memo_key] = resolved

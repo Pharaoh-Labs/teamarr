@@ -50,6 +50,7 @@ half.
 from __future__ import annotations
 
 import logging
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from functools import lru_cache
 from sqlite3 import Connection
@@ -154,7 +155,13 @@ _NON_DISCRIMINATING = frozenset(
 )
 
 
-def _discriminating(tokens: set[str]) -> set[str]:
+def _discriminating(tokens: AbstractSet[str]) -> set[str]:
+    """The tokens in ``tokens`` that can actually tell two teams apart.
+
+    Takes ``AbstractSet`` rather than ``set``: its callers difference two
+    memoized ``frozenset``s, so a ``set``-only annotation would reject the only
+    inputs it ever receives.
+    """
     return {t for t in tokens if len(t) > 2 and t not in _NON_DISCRIMINATING}
 
 
