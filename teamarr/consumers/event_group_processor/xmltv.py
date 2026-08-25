@@ -110,10 +110,15 @@ class XmltvRenderer:
 
         exception_keywords = get_exception_keywords(conn)
 
-        # Log template resolution context
+        # Template-resolution context. DEBUG, not INFO: this is per-group and
+        # per-event detail for answering "why did THIS event get THAT template",
+        # which is a debugging question. At INFO the two lines below produced
+        # 812 of 2,975 INFO lines in one observed run — 62 identical copies of
+        # this one, plus one per event below — drowning the per-group summaries
+        # a reader actually scans for.
         sub_templates = get_subscription_templates(conn)
         if len(sub_templates) > 1:
-            logger.info(
+            logger.debug(
                 "[EVENT_EPG] Multi-template subscription: default=%s, "
                 "templates=%s",
                 default_template_id,
@@ -136,9 +141,10 @@ class XmltvRenderer:
                 conn, event_sport, event_league
             )
 
-            # Log template resolution for multi-template subscriptions
+            # Log template resolution for multi-template subscriptions (DEBUG —
+            # see the note above; this is one line per event)
             if len(sub_templates) > 1:
-                logger.info(
+                logger.debug(
                     "[EVENT_EPG] Template resolution: event=%s "
                     "sport=%r league=%r -> template=%s (default=%s)",
                     event.id,

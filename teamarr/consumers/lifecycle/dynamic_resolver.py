@@ -36,6 +36,13 @@ class DynamicResolver:
     _conference_by_team: dict = field(default_factory=dict)
     _league_display_names: dict[str, str] = field(default_factory=dict)
     _league_aliases: dict[str, str] = field(default_factory=dict)
+    # Resolutions already announced at INFO. Group resolution is answered from
+    # _groups_by_name, so the same mapping is re-derived once per channel — 722
+    # lines in one observed run, 330 of them character-identical. The DISTINCT
+    # mappings are what a reader needs ("which group did MLB land in?"); the
+    # repeats are noise that costs real signal. First of each is announced,
+    # the rest go to DEBUG.
+    _announced_resolutions: set[tuple] = field(default_factory=set)
     # Valid Dispatcharr channel-group ids seen at init (only trusted when the
     # group fetch succeeded — see _groups_loaded) so a stale/deleted configured
     # group id can be detected before it fails every channel creation.
@@ -253,6 +260,14 @@ class DynamicResolver:
             return None
         return group_id
 
+    def _log_resolution(self, key: tuple, message: str, *args) -> None:
+        """Announce a group resolution once per distinct outcome (see above)."""
+        if key in self._announced_resolutions:
+            logger.debug(message, *args)
+            return
+        self._announced_resolutions.add(key)
+        logger.info(message, *args)
+
     def _get_or_create_group(self, name: str) -> int | None:
         """Get group ID by name, creating if needed.
 
@@ -363,7 +378,8 @@ class DynamicResolver:
         if mode == "sport" and event_sport:
             display_name = self.get_sport_display_name(event_sport)
             group_id = self._get_or_create_group(display_name)
-            logger.info(
+            self._log_resolution(
+                ("sport", event_sport, display_name, group_id),
                 "[RESOLVER] Sport mode: %s -> '%s' -> group_id=%s",
                 event_sport,
                 display_name,
@@ -403,8 +419,12 @@ class DynamicResolver:
                 return self._validate_group_id(static_group_id)  # Fallback
 
             group_id = self._get_or_create_group(resolved_name)
-            logger.info(
-                "[RESOLVER] Pattern mode: %s -> '%s' -> group_id=%s", mode, resolved_name, group_id
+            self._log_resolution(
+                ("pattern", mode, resolved_name, group_id),
+                "[RESOLVER] Pattern mode: %s -> '%s' -> group_id=%s",
+                mode,
+                resolved_name,
+                group_id,
             )
             return group_id
 
