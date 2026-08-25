@@ -385,4 +385,10 @@ def purge_league_cache_rows(conn: sqlite3.Connection, league_code: str) -> tuple
         "DELETE FROM league_cache WHERE league_slug = ?",
         (league_code,),
     ).rowcount
+    if teams:
+        # Same reasoning as the refresh paths: the fixture gate's shared index
+        # must not keep vetoing against rows that no longer exist (#609).
+        from teamarr.database.team_cache import invalidate_team_identity_caches
+
+        invalidate_team_identity_caches()
     return teams, leagues

@@ -112,6 +112,15 @@ def _cached_team_identity(provider: str, team_id: str, league: str) -> dict | No
     return cached
 
 
+def clear_team_identity_memo() -> None:
+    """Drop the team-identity memo so the next lookup re-reads team_cache.
+
+    Called by database.team_cache.invalidate_team_identity_caches after the
+    table is written; see that function for why the caches are dropped together.
+    """
+    _TEAM_IDENTITY_MEMO.clear()
+
+
 def _backfill_team_from_cache(team: Team | None, league: str) -> Team | None:
     """Patch a Team's short_name/abbreviation/name from team_cache when missing.
 

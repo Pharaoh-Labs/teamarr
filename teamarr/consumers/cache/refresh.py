@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from teamarr.core import SportsProvider
 from teamarr.database import get_db
+from teamarr.database.team_cache import invalidate_team_identity_caches
 from teamarr.providers import ProviderRegistry
 from teamarr.providers.espn.client import ESPNClient
 from teamarr.utilities.tz import utcnow_iso
@@ -506,6 +507,13 @@ class CacheRefresher:
                 (len(rows), now, league_code),
             )
 
+        # The fixture gate reads a process-wide index of this table (#609), and
+        # it VETOES: a stale league membership yields FIXTURE_NOT_IN_LEAGUE, a
+        # silently missing match. Waiting out its TTL would regress the
+        # refresh-then-generate sequence, which used to see every write
+        # immediately because the index was rebuilt per group.
+        invalidate_team_identity_caches()
+
         return len(rows)
 
     def _discover_from_provider(
@@ -864,6 +872,10 @@ class CacheRefresher:
                 len(leagues),
                 len(unique_teams),
             )
+
+        # See the note in _save_league_teams: the fixture gate's shared index
+        # must not outlive the rows it was built from.
+        invalidate_team_identity_caches()
 
     def _update_leagues_team_counts(self, cursor, leagues: list[dict]) -> None:
         """Update cached_team_count in the leagues table.

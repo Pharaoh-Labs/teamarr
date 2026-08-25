@@ -185,8 +185,10 @@ def _shared_identity_index(db_factory: Any) -> TeamIdentityIndex | None:
 def reset_identity_index_cache() -> None:
     """Drop the shared index so the next lookup rebuilds it.
 
-    For tests, and for callers that have just reseeded team_cache and want the
-    change visible immediately rather than at the next TTL expiry.
+    Production callers should not reach for this directly — write to team_cache
+    and call ``database.team_cache.invalidate_team_identity_caches``, which
+    drops this and the enrichment memo together. Exposed separately for tests
+    and so that helper has something to call.
     """
     global _identity_index_cache
     _identity_index_cache = None
