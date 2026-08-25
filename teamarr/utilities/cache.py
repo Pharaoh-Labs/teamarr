@@ -134,6 +134,13 @@ class TTLCache:
         instead of per insert. Whatever the sweep leaves behind is trimmed by
         least-recently-used, which the OrderedDict makes O(1) per victim (it was
         a full min() scan *per victim* before).
+
+        The trade: because this returns early below capacity, an under-capacity
+        cache holds expired entries rather than reaping them eagerly, so it
+        settles nearer ``max_size`` in memory than it used to. ``get()`` still
+        refuses to serve them, and ``PersistentTTLCache._background_flush``
+        reaps them on its timer — a plain ``TTLCache`` used standalone has no
+        such timer and should call ``cleanup_expired()`` itself if it cares.
         """
         if self._max_size <= 0:
             return
@@ -338,9 +345,28 @@ class PersistentTTLCache:
         self._flush_timer.start()
 
     def _background_flush(self) -> None:
-        """Background flush handler."""
+        """Background maintenance: reap expired entries, then flush dirty ones.
+
+        The reap rides here because nothing else calls it. ``_evict_if_needed``
+        deliberately does nothing while the cache has room, so without this an
+        under-capacity cache would hold expired entries until it filled up —
+        the old per-insert sweep reaped them incidentally, at the cost of
+        making every insert O(n). One sweep every ``flush_interval`` seconds
+        buys the same reclamation for ~2ms per 50k entries.
+
+        Reaping is isolated from the flush so a failure in one cannot skip the
+        other, and both are isolated from the reschedule so the timer chain
+        survives either.
+        """
         if self._shutdown:
             return
+
+        try:
+            removed = self.cleanup_expired()
+            if removed:
+                logger.debug("[CACHE] Reaped %d expired entries", removed)
+        except Exception as e:
+            logger.error("[CACHE] Background cleanup failed: %s", e)
 
         try:
             self.flush()

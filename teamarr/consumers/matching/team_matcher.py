@@ -8,6 +8,7 @@ Supports two modes:
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
@@ -375,7 +376,7 @@ class TeamMatcher:
         # whenever a different prefetch dict arrives.
         self._candidates_source: dict[str, list[Event]] | None = None
         self._candidates_memo: dict[
-            tuple[tuple[str, ...], _DateWindow | None], list[tuple[str, Event]]
+            tuple[tuple[str, ...], _DateWindow | None], tuple[tuple[str, Event], ...]
         ] = {}
         # Global team identity index (epic goax), built lazily on first use so
         # matchers constructed without a db_factory (tests, racing/tennis paths)
@@ -585,7 +586,7 @@ class TeamMatcher:
 
         # Use prefetched events if available (much faster for multi-stream matching)
         # Otherwise, fetch events: use full 30-day cache for matching
-        all_events: list[tuple[str, Event]] = []
+        all_events: Sequence[tuple[str, Event]] = []
 
         if prefetched_events:
             # Use pre-fetched events (already fetched once for all streams)
@@ -695,7 +696,7 @@ class TeamMatcher:
 
         # Narrow date window to ±2 days to minimise false positives.
         window_days = 2
-        all_events: list[tuple[str, Event]] = []
+        all_events: Sequence[tuple[str, Event]] = []
         if prefetched_events:
             all_events = self._prefetched_candidates(
                 prefetched_events,
@@ -850,7 +851,7 @@ class TeamMatcher:
 
         # Narrow date window to ±2 days to minimise false positives.
         window_days = 2
-        all_events: list[tuple[str, Event]] = []
+        all_events: Sequence[tuple[str, Event]] = []
         if prefetched_events:
             all_events = self._prefetched_candidates(
                 prefetched_events,
@@ -918,7 +919,7 @@ class TeamMatcher:
         leagues_to_search: list[str],
         *,
         window: _DateWindow | None = None,
-    ) -> list[tuple[str, Event]]:
+    ) -> tuple[tuple[str, Event], ...]:
         """Flattened ``[(league, event)]`` candidates, memoized for the batch.
 
         Every stream used to rebuild this list from the same prefetch — tens of
@@ -928,7 +929,14 @@ class TeamMatcher:
         those (the league set varies only when a stream carries a league hint),
         so it is built once per distinct key instead of once per stream.
 
-        The returned list is shared — callers must treat it as read-only.
+        Returns a tuple, not a list: the result is shared by every stream in
+        the batch, so a caller that mutated it would corrupt the candidates of
+        every stream after it. Immutability makes that a TypeError instead of
+        a quietly wrong guide.
+
+        Freshness rests on ``prefetched_events`` being *replaced* rather than
+        mutated in place — see the note at its producer,
+        ``StreamMatcher._prefetch_events``.
         """
         if self._candidates_source is not prefetched_events:
             self._candidates_source = prefetched_events
@@ -948,8 +956,9 @@ class TeamMatcher:
                         continue
                 candidates.append((league, event))
 
-        self._candidates_memo[key] = candidates
-        return candidates
+        frozen = tuple(candidates)
+        self._candidates_memo[key] = frozen
+        return frozen
 
     def _check_cache(self, ctx: MatchContext) -> MatchOutcome | None:
         """Check cache for existing match.
@@ -1282,7 +1291,7 @@ class TeamMatcher:
     def _match_against_multi_league_events(
         self,
         ctx: MatchContext,
-        events: list[tuple[str, Event]],
+        events: Sequence[tuple[str, Event]],
     ) -> MatchOutcome:
         """Try to match against events from multiple leagues.
 
@@ -2156,7 +2165,7 @@ class TeamMatcher:
     def _try_reverse_alias_match(
         self,
         ctx: MatchContext,
-        events: list[tuple[str, Event]],
+        events: Sequence[tuple[str, Event]],
         enabled_leagues: list[str],
     ) -> MatchOutcome | None:
         """Try matching with reverse alias resolution.

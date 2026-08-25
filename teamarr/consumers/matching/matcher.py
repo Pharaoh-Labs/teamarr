@@ -545,6 +545,10 @@ class StreamMatcher:
             target_date: Target date for event matching
             status_callback: Optional callback(status_message) for status updates
         """
+        # Rebuilt, never mutated in place. TeamMatcher memoizes its flattened
+        # candidate lists against this dict's *identity* (_prefetched_candidates),
+        # so mutating it after the fact would leave those memos serving stale
+        # candidates for the rest of the batch. Replace the dict; don't edit it.
         self._prefetched_events = {}
         total_events = 0
         shared_hits = 0

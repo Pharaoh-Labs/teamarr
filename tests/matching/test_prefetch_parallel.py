@@ -268,3 +268,48 @@ def test_a_failing_cache_only_fetch_is_isolated_too():
     matcher._prefetch_events(target_date)  # must not raise
 
     assert not [k for k in shared if k.startswith("lg1:")]
+
+
+def test_the_candidate_list_is_shared_and_immutable():
+    """Every stream in a batch gets the same object back, and cannot edit it.
+
+    `TeamMatcher._prefetched_candidates` memoizes the flattened
+    `[(league, event)]` list so it is built once per batch rather than once per
+    stream. That makes it shared state: a caller that mutated it would corrupt
+    the candidates of every stream matched after it. Returning a tuple turns
+    that into a TypeError instead of a quietly wrong guide.
+    """
+    from teamarr.consumers.matching.team_matcher import TeamMatcher
+
+    target_date = date(2026, 8, 25)
+    matcher = _matcher(_FakeService(), {}, set(LEAGUES))
+    matcher._prefetch_events(target_date)
+
+    tm = TeamMatcher(service=None, cache=None, db_factory=None)
+    first = tm._prefetched_candidates(matcher._prefetched_events, LEAGUES)
+    second = tm._prefetched_candidates(matcher._prefetched_events, LEAGUES)
+
+    assert first is second, "the candidate list was rebuilt instead of memoized"
+    assert isinstance(first, tuple)
+    with pytest.raises(AttributeError):
+        first.append(("lg0", None))  # type: ignore[attr-defined]
+
+
+def test_a_new_prefetch_invalidates_the_candidate_memo():
+    """The memo keys on the prefetch dict's identity, so a fresh prefetch
+    (a new dict) must not be served the previous batch's candidates."""
+    from teamarr.consumers.matching.team_matcher import TeamMatcher
+
+    target_date = date(2026, 8, 25)
+    tm = TeamMatcher(service=None, cache=None, db_factory=None)
+
+    first_matcher = _matcher(_FakeService(), {}, set(LEAGUES))
+    first_matcher._prefetch_events(target_date)
+    first = tm._prefetched_candidates(first_matcher._prefetched_events, LEAGUES)
+
+    second_matcher = _matcher(_FakeService(), {}, set(LEAGUES))
+    second_matcher._prefetch_events(target_date + timedelta(days=1))
+    second = tm._prefetched_candidates(second_matcher._prefetched_events, LEAGUES)
+
+    assert first is not second
+    assert {e.id for _, e in second} != {e.id for _, e in first}
