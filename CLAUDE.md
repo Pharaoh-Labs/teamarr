@@ -273,6 +273,14 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - Gating is by **category at the matcher router** (`matcher.py::_match_single`, reason `name_match_disabled`) — classification always runs so the types stay independent; never skip `classify_stream`. `name_match_enabled` defaults 1 (DEFAULT-1 column backfills existing sources). The hidden `is_channel_source` group is name-off (EPG/team only).
 - UI: three toggles on add/edit/bulk-add/bulk-edit; color-coded Sources badges (Stream Name=sky, Team=emerald, EPG=violet). The Matched-column coverage % shows only when Stream Name is on (Team/EPG fan one stream → many events).
 
+**Fixture Gate** (epic `teamarrv2-goax`, `teamarr/consumers/matching/identity.py`):
+- Cross-sport false positives came from `token_set_ratio` weighing every token equally, so a shared **city** cleared `BOTH_TEAMS_THRESHOLD` (60) on its own — "Tampa Bay Lightning"/"Tampa Bay Rays" = 78.3. 161 such cross-league pairs exist in the 6 major pro leagues alone; "New York Mets"/"New York Jets" = 92.3.
+- `TeamIdentityIndex` resolves each stream side against the **global** `team_cache` (all leagues, incl. unconfigured ones) and yields the leagues where both sides could actually meet. `_match_against_events` skips candidates outside that set → `FailedReason.FIXTURE_NOT_IN_LEAGUE`.
+- **Veto-only, never a selector** — resolution is a strong negative signal and a weak positive one (`D-backs` resolves to "ACL D-backs"; `SF Giants` and `NY Giants` give the same 4-way tie). Ties are kept, not collapsed. Returns `None` (defer) whenever it cannot speak, so an unseeded cache is inert.
+- No schedule lookup and no new API calls: the candidate event's own existence IS the schedule evidence.
+- `residual_contradicts` is the fallback for unresolvable names — generalizes `_short_name_leg_is_safe` (#569) to the full-name leg, ignoring non-discriminating residuals (club suffixes, ≤2-char noise) so "us seattle sounders a" still reaches the Sounders.
+- Measured in `tests/matching/test_fixture_corpus.py`: **0 false vetoes / 200**, **322/322 crosstalk rejected**. Regenerate the corpus with `tests/matching/corpus/build_corpus.py`.
+
 **EPG Program Matching** (epic `teamarrv2-183`, `teamarr/consumers/matching/epg_*.py`):
 - Matches static-named linear channels (ESPN, FS1) to events via Dispatcharr's program guide (`GET /api/epg/programs/search/`, feature-detected, Dispatcharr 0.24.0+), then time-shares one stream across many event channels (attach/detach window per program).
 - Opt-in: per-group `epg_match_enabled` only (no global switch as of eqz/3lp1 — EPG matching is always available; each event-group opts in). Global tuning (attach/detach buffers, `epg_stream_pre/post_buffer_minutes`, default 60) lives on the **Matching** page (`/matching`, `EpgMatchingSettings` component) as of the v2.7.0 IA overhaul — not Settings. Per-group flag also sets `skip_builtin` so static names survive filtering.

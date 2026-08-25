@@ -1,0 +1,3656 @@
+[
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Athletics",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Atlanta Braves",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Baltimore Orioles",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Boston Red Sox",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Chicago Cubs",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Chicago White Sox",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Cincinnati Reds",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Cleveland Guardians",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Colorado Rockies",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Detroit Tigers",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Houston Astros",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Kansas City Royals",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Los Angeles Angels",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Los Angeles Dodgers",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Miami Marlins",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Milwaukee Brewers",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Minnesota Twins",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"New York Mets",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"New York Yankees",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Philadelphia Phillies",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Pittsburgh Pirates",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"San Diego Padres",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"San Francisco Giants",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Seattle Mariners",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"St. Louis Cardinals",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Tampa Bay Rays",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Texas Rangers",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Toronto Blue Jays",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Washington Nationals",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Atlanta Braves",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Baltimore Orioles",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Boston Red Sox",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Chicago Cubs",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Chicago White Sox",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Cincinnati Reds",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Cleveland Guardians",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Colorado Rockies",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Detroit Tigers",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Houston Astros",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Athletics",
+"side_b":"Kansas City Royals",
+"league":"mlb",
+"expect":"supported",
+"tag":"real fixture in mlb"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Boston Bruins",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Buffalo Sabres",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Calgary Flames",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Carolina Hurricanes",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Chicago Blackhawks",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Colorado Avalanche",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Columbus Blue Jackets",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Dallas Stars",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Detroit Red Wings",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Edmonton Oilers",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Florida Panthers",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Los Angeles Kings",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Minnesota Wild",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Montreal Canadiens",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Nashville Predators",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"New Jersey Devils",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"New York Islanders",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Ottawa Senators",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Philadelphia Flyers",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Pittsburgh Penguins",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"San Jose Sharks",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Seattle Kraken",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"St. Louis Blues",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Tampa Bay Lightning",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Toronto Maple Leafs",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Utah Mammoth",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Vancouver Canucks",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Vegas Golden Knights",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Washington Capitals",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Anaheim Ducks",
+"side_b":"Winnipeg Jets",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Buffalo Sabres",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Calgary Flames",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Carolina Hurricanes",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Chicago Blackhawks",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Colorado Avalanche",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Columbus Blue Jackets",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Dallas Stars",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Detroit Red Wings",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Boston Bruins",
+"side_b":"Edmonton Oilers",
+"league":"nhl",
+"expect":"supported",
+"tag":"real fixture in nhl"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Boston Celtics",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Brooklyn Nets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Charlotte Hornets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Chicago Bulls",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Cleveland Cavaliers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Dallas Mavericks",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Denver Nuggets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Detroit Pistons",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Golden State Warriors",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Houston Rockets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Indiana Pacers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"LA Clippers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Los Angeles Lakers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Memphis Grizzlies",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Miami Heat",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Milwaukee Bucks",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Minnesota Timberwolves",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"New Orleans Pelicans",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"New York Knicks",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Oklahoma City Thunder",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Orlando Magic",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Philadelphia 76ers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Phoenix Suns",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Portland Trail Blazers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Sacramento Kings",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"San Antonio Spurs",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Toronto Raptors",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Utah Jazz",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Washington Wizards",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Brooklyn Nets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Charlotte Hornets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Chicago Bulls",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Cleveland Cavaliers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Dallas Mavericks",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Denver Nuggets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Detroit Pistons",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Golden State Warriors",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Houston Rockets",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Indiana Pacers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"LA Clippers",
+"league":"nba",
+"expect":"supported",
+"tag":"real fixture in nba"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Atlanta Falcons",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Baltimore Ravens",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Buffalo Bills",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Carolina Panthers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Chicago Bears",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Cincinnati Bengals",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Cleveland Browns",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Dallas Cowboys",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Denver Broncos",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Detroit Lions",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Green Bay Packers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Houston Texans",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Indianapolis Colts",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Jacksonville Jaguars",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Kansas City Chiefs",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Las Vegas Raiders",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Los Angeles Chargers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Los Angeles Rams",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Miami Dolphins",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Minnesota Vikings",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"New England Patriots",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"New Orleans Saints",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"New York Giants",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"New York Jets",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Philadelphia Eagles",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Pittsburgh Steelers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"San Francisco 49ers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Seattle Seahawks",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Tampa Bay Buccaneers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Tennessee Titans",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Arizona Cardinals",
+"side_b":"Washington Commanders",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Baltimore Ravens",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Buffalo Bills",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Carolina Panthers",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Chicago Bears",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Cincinnati Bengals",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Cleveland Browns",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Dallas Cowboys",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Denver Broncos",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Detroit Lions",
+"league":"nfl",
+"expect":"supported",
+"tag":"real fixture in nfl"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Chicago Sky",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Connecticut Sun",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Dallas Wings",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Golden State Valkyries",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Indiana Fever",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Las Vegas Aces",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Phoenix Mercury",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Portland Fire",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Seattle Storm",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Toronto Tempo",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Atlanta Dream",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Connecticut Sun",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Dallas Wings",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Golden State Valkyries",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Indiana Fever",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Las Vegas Aces",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Phoenix Mercury",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Portland Fire",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Seattle Storm",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Toronto Tempo",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Chicago Sky",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Dallas Wings",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Golden State Valkyries",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Indiana Fever",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Las Vegas Aces",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Phoenix Mercury",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Portland Fire",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Seattle Storm",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Toronto Tempo",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Connecticut Sun",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Dallas Wings",
+"side_b":"Golden State Valkyries",
+"league":"wnba",
+"expect":"supported",
+"tag":"real fixture in wnba"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Arizona Cardinals",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Arizona Diamondbacks",
+"side_b":"Arizona Cardinals",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Atlanta Hawks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Atlanta Hawks",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Atlanta Falcons",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Atlanta Falcons",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Baltimore Ravens",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Baltimore Ravens",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Atlanta Dream",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Atlanta Braves",
+"side_b":"Atlanta Dream",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Baltimore Orioles",
+"side_b":"Baltimore Ravens",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Baltimore Orioles",
+"side_b":"Baltimore Ravens",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Boston Red Sox",
+"side_b":"Boston Celtics",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Boston Red Sox",
+"side_b":"Boston Celtics",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Boston Red Sox",
+"side_b":"Houston Rockets",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Boston Red Sox",
+"side_b":"Houston Rockets",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Boston Red Sox",
+"side_b":"Boston Bruins",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Boston Red Sox",
+"side_b":"Boston Bruins",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Bulls",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Bulls",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Bears",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Bears",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Blackhawks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Blackhawks",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Sky",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Chicago Cubs",
+"side_b":"Chicago Sky",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Chicago White Sox",
+"side_b":"Chicago Bulls",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Chicago White Sox",
+"side_b":"Chicago Bulls",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Chicago White Sox",
+"side_b":"Chicago Bears",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Chicago White Sox",
+"side_b":"Chicago Bears",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Chicago White Sox",
+"side_b":"Chicago Sky",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Chicago White Sox",
+"side_b":"Chicago Sky",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Cincinnati Reds",
+"side_b":"Cincinnati Bengals",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Cincinnati Reds",
+"side_b":"Cincinnati Bengals",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Cleveland Guardians",
+"side_b":"Cleveland Cavaliers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Cleveland Guardians",
+"side_b":"Cleveland Cavaliers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Cleveland Guardians",
+"side_b":"Cleveland Browns",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Cleveland Guardians",
+"side_b":"Cleveland Browns",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Colorado Rockies",
+"side_b":"Colorado Avalanche",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Colorado Rockies",
+"side_b":"Colorado Avalanche",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Detroit Tigers",
+"side_b":"Detroit Pistons",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Detroit Tigers",
+"side_b":"Detroit Pistons",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Detroit Tigers",
+"side_b":"Detroit Lions",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Detroit Tigers",
+"side_b":"Detroit Lions",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Detroit Tigers",
+"side_b":"Detroit Red Wings",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Detroit Tigers",
+"side_b":"Detroit Red Wings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Houston Astros",
+"side_b":"Houston Rockets",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Houston Astros",
+"side_b":"Houston Rockets",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Houston Astros",
+"side_b":"Houston Texans",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Houston Astros",
+"side_b":"Houston Texans",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Kansas City Royals",
+"side_b":"Kansas City Chiefs",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Kansas City Royals",
+"side_b":"Kansas City Chiefs",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Lakers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Lakers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Chargers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Chargers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Rams",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Rams",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Kings",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Kings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Sparks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Los Angeles Angels",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Lakers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Lakers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Chargers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Chargers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Rams",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Rams",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Kings",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Kings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Sparks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Los Angeles Dodgers",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Miami Marlins",
+"side_b":"Miami Heat",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Miami Marlins",
+"side_b":"Miami Heat",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Miami Marlins",
+"side_b":"Miami Dolphins",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Miami Marlins",
+"side_b":"Miami Dolphins",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Milwaukee Brewers",
+"side_b":"Milwaukee Bucks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Milwaukee Brewers",
+"side_b":"Milwaukee Bucks",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Timberwolves",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Timberwolves",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Vikings",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Vikings",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Wild",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Wild",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Lynx",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Minnesota Twins",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Knicks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Knicks",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Giants",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Giants",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Jets",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Jets",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Islanders",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Islanders",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Rangers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Liberty",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"New York Mets",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Knicks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Knicks",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Giants",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Giants",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Jets",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Jets",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Islanders",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Islanders",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Rangers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Liberty",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"New York Yankees",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Philadelphia Phillies",
+"side_b":"Philadelphia 76ers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Philadelphia Phillies",
+"side_b":"Philadelphia 76ers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Philadelphia Phillies",
+"side_b":"Philadelphia Eagles",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Philadelphia Phillies",
+"side_b":"Philadelphia Eagles",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Philadelphia Phillies",
+"side_b":"Philadelphia Flyers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Philadelphia Phillies",
+"side_b":"Philadelphia Flyers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Pittsburgh Pirates",
+"side_b":"Pittsburgh Steelers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Pittsburgh Pirates",
+"side_b":"Pittsburgh Steelers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Pittsburgh Pirates",
+"side_b":"Pittsburgh Penguins",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Pittsburgh Pirates",
+"side_b":"Pittsburgh Penguins",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"San Diego Padres",
+"side_b":"San Antonio Spurs",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"San Diego Padres",
+"side_b":"San Antonio Spurs",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"San Francisco Giants",
+"side_b":"San Francisco 49ers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"San Francisco Giants",
+"side_b":"San Francisco 49ers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Seattle Mariners",
+"side_b":"Seattle Seahawks",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Seattle Mariners",
+"side_b":"Seattle Seahawks",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Seattle Mariners",
+"side_b":"Seattle Kraken",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Seattle Mariners",
+"side_b":"Seattle Kraken",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Seattle Mariners",
+"side_b":"Seattle Storm",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Seattle Mariners",
+"side_b":"Seattle Storm",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"St. Louis Cardinals",
+"side_b":"Arizona Cardinals",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"St. Louis Cardinals",
+"side_b":"Arizona Cardinals",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"St. Louis Cardinals",
+"side_b":"St. Louis Blues",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"St. Louis Cardinals",
+"side_b":"St. Louis Blues",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Tampa Bay Rays",
+"side_b":"Tampa Bay Buccaneers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Tampa Bay Rays",
+"side_b":"Tampa Bay Buccaneers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Tampa Bay Rays",
+"side_b":"Tampa Bay Lightning",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Tampa Bay Rays",
+"side_b":"Tampa Bay Lightning",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Texas Rangers",
+"side_b":"Las Vegas Raiders",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Texas Rangers",
+"side_b":"Las Vegas Raiders",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Texas Rangers",
+"side_b":"New York Rangers",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Texas Rangers",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Toronto Blue Jays",
+"side_b":"Toronto Raptors",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Toronto Blue Jays",
+"side_b":"Toronto Raptors",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Toronto Blue Jays",
+"side_b":"Toronto Maple Leafs",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Toronto Blue Jays",
+"side_b":"Toronto Maple Leafs",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Toronto Blue Jays",
+"side_b":"Toronto Tempo",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Toronto Blue Jays",
+"side_b":"Toronto Tempo",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Wizards",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Wizards",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nba"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Commanders",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Commanders",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nfl"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Capitals",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Capitals",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/nhl"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Mystics",
+"league":"mlb",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Washington Nationals",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk mlb/wnba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Atlanta Falcons",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Atlanta Falcons",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Atlanta Dream",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Atlanta Hawks",
+"side_b":"Atlanta Dream",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Boston Bruins",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Boston Celtics",
+"side_b":"Boston Bruins",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Chicago Bulls",
+"side_b":"Chicago Bears",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Chicago Bulls",
+"side_b":"Chicago Bears",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Chicago Bulls",
+"side_b":"Chicago Blackhawks",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Chicago Bulls",
+"side_b":"Chicago Blackhawks",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Chicago Bulls",
+"side_b":"Chicago Sky",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Chicago Bulls",
+"side_b":"Chicago Sky",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Cleveland Cavaliers",
+"side_b":"Cleveland Browns",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Cleveland Cavaliers",
+"side_b":"Cleveland Browns",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Dallas Mavericks",
+"side_b":"Dallas Cowboys",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Dallas Mavericks",
+"side_b":"Dallas Cowboys",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Dallas Mavericks",
+"side_b":"Dallas Stars",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Dallas Mavericks",
+"side_b":"Dallas Stars",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Dallas Mavericks",
+"side_b":"Dallas Wings",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Dallas Mavericks",
+"side_b":"Dallas Wings",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Denver Nuggets",
+"side_b":"Denver Broncos",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Denver Nuggets",
+"side_b":"Denver Broncos",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Detroit Pistons",
+"side_b":"Detroit Lions",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Detroit Pistons",
+"side_b":"Detroit Lions",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Detroit Pistons",
+"side_b":"Detroit Red Wings",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Detroit Pistons",
+"side_b":"Detroit Red Wings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Golden State Warriors",
+"side_b":"Golden State Valkyries",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Golden State Warriors",
+"side_b":"Golden State Valkyries",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Houston Rockets",
+"side_b":"Houston Texans",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Houston Rockets",
+"side_b":"Houston Texans",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Indiana Pacers",
+"side_b":"Florida Panthers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Indiana Pacers",
+"side_b":"Florida Panthers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Indiana Pacers",
+"side_b":"Indiana Fever",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Indiana Pacers",
+"side_b":"Indiana Fever",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Chargers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Chargers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Rams",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Rams",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Kings",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Kings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Sparks",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Los Angeles Lakers",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Miami Heat",
+"side_b":"Miami Dolphins",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Miami Heat",
+"side_b":"Miami Dolphins",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Minnesota Timberwolves",
+"side_b":"Minnesota Vikings",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Minnesota Timberwolves",
+"side_b":"Minnesota Vikings",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Minnesota Timberwolves",
+"side_b":"Minnesota Wild",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Minnesota Timberwolves",
+"side_b":"Minnesota Wild",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Minnesota Timberwolves",
+"side_b":"Minnesota Lynx",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Minnesota Timberwolves",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"New Orleans Pelicans",
+"side_b":"New Orleans Saints",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"New Orleans Pelicans",
+"side_b":"New Orleans Saints",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Giants",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Giants",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Jets",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Jets",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Islanders",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Islanders",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Rangers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Liberty",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"New York Knicks",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Orlando Magic",
+"side_b":"Portland Fire",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Orlando Magic",
+"side_b":"Portland Fire",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Philadelphia 76ers",
+"side_b":"Philadelphia Eagles",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Philadelphia 76ers",
+"side_b":"Philadelphia Eagles",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Philadelphia 76ers",
+"side_b":"Philadelphia Flyers",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Philadelphia 76ers",
+"side_b":"Philadelphia Flyers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Phoenix Suns",
+"side_b":"Phoenix Mercury",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Phoenix Suns",
+"side_b":"Phoenix Mercury",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Portland Trail Blazers",
+"side_b":"Portland Fire",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Portland Trail Blazers",
+"side_b":"Portland Fire",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Toronto Raptors",
+"side_b":"Toronto Maple Leafs",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Toronto Raptors",
+"side_b":"Toronto Maple Leafs",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Toronto Raptors",
+"side_b":"Toronto Tempo",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Toronto Raptors",
+"side_b":"Toronto Tempo",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Utah Jazz",
+"side_b":"Utah Mammoth",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Utah Jazz",
+"side_b":"Utah Mammoth",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Washington Wizards",
+"side_b":"Washington Commanders",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Washington Wizards",
+"side_b":"Washington Commanders",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nfl"
+},
+{
+"side_a":"Washington Wizards",
+"side_b":"Washington Capitals",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Washington Wizards",
+"side_b":"Washington Capitals",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/nhl"
+},
+{
+"side_a":"Washington Wizards",
+"side_b":"Washington Mystics",
+"league":"nba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Washington Wizards",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nba/wnba"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Atlanta Dream",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Atlanta Falcons",
+"side_b":"Atlanta Dream",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Buffalo Bills",
+"side_b":"Buffalo Sabres",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Buffalo Bills",
+"side_b":"Buffalo Sabres",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Carolina Panthers",
+"side_b":"Carolina Hurricanes",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Carolina Panthers",
+"side_b":"Carolina Hurricanes",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Carolina Panthers",
+"side_b":"Florida Panthers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Carolina Panthers",
+"side_b":"Florida Panthers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Chicago Bears",
+"side_b":"Chicago Blackhawks",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Chicago Bears",
+"side_b":"Chicago Blackhawks",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Chicago Bears",
+"side_b":"Chicago Sky",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Chicago Bears",
+"side_b":"Chicago Sky",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Dallas Cowboys",
+"side_b":"Dallas Stars",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Dallas Cowboys",
+"side_b":"Dallas Stars",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Dallas Cowboys",
+"side_b":"Dallas Wings",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Dallas Cowboys",
+"side_b":"Dallas Wings",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Detroit Lions",
+"side_b":"Detroit Red Wings",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Detroit Lions",
+"side_b":"Detroit Red Wings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Las Vegas Raiders",
+"side_b":"Las Vegas Aces",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Las Vegas Raiders",
+"side_b":"Las Vegas Aces",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Los Angeles Chargers",
+"side_b":"Los Angeles Kings",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Los Angeles Chargers",
+"side_b":"Los Angeles Kings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Los Angeles Chargers",
+"side_b":"Los Angeles Sparks",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Los Angeles Chargers",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"Los Angeles Kings",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"Los Angeles Kings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"St. Louis Blues",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"St. Louis Blues",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"Las Vegas Aces",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"Las Vegas Aces",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"Los Angeles Sparks",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Los Angeles Rams",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Minnesota Vikings",
+"side_b":"Minnesota Wild",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Minnesota Vikings",
+"side_b":"Minnesota Wild",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Minnesota Vikings",
+"side_b":"Minnesota Lynx",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Minnesota Vikings",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"New York Giants",
+"side_b":"New York Islanders",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Giants",
+"side_b":"New York Islanders",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Giants",
+"side_b":"New York Rangers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Giants",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Giants",
+"side_b":"New York Liberty",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"New York Giants",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"New York Jets",
+"side_b":"New York Islanders",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Jets",
+"side_b":"New York Islanders",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Jets",
+"side_b":"New York Rangers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Jets",
+"side_b":"New York Rangers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"New York Jets",
+"side_b":"New York Liberty",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"New York Jets",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Philadelphia Eagles",
+"side_b":"Philadelphia Flyers",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Philadelphia Eagles",
+"side_b":"Philadelphia Flyers",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Pittsburgh Steelers",
+"side_b":"Pittsburgh Penguins",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Pittsburgh Steelers",
+"side_b":"Pittsburgh Penguins",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Seattle Seahawks",
+"side_b":"Seattle Kraken",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Seattle Seahawks",
+"side_b":"Seattle Kraken",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Seattle Seahawks",
+"side_b":"Seattle Storm",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Seattle Seahawks",
+"side_b":"Seattle Storm",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Tampa Bay Buccaneers",
+"side_b":"Tampa Bay Lightning",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Tampa Bay Buccaneers",
+"side_b":"Tampa Bay Lightning",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Washington Commanders",
+"side_b":"Washington Capitals",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Washington Commanders",
+"side_b":"Washington Capitals",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/nhl"
+},
+{
+"side_a":"Washington Commanders",
+"side_b":"Washington Mystics",
+"league":"nfl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Washington Commanders",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nfl/wnba"
+},
+{
+"side_a":"Chicago Blackhawks",
+"side_b":"Chicago Sky",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Chicago Blackhawks",
+"side_b":"Chicago Sky",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Dallas Stars",
+"side_b":"Dallas Wings",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Dallas Stars",
+"side_b":"Dallas Wings",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Dallas Stars",
+"side_b":"Los Angeles Sparks",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Dallas Stars",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Los Angeles Kings",
+"side_b":"Los Angeles Sparks",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Los Angeles Kings",
+"side_b":"Los Angeles Sparks",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Minnesota Wild",
+"side_b":"Minnesota Lynx",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Minnesota Wild",
+"side_b":"Minnesota Lynx",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"New York Islanders",
+"side_b":"New York Liberty",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"New York Islanders",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"New York Rangers",
+"side_b":"New York Liberty",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"New York Rangers",
+"side_b":"New York Liberty",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Seattle Kraken",
+"side_b":"Seattle Storm",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Seattle Kraken",
+"side_b":"Seattle Storm",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Toronto Maple Leafs",
+"side_b":"Toronto Tempo",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Toronto Maple Leafs",
+"side_b":"Toronto Tempo",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Washington Capitals",
+"side_b":"Washington Mystics",
+"league":"nhl",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+},
+{
+"side_a":"Washington Capitals",
+"side_b":"Washington Mystics",
+"league":"wnba",
+"expect":"rejected",
+"tag":"cross-league crosstalk nhl/wnba"
+}
+]

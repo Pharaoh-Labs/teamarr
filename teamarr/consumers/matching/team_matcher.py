@@ -29,6 +29,7 @@ from teamarr.consumers.matching.country_resolver import (
 from teamarr.consumers.matching.country_resolver import (
     _normalize as _normalize_country,
 )
+from teamarr.consumers.matching.identity import TeamIdentityIndex, residual_contradicts
 from teamarr.consumers.matching.normalizer import normalize_for_matching
 from teamarr.consumers.matching.result import (
     FailedReason,
@@ -170,9 +171,20 @@ def _best_name_score(stream_norm: str, event_team) -> float:
     liked, so both are fair game — but the short_name leg is gated by
     _short_name_leg_is_safe so a shared nickname can't erase the location
     that tells two teams apart (#569).
+
+    The full-name leg carries the mirror-image gate (epic goax): when the stream
+    and the team share tokens but each keeps words the other lacks, those
+    residual words ARE the discriminator and they disagree — "tampa bay
+    LIGHTNING" is not "tampa bay RAYS", however much city they share. This is
+    the fallback for streams the identity index cannot resolve (an uncached
+    league, a team the provider has not seeded); the fixture gate handles the
+    rest. Aliases are unaffected: _side_score scores them separately and takes
+    the max, so "Anaheim Angels" still reaches the Angels via its alias.
     """
     name_norm = normalize_text(event_team.name)
-    score = fuzz.token_set_ratio(stream_norm, name_norm)
+    score = 0.0 if residual_contradicts(stream_norm, name_norm) else fuzz.token_set_ratio(
+        stream_norm, name_norm
+    )
 
     short = getattr(event_team, "short_name", None)
     if not short or short == event_team.name:
@@ -277,6 +289,12 @@ class TeamMatcher:
         # same names are re-checked against every candidate event. Without this
         # the [ALIAS] log line repeats once per candidate (147x in #256).
         self._country_resolve_cache: dict[str, str | None] = {}
+        # Global team identity index (epic goax), built lazily on first use so
+        # matchers constructed without a db_factory (tests, racing/tennis paths)
+        # cost nothing. _identity_loaded distinguishes "not tried yet" from
+        # "tried and unavailable".
+        self._identity_index: TeamIdentityIndex | None = None
+        self._identity_loaded = False
 
     def reload_aliases(self) -> None:
         """Reload aliases from database.
@@ -937,6 +955,12 @@ class TeamMatcher:
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
         best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
         date_rejected = 0  # Candidates gated by a trusted stream date (#474)
+        fixture_rejected = 0  # Candidates in a league these teams never meet in
+
+        # Which leagues could these two sides actually play each other in (epic
+        # goax)? Resolved once per stream, not per candidate — it depends only on
+        # the stream's own names. None = identity resolution had nothing to say.
+        fixture_leagues = self._fixture_leagues(ctx)
 
         for event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -979,6 +1003,16 @@ class TeamMatcher:
             if ctx.classified.sport_hint and not ctx.classified.league_hint:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
                     continue
+
+            # Fixture gate (epic goax). Both stream sides name real teams, and
+            # this event's league is not one where they could meet — so no score
+            # against it can be meaningful. This is what stops an NHL stream from
+            # riding a shared city into an MLB channel: "Tampa Bay Lightning" vs
+            # "Tampa Bay Rays" scores 78 on text alone, but the Lightning play in
+            # exactly one league and it is not this one.
+            if fixture_leagues is not None and event.league not in fixture_leagues:
+                fixture_rejected += 1
+                continue
 
             # Try alias match first (100% confidence)
             match_result = self._check_alias_match(team1_normalized, team2_normalized, event)
@@ -1093,6 +1127,11 @@ class TeamMatcher:
             # Candidates existed but every one was gated by the stream's
             # date — say so instead of a generic "no event found" (#474)
             reason = FailedReason.DATE_MISMATCH
+        elif fixture_rejected:
+            # The stream names two real teams and this league is not where they
+            # meet (epic goax). "No event found" would send the user hunting for
+            # a scheduling gap that isn't there.
+            reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
@@ -1161,6 +1200,13 @@ class TeamMatcher:
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
         best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
         date_rejected = 0  # Candidates gated by a trusted stream date (#474)
+        fixture_rejected = 0  # Candidates in a league these teams never meet in
+
+        # Which leagues could these two sides actually play each other in (epic
+        # goax)? This matters most here: a multi-league source offers candidates
+        # from every league it covers, so a shared city has many more wrong
+        # events to land on than in the single-league path.
+        fixture_leagues = self._fixture_leagues(ctx)
 
         for league, event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -1203,6 +1249,16 @@ class TeamMatcher:
             if ctx.classified.sport_hint and not ctx.classified.league_hint:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
                     continue
+
+            # Fixture gate (epic goax). Both stream sides name real teams, and
+            # this event's league is not one where they could meet — so no score
+            # against it can be meaningful. This is what stops an NHL stream from
+            # riding a shared city into an MLB channel: "Tampa Bay Lightning" vs
+            # "Tampa Bay Rays" scores 78 on text alone, but the Lightning play in
+            # exactly one league and it is not this one.
+            if fixture_leagues is not None and event.league not in fixture_leagues:
+                fixture_rejected += 1
+                continue
 
             # Try alias match first (100% confidence)
             match_result = self._check_alias_match(team1_normalized, team2_normalized, event)
@@ -1319,6 +1375,11 @@ class TeamMatcher:
             # Candidates existed but every one was gated by the stream's
             # date — say so instead of a generic "no event found" (#474)
             reason = FailedReason.DATE_MISMATCH
+        elif fixture_rejected:
+            # The stream names two real teams and this league is not where they
+            # meet (epic goax). "No event found" would send the user hunting for
+            # a scheduling gap that isn't there.
+            reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
@@ -1818,6 +1879,47 @@ class TeamMatcher:
             return (MatchMethod.ALIAS, 100.0)
 
         return None
+
+    def _get_identity_index(self) -> TeamIdentityIndex | None:
+        """The global team identity index, built once per matcher.
+
+        Absent without a db_factory, and absent (with a warning) if team_cache
+        has not been seeded yet — a fresh install matches before its first cache
+        refresh, and an empty index must not veto everything.
+        """
+        if self._identity_loaded:
+            return self._identity_index
+        self._identity_loaded = True
+
+        if not self._db:
+            return None
+        try:
+            with self._db() as conn:
+                index = TeamIdentityIndex.from_db(conn)
+        except Exception as e:
+            logger.warning("[FIXTURE] Could not build team identity index: %s", e)
+            return None
+
+        if not len(index):
+            logger.warning("[FIXTURE] team_cache is empty — fixture checking disabled")
+            return None
+
+        logger.debug("[FIXTURE] Team identity index: %d surface forms", len(index))
+        self._identity_index = index
+        return index
+
+    def _fixture_leagues(self, ctx: MatchContext) -> set[str] | None:
+        """Leagues where this stream's two sides could actually meet.
+
+        Returns None when identity resolution can say nothing — an unseeded
+        cache, an unresolvable name, a one-sided stream — in which case matching
+        proceeds exactly as before. An empty set is a real answer, not a
+        failure: both sides named real teams that share no league at all.
+        """
+        index = self._get_identity_index()
+        if index is None:
+            return None
+        return index.fixture_leagues(ctx.team1, ctx.team2)
 
     def _load_user_aliases(self) -> UserAliasCache:
         """Load user-defined aliases from database into memory cache.
