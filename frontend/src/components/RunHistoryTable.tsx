@@ -80,6 +80,7 @@ function getFailedReasonLabel(reason: string): string {
     team2_not_found: "Team 2 not found",
     both_teams_not_found: "Neither team found",
     no_common_league: "No common league",
+    fixture_not_in_league: "Teams don't play in this league",
     no_league_detected: "No league detected",
     ambiguous_league: "Ambiguous league",
     no_event_found: "No event found",

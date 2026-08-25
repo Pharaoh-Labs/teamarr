@@ -87,6 +87,10 @@ class FailedReason(Enum):
     TEAM2_NOT_FOUND = "team2_not_found"  # Second team not found in any league
     BOTH_TEAMS_NOT_FOUND = "both_teams_not_found"  # Neither team found
     NO_COMMON_LEAGUE = "no_common_league"  # Teams exist but in different leagues
+    # Both stream sides resolved to real teams (epic goax), and the league being
+    # matched is not one where those two could meet — an NHL stream offered to an
+    # MLB source. Distinct from NO_EVENT_FOUND: the game exists, just not here.
+    FIXTURE_NOT_IN_LEAGUE = "fixture_not_in_league"
 
     # League detection failures (multi-sport groups)
     NO_LEAGUE_DETECTED = "no_league_detected"  # Teams matched but can't determine league

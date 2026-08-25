@@ -23,6 +23,19 @@ The **Matching** page (`/matching`) has three views:
 {: .tip }
 > Per-source [Custom Regex](../sources/creating-groups#custom-regex) is your strongest matching lever — if one source's naming is the problem, fix it there in the source editor rather than with global rules.
 
+## Cross-Sport Protection
+
+Before scoring a stream against an event, Teamarr checks whether the two teams named in the stream could actually play each other in that event's league.
+
+This matters most for large multi-sport sources like an all-ESPN+ group. Team names overlap heavily across leagues — the Tampa Bay **Lightning** and the Tampa Bay **Rays** share a city, as do the Detroit **Red Wings** and the Detroit **Tigers** — and name similarity alone can't tell them apart. Without this check, an NHL stream could be attached to an MLB channel simply because both names contain "Tampa Bay" and "Detroit".
+
+Teamarr resolves each side of the stream name against its cached team list (every team it knows, across every league — not just the ones you've configured). If both sides name real teams and there is no league where those two could meet, the event is skipped. In **Run History** these appear with the reason **"Teams don't play in this league"**.
+
+The check only ever *rejects* a candidate; it never creates a match on its own. Ambiguous names stay ambiguous: a stream called `TB vs DET` reads as both Rays/Tigers and Lightning/Red Wings, so both leagues remain eligible and the game that actually exists on the day is the one that matches.
+
+{: .note }
+> This relies on the team cache, so it is inactive until your first cache refresh — and a stream naming teams from a league Teamarr hasn't cached is passed through to normal matching rather than rejected.
+
 ## EPG Matching
 
 ![Matching page — EPG Matching view with its three tiles](../../assets/images/matching-epg.png)

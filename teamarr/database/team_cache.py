@@ -98,6 +98,29 @@ def get_team_leagues_from_cache(
     return [row["league"] for row in cursor.fetchall()]
 
 
+def load_team_identities(conn: Connection) -> list[tuple[str, str | None, str | None, str, str]]:
+    """Every cached team as (name, short_name, abbrev, league, sport).
+
+    Feeds the matcher's identity index (epic goax): resolving a stream side to
+    the real teams that bear that name is what lets the matcher ask "do these
+    two actually play each other?" instead of "does this string look close
+    enough?". Deliberately unfiltered — the whole point is to see leagues the
+    user has NOT configured, so an NHL stream can be recognised as NHL by an
+    MLB-scoped source and rejected.
+    """
+    cursor = conn.execute(
+        """
+        SELECT DISTINCT team_name, team_short_name, team_abbrev, league, sport
+        FROM team_cache
+        WHERE team_name IS NOT NULL AND team_name != ''
+        """
+    )
+    return [
+        (r["team_name"], r["team_short_name"], r["team_abbrev"], r["league"], r["sport"])
+        for r in cursor.fetchall()
+    ]
+
+
 def search_teams(
     conn: Connection,
     query: str,
