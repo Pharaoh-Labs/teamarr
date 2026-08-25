@@ -9,6 +9,34 @@ from sqlite3 import Connection
 from teamarr.core.sports import get_sport_display_names_from_db
 
 
+def invalidate_team_identity_caches() -> None:
+    """Drop every in-memory cache derived from ``team_cache``.
+
+    Call this after any write to the table. Two caches read from it and neither
+    re-checks the source per use:
+
+    * The matcher's ``TeamIdentityIndex`` (#609) — process-wide behind a TTL.
+      This one **vetoes**: a stale league membership makes the fixture gate
+      return ``FIXTURE_NOT_IN_LEAGUE``, which is a silently missing match, the
+      failure class epic goax exists to keep at zero. Before the index was
+      shared it was rebuilt per event group, so a refresh was always visible to
+      the very next generation; without this call it would not be for up to the
+      TTL window.
+    * ``_TEAM_IDENTITY_MEMO`` in services/sports_data — short_name/abbreviation
+      backfill for display. Stale values here are cosmetic, but they come from
+      the same rows, so they are dropped together rather than leaving callers to
+      remember which caches are which.
+
+    Imports are function-local: both consumers import from this module, so
+    module-level imports would be circular.
+    """
+    from teamarr.consumers.matching.team_matcher import reset_identity_index_cache
+    from teamarr.services.sports_data import clear_team_identity_memo
+
+    reset_identity_index_cache()
+    clear_team_identity_memo()
+
+
 def get_team_name_by_id(
     conn: Connection,
     provider_team_id: str,

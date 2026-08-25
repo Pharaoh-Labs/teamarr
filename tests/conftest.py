@@ -12,6 +12,22 @@ fixtures).
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _reset_shared_identity_index():
+    """Keep the process-wide team identity index out of other tests (#609).
+
+    The index is memoized per process behind a TTL so a run does not rebuild it
+    once per event group. Every test gets its own temp database, so without this
+    a test could be served an index built from a previous test's team_cache —
+    silently matching against the wrong teams.
+    """
+    from teamarr.consumers.matching.team_matcher import reset_identity_index_cache
+
+    reset_identity_index_cache()
+    yield
+    reset_identity_index_cache()
+
+
 @pytest.fixture
 def db_path(tmp_path):
     """Path to a fully-initialized temp database (fresh per test)."""

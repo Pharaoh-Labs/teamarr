@@ -8,10 +8,12 @@ Supports two modes:
 
 import logging
 import re
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
+from time import monotonic
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -26,10 +28,10 @@ from teamarr.consumers.matching.constants import (
     SHORT_CODE_MAX_LEN,
 )
 from teamarr.consumers.matching.country_resolver import (
-    CountryNameResolver,
+    _normalize as _normalize_country,
 )
 from teamarr.consumers.matching.country_resolver import (
-    _normalize as _normalize_country,
+    get_country_resolver,
 )
 from teamarr.consumers.matching.identity import TeamIdentityIndex, residual_contradicts
 from teamarr.consumers.matching.normalizer import normalize_for_matching
@@ -134,6 +136,62 @@ class _DateWindow:
     user_tz: ZoneInfo
     target_date: date
     days: int
+
+
+# Process-wide memo for the team identity index (#609). Rebuilt on expiry so a
+# team_cache refresh is picked up without a restart; the window is generous
+# because team identity barely moves and a generation run is far shorter.
+_IDENTITY_INDEX_TTL = 900.0  # seconds
+_identity_index_cache: tuple[float, TeamIdentityIndex] | None = None
+_identity_index_lock = threading.Lock()
+
+
+def _shared_identity_index(db_factory: Any) -> TeamIdentityIndex | None:
+    """The shared identity index, rebuilt at most once per TTL window.
+
+    Returns None — never a partial or empty index — when team_cache cannot be
+    read or has not been seeded, so the fixture gate stays inert rather than
+    vetoing every candidate (epic goax).
+    """
+    global _identity_index_cache
+
+    now = monotonic()
+    cached = _identity_index_cache
+    if cached is not None and now - cached[0] < _IDENTITY_INDEX_TTL:
+        return cached[1]
+
+    with _identity_index_lock:
+        # Re-check: another thread may have rebuilt it while we waited.
+        cached = _identity_index_cache
+        if cached is not None and monotonic() - cached[0] < _IDENTITY_INDEX_TTL:
+            return cached[1]
+
+        try:
+            with db_factory() as conn:
+                index = TeamIdentityIndex.from_db(conn)
+        except Exception as e:
+            logger.warning("[FIXTURE] Could not build team identity index: %s", e)
+            return None
+
+        if not len(index):
+            logger.warning("[FIXTURE] team_cache is empty — fixture checking disabled")
+            return None
+
+        logger.debug("[FIXTURE] Team identity index: %d surface forms", len(index))
+        _identity_index_cache = (monotonic(), index)
+        return index
+
+
+def reset_identity_index_cache() -> None:
+    """Drop the shared index so the next lookup rebuilds it.
+
+    Production callers should not reach for this directly — write to team_cache
+    and call ``database.team_cache.invalidate_team_identity_caches``, which
+    drops this and the enrichment memo together. Exposed separately for tests
+    and so that helper has something to call.
+    """
+    global _identity_index_cache
+    _identity_index_cache = None
 
 
 @lru_cache(maxsize=32768)
@@ -363,7 +421,10 @@ class TeamMatcher:
         # Enables finding canonical name without knowing league first
         self._reverse_aliases: dict[str, list[tuple[str, str]]] = self._build_reverse_cache()
         # Locale-aware country name resolver (e.g. "brasil" → "Brazil")
-        self._country_resolver = CountryNameResolver()
+        # Process-wide (see get_country_resolver): read-only after construction,
+        # and ~17ms to build — which was 92% of this constructor's cost, paid
+        # once per event group.
+        self._country_resolver = get_country_resolver()
         # Memoize country resolution per team name: it's deterministic and the
         # same names are re-checked against every candidate event. Without this
         # the [ALIAS] log line repeats once per candidate (147x in #256).
@@ -2032,11 +2093,22 @@ class TeamMatcher:
         return None
 
     def _get_identity_index(self) -> TeamIdentityIndex | None:
-        """The global team identity index, built once per matcher.
+        """The global team identity index, shared across matchers (#609).
 
         Absent without a db_factory, and absent (with a warning) if team_cache
         has not been seeded yet — a fresh install matches before its first cache
         refresh, and an empty index must not veto everything.
+
+        Building one costs ~47ms — an unfiltered scan of team_cache (11k rows on
+        a real install) plus normalising every surface form. A matcher is
+        constructed per event group, so that was ~16s of a run spent rebuilding
+        the same index. It is now memoized per process behind a TTL, the same
+        shape as _cached_team_identity in services/sports_data.py and for the
+        same reason: team identity is effectively static, and the TTL bounds how
+        long a mid-run cache refresh stays invisible.
+
+        The instance flag is kept so a matcher that has already resolved the
+        index does not re-check the TTL on every candidate.
         """
         if self._identity_loaded:
             return self._identity_index
@@ -2044,18 +2116,11 @@ class TeamMatcher:
 
         if not self._db:
             return None
-        try:
-            with self._db() as conn:
-                index = TeamIdentityIndex.from_db(conn)
-        except Exception as e:
-            logger.warning("[FIXTURE] Could not build team identity index: %s", e)
+
+        index = _shared_identity_index(self._db)
+        if index is None:
             return None
 
-        if not len(index):
-            logger.warning("[FIXTURE] team_cache is empty — fixture checking disabled")
-            return None
-
-        logger.debug("[FIXTURE] Team identity index: %d surface forms", len(index))
         self._identity_index = index
         return index
 
