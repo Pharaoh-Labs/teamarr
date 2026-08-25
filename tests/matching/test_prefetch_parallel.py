@@ -168,18 +168,103 @@ def test_tsdb_leagues_are_never_fetched_concurrently():
         )
 
 
+def _flaky(broken_league: str, *, only_live: bool = True):
+    """A service whose fetches for one league raise."""
+
+    class _FlakyService(_FakeService):
+        def get_events(self, league, target_date, cache_only=False):
+            if league == broken_league and (not cache_only or not only_live):
+                raise RuntimeError("provider exploded")
+            return super().get_events(league, target_date, cache_only=cache_only)
+
+    return _FlakyService()
+
+
 def test_a_failing_league_does_not_lose_the_batch():
     """One league's outage must not cost every other league its events."""
     target_date = date(2026, 8, 25)
 
-    class _FlakyService(_FakeService):
-        def get_events(self, league, target_date, cache_only=False):
-            if league == "lg1" and not cache_only:
-                raise RuntimeError("provider exploded")
-            return super().get_events(league, target_date, cache_only=cache_only)
-
-    matcher = _matcher(_FlakyService(), {}, set(LEAGUES))
+    matcher = _matcher(_flaky("lg1"), {}, set(LEAGUES))
     matcher._prefetch_events(target_date)
 
     healthy = [lg for lg in LEAGUES if lg != "lg1"]
     assert any(lg in matcher._prefetched_events for lg in healthy)
+
+
+def test_a_failed_fetch_is_never_published_to_shared_events():
+    """A failure is an absence of knowledge, not an empty day.
+
+    `shared_events` treats an empty-but-freshly-fetched entry as authoritative
+    (`shared_events or not was_cache_only or ...`), so publishing a failed
+    slot's empty list would silently blank that league/date for every later
+    group in the run — the silent-missing-match failure mode of #599/#601 —
+    instead of letting them retry.
+
+    The poisoning condition is precisely "empty AND not cache_only", so that
+    is what this asserts. An empty cache-only entry is fine and pre-existing:
+    the reuse check already rejects it for any group that needs the league.
+    """
+    target_date = date(2026, 8, 25)
+    shared: dict = {}
+
+    matcher = _matcher(_flaky("lg1"), shared, set(LEAGUES))
+    matcher._prefetch_events(target_date)
+
+    poisoned = [
+        key
+        for key, (events, was_cache_only) in shared.items()
+        if key.startswith("lg1:") and not events and not was_cache_only
+    ]
+    assert not poisoned, (
+        f"failed fetches were cached as authoritative empty days: {poisoned}"
+    )
+    # ...and the leagues that answered are still cached as normal.
+    assert any(k.startswith("lg2:") for k in shared)
+
+
+def test_a_later_group_retries_a_league_whose_fetch_failed():
+    """The point of not publishing: the next group gets a real fetch."""
+    target_date = date(2026, 8, 25)
+    shared: dict = {}
+
+    _matcher(_flaky("lg1"), shared, set(LEAGUES))._prefetch_events(target_date)
+
+    healthy = _FakeService()
+    second = _matcher(healthy, shared, set(LEAGUES))
+    second._prefetch_events(target_date)
+
+    retried = [c for c in healthy.calls if c[0] == "lg1"]
+    assert retried, "lg1 was never retried — the failure was cached after all"
+    assert "lg1" in second._prefetched_events
+
+
+def test_a_failing_tsdb_league_does_not_kill_the_prefetch():
+    """TSDB fetches run inline, and are the flakiest call we make.
+
+    They must be isolated exactly like the concurrent ones — letting a
+    rate-limited TSDB league propagate would take down the prefetch for every
+    other league in the run.
+    """
+    target_date = date(2026, 8, 25)
+    broken = next(iter(TSDB_LEAGUES))
+    shared: dict = {}
+
+    # Subscribed, so TSDB actually fetches rather than going cache-only.
+    matcher = _matcher(_flaky(broken, only_live=False), shared, set(LEAGUES))
+    matcher._prefetch_events(target_date)  # must not raise
+
+    healthy = [lg for lg in LEAGUES if lg not in TSDB_LEAGUES]
+    assert any(lg in matcher._prefetched_events for lg in healthy)
+    assert not [k for k in shared if k.startswith(f"{broken}:")]
+
+
+def test_a_failing_cache_only_fetch_is_isolated_too():
+    """Cache-only slots run inline as well and get the same treatment."""
+    target_date = date(2026, 8, 25)
+    shared: dict = {}
+
+    # No league subscribed -> every slot is cache-only and runs inline.
+    matcher = _matcher(_flaky("lg1", only_live=False), shared, set())
+    matcher._prefetch_events(target_date)  # must not raise
+
+    assert not [k for k in shared if k.startswith("lg1:")]
