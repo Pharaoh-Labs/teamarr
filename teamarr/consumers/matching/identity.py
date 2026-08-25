@@ -165,6 +165,11 @@ def _discriminating(tokens: AbstractSet[str]) -> set[str]:
     return {t for t in tokens if len(t) > 2 and t not in _NON_DISCRIMINATING}
 
 
+# Cap on TeamIdentityIndex.resolve's memo. Keyed by normalized stream-side text,
+# so it grows with the variety of names a run sees, not with team_cache.
+_RESOLVE_CACHE_MAX = 16384
+
+
 @lru_cache(maxsize=16384)
 def _token_set(normalized: str) -> frozenset[str]:
     """Tokens of an already-normalized name, memoized.
@@ -255,9 +260,18 @@ class TeamIdentityIndex:
         norm = normalize_text(text)
         if not norm:
             return Resolution((), False)
-        if norm not in self._cache:
-            self._cache[norm] = self._resolve_uncached(norm)
-        return self._cache[norm]
+        hit = self._cache.get(norm)
+        if hit is None:
+            # Bounded (#609): the index is now shared for the whole run rather
+            # than rebuilt per event group, so this memo no longer gets a fresh
+            # start every group. Clearing wholesale rather than evicting one
+            # entry matches _TEAM_IDENTITY_MEMO in services/sports_data.py, and
+            # a rebuilt entry is a few string ops.
+            if len(self._cache) >= _RESOLVE_CACHE_MAX:
+                self._cache.clear()
+            hit = self._resolve_uncached(norm)
+            self._cache[norm] = hit
+        return hit
 
     def _alias_variants(self, norm: str) -> list[str]:
         """Rewrites of `norm` with any embedded alias expanded to canonical.

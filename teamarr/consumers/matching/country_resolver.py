@@ -11,6 +11,7 @@ TEAM_ALIASES instead).
 
 import logging
 import re
+import threading
 
 from unidecode import unidecode
 
@@ -96,6 +97,32 @@ _FIFA_OVERRIDES: dict[str, str] = {
     "eua": "United States",  # Portuguese "Estados Unidos da América"
     "usa": "United States",
 }
+
+
+_RESOLVER: "CountryNameResolver | None" = None
+_RESOLVER_LOCK = threading.Lock()
+
+
+def get_country_resolver() -> "CountryNameResolver":
+    """The shared resolver, built once per process.
+
+    Building one costs ~17ms — it walks every locale of the country dataset —
+    and a fresh ``TeamMatcher`` used to build its own. With one matcher per
+    event group that was 17ms x 343 groups = ~6s of a generation run, spent
+    rebuilding a mapping this class's own docstring calls static for the
+    lifetime of the process.
+
+    Safe to share precisely because it is: every write to ``_map`` happens
+    inside ``_build()`` during construction, and the object is read-only
+    thereafter. Nothing here memoizes per caller, so there is no shared mutable
+    state and no cross-group leakage.
+    """
+    global _RESOLVER
+    if _RESOLVER is None:
+        with _RESOLVER_LOCK:
+            if _RESOLVER is None:
+                _RESOLVER = CountryNameResolver()
+    return _RESOLVER
 
 
 def _normalize(name: str) -> str:
