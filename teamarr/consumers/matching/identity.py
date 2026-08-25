@@ -50,7 +50,9 @@ half.
 from __future__ import annotations
 
 import logging
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
+from functools import lru_cache
 from sqlite3 import Connection
 
 from rapidfuzz import fuzz, process
@@ -153,8 +155,26 @@ _NON_DISCRIMINATING = frozenset(
 )
 
 
-def _discriminating(tokens: set[str]) -> set[str]:
+def _discriminating(tokens: AbstractSet[str]) -> set[str]:
+    """The tokens in ``tokens`` that can actually tell two teams apart.
+
+    Takes ``AbstractSet`` rather than ``set``: its callers difference two
+    memoized ``frozenset``s, so a ``set``-only annotation would reject the only
+    inputs it ever receives.
+    """
     return {t for t in tokens if len(t) > 2 and t not in _NON_DISCRIMINATING}
+
+
+@lru_cache(maxsize=16384)
+def _token_set(normalized: str) -> frozenset[str]:
+    """Tokens of an already-normalized name, memoized.
+
+    Both arguments of ``residual_contradicts`` are drawn from small pools — the
+    stream's own sides and the candidate teams' names — but the function runs
+    once per (stream x candidate event x side), so re-splitting the same handful
+    of strings millions of times is pure waste.
+    """
+    return frozenset(normalized.split())
 
 
 def residual_contradicts(stream_norm: str, team_norm: str) -> bool:
@@ -172,8 +192,8 @@ def residual_contradicts(stream_norm: str, team_norm: str) -> bool:
     convict: "us seattle sounders a" vs "Seattle Sounders FC" leaves {us, a}
     against {fc}, which says nothing about whether these are the same club.
     """
-    s = set(stream_norm.split())
-    t = set(team_norm.split())
+    s = _token_set(stream_norm)
+    t = _token_set(team_norm)
     shared = s & t
     if not shared:
         return False

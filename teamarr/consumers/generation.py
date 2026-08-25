@@ -360,6 +360,10 @@ def run_full_generation(
             progress_callback=group_progress,
             generation=current_generation,  # Share generation across all groups
             service=shared_service,  # Reuse service to maintain warm cache
+            # Step 4 below re-reads team AND group XMLTV and merges the lot;
+            # aggregating the group half here would parse and serialize the
+            # whole guide a second time for a value nothing reads.
+            aggregate_xmltv=False,
         )
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes

@@ -21,8 +21,10 @@ Usage:
 """
 
 import logging
+import os
 import re
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -64,6 +66,38 @@ from teamarr.utilities.event_status import is_event_final
 from teamarr.utilities.fuzzy_match import normalize_text
 
 logger = logging.getLogger(__name__)
+
+# Concurrency for the event prefetch. Shares ESPN_MAX_WORKERS with the team
+# scan and cache refresh so a user throttling DNS (PiHole, AdGuard) turns both
+# down with one knob.
+PREFETCH_MAX_WORKERS = int(os.environ.get("ESPN_MAX_WORKERS", 24))
+
+
+@dataclass
+class _PrefetchSlot:
+    """One (league, date) cell of the prefetch window.
+
+    Planning, fetching and assembly are three separate passes over these, so a
+    slot carries both the decision made about it and the events that answered
+    it. ``reused`` marks a slot already served from ``shared_events`` — it must
+    not be written back, since it came from there.
+
+    ``failed`` marks a slot whose fetch raised. Its empty ``events`` is an
+    absence of knowledge, not an answer, so it must not be written back either:
+    ``shared_events`` treats an empty-but-freshly-fetched entry as authoritative
+    (``shared_events or not was_cache_only or ...``), so publishing one would
+    silently blank that league/date for every later group in the run instead of
+    letting them retry.
+    """
+
+    league: str
+    fetch_date: date
+    shared_key: str
+    cache_only: bool
+    is_tsdb: bool
+    events: list[Event] = field(default_factory=list)
+    reused: bool = False
+    failed: bool = False
 
 
 @dataclass
@@ -511,19 +545,25 @@ class StreamMatcher:
             target_date: Target date for event matching
             status_callback: Optional callback(status_message) for status updates
         """
+        # Rebuilt, never mutated in place. TeamMatcher memoizes its flattened
+        # candidate lists against this dict's *identity* (_prefetched_candidates),
+        # so mutating it after the fact would leave those memos serving stale
+        # candidates for the rest of the batch. Replace the dict; don't edit it.
         self._prefetched_events = {}
         total_events = 0
         shared_hits = 0
-        service_calls = 0
 
         total_leagues = len(self._search_leagues)
-        num_dates = MATCH_WINDOW_DAYS + self._days_ahead + 1
-        total_leagues * num_dates
 
-        for league_idx, league in enumerate(self._search_leagues):
-            league_events: list[Event] = []
+        # Pass 1 (sequential): decide, for every league x date in the window,
+        # whether the answer is already in shared_events or still has to be
+        # fetched. Every shared_key is distinct, so no slot in this plan depends
+        # on another's result — which is what makes pass 2 safe to parallelize.
+        plan: list[list[_PrefetchSlot]] = []
+        for league in self._search_leagues:
             is_tsdb = self._service.get_provider_name(league) == "tsdb"
             is_group_league = league in self._include_leagues
+            slots: list[_PrefetchSlot] = []
 
             # Range: from -MATCH_WINDOW_DAYS to +days_ahead (inclusive)
             for offset in range(-MATCH_WINDOW_DAYS, self._days_ahead + 1):
@@ -550,6 +590,14 @@ class StreamMatcher:
                     # Today: fetch from API for group's leagues, cache for others
                     cache_only = not is_group_league
 
+                slot = _PrefetchSlot(
+                    league=league,
+                    fetch_date=fetch_date,
+                    shared_key=shared_key,
+                    cache_only=cache_only,
+                    is_tsdb=is_tsdb,
+                )
+
                 # Check shared events cache first (from prior groups in same run)
                 if self._shared_events is not None and shared_key in self._shared_events:
                     shared_events, was_cache_only = self._shared_events[shared_key]
@@ -561,20 +609,82 @@ class StreamMatcher:
                     # Don't use if: empty + was_cache_only + we need this league
                     # (empty from cache miss shouldn't block groups that need API data)
                     if shared_events or not was_cache_only or not is_group_league:
-                        league_events.extend(shared_events)
+                        slot.events = shared_events
+                        slot.reused = True
                         shared_hits += 1
-                        continue
-                    # Fall through to fetch fresh if empty cache-only result
-                    # and this group actually needs the league
+                slots.append(slot)
+            plan.append(slots)
 
-                events = self._service.get_events(league, fetch_date, cache_only=cache_only)
-                service_calls += 1
-                league_events.extend(events)
+        # Pass 2: fill the slots that still need a service call. Network-bound
+        # fetches (cache_only=False) go out concurrently — the window is
+        # ~11 dates deep per league, and serializing every one of them was the
+        # single longest stretch of dead wall-clock time in a run. Cache-only
+        # slots stay inline: they never touch the network, so a thread would
+        # only add GIL hand-off to pure deserialization work.
+        #
+        # TSDB is excluded from the pool on purpose. Its client serializes on a
+        # rate limiter that sleeps while holding its lock, so concurrent callers
+        # would queue up inside that sleep rather than overlap — all the cost of
+        # threads, none of the overlap.
+        pending = [s for row in plan for s in row if not s.reused]
+        concurrent_slots = [s for s in pending if not s.cache_only and not s.is_tsdb]
+        inline_slots = [s for s in pending if s.cache_only or s.is_tsdb]
 
-                # Store result in shared cache for subsequent matchers
-                # Include was_cache_only flag so later groups can decide whether to re-fetch
-                if self._shared_events is not None:
-                    self._shared_events[shared_key] = (events, cache_only)
+        service_calls = len(pending)
+
+        def _record(slot: _PrefetchSlot, exc: Exception) -> None:
+            """One slot's failure must neither kill the batch nor be cached."""
+            logger.warning(
+                "[PREFETCH] %s %s failed: %s", slot.league, slot.fetch_date, exc
+            )
+            slot.events = []
+            slot.failed = True
+
+        if concurrent_slots:
+            workers = min(PREFETCH_MAX_WORKERS, len(concurrent_slots))
+            with ThreadPoolExecutor(
+                max_workers=workers, thread_name_prefix="prefetch"
+            ) as executor:
+                futures = {
+                    executor.submit(
+                        self._service.get_events,
+                        slot.league,
+                        slot.fetch_date,
+                        cache_only=slot.cache_only,
+                    ): slot
+                    for slot in concurrent_slots
+                }
+                for future in as_completed(futures):
+                    slot = futures[future]
+                    try:
+                        slot.events = future.result()
+                    except Exception as e:  # noqa: BLE001 - see _record
+                        _record(slot, e)
+
+        # Isolated per slot exactly like the concurrent path above. TSDB runs
+        # here and is the flakiest fetch we make (rate-limited free tier), so
+        # letting it propagate would let one league take down the whole
+        # prefetch for every other league.
+        for slot in inline_slots:
+            try:
+                slot.events = self._service.get_events(
+                    slot.league, slot.fetch_date, cache_only=slot.cache_only
+                )
+            except Exception as e:  # noqa: BLE001 - see _record
+                _record(slot, e)
+
+        # Pass 3 (sequential): assemble in league order and publish to
+        # shared_events, exactly as the serial version did.
+        for league_idx, (league, slots) in enumerate(
+            zip(self._search_leagues, plan, strict=True)
+        ):
+            league_events: list[Event] = []
+            for slot in slots:
+                league_events.extend(slot.events)
+                # Reused slots came FROM shared_events; failed slots know
+                # nothing (see _PrefetchSlot). Neither is ours to publish.
+                if self._shared_events is not None and not slot.reused and not slot.failed:
+                    self._shared_events[slot.shared_key] = (slot.events, slot.cache_only)
 
             if league_events:
                 self._prefetched_events[league] = league_events
@@ -582,16 +692,29 @@ class StreamMatcher:
 
             # Report progress periodically (every 20 leagues or at end)
             if status_callback and (league_idx % 20 == 0 or league_idx == total_leagues - 1):
-                int((league_idx + 1) / total_leagues * 100)
                 status_callback(
                     f"Prefetching events: {league_idx + 1}/{total_leagues} leagues "
                     f"({total_events} events, {shared_hits} reused)"
                 )
 
+        failed_slots = [s for s in pending if s.failed]
+        if failed_slots:
+            # One line to grep for during a dev soak: a burst here (429s from a
+            # provider under the prefetch's concurrency) is the signal to turn
+            # PREFETCH_MAX_WORKERS down.
+            logger.warning(
+                "[PREFETCH] %d/%d fetches failed and were NOT cached; "
+                "affected leagues: %s",
+                len(failed_slots),
+                service_calls,
+                ", ".join(sorted({s.league for s in failed_slots})),
+            )
+
         logger.debug(
             f"Prefetched {total_events} events from {len(self._prefetched_events)} leagues "
             f"(window: -{MATCH_WINDOW_DAYS} to +{self._days_ahead} days, "
-            f"shared_hits={shared_hits}, service_calls={service_calls})"
+            f"shared_hits={shared_hits}, service_calls={service_calls}, "
+            f"concurrent={len(concurrent_slots)}, failed={len(failed_slots)})"
         )
 
     def _match_single(

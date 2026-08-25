@@ -8,8 +8,10 @@ Supports two modes:
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -104,6 +106,49 @@ _NORMALIZED_TEAM_ALIASES: dict[str, str] = {
 }
 
 
+class _Unresolved:
+    """Sentinel for the alias memo: None is a real, cacheable answer ("no alias").
+
+    A class rather than a bare ``object()`` so callers can narrow the ``get()``
+    union with ``isinstance`` and the real payload type flows through — the same
+    pattern as ``_CacheMiss`` in services/sports_data.py.
+    """
+
+    __slots__ = ()
+
+
+_UNRESOLVED = _Unresolved()
+
+
+@dataclass(frozen=True)
+class _DateWindow:
+    """The +/- day window some candidate builders filter to.
+
+    One object rather than three keyword arguments because the three only ever
+    travel together: a caller either filters by date or does not. Grouping them
+    makes that an invariant the type checker enforces, instead of three
+    independently-optional values the body has to assume are consistent.
+    Frozen so it can key the candidate memo.
+    """
+
+    user_tz: ZoneInfo
+    target_date: date
+    days: int
+
+
+@lru_cache(maxsize=32768)
+def _local_date(instant: datetime, tz: ZoneInfo) -> date:
+    """The calendar date an instant falls on in ``tz``, memoized.
+
+    Every candidate event is converted at least twice per stream (the search
+    window and the date-proximity ranking), so a batch redoes the same
+    ``astimezone`` once per (stream x event) when it depends only on the event.
+    Kick-off times cluster hard on the hour, so the distinct-key count is far
+    smaller than the event count.
+    """
+    return instant.astimezone(tz).date()
+
+
 def _is_short_code(normalized: str) -> bool:
     """A single token this short is an abbreviation, not a team name (#472)."""
     return len(normalized) <= SHORT_CODE_MAX_LEN and " " not in normalized
@@ -114,6 +159,17 @@ def _resolve_alt_codes(tokens: set[str]) -> set[str]:
     return tokens | {
         ALTERNATE_TEAM_CODES[t] for t in tokens if t in ALTERNATE_TEAM_CODES
     }
+
+
+@lru_cache(maxsize=16384)
+def _code_tokens(team_name: str) -> frozenset[str]:
+    """Alt-code-resolved tokens of a stream side, memoized.
+
+    The abbreviation check runs once per (stream x candidate event), but its
+    stream-side tokens depend only on the stream — normalizing and splitting
+    them per candidate is work the whole batch repeats.
+    """
+    return frozenset(_resolve_alt_codes(set(normalize_text(team_name).split())))
 
 
 def _abbrev_equals(stream_code: str, event_abbrev: str | None) -> bool:
@@ -129,8 +185,12 @@ def _initialism(tokens: list[str]) -> str:
     return "".join(t[0] for t in tokens if t)
 
 
+@lru_cache(maxsize=16384)
 def _short_name_leg_is_safe(stream_norm: str, name_norm: str, short_norm: str, abbrev: str) -> bool:
     """May the short_name score stand in for this stream candidate? (#569)
+
+    Memoized: a pure function of four already-normalized strings, called once
+    per (stream x candidate event x side) over a small pool of distinct inputs.
 
     token_set_ratio returns 100 whenever the short name is a token subset of
     the stream — so a bare nickname short_name makes every team sharing that
@@ -165,6 +225,13 @@ def _short_name_leg_is_safe(stream_norm: str, name_norm: str, short_norm: str, a
 def _best_name_score(stream_norm: str, event_team) -> float:
     """token_set_ratio against the best of the team's name and short_name.
 
+    Thin wrapper over the memoized kernel below: a Team object is not hashable
+    on identity in a useful way here (the same team arrives as a fresh instance
+    from every event it appears in), but the three fields the score depends on
+    are. A team plays several games inside the match window, so within one
+    stream's pass over the candidate events the same (side, team) pair recurs
+    once per fixture — and again for every stream sharing a normalized side.
+
     Official nicknames often share no words with the full name — ESPN's
     short_name for Arizona is literally "D-backs", which scores ~50 against
     "Arizona Diamondbacks" (#480). Streams use whichever form the provider
@@ -181,13 +248,26 @@ def _best_name_score(stream_norm: str, event_team) -> float:
     rest. Aliases are unaffected: _side_score scores them separately and takes
     the max, so "Anaheim Angels" still reaches the Angels via its alias.
     """
-    name_norm = normalize_text(event_team.name)
+    return _best_name_score_cached(
+        stream_norm,
+        event_team.name,
+        getattr(event_team, "short_name", None) or "",
+        getattr(event_team, "abbreviation", "") or "",
+    )
+
+
+@lru_cache(maxsize=65536)
+def _best_name_score_cached(
+    stream_norm: str, team_name: str, team_short: str, team_abbrev: str
+) -> float:
+    """Memoized kernel of :func:`_best_name_score` — see its docstring."""
+    name_norm = normalize_text(team_name)
     score = 0.0 if residual_contradicts(stream_norm, name_norm) else fuzz.token_set_ratio(
         stream_norm, name_norm
     )
 
-    short = getattr(event_team, "short_name", None)
-    if not short or short == event_team.name:
+    short = team_short
+    if not short or short == team_name:
         return score
 
     short_norm = normalize_text(short)
@@ -195,7 +275,7 @@ def _best_name_score(stream_norm: str, event_team) -> float:
     if short_score <= score:
         return score
 
-    abbrev = normalize_text(getattr(event_team, "abbreviation", "") or "")
+    abbrev = normalize_text(team_abbrev)
     if _short_name_leg_is_safe(stream_norm, name_norm, short_norm, abbrev):
         return short_score
     return score
@@ -238,8 +318,7 @@ class MatchContext:
 
         Final/completed status is NOT checked here - lifecycle handles exclusions.
         """
-        event_start = event.start_time.astimezone(self.user_tz)
-        event_date = event_start.date()
+        event_date = _local_date(event.start_time, self.user_tz)
 
         earliest_date = self.target_date - timedelta(days=MATCH_WINDOW_DAYS)
 
@@ -289,6 +368,16 @@ class TeamMatcher:
         # same names are re-checked against every candidate event. Without this
         # the [ALIAS] log line repeats once per candidate (147x in #256).
         self._country_resolve_cache: dict[str, str | None] = {}
+        # Memo for _resolve_alias, keyed (team_name, league). Cleared by
+        # reload_aliases so a user's edit takes effect immediately.
+        self._alias_resolve_cache: dict[tuple[str, str | None], str | None] = {}
+        # Memo for the flattened prefetched-candidate list (see
+        # _prefetched_candidates). Keyed by league set + date window, and reset
+        # whenever a different prefetch dict arrives.
+        self._candidates_source: dict[str, list[Event]] | None = None
+        self._candidates_memo: dict[
+            tuple[tuple[str, ...], _DateWindow | None], tuple[tuple[str, Event], ...]
+        ] = {}
         # Global team identity index (epic goax), built lazily on first use so
         # matchers constructed without a db_factory (tests, racing/tennis paths)
         # cost nothing. _identity_loaded distinguishes "not tried yet" from
@@ -305,6 +394,7 @@ class TeamMatcher:
         """
         self._user_aliases = self._load_user_aliases()
         self._reverse_aliases = self._build_reverse_cache()
+        self._alias_resolve_cache.clear()
         logger.info(
             "[ALIAS] Reloaded aliases: %d forward, %d reverse entries",
             len(self._user_aliases),
@@ -496,13 +586,11 @@ class TeamMatcher:
 
         # Use prefetched events if available (much faster for multi-stream matching)
         # Otherwise, fetch events: use full 30-day cache for matching
-        all_events: list[tuple[str, Event]] = []
+        all_events: Sequence[tuple[str, Event]] = []
 
         if prefetched_events:
             # Use pre-fetched events (already fetched once for all streams)
-            for league in leagues_to_search:
-                for event in prefetched_events.get(league, []):
-                    all_events.append((league, event))
+            all_events = self._prefetched_candidates(prefetched_events, leagues_to_search)
         else:
             # Fallback: fetch events per-stream (slower, used when no prefetch)
             for league in leagues_to_search:
@@ -608,13 +696,13 @@ class TeamMatcher:
 
         # Narrow date window to ±2 days to minimise false positives.
         window_days = 2
-        all_events: list[tuple[str, Event]] = []
+        all_events: Sequence[tuple[str, Event]] = []
         if prefetched_events:
-            for league in leagues_to_search:
-                for event in prefetched_events.get(league, []):
-                    event_date = event.start_time.astimezone(user_tz).date()
-                    if abs((event_date - target_date).days) <= window_days:
-                        all_events.append((league, event))
+            all_events = self._prefetched_candidates(
+                prefetched_events,
+                leagues_to_search,
+                window=_DateWindow(user_tz, target_date, window_days),
+            )
         else:
             is_tsdb_map = {
                 lg: self._service.get_provider_name(lg) == "tsdb"
@@ -763,13 +851,13 @@ class TeamMatcher:
 
         # Narrow date window to ±2 days to minimise false positives.
         window_days = 2
-        all_events: list[tuple[str, Event]] = []
+        all_events: Sequence[tuple[str, Event]] = []
         if prefetched_events:
-            for league in leagues_to_search:
-                for event in prefetched_events.get(league, []):
-                    event_date = event.start_time.astimezone(user_tz).date()
-                    if abs((event_date - target_date).days) <= window_days:
-                        all_events.append((league, event))
+            all_events = self._prefetched_candidates(
+                prefetched_events,
+                leagues_to_search,
+                window=_DateWindow(user_tz, target_date, window_days),
+            )
         else:
             for league in leagues_to_search:
                 is_tsdb = self._service.get_provider_name(league) == "tsdb"
@@ -824,6 +912,53 @@ class TeamMatcher:
     # =========================================================================
     # PRIVATE METHODS
     # =========================================================================
+
+    def _prefetched_candidates(
+        self,
+        prefetched_events: dict[str, list[Event]],
+        leagues_to_search: list[str],
+        *,
+        window: _DateWindow | None = None,
+    ) -> tuple[tuple[str, Event], ...]:
+        """Flattened ``[(league, event)]`` candidates, memoized for the batch.
+
+        Every stream used to rebuild this list from the same prefetch — tens of
+        thousands of tuple allocations per stream, plus an ``astimezone`` per
+        event for the date-windowed callers. The list depends only on the
+        prefetch, the leagues being searched and the window, and streams share
+        those (the league set varies only when a stream carries a league hint),
+        so it is built once per distinct key instead of once per stream.
+
+        Returns a tuple, not a list: the result is shared by every stream in
+        the batch, so a caller that mutated it would corrupt the candidates of
+        every stream after it. Immutability makes that a TypeError instead of
+        a quietly wrong guide.
+
+        Freshness rests on ``prefetched_events`` being *replaced* rather than
+        mutated in place — see the note at its producer,
+        ``StreamMatcher._prefetch_events``.
+        """
+        if self._candidates_source is not prefetched_events:
+            self._candidates_source = prefetched_events
+            self._candidates_memo = {}
+
+        key = (tuple(leagues_to_search), window)
+        cached = self._candidates_memo.get(key)
+        if cached is not None:
+            return cached
+
+        candidates: list[tuple[str, Event]] = []
+        for league in leagues_to_search:
+            for event in prefetched_events.get(league, ()):
+                if window is not None:
+                    event_date = _local_date(event.start_time, window.user_tz)
+                    if abs((event_date - window.target_date).days) > window.days:
+                        continue
+                candidates.append((league, event))
+
+        frozen = tuple(candidates)
+        self._candidates_memo[key] = frozen
+        return frozen
 
     def _check_cache(self, ctx: MatchContext) -> MatchOutcome | None:
         """Check cache for existing match.
@@ -977,7 +1112,7 @@ class TeamMatcher:
                 if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
 
-            event_date = event.start_time.astimezone(ctx.user_tz).date()
+            event_date = _local_date(event.start_time, ctx.user_tz)
 
             # Date validation from the stream (#474). A trusted date (built-in
             # extraction, declared component groups, or a learned per-source
@@ -989,7 +1124,7 @@ class TeamMatcher:
             if ctx.classified.normalized.extracted_date:
                 # The date in the stream name is in the provider's timezone
                 compare_tz = ctx.stream_tz or ctx.user_tz
-                event_date_in_stream_tz = event.start_time.astimezone(compare_tz).date()
+                event_date_in_stream_tz = _local_date(event.start_time, compare_tz)
                 stream_date_dist = abs(
                     (
                         ctx.classified.normalized.extracted_date
@@ -1156,7 +1291,7 @@ class TeamMatcher:
     def _match_against_multi_league_events(
         self,
         ctx: MatchContext,
-        events: list[tuple[str, Event]],
+        events: Sequence[tuple[str, Event]],
     ) -> MatchOutcome:
         """Try to match against events from multiple leagues.
 
@@ -1223,7 +1358,7 @@ class TeamMatcher:
                 if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
 
-            event_date = event.start_time.astimezone(ctx.user_tz).date()
+            event_date = _local_date(event.start_time, ctx.user_tz)
 
             # Date validation from the stream (#474). A trusted date (built-in
             # extraction, declared component groups, or a learned per-source
@@ -1235,7 +1370,7 @@ class TeamMatcher:
             if ctx.classified.normalized.extracted_date:
                 # The date in the stream name is in the provider's timezone
                 compare_tz = ctx.stream_tz or ctx.user_tz
-                event_date_in_stream_tz = event.start_time.astimezone(compare_tz).date()
+                event_date_in_stream_tz = _local_date(event.start_time, compare_tz)
                 stream_date_dist = abs(
                     (
                         ctx.classified.normalized.extracted_date
@@ -1509,8 +1644,8 @@ class TeamMatcher:
         if not home_abbr or not away_abbr or len(home_abbr) < 2 or len(away_abbr) < 2:
             return None
 
-        t1_tokens = _resolve_alt_codes(set(normalize_text(team1).split())) if team1 else set()
-        t2_tokens = _resolve_alt_codes(set(normalize_text(team2).split())) if team2 else set()
+        t1_tokens = _code_tokens(team1) if team1 else frozenset()
+        t2_tokens = _code_tokens(team2) if team2 else frozenset()
 
         # Both teams must match different event teams
         if team1 and team2:
@@ -1786,6 +1921,19 @@ class TeamMatcher:
         Returns:
             Canonical team name if alias found, None otherwise
         """
+        # Memoized per (name, league): _side_score resolves both stream sides
+        # against every candidate event's league, so the same lookup repeats
+        # once per candidate over a pool of at most a few leagues.
+        memo_key = (team_name, league)
+        cached = self._alias_resolve_cache.get(memo_key, _UNRESOLVED)
+        if not isinstance(cached, _Unresolved):
+            return cached
+        resolved = self._resolve_alias_uncached(team_name, league)
+        self._alias_resolve_cache[memo_key] = resolved
+        return resolved
+
+    def _resolve_alias_uncached(self, team_name: str, league: str | None) -> str | None:
+        """Alias resolution proper — see :meth:`_resolve_alias`."""
         normalized = normalize_text(team_name)
 
         # User-defined aliases first — deliberate user mappings outrank
@@ -1841,33 +1989,36 @@ class TeamMatcher:
         if not team1 and not team2:
             return None
 
+        # Get event league for user-defined alias lookup
+        event_league = event.league
+
+        # Resolve aliases BEFORE building patterns. Aliases are rare, but this
+        # runs once per (stream x candidate event) pair, so generating the two
+        # pattern lists first meant allocating them for every pair whose stream
+        # has no alias at all — the single largest wasted allocation in the
+        # match loop. Both sides must resolve when both were extracted (the
+        # return conditions below), so a half-resolved pair can bail just as
+        # early as an unresolved one.
+        canonical1 = self._resolve_alias(team1, event_league) if team1 else None
+        canonical2 = self._resolve_alias(team2, event_league) if team2 else None
+
+        if team1 and team2:
+            if not (canonical1 and canonical2):
+                return None
+        elif not (canonical1 or canonical2):
+            return None
+
         # Generate patterns for alias checking
         home_patterns = self._fuzzy.generate_team_patterns(event.home_team)
         away_patterns = self._fuzzy.generate_team_patterns(event.away_team)
 
-        # Get event league for user-defined alias lookup
-        event_league = event.league
+        def _hits(canonical: str) -> bool:
+            return any(canonical in tp.pattern for tp in home_patterns) or any(
+                canonical in tp.pattern for tp in away_patterns
+            )
 
-        team1_match = False
-        team2_match = False
-
-        # Check team1 against aliases (built-in first, then user-defined)
-        if team1:
-            canonical = self._resolve_alias(team1, event_league)
-            if canonical:
-                if any(canonical in tp.pattern for tp in home_patterns):
-                    team1_match = True
-                elif any(canonical in tp.pattern for tp in away_patterns):
-                    team1_match = True
-
-        # Check team2 against aliases (built-in first, then user-defined)
-        if team2:
-            canonical = self._resolve_alias(team2, event_league)
-            if canonical:
-                if any(canonical in tp.pattern for tp in home_patterns):
-                    team2_match = True
-                elif any(canonical in tp.pattern for tp in away_patterns):
-                    team2_match = True
+        team1_match = bool(canonical1) and _hits(canonical1)
+        team2_match = bool(canonical2) and _hits(canonical2)
 
         # Need both teams to match via alias (if both were extracted)
         if team1 and team2:
@@ -2014,7 +2165,7 @@ class TeamMatcher:
     def _try_reverse_alias_match(
         self,
         ctx: MatchContext,
-        events: list[tuple[str, Event]],
+        events: Sequence[tuple[str, Event]],
         enabled_leagues: list[str],
     ) -> MatchOutcome | None:
         """Try matching with reverse alias resolution.

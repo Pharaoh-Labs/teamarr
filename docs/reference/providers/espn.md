@@ -34,9 +34,9 @@ ESPN is the primary data provider (priority 0), serving 99 pre-configured league
 | Max connections | 100 | `ESPN_MAX_CONNECTIONS` |
 | Timeout | 10s | `ESPN_TIMEOUT` |
 | Retry count | 3 | `ESPN_RETRY_COUNT` |
-| Max workers | 100 (team processing) / 50 (cache refresh) | `ESPN_MAX_WORKERS` |
+| Max workers | 100 (team processing) / 50 (cache refresh) / 24 (event prefetch) | `ESPN_MAX_WORKERS` |
 
-`ESPN_MAX_WORKERS` is read by the consumers, not the HTTP client, and has two defaults: 100 in the team processor and 50 in cache refresh (lower because refresh makes more API calls per league). Setting the env var overrides both.
+`ESPN_MAX_WORKERS` is read by the consumers, not the HTTP client, and has three defaults: 100 in the team processor, 50 in cache refresh (lower because refresh makes more API calls per league), and 24 in the event-match prefetch (which fans a league x date window out across threads). Setting the env var overrides all three.
 
 Retry logic uses exponential backoff: 0.5s → 1s → 2s → 4s (capped at 10s) with ±30% jitter. Rate limit (429) responses trigger longer backoff: 5s → 10s → 20s (capped at 60s), respecting the `Retry-After` header if present.
 

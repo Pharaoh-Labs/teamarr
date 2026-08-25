@@ -114,6 +114,8 @@ Output includes: extracted team names, detected league/sport hints, card segment
 
 **Caching:** Fingerprint-based cache keyed by `hash(stream_name, group_id, generation)`. The generation counter increments per EPG run to bust stale cache entries.
 
+**Event prefetch:** Before matching a batch, `_prefetch_events` fetches every searched league across the whole match window (`-MATCH_WINDOW_DAYS` to `+days_ahead`) once, instead of per stream. It runs in three passes — plan every (league, date) cell, fill the cells that still need a service call, then assemble in league order. Network-bound fetches go out concurrently (up to `ESPN_MAX_WORKERS`, default 24 here); cache-only cells run inline because they never touch the network, and TSDB stays inline because its rate limiter sleeps under a lock, so concurrent callers would queue inside that sleep rather than overlap. Results land in `shared_events`, so later groups in the same run reuse them.
+
 ### EPG-title matching (`matching/epg_matcher.py`, `matching/epg_index.py`)
 
 For static-named linear channels (ESPN, NBA1) the stream name is unmatchable, but the Dispatcharr EPG guide carries the real matchup. When a group opts in, `StreamMatcher` augments name matching with EPG-title matching:
