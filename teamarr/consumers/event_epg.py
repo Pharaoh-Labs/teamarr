@@ -253,6 +253,11 @@ class EventEPGGenerator:
             )
             stop = event.start_time + timedelta(hours=duration)
 
+        # One variable map for the whole programme: every field below resolves
+        # against this same, unchanging context, and building the map is the
+        # bulk of a resolve's cost (all 252 extractors plus suffixes).
+        variables = self._resolver.build_variables(context)
+
         # Conditional rows can override any of title/subtitle/description
         # (#370 part 2); each field falls through independently to the plain
         # format string when no row defines it or the winner renders empty.
@@ -267,21 +272,33 @@ class EventEPGGenerator:
 
         title = None
         if conditional_fields.get("title"):
-            title = self._resolver.resolve(conditional_fields["title"], context)
+            title = self._resolver.resolve(
+                conditional_fields["title"], context, variables=variables
+            )
         if not title:
-            title = self._resolver.resolve(template.title_format, context)
+            title = self._resolver.resolve(
+                template.title_format, context, variables=variables
+            )
 
         subtitle = None
         if conditional_fields.get("subtitle"):
-            subtitle = self._resolver.resolve(conditional_fields["subtitle"], context)
+            subtitle = self._resolver.resolve(
+                conditional_fields["subtitle"], context, variables=variables
+            )
         if not subtitle:
-            subtitle = self._resolver.resolve(template.subtitle_format, context)
+            subtitle = self._resolver.resolve(
+                template.subtitle_format, context, variables=variables
+            )
 
         description = None
         if conditional_fields.get("description"):
-            description = self._resolver.resolve(conditional_fields["description"], context)
+            description = self._resolver.resolve(
+                conditional_fields["description"], context, variables=variables
+            )
         if not description:
-            description = self._resolver.resolve(template.description_format, context)
+            description = self._resolver.resolve(
+                template.description_format, context, variables=variables
+            )
 
         # Prepend "POSTPONED | " label if event is postponed and setting is enabled
         title = prepend_postponed_label(title, event, options.prepend_postponed_label)
@@ -292,14 +309,18 @@ class EventEPGGenerator:
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
         icon = None
         if template.program_art_url:
-            icon = self._resolver.resolve_art(template.program_art_url, context)
+            icon = self._resolver.resolve_art(
+                template.program_art_url, context, variables=variables
+            )
 
         # Resolve categories (may contain {sport} variable)
         # Preserve user's original casing for custom categories
         resolved_categories = []
         for cat in template.xmltv_categories:
             if "{" in cat:
-                resolved_categories.append(self._resolver.resolve(cat, context))
+                resolved_categories.append(
+                    self._resolver.resolve(cat, context, variables=variables)
+                )
             else:
                 resolved_categories.append(cat)
 
@@ -439,10 +460,14 @@ class EventEPGGenerator:
             context.feed_team = feed_team
             context.extra_vars = {"exception_keyword": keyword_value}
 
+            # Built after the context is fully populated above; the name and
+            # logo fields below both resolve against it unchanged.
+            variables = self._resolver.build_variables(context)
+
             # Generate channel name from template
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             channel_name = self._resolver.resolve(
-                event_template.channel_name_format, context
+                event_template.channel_name_format, context, variables=variables
             )
 
             # Auto-append keyword if template doesn't use {exception_keyword} variable
@@ -459,7 +484,7 @@ class EventEPGGenerator:
             channel_icon = None
             if event_template.event_channel_logo_url:
                 channel_icon = self._resolver.resolve_art(
-                    event_template.event_channel_logo_url, context
+                    event_template.event_channel_logo_url, context, variables=variables
                 )
 
             channel_info = EventChannelInfo(

@@ -44,6 +44,11 @@ class LeagueMappingService:
         self._db_getter = db_getter
         # Cache all mappings at initialization for thread-safety
         self._mappings: dict[tuple[str, str], LeagueMapping] = {}
+        # First mapping seen per league_code, whatever the provider. Lookups by
+        # league alone used to linear-scan _mappings, and they sit on the
+        # per-league hot path (`ESPN.supports_league` -> `get_mapping_by_league`
+        # runs for every provider probe of every league on every get_events).
+        self._mappings_by_league: dict[str, LeagueMapping] = {}
         self._provider_leagues: dict[str, list[LeagueMapping]] = {}
         # Template variable caches (league_code -> value)
         # {league}: league_alias if set, else display_name
@@ -183,6 +188,12 @@ class LeagueMappingService:
             except sqlite3.OperationalError:
                 pass  # pre-upgrade database; overrides simply absent
 
+        # Built from _mappings rather than inside the load loop so it resolves
+        # exactly as the linear scan it replaces did: first entry in the dict's
+        # iteration order wins, with whatever value that key ended up holding.
+        for (code, _provider), mapping in self._mappings.items():
+            self._mappings_by_league.setdefault(code, mapping)
+
         logger.info(
             "[LEAGUE_MAPPING] Loaded %d mappings (%d providers, %d aliases, %d sports)",
             len(self._mappings),
@@ -197,6 +208,7 @@ class LeagueMappingService:
         Call this if leagues table is modified and you need fresh data.
         """
         self._mappings.clear()
+        self._mappings_by_league.clear()
         self._provider_leagues.clear()
         self._league_aliases.clear()
         self._league_ids.clear()
@@ -457,12 +469,7 @@ class LeagueMappingService:
         key_lower = league_code.lower()
 
         # Find the mapping for this league (any provider)
-        # First, find by iterating through all mappings
-        mapping: LeagueMapping | None = None
-        for (code, _provider), m in self._mappings.items():
-            if code == key_lower:
-                mapping = m
-                break
+        mapping = self._mappings_by_league.get(key_lower)
 
         if mapping is None:
             return None
@@ -544,11 +551,7 @@ class LeagueMappingService:
 
         Thread-safe: uses in-memory cache, no DB access.
         """
-        key_lower = league_code.lower()
-        for (code, _provider), mapping in self._mappings.items():
-            if code == key_lower:
-                return mapping
-        return None
+        return self._mappings_by_league.get(league_code.lower())
 
 
 # Singleton instance - initialized by app startup

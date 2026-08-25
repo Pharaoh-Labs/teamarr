@@ -252,6 +252,7 @@ class EventGroupProcessor(
         run_enforcement: bool = True,
         progress_callback: Callable[[int, int, str], None] | None = None,
         generation: int | None = None,
+        aggregate_xmltv: bool = True,
     ) -> BatchProcessingResult:
         """Process all active event groups.
 
@@ -266,6 +267,12 @@ class EventGroupProcessor(
             run_enforcement: Whether to run post-processing enforcement
             progress_callback: Optional callback(current, total, group_name)
             generation: Cache generation counter (shared across all groups)
+            aggregate_xmltv: Whether to populate ``result.total_xmltv`` by
+                merging every group's guide. Full EPG generation passes False:
+                it re-reads team AND group XMLTV from the database and merges
+                those itself, so merging the group half here parses and
+                serializes the whole guide a second time for a value it
+                discards.
 
         Returns:
             BatchProcessingResult with all group results and combined XMLTV
@@ -384,7 +391,7 @@ class EventGroupProcessor(
                 )
 
             # Aggregate XMLTV from all processed groups
-            if processed_group_ids:
+            if aggregate_xmltv and processed_group_ids:
                 xmltv_contents = get_all_group_xmltv(conn, processed_group_ids)
                 if xmltv_contents:
                     from teamarr.database.settings import get_display_settings
@@ -1045,6 +1052,7 @@ def process_all_event_groups(
     progress_callback: Callable[[int, int, str], None] | None = None,
     generation: int | None = None,
     service: SportsDataService | None = None,
+    aggregate_xmltv: bool = True,
 ) -> BatchProcessingResult:
     """Process all active event groups.
 
@@ -1057,6 +1065,8 @@ def process_all_event_groups(
         progress_callback: Optional callback(current, total, group_name)
         generation: Cache generation counter (shared across all groups in run)
         service: Optional SportsDataService (reuse to maintain cache warmth)
+        aggregate_xmltv: Populate result.total_xmltv (see
+            EventGroupProcessor.process_all_groups)
 
     Returns:
         BatchProcessingResult
@@ -1067,7 +1077,10 @@ def process_all_event_groups(
         service=service,
     )
     return processor.process_all_groups(
-        target_date, progress_callback=progress_callback, generation=generation
+        target_date,
+        progress_callback=progress_callback,
+        generation=generation,
+        aggregate_xmltv=aggregate_xmltv,
     )
 
 

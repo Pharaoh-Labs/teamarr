@@ -86,7 +86,28 @@ class TemplateResolver:
         # same way. Empty = no prefixing.
         self.art_base_url = art_base_url or ""
 
-    def resolve_art(self, template: str, context: TemplateContext) -> str:
+    def build_variables(self, context: TemplateContext) -> dict[str, str]:
+        """Materialize the full variable map for a context.
+
+        Every ``resolve()`` runs all 252 registered extractors (plus their
+        ``.next``/``.last`` suffixes) from scratch, but one programme resolves
+        five to eight fields — title, subtitle, description, art, each
+        category — against a context that does not change between them. Callers
+        rendering a whole programme can build the map once here and pass it to
+        each ``resolve``/``resolve_art`` call as ``variables=``.
+
+        Deliberately a returned value rather than a cache on the resolver: a
+        single ``TemplateResolver`` is shared across the team scan's worker
+        threads, so resolver-held state would be a data race.
+        """
+        return self._build_all_variables(context)
+
+    def resolve_art(
+        self,
+        template: str,
+        context: TemplateContext,
+        variables: dict[str, str] | None = None,
+    ) -> str:
         """Resolve an art/icon field, then apply the game-thumbs base URL.
 
         The single entry point for ALL art/logo URLs so the base-URL reconstruction
@@ -94,14 +115,27 @@ class TemplateResolver:
         the base prefixed; absolute URLs pass through unchanged (idempotent).
         """
 
-        return apply_art_base_url(self.resolve(template, context), self.art_base_url) or ""
+        return (
+            apply_art_base_url(
+                self.resolve(template, context, variables=variables), self.art_base_url
+            )
+            or ""
+        )
 
-    def resolve(self, template: str, context: TemplateContext) -> str:
+    def resolve(
+        self,
+        template: str,
+        context: TemplateContext,
+        variables: dict[str, str] | None = None,
+    ) -> str:
         """Replace all {variable} placeholders with values.
 
         Args:
             template: String with {variable} placeholders
             context: Complete template context
+            variables: Optional pre-built map from :meth:`build_variables` for
+                this same context, so a run of resolves over one programme
+                does not rebuild it per field.
 
         Returns:
             String with all variables resolved
@@ -110,7 +144,9 @@ class TemplateResolver:
             return ""
 
         # Build all variables (base + suffixed)
-        return self.resolve_with_map(template, self._build_all_variables(context))
+        if variables is None:
+            variables = self._build_all_variables(context)
+        return self.resolve_with_map(template, variables)
 
     def resolve_with_map(self, template: str, variables: dict[str, str]) -> str:
         """Replace {variable} placeholders from a pre-built name -> value map.
@@ -300,6 +336,7 @@ class TemplateResolver:
         description_options: str | list[dict[str, Any]] | None,
         context: TemplateContext,
         game_ctx: GameContext | None = None,
+        variables: dict[str, str] | None = None,
     ) -> str:
         """Select and resolve a conditional description.
 
@@ -312,6 +349,7 @@ class TemplateResolver:
             context: Template context
             game_ctx: Game context for condition evaluation.
                 If None, uses context.game_context.
+            variables: Optional pre-built map from :meth:`build_variables`.
 
         Returns:
             Resolved description string, or empty string if no match.
@@ -337,7 +375,7 @@ class TemplateResolver:
             return ""
 
         # Resolve variables in the selected template
-        return self.resolve(template, context)
+        return self.resolve(template, context, variables=variables)
 
     def get_available_variables(self) -> list[str]:
         """Get list of all registered variable names."""

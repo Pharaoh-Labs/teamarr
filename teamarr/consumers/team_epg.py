@@ -407,6 +407,11 @@ class TeamEPGGenerator:
         )
         stop = event.start_time + timedelta(hours=duration)
 
+        # One variable map for the whole programme: every field below resolves
+        # against this same, unchanging context, and building the map is the
+        # bulk of a resolve's cost (all 252 extractors plus suffixes).
+        variables = self._resolver.build_variables(context)
+
         # Conditional rows can override any of title/subtitle/description
         # (#370 part 2); each field falls through independently to the plain
         # format string when no row defines it or the winner renders empty.
@@ -421,21 +426,33 @@ class TeamEPGGenerator:
 
         title = None
         if conditional_fields.get("title"):
-            title = self._resolver.resolve(conditional_fields["title"], context)
+            title = self._resolver.resolve(
+                conditional_fields["title"], context, variables=variables
+            )
         if not title:
-            title = self._resolver.resolve(options.template.title_format, context)
+            title = self._resolver.resolve(
+                options.template.title_format, context, variables=variables
+            )
 
         subtitle = None
         if conditional_fields.get("subtitle"):
-            subtitle = self._resolver.resolve(conditional_fields["subtitle"], context)
+            subtitle = self._resolver.resolve(
+                conditional_fields["subtitle"], context, variables=variables
+            )
         if not subtitle:
-            subtitle = self._resolver.resolve(options.template.subtitle_format, context)
+            subtitle = self._resolver.resolve(
+                options.template.subtitle_format, context, variables=variables
+            )
 
         description = None
         if conditional_fields.get("description"):
-            description = self._resolver.resolve(conditional_fields["description"], context)
+            description = self._resolver.resolve(
+                conditional_fields["description"], context, variables=variables
+            )
         if not description:
-            description = self._resolver.resolve(options.template.description_format, context)
+            description = self._resolver.resolve(
+                options.template.description_format, context, variables=variables
+            )
 
         # Prepend "Postponed: " label if event is postponed and setting is enabled
         title = prepend_postponed_label(title, event, options.prepend_postponed_label)
@@ -445,7 +462,9 @@ class TeamEPGGenerator:
         # Icon: template program_art_url > channel logo > home team logo
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
         if options.template.program_art_url:
-            icon = self._resolver.resolve_art(options.template.program_art_url, context)
+            icon = self._resolver.resolve_art(
+                options.template.program_art_url, context, variables=variables
+            )
         else:
             icon = logo_url or (event.home_team.logo_url if event.home_team else None)
 
@@ -454,7 +473,9 @@ class TeamEPGGenerator:
         resolved_categories = []
         for cat in options.template.xmltv_categories:
             if "{" in cat:
-                resolved_categories.append(self._resolver.resolve(cat, context))
+                resolved_categories.append(
+                    self._resolver.resolve(cat, context, variables=variables)
+                )
             else:
                 resolved_categories.append(cat)
 

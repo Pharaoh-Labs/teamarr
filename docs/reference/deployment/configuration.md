@@ -32,7 +32,7 @@ These settings control how Teamarr communicates with ESPN's API. Most users don'
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ESPN_MAX_WORKERS` | `100` / `50` | Maximum parallel workers for fetching data. Two defaults: 100 for team/event processing, 50 for cache refresh (which makes more API calls per league). Setting the variable overrides both. |
+| `ESPN_MAX_WORKERS` | `100` / `50` / `24` | Maximum parallel workers for fetching data. Three defaults: 100 for team/event processing, 50 for cache refresh (which makes more API calls per league), 24 for the event-match prefetch. Setting the variable overrides all three. |
 | `ESPN_MAX_CONNECTIONS` | `100` | HTTP connection pool size |
 | `ESPN_TIMEOUT` | `10` | Request timeout in seconds |
 | `ESPN_RETRY_COUNT` | `3` | Number of retry attempts on failure |
