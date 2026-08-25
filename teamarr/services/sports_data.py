@@ -397,27 +397,47 @@ class SportsDataService:
         user's timezone — unlike the ``events_v2`` entry above it, which caches
         the resolved user-day answer. Both layers are wanted: this one keeps
         the #601 fan-out cheap, that one keeps the filtered result hot.
+
+        Single-flighted on its own key. The outer lock is per user-day, and
+        adjacent user-days share buckets, so without this two concurrent
+        callers for different target dates would each fetch the buckets they
+        overlap on — duplicate scoreboard requests during parallel stream
+        matching. Lock order is always events_v2 → events_raw, never the
+        reverse, so the nesting cannot cycle.
         """
         raw_key = make_cache_key(
             "events_raw", type(provider).__name__, league, day.isoformat()
         )
-        cached = self._cache.get(raw_key)
-        if isinstance(cached, list) and not any(
-            _event_dict_is_stale(e) for e in cached if isinstance(e, dict)
-        ):
+
+        def load_bucket() -> list[Event] | _CacheMiss:
+            cached = self._cache.get(raw_key)
+            if not isinstance(cached, list):
+                return _CACHE_MISS
+            if any(_event_dict_is_stale(e) for e in cached if isinstance(e, dict)):
+                return _CACHE_MISS
             try:
                 return [dict_to_event(e) for e in cached]
             except (KeyError, TypeError) as e:
                 logger.warning("[CACHE_ERROR] Raw bucket deserialization failed: %s", e)
+                return _CACHE_MISS
 
-        events = provider.get_events(league, day)
-        all_final = len(events) == 0 or all(is_event_final(e) for e in events)
-        self._cache.set(
-            raw_key,
-            [event_to_dict(e) for e in events],
-            get_events_cache_ttl(day, all_events_final=all_final),
-        )
-        return events
+        hit = load_bucket()
+        if not isinstance(hit, _CacheMiss):
+            return hit
+
+        with self._cache.lock_key(raw_key):
+            hit = load_bucket()
+            if not isinstance(hit, _CacheMiss):
+                return hit
+
+            events = provider.get_events(league, day)
+            all_final = len(events) == 0 or all(is_event_final(e) for e in events)
+            self._cache.set(
+                raw_key,
+                [event_to_dict(e) for e in events],
+                get_events_cache_ttl(day, all_events_final=all_final),
+            )
+            return events
 
     def get_sample_event(self, league: str) -> Event | None:
         """Pick the single best real event for a template sample preview.
@@ -915,11 +935,16 @@ class SportsDataService:
         # Cap to TSDB's max days (same as provider)
         days_ahead = min(days_ahead, 14)
 
-        total_calls = len(unique_leagues) * days_ahead  # N days per league
+        # Warm the provider-day buckets the seam will actually ask for, not the
+        # target dates: requesting target dates today..today+N-1 fetches buckets
+        # today-1..today+N (#601). Warming only the target dates leaves the two
+        # edge buckets to fetch on demand mid-run.
+        bucket_days = range(-1, days_ahead + 1)
+        total_calls = len(unique_leagues) * len(bucket_days)
         logger.info(
-            "[PREWARM] TSDB: %d leagues × %d days = ~%d API calls",
+            "[PREWARM] TSDB: %d leagues × %d day buckets = ~%d API calls",
             len(unique_leagues),
-            days_ahead,
+            len(bucket_days),
             total_calls,
         )
 
@@ -929,9 +954,9 @@ class SportsDataService:
 
             # Pre-warm events cache for each day
             # Team names come from seeded database cache (no API needed)
-            for i in range(days_ahead):
+            for i in bucket_days:
                 target_date = today + timedelta(days=i)
                 # Use get_events which goes through provider → client cache
                 tsdb_provider.get_events(league, target_date)
 
-            logger.debug("[PREWARM] TSDB league %s: %d days", league, days_ahead)
+            logger.debug("[PREWARM] TSDB league %s: %d buckets", league, len(bucket_days))

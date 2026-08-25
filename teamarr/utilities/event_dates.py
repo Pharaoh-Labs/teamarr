@@ -57,8 +57,16 @@ def provider_day_buckets(target_date: date) -> list[date]:
     both ends and becomes invisible at every lookahead (#601).
 
     Fetching D-1..D+1 and unioning restores the ±1-day superset the seam
-    assumes. One day either side covers every real UTC offset (max ±14h) plus
-    :data:`EVENT_TAIL_HOURS` of spill.
+    assumes. One day either side is sufficient exactly while::
+
+        offset_user - offset_provider <= 24h - EVENT_TAIL_HOURS   (i.e. 21h)
+        offset_provider - offset_user <= 24h
+
+    The first bound binds. ESPN buckets around US Eastern (~UTC-4), so even a
+    UTC+14 user sits at 18h — safe, but with only 3h of headroom, and resting
+    on a provider bucketing offset nobody writes down. A provider that buckets
+    further east than ESPN would silently reopen the hole, so widen the span
+    here rather than assume ±1 day is inherently enough (#601).
     """
     return [
         target_date - timedelta(days=1),
