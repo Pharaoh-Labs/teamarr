@@ -94,7 +94,13 @@ class TestEventRefreshFanout:
 
 
 class TestScoreboardFanout:
-    """get_events: the per-(league, date) seam PR #261 extends."""
+    """get_events: the per-(league, date) seam PR #261 extends.
+
+    One ``get_events`` call spans three provider-day buckets (D-1, D, D+1)
+    since #601 — a day-bucketed API can't return the ±1-day superset the
+    date seam filters. The budget that matters is that repeats stay flat and
+    neighbouring dates reuse buckets, not that the constant is 1.
+    """
 
     def test_repeated_get_events_fetch_once(self):
         provider = MagicMock()
@@ -105,7 +111,8 @@ class TestScoreboardFanout:
             events = service.get_events("nfl", date(2026, 7, 8))
             assert len(events) == 1
 
-        assert provider.get_events.call_count == 1
+        # 3 buckets, fetched once each — flat in the number of repeats.
+        assert provider.get_events.call_count == 3
 
     def test_empty_slate_is_cached(self):
         """A no-games day must cache the empty list, not re-poll the provider."""
@@ -116,7 +123,7 @@ class TestScoreboardFanout:
         for _ in range(10):
             assert service.get_events("nfl", date(2026, 7, 8)) == []
 
-        assert provider.get_events.call_count == 1
+        assert provider.get_events.call_count == 3
 
     def test_distinct_dates_fetch_separately(self):
         """Sanity: the cache key includes the date — dedup must not over-merge."""
@@ -127,4 +134,6 @@ class TestScoreboardFanout:
         service.get_events("nfl", date(2026, 7, 8))
         service.get_events("nfl", date(2026, 7, 9))
 
-        assert provider.get_events.call_count == 2
+        # {7,8,9} then {8,9,10}: only the 10th is new, so consecutive days
+        # cost one bucket each after the first — the fan-out amortizes away.
+        assert provider.get_events.call_count == 4

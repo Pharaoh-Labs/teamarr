@@ -39,7 +39,11 @@ from teamarr.utilities.cache import (
     get_events_cache_ttl,
     make_cache_key,
 )
-from teamarr.utilities.event_dates import event_intersects, user_day_window
+from teamarr.utilities.event_dates import (
+    event_intersects,
+    provider_day_buckets,
+    user_day_window,
+)
 from teamarr.utilities.event_status import is_event_final
 from teamarr.utilities.tz import get_user_timezone
 
@@ -325,14 +329,15 @@ class SportsDataService:
             # Iterate through providers
             for provider in self._providers:
                 if provider.supports_league(league):
-                    # THE date-membership seam (#590): providers return a
-                    # superset (their raw prefilters are ±1 day wide); the
-                    # user-local day window decides what "on target_date"
-                    # means, exactly once, for every provider.
+                    # THE date-membership seam (#590): the user-local day
+                    # window decides what "on target_date" means, exactly once,
+                    # for every provider. The superset it filters is built by
+                    # unioning the provider's own day buckets (#601) — a
+                    # day-bucketed API can't honour "return ±1 day" on its own.
                     window = user_day_window(target_date)
                     events = [
                         e
-                        for e in provider.get_events(league, target_date)
+                        for e in self._fetch_provider_span(provider, league, target_date)
                         if event_intersects(e, window)
                     ]
                     # Check if all events are final (for past dates, enables 30-day
@@ -344,6 +349,75 @@ class SportsDataService:
                     self._cache.set(cache_key, [event_to_dict(e) for e in events], ttl)
                     return [_enrich_event_teams(e) for e in events]
         return []
+
+    def _fetch_provider_span(
+        self, provider: SportsProvider, league: str, target_date: date
+    ) -> list[Event]:
+        """Union a provider's day buckets around ``target_date``, deduplicated.
+
+        The date seam (#590) filters against the user's local day but the fetch
+        is bucketed by the provider's calendar, so one bucket is not enough for
+        users far from the API's home region — see
+        :func:`provider_day_buckets`. Buckets are cached individually, so the
+        fan-out costs roughly one extra provider call per league per run rather
+        than 3x: consecutive target dates share buckets (D+1 of one day is D of
+        the next).
+
+        A failing neighbour bucket must never cost us the day actually asked
+        for, so each fetch is isolated.
+        """
+        seen: set[tuple[str | None, str | None]] = set()
+        events: list[Event] = []
+        for day in provider_day_buckets(target_date):
+            try:
+                bucket = self._fetch_provider_day(provider, league, day)
+            except Exception as e:  # noqa: BLE001 - one bad bucket ≠ lost day
+                logger.warning(
+                    "[EVENTS] %s bucket %s for %s failed: %s",
+                    type(provider).__name__,
+                    day,
+                    league,
+                    e,
+                )
+                continue
+            for event in bucket:
+                key = (event.provider, event.id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                events.append(event)
+        return events
+
+    def _fetch_provider_day(
+        self, provider: SportsProvider, league: str, day: date
+    ) -> list[Event]:
+        """One provider-day bucket, cached raw (pre-filter, timezone-free).
+
+        Keyed by provider + league + provider-day, so it is independent of the
+        user's timezone — unlike the ``events_v2`` entry above it, which caches
+        the resolved user-day answer. Both layers are wanted: this one keeps
+        the #601 fan-out cheap, that one keeps the filtered result hot.
+        """
+        raw_key = make_cache_key(
+            "events_raw", type(provider).__name__, league, day.isoformat()
+        )
+        cached = self._cache.get(raw_key)
+        if isinstance(cached, list) and not any(
+            _event_dict_is_stale(e) for e in cached if isinstance(e, dict)
+        ):
+            try:
+                return [dict_to_event(e) for e in cached]
+            except (KeyError, TypeError) as e:
+                logger.warning("[CACHE_ERROR] Raw bucket deserialization failed: %s", e)
+
+        events = provider.get_events(league, day)
+        all_final = len(events) == 0 or all(is_event_final(e) for e in events)
+        self._cache.set(
+            raw_key,
+            [event_to_dict(e) for e in events],
+            get_events_cache_ttl(day, all_events_final=all_final),
+        )
+        return events
 
     def get_sample_event(self, league: str) -> Event | None:
         """Pick the single best real event for a template sample preview.

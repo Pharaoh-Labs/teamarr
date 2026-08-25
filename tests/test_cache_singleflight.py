@@ -66,8 +66,9 @@ def test_concurrent_same_key_fetches_once(monkeypatch):
 
     _hammer(service, "nba", target, n=20)
 
-    # 20 threads, one cache key -> exactly one upstream fetch.
-    assert provider.calls == 1
+    # 20 threads, one cache key -> one upstream fetch per provider-day bucket
+    # (D-1, D, D+1 since #601), and crucially NOT one per thread.
+    assert provider.calls == 3
 
 
 def test_distinct_keys_not_serialized_away(monkeypatch):
@@ -79,4 +80,5 @@ def test_distinct_keys_not_serialized_away(monkeypatch):
     _hammer(service, "nba", d1, n=10)
     _hammer(service, "nba", d2, n=10)
 
-    assert provider.calls == 2
+    # {d1-1, d1, d1+1} then only d2+1 is new — consecutive days share buckets.
+    assert provider.calls == 4
