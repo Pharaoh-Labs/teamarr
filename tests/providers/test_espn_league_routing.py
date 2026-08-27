@@ -11,7 +11,17 @@ Discovered soccer leagues (not in the leagues table) must still resolve via
 that heuristic.
 """
 
+from teamarr.providers.espn.client import ESPN_USER_AGENT, ESPNClient
 from teamarr.providers.espn.provider import ESPNProvider
+
+
+def test_espn_client_uses_curl_user_agent():
+    client = ESPNClient()
+    try:
+        assert ESPN_USER_AGENT == "curl/8.7.1"
+        assert client._get_client().headers["User-Agent"] == ESPN_USER_AGENT
+    finally:
+        client.close()
 
 
 class FakeMappingSource:
