@@ -29,11 +29,21 @@ ESPN_USER_AGENT = "curl/8.7.1"
 # UFC athlete endpoint (for fighter profiles)
 ESPN_UFC_ATHLETE_URL = "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes"
 
-COLLEGE_SCOREBOARD_GROUPS = {
-    "mens-college-basketball": "50",
-    "womens-college-basketball": "50",
-    # Note: college-football omitted to return both FBS + FCS games
-    # Note: mens-college-hockey does NOT need groups param
+# ESPN's ungrouped NCAA scoreboards can omit entire divisions. Fetch the root
+# groups and merge their slates so a canonical Teamarr league covers all NCAA
+# events ESPN exposes, including cross-division fixtures.
+COLLEGE_SCOREBOARD_GROUPS: dict[str, tuple[str, ...]] = {
+    "college-football": ("90", "35"),  # Division I; Division II/III
+    "mens-college-basketball": ("50", "51"),  # NCAA D-I; non-NCAA D-I
+    "womens-college-basketball": ("50", "51"),
+    "college-baseball": ("26",),
+    "college-softball": ("31",),
+    "mens-college-volleyball": ("90",),
+    "womens-college-volleyball": ("90", "91", "110"),
+    "mens-college-lacrosse": ("90",),
+    "womens-college-lacrosse": ("90", "108"),
+    # NCAA hockey's ungrouped endpoint already returns its complete slate.
+    # NCAA soccer and women's hockey expose no season groups.
 }
 
 # ESPN team ID corrections for known mismatches between /teams endpoint and scoreboard
@@ -130,11 +140,36 @@ class ESPNClient(BaseHTTPClient):
         sport, espn_league = self.get_sport_league(league, sport_league)
         url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/scoreboard"
         params: dict = {"dates": date_str} if date_str else {}
+        groups = COLLEGE_SCOREBOARD_GROUPS.get(league)
+        if not groups:
+            return self._request(url, params)
 
-        if league in COLLEGE_SCOREBOARD_GROUPS:
-            params["groups"] = COLLEGE_SCOREBOARD_GROUPS[league]
+        responses = []
+        for group in groups:
+            response = self._request(url, {**params, "groups": group, "limit": 1000})
+            if response is None:
+                logger.warning("[ESPN] Empty scoreboard response for %s group %s", league, group)
+                continue
+            responses.append(response)
 
-        return self._request(url, params)
+        if not responses:
+            return None
+        if len(responses) == 1:
+            return responses[0]
+
+        merged = dict(responses[0])
+        seen_event_ids: set[str] = set()
+        events = []
+        for response in responses:
+            for event in response.get("events", []):
+                event_id = event.get("id")
+                if event_id and event_id in seen_event_ids:
+                    continue
+                if event_id:
+                    seen_event_ids.add(event_id)
+                events.append(event)
+        merged["events"] = events
+        return merged
 
     def get_league_info(
         self,
