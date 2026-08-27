@@ -182,6 +182,9 @@ TEAM_ALIASES: dict[str, str] = {
     "tamu cc": "texas a m corpus christi",
     "texas a&m-cc": "texas a m corpus christi",
     "texas a&m-corpus christi": "texas a m corpus christi",
+    # NCAA Football - provider abbreviations for lower-division teams
+    "northwestern college": "northwestern ia",
+    "south dakota school of mines": "south dakota mines",
 }
 
 

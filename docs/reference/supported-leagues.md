@@ -47,6 +47,8 @@ TSDB leagues are classified by tier. Most work on the free tier. Leagues marked 
 
 ## Football
 
+NCAA Football aggregates ESPN's FBS, FCS, lower-division, and cross-division fixtures.
+
 | League | ID | Provider |
 |--------|-----|----------|
 | National Football League | `nfl` | ESPN |
