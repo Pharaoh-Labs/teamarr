@@ -43,6 +43,16 @@ CACHED_TEAMS = [
     ("New York Jets", "Jets", "NYJ", "nfl", "football"),
     ("Northern Colorado Bears", "Bears", "UNC", "college-baseball", "baseball"),
     ("Eastern Washington Eagles", "Eagles", "EWU", "college-baseball", "baseball"),
+    # Partial broadcast labels below exactly identify unrelated short names.
+    ("Milwaukee Brewers", "Brewers", "MIL", "mlb", "baseball"),
+    ("Milwaukee Bucks", "Milwaukee", "MIL", "nba", "basketball"),
+    ("Los Angeles Dodgers", "Dodgers", "LAD", "mlb", "baseball"),
+    ("Atlanta Braves", "Braves", "ATL", "mlb", "baseball"),
+    ("Atlanta United", "Atlanta", "ATL", "usa.1", "soccer"),
+    ("Kansas City Royals", "Royals", "KC", "mlb", "baseball"),
+    ("Toronto Blue Jays", "Blue Jays", "TOR", "mlb", "baseball"),
+    ("Kansas City Chiefs", "Kansas City", "KC", "nfl", "football"),
+    ("Toronto FC", "Toronto", "TOR", "can.1", "soccer"),
 ]
 
 
@@ -111,11 +121,20 @@ ROCKIES = _team("Colorado Rockies", "Rockies", "COL", "mlb", "baseball")
 NATIONALS = _team("Washington Nationals", "Nationals", "WSH", "mlb", "baseball")
 LIGHTNING = _team("Tampa Bay Lightning", "Lightning", "TB", "nhl", "hockey")
 RED_WINGS = _team("Detroit Red Wings", "Red Wings", "DET", "nhl", "hockey")
+BREWERS = _team("Milwaukee Brewers", "Brewers", "MIL", "mlb", "baseball")
+METS = _team("New York Mets", "Mets", "NYM", "mlb", "baseball")
+DODGERS = _team("Los Angeles Dodgers", "Dodgers", "LAD", "mlb", "baseball")
+BRAVES = _team("Atlanta Braves", "Braves", "ATL", "mlb", "baseball")
+ROYALS = _team("Kansas City Royals", "Royals", "KC", "mlb", "baseball")
+BLUE_JAYS = _team("Toronto Blue Jays", "Blue Jays", "TOR", "mlb", "baseball")
 
 # The two channels from the report.
 TB_DET = _event(TIGERS, RAYS, "401816657")
 COL_WSH = _event(NATIONALS, ROCKIES, "401816656")
 NHL_GAME = _event(RED_WINGS, LIGHTNING, "nhl-1")
+BREWERS_METS = _event(METS, BREWERS, "mlb-mil-nym")
+DODGERS_BRAVES = _event(BRAVES, DODGERS, "mlb-lad-atl")
+ROYALS_BLUE_JAYS = _event(BLUE_JAYS, ROYALS, "mlb-kc-tor")
 
 
 def _match(stream_name: str, event: Event, league: str, db_factory=None):
@@ -133,6 +152,23 @@ def _match(stream_name: str, event: Event, league: str, db_factory=None):
         team2=classified.team2,
     )
     return matcher._match_against_events(ctx, [event], league)
+
+
+def _match_multi(stream_name: str, event: Event, db_factory):
+    classified = classify_stream(stream_name)
+    matcher = make_team_matcher(db_factory=db_factory)
+    ctx = MatchContext(
+        stream_name=stream_name,
+        stream_id=1,
+        group_id=1,
+        target_date=TODAY,
+        generation=1,
+        user_tz=ZoneInfo("UTC"),
+        classified=classified,
+        team1=classified.team1,
+        team2=classified.team2,
+    )
+    return matcher._match_against_multi_league_events(ctx, [(event.league, event)])
 
 
 class TestReportedFalsePositives:
@@ -173,6 +209,28 @@ class TestReportedFalsePositives:
             db_factory,
         )
         assert result.category is ResultCategory.MATCHED
+
+
+class TestPartialTeamNames:
+    """Partial broadcast labels must not be vetoed by short-name identities."""
+
+    @pytest.mark.parametrize(
+        ("stream_name", "event"),
+        [
+            ("Milwaukee @ New York Mets", BREWERS_METS),
+            ("Los Angeles Dodgers @ Atlanta", DODGERS_BRAVES),
+            ("Kansas City @ Toronto", ROYALS_BLUE_JAYS),
+        ],
+    )
+    def test_partial_names_match_their_mlb_fixture(self, db_factory, stream_name, event):
+        result = _match(stream_name, event, "mlb", db_factory)
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == event.id
+
+    def test_partial_names_match_in_the_multi_league_path(self, db_factory):
+        result = _match_multi("Milwaukee @ New York Mets", BREWERS_METS, db_factory)
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == BREWERS_METS.id
 
 
 class TestGateIsInertWithoutData:
