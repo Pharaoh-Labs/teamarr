@@ -269,6 +269,48 @@ class TestPartialTeamNames:
         assert {i.league for i in resolution.identities} >= {"usa.1", "mlb"}
 
 
+class TestExplicitLeagueHints:
+    def test_ncaaf_hint_overrides_incomplete_cross_league_identity(self, db_factory):
+        with db_factory() as conn:
+            # Simulate an incomplete football directory where these schools are
+            # known only through basketball, while the league itself is seeded.
+            conn.executemany(
+                "INSERT INTO team_cache VALUES (?,?,?,?,?)",
+                [
+                    ("Mercyhurst", "Mercyhurst", "MER", "mens-college-basketball", "basketball"),
+                    (
+                        "Youngstown State",
+                        "Youngstown State",
+                        "YSU",
+                        "mens-college-basketball",
+                        "basketball",
+                    ),
+                    ("Ohio State Buckeyes", "Ohio State", "OSU", "college-football", "football"),
+                ],
+            )
+            conn.commit()
+
+        event = _event(
+            _team(
+                "Youngstown State Penguins",
+                "Youngstown State",
+                "YSU",
+                "college-football",
+                "football",
+            ),
+            _team("Mercyhurst Lakers", "Mercyhurst", "MER", "college-football", "football"),
+            "fcs-mer-ysu",
+        )
+
+        result = _match_multi(
+            "NCAAF: Mercyhurst vs. Youngstown State @ Aug 27 6:00PM ET",
+            event,
+            db_factory,
+        )
+
+        assert result.category is ResultCategory.MATCHED
+
+
 class TestShortCodesAreNeverHijacked:
     """A code is read by the abbreviation table, unioned with any team whose
     name or short name IS that code — never pre-empted by one such row (#619).

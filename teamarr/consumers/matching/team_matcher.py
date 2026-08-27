@@ -1403,6 +1403,10 @@ class TeamMatcher:
         # from every league it covers, so a shared city has many more wrong
         # events to land on than in the single-league path.
         fixture_leagues = self._fixture_leagues(ctx)
+        league_hint = ctx.classified.league_hint
+        hinted_leagues = (
+            {league_hint} if isinstance(league_hint, str) else set(league_hint or [])
+        )
 
         for league, event in events:
             # Validate event is within search window (lifecycle handles exclusions)
@@ -1446,8 +1450,13 @@ class TeamMatcher:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
                     continue
 
-            # Fixture gate (epic goax) — see the single-league path above.
-            if self._fixture_vetoes(fixture_leagues, event.league):
+            # An explicit league hint already narrowed this stream to the
+            # candidate's league. It is stronger evidence than an incomplete
+            # cross-league identity index; unhinted streams retain the gate.
+            if (
+                self._fixture_vetoes(fixture_leagues, event.league)
+                and event.league not in hinted_leagues
+            ):
                 fixture_rejected += 1
                 continue
 
