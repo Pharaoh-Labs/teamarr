@@ -24,6 +24,7 @@ ESPN_RETRY_COUNT = int(os.environ.get("ESPN_RETRY_COUNT", 3))
 
 ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports"
 ESPN_CORE_URL = "http://sports.core.api.espn.com/v2/sports"
+ESPN_USER_AGENT = "curl/8.7.1"
 
 # UFC athlete endpoint (for fighter profiles)
 ESPN_UFC_ATHLETE_URL = "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes"
@@ -67,6 +68,7 @@ class ESPNClient(BaseHTTPClient):
             max_connections=(
                 max_connections if max_connections is not None else ESPN_MAX_CONNECTIONS
             ),
+            headers={"User-Agent": ESPN_USER_AGENT},
         )
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
