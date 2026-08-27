@@ -227,13 +227,20 @@ class SupportBundleService:
             stream["matched_rules"] = self._matched_rules(
                 ordering, model, stream.get("source_group_name")
             )
-            by_channel.setdefault(stream.get("managed_channel_id"), []).append(stream)
+            channel_id = stream.get("managed_channel_id")
+            if isinstance(channel_id, int):
+                by_channel.setdefault(channel_id, []).append(stream)
+
+        channel_entries = []
+        for channel in channels:
+            channel_id = channel.get("id")
+            stream_assignments = (
+                by_channel.get(channel_id, []) if isinstance(channel_id, int) else []
+            )
+            channel_entries.append({**channel, "streams": stream_assignments})
         return {
             "total": len(channels),
-            "channels": [
-                {**channel, "streams": by_channel.get(channel.get("id"), [])}
-                for channel in channels
-            ],
+            "channels": channel_entries,
         }
 
     def _safe_stream_ordering(self, conn: sqlite3.Connection, errors: list[str]) -> Any:
@@ -397,10 +404,13 @@ class SupportBundleService:
             "",
             "## Signal Summary",
         ]
-        lines.extend(
-            f"- **{signal['severity']}** `{signal['code']}`: {signal['message']}"
-            for signal in signals
-        ) or lines.append("- No automatic signals were found.")
+        if signals:
+            lines.extend(
+                f"- **{signal['severity']}** `{signal['code']}`: {signal['message']}"
+                for signal in signals
+            )
+        else:
+            lines.append("- No automatic signals were found.")
         lines.extend(
             [
                 "",
