@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from teamarr.consumers.matching.classifier import classify_stream
+from teamarr.consumers.matching.identity import TeamIdentityIndex
 from teamarr.consumers.matching.result import FailedReason, ResultCategory
 from teamarr.consumers.matching.team_matcher import MatchContext
 from teamarr.core.types import Event, EventStatus, Team
@@ -53,6 +54,18 @@ CACHED_TEAMS = [
     ("Toronto Blue Jays", "Blue Jays", "TOR", "mlb", "baseball"),
     ("Kansas City Chiefs", "Kansas City", "KC", "nfl", "football"),
     ("Toronto FC", "Toronto", "TOR", "can.1", "soccer"),
+    # A code stored AS a short name (TSDB does this) must not pre-empt the
+    # abbreviation table: "SEA" is the Orcas' short name AND the Mariners' code.
+    ("Seattle Mariners", "Mariners", "SEA", "mlb", "baseball"),
+    ("St. Louis Cardinals", "Cardinals", "STL", "mlb", "baseball"),
+    ("Seattle Orcas", "SEA", "SEA", "mlc", "cricket"),
+    ("Houston Astros", "Astros", "HOU", "mlb", "baseball"),
+    ("Houston Texans", "Texans", "HOU", "nfl", "football"),
+    # A full name that IS another team's city ("Utah", the usa.ncaa row) must
+    # not hide the Jazz behind it. UTAH is four letters, so it is not a code.
+    ("Utah Jazz", "Jazz", "UTAH", "nba", "basketball"),
+    ("Utah", "Utah", "UTAH", "usa.ncaa.w.1", "soccer"),
+    ("Washington Wizards", "Wizards", "WSH", "nba", "basketball"),
 ]
 
 
@@ -135,6 +148,14 @@ NHL_GAME = _event(RED_WINGS, LIGHTNING, "nhl-1")
 BREWERS_METS = _event(METS, BREWERS, "mlb-mil-nym")
 DODGERS_BRAVES = _event(BRAVES, DODGERS, "mlb-lad-atl")
 ROYALS_BLUE_JAYS = _event(BLUE_JAYS, ROYALS, "mlb-kc-tor")
+MARINERS = _team("Seattle Mariners", "Mariners", "SEA", "mlb", "baseball")
+CARDINALS = _team("St. Louis Cardinals", "Cardinals", "STL", "mlb", "baseball")
+ASTROS = _team("Houston Astros", "Astros", "HOU", "mlb", "baseball")
+JAZZ = _team("Utah Jazz", "Jazz", "UTAH", "nba", "basketball")
+WIZARDS = _team("Washington Wizards", "Wizards", "WSH", "nba", "basketball")
+MARINERS_CARDINALS = _event(CARDINALS, MARINERS, "mlb-sea-stl")
+ASTROS_METS = _event(METS, ASTROS, "mlb-hou-nym")
+JAZZ_WIZARDS = _event(WIZARDS, JAZZ, "nba-utah-wsh")
 
 
 def _match(stream_name: str, event: Event, league: str, db_factory=None):
@@ -231,6 +252,74 @@ class TestPartialTeamNames:
         result = _match_multi("Milwaukee @ New York Mets", BREWERS_METS, db_factory)
         assert result.category is ResultCategory.MATCHED
         assert result.event.id == BREWERS_METS.id
+
+    def test_city_only_pair_resolves_to_every_league_those_cities_share(self, db_factory):
+        """"Kansas City @ Toronto" is an MLB game AND an MLS game. The index must
+        say so, not pick one: the schedule (which events exist) decides."""
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        assert index.fixture_leagues("Kansas City", "Toronto") == {"mlb"}
+        assert index.fixture_leagues("Milwaukee", "New York Mets") == {"mlb"}
+
+    def test_bare_city_alias_does_not_swear_off_the_other_teams(self, db_factory):
+        """TEAM_ALIASES maps "atlanta" -> "atlanta united" for the scoring
+        ladder. As an identity that would veto the Braves (#619)."""
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        resolution = index.resolve("Atlanta")
+        assert not resolution.exact
+        assert {i.league for i in resolution.identities} >= {"usa.1", "mlb"}
+
+
+class TestShortCodesAreNeverHijacked:
+    """A code is read by the abbreviation table, unioned with any team whose
+    name or short name IS that code — never pre-empted by one such row (#619).
+
+    Before: "SEA" resolved to the Seattle Orcas alone (their short_name is the
+    code) and "SEA @ STL" was FIXTURE_NOT_IN_LEAGUE on an MLB source."""
+
+    @pytest.mark.parametrize(
+        ("stream_name", "event", "league"),
+        [
+            ("SEA @ STL", MARINERS_CARDINALS, "mlb"),
+            ("US (Peacock 005) | Away Feed: HOU at NYM", ASTROS_METS, "mlb"),
+            ("UTAH @ WSH", JAZZ_WIZARDS, "nba"),
+        ],
+    )
+    def test_code_streams_reach_their_event(self, db_factory, stream_name, event, league):
+        result = _match(stream_name, event, league, db_factory)
+        assert result.category is ResultCategory.MATCHED, result.failed_reason
+        assert result.event.id == event.id
+
+    def test_a_code_resolves_to_every_team_bearing_it(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        sea = index.resolve("SEA")
+        assert not sea.exact
+        assert {i.league for i in sea.identities} == {"mlb", "mlc"}
+        hou = index.resolve("HOU")
+        assert {i.league for i in hou.identities} == {"mlb", "nfl"}
+
+    def test_full_name_that_is_another_teams_city_keeps_both_readings(self):
+        utah = TeamIdentityIndex(CACHED_TEAMS).resolve("UTAH")
+        assert utah.exact  # the usa.ncaa row really is named "Utah"
+        assert {i.league for i in utah.identities} == {"usa.ncaa.w.1", "nba"}
+
+
+class TestUnknownLeagueIsNeverVetoed:
+    """The gate is a statement about who plays in a league. For a league the
+    cache has never seen — custom, unseeded, added since the last refresh — it
+    has no standing to refuse anything (#619)."""
+
+    def test_event_in_uncached_league_is_not_fixture_rejected(self, db_factory):
+        custom = Event(
+            **{**NHL_GAME.__dict__, "id": "custom-1", "league": "my-custom-hockey"}
+        )
+        result = _match(
+            "ESPN+ 81 (D): Tampa Bay Lightning vs. Detroit Red Wings",
+            custom,
+            "my-custom-hockey",
+            db_factory,
+        )
+        assert result.failed_reason is not FailedReason.FIXTURE_NOT_IN_LEAGUE
+        assert result.category is ResultCategory.MATCHED
 
 
 class TestGateIsInertWithoutData:
