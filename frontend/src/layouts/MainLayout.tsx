@@ -12,13 +12,16 @@ import {
   Play,
   Menu,
   X,
+  Download,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { Toaster } from "sonner"
+import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import { useUpdateCheckSettings, useCheckForUpdates } from "../hooks/useSettings"
 import { useGenerationProgress } from "@/hooks/useGenerationProgress"
+import { downloadSupportBundle } from "@/api/support"
 
 // The stepwise user flow (v2.7.0 IA). Dashboard is the landing/overview;
 // steps 1–5 are the ordered configuration flow; Generate is the end bookend.
@@ -78,6 +81,7 @@ export function MainLayout() {
     return (saved as "dark" | "light") || "dark"
   })
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isExportingSupport, setIsExportingSupport] = useState(false)
 
   const healthQuery = useQuery({
     queryKey: ["health"],
@@ -88,6 +92,18 @@ export function MainLayout() {
   const version = healthQuery.data?.version || "v2.0.0"
 
   const { startGeneration, isGenerating } = useGenerationProgress()
+
+  const handleSupportDownload = async () => {
+    setIsExportingSupport(true)
+    try {
+      await downloadSupportBundle()
+      toast.success("Support bundle downloaded")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create support bundle")
+    } finally {
+      setIsExportingSupport(false)
+    }
+  }
 
   // First-run step numbers: mark a step visited once its page is open.
   const location = useLocation()
@@ -363,7 +379,7 @@ export function MainLayout() {
       {/* Footer */}
       <footer className="border-t border-border mt-auto">
         <div className="max-w-[1440px] mx-auto px-4 py-3">
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
             <img
               src="/logo.svg"
               alt=""
@@ -379,6 +395,16 @@ export function MainLayout() {
               )}
               {window.location.port && ` | Port ${window.location.port}`}
             </span>
+            <button
+              type="button"
+              onClick={handleSupportDownload}
+              disabled={isExportingSupport}
+              className="inline-flex items-center gap-1 text-xs hover:text-foreground disabled:cursor-wait"
+              title="Download a redacted diagnostic support bundle"
+            >
+              <Download className="h-3 w-3" />
+              {isExportingSupport ? "Preparing support bundle" : "Support bundle"}
+            </button>
           </div>
           <div className="mt-1 text-center text-xs italic text-muted-foreground">
             Jesse, Teamarr will never support curling 🥌

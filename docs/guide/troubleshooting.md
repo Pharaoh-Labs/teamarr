@@ -128,5 +128,9 @@ docker exec teamarr cat data/logs/teamarr.log | tail -100  # Log file
 
 ## Getting Help
 
+### Support bundle
+
+Use **Support bundle** in the footer to download a redacted diagnostic ZIP. Attach the ZIP to a support request instead of a database backup. It includes configuration, source and subscription diagnostics, the matching library (aliases, detection and exception keywords, condition presets, persistent corrections, and source-template mappings), recent run and match details, managed-channel ordering evidence, and bounded log excerpts. Stream URLs, M3U account names, passwords, API keys, tokens, template bodies, XMLTV, and provider caches are excluded.
+
 - **GitHub Issues**: [github.com/Pharaoh-Labs/teamarr/issues](https://github.com/Pharaoh-Labs/teamarr/issues)
 - **Discord**: Join the Dispatcharr Discord server — there's a Teamarr channel

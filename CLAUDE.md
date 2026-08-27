@@ -4,6 +4,10 @@
 
 Sports EPG generator. Uses **bd (beads)** for issue tracking. Start with `bd ready`.
 
+## Support Bundle Contract
+
+When changing support-bundle schemas, archive layout, collection limits, redaction, or signal codes, update the implementation, tests, user documentation, bundled `AGENTS.md`, and this instruction in the same change. Never add a generic database dump or relax exclusions for stream URLs, M3U account names, credentials, or tokens without an explicit security decision.
+
 ## CRITICAL: Database Safety
 
 **NEVER delete `teamarr.db` or `data/teamarr.db`.** The database contains user-configured teams, templates, settings, and history that cannot be recreated. Schema changes use migrations (`INSERT OR REPLACE`, `ALTER TABLE`) - deleting the database is NEVER required and will cause data loss.
