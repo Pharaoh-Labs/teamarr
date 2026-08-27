@@ -219,19 +219,45 @@ class TeamIdentityIndex:
         self._identities: list[TeamIdentity] = []
         self._surfaces: list[str] = []
         self._by_abbrev: dict[str, list[TeamIdentity]] = {}
+        # Only a FULL name is an identity (#619). A short_name is whatever the
+        # provider chose to abbreviate to, and for college, MLS, NWSL and most
+        # non-US rows that is the bare city or school: "Milwaukee" is the
+        # short_name of the Milwaukee Panthers, "Atlanta" of Atlanta United,
+        # "Kansas City" of Sporting KC. Every one of those is also a perfectly
+        # ordinary broadcast label for the Brewers, the Braves and the Royals.
+        # Reading it as an *exact* identity of the college/MLS side turned a
+        # partial label into a veto against the team it partially named.
         self._exact: dict[str, list[TeamIdentity]] = {}
+        # Partial readings: short names, and the city/school prefix of a full
+        # name ("new york" from "New York Mets"). A side that only hits here is
+        # evidence of which teams it *could* be, never proof of which it is not.
+        self._partial: dict[str, list[TeamIdentity]] = {}
+        self._known_leagues: set[str] = set()
 
         for name, short_name, abbrev, league, sport in rows:
             identity = TeamIdentity(name=name, league=league, sport=sport)
-            forms = {normalize_text(name)}
-            if short_name:
-                forms.add(normalize_text(short_name))
-            for form in forms:
+            self._known_leagues.add(league)
+            name_norm = normalize_text(name)
+            short_norm = normalize_text(short_name) if short_name else ""
+            for form in {name_norm, short_norm}:
                 if not form:
                     continue
                 self._identities.append(identity)
                 self._surfaces.append(form)
-                self._exact.setdefault(form, []).append(identity)
+            if name_norm:
+                self._exact.setdefault(name_norm, []).append(identity)
+            if short_norm and short_norm != name_norm:
+                self._partial.setdefault(short_norm, []).append(identity)
+                # "Milwaukee Brewers" / "Brewers" -> "milwaukee". Only when the
+                # short name is the tail of the full name, so a nickname that is
+                # not a suffix ("D-backs") does not manufacture a bogus prefix.
+                name_tokens = name_norm.split()
+                short_tokens = short_norm.split()
+                if len(short_tokens) < len(name_tokens) and (
+                    name_tokens[-len(short_tokens) :] == short_tokens
+                ):
+                    prefix = " ".join(name_tokens[: -len(short_tokens)])
+                    self._partial.setdefault(prefix, []).append(identity)
             if abbrev:
                 self._by_abbrev.setdefault(normalize_text(abbrev), []).append(identity)
 
@@ -252,6 +278,16 @@ class TeamIdentityIndex:
 
     def __len__(self) -> int:
         return len(self._identities)
+
+    def knows_league(self, league: str) -> bool:
+        """Does the cache hold any team of this league at all?
+
+        A veto is a statement about who plays in ``league``; the index can only
+        make it for leagues it has actually seen. A custom league, a provider
+        that failed to seed, or a league added since the last refresh must not
+        be refused every stream just because its teams are absent (#619).
+        """
+        return league in self._known_leagues
 
     def resolve(self, text: str | None) -> Resolution:
         """Every team this text plausibly names. Ties are kept (see module doc)."""
@@ -291,22 +327,47 @@ class TeamIdentityIndex:
         return variants
 
     def _resolve_uncached(self, norm: str) -> Resolution:
-        # Exact surface form wins outright — no fuzzy pass can improve on it.
-        if norm in self._exact:
-            return Resolution(tuple(dict.fromkeys(self._exact[norm])), True)
-
-        # Short codes match by abbreviation ONLY (#472). token_set_ratio gives a
+        # Short codes read by abbreviation (#472) — token_set_ratio gives a
         # spurious 100 whenever a code is a literal word of an unrelated name
-        # ("SEA" in "Portland Sea Dogs").
+        # ("SEA" in "Portland Sea Dogs") — UNIONED with any team whose name or
+        # short name is literally that code. TSDB and several ESPN soccer feeds
+        # store the code AS the short name, and letting that one row pre-empt
+        # the abbreviation table made "SEA" resolve to the Seattle Orcas alone
+        # and never the Mariners, Seahawks or Kraken (#619). A code is never an
+        # exact identity: "HOU" names sixteen teams in this cache.
         if _is_short_code(norm):
-            hits = self._by_abbrev.get(norm, [])
-            return Resolution(tuple(dict.fromkeys(hits)), bool(hits))
+            hits = (
+                self._by_abbrev.get(norm, [])
+                + self._exact.get(norm, [])
+                + self._partial.get(norm, [])
+            )
+            return Resolution(tuple(dict.fromkeys(hits)), False)
+
+        # A full-name hit is exact. It still carries every partial reading of
+        # the same text: the usa.ncaa row literally named "Utah" must not hide
+        # the Jazz behind it.
+        if norm in self._exact:
+            hits = self._exact[norm] + self._partial.get(norm, [])
+            return Resolution(tuple(dict.fromkeys(hits)), True)
 
         # A known alias rewrite that lands on a real surface form is as good as
-        # an exact hit — it is a curated statement about one specific team.
+        # an exact hit — it is a curated statement about one specific team —
+        # UNLESS the text also reads as a partial label. TEAM_ALIASES was
+        # written for the scoring ladder, where "atlanta" -> "atlanta united"
+        # merely adds a candidate score; here it would swear that "Atlanta"
+        # cannot be the Braves, the Hawks or the Falcons (#619). Keep the alias
+        # reading, add the partial ones, and call it exact only when it is the
+        # sole reading ("d backs" -> Arizona, #480).
+        partial = self._partial.get(norm, [])
         for variant in self._alias_variants(norm):
             if variant in self._exact:
-                return Resolution(tuple(dict.fromkeys(self._exact[variant])), True)
+                hits = self._exact[variant] + partial
+                return Resolution(tuple(dict.fromkeys(hits)), not partial)
+
+        # Partial-only: a short name or a bare city. Strong evidence of the set
+        # of teams it could be, no evidence about any it is not.
+        if partial:
+            return Resolution(tuple(dict.fromkeys(partial)), False)
 
         hits = process.extract(
             norm,

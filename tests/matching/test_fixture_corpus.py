@@ -99,6 +99,14 @@ def test_crosstalk_rejection_rate(outcomes) -> None:
         ("SF Giants", "LA Dodgers", "mlb", False, "#569 four-way Giants tie"),
         ("NY Giants", "Dallas Cowboys", "nfl", False, "#569 same tie, NFL reading"),
         ("Los Angeles Angels", "Los Angeles Dodgers", "mlb", False, "both real MLB teams"),
+        # #619: partial labels, hijacked codes and bare-city aliases are readings
+        # of the pro team too, never a veto against it.
+        ("Milwaukee", "New York Mets", "mlb", False, "#619 city-only side (Panthers short_name)"),
+        ("Los Angeles Dodgers", "Atlanta", "mlb", False, "#619 bare-city TEAM_ALIASES key"),
+        ("Kansas City", "Toronto", "mlb", False, "#619 both sides city-only"),
+        ("SEA", "STL", "mlb", False, "#619 code stored as a TSDB short_name"),
+        ("UTAH", "WSH", "nba", False, "#619 full name that is another team's city"),
+        ("Kansas City", "Toronto", "nhl", True, "#619 ...but no NHL team in Kansas City"),
     ],
 )
 def test_reported_and_regression_cases(

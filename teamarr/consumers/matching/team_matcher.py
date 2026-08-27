@@ -1200,6 +1200,16 @@ class TeamMatcher:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
                     continue
 
+            # Fixture gate (epic goax). Both stream sides name real teams, and
+            # this event's league is not one where they could meet — so no score
+            # against it can be meaningful. This is what stops an NHL stream from
+            # riding a shared city into an MLB channel: "Tampa Bay Lightning" vs
+            # "Tampa Bay Rays" scores 78 on text alone, but the Lightning play in
+            # exactly one league and it is not this one.
+            if self._fixture_vetoes(fixture_leagues, event.league):
+                fixture_rejected += 1
+                continue
+
             # Try alias match first (100% confidence)
             match_result = self._check_alias_match(team1_normalized, team2_normalized, event)
 
@@ -1216,19 +1226,6 @@ class TeamMatcher:
                 match_result = self._match_teams_to_event(
                     fallback_t1, fallback_t2, event, has_date_validation
                 )
-
-            # Fixture gate (epic goax). A partial broadcast label can resolve
-            # exactly to an unrelated team's short name (for example,
-            # "Milwaukee"), even when both sides perfectly identify this event.
-            # Direct perfect candidate evidence wins in that narrow case; weaker
-            # same-city cross-sport scores remain vetoed.
-            if (
-                fixture_leagues is not None
-                and event.league not in fixture_leagues
-                and (not match_result or match_result[1] < 100.0)
-            ):
-                fixture_rejected += 1
-                continue
 
             # Trusted-date gate (#474), applied AFTER team scoring (#480):
             # only candidates whose teams actually matched count as date
@@ -1449,6 +1446,11 @@ class TeamMatcher:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
                     continue
 
+            # Fixture gate (epic goax) — see the single-league path above.
+            if self._fixture_vetoes(fixture_leagues, event.league):
+                fixture_rejected += 1
+                continue
+
             # Try alias match first (100% confidence)
             match_result = self._check_alias_match(team1_normalized, team2_normalized, event)
 
@@ -1465,18 +1467,6 @@ class TeamMatcher:
                 match_result = self._match_teams_to_event(
                     fallback_t1, fallback_t2, event, has_date_validation
                 )
-
-            # See the single-league path above. A perfect direct candidate
-            # match is stronger evidence than a partial label's short-name
-            # identity resolution, but weaker candidates still cannot cross
-            # the fixture gate.
-            if (
-                fixture_leagues is not None
-                and event.league not in fixture_leagues
-                and (not match_result or match_result[1] < 100.0)
-            ):
-                fixture_rejected += 1
-                continue
 
             # Trusted-date gate (#474), applied AFTER team scoring (#480):
             # only candidates whose teams actually matched count as date
@@ -2141,6 +2131,19 @@ class TeamMatcher:
         if index is None:
             return None
         return index.fixture_leagues(ctx.team1, ctx.team2)
+
+    def _fixture_vetoes(self, fixture_leagues: set[str] | None, league: str) -> bool:
+        """Should the fixture gate refuse a candidate from ``league``?
+
+        Only when identity resolution spoke (``fixture_leagues`` is not None),
+        this league is not among the answers, AND the index actually knows the
+        league's teams. A league the cache has never seen — custom, unseeded,
+        added since the last refresh — cannot be judged, only deferred (#619).
+        """
+        if fixture_leagues is None or league in fixture_leagues:
+            return False
+        index = self._identity_index
+        return index is not None and index.knows_league(league)
 
     def _load_user_aliases(self) -> UserAliasCache:
         """Load user-defined aliases from database into memory cache.
