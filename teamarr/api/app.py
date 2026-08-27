@@ -29,6 +29,7 @@ from teamarr.api.routes import (
     sort_priorities,
     stats,
     subscription,
+    support,
     teams,
     templates,
     variables,
@@ -332,6 +333,7 @@ def create_app() -> FastAPI:
     app.include_router(dispatcharr.router, prefix="/api/v1", tags=["Dispatcharr"])
     app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
     app.include_router(subscription.router, prefix="/api/v1", tags=["Subscription"])
+    app.include_router(support.router, prefix="/api/v1", tags=["Support"])
     app.include_router(detection_keywords.router, tags=["Detection Keywords"])
 
     # Serve React UI static files
