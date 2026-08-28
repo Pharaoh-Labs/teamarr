@@ -292,6 +292,7 @@ CREATE TABLE IF NOT EXISTS settings (
     bullpen_api_key TEXT,
     bullpen_base_url TEXT DEFAULT 'https://bullpen.direct',
     bullpen_espn_enabled BOOLEAN DEFAULT 0,
+    bullpen_bellmedia_enabled BOOLEAN DEFAULT 0,
     bullpen_squiggle_enabled BOOLEAN DEFAULT 0,
     bullpen_nascar_enabled BOOLEAN DEFAULT 0,
     bullpen_mlbstats_enabled BOOLEAN DEFAULT 0,

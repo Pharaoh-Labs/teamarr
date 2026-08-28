@@ -12,6 +12,7 @@ import type { BullpenSettings as BullpenSettingsType } from "@/api/settings"
 
 const PROVIDERS: { key: keyof BullpenSettingsType; label: string }[] = [
   { key: "espn_enabled", label: "ESPN" },
+  { key: "bellmedia_enabled", label: "Bell Media (CFL)" },
   { key: "squiggle_enabled", label: "Squiggle (AFL)" },
   { key: "nascar_enabled", label: "NASCAR" },
   { key: "mlbstats_enabled", label: "MLB Stats" },
@@ -52,6 +53,7 @@ export function BullpenSettings() {
     api_key: "", // don't show masked key
     base_url: data.base_url,
     espn_enabled: data.espn_enabled,
+    bellmedia_enabled: data.bellmedia_enabled,
     squiggle_enabled: data.squiggle_enabled,
     nascar_enabled: data.nascar_enabled,
     mlbstats_enabled: data.mlbstats_enabled,
@@ -67,6 +69,7 @@ export function BullpenSettings() {
         enabled: bullpen.enabled,
         base_url: bullpen.base_url,
         espn_enabled: bullpen.espn_enabled,
+        bellmedia_enabled: bullpen.bellmedia_enabled,
         squiggle_enabled: bullpen.squiggle_enabled,
         nascar_enabled: bullpen.nascar_enabled,
         mlbstats_enabled: bullpen.mlbstats_enabled,

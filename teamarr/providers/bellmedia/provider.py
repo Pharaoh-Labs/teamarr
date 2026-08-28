@@ -13,6 +13,7 @@ from teamarr.core import (
     TeamStats,
     Venue,
 )
+from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.bellmedia.client import BellMediaClient
 
 logger = logging.getLogger(__name__)
@@ -27,9 +28,13 @@ class BellMediaProvider(SportsProvider):
         self,
         league_mapping_source: LeagueMappingSource | None = None,
         client: BellMediaClient | None = None,
+        bullpen: BullpenConfig | None = None,
     ):
         self._league_mapping_source = league_mapping_source
-        self._client = client or BellMediaClient(league_mapping_source=league_mapping_source)
+        self._client = client or BellMediaClient(
+            league_mapping_source=league_mapping_source,
+            bullpen=bullpen,
+        )
 
     @property
     def name(self) -> str:

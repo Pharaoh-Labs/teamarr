@@ -47,7 +47,7 @@ The schema contains **34 tables** in total; the table above shows the core subse
 
 ## Settings Table
 
-The settings table is a single row with 132 columns, organized into these groups (a sample of columns per group is shown):
+The settings table is a single row with 133 columns, organized into these groups (a sample of columns per group is shown):
 
 ### Lookahead Windows
 
@@ -113,6 +113,7 @@ The settings table is a single row with 132 columns, organized into these groups
 | `bullpen_api_key` | null | Sent as `X-Bullpen-Key` on proxied requests |
 | `bullpen_base_url` | `https://bullpen.direct` | Proxy base URL |
 | `bullpen_espn_enabled` | 0 | Route ESPN requests through bullpen |
+| `bullpen_bellmedia_enabled` | 0 | Route Bell Media CFL requests through bullpen |
 | `bullpen_squiggle_enabled` | 0 | Route Squiggle requests through bullpen |
 | `bullpen_nascar_enabled` | 0 | Route NASCAR requests through bullpen |
 | `bullpen_mlbstats_enabled` | 0 | Route MLB Stats requests through bullpen |

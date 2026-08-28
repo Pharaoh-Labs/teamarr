@@ -3,6 +3,10 @@
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
+import httpx
+
+from teamarr.providers.base_client import BullpenConfig
+from teamarr.providers.bellmedia.client import BellMediaClient
 from teamarr.providers.bellmedia.provider import BellMediaProvider
 
 COMPETITORS = [
@@ -158,3 +162,57 @@ def test_unsupported_league_returns_no_data():
 
     assert provider.get_events("nfl", date(2026, 8, 13)) == []
     assert provider.get_team("93775", "nfl") is None
+
+
+def test_client_routes_all_endpoint_types_through_bullpen():
+    requests = []
+    client = BellMediaClient(bullpen=BullpenConfig(api_key="test-key"))
+    client._client = httpx.Client(
+        headers=client._headers,
+        transport=httpx.MockTransport(
+            lambda request: (requests.append(request), httpx.Response(200, json={}))[1]
+        ),
+    )
+    mapping = SimpleNamespace(sport="football", provider_league_id="cfl")
+
+    for path in (
+        "competitor/{sport}/{league}",
+        "leagueCalendar/sports/{sport}/leagues/{league}",
+        "schedule/sports/{sport}/leagues/{league}",
+        "event/{sport}/{league}/13419712",
+    ):
+        client._request_for_mapping(mapping, path, label="test")
+
+    assert [request.url.path for request in requests] == [
+        "/v1/bellmedia/v2/competitor/football/cfl",
+        "/v1/bellmedia/v2/leagueCalendar/sports/football/leagues/cfl",
+        "/v1/bellmedia/v2/schedule/sports/football/leagues/cfl",
+        "/v1/bellmedia/v2/event/football/cfl/13419712",
+    ]
+    assert all(request.headers["X-Bullpen-Key"] == "test-key" for request in requests)
+    assert all(request.url.params["brand"] == "tsn" for request in requests)
+    assert all(request.url.params["lang"] == "en" for request in requests)
+    client.close()
+
+
+def test_client_uses_bellmedia_origin_without_bullpen():
+    requests = []
+    client = BellMediaClient()
+    client._client = httpx.Client(
+        headers=client._headers,
+        transport=httpx.MockTransport(
+            lambda request: (requests.append(request), httpx.Response(200, json={}))[1]
+        ),
+    )
+
+    client._request_for_mapping(
+        SimpleNamespace(sport="football", provider_league_id="cfl"),
+        "competitor/{sport}/{league}",
+        label="test",
+    )
+
+    assert str(requests[0].url).startswith(
+        "https://next-gen.sports.bellmedia.ca/v2/competitor/football/cfl"
+    )
+    assert "X-Bullpen-Key" not in requests[0].headers
+    client.close()

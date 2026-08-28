@@ -77,6 +77,7 @@ def _create_bellmedia_provider() -> BellMediaProvider:
     """Factory for Bell Media provider with injected dependencies."""
     return BellMediaProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+        bullpen=_get_bullpen_config("bullpen_bellmedia_enabled"),
     )
 
 

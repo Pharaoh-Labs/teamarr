@@ -44,7 +44,7 @@ Request for league data
 
 ## Bullpen Proxy (Optional)
 
-ESPN, Squiggle, NASCAR, MLB Stats, HockeyTech, and TSDB can each optionally route their requests through [Bullpen](bullpen), a caching proxy. Off by default, configured per-provider at `/bullpen` (a settings page with no sidebar entry). See [Bullpen](bullpen) for details.
+ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, and TSDB can each optionally route their requests through [Bullpen](bullpen), a caching proxy. Off by default, configured per-provider at `/bullpen` (a settings page with no sidebar entry). See [Bullpen](bullpen) for details.
 
 ## SportsProvider Interface
 

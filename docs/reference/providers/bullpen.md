@@ -7,7 +7,7 @@ nav_order: 8
 
 # Bullpen Proxy
 
-[Bullpen](https://bullpen.direct) is an optional caching proxy that fronts several of Teamarr's provider upstreams (ESPN, Squiggle, NASCAR, MLB Stats, HockeyTech, TheSportsDB) behind a single API key. It is off by default and configured per-provider.
+[Bullpen](https://bullpen.direct) is an optional caching proxy that fronts several of Teamarr's provider upstreams (ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, TheSportsDB) behind a single API key. It is off by default and configured per-provider.
 
 ## Configuration
 
@@ -18,7 +18,7 @@ Bullpen has its own settings page at `/bullpen` — it has no sidebar entry and 
 | Enable bullpen proxy | Master switch. Must be on for any per-provider toggle to take effect. |
 | API Key | Your bullpen key, sent as the `X-Bullpen-Key` header on every proxied request. |
 | Base URL | Defaults to `https://bullpen.direct`. |
-| Per-provider toggles | One switch each for ESPN, Squiggle, NASCAR, MLB Stats, HockeyTech, and TheSportsDB. All default off — enabling bullpen doesn't change any provider's behavior until its own toggle is also flipped. |
+| Per-provider toggles | One switch each for ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, and TheSportsDB. All default off — enabling bullpen doesn't change any provider's behavior until its own toggle is also flipped. |
 
 Supabase has no bullpen target and is unaffected by these settings.
 
@@ -33,6 +33,7 @@ When a provider's bullpen toggle is on, its origin base URL is rewritten to `{ba
 | Provider | Bullpen target(s) |
 |---|---|
 | ESPN | `espn-site` (site.api.espn.com), `espn-core` (sports.core.api.espn.com — UFC athlete endpoint) |
+| Bell Media | `bellmedia` (next-gen.sports.bellmedia.ca; preserves the `/v2` API path) |
 | Squiggle | `squiggle` |
 | NASCAR | `nascar` |
 | MLB Stats | `mlb-stats` |

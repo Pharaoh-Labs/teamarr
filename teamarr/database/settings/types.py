@@ -43,6 +43,7 @@ class BullpenSettings:
     api_key: str | None = None
     base_url: str = "https://bullpen.direct"
     espn_enabled: bool = False
+    bellmedia_enabled: bool = False
     squiggle_enabled: bool = False
     nascar_enabled: bool = False
     mlbstats_enabled: bool = False
