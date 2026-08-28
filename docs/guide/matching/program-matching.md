@@ -80,6 +80,17 @@ It runs **alongside** your per-source M3U matching (not instead of it); matches 
 
 ---
 
+### A real-world pattern: curate channels in Dispatcharr, let Teamarr read their EPG
+
+When several providers give the same linear channel different `tvg-id`s (Xtream sources, HDHomeRun, TVEverywhere, EPlusTV…), matching each provider's EPG separately is slow and patchy. A cleaner setup, contributed by a user in [#598](https://github.com/Pharaoh-Labs/teamarr/issues/598):
+
+1. In Dispatcharr, create a channel profile (e.g. **Regional Networks**) and add one channel per station you care about — regional ABC, NBC, CBS and FOX affiliates around the country.
+2. Link each channel to the correct EPG entry **once**, in Dispatcharr.
+3. Attach the matching streams from every provider to that channel (the `stream-mapparr` plugin does this in bulk). Optional: probe them with a stream checker so Teamarr's stream-stats ordering can rank them by resolution.
+4. In Teamarr, enable **Dispatcharr channels as an EPG source** (above). Each curated channel's own EPG now drives the match, and every game on those affiliates lands on its event channel with all providers' streams attached.
+
+This keeps EPG mapping in one place, avoids loading every provider's guide into Teamarr, and makes generation noticeably faster.
+
 ## Requirements
 
 - **Dispatcharr with the program-search API** — `GET /api/epg/programs/search/`, **confirmed on Dispatcharr `0.24.0`**. Teamarr probes for the endpoint the first time it builds the program index (and caches the answer); on older builds the feature simply stays off, with no errors.
