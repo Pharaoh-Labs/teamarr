@@ -81,6 +81,11 @@ def _flatten_team_stats(items: list[dict] | None) -> dict[str, str]:
 def _format_leader(name: str, value: str, label: str) -> str:
     if not name or not value:
         return ""
+    # Some football categories contain a complete ESPN stat line rather than
+    # bare yardage. Keep that provider value intact for the public variable;
+    # the generated-prose formatter expands its abbreviations for readability.
+    if label.endswith("yards") and re.search(r"\b(?:YDS?|yards?)\b", value, re.IGNORECASE):
+        label = ""
     detail = f"{value} {label}".strip()
     return f"{name} — {detail}"
 

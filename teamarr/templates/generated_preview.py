@@ -154,6 +154,59 @@ def _leaders_sentence(values: list[str]) -> str:
     return f"Team leaders include {'; '.join(athlete_facts)}."
 
 
+def _count_phrase(count: str, singular: str, plural: str | None = None) -> str:
+    return f"{count} {singular if count == '1' else (plural or singular + 's')}"
+
+
+def _football_leader_prose(value: str, role: str) -> str:
+    """Expand ESPN abbreviations while leaving the public field unchanged."""
+    if not value:
+        return ""
+    if " — " in value:
+        name, detail = value.split(" — ", 1)
+    else:
+        name, detail = value, ""
+
+    parts = [part.strip() for part in detail.split(",") if part.strip()]
+    expanded: list[str] = []
+    for part in parts:
+        passing = re.fullmatch(r"(\d+)/(\d+)", part)
+        carries = re.fullmatch(r"(\d+)\s+CAR", part, flags=re.IGNORECASE)
+        receptions = re.fullmatch(r"(\d+)\s+REC", part, flags=re.IGNORECASE)
+        yards = re.fullmatch(r"([\d.]+)\s+YDS?", part, flags=re.IGNORECASE)
+        touchdowns = re.fullmatch(r"(\d+)\s+TD", part, flags=re.IGNORECASE)
+        if passing:
+            completed, attempted = passing.groups()
+            expanded.append(f"{completed}/{attempted} completions")
+        elif carries:
+            expanded.append(_count_phrase(carries.group(1), "carry", "carries"))
+        elif receptions:
+            expanded.append(_count_phrase(receptions.group(1), "reception"))
+        elif yards:
+            expanded.append(f"{yards.group(1)} {role} yards")
+        elif touchdowns:
+            expanded.append(
+                _count_phrase(touchdowns.group(1), f"{role} touchdown")
+            )
+        else:
+            expanded.append(part)
+
+    if len(expanded) >= 2 and (
+        expanded[0].endswith(" completion")
+        or expanded[0].endswith(" completions")
+        or expanded[0].endswith(" carry")
+        or expanded[0].endswith(" carries")
+        or expanded[0].endswith(" reception")
+        or expanded[0].endswith(" receptions")
+    ) and expanded[1].endswith(f"{role} yards"):
+        detail = f"{expanded[0]} for {expanded[1]}"
+        if expanded[2:]:
+            detail += f" and {_join_phrases(expanded[2:])}"
+    else:
+        detail = _join_phrases(expanded)
+    return f"{name} — {detail}" if detail else name
+
+
 def _series_clause(value: str) -> str:
     """Turn ESPN's compact series summary into a grammatical clause."""
     summary = value.strip().rstrip(".")
@@ -235,10 +288,14 @@ def _football_sentence(event: Event, side: str) -> str:
     if total:
         text += f", producing {_clean_number(total)} total yards per game"
         if rushing:
-            text += f", including {_clean_number(rushing)} rushing"
+            text += f", including {_clean_number(rushing)} rushing yards per game"
     leaders = [
-        getattr(event, f"{side}_{field}")
-        for field in ("passing_leader", "rushing_leader", "receiving_leader")
+        _football_leader_prose(getattr(event, f"{side}_{field}"), role)
+        for field, role in (
+            ("passing_leader", "passing"),
+            ("rushing_leader", "rushing"),
+            ("receiving_leader", "receiving"),
+        )
     ]
     leader_sentence = _leaders_sentence(leaders)
     return " ".join(part for part in (text + ".", leader_sentence) if part)

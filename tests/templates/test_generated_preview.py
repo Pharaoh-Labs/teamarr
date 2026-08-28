@@ -256,7 +256,7 @@ def test_football_parser_and_renderer_include_all_secondary_stats():
     assert event.home_passing_leader == "Bo Nix — 246 passing yards"
     assert event.away_rushing_leader == "Josh Jacobs — 73 rushing yards"
     assert "Week 3 preseason matchup" in text
-    assert "360 total yards per game, including 162 rushing" in text
+    assert "360 total yards per game, including 162 rushing yards per game" in text
     assert "Bo Nix with 246 passing yards" in text
     assert "J.K. Dobbins with 68 rushing yards" in text
     assert "Courtland Sutton with 84 receiving yards" in text
@@ -412,7 +412,89 @@ def test_formatted_football_leader_is_not_given_a_duplicate_label():
     apply_generated_preview_fields(payload, event)
 
     assert event.home_passing_leader == "Bo Nix — 19/31, 181 YDS"
-    assert "181 YDS passing" not in build_generated_preview(event)
+    assert "Bo Nix leads the team with 19/31 completions for 181 passing yards" in (
+        build_generated_preview(event)
+    )
+
+
+def test_nfl_stat_abbreviations_expand_in_generated_prose():
+    event = _event(
+        sport="football",
+        league="nfl",
+        season_type="preseason",
+        week=4,
+        away_team=_team("Pittsburgh Steelers", "23"),
+        home_team=_team("Buffalo Bills", "2"),
+        venue=Venue(name="Highmark Stadium", city="Orchard Park", state="NY"),
+        away_last_five="2-3",
+        home_last_five="4-1",
+    )
+    payload = {
+        "header": {
+            "week": {"number": 4},
+            "competitions": [
+                _competition(
+                    event,
+                    extra_home={"record": [{"type": "total", "summary": "2-0"}]},
+                    extra_away={"record": [{"type": "total", "summary": "1-1"}]},
+                )
+            ],
+        },
+        "leaders": [
+            _leader_block(
+                "23",
+                [
+                    ("passingYards", "Drew Allar", "11/23, 110 YDS"),
+                    ("rushingYards", "Kaleb Johnson", "10 CAR, 39 YDS, 1 TD"),
+                    ("receivingYards", "Lake McRee", "2 REC, 46 YDS"),
+                ],
+            ),
+            _leader_block(
+                "2",
+                [
+                    ("passingYards", "Kyle Allen", "10/12, 128 YDS, 1 TD"),
+                    ("rushingYards", "Ian Wheeler", "14 CAR, 56 YDS"),
+                    ("receivingYards", "Ja'Mori Maclin", "2 REC, 108 YDS, 1 TD"),
+                ],
+            ),
+        ],
+        "boxscore": {
+            "teams": [
+                {
+                    "team": {"id": "23"},
+                    "statistics": [
+                        {"name": "yardsPerGame", "displayValue": "343"},
+                        {"name": "rushingYardsPerGame", "displayValue": "85"},
+                    ],
+                },
+                {
+                    "team": {"id": "2"},
+                    "statistics": [
+                        {"name": "yardsPerGame", "displayValue": "398.5"},
+                        {"name": "rushingYardsPerGame", "displayValue": "144.5"},
+                    ],
+                },
+            ]
+        },
+    }
+
+    apply_generated_preview_fields(payload, event)
+
+    assert build_generated_preview(event) == (
+        "The Pittsburgh Steelers visit the Buffalo Bills at Highmark Stadium for a "
+        "Week 4 preseason matchup. Pittsburgh enters at 1-1 after going 2-3 in its "
+        "last 5 games, producing 343 total yards per game, including 85 rushing yards "
+        "per game. Team leaders include Drew Allar with 11/23 completions for 110 "
+        "passing yards; Kaleb Johnson with 10 carries for 39 rushing yards and 1 "
+        "rushing touchdown; Lake McRee with 2 receptions for 46 receiving yards. "
+        "Buffalo enters at 2-0 after going "
+        "4-1 in its last 5 games, producing 398.5 total yards per game, including 144.5 "
+        "rushing yards per game. Team leaders include Kyle Allen with 10/12 "
+        "completions for 128 passing yards and 1 passing touchdown; Ian Wheeler with 14 "
+        "carries for "
+        "56 rushing yards; Ja'Mori Maclin with 2 receptions for 108 receiving yards "
+        "and 1 receiving touchdown."
+    )
 
 
 def test_unsupported_sport_generates_only_generic_complete_matchup():
