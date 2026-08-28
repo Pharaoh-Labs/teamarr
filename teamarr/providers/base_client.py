@@ -167,11 +167,10 @@ class BaseHTTPClient:
             try:
                 client = self._get_client()
                 headers = bullpen_headers(url, self._bullpen)
-                response = client.get(
-                    url,
-                    params=params,
-                    **({"headers": headers} if headers else {}),
-                )
+                if headers:
+                    response = client.get(url, params=params, headers=headers)
+                else:
+                    response = client.get(url, params=params)
 
                 # Handle 429 rate limit separately with longer backoff
                 if response.status_code == 429:
