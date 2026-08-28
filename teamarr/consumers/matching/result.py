@@ -107,6 +107,9 @@ class FailedReason(Enum):
 
     # Tennis match failures (ATP, WTA)
     NO_TENNIS_MATCH = "no_tennis_match"  # Could not match to a tennis match
+    # Both players resolved, but the stream names a different tournament than the
+    # candidate (tennis fixture gate, #283) — veto-only, mirrors FIXTURE_NOT_IN_LEAGUE.
+    TENNIS_TOURNAMENT_MISMATCH = "tennis_tournament_mismatch"
 
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
@@ -433,6 +436,7 @@ FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.NO_EVENT_CARD_MATCH: "No matching event card",
     FailedReason.NO_RACING_MATCH: "No matching racing event",
     FailedReason.NO_TENNIS_MATCH: "No matching tennis match",
+    FailedReason.TENNIS_TOURNAMENT_MISMATCH: "Stream names a different tournament",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 

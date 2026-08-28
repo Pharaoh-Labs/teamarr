@@ -73,6 +73,7 @@ def event_to_dict(event: Event) -> dict:
         "race_distance_miles": event.race_distance_miles,
         "stage_laps": event.stage_laps,
         # Tennis-specific fields
+        "tournament_id": event.tournament_id,
         "tournament_name": event.tournament_name,
         "round_name": event.round_name,
         "court": event.court,
@@ -216,6 +217,7 @@ def dict_to_event(data: dict) -> Event:
         race_distance_miles=data.get("race_distance_miles"),
         stage_laps=data.get("stage_laps") or [],
         # Tennis-specific fields
+        tournament_id=data.get("tournament_id"),
         tournament_name=data.get("tournament_name"),
         round_name=data.get("round_name"),
         court=data.get("court"),

@@ -211,6 +211,9 @@ class TennisParserMixin:
                 venue=Venue(name=full_venue) if full_venue else None,
                 broadcasts=broadcasts,
                 game_recap=game_recap,
+                # ESPN's scoreboard event id is "<tournament>-<season>" (e.g.
+                # "189-2026"); the prefix is the season-stable tournament id.
+                tournament_id=tournament_id.split("-")[0] or None,
                 tournament_name=tournament_name,
                 round_name=round_name,
                 court=court,

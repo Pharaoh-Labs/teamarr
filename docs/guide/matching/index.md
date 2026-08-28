@@ -36,6 +36,16 @@ The check only ever *rejects* a candidate; it never creates a match on its own. 
 {: .note }
 > This relies on the team cache, so it is inactive until your first cache refresh — and a stream naming teams from a league Teamarr hasn't cached is passed through to normal matching rather than rejected.
 
+## Tennis
+
+Tennis streams are matched on player surnames plus date/time, and get the same kind of protection as team sports:
+
+- **Tournament check.** If the stream names a tournament that is running that day (`Wimbledon: Zheng vs Norrie`, `US Open Court 5`), only matches from that tournament are eligible — a same-day match between the same players at another event is rejected, shown in **Run History** as **"Different tournament"**. Streams that don't name a tournament (`ATP: Zheng vs Norrie`) are matched on players and time alone. Teamarr uses ESPN's own tournament names; there is no tournament alias list to maintain.
+- **Singles vs doubles.** A stream naming one player per side never binds to a doubles match, and a stream written as pairs (`Sinner/Sonego vs Krajicek/Ram`) never binds to a singles match.
+- **Court and round feeds** (`Day #8 No 1 Court`, `Ladies' Singles Semifinals`) fan out to every match on that court/round for the day, filtered by the same tournament check.
+
+To limit tennis to the four Grand Slams, use **Tennis: majors only** under [Subscriptions → Teams](../subscriptions#default-team-filter).
+
 ## EPG Matching
 
 ![Matching page — EPG Matching view with its three tiles](../../assets/images/matching-epg.png)

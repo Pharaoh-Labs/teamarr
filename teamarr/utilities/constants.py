@@ -394,6 +394,8 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     # ==========================================================================
     # Major US/Canadian Pro Leagues
     # ==========================================================================
+    (r"\batp[:\s-]", "atp"),
+    (r"\bwta[:\s-]", "wta"),
     (r"\bnfl[:\s-]", "nfl"),
     (r"\bnba[:\s-]", "nba"),
     (r"\bnhl[:\s-]", "nhl"),

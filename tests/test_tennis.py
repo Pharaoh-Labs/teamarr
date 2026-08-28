@@ -16,6 +16,7 @@ from teamarr.consumers.matching.classifier import (
     is_racing,
     is_tennis,
 )
+from teamarr.consumers.matching.result import FailedReason
 from teamarr.consumers.matching.tennis_matcher import TennisMatcher
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.providers.espn.tennis import TennisParserMixin, _tennis_surnames
@@ -648,6 +649,12 @@ class _NoCache:
     def touch(self, *a, **k):
         pass
 
+    def set(self, *a, **k):
+        pass
+
+    def delete(self, *a, **k):
+        pass
+
 
 def _court_event(eid, league, court, start, round_name="Round 4"):
     e = _tennis_event(
@@ -1071,3 +1078,160 @@ def test_majors_only_gates_cache_hits():
     cache_on = _EntryCache()
     assert not _match(True, cache_on).is_matched
     assert cache_on.deleted
+
+
+# ---------------------------------------------------------------------------
+# Tennis fixture gate (#283): tournament veto + draw-shape validation
+# ---------------------------------------------------------------------------
+
+
+def _pair_stream(text: str):
+    return classify_stream(text, league_event_type="event", event_league_sport="tennis")
+
+
+def _gate_pool(tz):
+    day = datetime(2026, 8, 25, 12, 0, tzinfo=tz)
+    zheng, norrie = _player("Qinwen Zheng", "Zheng"), _player("Cameron Norrie", "Norrie")
+    uso = _tennis_event("uso-zn", zheng, norrie, day)
+    uso.tournament_id, uso.tournament_name = "189", "US Open"
+    uso.draw_type = "Men's Singles"
+    # Same pair, same day, different tournament (exhibition/replay shape)
+    wso = _tennis_event("wso-zn", zheng, norrie, day.replace(hour=15))
+    wso.tournament_id, wso.tournament_name = "363", "Winston-Salem Open"
+    wso.draw_type = "Men's Singles"
+    return uso, wso
+
+
+def test_pair_stream_naming_tournament_vetoes_other_tournament():
+    tz = ZoneInfo("America/New_York")
+    uso, wso = _gate_pool(tz)
+    tm = TennisMatcher(service=_PoolService([uso, wso]), cache=_NoCache())
+    out = tm.match(
+        _pair_stream("Winston-Salem Open: Zheng vs Norrie @ Aug 25 3:00 PM"),
+        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+    )
+    assert out.is_matched and out.event.id == "wso-zn"
+
+
+def test_pair_stream_names_tournament_with_no_match_there_is_vetoed():
+    """Players match at the US Open, but the stream says Winston-Salem → veto."""
+    tz = ZoneInfo("America/New_York")
+    uso, wso = _gate_pool(tz)
+    wso.away_team = _player("Other Guy", "Guy")  # no Zheng/Norrie at Winston-Salem
+    tm = TennisMatcher(service=_PoolService([uso, wso]), cache=_NoCache())
+    out = tm.match(
+        _pair_stream("Winston-Salem Open: Zheng vs Norrie"),
+        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+    )
+    assert not out.is_matched
+    assert out.failed_reason == FailedReason.TENNIS_TOURNAMENT_MISMATCH
+
+
+def test_pair_stream_without_tournament_defers():
+    """No tournament in the stream → gate is inert, players + time decide."""
+    tz = ZoneInfo("America/New_York")
+    uso, wso = _gate_pool(tz)
+    tm = TennisMatcher(service=_PoolService([uso, wso]), cache=_NoCache())
+    out = tm.match(
+        _pair_stream("ATP: Zheng vs Norrie @ Aug 25 12:00 PM"),
+        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+    )
+    assert out.is_matched and out.event.id == "uso-zn"
+
+
+def test_generic_tokens_never_veto_pair_streams():
+    """'ATP Open' names nothing distinctive → no veto."""
+    tz = ZoneInfo("America/New_York")
+    uso, _ = _gate_pool(tz)
+    tm = TennisMatcher(service=_PoolService([uso]), cache=_NoCache())
+    out = tm.match(
+        _pair_stream("ATP Open Tennis: Zheng vs Norrie"),
+        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+    )
+    assert out.is_matched
+
+
+def test_singles_stream_never_matches_doubles_pair():
+    """token_set_ratio('sinner', 'Jannik Sinner/Lorenzo Sonego') is 100 — must not bind."""
+    pair = _player("Jannik Sinner/Lorenzo Sonego", "Sinner/Sonego")
+    assert _TM._side_score("sinner", pair, parsed_pair=False) == 0
+    assert _TM._side_score("sinner", pair, parsed_pair=None) == 0
+    # A full pair still matches exactly
+    assert _TM._side_score("sinner sonego", pair, parsed_pair=True) == 100
+
+
+def test_doubles_stream_never_matches_singles_player():
+    single = _player("Jannik Sinner", "Sinner")
+    assert _TM._side_score("sinner sonego", single, parsed_pair=True) == 0
+    # Unknown shape ("_" joiner) defers to the normal rules
+    assert _TM._side_score("jannik sinner", single, parsed_pair=None) == 100
+
+
+def test_parsed_side_pair_detection():
+    from teamarr.consumers.matching.tennis_matcher import _parsed_side_is_pair
+
+    assert _parsed_side_is_pair("Sinner/Sonego") is True
+    assert _parsed_side_is_pair("Krejcikova & Siniakova") is True
+    assert _parsed_side_is_pair("jannik_sinner") is None
+    assert _parsed_side_is_pair("Sinner") is False
+    assert _parsed_side_is_pair("") is None
+
+
+def test_singles_stream_picks_singles_over_same_day_doubles():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 8, 25, 12, 0, tzinfo=tz)
+    sinner, alcaraz = _player("Jannik Sinner", "Sinner"), _player("Carlos Alcaraz", "Alcaraz")
+    singles = _tennis_event("s", sinner, alcaraz, day)
+    doubles = _tennis_event(
+        "d",
+        _player("Jannik Sinner/Lorenzo Sonego", "Sinner/Sonego"),
+        _player("Carlos Alcaraz/Pablo Carreno Busta", "Alcaraz/Carreno Busta"),
+        day.replace(hour=11),
+    )
+    tm = TennisMatcher(service=_PoolService([doubles, singles]), cache=_NoCache())
+    out = tm.match(
+        _pair_stream("Wimbledon: Sinner vs Alcaraz"),
+        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+    )
+    assert out.is_matched and out.event.id == "s"
+    out = tm.match(
+        _pair_stream("Wimbledon: Sinner/Sonego vs Alcaraz/Carreno Busta"),
+        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+    )
+    assert out.is_matched and out.event.id == "d"
+
+
+def test_court_feed_guard_still_keys_by_tournament_id():
+    """Feed path uses the shared gate: ids differ, names differ → veto holds."""
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 7, 6, 8, 0, tzinfo=tz)
+    wim = _tournament_event("wim1", "Wimbledon", "No. 1 Court", day)
+    wim.tournament_id = "188"
+    nor = _tournament_event("nor1", "Nordea Open", "Court 1", day.replace(hour=9))
+    nor.tournament_id = "402"
+    tm = TennisMatcher(service=_PoolService([wim, nor]), cache=_NoCache())
+    c = _pair_stream("Wimbledon Day #8 No 1 Court @ Jul 6 8:00 AM")
+    outcomes = tm.match_feed(c, ["atp"], date(2026, 7, 6), stream_id=1, user_tz=tz)
+    assert {o.event.id for o in outcomes if o.is_matched} == {"wim1"}
+
+
+def test_parser_sets_stable_tournament_id():
+    events = _Parser()._parse_tennis_matches(WIMBLEDON, "atp", "tennis", date(2026, 7, 6))
+    assert events and all(e.tournament_id == "188" for e in events)
+
+
+def test_tournament_id_round_trips_provider_cache():
+    from teamarr.database.provider_cache import dict_to_event, event_to_dict
+
+    tz = ZoneInfo("UTC")
+    start = datetime(2026, 8, 25, tzinfo=tz)
+    e = _tennis_event("x", _player("A B", "B"), _player("C D", "D"), start)
+    e.tournament_id = "189"
+    assert dict_to_event(event_to_dict(e)).tournament_id == "189"
+
+
+def test_atp_wta_league_hints_are_builtin():
+    for text, code in (("ATP: Sinner vs Alcaraz", "atp"), ("WTA: Gauff vs Swiatek", "wta")):
+        c = classify_stream(text)
+        assert c.category == StreamCategory.TENNIS_MATCH
+        assert c.league_hint == code
