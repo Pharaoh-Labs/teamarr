@@ -8,6 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   getChannelGroups,
+  getChannelGroupsWithChannels,
   getChannelProfiles,
   getStreamProfiles,
   createChannelProfile,
@@ -37,6 +38,20 @@ export function useChannelGroups(excludeM3u: boolean, enabled = true) {
     // and must not share a cache entry.
     queryKey: ["dispatcharr-channel-groups", { excludeM3u }],
     queryFn: () => getChannelGroups(excludeM3u),
+    enabled,
+    retry: false,
+  })
+}
+
+/**
+ * Channel groups that hold at least one non-Teamarr channel (#631).
+ *
+ * Separate cache key from useChannelGroups — a different, smaller list.
+ */
+export function useChannelGroupsWithChannels(enabled = true) {
+  return useQuery({
+    queryKey: ["dispatcharr-channel-groups", { withChannels: true }],
+    queryFn: getChannelGroupsWithChannels,
     enabled,
     retry: false,
   })

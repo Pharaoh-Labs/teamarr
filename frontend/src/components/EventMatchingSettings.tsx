@@ -13,7 +13,7 @@ import {
   useDispatcharrStatus,
 } from "@/hooks/useSettings"
 import type { EPGSettings } from "@/api/settings"
-import { useChannelGroups } from "@/hooks/useDispatcharr"
+import { useChannelGroupsWithChannels } from "@/hooks/useDispatcharr"
 
 /**
  * EPG Matching settings — how static-named linear channels are matched to events
@@ -40,8 +40,10 @@ export function EpgMatchingSettings() {
     setEPG(epgData)
   }
 
-  const channelGroupsQuery = useChannelGroups(
-    true,
+  // Groups that actually hold channels (#631) — NOT the exclude_m3u list. That
+  // filter drops any group whose name a playlist carries, hiding the groups the
+  // user curated channels into; the scan scopes on the channel's own group.
+  const channelGroupsQuery = useChannelGroupsWithChannels(
     dispatcharrStatus.data?.connected ?? false
   )
 
@@ -148,13 +150,14 @@ export function EpgMatchingSettings() {
             }
             items={(channelGroupsQuery.data ?? []).map((g) => ({
               value: String(g.id),
-              label: g.name,
+              label: `${g.name} (${g.channel_count} channel${g.channel_count === 1 ? "" : "s"})`,
             }))}
             searchPlaceholder="Search Dispatcharr groups..."
           />
           <p className="text-xs text-muted-foreground pt-1">
-            Only these groups are scanned — fewer = faster. Empty = all. They also become
-            sort options under Channels → Stream Priority.
+            Lists the Dispatcharr groups that hold channels. Only these groups are
+            scanned — fewer = faster. Empty = all. They also become sort options
+            under Channels → Stream Priority.
           </p>
         </div>
       </ToggleCard>
