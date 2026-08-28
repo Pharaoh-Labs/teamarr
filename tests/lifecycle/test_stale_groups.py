@@ -161,3 +161,31 @@ def test_recovery_clears_stale_flag(monkeypatch):
         "SELECT source_missing FROM event_epg_groups WHERE name='Flaky Group'"
     ).fetchone()
     assert row["source_missing"] == 0
+
+
+def test_stale_account_id_auto_healed(monkeypatch):
+    """Stale m3u_account_id is auto-healed when account name matches live accounts."""
+    conn = _db()
+    conn.execute(
+        "INSERT INTO event_epg_groups "
+        "(name, leagues, m3u_group_id, m3u_account_id, m3u_account_name) "
+        "VALUES ('Stale Acc', '[]', 10, 999, 'Provider A')"
+    )
+    conn.commit()
+
+    import teamarr.consumers.reconciliation as reconciliation
+
+    fake_m3u = SimpleNamespace(
+        list_groups=lambda: [SimpleNamespace(id=10, name="live-10")],
+        list_accounts=lambda: [SimpleNamespace(id=7, name="Provider A")],
+    )
+    fake = SimpleNamespace(m3u=fake_m3u)
+    monkeypatch.setattr(reconciliation, "get_dispatcharr_connection", lambda db_factory=None: fake)
+
+    detect_stale_groups(_factory(conn))
+
+    row = conn.execute(
+        "SELECT m3u_account_id FROM event_epg_groups WHERE name='Stale Acc'"
+    ).fetchone()
+    assert row["m3u_account_id"] == 7
+

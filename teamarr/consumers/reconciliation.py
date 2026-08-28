@@ -828,10 +828,18 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
     for g in live_groups:
         ids_by_name.setdefault(g.name, []).append(g.id)
 
+    try:
+        live_accounts = conn_dc.m3u.list_accounts()
+        account_ids_by_name = {a.name: a.id for a in live_accounts}
+        account_names_by_id = {a.id: a.name for a in live_accounts}
+    except Exception:
+        account_ids_by_name = {}
+        account_names_by_id = {}
+
     with db_factory() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, m3u_group_id, m3u_group_name,
+            SELECT id, name, m3u_group_id, m3u_group_name, m3u_account_id, m3u_account_name,
                    m3u_group_name_pattern, m3u_group_name_pattern_enabled
             FROM event_epg_groups
             WHERE enabled = 1
@@ -841,6 +849,25 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
             """
         ).fetchall()
         for row in rows:
+            # Auto-heal stale m3u_account_id if account ID no longer exists but name matches
+            if (
+                row["m3u_account_id"]
+                and account_names_by_id
+                and row["m3u_account_id"] not in account_names_by_id
+            ):
+                target_acc_id = account_ids_by_name.get(row["m3u_account_name"] or "")
+                if target_acc_id:
+                    conn.execute(
+                        "UPDATE event_epg_groups SET m3u_account_id = ? WHERE id = ?",
+                        (target_acc_id, row["id"]),
+                    )
+                    logger.info(
+                        "[STALE_GROUPS] Healed '%s' account id %s -> %s",
+                        row["name"],
+                        row["m3u_account_id"],
+                        target_acc_id,
+                    )
+
             # Pattern-bound sources (#450) are judged by pattern resolution,
             # not by the pinned id: present iff the pattern matches at least
             # one live M3U-provided group.

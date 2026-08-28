@@ -2043,7 +2043,12 @@ def get_raw_streams(group_id: int):
         group_id=group.m3u_group_id,
         account_id=group.m3u_account_id,
     )
-
+    # A re-imported/recreated M3U account gets a NEW account id, leaving the
+    # source pinned to a stale one and filtering every stream away (#628).
+    # Retry unfiltered so the group's streams stay visible until reconciliation
+    # heals the stored id.
+    if not raw and group.m3u_account_id is not None:
+        raw = conn.m3u.list_streams(group_id=group.m3u_group_id)
 
     def get_builtin_filter_reason(name: str) -> str | None:
         """Check all builtin filters and return reason if filtered."""
