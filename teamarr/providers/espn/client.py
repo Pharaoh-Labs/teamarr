@@ -32,6 +32,15 @@ ESPN_UFC_ATHLETE_URL = "https://sports.core.api.espn.com/v2/sports/mma/leagues/u
 # ESPN's ungrouped NCAA scoreboards can omit entire divisions. Fetch the root
 # groups and merge their slates so a canonical Teamarr league covers all NCAA
 # events ESPN exposes, including cross-division fixtures.
+#
+# Never send `limit` on these requests (#625). Measured 2026-08-28 against the
+# busiest days of the year: with no limit ESPN returns the whole slate (143
+# MBB, 121 WBB, 117 CFB); limit=100 truncates to 100; 200-500 return the whole
+# slate; and any limit ABOVE 500 — 1000 included — makes ESPN silently return
+# exactly 25 events. That single parameter cut Week 1 FBS coverage from 68
+# games to 17. `_SCOREBOARD_CAP_CANARY` warns if that shape ever comes back.
+_SCOREBOARD_CAP_CANARY = 25
+
 COLLEGE_SCOREBOARD_GROUPS: dict[str, tuple[str, ...]] = {
     "college-football": ("90", "35"),  # Division I; Division II/III
     "mens-college-basketball": ("50", "51"),  # NCAA D-I; non-NCAA D-I
@@ -146,10 +155,22 @@ class ESPNClient(BaseHTTPClient):
 
         responses = []
         for group in groups:
-            response = self._request(url, {**params, "groups": group, "limit": 1000})
+            response = self._request(url, {**params, "groups": group})
             if response is None:
                 logger.warning("[ESPN] Empty scoreboard response for %s group %s", league, group)
                 continue
+            if len(response.get("events", [])) == _SCOREBOARD_CAP_CANARY:
+                # A real slate is never exactly 25; this is the shape ESPN
+                # returns when it decides to cap a request (see the note on
+                # COLLEGE_SCOREBOARD_GROUPS). Surface it rather than silently
+                # matching against a fifth of the schedule.
+                logger.warning(
+                    "[ESPN] %s group %s returned exactly %d events — ESPN may be capping "
+                    "this request; coverage is probably incomplete",
+                    league,
+                    group,
+                    _SCOREBOARD_CAP_CANARY,
+                )
             responses.append(response)
 
         if not responses:
