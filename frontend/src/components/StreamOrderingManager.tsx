@@ -34,9 +34,10 @@ import {
   useTeamFilterSettings,
 } from "@/hooks/useSettings"
 import { useGroups } from "@/hooks/useGroups"
+import { useChannelGroupsWithChannels } from "@/hooks/useDispatcharr"
 import { getLeagueTeams, getTeamPickerLeagues } from "@/api/teams"
 import type { CachedTeam } from "@/api/teams"
-import { getSettings, getDispatcharrChannelGroups } from "@/api/settings"
+import { getSettings } from "@/api/settings"
 
 function TeamMultiSelect({
   selected,
@@ -844,12 +845,11 @@ export function StreamOrderingManager() {
 
   // "Dispatcharr Group" rule: the dropdown lists the DP channel groups the user
   // selected as an EPG source (ybt.3) — resolve the saved group ids to names.
+  // Shares useChannelGroupsWithChannels with the picker that WRITES those ids
+  // (#633): a second, differently-filtered fetch let the two lists disagree, so
+  // ids the picker offered resolved to nothing here and silently vanished.
   const { data: appSettings } = useQuery({ queryKey: ["settings"], queryFn: getSettings })
-  const { data: dpChannelGroups } = useQuery({
-    queryKey: ["dispatcharrChannelGroups"],
-    queryFn: getDispatcharrChannelGroups,
-    staleTime: 5 * 60 * 1000,
-  })
+  const { data: dpChannelGroups } = useChannelGroupsWithChannels()
   const dpGroupNames = useMemo(() => {
     const selected = new Set(appSettings?.epg?.epg_channel_source_groups ?? [])
     if (!selected.size || !dpChannelGroups) return []
