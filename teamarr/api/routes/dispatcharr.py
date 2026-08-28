@@ -10,6 +10,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
+from teamarr.consumers.event_group_processor.stream_fetcher import managed_channel_ids
 from teamarr.database import get_db
 from teamarr.dispatcharr.factory import get_dispatcharr_connection
 from teamarr.utilities.sorting import natural_sort_key
@@ -105,12 +106,21 @@ def list_group_streams(account_id: int, group_id: int) -> list[dict]:
 
 
 @router.get("/channel-groups")
-def list_channel_groups(exclude_m3u: bool = True) -> list[dict]:
+def list_channel_groups(exclude_m3u: bool = True, with_channels: bool = False) -> list[dict]:
     """List Dispatcharr channel groups (for channel assignment).
 
     Args:
         exclude_m3u: If True, exclude groups originating from M3U accounts.
                      Defaults to True since M3U groups shouldn't be used for channel assignment.
+        with_channels: If True, return ONLY groups that hold at least one
+                       non-Teamarr channel, each with a ``channel_count``, and
+                       ignore ``exclude_m3u`` entirely (#631). Dispatcharr uses
+                       one group table for stream and channel organization, and
+                       ``m3u_accounts`` does not separate them — it is set for
+                       any group name a playlist carries, so it silently hides
+                       groups the user curated channels into. "Holds channels"
+                       is the honest test for the channel-source picker, whose
+                       scan scopes on the channel's own ``channel_group_id``.
 
     Returns:
         List of channel groups
@@ -118,6 +128,23 @@ def list_channel_groups(exclude_m3u: bool = True) -> list[dict]:
     conn = get_dispatcharr_connection(db_factory=get_db)
     if not conn:
         raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
+
+    if with_channels:
+        # Teamarr's own channels are OUTPUT, never a source: a group holding
+        # only Teamarr channels must read as empty, matching the scan.
+        counts = conn.channels.count_channels_by_group(
+            exclude_channel_ids=managed_channel_ids(get_db)
+        )
+        return [
+            {
+                "id": g.id,
+                "name": g.name,
+                "from_m3u": bool(g.m3u_accounts),
+                "channel_count": counts[g.id],
+            }
+            for g in conn.m3u.list_groups()
+            if counts.get(g.id)
+        ]
 
     groups = conn.m3u.list_groups(exclude_m3u=exclude_m3u)
     return [

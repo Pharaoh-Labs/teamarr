@@ -22,6 +22,8 @@ export interface ChannelGroup {
   id: number
   name: string
   from_m3u: boolean
+  /** Channels in the group, excluding Teamarr's own — only from getChannelGroupsWithChannels. */
+  channel_count?: number
 }
 
 async function emptyOn503<T>(promise: Promise<T[]>): Promise<T[]> {
@@ -50,5 +52,19 @@ export function getStreamProfiles(): Promise<StreamProfile[]> {
 export function getChannelGroups(excludeM3u: boolean): Promise<ChannelGroup[]> {
   return emptyOn503(
     api.get<ChannelGroup[]>(`/dispatcharr/channel-groups?exclude_m3u=${excludeM3u}`)
+  )
+}
+
+/**
+ * Groups that actually hold channels, with counts (#631).
+ *
+ * For the channel-source picker: `exclude_m3u` filters on Dispatcharr's
+ * `m3u_accounts` link, which is set for any group name a playlist carries and
+ * so hides groups the user curated channels into. "Holds channels" is the test
+ * that matches what the scan scopes on.
+ */
+export function getChannelGroupsWithChannels(): Promise<ChannelGroup[]> {
+  return emptyOn503(
+    api.get<ChannelGroup[]>("/dispatcharr/channel-groups?with_channels=true")
   )
 }

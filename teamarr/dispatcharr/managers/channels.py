@@ -798,3 +798,36 @@ class ChannelManager:
             if uuid:
                 uuid_map[str(uuid).lower()] = ch
         return stream_map, uuid_map
+
+    def count_channels_by_group(
+        self, exclude_channel_ids: set[int] | None = None
+    ) -> dict[int, int]:
+        """Count Dispatcharr channels per channel group (#631).
+
+        Dispatcharr uses ONE group table for two jobs — organizing imported
+        streams and organizing channels — and ``m3u_accounts`` does not
+        separate them: it is written for any group name a playlist carries,
+        including groups Dispatcharr auto-creates on import, and it survives
+        the group being disabled or dropped by the provider. So "has channels
+        in it" is the only honest test for a channel group.
+
+        ``exclude_channel_ids`` drops Teamarr's own managed channels from the
+        count, so a group holding nothing but Teamarr OUTPUT channels reads as
+        empty — matching what the channel-source scan already skips.
+
+        Returns:
+            Dict mapping channel group id -> channel count (groups with zero
+            channels are absent).
+        """
+        channels = self._client.paginated_get(
+            "/api/channels/channels/?page_size=500",
+            error_context="channels",
+        )
+        counts: dict[int, int] = {}
+        for ch in channels:
+            if exclude_channel_ids and ch.get("id") in exclude_channel_ids:
+                continue
+            group_id = ch.get("channel_group_id")
+            if group_id is not None:
+                counts[group_id] = counts.get(group_id, 0) + 1
+        return counts
