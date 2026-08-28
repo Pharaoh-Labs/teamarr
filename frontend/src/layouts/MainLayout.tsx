@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router"
+import { RuntimeModeBanner } from "@/components/RuntimeModeBanner"
 import {
   Moon,
   Sun,
@@ -372,6 +373,7 @@ export function MainLayout() {
       )}
 
       {/* Main Content */}
+      <RuntimeModeBanner />
       <main className="max-w-[1440px] mx-auto px-4 py-4">
         <Outlet />
       </main>

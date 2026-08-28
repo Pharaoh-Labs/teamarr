@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from teamarr.config.runtime import dry_run
 from teamarr.dispatcharr.auth import TokenManager
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,18 @@ class DispatcharrClient:
         Returns:
             Response object or None if request fails after all retries
         """
+        if method.upper() != "GET" and dry_run():
+            # DRY_RUN (#554): every Dispatcharr mutation funnels through here.
+            # Log what would have happened and report "no response" so callers
+            # take their failure path — nothing is persisted against a fake id.
+            logger.info(
+                "[DRY_RUN] Suppressed %s %s%s",
+                method.upper(),
+                endpoint,
+                f" payload={data}" if data is not None else "",
+            )
+            return None
+
         token = self._auth.get_token()
         if not token:
             logger.error("[DISPATCHARR] Failed to obtain authentication token")
@@ -299,6 +312,8 @@ class DispatcharrClient:
             Human-readable error message
         """
         if response is None:
+            if dry_run():
+                return "Dry run — write suppressed (DRY_RUN=true)"
             return "Request failed - no response"
 
         try:

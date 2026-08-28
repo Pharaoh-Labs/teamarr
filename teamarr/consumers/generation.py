@@ -478,6 +478,8 @@ def run_full_generation(
             if channelsdvr_settings.enabled:
                 jobs += [("channelsdvr", s) for s in channelsdvr_settings.servers if s.url]
 
+            if jobs and _dry_run_media_refresh(result, jobs):
+                jobs = []
             if jobs:
                 update_progress(
                     "media_servers", 97,
@@ -651,6 +653,31 @@ def run_full_generation(
         _generation_lock.release()
 
     return result
+
+
+def _dry_run_media_refresh(result: Any, jobs: list[tuple[str, Any]]) -> bool:
+    """DRY_RUN (#554): record what would have been refreshed, run nothing.
+
+    Returns True when dry-run is active (caller skips the refresh jobs).
+    """
+    from teamarr.config.runtime import dry_run
+
+    if not dry_run():
+        return False
+    by_kind: dict[str, list[str]] = {}
+    for kind, server in jobs:
+        by_kind.setdefault(kind, []).append(getattr(server, "url", None) or str(server))
+    for kind, urls in by_kind.items():
+        logger.info("[DRY_RUN] Suppressed %s guide refresh for %s", kind, ", ".join(urls))
+        payload = {"success": True, "dry_run": True, "servers": urls}
+        if kind == "emby":
+            result.emby_refresh = payload
+        elif kind == "jellyfin":
+            result.jellyfin_refresh = payload
+        elif kind == "channelsdvr":
+            result.channelsdvr_refresh = payload
+            result.channelsdvr_epg_refresh = dict(payload)
+    return True
 
 
 def _run_media_server_refreshes(

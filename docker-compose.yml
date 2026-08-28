@@ -17,6 +17,12 @@ services:
       # Note: File logging (data/logs/) always captures DEBUG regardless of this setting
       # - LOG_LEVEL=INFO
 
+      # Run beside another instance safely (#554):
+      #   SCHEDULER=off  → API + UI only, nothing fires on a timer (manual generation still works)
+      #   DRY_RUN=true   → log every outbound write (Dispatcharr, media-server refreshes), execute none
+      # - SCHEDULER=on
+      # - DRY_RUN=false
+
       # Log format: "text" or "json" (default: text)
       # Use "json" for log aggregation systems (ELK, Loki, Splunk)
       # - LOG_FORMAT=text

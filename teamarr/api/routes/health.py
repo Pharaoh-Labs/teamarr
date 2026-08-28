@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from teamarr.api.startup_state import get_startup_state
 from teamarr.config import VERSION
+from teamarr.config.runtime import runtime_flags
 
 router = APIRouter()
 
@@ -18,4 +19,6 @@ def health_check() -> dict:
         "status": "healthy" if startup_state.is_ready else "starting",
         "version": VERSION,
         "startup": startup_info,
+        # #554: SCHEDULER=off / DRY_RUN=true — read by the UI banner
+        "runtime": runtime_flags(),
     }
