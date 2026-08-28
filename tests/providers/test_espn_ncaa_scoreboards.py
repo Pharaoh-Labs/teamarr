@@ -39,7 +39,23 @@ def test_ncaa_coverage_uses_all_configured_subdivision_groups(monkeypatch):
     assert [event["id"] for event in result["events"]] == ["fcs", "d2"]
     assert [params["groups"] for _, params in calls] == ["90", "35"]
     assert all(params["dates"] == "20260827" for _, params in calls)
-    assert all(params["limit"] == 1000 for _, params in calls)
+    # Never a `limit` (#625): ESPN returns the full slate without one and caps
+    # the response at 25 events for any limit above 500. limit=1000 cut Week 1
+    # FBS coverage from 68 games to 17.
+    assert all("limit" not in params for _, params in calls)
+
+
+def test_ncaa_scoreboard_warns_when_a_group_looks_capped(monkeypatch, caplog):
+    """Exactly 25 events is ESPN's capped-response shape, never a real slate."""
+    client, _ = _client_with_responses(
+        monkeypatch,
+        {"90": {"events": [{"id": str(i)} for i in range(25)]}, "35": {"events": []}},
+    )
+
+    with caplog.at_level("WARNING", logger="teamarr.providers.espn.client"):
+        client.get_scoreboard("college-football", "20260905", ("football", "college-football"))
+
+    assert any("may be capping" in r.message for r in caplog.records)
 
 
 def test_ncaa_scoreboard_deduplicates_events_from_overlapping_groups(monkeypatch):
