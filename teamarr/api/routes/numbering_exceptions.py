@@ -107,7 +107,7 @@ def _display_name(conn, exc) -> str:
     from teamarr.core.sports import get_sport_display_names_from_db
 
     names = get_sport_display_names_from_db(conn)
-    return names.get(exc.sport, exc.sport.title())
+    return names.get(exc.sport) or exc.sport.title()
 
 
 def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
@@ -208,7 +208,7 @@ def preview_layout():
             if lane.is_default:
                 label = "Everything else"
             else:
-                exc = exceptions.get(lane.id)
+                exc = exceptions.get(lane.id) if lane.id is not None else None
                 members = [
                     _display_name(conn, e) for e in exceptions.values() if e.start == lane.start
                 ]

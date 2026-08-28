@@ -236,7 +236,7 @@ def add_numbering_exception(
             return None
         league_code = provider = provider_team_id = None
 
-    sport = sport.lower()
+    sport = (sport or "").lower()
     cursor = conn.execute(
         """
         INSERT INTO numbering_exceptions
@@ -251,6 +251,7 @@ def add_numbering_exception(
         ),
     )
     _arm_relayout(conn)
+    assert cursor.lastrowid is not None  # INSERT always yields a rowid
     created = get_numbering_exception(conn, cursor.lastrowid)
     logger.info(
         "[NUMBERING_EXC] Added %s pin → %d (%s)",
@@ -275,12 +276,18 @@ def update_numbering_exception(
     if current is None:
         return None
     new_start = int(start) if start is not None else current.start
-    new_end = current.end if end is ... else (int(end) if end is not None else None)
+    if end is ...:
+        new_end = current.end
+    else:
+        new_end = int(end) if isinstance(end, int) else None
     err = _validate(current.scope, new_start, new_end)
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None
-    new_label = current.label if label is ... else ((label or "").strip() or None)
+    if label is ...:
+        new_label = current.label
+    else:
+        new_label = (label.strip() or None) if isinstance(label, str) else None
     new_enabled = current.enabled if enabled is None else bool(enabled)
     conn.execute(
         """
