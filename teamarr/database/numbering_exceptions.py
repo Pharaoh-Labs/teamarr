@@ -116,13 +116,18 @@ def _table_exists(conn: Connection) -> bool:
 def get_numbering_exceptions(
     conn: Connection, *, enabled_only: bool = False
 ) -> list[NumberingException]:
-    """All pinned blocks, ordered by start then sort_order (the UI list order)."""
+    """All pinned blocks in precedence order (sort_order, then id).
+
+    This is the UI list order: the reorder arrows edit ``sort_order``, so the
+    list must follow it rather than ``start`` or a move would be invisible.
+    Placement order (ascending start) is derived separately by
+    ``LaneResolver.lanes``.
+    """
     if not _table_exists(conn):
         return []
     where = "WHERE enabled = 1" if enabled_only else ""
     rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM numbering_exceptions {where} "
-        "ORDER BY start ASC, sort_order ASC, id ASC"
+        f"SELECT {_COLUMNS} FROM numbering_exceptions {where} ORDER BY sort_order ASC, id ASC"
     ).fetchall()
     return [_row_to_exception(r) for r in rows]
 

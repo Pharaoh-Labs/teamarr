@@ -490,3 +490,16 @@ def test_update_and_reorder():
     assert ne.update_numbering_exception(c, a.id, start=600, end=500) is None  # end < start
     ne.reorder_numbering_exceptions(c, [b.id, a.id])
     assert [e.id for e in ne.get_numbering_exceptions(c)] == [b.id, a.id]
+
+
+def test_list_order_follows_sort_order_not_start():
+    """The reorder arrows must visibly move rows: list order is sort_order, not start."""
+    c = build()
+    hi = pin(c, "league", 900, league_code="nfl")
+    lo = pin(c, "league", 100, league_code="nba")
+    assert [e.id for e in ne.get_numbering_exceptions(c)] == [hi.id, lo.id]
+    ne.reorder_numbering_exceptions(c, [lo.id, hi.id])
+    assert [e.id for e in ne.get_numbering_exceptions(c)] == [lo.id, hi.id]
+    # placement order is still by start
+    resolver = ne.LaneResolver.load(c, cn._default_lane(c))
+    assert [lane.start for lane in resolver.lanes()] == [100, 900, 101]

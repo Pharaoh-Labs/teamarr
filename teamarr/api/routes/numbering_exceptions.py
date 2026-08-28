@@ -144,7 +144,7 @@ def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
 
 @router.get("", response_model=list[NumberingExceptionModel])
 def list_numbering_exceptions():
-    """List pinned blocks in UI order (start, then drag order)."""
+    """List pinned blocks in precedence order (drag order)."""
     with get_db() as conn:
         return _with_counts(conn, get_numbering_exceptions(conn))
 
