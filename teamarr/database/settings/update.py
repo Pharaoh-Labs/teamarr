@@ -549,6 +549,35 @@ def update_channelsdvr_settings(
     return _apply(conn, "channelsdvr", provided)
 
 
+def update_bullpen_settings(
+    conn: Connection,
+    enabled: bool | None = None,
+    api_key: str | None | object = _NOT_PROVIDED,
+    base_url: str | None = None,
+    espn_enabled: bool | None = None,
+    bellmedia_enabled: bool | None = None,
+    squiggle_enabled: bool | None = None,
+    nascar_enabled: bool | None = None,
+    mlbstats_enabled: bool | None = None,
+    hockeytech_enabled: bool | None = None,
+    tsdb_enabled: bool | None = None,
+) -> bool:
+    """Update bullpen proxy settings (only provided fields)."""
+    provided = _skip_none(
+        enabled=enabled,
+        base_url=base_url,
+        espn_enabled=espn_enabled,
+        bellmedia_enabled=bellmedia_enabled,
+        squiggle_enabled=squiggle_enabled,
+        nascar_enabled=nascar_enabled,
+        mlbstats_enabled=mlbstats_enabled,
+        hockeytech_enabled=hockeytech_enabled,
+        tsdb_enabled=tsdb_enabled,
+    )
+    provided.update(_skip_missing(api_key=api_key))
+    return _apply(conn, "bullpen", provided)
+
+
 def update_backup_settings(
     conn: Connection,
     enabled: bool | None = None,

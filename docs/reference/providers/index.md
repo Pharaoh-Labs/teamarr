@@ -42,6 +42,10 @@ Request for league data
 | [Supabase](supabase) | 55 | 1 (CBL) | None (credentials auto-extracted, cached 7 days) | None observed |
 | [TSDB](tsdb) | 100 | 48 | API key in URL path | 30/min free, 100/min premium |
 
+## Bullpen Proxy (Optional)
+
+ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, and TSDB can each optionally route their requests through [Bullpen](bullpen), a caching proxy. Off by default, configured per-provider at `/bullpen` (a settings page with no sidebar entry). See [Bullpen](bullpen) for details.
+
 ## SportsProvider Interface
 
 All providers implement these methods (defined in `teamarr/core/interfaces.py`):

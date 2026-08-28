@@ -24,6 +24,7 @@ from teamarr.core import (
     TeamStats,
     Venue,
 )
+from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.squiggle.client import SquiggleClient
 
 logger = logging.getLogger(__name__)
@@ -38,8 +39,9 @@ class SquiggleProvider(SportsProvider):
         self,
         client: SquiggleClient | None = None,
         league_mapping_source: LeagueMappingSource | None = None,
+        bullpen: BullpenConfig | None = None,
     ):
-        self._client = client or SquiggleClient()
+        self._client = client or SquiggleClient(bullpen=bullpen)
         self._league_mapping_source = league_mapping_source
 
     @property

@@ -15,6 +15,7 @@ from .registry import GROUPS, GroupSpec
 from .types import (
     AllSettings,
     BackupSettings,
+    BullpenSettings,
     ChannelNumberingSettings,
     ChannelsDVRSettings,
     DispatcharrSettings,
@@ -166,3 +167,8 @@ def get_jellyfin_settings(conn: Connection) -> JellyfinSettings:
 def get_channelsdvr_settings(conn: Connection) -> ChannelsDVRSettings:
     """Get Channels DVR integration settings."""
     return _get_group(conn, "channelsdvr")
+
+
+def get_bullpen_settings(conn: Connection) -> BullpenSettings:
+    """Get bullpen proxy settings."""
+    return _get_group(conn, "bullpen")

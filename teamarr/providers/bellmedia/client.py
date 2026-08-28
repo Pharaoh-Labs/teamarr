@@ -8,7 +8,7 @@ import logging
 from datetime import date
 
 from teamarr.core.interfaces import LeagueMapping, LeagueMappingSource
-from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -32,9 +32,11 @@ class BellMediaClient(BaseHTTPClient):
         league_mapping_source: LeagueMappingSource | None = None,
         timeout: float = 10.0,
         retry_count: int = 3,
+        bullpen: BullpenConfig | None = None,
     ):
-        super().__init__(timeout=timeout, retry_count=retry_count)
+        super().__init__(timeout=timeout, retry_count=retry_count, bullpen=bullpen)
         self._league_mapping_source = league_mapping_source
+        self._base_url = bullpen_rewrite(BELLMEDIA_BASE_URL, "bellmedia", bullpen)
         self._cache = TTLCache()
 
     def supports_league(self, league: str) -> bool:
@@ -60,7 +62,7 @@ class BellMediaClient(BaseHTTPClient):
         if params:
             query.update(params)
         endpoint = path.format(sport=mapping.sport, league=mapping.provider_league_id)
-        return self._request_json(f"{BELLMEDIA_BASE_URL}/{endpoint}", query, label=label)
+        return self._request_json(f"{self._base_url}/{endpoint}", query, label=label)
 
     def get_competitors(self, league: str) -> list[dict]:
         mapping = self.get_mapping(league)

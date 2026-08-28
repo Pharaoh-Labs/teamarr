@@ -33,6 +33,7 @@ from typing import Any, Union, cast, get_args, get_origin
 from .types import (
     APISettings,
     BackupSettings,
+    BullpenSettings,
     ChannelNumberingSettings,
     ChannelsDVRSettings,
     DispatcharrSettings,
@@ -531,6 +532,12 @@ GROUPS: dict[str, GroupSpec] = {
                 },
             ),
             "Channels DVR",
+        ),
+        GroupSpec(
+            "bullpen",
+            BullpenSettings,
+            _specs(BullpenSettings, prefix="bullpen_"),
+            "Bullpen",
         ),
     )
 }

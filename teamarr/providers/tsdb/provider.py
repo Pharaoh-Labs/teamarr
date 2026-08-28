@@ -18,6 +18,7 @@ from teamarr.core import (
     TeamStats,
     Venue,
 )
+from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.tsdb.client import TSDBClient
 from teamarr.providers.tsdb.racing import parse_racing_events
 
@@ -94,11 +95,13 @@ class TSDBProvider(SportsProvider):
         client: TSDBClient | None = None,
         api_key: str | None = None,
         team_name_resolver: TeamNameResolver | None = None,
+        bullpen: BullpenConfig | None = None,
     ):
         self._league_mapping_source = league_mapping_source
         self._client = client or TSDBClient(
             league_mapping_source=league_mapping_source,
             api_key=api_key,
+            bullpen=bullpen,
         )
         self._team_name_resolver = team_name_resolver
 

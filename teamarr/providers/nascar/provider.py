@@ -26,6 +26,7 @@ from teamarr.core import (
     Team,
     Venue,
 )
+from teamarr.providers.base_client import BullpenConfig, bullpen_headers, bullpen_rewrite
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +96,12 @@ class NASCARProvider(SportsProvider):
         self,
         league_mapping_source: LeagueMappingSource | None = None,
         timeout: float = 10.0,
+        bullpen: BullpenConfig | None = None,
     ):
         self._league_mapping_source = league_mapping_source
         self._timeout = timeout
+        self._bullpen = bullpen
+        self._base_url = bullpen_rewrite(_BASE_URL, "nascar", bullpen)
         self._events_by_league: dict[str, list[Event]] = {}
         self._loaded_at: datetime | None = None
 
@@ -165,7 +169,7 @@ class NASCARProvider(SportsProvider):
         result: dict[str, list[Event]] = {}
 
         for league, (suffix, series_key) in _LEAGUE_CONFIG.items():
-            url = f"{_BASE_URL}/{year}/{suffix}"
+            url = f"{self._base_url}/{year}/{suffix}"
             if url not in fetched:
                 fetched[url] = self._fetch(url)
 
@@ -193,8 +197,9 @@ class NASCARProvider(SportsProvider):
         return result
 
     def _fetch(self, url: str) -> list | dict | None:
+        headers = bullpen_headers(url, self._bullpen)
         try:
-            with httpx.Client(timeout=self._timeout) as client:
+            with httpx.Client(timeout=self._timeout, headers=headers) as client:
                 resp = client.get(url)
                 resp.raise_for_status()
                 return resp.json()

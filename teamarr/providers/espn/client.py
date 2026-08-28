@@ -12,7 +12,7 @@ Configuration via environment variables:
 import logging
 import os
 
-from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,7 @@ class ESPNClient(BaseHTTPClient):
         timeout: float | None = None,
         retry_count: int | None = None,
         max_connections: int | None = None,
+        bullpen: BullpenConfig | None = None,
     ):
         super().__init__(
             timeout=timeout if timeout is not None else ESPN_TIMEOUT,
@@ -88,7 +89,13 @@ class ESPNClient(BaseHTTPClient):
                 max_connections if max_connections is not None else ESPN_MAX_CONNECTIONS
             ),
             headers={"User-Agent": ESPN_USER_AGENT},
+            bullpen=bullpen,
         )
+        # site.api.espn.com -> bullpen target "espn-site"; sports.core.api.espn.com
+        # (UFC athletes and season-tree endpoints) -> bullpen target "espn-core".
+        self._base_url = bullpen_rewrite(ESPN_BASE_URL, "espn-site", bullpen)
+        self._core_url = bullpen_rewrite(ESPN_CORE_URL, "espn-core", bullpen)
+        self._ufc_athlete_url = bullpen_rewrite(ESPN_UFC_ATHLETE_URL, "espn-core", bullpen)
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
         label = url.split("/sports/")[-1] if "/sports/" in url else url
@@ -147,7 +154,7 @@ class ESPNClient(BaseHTTPClient):
             Raw ESPN response or None on error
         """
         sport, espn_league = self.get_sport_league(league, sport_league)
-        url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/scoreboard"
+        url = f"{self._base_url}/{sport}/{espn_league}/scoreboard"
         params: dict = {"dates": date_str} if date_str else {}
         groups = COLLEGE_SCOREBOARD_GROUPS.get(league)
         if not groups:
@@ -207,7 +214,7 @@ class ESPNClient(BaseHTTPClient):
             Dict with name, logo_url, abbreviation or None on error
         """
         sport, espn_league = self.get_sport_league(league, sport_league)
-        url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/scoreboard"
+        url = f"{self._base_url}/{sport}/{espn_league}/scoreboard"
 
         data = self._request(url)
         if not data:
@@ -255,7 +262,7 @@ class ESPNClient(BaseHTTPClient):
         """
         team_id = self._correct_team_id(league, team_id)
         sport, espn_league = self.get_sport_league(league, sport_league)
-        url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/teams/{team_id}/schedule"
+        url = f"{self._base_url}/{sport}/{espn_league}/teams/{team_id}/schedule"
         return self._request(url)
 
     def get_team(
@@ -276,7 +283,7 @@ class ESPNClient(BaseHTTPClient):
         """
         team_id = self._correct_team_id(league, team_id)
         sport, espn_league = self.get_sport_league(league, sport_league)
-        url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/teams/{team_id}"
+        url = f"{self._base_url}/{sport}/{espn_league}/teams/{team_id}"
         return self._request(url)
 
     def get_event(
@@ -296,7 +303,7 @@ class ESPNClient(BaseHTTPClient):
             Raw ESPN response or None on error
         """
         sport, espn_league = self.get_sport_league(league, sport_league)
-        url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/summary"
+        url = f"{self._base_url}/{sport}/{espn_league}/summary"
         return self._request(url, {"event": event_id})
 
     def get_teams(self, league: str, sport_league: tuple[str, str] | None = None) -> dict | None:
@@ -310,7 +317,7 @@ class ESPNClient(BaseHTTPClient):
             Raw ESPN response with teams list or None on error
         """
         sport, espn_league = self.get_sport_league(league, sport_league)
-        url = f"{ESPN_BASE_URL}/{sport}/{espn_league}/teams"
+        url = f"{self._base_url}/{sport}/{espn_league}/teams"
         return self._request(url, {"limit": 1000})
 
     # Core-API season-tree endpoints (#91): conference/division groups. The
@@ -319,7 +326,7 @@ class ESPNClient(BaseHTTPClient):
 
     def _season_group_url(self, sport: str, espn_league: str, season: int, group_id: str) -> str:
         return (
-            f"{ESPN_CORE_URL}/{sport}/leagues/{espn_league}"
+            f"{self._core_url}/{sport}/leagues/{espn_league}"
             f"/seasons/{season}/types/2/groups/{group_id}"
         )
 
@@ -359,7 +366,7 @@ class ESPNClient(BaseHTTPClient):
         Returns:
             Raw ESPN scoreboard response or None on error
         """
-        url = f"{ESPN_BASE_URL}/mma/ufc/scoreboard"
+        url = f"{self._base_url}/mma/ufc/scoreboard"
         params: dict = {"dates": date_str} if date_str else {}
         return self._request(url, params)
 
@@ -372,7 +379,7 @@ class ESPNClient(BaseHTTPClient):
         Returns:
             Raw ESPN response or None on error
         """
-        url = f"{ESPN_UFC_ATHLETE_URL}/{fighter_id}"
+        url = f"{self._ufc_athlete_url}/{fighter_id}"
         return self._request(url)
 
     def get_fighter_record(self, fighter_id: str) -> dict | None:
@@ -384,5 +391,5 @@ class ESPNClient(BaseHTTPClient):
         Returns:
             Raw ESPN response with record data or None on error
         """
-        url = f"{ESPN_UFC_ATHLETE_URL}/{fighter_id}/records"
+        url = f"{self._ufc_athlete_url}/{fighter_id}/records"
         return self._request(url)

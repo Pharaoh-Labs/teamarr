@@ -43,6 +43,8 @@ import {
   testChannelsDVRConnection,
   getChannelsDVRSources,
   getChannelsDVRLineups,
+  getBullpenSettings,
+  updateBullpenSettings,
 } from "@/api/settings"
 
 // ---------------------------------------------------------------------------
@@ -171,6 +173,11 @@ export const useUpdateChannelsDVRSettings = settingsMutationHook(updateChannelsD
   ["settings", "channelsdvr"],
   ["channelsdvr", "sources"],
   ["channelsdvr", "lineups"],
+])
+
+export const useBullpenSettings = settingsQueryHook("bullpen", getBullpenSettings)
+export const useUpdateBullpenSettings = settingsMutationHook(updateBullpenSettings, [
+  ["settings", "bullpen"],
 ])
 
 // ---------------------------------------------------------------------------
