@@ -310,6 +310,24 @@ class TestDisplaySettingsReloadIntegration:
         assert "unmask_or_skip(update.tsdb_api_key) is not None" in source
 
 
+def test_bullpen_settings_reinitialize_all_proxied_providers():
+    import inspect
+
+    from teamarr.api.routes.settings.bullpen import update_bullpen_settings
+
+    source = inspect.getsource(update_bullpen_settings)
+    for provider in (
+        "espn",
+        "bellmedia",
+        "squiggle",
+        "nascar",
+        "mlbstats",
+        "hockeytech",
+        "tsdb",
+    ):
+        assert f'"{provider}"' in source
+
+
 # ===========================================================================
 # Premium-league cache prewarm gating
 # ===========================================================================

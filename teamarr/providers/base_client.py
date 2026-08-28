@@ -52,7 +52,7 @@ class BullpenConfig:
     toggle is on; ``None``/absent means "use the origin host directly".
     """
 
-    api_key: str
+    api_key: str | None = None
     base_url: str = "https://bullpen.direct"
 
 
@@ -69,6 +69,15 @@ def bullpen_rewrite(origin_base: str, target: str, bullpen: BullpenConfig | None
         return origin_base
     path = urlsplit(origin_base).path.rstrip("/")
     return f"{bullpen.base_url.rstrip('/')}/v1/{target}{path}"
+
+
+def bullpen_headers(url: str, bullpen: BullpenConfig | None) -> dict[str, str] | None:
+    """Return Bullpen authentication only for requests to the proxy host."""
+    if bullpen is None or not bullpen.api_key:
+        return None
+    if urlsplit(url).netloc != urlsplit(bullpen.base_url).netloc:
+        return None
+    return {"X-Bullpen-Key": bullpen.api_key}
 
 
 class BaseHTTPClient:
@@ -96,8 +105,7 @@ class BaseHTTPClient:
             else max_connections
         )
         self._headers = headers
-        if bullpen is not None:
-            self._headers = {**(headers or {}), "X-Bullpen-Key": bullpen.api_key}
+        self._bullpen = bullpen
         self._client: httpx.Client | None = None
         self._client_lock = threading.Lock()
 
@@ -158,7 +166,12 @@ class BaseHTTPClient:
         for attempt in range(self._retry_count + RATE_LIMIT_MAX_RETRIES):
             try:
                 client = self._get_client()
-                response = client.get(url, params=params)
+                headers = bullpen_headers(url, self._bullpen)
+                response = client.get(
+                    url,
+                    params=params,
+                    **({"headers": headers} if headers else {}),
+                )
 
                 # Handle 429 rate limit separately with longer backoff
                 if response.status_code == 429:

@@ -8,8 +8,9 @@ settings CRUD group (get/put) with no connection-test endpoint.
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.providers.registry import ProviderRegistry
 
-from .models import BullpenSettingsModel, BullpenSettingsUpdate, to_model, unmask_or_skip
+from .models import MASKED_SECRET, BullpenSettingsModel, BullpenSettingsUpdate, to_model
 
 router = APIRouter()
 
@@ -30,11 +31,23 @@ def update_bullpen_settings(update: BullpenSettingsUpdate):
     """Update bullpen proxy settings."""
     from teamarr.database.settings import get_bullpen_settings, update_bullpen_settings
 
-    payload = update.model_dump()
-    payload["api_key"] = unmask_or_skip(update.api_key)
+    payload = update.model_dump(exclude_unset=True)
+    if payload.get("api_key") == MASKED_SECRET:
+        payload.pop("api_key")
 
     with get_db() as conn:
         update_bullpen_settings(conn, **payload)
+
+    for provider in (
+        "espn",
+        "bellmedia",
+        "squiggle",
+        "nascar",
+        "mlbstats",
+        "hockeytech",
+        "tsdb",
+    ):
+        ProviderRegistry.reinitialize_provider(provider)
 
     with get_db() as conn:
         settings = get_bullpen_settings(conn)

@@ -26,7 +26,7 @@ from teamarr.core import (
     Team,
     Venue,
 )
-from teamarr.providers.base_client import BullpenConfig, bullpen_rewrite
+from teamarr.providers.base_client import BullpenConfig, bullpen_headers, bullpen_rewrite
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ class NASCARProvider(SportsProvider):
         return result
 
     def _fetch(self, url: str) -> list | dict | None:
-        headers = {"X-Bullpen-Key": self._bullpen.api_key} if self._bullpen else None
+        headers = bullpen_headers(url, self._bullpen)
         try:
             with httpx.Client(timeout=self._timeout, headers=headers) as client:
                 resp = client.get(url)

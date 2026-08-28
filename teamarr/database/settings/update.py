@@ -552,7 +552,7 @@ def update_channelsdvr_settings(
 def update_bullpen_settings(
     conn: Connection,
     enabled: bool | None = None,
-    api_key: str | None = None,
+    api_key: str | None | object = _NOT_PROVIDED,
     base_url: str | None = None,
     espn_enabled: bool | None = None,
     bellmedia_enabled: bool | None = None,
@@ -565,7 +565,6 @@ def update_bullpen_settings(
     """Update bullpen proxy settings (only provided fields)."""
     provided = _skip_none(
         enabled=enabled,
-        api_key=api_key,
         base_url=base_url,
         espn_enabled=espn_enabled,
         bellmedia_enabled=bellmedia_enabled,
@@ -575,6 +574,7 @@ def update_bullpen_settings(
         hockeytech_enabled=hockeytech_enabled,
         tsdb_enabled=tsdb_enabled,
     )
+    provided.update(_skip_missing(api_key=api_key))
     return _apply(conn, "bullpen", provided)
 
 

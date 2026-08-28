@@ -92,8 +92,9 @@ class ESPNClient(BaseHTTPClient):
             bullpen=bullpen,
         )
         # site.api.espn.com -> bullpen target "espn-site"; sports.core.api.espn.com
-        # (UFC athlete endpoint) -> bullpen target "espn-core".
+        # (UFC athletes and season-tree endpoints) -> bullpen target "espn-core".
         self._base_url = bullpen_rewrite(ESPN_BASE_URL, "espn-site", bullpen)
+        self._core_url = bullpen_rewrite(ESPN_CORE_URL, "espn-core", bullpen)
         self._ufc_athlete_url = bullpen_rewrite(ESPN_UFC_ATHLETE_URL, "espn-core", bullpen)
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
@@ -325,7 +326,7 @@ class ESPNClient(BaseHTTPClient):
 
     def _season_group_url(self, sport: str, espn_league: str, season: int, group_id: str) -> str:
         return (
-            f"{ESPN_CORE_URL}/{sport}/leagues/{espn_league}"
+            f"{self._core_url}/{sport}/leagues/{espn_league}"
             f"/seasons/{season}/types/2/groups/{group_id}"
         )
 

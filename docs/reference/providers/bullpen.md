@@ -7,7 +7,12 @@ nav_order: 8
 
 # Bullpen Proxy
 
-[Bullpen](https://bullpen.direct) is an optional caching proxy that fronts several of Teamarr's provider upstreams (ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, TheSportsDB) behind a single API key. It is off by default and configured per-provider.
+[Bullpen](https://bullpen.direct) is an optional caching proxy that fronts several of Teamarr's provider upstreams (ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, TheSportsDB). It is off by default and configured per-provider.
+
+Bullpen is a Teamarr-operated service. When enabled for a provider, it receives that
+provider's request path and query parameters, any configured Bullpen API key, and the upstream
+response needed to cache and return the request. Do not enable it for traffic you do
+not want routed through the service.
 
 ## Configuration
 
@@ -16,7 +21,7 @@ Bullpen has its own settings page at `/bullpen` — it has no sidebar entry and 
 | Setting | Description |
 |---|---|
 | Enable bullpen proxy | Master switch. Must be on for any per-provider toggle to take effect. |
-| API Key | Your bullpen key, sent as the `X-Bullpen-Key` header on every proxied request. |
+| API Key | Optional. Sent as the `X-Bullpen-Key` header on proxied requests when configured. Leave it blank for a Bullpen deployment with anonymous access enabled by its administrator. |
 | Base URL | Defaults to `https://bullpen.direct`. |
 | Per-provider toggles | One switch each for ESPN, Bell Media, Squiggle, NASCAR, MLB Stats, HockeyTech, and TheSportsDB. All default off — enabling bullpen doesn't change any provider's behavior until its own toggle is also flipped. |
 

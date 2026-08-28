@@ -25,6 +25,7 @@ export function BullpenSettings() {
   const updateBullpen = useUpdateBullpenSettings()
 
   const [form, setForm] = useState<Partial<BullpenSettingsType> | null>(null)
+  const [clearApiKey, setClearApiKey] = useState(false)
 
   if (isLoading) {
     return <Spinner size="lg" className="py-12" />
@@ -78,6 +79,8 @@ export function BullpenSettings() {
       }
       if (bullpen.api_key) {
         payload.api_key = bullpen.api_key
+      } else if (clearApiKey) {
+        payload.api_key = null
       }
       await updateBullpen.mutateAsync(payload)
       toast.success("Bullpen settings saved")
@@ -110,14 +113,30 @@ export function BullpenSettings() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bullpen-api-key">API Key</Label>
+            <Label htmlFor="bullpen-api-key">API Key (optional)</Label>
             <Input
               id="bullpen-api-key"
               type="password"
               value={bullpen.api_key ?? ""}
-              onChange={(e) => set({ api_key: e.target.value })}
-              placeholder="Leave blank to keep current"
+              onChange={(e) => {
+                set({ api_key: e.target.value })
+                setClearApiKey(false)
+              }}
+              placeholder="Optional for anonymous Bullpen"
             />
+            <p className="text-xs text-muted-foreground">
+              Leave blank for a Bullpen deployment with anonymous access.
+            </p>
+            {data.api_key && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setClearApiKey(!clearApiKey)}
+              >
+                {clearApiKey ? "Keep saved API key" : "Clear saved API key"}
+              </Button>
+            )}
           </div>
 
           <div className="space-y-2">
