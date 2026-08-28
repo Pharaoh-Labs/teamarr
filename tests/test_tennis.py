@@ -540,51 +540,143 @@ def test_widened_fallback_requires_unique_top(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# EPG path: tennis programme titles are gated out pending mf7.9
+# EPG path (mf7.9, #642): tournament + (player pair or court) from any field
 # ---------------------------------------------------------------------------
 
 
-def test_epg_path_skips_tennis_programmes():
-    """Tennis EPG matching needs its own design (mf7.9) — one guide programme
-    covers many concurrent matches. Until then, tennis-classified programme
-    titles must be dropped from the EPG path, not routed to the matcher
-    (2026-07-05 regression: match volume 166→1,099 on the channel-source
-    group when programme titles reached the tennis pipeline)."""
-    from zoneinfo import ZoneInfo as _Z
-
-    from teamarr.consumers.matching.epg_index import EPGProgramIndex
+def _epg_program(pid, title, sub_title, start, end, description=None):
     from teamarr.dispatcharr.types import DispatcharrProgram
-    from tests.fakes import make_stream_matcher
 
-    start = datetime(2026, 7, 5, 13, tzinfo=_Z("UTC"))
-    prog = DispatcharrProgram.from_api(
+    return DispatcharrProgram.from_api(
         {
-            "id": 1,
+            "id": pid,
             "tvg_id": "espn",
-            "title": "Tennis: Wimbledon",
-            "sub_title": "Sabalenka vs Osaka",
+            "title": title,
+            "sub_title": sub_title,
+            "description": description,
             "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "end_time": "2026-07-05T16:00:00Z",
+            "end_time": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "epg_source": "ext",
             "custom_properties": {},
         }
     )
+
+
+def _epg_pool():
+    tz = ZoneInfo("UTC")
+    day = datetime(2026, 7, 5, 13, tzinfo=tz)
+    sab, osa = _player("Aryna Sabalenka", "Sabalenka"), _player("Naomi Osaka", "Osaka")
+    swi, gau = _player("Iga Swiatek", "Swiatek"), _player("Coco Gauff", "Gauff")
+    a = _tennis_event("wim-so", sab, osa, day)
+    a.league, a.court, a.tournament_id = "wta", "Centre Court", "188"
+    b = _tennis_event("wim-sg", swi, gau, day.replace(hour=15))
+    b.league, b.court, b.tournament_id = "wta", "Centre Court", "188"
+    c = _tennis_event("wim-c1", _player("Player X", "X"), _player("Player Y", "Y"), day)
+    c.league, c.court, c.tournament_id = "wta", "No. 1 Court", "188"
+    # Same players, other tournament, same day — must never be chosen
+    d = _tennis_event("nor-so", sab, osa, day.replace(hour=14))
+    d.league, d.court, d.tournament_id, d.tournament_name = "wta", "Court 1", "402", "Nordea Open"
+    return [a, b, c, d]
+
+
+def _epg_matcher(programs):
+    from teamarr.consumers.matching.epg_index import EPGProgramIndex
+    from tests.fakes import make_stream_matcher
+
     m = make_stream_matcher(
         leagues=("atp", "wta"),
         league_event_types={"atp": "event", "wta": "event"},
         league_sports={"atp": "tennis", "wta": "tennis"},
-        epg_index=EPGProgramIndex({"espn": [prog]}),
-        user_tz=_Z("UTC"),
+        epg_index=EPGProgramIndex({"espn": programs}),
+        user_tz=ZoneInfo("UTC"),
     )
+    m._tennis_matcher._service = _PoolService(_epg_pool())
+    return m
 
-    called = []
-    m._route_to_outcomes = lambda *a, **k: called.append(1) or []
 
+def _epg_ids(m):
     results = m._match_via_epg(
         stream_id=1, stream_name="ESPN", tvg_id="espn", target_date=date(2026, 7, 5)
     )
-    assert results == []
-    assert not called  # programme never reached the matcher
+    return {r.event.id: r for r in results if r.matched}
+
+
+def test_epg_tennis_tournament_plus_pair_matches_one():
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "Tennis: Wimbledon", "Sabalenka vs Osaka",
+        datetime(2026, 7, 5, 12, 30, tzinfo=tz), datetime(2026, 7, 5, 16, tzinfo=tz),
+    )
+    m = _epg_matcher([prog])
+    ids = _epg_ids(m)
+    assert set(ids) == {"wim-so"}  # not the same-day Nordea match
+    out = ids["wim-so"]
+    assert out.match_method.value == "epg"
+    assert out.epg_program_start == prog.start_dt and out.epg_program_end == prog.end_dt
+
+
+def test_epg_tennis_tournament_only_is_matchup_unknown():
+    from teamarr.consumers.matching.matcher import MatchedStreamResult
+
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "Tennis: Wimbledon", "Day 7",
+        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 20, tzinfo=tz),
+    )
+    m = _epg_matcher([prog])
+    assert _epg_ids(m) == {}
+    name = [MatchedStreamResult(stream_name="ESPN", stream_id=1, matched=False,
+                                exclusion_reason="teams_not_parsed")]
+    merged = m._reconcile_epg(name, [], "espn")
+    assert merged[0].exclusion_reason == "tennis_matchup_unknown"
+
+
+def test_epg_tennis_pair_without_tournament_is_matchup_unknown():
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "WTA Tennis", "Sabalenka vs Osaka",
+        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 16, tzinfo=tz),
+    )
+    m = _epg_matcher([prog])
+    assert _epg_ids(m) == {}
+    assert m._epg_tennis_unknown["espn"]
+
+
+def test_epg_tennis_court_in_description_fans_out_within_window():
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "Tennis: Wimbledon", "Day 7",
+        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 14, tzinfo=tz),
+        description="Live coverage from Centre Court on day seven of the Championships.",
+    )
+    m = _epg_matcher([prog])
+    # Centre Court hosts wim-so (13:00) and wim-sg (15:00); only 13:00 is in the 12–14 slot
+    assert set(_epg_ids(m)) == {"wim-so"}
+
+
+def test_epg_tennis_pair_in_description_matches():
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "Tennis: Wimbledon", None,
+        datetime(2026, 7, 5, 14, tzinfo=tz), datetime(2026, 7, 5, 18, tzinfo=tz),
+        description="Iga Swiatek takes on Coco Gauff in the fourth round.",
+    )
+    m = _epg_matcher([prog])
+    assert set(_epg_ids(m)) == {"wim-sg"}
+
+
+def test_epg_tennis_never_fans_out_tournament_wide():
+    """The 2026-07-05 regression shape: tournament + day, nothing else."""
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "Wimbledon", "Wimbledon Day 7 highlights and live matches",
+        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 22, tzinfo=tz),
+    )
+    m = _epg_matcher([prog])
+    assert _epg_ids(m) == {}
+
+
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
