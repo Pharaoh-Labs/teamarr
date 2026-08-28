@@ -417,9 +417,7 @@ def test_sticky_mode_detection(db):
     assert cn.is_sticky_mode(db) is True
     _set_mode(db, "strict")
     assert cn.is_sticky_mode(db) is True
-    # Manual global mode overrides stability (per-league sequential).
-    db.execute("UPDATE settings SET global_channel_mode = 'manual'")
-    db.commit()
+    _set_mode(db, "compact")
     assert cn.is_sticky_mode(db) is False
 
 
@@ -528,17 +526,6 @@ def test_range_change_does_not_arm_in_compact_mode(db):
     from teamarr.database.settings.update import update_lifecycle_settings
 
     _set_mode(db, "compact")
-    db.commit()
-
-    assert update_lifecycle_settings(db, channel_range_start=2000)
-    assert not _pending(db)
-
-
-def test_range_change_does_not_arm_in_manual_mode(db):
-    from teamarr.database.settings.update import update_lifecycle_settings
-
-    _set_mode(db, "gap", gap=3)
-    db.execute("UPDATE settings SET global_channel_mode = 'manual'")
     db.commit()
 
     assert update_lifecycle_settings(db, channel_range_start=2000)

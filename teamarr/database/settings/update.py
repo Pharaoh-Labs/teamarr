@@ -271,7 +271,8 @@ def update_channel_numbering_settings(
     Returns:
         True if updated (False on validation failure)
     """
-    if global_channel_mode is not None and global_channel_mode not in ("auto", "manual"):
+    # Manual mode retired in v88 (#333) — pinned blocks replace per-league starts.
+    if global_channel_mode is not None and global_channel_mode != "auto":
         logger.warning("[CHANNEL_NUM] Invalid global_channel_mode '%s'", global_channel_mode)
         return False
     if global_consolidation_mode is not None and global_consolidation_mode not in (

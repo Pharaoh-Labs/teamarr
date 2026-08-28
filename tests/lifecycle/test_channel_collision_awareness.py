@@ -146,50 +146,53 @@ class TestAutoModeWithExternals:
         assert result == 102
 
 
-class TestManualModeWithExternals:
-    """Test MANUAL mode with per-league starts."""
+class TestPinnedBlocksWithExternals:
+    """Pinned blocks (#333 — the successor to manual per-league starts)."""
 
-    def test_manual_uses_league_start(self, conn):
-        """MANUAL mode uses per-league starting channel number."""
-        from teamarr.database.channel_numbers import get_next_channel_number
-
+    @staticmethod
+    def _pin_nhl(conn, start=500):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS numbering_exceptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scope TEXT NOT NULL, sport TEXT NOT NULL, league_code TEXT, team_name TEXT,
+                provider TEXT, provider_team_id TEXT, start INTEGER NOT NULL, "end" INTEGER,
+                label TEXT, sort_order INTEGER NOT NULL DEFAULT 0, enabled BOOLEAN DEFAULT 1,
+                created_at TEXT, updated_at TEXT
+            );
+            """
+        )
         conn.execute(
-            "UPDATE settings SET global_channel_mode = 'manual', "
-            "league_channel_starts = '{\"nhl\": 500}' WHERE id = 1"
+            "INSERT INTO numbering_exceptions (scope, sport, league_code, start) "
+            "VALUES ('league', 'hockey', 'nhl', ?)",
+            (start,),
         )
         conn.commit()
 
-        result = get_next_channel_number(conn, league="nhl")
-        assert result == 500
-
-    def test_manual_skips_externals(self, conn):
-        """MANUAL mode skips external numbers within league range."""
+    def test_pinned_league_uses_block_start(self, conn):
+        """A league pin numbers that league's channels from its block start."""
         from teamarr.database.channel_numbers import get_next_channel_number
 
-        conn.execute(
-            "UPDATE settings SET global_channel_mode = 'manual', "
-            "league_channel_starts = '{\"nhl\": 500}' WHERE id = 1"
-        )
-        conn.commit()
+        self._pin_nhl(conn)
+        assert get_next_channel_number(conn, league="nhl", sport="hockey") == 500
 
+    def test_pinned_block_skips_externals(self, conn):
+        """Pinned blocks skip external numbers inside the block."""
+        from teamarr.database.channel_numbers import get_next_channel_number
+
+        self._pin_nhl(conn)
         external = {500, 501, 502}
-        result = get_next_channel_number(conn, league="nhl", external_occupied=external)
+        result = get_next_channel_number(
+            conn, league="nhl", sport="hockey", external_occupied=external
+        )
         assert result == 503
 
-    def test_manual_fallback_to_range_start(self, conn):
-        """Leagues without configured starts use global range."""
+    def test_unpinned_league_uses_default_range(self, conn):
+        """Leagues without a pin use the global range."""
         from teamarr.database.channel_numbers import get_next_channel_number
 
-        conn.execute(
-            "UPDATE settings SET global_channel_mode = 'manual', "
-            "league_channel_starts = '{\"nhl\": 500}' WHERE id = 1"
-        )
-        conn.commit()
-
-        # NBA has no configured start → falls back to range_start (101)
-        result = get_next_channel_number(conn, league="nba")
-        assert result == 101
-
+        self._pin_nhl(conn)
+        assert get_next_channel_number(conn, league="nba", sport="basketball") == 101
 
 class TestGlobalReassignWithExternals:
     """Test global reassignment skips external numbers."""

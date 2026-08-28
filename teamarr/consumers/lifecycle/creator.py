@@ -911,9 +911,14 @@ class ChannelCreator(_LifecycleHost):
             feed_team=feed_team, feed_label_style=feed_label_style,
         )
 
-        # Get channel number using global mode (AUTO/MANUAL)
+        # Get channel number from the event's numbering lane (pinned block or default range)
         event_league = getattr(event, "league", None)
-        channel_number = self._get_next_channel_number(conn, event_league)
+        channel_number = self._get_next_channel_number(
+            conn, event_league,
+            sport=getattr(event, "sport", None),
+            home_team=event.home_team.name if getattr(event, "home_team", None) else None,
+            away_team=event.away_team.name if getattr(event, "away_team", None) else None,
+        )
         if not channel_number:
             return ChannelCreationResult(
                 success=False,
@@ -1121,15 +1126,21 @@ class ChannelCreator(_LifecycleHost):
         self,
         conn: Connection,
         event_league: str | None = None,
+        *,
+        sport: str | None = None,
+        home_team: str | None = None,
+        away_team: str | None = None,
     ) -> int | None:
         """Get next available channel number.
 
-        Uses global channel mode (AUTO/MANUAL) from settings.
+        Resolves the event's numbering lane (a pinned block for its team /
+        league / sport, else the global range — #333).
         Passes external Dispatcharr channel numbers to avoid collisions (#146).
 
         Args:
             conn: Database connection
-            event_league: League code for the event (used in MANUAL mode)
+            event_league: League code for the event
+            sport / home_team / away_team: lane resolution keys
 
         Returns:
             Next available channel number as int, or None if range exhausted
@@ -1139,6 +1150,7 @@ class ChannelCreator(_LifecycleHost):
         next_num = get_next_channel_number(
             conn, league=event_league,
             external_occupied=self._external_occupied,
+            sport=sport, home_team=home_team, away_team=away_team,
         )
         if next_num is None:
             logger.warning(

@@ -296,6 +296,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _apply_migration(conn, 87, "remap CFL team selections", _migrate_v87_cfl_team_selections)
         current_version = 87
 
+    if current_version < 88:
+        _apply_migration(
+            conn, 88,
+            "retire manual numbering mode; league starts → pinned blocks (#333)",
+            _migrate_v88_numbering_exceptions,
+        )
+        current_version = 88
+
 
 # =============================================================================
 # Migration helpers
@@ -2324,3 +2332,78 @@ def _migrate_v84_filter_consolidation(conn: sqlite3.Connection) -> None:
             rewritten += 1
 
     logger.info("[MIGRATE v84] Rewrote retired transform tokens in %d row(s)", rewritten)
+
+
+def _migrate_v88_numbering_exceptions(conn: sqlite3.Connection) -> None:
+    """v88: retire manual numbering mode (#333).
+
+    Manual mode numbered each league sequentially from ``league_channel_starts``
+    in global sort order — exactly a league-scoped pinned block in compact
+    stability mode. So for manual-mode installs: one ``numbering_exceptions``
+    row per configured league start, mode → auto, stability → compact (manual
+    never had stability; compact is the only value that reproduces its numbers).
+
+    Auto-mode installs are untouched. ``league_channel_starts`` and the
+    ``'manual'`` CHECK value stay in place, unread, as a rollback aid.
+    """
+    try:
+        row = conn.execute(
+            "SELECT global_channel_mode, league_channel_starts, channel_stability_mode "
+            "FROM settings WHERE id = 1"
+        ).fetchone()
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'numbering_exceptions'"
+        ).fetchone()
+    except sqlite3.OperationalError as e:
+        # Partial schema (tests that call _run_migrations directly) — nothing to migrate.
+        logger.warning("[MIGRATE v88] numbering migration skipped: %s", e)
+        return
+    if not row or (row["global_channel_mode"] or "auto") != "manual" or not has_table:
+        return
+
+    try:
+        starts = json.loads(row["league_channel_starts"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        starts = {}
+    if not isinstance(starts, dict):
+        starts = {}
+
+    existing = conn.execute("SELECT COUNT(*) FROM numbering_exceptions").fetchone()[0]
+    inserted = 0
+    if not existing:
+        for order, (league_code, start) in enumerate(
+            sorted(
+                starts.items(),
+                key=lambda kv: (int(kv[1]) if str(kv[1]).isdigit() else 0, kv[0]),
+            )
+        ):
+            try:
+                start_num = int(start)
+            except (TypeError, ValueError):
+                continue
+            if start_num < 1:
+                continue
+            league_code = str(league_code).lower()
+            sport_row = conn.execute(
+                "SELECT sport FROM leagues WHERE league_code = ?", (league_code,)
+            ).fetchone()
+            sport = (sport_row["sport"] if sport_row and sport_row["sport"] else "unknown").lower()
+            conn.execute(
+                """
+                INSERT INTO numbering_exceptions
+                    (scope, sport, league_code, start, sort_order)
+                VALUES ('league', ?, ?, ?, ?)
+                """,
+                (sport, league_code, start_num, order),
+            )
+            inserted += 1
+
+    conn.execute(
+        "UPDATE settings SET global_channel_mode = 'auto', channel_stability_mode = 'compact' "
+        "WHERE id = 1"
+    )
+    logger.info(
+        "[MIGRATE] v88: manual numbering mode retired — %d league start(s) → pinned blocks; "
+        "stability set to compact",
+        inserted,
+    )
