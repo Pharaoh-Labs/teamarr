@@ -297,7 +297,9 @@ TIME_PATTERNS = [
 ]
 
 # Standalone TZ pattern (after time has been masked, e.g., "@ ET" at end)
-TZ_STANDALONE_PATTERN = rf"\s*@?\s*({_TZ_ABBREVS})\s*$"
+# \b guards the abbreviation: without it "Gomez", "Budapest" and "Stuttgart"
+# lost their Z/EST/ART tails as a phantom timezone (#283).
+TZ_STANDALONE_PATTERN = rf"\s*@?\s*\b({_TZ_ABBREVS})\s*$"
 
 # Catchup/timeshift metadata some providers append to stream names (#495):
 #   "Dodgers x Yankees start:2026-07-19 17:35:00 stop:2026-07-20 00:48:20"

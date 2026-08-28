@@ -86,3 +86,14 @@ class TestNoRegressions:
         masked, d, t, _ = extract_and_mask_datetime("NBA | Lakers vs Celtics start of season")
         assert "start of season" in masked
         assert d is None
+
+
+def test_standalone_tz_needs_word_boundary():
+    """Names ending in a TZ-shaped suffix must keep it (#283): Gomez/Budapest/Stuttgart."""
+    from teamarr.consumers.matching.normalizer import normalize_stream
+
+    for text in ("Sinner vs Gomez", "Honved vs Budapest", "Hoffenheim vs Stuttgart"):
+        r = normalize_stream(text)
+        assert r.normalized == text and r.extracted_tz is None
+    r = normalize_stream("Lakers vs Celtics @ ET")
+    assert r.normalized == "Lakers vs Celtics" and r.extracted_tz == "America/New_York"

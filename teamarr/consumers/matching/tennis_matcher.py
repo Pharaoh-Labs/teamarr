@@ -13,6 +13,19 @@ Matching strategy (combat-style fuzzy names + exact date, no athlete cache):
   — a one-sided surname hit must never match.
 - A grand slam runs ~40+ matches/day, so ties are broken by proximity to the
   stream's extracted "@ 12:30 PM" time when present.
+
+Tennis fixture gate (#283, same philosophy as the team fixture gate in
+identity.py — veto-only, never a selector):
+- Tournament: when the stream names a tournament that is in the candidate
+  pool ("Wimbledon: Zheng vs Norrie"), candidates from OTHER tournaments are
+  vetoed (FailedReason.TENNIS_TOURNAMENT_MISMATCH). A stream that names no
+  pooled tournament defers — the pool passes unfiltered. Applies to both the
+  player-pair path and the court/round feed path.
+- Draw shape: a side naming one player never matches a doubles pair (rapidfuzz
+  token_set_ratio scores "sinner" vs "Sinner/Sonego" 100, so the fuzzy
+  fallback is exact-only for pairs), and a side written as a pair ("A/B")
+  never matches a singles player. "_" is ambiguous (lazy singles naming) and
+  defers.
 """
 
 import logging
@@ -105,33 +118,67 @@ def _draw_key(draw_type: str | None) -> tuple[str | None, str | None]:
     return _extract_draw_hints(normalize_text(draw_type))
 
 
-def _tournament_guard(text: str, pool: list[Event]) -> list[Event]:
-    """Restrict candidates to tournaments the stream names, when it names any.
+def _tournament_key(event: Event) -> str:
+    """Identity the gate compares: the season-stable ESPN tournament id, else name."""
+    return event.tournament_id or event.tournament_name or ""
 
-    A court feed says "Wimbledon Day #8 No 1 Court" — without this, its
-    court key also joins Court 1 at every OTHER tournament running that day
-    (#316). The hint set is derived from the candidate pool itself: a
-    tournament is "named" when any of its distinctive name tokens (generic
-    words like open/cup/masters excluded) appears in the stream text. When
-    the stream names no pooled tournament, the pool passes unfiltered.
+
+def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
+    """Tournament keys the (normalized) stream text names, out of the pool.
+
+    The hint set is derived from the candidate pool itself: a tournament is
+    "named" when any of its distinctive name tokens (generic words like
+    open/cup/masters excluded) appears in the stream text. No alias table —
+    ESPN's own tournament names are the vocabulary.
     """
     text_tokens = set(text.split())
     named: set[str] = set()
-    seen: dict[str, bool] = {}
+    seen: set[str] = set()
     for event in pool:
+        key = _tournament_key(event)
         tname = event.tournament_name or ""
-        if not tname or tname in seen:
+        if not key or not tname or key in seen:
             continue
+        seen.add(key)
         distinctive = (
             set(normalize_text(tname).split()) - _GENERIC_TOURNAMENT_TOKENS
         )
-        hit = bool(distinctive and distinctive & text_tokens)
-        seen[tname] = hit
-        if hit:
-            named.add(tname)
+        if distinctive and distinctive & text_tokens:
+            named.add(key)
+    return named
+
+
+def _tournament_guard(text: str, pool: list[Event]) -> tuple[list[Event], list[Event]]:
+    """Split the pool into (kept, vetoed) by the tournaments the stream names.
+
+    A court feed says "Wimbledon Day #8 No 1 Court" — without this, its
+    court key also joins Court 1 at every OTHER tournament running that day
+    (#316); a player-pair stream "Wimbledon: Zheng vs Norrie" likewise must
+    not bind to a same-day Zheng match elsewhere (#283). Veto-only: when the
+    stream names no pooled tournament, everything is kept.
+    """
+    named = _named_tournaments(text, pool)
     if not named:
-        return pool
-    return [e for e in pool if (e.tournament_name or "") in named]
+        return pool, []
+    kept = [e for e in pool if _tournament_key(e) in named]
+    vetoed = [e for e in pool if _tournament_key(e) not in named]
+    return kept, vetoed
+
+
+def _parsed_side_is_pair(raw_side: str | None) -> bool | None:
+    """Does a raw parsed side name a doubles pair? True/False, None = can't tell.
+
+    "/" and "&" are unambiguous pair joiners ("Nys/Roger-Vasselin", "Krejcikova
+    & Siniakova"). "_" also joins pairs in some feeds but equally appears in
+    lazy singles naming ("jannik_sinner"), so it defers.
+    """
+    if not raw_side:
+        return None
+    if "/" in raw_side or "&" in raw_side:
+        return True
+    if "_" in raw_side:
+        return None
+    return False
 
 
 def _extract_courts(text: str) -> set[str]:
@@ -341,7 +388,7 @@ class TennisMatcher:
 
         # Tournament guard (#316): "Wimbledon ... No 1 Court" must not join
         # Court 1 at other tournaments running the same day.
-        pool = _tournament_guard(text, pool)
+        pool, _vetoed = _tournament_guard(text, pool)
 
         # Draw guard (#316): a round feed that declares its draw ("Ladies'
         # Singles Semifinals") must not fan onto other groupings. Court feeds
@@ -499,18 +546,44 @@ class TennisMatcher:
         the ONLY one at that score — without a trustworthy date, ambiguity
         (e.g. a round-robin rematch) must not match.
         """
-        team1 = normalize_text(ctx.classified.team1 or "")
-        team2 = normalize_text(ctx.classified.team2 or "")
+        raw1, raw2 = ctx.classified.team1 or "", ctx.classified.team2 or ""
+        team1, team2 = normalize_text(raw1), normalize_text(raw2)
+        pair1, pair2 = _parsed_side_is_pair(raw1), _parsed_side_is_pair(raw2)
 
         stream_instant = self._stream_instant(ctx)
 
+        # Tournament gate (#283): the stream's own text names the tournament
+        # when it does; candidates from other tournaments are vetoed.
+        candidates, vetoed = _tournament_guard(normalize_text(ctx.stream_name), events)
+
+        def _score(event: Event) -> int:
+            return self._pair_score(
+                team1, team2, event.home_team, event.away_team, pair1, pair2
+            )
+
         scored: list[tuple[int, Event]] = []
-        for event in events:
-            score = self._pair_score(team1, team2, event.home_team, event.away_team)
+        for event in candidates:
+            score = _score(event)
             if score >= TENNIS_MATCH_THRESHOLD:
                 scored.append((score, event))
 
         if not scored:
+            # Diagnose a gate veto: the players DID match, elsewhere.
+            vetoed_hit = next((e for e in vetoed if _score(e) >= TENNIS_MATCH_THRESHOLD), None)
+            if vetoed_hit is not None:
+                logger.debug(
+                    "[FAILED] tennis stream=%s: players match %s but stream names "
+                    "a different tournament",
+                    ctx.stream_name[:40],
+                    vetoed_hit.name,
+                )
+                return MatchOutcome.failed(
+                    FailedReason.TENNIS_TOURNAMENT_MISMATCH,
+                    stream_name=ctx.stream_name,
+                    stream_id=ctx.stream_id,
+                    detail=f"Players match '{vetoed_hit.name}' but the stream names "
+                    f"a different tournament",
+                )
             logger.debug(
                 "[FAILED] tennis stream=%s: no match in %d matches for %s",
                 ctx.stream_name[:40],
@@ -561,24 +634,47 @@ class TennisMatcher:
             stream_id=ctx.stream_id,
         )
 
-    def _pair_score(self, team1: str, team2: str, home: Team, away: Team) -> int:
+    def _pair_score(
+        self,
+        team1: str,
+        team2: str,
+        home: Team,
+        away: Team,
+        pair1: bool | None = None,
+        pair2: bool | None = None,
+    ) -> int:
         """Score a parsed player pair against an event's two players.
 
         Returns the better orientation's min-side score, so BOTH sides must
-        match the same event — 0..100.
+        match the same event — 0..100. pair1/pair2: whether each parsed side
+        is written as a doubles pair (None = unknown, see _parsed_side_is_pair).
         """
-        straight = min(self._side_score(team1, home), self._side_score(team2, away))
-        swapped = min(self._side_score(team1, away), self._side_score(team2, home))
+        straight = min(
+            self._side_score(team1, home, pair1), self._side_score(team2, away, pair2)
+        )
+        swapped = min(
+            self._side_score(team1, away, pair1), self._side_score(team2, home, pair2)
+        )
         return max(straight, swapped)
 
-    def _side_score(self, parsed: str, player: Team) -> int:
+    def _side_score(self, parsed: str, player: Team, parsed_pair: bool | None = None) -> int:
         """Score one parsed side against one player (0-100).
 
         Surname-token subset is an exact hit (parsed sides often carry
         tournament prefixes: "wimbledon zheng" ⊇ "zheng"); fuzzy full-name
         similarity is the fallback for spelling variants.
+
+        Draw-shape gate (#283): a doubles pair (abbreviation "A/B") is matched
+        exact-only — token_set_ratio("sinner", "Jannik Sinner/Lorenzo Sonego")
+        is 100, which let singles streams bind to same-day doubles — and a
+        side written as a pair never matches a singles player.
         """
         if not parsed:
+            return 0
+        player_is_pair = "/" in (player.abbreviation or "")
+        if player_is_pair and parsed_pair is False:
+            return 0
+        if not player_is_pair and parsed_pair is True:
             return 0
         # Stream names join doubles pairs with "/", "_" or "&" and normalize_text
         # keeps "_" inside tokens ("roger_vasselin") — flatten all to spaces.
@@ -593,6 +689,8 @@ class TennisMatcher:
         surname_tokens = set(surname_flat.split())
         if surname_tokens and surname_tokens <= parsed_tokens:
             return 100
+        if player_is_pair:
+            return 0
 
         return int(fuzz.token_set_ratio(parsed_flat, normalize_text(player.name)))
 

@@ -2543,6 +2543,7 @@ class TeamMatcher:
                 main_card_start=main_card_start,
                 circuit_name=cached_data.get("circuit_name"),
                 sessions=sessions,
+                tournament_id=cached_data.get("tournament_id"),
                 tournament_name=cached_data.get("tournament_name"),
                 round_name=cached_data.get("round_name"),
                 court=cached_data.get("court"),
