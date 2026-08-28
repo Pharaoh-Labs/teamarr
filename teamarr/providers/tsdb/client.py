@@ -35,7 +35,7 @@ from datetime import date, datetime
 import httpx
 
 from teamarr.core import LeagueMappingSource
-from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
 from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
@@ -247,17 +247,21 @@ class TSDBClient(BaseHTTPClient):
         retry_count: int = 3,
         retry_delay: float = 1.0,
         requests_per_minute: int = 30,  # TSDB free tier limit
+        bullpen: BullpenConfig | None = None,
     ):
         super().__init__(
             timeout=timeout,
             retry_count=retry_count,
             max_connections=10,
             max_keepalive_connections=5,
+            bullpen=bullpen,
         )
         self._league_mapping_source = league_mapping_source
         self._explicit_key = api_key
         self._retry_delay = retry_delay
         self._requests_per_minute = requests_per_minute
+        self._bullpen_enabled = bullpen is not None
+        self._base_url = bullpen_rewrite(TSDB_BASE_URL, "thesportsdb", bullpen)
         # Rate limiter initialized lazily after we can check is_premium
         self._rate_limiter: RateLimiter | None = None
         self._cache = TTLCache()
@@ -275,8 +279,8 @@ class TSDBClient(BaseHTTPClient):
 
     @property
     def is_premium(self) -> bool:
-        """Check if using premium API key."""
-        return self._api_key != self.FREE_API_KEY
+        """Check if using premium API key or bullpen (bullpen counts as premium)."""
+        return self._bullpen_enabled or self._api_key != self.FREE_API_KEY
 
     def _get_rate_limiter(self) -> RateLimiter:
         """Get or create rate limiter (lazy init to check is_premium)."""
@@ -310,7 +314,7 @@ class TSDBClient(BaseHTTPClient):
         rate_limiter = self._get_rate_limiter()
         rate_limiter.acquire()
 
-        url = f"{TSDB_BASE_URL}/{self._api_key}/{endpoint}"
+        url = f"{self._base_url}/{self._api_key}/{endpoint}"
         backoff_attempt = 0
 
         for attempt in range(self._retry_count + self.BACKOFF_MAX_RETRIES):

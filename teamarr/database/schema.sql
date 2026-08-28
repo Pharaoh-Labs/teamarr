@@ -286,6 +286,18 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Premium key ($9/mo) gives 100 req/min and higher limits
     tsdb_api_key TEXT,
 
+    -- Bullpen proxy (https://bullpen.direct) - optional caching proxy for provider upstreams
+    -- Master switch + key/base URL, plus per-provider opt-in (all default off)
+    bullpen_enabled BOOLEAN DEFAULT 0,
+    bullpen_api_key TEXT,
+    bullpen_base_url TEXT DEFAULT 'https://bullpen.direct',
+    bullpen_espn_enabled BOOLEAN DEFAULT 0,
+    bullpen_squiggle_enabled BOOLEAN DEFAULT 0,
+    bullpen_nascar_enabled BOOLEAN DEFAULT 0,
+    bullpen_mlbstats_enabled BOOLEAN DEFAULT 0,
+    bullpen_hockeytech_enabled BOOLEAN DEFAULT 0,
+    bullpen_tsdb_enabled BOOLEAN DEFAULT 0,
+
     -- Channel ID Format
     channel_id_format TEXT DEFAULT '{team_name|pascal}.{league_id}',
 

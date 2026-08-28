@@ -19,6 +19,7 @@ from collections.abc import Callable
 
 from teamarr.database import get_db
 from teamarr.database.team_cache import get_team_name_by_id
+from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.bellmedia import BellMediaClient, BellMediaProvider
 from teamarr.providers.espn import ESPNClient, ESPNProvider
 from teamarr.providers.hockeytech import HockeyTechClient, HockeyTechProvider
@@ -35,10 +36,40 @@ from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 # Factories inject dependencies from the registry at instantiation time.
 
 
+def _get_bullpen_config(provider_flag_column: str) -> BullpenConfig | None:
+    """Resolve BullpenConfig for one provider from database settings.
+
+    Returns None unless the global switch, the API key, and this provider's
+    own toggle are all set — this is the DB-access boundary (like
+    _get_tsdb_api_key below), providers never query settings directly.
+    """
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                f"SELECT bullpen_enabled, bullpen_api_key, bullpen_base_url, "
+                f"{provider_flag_column} FROM settings WHERE id = 1"
+            ).fetchone()
+            if (
+                row
+                and row["bullpen_enabled"]
+                and row["bullpen_api_key"]
+                and row[provider_flag_column]
+            ):
+                return BullpenConfig(
+                    api_key=row["bullpen_api_key"],
+                    base_url=row["bullpen_base_url"] or "https://bullpen.direct",
+                )
+    except Exception:
+        # Database not available or column doesn't exist yet - expected during startup
+        pass
+    return None
+
+
 def _create_espn_provider() -> ESPNProvider:
     """Factory for ESPN provider with injected dependencies."""
     return ESPNProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+        bullpen=_get_bullpen_config("bullpen_espn_enabled"),
     )
 
 
@@ -89,6 +120,7 @@ def _create_tsdb_provider() -> TSDBProvider:
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
         api_key=_get_tsdb_api_key(),
         team_name_resolver=_create_tsdb_team_name_resolver(),
+        bullpen=_get_bullpen_config("bullpen_tsdb_enabled"),
     )
 
 
@@ -96,6 +128,7 @@ def _create_hockeytech_provider() -> HockeyTechProvider:
     """Factory for HockeyTech provider with injected dependencies."""
     return HockeyTechProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+        bullpen=_get_bullpen_config("bullpen_hockeytech_enabled"),
     )
 
 
@@ -110,6 +143,7 @@ def _create_mlbstats_provider() -> MLBStatsProvider:
     """Factory for MLB Stats provider with injected dependencies."""
     return MLBStatsProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+        bullpen=_get_bullpen_config("bullpen_mlbstats_enabled"),
     )
 
 
@@ -117,6 +151,7 @@ def _create_squiggle_provider() -> SquiggleProvider:
     """Factory for Squiggle provider with injected dependencies."""
     return SquiggleProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+        bullpen=_get_bullpen_config("bullpen_squiggle_enabled"),
     )
 
 
@@ -124,6 +159,7 @@ def _create_nascar_provider() -> NASCARProvider:
     """Factory for NASCAR provider with injected dependencies."""
     return NASCARProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
+        bullpen=_get_bullpen_config("bullpen_nascar_enabled"),
     )
 
 

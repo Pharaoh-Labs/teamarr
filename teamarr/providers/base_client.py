@@ -23,6 +23,8 @@ import logging
 import random
 import threading
 import time
+from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -42,6 +44,33 @@ RATE_LIMIT_MAX_DELAY = 60.0  # Cap at 60s
 RATE_LIMIT_MAX_RETRIES = 3  # Give up after 3 rate-limit retries
 
 
+@dataclass
+class BullpenConfig:
+    """Resolved bullpen.direct proxy config (see database/settings BullpenSettings).
+
+    Passed to a provider client's constructor when that provider's bullpen
+    toggle is on; ``None``/absent means "use the origin host directly".
+    """
+
+    api_key: str
+    base_url: str = "https://bullpen.direct"
+
+
+def bullpen_rewrite(origin_base: str, target: str, bullpen: BullpenConfig | None) -> str:
+    """Rewrite a provider's origin base URL to route through bullpen.
+
+    bullpen's route shape is ``{base_url}/v1/{target}/{path}``, where
+    ``path`` is the origin URL's path from host-root (so a provider's
+    existing ``f"{base}/{endpoint}"`` call sites keep working unchanged
+    once ``base`` itself has been rewritten). Returns ``origin_base``
+    unchanged when bullpen isn't configured.
+    """
+    if bullpen is None:
+        return origin_base
+    path = urlsplit(origin_base).path.rstrip("/")
+    return f"{bullpen.base_url.rstrip('/')}/v1/{target}{path}"
+
+
 class BaseHTTPClient:
     """Thread-safe pooled HTTP client with retry, backoff, and 429 handling."""
 
@@ -55,6 +84,7 @@ class BaseHTTPClient:
         max_connections: int = 100,
         max_keepalive_connections: int | None = None,
         headers: dict[str, str] | None = None,
+        bullpen: BullpenConfig | None = None,
     ):
         self._timeout = timeout
         self._retry_count = retry_count
@@ -66,6 +96,8 @@ class BaseHTTPClient:
             else max_connections
         )
         self._headers = headers
+        if bullpen is not None:
+            self._headers = {**(headers or {}), "X-Bullpen-Key": bullpen.api_key}
         self._client: httpx.Client | None = None
         self._client_lock = threading.Lock()
 

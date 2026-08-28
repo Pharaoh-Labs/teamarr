@@ -14,7 +14,7 @@ We satisfy these by:
 """
 import logging
 
-from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -43,12 +43,15 @@ class SquiggleClient(BaseHTTPClient):
     PROVIDER = "squiggle"
     LOG_TAG = "SQUIGGLE"
 
-    def __init__(self, timeout: float = 15.0):
-        super().__init__(timeout=timeout, headers={"User-Agent": USER_AGENT})
+    def __init__(self, timeout: float = 15.0, bullpen: BullpenConfig | None = None):
+        super().__init__(
+            timeout=timeout, headers={"User-Agent": USER_AGENT}, bullpen=bullpen
+        )
+        self._base_url = bullpen_rewrite(BASE_URL, "squiggle", bullpen)
         self._cache = TTLCache()
 
     def _get(self, params: dict) -> dict | None:
-        return self._request_json(BASE_URL, params, label=str(params.get("q", "api")))
+        return self._request_json(self._base_url, params, label=str(params.get("q", "api")))
 
     def get_teams(self) -> list[dict]:
         """Fetch all 18 AFL teams. Cached for 24 hours."""

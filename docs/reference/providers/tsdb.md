@@ -66,6 +66,8 @@ Add your premium key in **Settings > General > TheSportsDB API Key**. The key ta
 
 Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
+Alternatively, enabling TSDB in [Bullpen](bullpen) settings (`/bullpen`) counts as holding a premium key — `is_premium` reports `True` and requests route through bullpen's `thesportsdb` target — independent of whether `tsdb_api_key` is also set.
+
 ## Supported Leagues
 
 TSDB serves **49 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.

@@ -12,6 +12,7 @@ from teamarr.core import (
     Team,
     Venue,
 )
+from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.mlbstats.client import MLBStatsClient
 
 logger = logging.getLogger(__name__)
@@ -38,8 +39,9 @@ class MLBStatsProvider(SportsProvider):
         self,
         client: MLBStatsClient | None = None,
         league_mapping_source: LeagueMappingSource | None = None,
+        bullpen: BullpenConfig | None = None,
     ):
-        self._client = client or MLBStatsClient()
+        self._client = client or MLBStatsClient(bullpen=bullpen)
         self._league_mapping_source = league_mapping_source
         # Populated by get_league_teams; used to fill in abbreviation when
         # schedule hydration returns sparse team objects (id/name/link only).

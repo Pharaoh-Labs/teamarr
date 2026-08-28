@@ -47,7 +47,7 @@ The schema contains **34 tables** in total; the table above shows the core subse
 
 ## Settings Table
 
-The settings table is a single row with 123 columns, organized into these groups (a sample of columns per group is shown):
+The settings table is a single row with 132 columns, organized into these groups (a sample of columns per group is shown):
 
 ### Lookahead Windows
 
@@ -105,6 +105,20 @@ The settings table is a single row with 123 columns, organized into these groups
 | `default_channel_profile_ids` | JSON | Default channel profiles |
 | `default_stream_profile_id` | null | Default stream profile |
 
+### Bullpen Proxy
+
+| Column | Default | Description |
+|--------|---------|-------------|
+| `bullpen_enabled` | 0 | Master switch for the [bullpen](../providers/bullpen) proxy |
+| `bullpen_api_key` | null | Sent as `X-Bullpen-Key` on proxied requests |
+| `bullpen_base_url` | `https://bullpen.direct` | Proxy base URL |
+| `bullpen_espn_enabled` | 0 | Route ESPN requests through bullpen |
+| `bullpen_squiggle_enabled` | 0 | Route Squiggle requests through bullpen |
+| `bullpen_nascar_enabled` | 0 | Route NASCAR requests through bullpen |
+| `bullpen_mlbstats_enabled` | 0 | Route MLB Stats requests through bullpen |
+| `bullpen_hockeytech_enabled` | 0 | Route HockeyTech requests through bullpen |
+| `bullpen_tsdb_enabled` | 0 | Route TheSportsDB requests through bullpen; also makes `is_premium` report `True` |
+
 ## Database Modules
 
 22 top-level Python modules plus 3 subpackages (`channels/`, `migrations/`, `settings/`) in `teamarr/database/`:
@@ -119,7 +133,7 @@ The settings table is a single row with 123 columns, organized into these groups
 | `templates.py` | Template CRUD |
 | `default_templates.py` | Default template seeding |
 | `leagues.py` | League queries, sport lookup, league ID resolution |
-| `settings/` | Settings package (`AllSettings` dataclass with 18 sub-groups; `types.py`, `registry.py`, `read.py`, `update.py`) |
+| `settings/` | Settings package (`AllSettings` dataclass with 19 sub-groups; `types.py`, `registry.py`, `read.py`, `update.py`) |
 | `channels/` | Managed channel package: channel CRUD, history, stream membership (`streams.py`) |
 | `channel_numbers.py` | Channel allocation algorithm |
 | `stats.py` | Processing run tracking (`processing_runs`, 28 columns) |
