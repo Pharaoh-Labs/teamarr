@@ -167,7 +167,8 @@ def test_stale_account_id_auto_healed(monkeypatch):
     """Stale m3u_account_id is auto-healed when account name matches live accounts."""
     conn = _db()
     conn.execute(
-        "INSERT INTO event_epg_groups (name, leagues, m3u_group_id, m3u_account_id, m3u_account_name) "
+        "INSERT INTO event_epg_groups "
+        "(name, leagues, m3u_group_id, m3u_account_id, m3u_account_name) "
         "VALUES ('Stale Acc', '[]', 10, 999, 'Provider A')"
     )
     conn.commit()
@@ -183,6 +184,8 @@ def test_stale_account_id_auto_healed(monkeypatch):
 
     detect_stale_groups(_factory(conn))
 
-    row = conn.execute("SELECT m3u_account_id FROM event_epg_groups WHERE name='Stale Acc'").fetchone()
+    row = conn.execute(
+        "SELECT m3u_account_id FROM event_epg_groups WHERE name='Stale Acc'"
+    ).fetchone()
     assert row["m3u_account_id"] == 7
 

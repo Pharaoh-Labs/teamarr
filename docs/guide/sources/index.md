@@ -70,6 +70,10 @@ The editor shows a live **"Matches N groups"** preview as you type. A pattern th
 
 A stale pattern never deletes your channels: when it matches nothing, the source simply skips the run and existing channels stay until their normal post-event expiry. If the pattern still matches *some* groups but misses one (say a rename escaped your regex), streams from the missed group are treated like streams removed from the M3U — they're detached on the next run, and a channel is removed only once no streams are left on it.
 
+### Re-imported M3U Accounts
+
+Deleting and re-adding an M3U account in Dispatcharr gives it a **new account ID**, which leaves every source that was bound to it pointing at an ID that no longer exists — the source looks configured but resolves to zero streams. Teamarr repairs this on its own: each generation run re-resolves a source's stored account ID against the live M3U accounts and, when the account name still matches, updates the source to the new ID. The Streams view also falls back to showing the group's streams unfiltered while the stored ID is stale, so a re-imported account never leaves the source looking empty.
+
 ### Re-bind Suggestions
 
 When a source goes stale, Teamarr scans the live M3U groups for a likely rename — an unused group whose name closely matches the old one — and offers it right in the stale-sources banner:
