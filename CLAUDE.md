@@ -294,6 +294,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - `epg_resolver.py` bridges the stream `tvg_id` → program `tvg_id` namespace gap via a cascade: direct tvg_id → curated channel `epg_data_id` → strict name match (does NOT require an EPG-linked channel). `_Teamarr` source excluded.
 - `epg_index.py` fetches by resolved tvg_id, keys by stream tvg_id; `epg_matcher.py` routes program title+sub_title (pipe-joined) through `classify_stream → TeamMatcher`.
 - `MatchMethod.EPG` persisted to `managed_channel_streams.match_method` → drives the `epg_match` stream-ordering rule. EPG-matched groups show an "EPG Matched" badge.
+- Tennis programmes (mf7.9, #642): `TennisMatcher.match_program` — binds only with a tournament clue AND (player pair OR court) from title|sub_title|description; pair → one match, court → that court's matches inside the programme slot; otherwise `FailedReason.TENNIS_MATCHUP_UNKNOWN`, surfaced on the linear stream's result via `_epg_tennis_unknown` in `_reconcile_epg`. Never a tournament-wide fan-out (the 2026-07-05 regression).
 - Docs: `docs/guide/matching/program-matching.md`.
 
 ## Plans & Roadmap

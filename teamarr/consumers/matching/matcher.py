@@ -391,6 +391,10 @@ class StreamMatcher:
         self._tennis_matcher = TennisMatcher(
             service, self._cache, majors_only=tennis_majors_only
         )
+        # EPG tennis programmes that could not be resolved to a matchup, per
+        # tvg_id (mf7.9) — surfaced on the linear stream's result in
+        # _reconcile_epg when nothing else matched.
+        self._epg_tennis_unknown: dict[str, list[str]] = {}
 
         # League event types + sports cache
         self._league_event_types: dict[str, str] = {}
@@ -951,15 +955,16 @@ class StreamMatcher:
             attempted += 1
 
             epg_input = build_match_input(program)
-            # NOTE: event_league_sport is deliberately NOT passed here. Tennis
-            # EPG matching needs its own design (bead mf7.9): one guide
-            # programme ("Wimbledon, Day 7") covers MANY concurrent matches,
-            # so routing programme titles through the tennis pipeline mass-
-            # matched arbitrary linear channels (2026-07-05: match volume
-            # 166 -> 1,099 on the channel-source group, 252 bindings to one
-            # WTA tournament). Omitting it preserves the pre-tennis EPG
-            # classification exactly; the gate below drops any TENNIS_MATCH
-            # that still arises via the "Tennis" sport-hint trigger.
+            # NOTE: event_league_sport is deliberately NOT passed here. One
+            # guide programme ("Wimbledon, Day 7") covers MANY concurrent
+            # matches, so routing programme titles through the tennis
+            # pipeline mass-matched arbitrary linear channels (2026-07-05:
+            # match volume 166 -> 1,099 on the channel-source group, 252
+            # bindings to one WTA tournament). Tennis programmes are only
+            # those that classify TENNIS_MATCH on their own evidence (atp/wta
+            # league hint or a "Tennis" sport hint) and they take the
+            # dedicated programme path below (mf7.9, #642), which requires a
+            # tournament AND a player pair or court before binding anything.
             classified = classify_stream(
                 epg_input, league_event_type, self._custom_regex,
                 self._feed_home_terms, self._feed_away_terms,
@@ -967,10 +972,21 @@ class StreamMatcher:
             if classified.category == StreamCategory.PLACEHOLDER:
                 continue
             if classified.category == StreamCategory.TENNIS_MATCH:
-                logger.debug(
-                    "[EPG_MATCH] tennis programme skipped pending mf7.9: %s",
-                    epg_input[:60],
-                )
+                for outcome in self._match_tennis_program(
+                    program, classified, epg_input, stream_id, tvg_id
+                ):
+                    outcome.match_method = MatchMethod.EPG
+                    outcome.epg_program_start = program.start_dt
+                    outcome.epg_program_end = program.end_dt
+                    ev_id = outcome.event.id if outcome.event else None
+                    prev = best_by_event.get(ev_id)
+                    skew_s = (
+                        abs((outcome.event.start_time - program.start_dt).total_seconds())
+                        if outcome.event is not None and program.start_dt is not None
+                        else 0.0
+                    )
+                    if prev is None or skew_s < prev[0]:
+                        best_by_event[ev_id] = (skew_s, outcome, classified)
                 continue
 
             # Same text-evidence gate as the racing fallback, applied to the
@@ -1096,17 +1112,60 @@ class StreamMatcher:
 
         plan = [(o, c) for _, o, c in best_by_event.values()]
         if programs:
+            tennis_unknown = len(self._epg_tennis_unknown.get(tvg_id, ()))
             logger.info(
                 "[EPG_MATCH] tvg=%s (via stream '%s'): %d program(s), %d attempted, "
-                "%d non-event skipped, %d event(s) matched",
+                "%d non-event skipped, %d event(s) matched%s",
                 tvg_id,
                 stream_name[:32],
                 len(programs),
                 attempted,
                 skipped_non_event,
                 len(plan),
+                f", {tennis_unknown} tennis matchup(s) not known" if tennis_unknown else "",
             )
         return plan
+
+    def _match_tennis_program(
+        self,
+        program,
+        classified: ClassifiedStream,
+        epg_input: str,
+        stream_id: int,
+        tvg_id: str,
+    ) -> list[MatchOutcome]:
+        """Tennis EPG programme → matched outcomes (mf7.9, #642).
+
+        Feeds title + sub_title + description to TennisMatcher.match_program;
+        a TENNIS_MATCHUP_UNKNOWN failure is recorded per tvg_id so the linear
+        stream's result can carry it when nothing else matches.
+        """
+        tennis_leagues = [
+            lg
+            for lg in self._search_leagues
+            if self._league_event_types.get(lg) == "event"
+            and self._league_sports.get(lg) == "tennis"
+        ]
+        if not tennis_leagues or program.start_dt is None or program.end_dt is None:
+            return []
+        description = (program.description or "").strip()
+        program_text = f"{epg_input} | {description}" if description else epg_input
+        outcomes = self._tennis_matcher.match_program(
+            classified=classified,
+            program_text=program_text,
+            leagues=tennis_leagues,
+            program_start=program.start_dt,
+            program_end=program.end_dt,
+            stream_id=stream_id,
+            user_tz=self._user_tz,
+            duration_hours=self._sport_durations.get("tennis", 3.0),
+        )
+        matched = [o for o in outcomes if o.is_matched]
+        if not matched:
+            detail = next((o.detail for o in outcomes if o.detail), "") or "matchup not known"
+            self._epg_tennis_unknown.setdefault(tvg_id, []).append(f"{epg_input[:48]}: {detail}")
+            logger.debug("[EPG_MATCH] tennis matchup not known: %s — %s", epg_input[:60], detail)
+        return matched
 
     def _reconcile_epg(
         self,
@@ -1124,6 +1183,13 @@ class StreamMatcher:
           name found nothing (a static-named single-event stream).
         """
         epg_matched = [r for r in epg_results if r.matched]
+        # Tennis programmes that had no resolvable matchup (mf7.9): when the
+        # stream ends up unmatched, say so instead of the generic name-match
+        # failure — the guide DID carry tennis, it just didn't say which match.
+        unknown = self._epg_tennis_unknown.pop(tvg_id, None)
+        if unknown and not epg_matched and not any(r.matched for r in name_results):
+            for r in name_results:
+                r.exclusion_reason = FailedReason.TENNIS_MATCHUP_UNKNOWN.value
         if self._epg_index is not None and self._epg_index.is_linear(tvg_id):
             return epg_matched if epg_matched else name_results
         name_matched = any(r.matched for r in name_results)

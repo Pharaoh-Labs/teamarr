@@ -165,6 +165,12 @@ def _tournament_guard(text: str, pool: list[Event]) -> tuple[list[Event], list[E
     return kept, vetoed
 
 
+def _surname_tokens(player: Team) -> set[str]:
+    """Normalized surname tokens of a player (doubles pairs flattened)."""
+    flat = normalize_text((player.abbreviation or "").replace("/", " ").replace("_", " "))
+    return set(flat.split())
+
+
 def _parsed_side_is_pair(raw_side: str | None) -> bool | None:
     """Does a raw parsed side name a doubles pair? True/False, None = can't tell.
 
@@ -443,6 +449,129 @@ class TennisMatcher:
             stream_name[:40],
             len(outcomes),
             f"courts={sorted(courts)}" if courts else f"round={round_label}",
+        )
+        return outcomes
+
+    def match_program(
+        self,
+        classified: ClassifiedStream,
+        program_text: str,
+        leagues: list[str],
+        program_start: datetime,
+        program_end: datetime,
+        stream_id: int,
+        user_tz: ZoneInfo,
+        duration_hours: float = 3.0,
+    ) -> list[MatchOutcome]:
+        """Match an EPG programme (mf7.9, #642) — tournament + (pair or court).
+
+        Guide entries for tennis are tournament-level ("2026 US Open", "WTA
+        1000 Toronto"); one programme covers many concurrent matches, so a
+        programme may only bind when its fields (title, sub_title AND
+        description — ``program_text`` is all of them) establish:
+
+        1. a **tournament** in the day's pool (same token rule as the fixture
+           gate), AND
+        2. either a **player pair** (from the title/sub_title classification,
+           or both surnames of one pooled match present in the text) or a
+           **court** ("Centre Court", "Court 5").
+
+        Pair → that one match. Court → the court's matches inside the
+        programme's broadcast window. Anything less fails with
+        ``TENNIS_MATCHUP_UNKNOWN`` — never a tournament-wide fan-out.
+        """
+        stream_name = classified.normalized.original
+        text = normalize_text(program_text)
+        prog_date = program_start.astimezone(user_tz).date()
+
+        def unknown(detail: str) -> list[MatchOutcome]:
+            return [
+                MatchOutcome.failed(
+                    FailedReason.TENNIS_MATCHUP_UNKNOWN,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=detail,
+                )
+            ]
+
+        pool: list[Event] = []
+        for league in leagues:
+            pool.extend(self._events_for_local_date(league, prog_date, user_tz))
+        if not pool:
+            return unknown(f"No tennis matches on {prog_date}")
+
+        named = _named_tournaments(text, pool)
+        if not named:
+            return unknown("Programme names no tournament playing that day")
+        pool = [e for e in pool if _tournament_key(e) in named]
+
+        duration = timedelta(hours=duration_hours)
+
+        def in_window(event: Event) -> bool:
+            return event.start_time < program_end and event.start_time + duration > program_start
+
+        matched: list[Event] = []
+        how = ""
+
+        # 1. Player pair from the title/sub_title classification
+        if classified.team1 and classified.team2:
+            ctx = TennisMatchContext(
+                stream_name=program_text,
+                stream_id=stream_id,
+                group_id=0,
+                target_date=prog_date,
+                generation=0,
+                user_tz=user_tz,
+                classified=classified,
+            )
+            outcome = self._match_to_event(ctx, pool, "tennis")
+            if outcome.is_matched and outcome.event:
+                matched, how = [outcome.event], "pair"
+
+        # 2. Player pair anywhere in the text: both surnames of one pooled match
+        if not matched:
+            tokens = set(text.split())
+            for event in pool:
+                if all(
+                    _surname_tokens(p) and _surname_tokens(p) <= tokens
+                    for p in (event.home_team, event.away_team)
+                ):
+                    matched.append(event)
+            if matched:
+                how = "pair-in-text"
+
+        # 3. Court
+        if not matched:
+            courts = _extract_courts(text)
+            if courts:
+                matched = [e for e in pool if e.court and _court_key(e.court) in courts]
+                how = f"courts={sorted(courts)}"
+                if not matched:
+                    return unknown(f"No matches on {how} for the named tournament")
+
+        if not matched:
+            return unknown("Programme names a tournament but no player pair or court")
+
+        windowed = [e for e in matched if in_window(e)]
+        if not windowed:
+            return unknown(f"Matchup found ({how}) but outside the programme window")
+
+        outcomes = []
+        for event in sorted(windowed, key=lambda e: e.start_time):
+            outcome = MatchOutcome.matched(
+                MatchMethod.DIRECT,
+                event,
+                detected_league=event.league,
+                confidence=0.9,
+                stream_name=stream_name,
+                stream_id=stream_id,
+            )
+            outcomes.append(outcome)
+        logger.debug(
+            "[MATCHED] tennis programme '%s' -> %d match(es) via %s",
+            program_text[:40],
+            len(outcomes),
+            how,
         )
         return outcomes
 

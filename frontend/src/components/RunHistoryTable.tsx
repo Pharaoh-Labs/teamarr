@@ -88,6 +88,7 @@ function getFailedReasonLabel(reason: string): string {
     no_racing_match: "No racing match",
     no_tennis_match: "No tennis match",
     tennis_tournament_mismatch: "Different tournament",
+    tennis_matchup_unknown: "Tennis matchup not known",
     date_mismatch: "Date mismatch",
     unmatched: "Unmatched",
   }

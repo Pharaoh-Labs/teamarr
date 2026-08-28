@@ -110,6 +110,9 @@ class FailedReason(Enum):
     # Both players resolved, but the stream names a different tournament than the
     # candidate (tennis fixture gate, #283) — veto-only, mirrors FIXTURE_NOT_IN_LEAGUE.
     TENNIS_TOURNAMENT_MISMATCH = "tennis_tournament_mismatch"
+    # EPG programme is tennis but its fields give no tournament + (player pair or
+    # court) — the matchup cannot be known, so nothing is bound (mf7.9).
+    TENNIS_MATCHUP_UNKNOWN = "tennis_matchup_unknown"
 
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
@@ -437,6 +440,7 @@ FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.NO_RACING_MATCH: "No matching racing event",
     FailedReason.NO_TENNIS_MATCH: "No matching tennis match",
     FailedReason.TENNIS_TOURNAMENT_MISMATCH: "Stream names a different tournament",
+    FailedReason.TENNIS_MATCHUP_UNKNOWN: "Tennis matchup not known",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 

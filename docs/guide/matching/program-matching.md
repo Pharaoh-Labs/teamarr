@@ -133,6 +133,15 @@ In **Channels → Stream Priority**, add a **Stream Type** rule and choose **EPG
 
 ---
 
+## Tennis programmes
+
+Guide entries for tennis are usually tournament-level ("Wimbledon", "WTA 1000 Toronto — Day 3") and one programme covers many concurrent matches, so tennis follows a stricter rule than team sports. A programme binds only when its EPG fields — title, sub-title **or** description, any of them — establish both:
+
+1. a **tournament** that is playing that day, and
+2. either a **player pair** ("Sabalenka vs Osaka", or both surnames of one match anywhere in the description) or a **court** ("Centre Court", "Court 5").
+
+A pair binds that one match. A court binds every match on that court that falls inside the programme's broadcast slot. A programme that gives only the tournament (or only players, with no tournament) binds nothing and the stream shows **"Tennis matchup not known"** in Run History — Teamarr never spreads one programme across a whole tournament.
+
 ## Why some channels show red in Dispatcharr
 
 A channel that shows **red** in Dispatcharr means no streams are currently attached to it. With EPG program matching, that is often **completely normal**: time-sharing means the linear stream is attached only inside the window around each matched program — outside it, the stream is intentionally detached so it's free to serve the next event's channel, and the channel goes red.
