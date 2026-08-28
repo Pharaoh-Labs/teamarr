@@ -221,7 +221,21 @@ def _run_startup_tasks():
             scheduler_settings = get_scheduler_settings(conn)
             epg_settings = get_epg_settings(conn)
 
-        if scheduler_settings.enabled:
+        from teamarr.config.runtime import dry_run, scheduler_enabled
+
+        if dry_run():
+            logger.warning(
+                "[STARTUP] DRY_RUN=true — outbound writes (Dispatcharr channels/streams, "
+                "media-server refreshes) will be logged, not executed"
+            )
+
+        if scheduler_settings.enabled and not scheduler_enabled():
+            logger.warning(
+                "[STARTUP] SCHEDULER=off — background scheduler NOT started; "
+                "timed generation, backups and channel resets are disabled "
+                "(manual generation still works)"
+            )
+        elif scheduler_settings.enabled:
             try:
                 # Get Dispatcharr connection for scheduler (may be None)
                 # Must use get_connection() to get the full DispatcharrConnection
