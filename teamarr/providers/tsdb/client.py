@@ -364,7 +364,7 @@ class TSDBClient(BaseHTTPClient):
 
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code
-                logger.warning("[TSDB] HTTP %d for %s", status, url)
+                logger.warning("[TSDB] HTTP %d for endpoint %s", status, endpoint)
                 # 404 is deterministic — retrying wastes requests and can trip
                 # the rate limiter (see GH #217). Fail fast.
                 if status == 404:
@@ -377,7 +377,9 @@ class TSDBClient(BaseHTTPClient):
             except (httpx.RequestError, RuntimeError, OSError) as e:
                 # RuntimeError: "Cannot send a request, as the client has been closed"
                 # OSError: "Bad file descriptor" from stale connections
-                logger.warning("[TSDB] Request failed for %s: %s", url, e)
+                logger.warning(
+                    "[TSDB] Request failed for endpoint %s (%s)", endpoint, type(e).__name__
+                )
                 # Don't reset client here - causes race conditions in parallel processing
                 # httpx connection pool handles stale connections automatically
                 if attempt < self._retry_count - 1:

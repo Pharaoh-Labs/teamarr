@@ -5,13 +5,17 @@ as section comments.
 """
 
 import contextlib
+import logging
 import sqlite3
 import threading
 from datetime import date
 from unittest.mock import MagicMock
 
+import httpx
+
 from teamarr.consumers.cache.refresh import CacheRefresher
 from teamarr.providers.registry import ProviderConfig, ProviderRegistry
+from teamarr.providers.tsdb.client import TSDBClient
 from teamarr.providers.tsdb.provider import TSDBProvider
 from teamarr.providers.tsdb.racing import parse_racing_events
 from tests.helpers import SCHEMA_PATH
@@ -516,3 +520,32 @@ class TestFighterParsing:
         )
         assert home.name == "Zuffa Boxing 9"
         assert away.name == "TBD"
+
+
+def test_http_error_log_excludes_api_key(caplog):
+    client = TSDBClient(api_key="sensitive-key", retry_count=1)
+    client._client = httpx.Client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(500, request=request))
+    )
+
+    with caplog.at_level(logging.WARNING, logger="teamarr.providers.tsdb.client"):
+        assert client._request("lookupleague.php") is None
+
+    assert "sensitive-key" not in caplog.text
+    assert "endpoint lookupleague.php" in caplog.text
+    client.close()
+
+
+def test_transport_error_log_excludes_api_key(caplog):
+    client = TSDBClient(api_key="sensitive-key", retry_count=1)
+
+    def raise_connect_error(request):
+        raise httpx.ConnectError("connection failed", request=request)
+
+    client._client = httpx.Client(transport=httpx.MockTransport(raise_connect_error))
+    with caplog.at_level(logging.WARNING, logger="teamarr.providers.tsdb.client"):
+        assert client._request("lookupleague.php") is None
+
+    assert "sensitive-key" not in caplog.text
+    assert "endpoint lookupleague.php (ConnectError)" in caplog.text
+    client.close()
