@@ -555,6 +555,8 @@ def update_bullpen_settings(
     enabled: bool | None = None,
     api_key: str | None | object = _NOT_PROVIDED,
     base_url: str | None = None,
+    disabled_reason: str | None | object = _NOT_PROVIDED,
+    disabled_at: str | None | object = _NOT_PROVIDED,
     espn_enabled: bool | None = None,
     bellmedia_enabled: bool | None = None,
     squiggle_enabled: bool | None = None,
@@ -575,7 +577,13 @@ def update_bullpen_settings(
         hockeytech_enabled=hockeytech_enabled,
         tsdb_enabled=tsdb_enabled,
     )
-    provided.update(_skip_missing(api_key=api_key))
+    provided.update(
+        _skip_missing(
+            api_key=api_key,
+            disabled_reason=disabled_reason,
+            disabled_at=disabled_at,
+        )
+    )
     return _apply(conn, "bullpen", provided)
 
 

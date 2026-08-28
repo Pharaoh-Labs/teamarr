@@ -35,7 +35,14 @@ from datetime import date, datetime
 import httpx
 
 from teamarr.core import LeagueMappingSource
-from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
+from teamarr.providers.base_client import (
+    BULLPEN_UNAUTHORIZED_ATTEMPTS,
+    BaseHTTPClient,
+    BullpenConfig,
+    bullpen_headers,
+    bullpen_rewrite,
+    is_bullpen_url,
+)
 from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
@@ -310,6 +317,9 @@ class TSDBClient(BaseHTTPClient):
         Never fails due to rate limits - always waits and continues.
         All waits are tracked in rate_limit_stats() for UI feedback.
         """
+        if self._bullpen and self._bullpen.disabled:
+            return None
+
         # Wait for rate limit slot (preemptive)
         rate_limiter = self._get_rate_limiter()
         rate_limiter.acquire()
@@ -320,7 +330,23 @@ class TSDBClient(BaseHTTPClient):
         for attempt in range(self._retry_count + self.BACKOFF_MAX_RETRIES):
             try:
                 client = self._get_client()
-                response = client.get(url, params=params)
+                headers = bullpen_headers(url, self._bullpen)
+                if headers:
+                    response = client.get(url, params=params, headers=headers)
+                else:
+                    response = client.get(url, params=params)
+
+                if response.status_code == 401 and is_bullpen_url(url, self._bullpen):
+                    if attempt < BULLPEN_UNAUTHORIZED_ATTEMPTS - 1:
+                        time.sleep(self._retry_delay * (attempt + 1))
+                        continue
+                    logger.error(
+                        "[TSDB] Bullpen unauthorized after %d attempts; disabling proxy",
+                        BULLPEN_UNAUTHORIZED_ATTEMPTS,
+                    )
+                    if self._bullpen:
+                        self._bullpen.disable()
+                    return None
 
                 # Handle rate limit response (reactive) with exponential backoff
                 if response.status_code == 429:

@@ -34,6 +34,8 @@ def update_bullpen_settings(update: BullpenSettingsUpdate):
     payload = update.model_dump(exclude_unset=True)
     if payload.get("api_key") == MASKED_SECRET:
         payload.pop("api_key")
+    if payload.get("enabled"):
+        payload.update(disabled_reason=None, disabled_at=None)
 
     with get_db() as conn:
         update_bullpen_settings(conn, **payload)

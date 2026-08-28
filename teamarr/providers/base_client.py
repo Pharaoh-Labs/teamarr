@@ -23,6 +23,7 @@ import logging
 import random
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -42,6 +43,7 @@ RETRY_JITTER = 0.3  # ±30% randomization to prevent thundering herd
 RATE_LIMIT_BASE_DELAY = 5.0  # Start at 5s for 429s (more serious)
 RATE_LIMIT_MAX_DELAY = 60.0  # Cap at 60s
 RATE_LIMIT_MAX_RETRIES = 3  # Give up after 3 rate-limit retries
+BULLPEN_UNAUTHORIZED_ATTEMPTS = 3
 
 
 @dataclass
@@ -54,6 +56,16 @@ class BullpenConfig:
 
     api_key: str | None = None
     base_url: str = "https://bullpen.direct"
+    on_unauthorized: Callable[[], None] | None = None
+    disabled: bool = False
+
+    def disable(self) -> None:
+        """Stop proxy use by this client and persist the shared shutdown."""
+        if self.disabled:
+            return
+        self.disabled = True
+        if self.on_unauthorized:
+            self.on_unauthorized()
 
 
 def bullpen_rewrite(origin_base: str, target: str, bullpen: BullpenConfig | None) -> str:
@@ -65,7 +77,7 @@ def bullpen_rewrite(origin_base: str, target: str, bullpen: BullpenConfig | None
     once ``base`` itself has been rewritten). Returns ``origin_base``
     unchanged when bullpen isn't configured.
     """
-    if bullpen is None:
+    if bullpen is None or bullpen.disabled:
         return origin_base
     path = urlsplit(origin_base).path.rstrip("/")
     return f"{bullpen.base_url.rstrip('/')}/v1/{target}{path}"
@@ -73,11 +85,20 @@ def bullpen_rewrite(origin_base: str, target: str, bullpen: BullpenConfig | None
 
 def bullpen_headers(url: str, bullpen: BullpenConfig | None) -> dict[str, str] | None:
     """Return Bullpen authentication only for requests to the proxy host."""
-    if bullpen is None or not bullpen.api_key:
+    if bullpen is None or bullpen.disabled or not bullpen.api_key:
         return None
     if urlsplit(url).netloc != urlsplit(bullpen.base_url).netloc:
         return None
     return {"X-Bullpen-Key": bullpen.api_key}
+
+
+def is_bullpen_url(url: str, bullpen: BullpenConfig | None) -> bool:
+    """Return whether a request URL is routed to the configured Bullpen host."""
+    return bool(
+        bullpen
+        and not bullpen.disabled
+        and urlsplit(url).netloc == urlsplit(bullpen.base_url).netloc
+    )
 
 
 class BaseHTTPClient:
@@ -161,6 +182,8 @@ class BaseHTTPClient:
                 call_metrics reduces either form to the last path segment)
         """
         label = label if label is not None else url
+        if self._bullpen and self._bullpen.disabled:
+            return None
         rate_limit_retries = 0
 
         for attempt in range(self._retry_count + RATE_LIMIT_MAX_RETRIES):
@@ -171,6 +194,25 @@ class BaseHTTPClient:
                     response = client.get(url, params=params, headers=headers)
                 else:
                     response = client.get(url, params=params)
+
+                if response.status_code == 401 and is_bullpen_url(url, self._bullpen):
+                    if attempt < BULLPEN_UNAUTHORIZED_ATTEMPTS - 1:
+                        logger.warning(
+                            "[%s] Bullpen unauthorized. Retry %d/%d",
+                            self.LOG_TAG,
+                            attempt + 1,
+                            BULLPEN_UNAUTHORIZED_ATTEMPTS,
+                        )
+                        time.sleep(self._calculate_delay(attempt))
+                        continue
+                    logger.error(
+                        "[%s] Bullpen unauthorized after %d attempts; disabling proxy",
+                        self.LOG_TAG,
+                        BULLPEN_UNAUTHORIZED_ATTEMPTS,
+                    )
+                    if self._bullpen:
+                        self._bullpen.disable()
+                    return None
 
                 # Handle 429 rate limit separately with longer backoff
                 if response.status_code == 429:

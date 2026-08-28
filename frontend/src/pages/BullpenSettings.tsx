@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Alert } from "@/components/ui/alert"
 import { useBullpenSettings, useUpdateBullpenSettings } from "@/hooks/useSettings"
 import type { BullpenSettings as BullpenSettingsType } from "@/api/settings"
 
@@ -98,6 +99,12 @@ export function BullpenSettings() {
           this page has no sidebar entry and is only reachable at this URL.
         </p>
       </div>
+
+      {data.disabled_reason && (
+        <Alert variant="warning" title="Bullpen disabled automatically">
+          {data.disabled_reason} Re-enable the proxy after correcting its authentication settings.
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>

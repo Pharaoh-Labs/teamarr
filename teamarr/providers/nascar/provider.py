@@ -13,6 +13,7 @@ URL patterns (no auth required):
 """
 
 import logging
+import time
 from datetime import UTC, date, datetime
 
 import httpx
@@ -26,7 +27,13 @@ from teamarr.core import (
     Team,
     Venue,
 )
-from teamarr.providers.base_client import BullpenConfig, bullpen_headers, bullpen_rewrite
+from teamarr.providers.base_client import (
+    BULLPEN_UNAUTHORIZED_ATTEMPTS,
+    BullpenConfig,
+    bullpen_headers,
+    bullpen_rewrite,
+    is_bullpen_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -197,16 +204,32 @@ class NASCARProvider(SportsProvider):
         return result
 
     def _fetch(self, url: str) -> list | dict | None:
+        if self._bullpen and self._bullpen.disabled:
+            return None
         headers = bullpen_headers(url, self._bullpen)
-        try:
-            with httpx.Client(timeout=self._timeout, headers=headers) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-                return resp.json()
-        except httpx.HTTPStatusError as e:
-            logger.warning("[NASCAR] HTTP %d fetching %s", e.response.status_code, url)
-        except Exception as e:
-            logger.warning("[NASCAR] Failed to fetch %s: %s", url, e)
+        for attempt in range(BULLPEN_UNAUTHORIZED_ATTEMPTS):
+            try:
+                with httpx.Client(timeout=self._timeout, headers=headers) as client:
+                    resp = client.get(url)
+                    if resp.status_code == 401 and is_bullpen_url(url, self._bullpen):
+                        if attempt < BULLPEN_UNAUTHORIZED_ATTEMPTS - 1:
+                            time.sleep(0.5 * (attempt + 1))
+                            continue
+                        logger.error(
+                            "[NASCAR] Bullpen unauthorized after %d attempts; disabling proxy",
+                            BULLPEN_UNAUTHORIZED_ATTEMPTS,
+                        )
+                        if self._bullpen:
+                            self._bullpen.disable()
+                        return None
+                    resp.raise_for_status()
+                    return resp.json()
+            except httpx.HTTPStatusError as e:
+                logger.warning("[NASCAR] HTTP %d fetching %s", e.response.status_code, url)
+                return None
+            except Exception as e:
+                logger.warning("[NASCAR] Failed to fetch %s: %s", url, e)
+                return None
         return None
 
     def _parse_race(self, data: dict, league: str) -> Event | None:
