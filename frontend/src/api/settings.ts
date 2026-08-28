@@ -368,17 +368,6 @@ export async function getSettings(): Promise<AllSettings> {
   return api.get("/settings")
 }
 
-export interface DispatcharrChannelGroup {
-  id: number
-  name: string
-  from_m3u: boolean
-}
-
-/** List Dispatcharr channel groups (for the channel-source picker + sorting rule). */
-export async function getDispatcharrChannelGroups(): Promise<DispatcharrChannelGroup[]> {
-  return api.get("/dispatcharr/channel-groups")
-}
-
 export async function getDispatcharrSettings(): Promise<DispatcharrSettings> {
   return api.get("/settings/dispatcharr")
 }
