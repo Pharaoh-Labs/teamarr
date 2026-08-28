@@ -2043,6 +2043,9 @@ def get_raw_streams(group_id: int):
         group_id=group.m3u_group_id,
         account_id=group.m3u_account_id,
     )
+    if not raw and group.m3u_account_id is not None:
+        raw = conn.m3u.list_streams(group_id=group.m3u_group_id)
+
 
 
     def get_builtin_filter_reason(name: str) -> str | None:
