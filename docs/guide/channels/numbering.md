@@ -9,27 +9,48 @@ nav_order: 3
 
 How channel numbers are assigned and how channels are ordered within the lineup.
 
-![Channels → Numbering — mode, range, and number-stability options](../../assets/images/channels-numbering.png)
+![Channels → Numbering — range, pinned blocks, and number-stability options](../../assets/images/channels-numbering.png)
 
-## Numbering Mode
-
-| Mode | Description |
-|------|-------------|
-| **Auto** | Sequential numbering from the channel range start. Order is determined by sport/league priority. |
-| **Manual** | Per-league starting channel numbers. Each league gets its own block. |
+Numbers come from two places: **pinned blocks** you define for the teams, leagues,
+or sports you care about, and the **channel range** for everything else. Channels
+are ordered by priority inside each.
 
 ## Channel Range
 
-Both modes use a global channel range:
-
 | Field | Description |
 |-------|-------------|
-| **Channel Range Start** | First channel number Teamarr can use. In Manual mode, this is the default start for leagues without a configured start. |
+| **Channel Range Start** | First channel number for everything that isn't pinned. |
 | **Channel Range End** | Last channel number — leave empty for no upper limit. If a run fills the range, allocation stops there (with a log warning) rather than numbering past the end. |
 
-Teamarr automatically **skips numbers already used by non-Teamarr channels** in Dispatcharr (in both modes), and logs a warning when the configured range overlaps external channels. Setting the range start above your existing channels (e.g., 1000 if you use 1–500) is still tidier — contiguous blocks without skips — but collisions are prevented either way.
+Teamarr automatically **skips numbers already used by non-Teamarr channels** in Dispatcharr, and logs a warning when the configured range overlaps external channels. Setting the range start above your existing channels (e.g., 1000 if you use 1–500) is still tidier — contiguous blocks without skips — but collisions are prevented either way.
 
-## Number Stability (Auto Mode)
+## Pinned Blocks
+
+A pinned block gives a **team**, **league**, or **sport** its own block of channel numbers starting at a number you choose. For example:
+
+| Start | Scope | Result |
+|-------|-------|--------|
+| 800 | Team · Detroit Lions | The Lions team channel and every Lions game, from 800 |
+| 850 | Group "Big events" · FIFA World Cup, Olympics | Both competitions share one block from 850 |
+| 1700 | League · NFL | Every other NFL game from 1700 |
+| 8000 | *(channel range start)* | Everything else |
+
+**Add block** picks the scope (the team picker, a league, or a sport), a start channel, and optionally a group name. Blocks that share a group name *and* start share one block of numbers — type an existing group's name and its start fills in.
+
+Rules:
+
+- **Most specific wins.** A channel goes to the team block if either team is pinned, else the league block, else the sport block, else the channel range. When both teams are pinned, the **home** team's block wins; among equals, the block higher in the list wins — use the arrows to reorder.
+- **A team pin follows the team everywhere** — league games and cup games alike, matched by name within the sport (the same rule Priority Teams use).
+- **Feeds stay together.** Home/away feeds and keyword variants of one game land on adjacent numbers inside the block, exactly as in the channel range.
+- **Blocks spill forward.** A block with more channels than room simply continues past its start; the next block skips over it (you'll see a ⚠ in the effective-layout preview). Set an **end channel** (under *advanced*) if you'd rather overflow into the channel range.
+- **Disable** a block with its switch to keep it without applying it.
+
+Block changes are saved immediately and queue a re-grid in Gapped/Strict modes, so they take effect on the next generation. The **effective layout** strip under the list shows where today's channels would land under the current blocks.
+
+{: .note }
+**Upgrading from Manual mode.** Manual mode's per-league starting channels became league-scoped pinned blocks automatically — same starts, same numbers. Leagues that had no configured start now share the channel range in priority order instead of each restarting at the range start (which could hand two leagues the same number).
+
+## Number Stability
 
 Controls whether a channel can be **renumbered while its event is live**. Dispatcharr relies on channel numbers staying put, so a game shouldn't jump numbers just because another event started or ended.
 
@@ -63,16 +84,10 @@ Reset Time is the **server's** local time. In Docker this is usually UTC unless 
 
 You don't have to wait for the daily window. **Re-grid channels now** (shown in Gapped/Strict modes only) queues a one-shot re-layout that runs on the **next generation** — renumbering every channel back into priority order and reclaiming gaps, regardless of the reset time and even if the daily re-layout is turned off. The flag clears once that run completes.
 
-Changing the **gap size**, switching **stability mode**, adjusting the **channel range**, or reordering **sort priority / priority teams** queues the same re-grid automatically, so the change takes effect on the next run instead of silently waiting for the daily reset.
+Changing the **gap size**, switching **stability mode**, adjusting the **channel range**, editing **pinned blocks**, or reordering **sort priority / priority teams** queues the same re-grid automatically, so the change takes effect on the next run instead of silently waiting for the daily reset.
 
 {: .note }
-Number Stability applies to **Auto** mode. Manual mode uses its own per-league sequential numbering (the stability and re-grid controls are hidden).
-
-## Per-League Starting Channels (Manual Mode)
-
-When Manual mode is selected, a table lists leagues with a configurable starting channel number for each. The **Subscribed only** toggle is on by default, so the table opens showing just your subscribed leagues; turn it off to see everything (the search field filters within whatever's visible).
-
-Each league gets sequential numbers starting from its configured start. This lets you group sports into predictable channel ranges (e.g., NFL at 500, NBA at 600, NHL at 700). Leagues without a configured start fall back to the channel range start.
+Number Stability applies **inside every pinned block** as well as the channel range: with Gapped and gap size 3, a block starting at 800 lays out 800, 803, 806…; the daily re-layout re-grids each block from its own start.
 
 ## Channel Ordering
 

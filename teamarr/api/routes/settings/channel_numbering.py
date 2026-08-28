@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from teamarr.database import get_db
-from teamarr.database.channel_numbers import arm_channel_relayout, get_global_channel_mode
+from teamarr.database.channel_numbers import arm_channel_relayout
 
 from .models import (
     ChannelNumberingSettingsModel,
@@ -13,7 +13,7 @@ from .models import (
 
 router = APIRouter()
 
-VALID_CHANNEL_MODES = {"auto", "manual"}
+VALID_CHANNEL_MODES = {"auto"}  # manual retired in v88 (#333)
 VALID_CONSOLIDATION_MODES = {"consolidate", "separate"}
 VALID_STABILITY_MODES = {"compact", "gap", "strict"}
 
@@ -103,11 +103,6 @@ def request_channel_relayout():
     from teamarr.database.settings import get_channel_numbering_settings
 
     with get_db() as conn:
-        if get_global_channel_mode(conn) == "manual":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Re-grid applies to Auto numbering mode only.",
-            )
         settings = get_channel_numbering_settings(conn)
         if settings.channel_stability_mode == "compact":
             raise HTTPException(

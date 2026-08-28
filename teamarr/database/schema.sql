@@ -474,7 +474,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 87
+    schema_version INTEGER DEFAULT 88
 );
 
 -- Insert default settings
@@ -904,6 +904,35 @@ CREATE TABLE IF NOT EXISTS channel_priority_teams (
 
     -- One entry per team-in-league
     UNIQUE(provider, provider_team_id, league)
+);
+
+
+-- =============================================================================
+-- NUMBERING EXCEPTIONS (pinned blocks, #333)
+-- A scoped pin (team / league / sport) that numbers its channels from `start`.
+-- Every channel resolves to exactly one lane (most specific wins, then
+-- sort_order); unmatched channels use the global channel range. Rows sharing
+-- start + label form a group (e.g. "Big events": World Cup + Olympics at 850).
+-- See docs/reference/architecture/channel-numbering.md.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS numbering_exceptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    scope TEXT NOT NULL CHECK(scope IN ('team', 'league', 'sport')),
+    sport TEXT NOT NULL,                     -- always set; team + league pins are sport-scoped
+    league_code TEXT,                        -- scope='league'
+    team_name TEXT,                          -- scope='team': match key (case-insensitive, either side)
+    provider TEXT,                           -- scope='team': identity from team_cache
+    provider_team_id TEXT,                   -- scope='team'
+
+    start INTEGER NOT NULL,                  -- first channel number of the block
+    "end" INTEGER,                           -- NULL = spill forward; set = overflow to default lane
+    label TEXT,                              -- group label (rows sharing start + label)
+    sort_order INTEGER NOT NULL DEFAULT 0,   -- tie-break within a precedence level (UI drag order)
+    enabled BOOLEAN DEFAULT 1
 );
 
 

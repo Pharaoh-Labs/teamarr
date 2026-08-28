@@ -1,11 +1,16 @@
 """Channel numbering and range management.
 
-Two global modes:
-- AUTO: Sequential numbering from channel_range_start, ordered by sort priorities
-- MANUAL: Per-league starting channel numbers from league_channel_starts
+Channels are numbered inside *lanes*: pinned blocks (numbering_exceptions, #333)
+for a team / league / sport, and the default lane — the global channel range —
+for everything else. The stability mode (compact / gap / strict) is applied
+inside each lane by the placement cores at the bottom of this module.
 
-Sort order is always: sport_priority → league_priority → event_time → event_id
-Priorities come from channel_sort_priorities table (drag-drop UI).
+Sort order is always: priority team → sport_priority → league_priority →
+event_time → event_id. Priorities come from channel_sort_priorities (drag-drop UI).
+
+Manual mode (per-league starts) was retired in v88; its league starts were
+migrated to league-scoped pinned blocks. See
+docs/reference/architecture/channel-numbering.md.
 """
 
 import json
@@ -52,6 +57,10 @@ def get_global_channel_range(conn: Connection) -> tuple[int, int | None]:
 def get_global_channel_mode(conn: Connection) -> str:
     """Get the global channel numbering mode.
 
+    Always 'auto' after the v88 migration (manual mode retired, #333); the
+    column is kept one release for rollback.
+    # TODO: PRUNE — remove with the global_channel_mode column after v88 settles.
+
     Returns:
         'auto' or 'manual'
     """
@@ -64,7 +73,10 @@ def get_global_channel_mode(conn: Connection) -> str:
 
 
 def get_league_channel_starts(conn: Connection) -> dict[str, int]:
-    """Get per-league starting channel numbers for MANUAL mode.
+    """Get per-league starting channel numbers (legacy MANUAL mode).
+
+    Read only by the v88 migration, which converts these into league-scoped
+    pinned blocks. # TODO: PRUNE — remove with the league_channel_starts column.
 
     Returns:
         Dict mapping league_code → starting channel number.
@@ -159,14 +171,12 @@ def get_channel_stability_settings(conn: Connection) -> dict:
 
 
 def is_sticky_mode(conn: Connection) -> bool:
-    """True when channels should be sticky (AUTO + gap/strict stability mode).
+    """True when channels should be sticky (gap/strict stability mode).
 
     Used to skip the mid-run reassign passes: in sticky modes the only place
     numbers are (re)assigned is the single end-of-run pass, which also pushes to
     Dispatcharr, so intermediate passes would write DB numbers that never sync.
     """
-    if get_global_channel_mode(conn) == "manual":
-        return False
     return get_channel_stability_settings(conn)["mode"] in ("gap", "strict")
 
 
@@ -320,119 +330,84 @@ def get_next_channel_number(
     conn: Connection,
     league: str | None = None,
     external_occupied: set[int] | None = None,
+    *,
+    sport: str | None = None,
+    home_team: str | None = None,
+    away_team: str | None = None,
 ) -> int | None:
-    """Get the next available channel number.
+    """Get the next available channel number for a new channel.
 
-    Unified entry point for channel allocation. Delegates to AUTO or MANUAL
-    mode based on global_channel_mode setting.
-
-    Args:
-        conn: Database connection
-        league: League code for the event (used in MANUAL mode for per-league starts)
-        external_occupied: Channel numbers occupied by non-Teamarr channels (#146)
-
-    Returns:
-        Next available channel number, or None if range exhausted
-    """
-    mode = get_global_channel_mode(conn)
-    if mode == "manual":
-        return _get_next_manual_channel(conn, league, external_occupied)
-    return _get_next_auto_channel(conn, external_occupied)
-
-
-def _get_next_auto_channel(
-    conn: Connection,
-    external_occupied: set[int] | None = None,
-) -> int | None:
-    """Get next available channel in AUTO mode.
-
-    Finds the first unused channel number starting from range_start,
-    considering all channels across all enabled groups and external
-    Dispatcharr channels.
-
-    Args:
-        conn: Database connection
-        external_occupied: Channel numbers occupied by non-Teamarr channels (#146)
-
-    Returns:
-        Next available channel number, or None if range exhausted
-    """
-    range_start, range_end = get_global_channel_range(conn)
-    effective_end = range_end if range_end else MAX_CHANNEL
-
-    used_set = _get_all_used_channels(conn)
-    if external_occupied:
-        used_set |= external_occupied
-
-    next_num = range_start
-    while next_num in used_set:
-        next_num += 1
-        if next_num > effective_end:
-            logger.warning(
-                "[CHANNEL_NUM] AUTO: No available channels (range %d-%d exhausted)",
-                range_start, effective_end,
-            )
-            return None
-
-    if next_num > MAX_CHANNEL:
-        logger.warning("[CHANNEL_NUM] Channel number %d exceeds max %d", next_num, MAX_CHANNEL)
-        return None
-
-    return next_num
-
-
-def _get_next_manual_channel(
-    conn: Connection,
-    league: str | None = None,
-    external_occupied: set[int] | None = None,
-) -> int | None:
-    """Get next available channel in MANUAL mode.
-
-    Uses per-league starting channel numbers. Leagues without configured
-    starts fall back to global range (auto-assign from range_start).
+    Resolves the channel's lane (a pinned block for its team / league / sport,
+    else the global range — #333) and returns the first free number from that
+    lane's start. Full priority ordering happens in the end-of-run
+    ``reassign_all_channels`` pass.
 
     Args:
         conn: Database connection
         league: League code for the event
         external_occupied: Channel numbers occupied by non-Teamarr channels (#146)
+        sport / home_team / away_team: Lane resolution keys (team pins match either side)
 
     Returns:
-        Next available channel number, or None if range exhausted
+        Next available channel number, or None if the lane (and, for a bounded
+        block, the default lane it overflows into) is exhausted
     """
-    league_starts = get_league_channel_starts(conn)
-    range_start, range_end = get_global_channel_range(conn)
-    effective_end = range_end if range_end else MAX_CHANNEL
+    from teamarr.database.numbering_exceptions import LaneResolver
 
-    # Determine starting number for this league
-    start = league_starts.get(league) if league else None
-    if start is None:
-        # Fallback: auto-assign from global range
-        start = range_start
+    resolver = LaneResolver.load(conn, _default_lane(conn))
+    lane = resolver.resolve(sport, league, home_team, away_team)
 
     used_set = _get_all_used_channels(conn)
     if external_occupied:
         used_set |= external_occupied
 
-    next_num = start
-    while next_num in used_set:
-        next_num += 1
-        if next_num > effective_end:
-            logger.warning(
-                "[CHANNEL_NUM] MANUAL: No channels for league '%s' (from %d, end %d)",
-                league, start, effective_end,
-            )
+    num = _first_free(lane.start, _lane_end(conn, lane), used_set)
+    if num is None and not lane.is_default:
+        # Bounded block is full — overflow into the default lane.
+        logger.warning(
+            "[CHANNEL_NUM] Pinned block %d-%s is full; overflowing to default range",
+            lane.start, lane.end,
+        )
+        default = resolver.default
+        num = _first_free(default.start, _lane_end(conn, default), used_set)
+    if num is None:
+        logger.warning(
+            "[CHANNEL_NUM] No available channels (lane start %d, league=%s)", lane.start, league,
+        )
+    return num
+
+
+def _default_lane(conn: Connection):
+    """The global channel range as a Lane (the lane unmatched channels use)."""
+    from teamarr.database.numbering_exceptions import Lane
+
+    range_start, range_end = get_global_channel_range(conn)
+    return Lane(id=None, start=range_start, end=range_end)
+
+
+def _lane_end(conn: Connection, lane) -> int:
+    """Inclusive last number a lane may use.
+
+    A pinned block without an explicit end spills forward without limit (it sits
+    outside the global range by design); the default lane honours the global
+    range end.
+    """
+    if lane.end is not None:
+        return min(int(lane.end), MAX_CHANNEL)
+    if lane.is_default:
+        _, range_end = get_global_channel_range(conn)
+        return range_end if range_end else MAX_CHANNEL
+    return MAX_CHANNEL
+
+
+def _first_free(start: int, end: int, used: set[int]) -> int | None:
+    """Lowest number in [start, end] not in ``used``."""
+    num = start
+    while num in used:
+        num += 1
+        if num > end:
             return None
-
-    if next_num > MAX_CHANNEL:
-        logger.warning("[CHANNEL_NUM] Channel number %d exceeds max %d", next_num, MAX_CHANNEL)
-        return None
-
-    return next_num
-
-
-# =============================================================================
-# Global Sorting & Reassignment
-# =============================================================================
+    return num if num <= end else None
 
 
 def get_all_channels_sorted(conn: Connection) -> list[dict]:
@@ -574,14 +549,23 @@ def reassign_all_channels(
     external_occupied: set[int] | None = None,
     force_reset: bool = False,
 ) -> dict:
-    """Reassign all active channel numbers based on global mode.
+    """Reassign all active channel numbers, lane by lane.
 
-    AUTO: behaviour depends on the channel stability mode:
-        - compact: sequential numbers from range_start by sort priority (legacy).
-        - gap/strict: sticky — existing (locked) channels keep their number; only
-          unplaced channels are assigned. A full re-layout runs only when
-          force_reset=True (the daily reset window).
-    MANUAL: Sequential within each league's configured range (stability modes N/A).
+    Every channel resolves to one lane — a pinned block (#333) or the default
+    global range — and the stability mode is applied *inside* each lane:
+
+        - compact: sequential numbers from the lane start by sort priority.
+        - gap/strict: sticky — locked channels keep their number; only unplaced
+          channels are assigned. A full re-layout runs only when force_reset=True
+          (the daily reset window).
+
+    Pinned lanes are placed first in ascending start order, then the default
+    lane. All lanes share one set of used numbers (plus external channels), so a
+    block that outgrows its space spills forward and later lanes skip over it.
+    A block with an explicit end overflows into the default lane instead.
+
+    With no pinned blocks there is exactly one lane and this is the pre-#333
+    allocator unchanged (see tests/lifecycle/test_numbering_lanes.py).
 
     Args:
         conn: Database connection
@@ -592,29 +576,90 @@ def reassign_all_channels(
     Returns:
         Dict with statistics: channels_processed, channels_moved, drift_details
     """
-    mode = get_global_channel_mode(conn)
-    if mode == "manual":
-        return _reassign_manual(conn, external_occupied)
+    from teamarr.database.numbering_exceptions import LaneResolver
 
     stability = get_channel_stability_settings(conn)
     smode = stability["mode"]
-    if smode == "compact":
-        return _reassign_auto(conn, external_occupied)
+    gap_size = stability["gap_size"]
+    ext = set(external_occupied or ())
 
-    ext = external_occupied or set()
-    if force_reset:
-        result = _reassign_reset(conn, smode, stability["gap_size"], ext)
+    sorted_channels = get_all_channels_sorted(conn)
+    if not sorted_channels:
+        logger.info("[CHANNEL_SORT] No channels to reassign")
+        return {"channels_processed": 0, "channels_moved": 0, "drift_details": []}
+
+    resolver = LaneResolver.load(conn, _default_lane(conn))
+    lanes = resolver.lanes()
+
+    # Partition the globally sorted list by lane, preserving sort order within each.
+    by_lane: dict[int | None, list[dict]] = {lane.id: [] for lane in lanes}
+    for ch in sorted_channels:
+        lane = resolver.resolve(
+            ch.get("sport"), ch.get("league"), ch.get("home_team"), ch.get("away_team")
+        )
+        by_lane[lane.id].append(ch)
+
+    sticky = smode in ("gap", "strict")
+    used: set[int] = set(ext)
+    if sticky and not force_reset:
+        # Locked channels that are still valid in *their own* lane are fixed
+        # anchors for every lane's placement — seed them before placing anything.
+        for lane in lanes:
+            lo, hi = lane.start, _lane_end(conn, lane)
+            for ch in by_lane[lane.id]:
+                num = _channel_num_as_int(ch["channel_number"])
+                if ch.get("channel_number_locked") and num is not None:
+                    if num not in ext and lo <= num <= hi:
+                        used.add(num)
+
+    totals = {"channels_processed": 0, "channels_moved": 0, "drift_details": []}
+    default_lane = resolver.default
+    for lane in lanes:
+        channels = by_lane[lane.id]
+        if not channels:
+            continue
+        start, end = lane.start, _lane_end(conn, lane)
+        if not sticky:
+            result, leftover = _place_compact(conn, channels, start, end, used)
+        elif force_reset:
+            result, leftover = _place_reset(conn, channels, smode, gap_size, start, end, used)
+        else:
+            result, leftover = _place_sticky(
+                conn, channels, smode, gap_size, start, end, used, ext
+            )
+        _merge(totals, result)
+        if leftover and not lane.is_default and lane.end is not None:
+            # Bounded block overflowed — its remaining channels take the tail of the
+            # default lane (in their sort order) rather than being left unnumbered.
+            logger.warning(
+                "[CHANNEL_SORT] Pinned block %d-%d full; %d channel(s) overflow to default range",
+                lane.start, lane.end, len(leftover),
+            )
+            by_lane[default_lane.id].extend(leftover)
+
+    if sticky and force_reset:
         _mark_channel_reset(conn)
-        return result
-    return _reassign_sticky(conn, smode, stability["gap_size"], ext)
+
+    if len(lanes) > 1:
+        logger.info(
+            "[CHANNEL_SORT] Lanes: %d pinned + default; %d channels processed, %d moved",
+            len(lanes) - 1, totals["channels_processed"], totals["channels_moved"],
+        )
+    return totals
+
+
+def _merge(totals: dict, result: dict) -> None:
+    totals["channels_processed"] += result["channels_processed"]
+    totals["channels_moved"] += result["channels_moved"]
+    totals["drift_details"].extend(result["drift_details"])
 
 
 def _channel_num_as_int(value) -> int | None:
     """Parse a stored channel_number (TEXT) into an int, or None."""
-    if value is None or value == "":
+    if value is None:
         return None
     try:
-        return int(float(value))
+        return int(value)
     except (ValueError, TypeError):
         return None
 
@@ -669,12 +714,88 @@ def _apply_number(conn: Connection, ch: dict, target: int, mode: str, drift: lis
     return False
 
 
-def _reassign_sticky(
+# =============================================================================
+# Per-lane placement cores
+# =============================================================================
+# Each takes the lane's already-sorted channels and range, and the shared set of
+# used numbers (external channels + everything placed so far). They return the
+# usual stats dict plus the channels that did not fit (range exhausted).
+
+
+def _place_compact(
     conn: Connection,
+    channels: list[dict],
+    range_start: int,
+    effective_end: int,
+    used: set[int],
+) -> tuple[dict, list[dict]]:
+    """Sequential numbers from range_start in sort order (no locking)."""
+    channels_moved = 0
+    drift_details: list[dict] = []
+    leftover: list[dict] = []
+
+    next_num = range_start
+    while next_num in used:
+        next_num += 1
+
+    for i, ch in enumerate(channels):
+        old_num = ch["channel_number"]
+
+        if next_num > effective_end:
+            logger.warning(
+                "[CHANNEL_SORT] COMPACT reassign stopped at channel %d - range exhausted",
+                ch["id"],
+            )
+            leftover = channels[i:]
+            break
+
+        if old_num != next_num:
+            conn.execute(
+                "UPDATE managed_channels SET channel_number = ? WHERE id = ?",
+                (next_num, ch["id"]),
+            )
+            drift_details.append({
+                "channel_id": ch["id"],
+                "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
+                "channel_name": ch["channel_name"],
+                "old_number": old_num,
+                "new_number": next_num,
+            })
+            channels_moved += 1
+            logger.debug(
+                "[CHANNEL_NUM] '%s' moved #%s → #%d",
+                ch["channel_name"], old_num, next_num,
+            )
+
+        used.add(next_num)
+        next_num += 1
+        while next_num in used:
+            next_num += 1
+
+    placed = len(channels) - len(leftover)
+    logger.info(
+        "[CHANNEL_SORT] COMPACT reassign: %d channels processed, %d moved", placed, channels_moved,
+    )
+    return (
+        {
+            "channels_processed": placed,
+            "channels_moved": channels_moved,
+            "drift_details": drift_details,
+        },
+        leftover,
+    )
+
+
+def _place_sticky(
+    conn: Connection,
+    sorted_channels: list[dict],
     mode: str,
     gap_size: int,
+    range_start: int,
+    effective_end: int,
+    used: set[int],
     ext: set[int],
-) -> dict:
+) -> tuple[dict, list[dict]]:
     """Sticky placement for gap/strict modes (no full re-layout).
 
     Locked channels never move. Unlocked channels (newly created, or existing
@@ -687,16 +808,13 @@ def _reassign_sticky(
     - strict: appended to the end of the used range, so nothing existing is displaced.
 
     A locked channel whose number now collides with an external channel or has
-    fallen outside the configured range is treated as unplaced and re-gridded on
+    fallen outside the lane's range is treated as unplaced and re-gridded on
     this run (rather than waiting for the daily reset to clear the conflict).
-    """
-    range_start, range_end = get_global_channel_range(conn)
-    effective_end = range_end if range_end else MAX_CHANNEL
-    step = gap_size if (mode == "gap" and gap_size > 0) else 1
 
-    sorted_channels = get_all_channels_sorted(conn)
-    if not sorted_channels:
-        return {"channels_processed": 0, "channels_moved": 0, "drift_details": []}
+    ``used`` arrives pre-seeded with every lane's valid anchors and external
+    channels; this lane's placements are added to it.
+    """
+    step = gap_size if (mode == "gap" and gap_size > 0) else 1
 
     def is_anchor(ch) -> bool:
         """A locked channel still acts as a fixed anchor only while its number is
@@ -706,14 +824,12 @@ def _reassign_sticky(
             return False
         return num not in ext and range_start <= num <= effective_end
 
-    # Locked anchors occupy their numbers permanently here; external channels too.
-    used: set[int] = set(ext)
+    # This lane's own anchors bound its append frontier.
     locked_teamarr: set[int] = set()
     for ch in sorted_channels:
         if is_anchor(ch):
             num = _channel_num_as_int(ch["channel_number"])
             assert num is not None  # is_anchor guarantees a valid int
-            used.add(num)
             locked_teamarr.add(num)
 
     # Feeds of one event are placed as a contiguous block — no gap or other event
@@ -791,6 +907,7 @@ def _reassign_sticky(
 
     drift_details: list[dict] = []
     channels_moved = 0
+    leftover: list[dict] = []
     lo = range_start - 1  # so the first grid slot considered is range_start
 
     for gi, group in enumerate(groups):
@@ -826,7 +943,7 @@ def _reassign_sticky(
                 ),
             )
             stopped = False
-            for ch in unplaced:
+            for ui, ch in enumerate(unplaced):
                 target = first_free_run(lo + 1, hi, 1)
                 if target is None:
                     target = append_block(on_grid=(mode == "gap"), k=1)
@@ -835,6 +952,7 @@ def _reassign_sticky(
                         "[CHANNEL_SORT] %s sticky stopped (event=%s) - range exhausted",
                         mode.upper(), group[0].get("event_id"),
                     )
+                    leftover = unplaced[ui:] + [c for g in groups[gi + 1:] for c in g]
                     stopped = True
                     break
                 claim(ch, target)
@@ -857,29 +975,37 @@ def _reassign_sticky(
                 "[CHANNEL_SORT] %s sticky stopped (event=%s, %d feed(s)) - range exhausted",
                 mode.upper(), group[0].get("event_id"), k,
             )
+            leftover = [c for g in groups[gi:] for c in g]
             break
 
         for j, ch in enumerate(group):
             claim(ch, start + j)
         lo = start + (k - 1)
 
+    placed = len(sorted_channels) - len(leftover)
     logger.info(
         "[CHANNEL_SORT] %s sticky: %d channels processed, %d placed",
-        mode.upper(), len(sorted_channels), channels_moved,
+        mode.upper(), placed, channels_moved,
     )
-    return {
-        "channels_processed": len(sorted_channels),
-        "channels_moved": channels_moved,
-        "drift_details": drift_details,
-    }
+    return (
+        {
+            "channels_processed": placed,
+            "channels_moved": channels_moved,
+            "drift_details": drift_details,
+        },
+        leftover,
+    )
 
 
-def _reassign_reset(
+def _place_reset(
     conn: Connection,
+    sorted_channels: list[dict],
     mode: str,
     gap_size: int,
-    ext: set[int],
-) -> dict:
+    range_start: int,
+    effective_end: int,
+    used: set[int],
+) -> tuple[dict, list[dict]]:
     """Full re-layout for gap/strict modes (the daily reset window).
 
     Re-grids every channel by priority order and re-locks them. Feeds of one event
@@ -887,17 +1013,11 @@ def _reassign_reset(
     is applied only *between* events (strict is fully contiguous). This is the only
     path that moves a channel that is already locked.
     """
-    range_start, range_end = get_global_channel_range(conn)
-    effective_end = range_end if range_end else MAX_CHANNEL
     step = gap_size if (mode == "gap" and gap_size > 0) else 1
-
-    sorted_channels = get_all_channels_sorted(conn)
-    if not sorted_channels:
-        return {"channels_processed": 0, "channels_moved": 0, "drift_details": []}
 
     drift_details: list[dict] = []
     channels_moved = 0
-    used: set[int] = set(ext)
+    leftover: list[dict] = []
 
     def free_run(start: int, k: int) -> bool:
         return start + (k - 1) <= effective_end and all(
@@ -910,7 +1030,8 @@ def _reassign_reset(
     # Strict (step=1) packs everything tight. Matches the sticky allocator so the
     # reset doesn't shift events that sticky already placed.
     frontier = range_start
-    for group in _group_consecutive(sorted_channels):
+    groups = _group_consecutive(sorted_channels)
+    for gi, group in enumerate(groups):
         k = len(group)
         start = frontier
         while start + (k - 1) <= effective_end and not free_run(start, k):
@@ -920,6 +1041,7 @@ def _reassign_reset(
                 "[CHANNEL_SORT] %s reset stopped (event=%s, %d feed(s)) - range exhausted",
                 mode.upper(), group[0].get("event_id"), k,
             )
+            leftover = [c for g in groups[gi:] for c in g]
             break
         for j, ch in enumerate(group):
             if _apply_number(conn, ch, start + j, mode, drift_details):
@@ -927,151 +1049,16 @@ def _reassign_reset(
             used.add(start + j)
         frontier = start + (k - 1) + step
 
+    placed = len(sorted_channels) - len(leftover)
     logger.info(
         "[CHANNEL_SORT] %s reset re-layout: %d channels processed, %d moved",
-        mode.upper(), len(sorted_channels), channels_moved,
+        mode.upper(), placed, channels_moved,
     )
-    return {
-        "channels_processed": len(sorted_channels),
-        "channels_moved": channels_moved,
-        "drift_details": drift_details,
-    }
-
-
-def _reassign_auto(
-    conn: Connection,
-    external_occupied: set[int] | None = None,
-) -> dict:
-    """Reassign all channels sequentially from range_start by sort order."""
-    range_start, range_end = get_global_channel_range(conn)
-    effective_end = range_end if range_end else MAX_CHANNEL
-    ext_set = external_occupied or set()
-
-    sorted_channels = get_all_channels_sorted(conn)
-
-    if not sorted_channels:
-        logger.info("[CHANNEL_SORT] No channels to reassign")
-        return {"channels_processed": 0, "channels_moved": 0, "drift_details": []}
-
-    channels_moved = 0
-    drift_details = []
-
-    next_num = range_start
-    while next_num in ext_set:
-        next_num += 1
-
-    for ch in sorted_channels:
-        old_num = ch["channel_number"]
-
-        if next_num > effective_end:
-            logger.warning(
-                "[CHANNEL_SORT] AUTO reassign stopped at channel %d - range exhausted", ch["id"],
-            )
-            break
-
-        if old_num != next_num:
-            conn.execute(
-                "UPDATE managed_channels SET channel_number = ? WHERE id = ?",
-                (next_num, ch["id"]),
-            )
-            drift_details.append({
-                "channel_id": ch["id"],
-                "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
-                "channel_name": ch["channel_name"],
-                "old_number": old_num,
-                "new_number": next_num,
-            })
-            channels_moved += 1
-            logger.debug(
-                "[CHANNEL_NUM] '%s' moved #%s → #%d",
-                ch["channel_name"], old_num, next_num,
-            )
-
-        next_num += 1
-        while next_num in ext_set:
-            next_num += 1
-
-    logger.info(
-        "[CHANNEL_SORT] AUTO reassign: %d channels processed, %d moved",
-        len(sorted_channels), channels_moved,
+    return (
+        {
+            "channels_processed": placed,
+            "channels_moved": channels_moved,
+            "drift_details": drift_details,
+        },
+        leftover,
     )
-
-    return {
-        "channels_processed": len(sorted_channels),
-        "channels_moved": channels_moved,
-        "drift_details": drift_details,
-    }
-
-
-def _reassign_manual(
-    conn: Connection,
-    external_occupied: set[int] | None = None,
-) -> dict:
-    """Reassign channels in MANUAL mode: sequential within each league's range."""
-    league_starts = get_league_channel_starts(conn)
-    range_start, range_end = get_global_channel_range(conn)
-    effective_end = range_end if range_end else MAX_CHANNEL
-    ext_set = external_occupied or set()
-
-    sorted_channels = get_all_channels_sorted(conn)
-
-    if not sorted_channels:
-        logger.info("[CHANNEL_SORT] No channels to reassign (manual)")
-        return {"channels_processed": 0, "channels_moved": 0, "drift_details": []}
-
-    # Track next available number per league
-    league_counters: dict[str, int] = {}
-    channels_moved = 0
-    drift_details = []
-
-    for ch in sorted_channels:
-        old_num = ch["channel_number"]
-        league = (ch.get("league") or "").lower()
-
-        if league not in league_counters:
-            start = league_starts.get(league, range_start)
-            # Skip external channels at the start
-            while start in ext_set:
-                start += 1
-            league_counters[league] = start
-
-        next_num = league_counters[league]
-        while next_num in ext_set:
-            next_num += 1
-
-        if next_num > effective_end:
-            logger.warning(
-                "[CHANNEL_SORT] MANUAL reassign stopped for league '%s' - range exhausted", league,
-            )
-            continue
-
-        if old_num != next_num:
-            conn.execute(
-                "UPDATE managed_channels SET channel_number = ? WHERE id = ?",
-                (next_num, ch["id"]),
-            )
-            drift_details.append({
-                "channel_id": ch["id"],
-                "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
-                "channel_name": ch["channel_name"],
-                "old_number": old_num,
-                "new_number": next_num,
-            })
-            channels_moved += 1
-            logger.debug(
-                "[CHANNEL_NUM] '%s' moved #%s → #%d",
-                ch["channel_name"], old_num, next_num,
-            )
-
-        league_counters[league] = next_num + 1
-
-    logger.info(
-        "[CHANNEL_SORT] MANUAL reassign: %d channels processed, %d moved",
-        len(sorted_channels), channels_moved,
-    )
-
-    return {
-        "channels_processed": len(sorted_channels),
-        "channels_moved": channels_moved,
-        "drift_details": drift_details,
-    }

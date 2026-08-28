@@ -129,7 +129,9 @@ export interface TeamFilterSettingsUpdate {
 export type ChannelStabilityMode = "compact" | "gap" | "strict"
 
 export interface ChannelNumberingSettings {
+  /** Always "auto" since v88 — manual mode was replaced by pinned blocks (#333). */
   global_channel_mode: "auto" | "manual"
+  /** Legacy manual-mode starts; migrated to pinned blocks in v88, no longer read. */
   league_channel_starts: Record<string, number>
   global_consolidation_mode: "consolidate" | "separate"
   channel_stability_mode: ChannelStabilityMode
