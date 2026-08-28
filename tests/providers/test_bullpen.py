@@ -114,3 +114,22 @@ def test_bullpen_api_key_can_be_cleared():
     update_bullpen_settings(conn, api_key=None)
 
     assert get_bullpen_settings(conn).api_key is None
+
+
+def test_bullpen_disable_status_can_be_cleared():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(SCHEMA_PATH.read_text())
+
+    update_bullpen_settings(
+        conn,
+        enabled=False,
+        disabled_reason="Bullpen returned 401 Unauthorized after three attempts.",
+        disabled_at="2026-08-28T12:00:00+00:00",
+    )
+    update_bullpen_settings(conn, enabled=True, disabled_reason=None, disabled_at=None)
+
+    settings = get_bullpen_settings(conn)
+    assert settings.enabled is True
+    assert settings.disabled_reason is None
+    assert settings.disabled_at is None

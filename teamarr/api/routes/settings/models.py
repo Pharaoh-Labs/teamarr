@@ -662,6 +662,8 @@ class BullpenSettingsModel(BaseModel):
     enabled: bool = False
     api_key: str | None = None
     base_url: str = "https://bullpen.direct"
+    disabled_reason: str | None = None
+    disabled_at: str | None = None
     espn_enabled: bool = False
     bellmedia_enabled: bool = False
     squiggle_enabled: bool = False

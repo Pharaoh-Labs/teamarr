@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from teamarr.providers import base_client
-from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig
 
 
 class _StubClient(BaseHTTPClient):
@@ -79,6 +79,38 @@ def test_429_gives_up_after_max_retries(monkeypatch):
     assert client._request_json("https://api.test/x") is None
     # Initial attempt + RATE_LIMIT_MAX_RETRIES retries
     assert len(calls) == base_client.RATE_LIMIT_MAX_RETRIES + 1
+
+
+def test_bullpen_401_retries_then_disables(monkeypatch):
+    monkeypatch.setattr(base_client.time, "sleep", lambda s: None)
+    calls = []
+    disabled = []
+    bullpen = BullpenConfig(
+        api_key="key",
+        base_url="https://proxy.test",
+        on_unauthorized=lambda: disabled.append(True),
+    )
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(401)
+
+    client = _make_client(handler, bullpen=bullpen)
+    assert client._request_json("https://proxy.test/v1/stub/request") is None
+
+    assert len(calls) == base_client.BULLPEN_UNAUTHORIZED_ATTEMPTS
+    assert bullpen.disabled is True
+    assert disabled == [True]
+
+
+def test_direct_401_does_not_disable_bullpen():
+    disabled = []
+    bullpen = BullpenConfig(api_key="key", on_unauthorized=lambda: disabled.append(True))
+    client = _make_client(lambda request: httpx.Response(401), bullpen=bullpen)
+
+    assert client._request_json("https://origin.test/request") is None
+    assert bullpen.disabled is False
+    assert disabled == []
 
 
 @pytest.mark.parametrize("attempt", [0, 1, 2, 5, 10])

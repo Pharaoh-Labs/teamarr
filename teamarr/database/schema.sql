@@ -291,6 +291,8 @@ CREATE TABLE IF NOT EXISTS settings (
     bullpen_enabled BOOLEAN DEFAULT 0,
     bullpen_api_key TEXT,
     bullpen_base_url TEXT DEFAULT 'https://bullpen.direct',
+    bullpen_disabled_reason TEXT,
+    bullpen_disabled_at TEXT,
     bullpen_espn_enabled BOOLEAN DEFAULT 0,
     bullpen_bellmedia_enabled BOOLEAN DEFAULT 0,
     bullpen_squiggle_enabled BOOLEAN DEFAULT 0,
@@ -474,7 +476,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 88
+    schema_version INTEGER DEFAULT 89
 );
 
 -- Insert default settings

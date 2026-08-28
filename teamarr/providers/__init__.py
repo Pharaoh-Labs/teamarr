@@ -17,9 +17,10 @@ to inject the LeagueMappingSource into providers.
 
 import sqlite3
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from teamarr.database import get_db
-from teamarr.database.settings import get_bullpen_settings
+from teamarr.database.settings import get_bullpen_settings, update_bullpen_settings
 from teamarr.database.team_cache import get_team_name_by_id
 from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.bellmedia import BellMediaClient, BellMediaProvider
@@ -37,6 +38,32 @@ from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 # =============================================================================
 # Factories inject dependencies from the registry at instantiation time.
 
+_BULLPEN_PROVIDERS = (
+    "espn",
+    "bellmedia",
+    "squiggle",
+    "nascar",
+    "mlbstats",
+    "hockeytech",
+    "tsdb",
+)
+
+
+def _disable_bullpen_after_unauthorized() -> None:
+    """Disable Bullpen globally after a provider exhausts 401 retries."""
+    with get_db() as conn:
+        if not get_bullpen_settings(conn).enabled:
+            return
+        update_bullpen_settings(
+            conn,
+            enabled=False,
+            disabled_reason="Bullpen returned 401 Unauthorized after three attempts.",
+            disabled_at=datetime.now(UTC).isoformat(),
+        )
+
+    for provider in _BULLPEN_PROVIDERS:
+        ProviderRegistry.reinitialize_provider(provider)
+
 
 def _get_bullpen_config(provider_flag: str) -> BullpenConfig | None:
     """Resolve BullpenConfig for one provider from database settings.
@@ -53,6 +80,7 @@ def _get_bullpen_config(provider_flag: str) -> BullpenConfig | None:
                 return BullpenConfig(
                     api_key=settings.api_key,
                     base_url=settings.base_url or "https://bullpen.direct",
+                    on_unauthorized=_disable_bullpen_after_unauthorized,
                 )
     except sqlite3.Error:
         # Database not available or column doesn't exist yet - expected during startup

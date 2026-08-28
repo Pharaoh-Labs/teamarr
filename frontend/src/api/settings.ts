@@ -292,6 +292,8 @@ export interface BullpenSettings {
   enabled: boolean
   api_key: string | null
   base_url: string
+  disabled_reason: string | null
+  disabled_at: string | null
   espn_enabled: boolean
   bellmedia_enabled: boolean
   squiggle_enabled: boolean

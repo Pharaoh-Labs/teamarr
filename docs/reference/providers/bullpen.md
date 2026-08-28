@@ -52,3 +52,5 @@ Enabling bullpen for TheSportsDB is treated as equivalent to holding a [premium 
 ## Failure behavior
 
 There is no fallback to the direct origin if a bullpen request fails (rate limit, upstream error, or bullpen itself unreachable) — the request fails like any other failed provider call, subject to the normal retry/backoff behavior in `teamarr/providers/base_client.py`.
+
+If Bullpen returns `401 Unauthorized` three times for one proxied request, Teamarr disables the global Bullpen switch and records the reason on the `/bullpen` settings page. Correct the proxy authentication configuration, then re-enable Bullpen to clear the alert and resume proxy traffic.
