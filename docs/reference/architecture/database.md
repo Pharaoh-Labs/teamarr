@@ -43,7 +43,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `stream_match_cache` | Fingerprint cache for stream matching |
 | `processing_runs` | EPG generation run statistics (28 columns) |
 
-The schema contains **34 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed stream membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
+The schema contains **35 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed stream membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `numbering_exceptions` (pinned blocks, #333), `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
 
 ## Settings Table
 
@@ -72,11 +72,12 @@ The settings table is a single row with 123 columns, organized into these groups
 
 | Column | Default | Description |
 |--------|---------|-------------|
-| `global_channel_mode` | `auto` | `auto` or `manual` |
-| `channel_range_start` | 101 | First channel number |
+| `channel_range_start` | 101 | First channel number of the default lane (everything not pinned) |
 | `channel_range_end` | null | Last number (null = no limit) |
-| `channel_numbering_mode` | `strict_block` | `strict_block`, `rational_block`, or `strict_compact` |
-| `league_channel_starts` | JSON | Per-league starting numbers (manual mode) |
+| `channel_stability_mode` | `compact` | `compact`, `gap`, or `strict` — applied inside every lane |
+| `channel_gap_size` | 3 | Spacing between events in `gap` mode |
+| `global_channel_mode` | `auto` | Always `auto` since v88 (manual mode retired, #333); kept one release for rollback |
+| `league_channel_starts` | JSON | Legacy manual-mode starts, migrated to `numbering_exceptions` in v88; no longer read |
 
 ### Sport Durations (hours)
 
@@ -139,19 +140,15 @@ The settings table is a single row with 123 columns, organized into these groups
 
 ## Channel Numbering Algorithm
 
-`channel_numbers.py` provides three numbering modes:
+`channel_numbers.py` numbers channels inside **lanes**: one per pinned block
+(`numbering_exceptions` — a team, league, or sport pin, most specific wins) plus
+the default lane (the global range). The stability mode (`compact` / `gap` /
+`strict`, with sticky locks and the daily re-layout) is applied inside each lane
+over a shared set of used numbers, so blocks spill forward rather than collide.
+External Dispatcharr channel numbers are always skipped.
 
-| Mode | Behavior |
-|------|----------|
-| `strict_block` | Fixed blocks per league with gaps between. Predictable but wastes numbers. |
-| `rational_block` | Like strict_block but tightens gaps. More efficient. |
-| `strict_compact` | No gaps, sequential assignment. Most efficient but numbers shift when channels change. |
-
-The allocator respects:
-- Global range (`channel_range_start` to `channel_range_end`)
-- Per-league starting numbers (manual mode)
-- External occupied numbers (non-Teamarr channels in Dispatcharr)
-- Sort scope (`per_group` or `global`)
+See [Channel Numbering](channel-numbering) for the model, precedence rules, and
+the v88 migration from manual mode.
 
 ## File Locations
 

@@ -27,7 +27,7 @@ The channels themselves are inspected on the **Dashboard**'s [Managed Channels t
 |------|----------------|
 | **[Lifecycle](lifecycle)** | When event channels are created and deleted, and the pre/post-event buffers |
 | **[Consolidation](consolidation)** | Whether multiple streams for one event merge into a single channel or split apart — plus exception keywords and feed separation |
-| **[Numbering](numbering)** | Channel-number assignment (auto/manual), the channel range, and channel ordering in the lineup |
+| **[Numbering](numbering)** | The channel range, pinned blocks for teams/leagues/sports, number stability, and channel ordering in the lineup |
 | **[Stream Priority](stream-priority)** | Rules that decide which stream plays first inside a consolidated channel |
 | **[Dispatcharr Output](output)** | How channels are written to Dispatcharr — profiles, channel groups, group modes, and per-league overrides |
 
