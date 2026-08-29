@@ -161,6 +161,16 @@ class MatchPersistence:
                         stream_id=stream_id,
                         stream_name=result.stream_name,
                         reason=failed_reason,
+                        # The evidence behind the reason (#661), and the
+                        # inclusion verdict beside it (#662's unmatched rows).
+                        # MatchOutcome has carried a detail since it was
+                        # introduced and both columns have always existed, but
+                        # this constructor passed neither, so every one of
+                        # 11,279 failures in a real bundle shipped with detail
+                        # NULL and triage had to re-derive causes from the
+                        # parsed_team strings.
+                        detail=result.detail,
+                        exclusion_reason=result.exclusion_reason,
                         parsed_team1=parsed_team1,
                         parsed_team2=parsed_team2,
                         detected_league=detected_league,

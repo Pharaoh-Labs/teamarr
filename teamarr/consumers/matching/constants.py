@@ -9,6 +9,12 @@ For pattern/alias data, see teamarr/utilities/constants.py
 # The lifecycle layer filters out past events after matching.
 MATCH_WINDOW_DAYS = 30
 
+# Longest near-miss explanation persisted on a failed match (#661). It rides in
+# every support bundle at up to 500 failure rows per run, so it is capped to
+# keep the archive bounded; the informative half (best candidate + both scores)
+# comes first, so a truncation loses only the alias/date tail.
+NEAR_MISS_DETAIL_MAX = 400
+
 # =============================================================================
 # CONFIDENCE THRESHOLDS
 # Fuzzy match score thresholds that control when matches are accepted.

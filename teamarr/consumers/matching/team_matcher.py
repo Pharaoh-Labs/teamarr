@@ -25,6 +25,7 @@ from teamarr.consumers.matching.constants import (
     ALTERNATE_TEAM_CODES,
     BOTH_TEAMS_THRESHOLD,
     HIGH_CONFIDENCE_THRESHOLD,
+    NEAR_MISS_DETAIL_MAX,
     SHORT_CODE_MAX_LEN,
 )
 from teamarr.consumers.matching.country_resolver import (
@@ -1393,39 +1394,50 @@ class TeamMatcher:
             ctx.team1,
             ctx.team2,
         )
-        self._log_near_miss(
+        near_miss = self._near_miss_summary(
             ctx,
             [e for _, e in events],
             team1_normalized,
             team2_normalized,
             date_rejected,
         )
+        logger.debug("[NEAR_MISS] stream_id=%d %s", ctx.stream_id, near_miss)
         return MatchOutcome.failed(
             reason,
             stream_name=ctx.stream_name,
             stream_id=ctx.stream_id,
+            detail=near_miss,
             parsed_team1=ctx.team1,
             parsed_team2=ctx.team2,
         )
 
-    def _log_near_miss(
+    def _near_miss_summary(
         self,
         ctx: MatchContext,
         candidates: list[Event],
         team1_norm: str | None,
         team2_norm: str | None,
         date_rejected: int,
-    ) -> None:
-        """DEBUG-only near-miss report for match failures (#480).
+    ) -> str:
+        """Why the closest candidate lost, as one line (#480, persisted by #661).
 
         A bare "reason=no_event_found" hides everything a bug report needs:
         which candidate came closest, the per-side scores vs the threshold,
-        and whether aliases resolved. This prints the single best-scoring
-        candidate so a log line is enough to diagnose misses like
-        'D-backs' scoring 50 against the Diamondbacks.
+        and whether aliases resolved. This reports the single best-scoring
+        candidate, enough to diagnose misses like 'D-backs' scoring 50 against
+        the Diamondbacks.
+
+        Returned rather than logged (#661). It used to go only to a DEBUG log,
+        where two things destroyed it: installs that raise LOG_LEVEL never
+        computed it at all, and the support bundle caps log tails at 256KB, so
+        78 of 11,279 failures kept their line. Meanwhile the structured record
+        the bundle ships complete had an empty `detail` column. The caller now
+        puts this on the MatchOutcome, so the evidence travels with the failure.
+
+        Cost: bounded at 300 candidates, and only ever runs on the failure
+        path. The per-side scores come from the same memoized kernel the match
+        loop just used, so the pairs are overwhelmingly cache hits.
         """
-        if not logger.isEnabledFor(logging.DEBUG):
-            return
 
         def side(stream_norm: str | None, team) -> float:
             if not stream_norm:
@@ -1446,12 +1458,7 @@ class TeamMatcher:
                 best = (pair[0], pair[1], pair[2], event)
 
         if best is None:
-            logger.debug(
-                "[NEAR_MISS] stream_id=%d no candidates in window; date_gated=%d",
-                ctx.stream_id,
-                date_rejected,
-            )
-            return
+            return f"no candidates in window; date_gated={date_rejected}"
 
         _, s1, s2, event = best
         # Resolve against the candidate's league — user aliases are
@@ -1459,23 +1466,15 @@ class TeamMatcher:
         # alias that WOULD fire in the real path).
         alias1 = self._resolve_alias(team1_norm, event.league) if team1_norm else None
         alias2 = self._resolve_alias(team2_norm, event.league) if team2_norm else None
-        logger.debug(
-            "[NEAR_MISS] stream_id=%d best='%s vs %s' (%s %s) scores %s=%.0f / %s=%.0f "
-            "(need %.0f) alias1=%s alias2=%s date_gated=%d",
-            ctx.stream_id,
-            event.home_team.name,
-            event.away_team.name,
-            event.league,
-            event.start_time.date(),
-            ctx.team1,
-            s1,
-            ctx.team2,
-            s2,
-            BOTH_TEAMS_THRESHOLD,
-            alias1 or "none",
-            alias2 or "none",
-            date_rejected,
+        summary = (
+            f"best='{event.home_team.name} vs {event.away_team.name}' "
+            f"({event.league} {event.start_time.date()}) "
+            f"scores {ctx.team1}={s1:.0f} / {ctx.team2}={s2:.0f} "
+            f"(need {BOTH_TEAMS_THRESHOLD:.0f}) "
+            f"alias1={alias1 or 'none'} alias2={alias2 or 'none'} "
+            f"date_gated={date_rejected}"
         )
+        return summary[:NEAR_MISS_DETAIL_MAX]
 
     def _check_abbreviation_match(
         self,
