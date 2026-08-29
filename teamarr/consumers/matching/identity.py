@@ -50,6 +50,7 @@ half.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from functools import lru_cache
@@ -152,7 +153,13 @@ def _is_short_code(normalized: str) -> bool:
 # either as a discriminator would refuse a team its own event.
 _NON_DISCRIMINATING = frozenset(
     {"fc", "cf", "sc", "afc", "ac", "as", "ss", "cd", "sv", "fk", "bk", "if", "ff", "hc"}
+    # Video-quality words that survive into a stream side (#651). "HD"/"SD"/"4K"
+    # are already too short to count; these are not, and "1080p" convicted
+    # "wagner 1080p" against "wagner seahawks" — a second, independent kill
+    # after the score itself.
+    | {"uhd", "fhd"}
 )
+_RESOLUTION_RE = re.compile(r"\d{3,4}[pi]")
 
 
 def _discriminating(tokens: AbstractSet[str]) -> set[str]:
@@ -162,7 +169,11 @@ def _discriminating(tokens: AbstractSet[str]) -> set[str]:
     memoized ``frozenset``s, so a ``set``-only annotation would reject the only
     inputs it ever receives.
     """
-    return {t for t in tokens if len(t) > 2 and t not in _NON_DISCRIMINATING}
+    return {
+        t
+        for t in tokens
+        if len(t) > 2 and t not in _NON_DISCRIMINATING and not _RESOLUTION_RE.fullmatch(t)
+    }
 
 
 # Cap on TeamIdentityIndex.resolve's memo. Keyed by normalized stream-side text,
