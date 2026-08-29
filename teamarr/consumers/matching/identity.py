@@ -258,6 +258,35 @@ class TeamIdentityIndex:
                 ):
                     prefix = " ".join(name_tokens[: -len(short_tokens)])
                     self._partial.setdefault(prefix, []).append(identity)
+            # "Fairmont State Falcons" -> "fairmont state" (#650). A leading run
+            # of a full name is a partial reading of it, and for college rows
+            # the trailing run is the mascot while the leading run is exactly
+            # what broadcasters write.
+            #
+            # The short-name prefix rule above cannot supply these keys: ESPN
+            # abbreviates the SCHOOL for college ("Fairmont State Falcons" ->
+            # "Fairmont St", "Eastern Washington Eagles" -> "E Washington"), so
+            # the short name is never a suffix of the full name and the rule
+            # never fires. That left the school-only form with no route to the
+            # football team at all, while NCAA soccer -- where ESPN publishes no
+            # mascots, so the full name IS the bare school -- held it as an
+            # *exact* identity. One such side narrowed the fixture to
+            # usa.ncaa.w.1 and vetoed college-football for 20 of 73 games.
+            #
+            # Every prefix, not just the mascot-dropped one, because mascots run
+            # to two words as often as one ("Central Connecticut Blue Devils").
+            # Stop at two tokens: a bare first word is the city/school reading,
+            # which the short_name rule already owns, and registering it here
+            # would enter every "north"/"saint" against thousands of teams.
+            #
+            # Safe by construction: partial readings only widen an identity set,
+            # and the gate is veto-only, so this can withdraw a veto but never
+            # manufacture a match.
+            full_tokens = name_norm.split()
+            for cut in range(len(full_tokens) - 1, 1, -1):
+                prefix = " ".join(full_tokens[:cut])
+                if prefix != short_norm:
+                    self._partial.setdefault(prefix, []).append(identity)
             if abbrev:
                 self._by_abbrev.setdefault(normalize_text(abbrev), []).append(identity)
 
