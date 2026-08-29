@@ -6,6 +6,7 @@ Handles M3U account listing, stream discovery, and refresh operations.
 import logging
 import time
 import urllib.parse
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from teamarr.dispatcharr.client import DispatcharrClient
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 # purpose: Dispatcharr is a single Django app, frequently on the same host, so
 # the goal is to remove the serial round-trip cost, not to saturate it.
 _MAX_PAGE_WORKERS = 8
+# ids per ``?ids=`` request — ~8 chars each keeps the URL well under 2 KB.
+_IDS_CHUNK_SIZE = 200
 
 
 def _fix_double_encoded_utf8(text: str) -> str:
@@ -311,11 +314,7 @@ class M3UManager:
         else:
             raw_streams.extend(first.get("results", []))
             total = first.get("count")
-            pages = (
-                -(-total // page_size)
-                if isinstance(total, int) and page_size > 0
-                else None
-            )
+            pages = -(-total // page_size) if isinstance(total, int) and page_size > 0 else None
 
             if limit is not None or pages is None:
                 # A caller with a limit wants to stop early, and a response with
@@ -334,10 +333,7 @@ class M3UManager:
                 with ThreadPoolExecutor(
                     max_workers=workers, thread_name_prefix="m3u-page"
                 ) as executor:
-                    futures = {
-                        executor.submit(fetch, page_url(n)): n
-                        for n in range(2, pages + 1)
-                    }
+                    futures = {executor.submit(fetch, page_url(n)): n for n in range(2, pages + 1)}
                     for future in as_completed(futures):
                         page = futures[future]
                         try:
@@ -358,9 +354,7 @@ class M3UManager:
                             )
                             executor.shutdown(wait=False, cancel_futures=True)
                             return []
-                        by_page[page] = (
-                            data.get("results", []) if isinstance(data, dict) else data
-                        )
+                        by_page[page] = data.get("results", []) if isinstance(data, dict) else data
                         if isinstance(data, dict) and page == pages:
                             last = data
 
@@ -399,6 +393,44 @@ class M3UManager:
                 len(streams),
             )
 
+        return streams
+
+    def get_streams_by_ids(
+        self,
+        stream_ids: Iterable[int],
+        chunk_size: int = _IDS_CHUNK_SIZE,
+    ) -> list[DispatcharrStream]:
+        """Fetch specific streams by id via ``/api/channels/streams/?ids=``.
+
+        Dispatcharr answers an ``ids`` filter with an unpaginated list, so a
+        few hundred streams cost a handful of requests instead of a walk over
+        the whole catalog (#647: 119 pages / 118k streams on a real install to
+        look up ~500). Ids are sent in chunks to keep URLs short. A failed
+        chunk is logged and skipped — callers treat a missing detail as "use
+        what the channel already tells us", so partial is strictly better
+        than nothing here.
+        """
+        ids = sorted({int(i) for i in stream_ids})
+        if not ids:
+            return []
+        streams: list[DispatcharrStream] = []
+        for start in range(0, len(ids), chunk_size):
+            chunk = ids[start : start + chunk_size]
+            url = "/api/channels/streams/?ids=" + ",".join(map(str, chunk))
+            response = self._client.get(url)
+            if response is None or response.status_code != 200:
+                logger.warning(
+                    "[M3U] Failed to fetch %d stream(s) by id: %s",
+                    len(chunk),
+                    response.status_code if response else "No response",
+                )
+                continue
+            data = response.json()
+            raw_list = data.get("results", []) if isinstance(data, dict) else data
+            for raw in raw_list:
+                if "name" in raw:
+                    raw["name"] = _fix_double_encoded_utf8(raw["name"])
+                streams.append(DispatcharrStream.from_api(raw))
         return streams
 
     def get_group_with_streams(

@@ -156,9 +156,7 @@ class StreamFetcher:
         streams: list = []
         seen_ids: set[int] = set()
         for g in matched:
-            for s in m3u_manager.list_streams(
-                group_name=g.name, account_id=group.m3u_account_id
-            ):
+            for s in m3u_manager.list_streams(group_name=g.name, account_id=group.m3u_account_id):
                 if s.id not in seen_ids:
                     seen_ids.add(s.id)
                     streams.append(s)
@@ -222,13 +220,6 @@ class StreamFetcher:
         except Exception as e:
             logger.warning("[CHANNEL_SOURCE] Failed to load group ids: %s", e)
 
-        # Stream detail (name, account) keyed by id — listed once.
-        try:
-            detail_by_id = {s.id: s for s in client.m3u.list_streams()}
-        except Exception as e:
-            logger.warning("[CHANNEL_SOURCE] Failed to list streams: %s", e)
-            detail_by_id = {}
-
         # DP channel group id -> name (#379). The channels API returns only
         # channel_group_id; the name (which dispatcharr_group ordering rules
         # match on, and which the rule-builder dropdown shows) lives in the
@@ -239,10 +230,11 @@ class StreamFetcher:
             logger.warning("[CHANNEL_SOURCE] Failed to list channel groups: %s", e)
             dp_group_names = {}
 
-        candidates: list[dict] = []
-        seen: set[int] = set()
+        # Pass 1: cheap eligibility from the channel map alone, so the stream
+        # detail lookup below covers only the streams that can become
+        # candidates — never the whole catalog (#647).
+        eligible: list[tuple[int, dict, dict, int | None]] = []
         skipped_teamarr = 0
-        skipped_overlap = 0
         skipped_group = 0
         for stream_id, ch in stream_channel_map.items():
             if ch.get("id") in managed_ids:
@@ -260,6 +252,22 @@ class StreamFetcher:
                 continue
             if active_source_ids is not None and ed.get("epg_source") not in active_source_ids:
                 continue
+            eligible.append((stream_id, ch, ed, dp_group_id))
+
+        # Stream detail (name, M3U group, account, staleness) for just those ids.
+        detail_by_id: dict[int, Any] = {}
+        if eligible:
+            try:
+                detail_by_id = {
+                    s.id: s for s in client.m3u.get_streams_by_ids(sid for sid, *_ in eligible)
+                }
+            except Exception as e:
+                logger.warning("[CHANNEL_SOURCE] Failed to fetch stream details: %s", e)
+
+        candidates: list[dict] = []
+        seen: set[int] = set()
+        skipped_overlap = 0
+        for stream_id, ch, ed, dp_group_id in eligible:
             if stream_id in seen:
                 continue
             detail = detail_by_id.get(stream_id)
