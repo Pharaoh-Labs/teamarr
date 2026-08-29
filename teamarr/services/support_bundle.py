@@ -15,7 +15,12 @@ from typing import Any
 from teamarr.config import BASE_VERSION
 from teamarr.database.channels.types import ManagedChannelStream
 from teamarr.database.connection import get_connection
-from teamarr.database.stats import get_failed_matches, get_matched_streams, get_recent_runs
+from teamarr.database.stats import (
+    get_failed_matches,
+    get_matched_streams,
+    get_recent_runs,
+    media_server_health,
+)
 from teamarr.services.stream_ordering import get_stream_ordering_service
 from teamarr.utilities.logging import _get_log_dir
 
@@ -342,6 +347,26 @@ class SupportBundleService:
                     "severity": "warning",
                     "message": "The latest generation did not complete.",
                     "evidence": {"run_id": runs[0].get("id"), "status": runs[0].get("status")},
+                }
+            )
+        failing = [s for s in media_server_health(runs) if s["failing"]]
+        if failing:
+            signals.append(
+                {
+                    "code": "media_server_refresh_failing",
+                    "severity": "warning",
+                    "message": "A media server's guide refresh has failed on consecutive runs.",
+                    "evidence": {
+                        "servers": [
+                            {
+                                "kind": s["kind"],
+                                "server": s["server"],
+                                "consecutive_failures": s["consecutive_failures"],
+                                "last_error": s["last_error"],
+                            }
+                            for s in failing
+                        ]
+                    },
                 }
             )
         if not channels.get("total"):

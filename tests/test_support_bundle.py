@@ -54,3 +54,29 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
     assert "https://stream.example/live" not in contents
     assert "sb_publishable_abcdef" not in contents
     assert "secret@example.test" not in contents
+
+
+def test_bundle_signals_media_server_failing(db_path, tmp_path):
+    from teamarr.database.stats import create_run, save_run
+
+    with get_connection(db_path) as conn:
+        for _ in range(3):
+            run = create_run(conn, run_type="full_epg")
+            run.extra_metrics["media_servers"] = [
+                {"kind": "emby", "server": "Emby", "success": False, "duration": 0.02,
+                 "error": "connection refused"}
+            ]
+            run.complete()
+            save_run(conn, run)
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    bundle = SupportBundleService(db_path, logs).create()
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        report = json.loads(archive.read("support-report.json"))
+        guide = archive.read("AGENTS.md").decode()
+
+    [signal] = [s for s in report["signals"] if s["code"] == "media_server_refresh_failing"]
+    assert signal["severity"] == "warning"
+    assert signal["evidence"]["servers"][0]["consecutive_failures"] == 3
+    assert "media_server_refresh_failing" in guide

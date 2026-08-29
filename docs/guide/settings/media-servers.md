@@ -23,6 +23,8 @@ The refresh triggers the server's own **Refresh Guide** scheduled task and waits
 
 Saved secrets display as `********` — leave them as-is to keep the stored value, or type over them to replace.
 
+A failed refresh never fails the generation — but it is recorded. Each run stores every server's outcome (success, duration, error) with its run stats, and once a server has failed three consecutive runs the Dashboard status strip shows a **Media servers … not refreshing** warning (hover for the error) and the support bundle raises a `media_server_refresh_failing` signal. If you see it, check the URL first: a server that moved hosts fails instantly on every run and is otherwise invisible.
+
 ## Channels DVR
 
 Channels DVR splits channel-list and guide data into two providers, so Teamarr refreshes both — sequenced, each step confirmed against the server's log before the next:

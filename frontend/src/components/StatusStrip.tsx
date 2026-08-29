@@ -6,7 +6,7 @@ import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { useGenerationProgress } from "@/hooks/useGenerationProgress"
 import { getTeamXmltvUrl } from "@/api/epg"
-import type { ProcessingRun } from "@/api/epg"
+import type { MediaServerHealth, ProcessingRun } from "@/api/epg"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -30,7 +30,13 @@ function formatDuration(ms: number | null | undefined): string | null {
  * a copy button for the XMLTV URL. No chip navigation — the lone control is the
  * URL copy.
  */
-export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
+export function StatusStrip({
+  lastRun,
+  mediaServers,
+}: {
+  lastRun?: ProcessingRun
+  mediaServers?: MediaServerHealth[]
+}) {
   const dispatcharr = useDispatcharrStatus()
   const matchRate = useMatchRate()
   const { formatRelativeTime } = useDateFormat()
@@ -111,6 +117,13 @@ export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
     GenIcon = CircleCheckBig
   }
 
+  // --- Media servers chip (#649): only when a server has failed on
+  // consecutive runs — a single miss is noise, three hours of misses is not.
+  const failingServers = (mediaServers ?? []).filter((s) => s.failing)
+  const mediaTitle = failingServers
+    .map((s) => `${s.server} (${s.kind}): ${s.consecutive_failures} failed runs${s.last_error ? ` — ${s.last_error}` : ""}`)
+    .join("\n")
+
   const genWhen = finishedAt ? formatRelativeTime(finishedAt) : "Never generated"
   const genDuration = formatDuration(lastRun?.duration_ms)
   const liveChannels = lastRun?.channels?.active
@@ -166,6 +179,19 @@ export function StatusStrip({ lastRun }: { lastRun?: ProcessingRun }) {
               <span className={`font-medium ${matchRateColor(matchRate.rate)}`}>{matchRate.rate}%</span>
             )}
             <span className="text-muted-foreground">matched</span>
+          </div>
+        </>
+      )}
+
+      {failingServers.length > 0 && (
+        <>
+          <span className="hidden h-4 w-px bg-border sm:inline-block" />
+          <div className="flex items-center gap-2" title={mediaTitle}>
+            <TriangleAlert className="h-4 w-4 text-red-500" />
+            <span className="text-muted-foreground">Media servers</span>
+            <span className="font-medium text-red-500">
+              {failingServers.length} not refreshing
+            </span>
           </div>
         </>
       )}

@@ -74,6 +74,9 @@ class GenerationResult:
     jellyfin_refresh: dict = field(default_factory=dict)
     channelsdvr_refresh: dict = field(default_factory=dict)
     channelsdvr_epg_refresh: dict = field(default_factory=dict)
+    # One entry per media server refreshed this run (#649): persisted on the
+    # run row so a server that fails every run is visible after the fact.
+    media_server_outcomes: list[dict] = field(default_factory=list)
 
     # For stats run tracking
     run_id: int | None = None
@@ -489,6 +492,9 @@ def run_full_generation(
                 outcomes = _run_media_server_refreshes(
                     jobs, update_progress, is_cancellation_requested
                 )
+                result.media_server_outcomes = [
+                    _media_server_outcome(kind, label, o) for kind, label, o in outcomes
+                ]
 
                 emby_results = [
                     {"server": label, **o["guide"]}
@@ -671,6 +677,11 @@ def _dry_run_media_refresh(result: Any, jobs: list[tuple[str, Any]]) -> bool:
     for kind, urls in by_kind.items():
         logger.info("[DRY_RUN] Suppressed %s guide refresh for %s", kind, ", ".join(urls))
         payload = {"success": True, "dry_run": True, "servers": urls}
+        result.media_server_outcomes += [
+            {"kind": kind, "server": u, "success": True, "duration": 0.0, "error": None,
+             "dry_run": True}
+            for u in urls
+        ]
         if kind == "emby":
             result.emby_refresh = payload
         elif kind == "jellyfin":
@@ -724,6 +735,23 @@ def _run_media_server_refreshes(
                     (kind, label, {"guide": {"success": False, "error": str(e)}})
                 )
     return results
+
+
+def _media_server_outcome(kind: str, label: str, outcome: dict) -> dict:
+    """Flatten one server's refresh result for the run row (#649).
+
+    Channels DVR has two steps (m3u + epg); it counts as a success only when
+    both did, and reports the first error.
+    """
+    parts = [v for v in (outcome.get("guide"), outcome.get("m3u"), outcome.get("epg")) if v]
+    errors = [p.get("error") or p.get("message") for p in parts if not p.get("success")]
+    return {
+        "kind": kind,
+        "server": label,
+        "success": bool(parts) and all(p.get("success") for p in parts),
+        "duration": round(sum(float(p.get("duration") or 0) for p in parts), 2),
+        "error": errors[0] if errors else None,
+    }
 
 
 def _refresh_one_media_server(
@@ -1390,6 +1418,11 @@ def _finalize_stats_run(
 
     stats_run.extra_metrics["provider_calls"] = call_metrics.snapshot()
     stats_run.extra_metrics["provider_calls_total"] = call_metrics.total()
+
+    # Media-server refresh outcomes (#649): non-blocking failures otherwise
+    # leave no trace beyond a phase timing collapsing to ~0.
+    if result.media_server_outcomes:
+        stats_run.extra_metrics["media_servers"] = list(result.media_server_outcomes)
 
     # Per-phase wall time so run-to-run comparisons (and perf regressions)
     # are visible in the run summary instead of requiring log archaeology.

@@ -124,7 +124,8 @@ def test_dry_run_media_refresh_records_and_skips(monkeypatch):
 
     monkeypatch.setenv("DRY_RUN", "true")
     result = SimpleNamespace(
-        emby_refresh={}, jellyfin_refresh={}, channelsdvr_refresh={}, channelsdvr_epg_refresh={}
+        emby_refresh={}, jellyfin_refresh={}, channelsdvr_refresh={}, channelsdvr_epg_refresh={},
+        media_server_outcomes=[],
     )
     jobs = [
         ("emby", SimpleNamespace(url="http://emby:8096")),
@@ -134,6 +135,11 @@ def test_dry_run_media_refresh_records_and_skips(monkeypatch):
     assert result.emby_refresh == {
         "success": True, "dry_run": True, "servers": ["http://emby:8096"],
     }
+    # Suppressed refreshes are still recorded as (dry-run) successes (#649),
+    # so a dev instance never trips the consecutive-failure signal.
+    assert [(o["kind"], o["success"], o["dry_run"]) for o in result.media_server_outcomes] == [
+        ("emby", True, True), ("channelsdvr", True, True),
+    ]
     assert result.channelsdvr_refresh["dry_run"] is True
     assert result.channelsdvr_epg_refresh["dry_run"] is True
     assert result.jellyfin_refresh == {}

@@ -20,6 +20,7 @@ A read-only strip across the top shows system health at a glance:
 | **Last generated** | When the last run finished (relative time) and its duration, color-coded by staleness: green under a day, amber 1–3 days, red over 3 days or failed. Shows *Generating…* with a spinner during an active run, and a muted "Never generated" before the first run |
 | **Managed channels** | Active Teamarr channel count recorded by the last generation run |
 | **Matched** | Overall stream match rate, color-coded (only shown when match data exists) |
+| **Media servers** | Appears only when a configured Emby, Jellyfin, or Channels DVR server has failed its post-generation refresh on three or more consecutive runs. Hover for the server, failure count, and last error. A single miss stays quiet — this catches a server that has quietly stopped refreshing (a moved host, an expired key) |
 | **EPG URL** | The XMLTV URL with a one-click **Copy** button — this is where you grab the URL for Dispatcharr |
 
 {: .note }
