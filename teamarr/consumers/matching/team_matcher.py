@@ -1110,261 +1110,32 @@ class TeamMatcher:
         events: list[Event],
         league: str,
     ) -> MatchOutcome:
-        """Try to match classified stream against events in a single league.
-
-        Uses whole-name token_set_ratio matching with the following strategy:
-        1. Try alias match first (100% confidence for known abbreviations)
-        2. Fall back to token_set_ratio between extracted teams and event name
-        3. If no match, strip parentheticals from raw names and retry
-           (handles noise like "(Baseball)", "(Available outside Ottawa Region)"
-           without breaking legitimate disambiguators like "Miami (OH)")
-        4. Rank by: score > time proximity > date proximity
-        """
-        team1_normalized = normalize_for_matching(ctx.team1) if ctx.team1 else None
-        team2_normalized = normalize_for_matching(ctx.team2) if ctx.team2 else None
-
-        if not team1_normalized and not team2_normalized:
-            return MatchOutcome.failed(
-                FailedReason.TEAMS_NOT_PARSED,
-                stream_name=ctx.stream_name,
-                stream_id=ctx.stream_id,
-                detail="No team names extracted",
-            )
-
-        # Pre-compute parenthetical-stripped versions from RAW names for fallback.
-        # normalize_for_matching strips parens as punctuation, so we must strip
-        # from the raw names first, then normalize — otherwise the fallback
-        # can never detect that parentheticals were removed.
-        fallback_t1, fallback_t2, has_stripped_fallback = self._prepare_stripped_fallback(
-            ctx.team1, ctx.team2, team1_normalized, team2_normalized
-        )
-        pipe_t1, pipe_t2, has_pipe_fallback = self._prepare_pipe_fallback(
-            ctx.team1, ctx.team2, team1_normalized, team2_normalized
-        )
-
-        # Check if we have date validation from the stream
-        has_date_validation = ctx.classified.normalized.extracted_date is not None
-
-        best_match: Event | None = None
-        best_method: MatchMethod = MatchMethod.FUZZY
-        best_confidence: float = 0.0
-        best_is_future: bool = False  # Whether best match is today or future
-        best_date_distance: int = 999  # Absolute days from target_date
-        best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
-        best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
-        best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
-        date_rejected = 0  # Candidates gated by a trusted stream date (#474)
-        fixture_rejected = 0  # Candidates in a league these teams never meet in
-
-        # Which leagues could these two sides actually play each other in (epic
-        # goax)? Resolved once per stream, not per candidate — it depends only on
-        # the stream's own names. None = identity resolution had nothing to say.
-        fixture_leagues = self._fixture_leagues(ctx)
-
-        for event in events:
-            # Validate event is within search window (lifecycle handles exclusions)
-            if not ctx.is_event_in_search_window(event):
-                continue
-
-            # EPG anchored matching (bead t5e): the candidate must air within the
-            # tolerance of the program's broadcast instant, else it is a different
-            # occurrence — an encore/replay or the next game in the series. This is
-            # the definitive, category-independent guard against encore binding.
-            anchor_dist = 0
-            if ctx.anchor_dt is not None:
-                anchor_dist = abs(int((event.start_time - ctx.anchor_dt).total_seconds()))
-                if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
-                    continue
-
-            event_date = _local_date(event.start_time, ctx.user_tz)
-
-            # Date validation from the stream (#474). A trusted date (built-in
-            # extraction, declared component groups, or a learned per-source
-            # format) gates candidates with ±1 day of tolerance for provider
-            # timezone day-boundaries. An untrusted date (blind per-string
-            # format guess) never rejects — it ranks candidates instead, so a
-            # misread date can no longer zero out the whole group.
-            stream_date_dist = 0
-            if ctx.classified.normalized.extracted_date:
-                # The date in the stream name is in the provider's timezone
-                compare_tz = ctx.stream_tz or ctx.user_tz
-                event_date_in_stream_tz = _local_date(event.start_time, compare_tz)
-                stream_date_dist = abs(
-                    (
-                        ctx.classified.normalized.extracted_date
-                        - event_date_in_stream_tz
-                    ).days
-                )
-
-            # Check for sport mismatch from stream (if detected)
-            # Skip when league hint is present - league is more specific and avoids
-            # sport naming inconsistencies (e.g., "Football" vs "soccer")
-            if ctx.classified.sport_hint and not ctx.classified.league_hint:
-                if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
-                    continue
-
-            # Fixture gate (epic goax). Both stream sides name real teams, and
-            # this event's league is not one where they could meet — so no score
-            # against it can be meaningful. This is what stops an NHL stream from
-            # riding a shared city into an MLB channel: "Tampa Bay Lightning" vs
-            # "Tampa Bay Rays" scores 78 on text alone, but the Lightning play in
-            # exactly one league and it is not this one.
-            if self._fixture_vetoes(fixture_leagues, event.league):
-                fixture_rejected += 1
-                continue
-
-            # Try alias match first (100% confidence)
-            match_result = self._check_alias_match(team1_normalized, team2_normalized, event)
-
-            # Fall back to whole-name matching using extracted teams
-            if not match_result:
-                match_result = self._match_teams_to_event(
-                    team1_normalized, team2_normalized, event, has_date_validation
-                )
-
-            # Fallback: retry with parentheticals stripped from raw names
-            # Handles noise like "(Baseball)", "(03.10 /4PM PT)" without
-            # breaking legitimate disambiguators like "Miami (OH)" (tried above)
-            if not match_result and has_stripped_fallback:
-                match_result = self._match_teams_to_event(
-                    fallback_t1, fallback_t2, event, has_date_validation
-                )
-
-            # Fallback: retry with pipe metadata trimmed (#652). Last tier, so
-            # a name that matches intact never reaches it.
-            if not match_result and has_pipe_fallback:
-                match_result = self._match_teams_to_event(
-                    pipe_t1, pipe_t2, event, has_date_validation
-                )
-
-            # Trusted-date gate (#474), applied AFTER team scoring (#480):
-            # only candidates whose teams actually matched count as date
-            # rejections, so DATE_MISMATCH is reported only when the date is
-            # what killed an otherwise-good match — not whenever unrelated
-            # games elsewhere in the window were skipped.
-            if (
-                match_result
-                and stream_date_dist > 1
-                and ctx.classified.normalized.extracted_date_trusted
-            ):
-                date_rejected += 1
-                continue
-
-            if match_result:
-                method, score = match_result
-
-                # Calculate date metrics for comparison
-                days_from_target = (event_date - ctx.target_date).days
-                is_future = days_from_target >= 0  # Today or future
-                abs_distance = abs(days_from_target)
-
-                # Calculate time proximity for doubleheader disambiguation
-                # Use stream_tz if available - the time in stream name is in provider's timezone
-                time_distance = 999999
-                if ctx.classified.normalized.extracted_time:
-                    time_tz = ctx.stream_tz or ctx.user_tz
-                    ref_date = event.start_time.astimezone(time_tz).date()
-                    stream_dt = datetime.combine(
-                        ref_date, ctx.classified.normalized.extracted_time, tzinfo=time_tz
-                    )
-                    time_distance = abs(
-                        int((event.start_time.astimezone(time_tz) - stream_dt).total_seconds())
-                    )
-
-                # Ranking: score > time proximity > future over past > date proximity.
-                # For EPG anchored matches, nearest to the program instant wins
-                # outright (the encore/series guard already gated the candidates).
-                is_better = False
-                if score > best_confidence:
-                    is_better = True
-                elif score == best_confidence:
-                    if stream_date_dist != best_stream_date_dist:
-                        # Agreement with the stream's declared date is the
-                        # strongest equal-score disambiguator (#474)
-                        is_better = stream_date_dist < best_stream_date_dist
-                    elif ctx.anchor_dt is not None:
-                        is_better = anchor_dist < best_anchor_dist
-                    elif time_distance < best_time_distance:
-                        # Closer to stream time wins (doubleheader case)
-                        is_better = True
-                    elif time_distance == best_time_distance:
-                        if is_future and not best_is_future:
-                            # Future beats past
-                            is_better = True
-                        elif is_future == best_is_future and abs_distance < best_date_distance:
-                            # Same future/past status, prefer closer
-                            is_better = True
-
-                if is_better:
-                    best_match = event
-                    best_method = method
-                    best_confidence = score
-                    best_is_future = is_future
-                    best_date_distance = abs_distance
-                    best_time_distance = time_distance
-                    best_anchor_dist = anchor_dist
-                    best_stream_date_dist = stream_date_dist
-
-        if best_match:
-            logger.debug(
-                "[MATCHED] stream_id=%d method=%s event=%s confidence=%.0f%%",
-                ctx.stream_id,
-                best_method.value,
-                best_match.id,
-                best_confidence,
-            )
-            return MatchOutcome.matched(
-                best_method,
-                best_match,
-                detected_league=league,
-                confidence=best_confidence / 100.0,  # Convert to 0-1
-                stream_name=ctx.stream_name,
-                stream_id=ctx.stream_id,
-                parsed_team1=ctx.team1,
-                parsed_team2=ctx.team2,
-            )
-
-        # No match found
-        if team1_normalized and not team2_normalized:
-            reason = FailedReason.TEAM2_NOT_FOUND
-        elif team2_normalized and not team1_normalized:
-            reason = FailedReason.TEAM1_NOT_FOUND
-        elif date_rejected:
-            # Candidates existed but every one was gated by the stream's
-            # date — say so instead of a generic "no event found" (#474)
-            reason = FailedReason.DATE_MISMATCH
-        elif fixture_rejected:
-            # The stream names two real teams and this league is not where they
-            # meet (epic goax). "No event found" would send the user hunting for
-            # a scheduling gap that isn't there.
-            reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
-        else:
-            reason = FailedReason.NO_EVENT_FOUND
-
-        logger.debug(
-            "[FAILED] stream_id=%d reason=%s teams=%s/%s",
-            ctx.stream_id,
-            reason.value,
-            ctx.team1,
-            ctx.team2,
-        )
-        self._log_near_miss(
-            ctx, list(events), team1_normalized, team2_normalized, date_rejected
-        )
-        return MatchOutcome.failed(
-            reason,
-            stream_name=ctx.stream_name,
-            stream_id=ctx.stream_id,
-            parsed_team1=ctx.team1,
-            parsed_team2=ctx.team2,
-        )
+        """Single-league entry point: every candidate carries ``league``."""
+        return self._match_against_candidates(ctx, [(league, event) for event in events])
 
     def _match_against_multi_league_events(
         self,
         ctx: MatchContext,
         events: Sequence[tuple[str, Event]],
     ) -> MatchOutcome:
-        """Try to match against events from multiple leagues.
+        """Multi-league entry point: candidates already carry their league."""
+        return self._match_against_candidates(ctx, events)
+
+    def _match_against_candidates(
+        self,
+        ctx: MatchContext,
+        events: Sequence[tuple[str, Event]],
+    ) -> MatchOutcome:
+        """Score a stream against ``(league, event)`` candidates and pick the best.
+
+        The ONE candidate loop (#660). Both the single-league and multi-league
+        entry points delegate here, so a gate or fallback added to matching
+        lands on every source type at once. It used to be two ~250-line
+        copies that were 89% identical and had already drifted: the #627
+        league-hint hatch below was added to the multi-league copy only, and
+        the single-league copy — the one an "NCAAF only" source uses — kept
+        vetoing (#650). ``TestPathParity`` in ``tests/matching/test_fixture_gate.py``
+        pins the two entry points to the same verdict.
 
         Uses whole-name token_set_ratio matching with the following strategy:
         1. Try alias match first (100% confidence for known abbreviations)
@@ -1412,9 +1183,10 @@ class TeamMatcher:
         fixture_rejected = 0  # Candidates in a league these teams never meet in
 
         # Which leagues could these two sides actually play each other in (epic
-        # goax)? This matters most here: a multi-league source offers candidates
-        # from every league it covers, so a shared city has many more wrong
-        # events to land on than in the single-league path.
+        # goax)? Resolved once per stream, not per candidate — it depends only on
+        # the stream's own names. None = identity resolution had nothing to say.
+        # A multi-league source offers candidates from every league it covers,
+        # so a shared city has many more wrong events to land on there.
         fixture_leagues = self._fixture_leagues(ctx)
         league_hint = ctx.classified.league_hint
         hinted_leagues = (
@@ -1463,9 +1235,20 @@ class TeamMatcher:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
                     continue
 
+            # Fixture gate (epic goax). Both stream sides name real teams, and
+            # this event's league is not one where they could meet — so no score
+            # against it can be meaningful. This is what stops an NHL stream from
+            # riding a shared city into an MLB channel: "Tampa Bay Lightning" vs
+            # "Tampa Bay Rays" scores 78 on text alone, but the Lightning play in
+            # exactly one league and it is not this one.
+            #
             # An explicit league hint already narrowed this stream to the
-            # candidate's league. It is stronger evidence than an incomplete
-            # cross-league identity index; unhinted streams retain the gate.
+            # candidate's league (#627). It is stronger evidence than an
+            # incomplete cross-league identity index; unhinted streams retain
+            # the gate. The multi-league caller has already narrowed the search
+            # to the hinted leagues, so there the hatch simply disables the gate
+            # for hinted streams; in the single-league path it fires only when
+            # the hint names the configured league — the honest guard (#660).
             if (
                 self._fixture_vetoes(fixture_leagues, event.league)
                 and event.league not in hinted_leagues
