@@ -127,6 +127,7 @@ class FakeChannel:
     league: str | None = None
     event_epg_group_id: int | None = 1
     event_id: str | None = None
+    feed_team_id: str | None = None
 
 
 @dataclass

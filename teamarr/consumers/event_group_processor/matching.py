@@ -7,6 +7,7 @@ resolution and UFC/racing segment expansion of the matched-stream list.
 import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
 
 from teamarr.consumers.event_group_processor.stream_fetcher import (
@@ -37,6 +38,7 @@ class StreamMatching:
         _shared_events: Any
         _get_all_known_leagues: Any
         _load_sport_durations: Any
+        _get_lifecycle_service: Any
 
     def _match_streams(
         self,
@@ -504,6 +506,70 @@ class StreamMatching:
                 )
 
         return matched_streams
+
+    def _cleanup_feed_separated_channels(
+        self,
+        group: EventEPGGroup,
+        conn: Connection,
+        passed_event_ids: set[str],
+    ) -> int:
+        """Reclaim feed-separated channels after the master toggle is turned off (#672).
+
+        Disabling ``feed_separation.enabled`` makes ``_resolve_feed_teams``
+        stop populating ``feed_team``, so every lookup this run carries
+        ``feed_team_id=None``. ``find_existing_channel`` then constrains on
+        ``feed_team_id IS NULL`` and matches (or creates) the base channel —
+        the rows already carrying a feed team are never returned, so they are
+        never synced, never renamed and never deleted. They sat beside a
+        freshly created duplicate base channel until their scheduled deletion,
+        consuming the numbers of their feed block the whole time.
+
+        Scoped to events that survived the team filter this run, so every
+        deleted feed channel has a base channel to land on in the same pass —
+        feed channels for events not matched today keep their normal
+        end-of-event deletion rather than being dropped mid-broadcast.
+
+        Args:
+            group: The event group being processed
+            conn: Database connection
+            passed_event_ids: Segment-aware event IDs that passed team filtering
+
+        Returns:
+            Number of channels deleted.
+        """
+        from teamarr.database.channels import get_managed_channels_for_group
+
+        if not passed_event_ids:
+            return 0
+
+        reclaimable = [
+            ch
+            for ch in get_managed_channels_for_group(conn, group.id)
+            if getattr(ch, "feed_team_id", None) and ch.event_id in passed_event_ids
+        ]
+        if not reclaimable:
+            return 0
+
+        # Built lazily: constructing the lifecycle service scans Dispatcharr for
+        # externally occupied numbers, which is wasted work on the overwhelmingly
+        # common run where the toggle is off and no feed channels are left.
+        lifecycle_service = self._get_lifecycle_service()
+
+        deleted = 0
+        for channel in reclaimable:
+            if lifecycle_service.delete_managed_channel(
+                conn, channel.id, reason="feed_separation_disabled"
+            ):
+                deleted += 1
+                logger.info(
+                    "[FEED] Reclaimed feed channel '%s' (event_id=%s, feed_team_id=%s) "
+                    "— feed separation is off",
+                    channel.channel_name,
+                    channel.event_id,
+                    channel.feed_team_id,
+                )
+
+        return deleted
 
     @staticmethod
     def _broadcast_name_in_stream(name_norm: str, stream_norm: str) -> bool:

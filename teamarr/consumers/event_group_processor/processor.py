@@ -754,6 +754,21 @@ class EventGroupProcessor(
                 result.channels_deleted = cleanup_count
                 logger.info("[EVENT_EPG] Cleaned up %d channels due to team filter", cleanup_count)
 
+            # Reclaim feed-separated channels once the master toggle goes off (#672).
+            # Runs BEFORE channel processing so the freed streams re-land on the base
+            # channel in this same pass instead of duplicating it for a day.
+            if not feed_settings.enabled:
+                feed_cleanup_count = self._cleanup_feed_separated_channels(
+                    group, conn, passed_event_ids
+                )
+                if feed_cleanup_count > 0:
+                    result.channels_deleted += feed_cleanup_count
+                    logger.info(
+                        "[EVENT_EPG] Reclaimed %d feed-separated channel(s) — "
+                        "feed separation is off",
+                        feed_cleanup_count,
+                    )
+
             # Build stream dict for cleanup (fingerprint-based content change detection)
             current_streams = {sid: s for s in streams if (sid := s.get("id"))}
 
@@ -767,7 +782,9 @@ class EventGroupProcessor(
                 result.channels_created = len(lifecycle_result.created)
                 result.channels_existing = len(lifecycle_result.existing)
                 result.channels_skipped = len(lifecycle_result.skipped)
-                result.channels_deleted = len(lifecycle_result.deleted)
+                # += : the team-filter and feed-separation sweeps above already
+                # counted their deletions into this field.
+                result.channels_deleted += len(lifecycle_result.deleted)
                 result.channel_errors = len(lifecycle_result.errors)
                 # Add lifecycle exclusions to total
                 result.streams_excluded += len(lifecycle_result.excluded)

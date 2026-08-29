@@ -71,6 +71,15 @@ Feed **identification** always runs — every stream's resolved feed team *and* 
 | **Detect Team Names** | On | Also match team names in stream names (e.g., "Orioles Feed") |
 | **Feed Label Style** | Team Name | How feed channels are labeled — see below |
 
+### Turning It Off
+
+Turning the master toggle off un-splits on the **next generation run**: the
+existing `…-feed-<team>` channels are deleted and their streams re-land on the
+event's shared channel in that same pass, freeing the channel numbers the feed
+block held. Only events matched by that run are reclaimed — a feed channel for
+an event that isn't in today's slate keeps its normal end-of-event deletion
+rather than being pulled mid-broadcast.
+
 ### Label Styles
 
 Controls the label appended to channel names when a feed team is detected (always in the form `(<label> Feed)`):
