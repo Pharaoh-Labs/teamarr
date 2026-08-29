@@ -1095,12 +1095,17 @@ def _apply_stream_ordering(
         get_ordered_stream_ids,
         update_stream_priority,
     )
+    from teamarr.database.channels.streams import (
+        get_active_dispatcharr_stream_ids,
+        refresh_stream_stats_bulk,
+    )
     from teamarr.database.settings import get_stream_ordering_settings
 
     reorder_result: dict = {
         "channels_reordered": 0,
         "streams_reordered": 0,
         "windows_synced": 0,
+        "stats_refreshed": 0,
     }
     try:
         with db_factory() as conn:
@@ -1135,6 +1140,28 @@ def _apply_stream_ordering(
 
             all_channels = get_all_managed_channels(conn, include_deleted=False)
             total_channels = len(all_channels)
+
+            # stats_metric rules score against the cached stream_stats column,
+            # and until now that column was only ever refreshed by the streams
+            # page — one endpoint, driven by a human opening a channel (#576,
+            # #616). Every scheduled run therefore ordered on whatever numbers
+            # happened to be cached, which on a real install means months old or
+            # absent entirely. Pull them once, in bulk, before any priority is
+            # computed.
+            #
+            # Skipped outright when no rule reads stats: the fetch buys nothing
+            # for a ruleset built from m3u/group/regex, and most are.
+            if ordering_service and any(
+                rule.type == "stats_metric" for rule in ordering_settings.rules
+            ):
+                stat_stream_ids = get_active_dispatcharr_stream_ids(conn)
+                refreshed = refresh_stream_stats_bulk(conn, stat_stream_ids)
+                reorder_result["stats_refreshed"] = refreshed
+                logger.info(
+                    "[ORDERING] Refreshed stats for %d/%d stream(s) before scoring",
+                    refreshed,
+                    len(stat_stream_ids),
+                )
 
             for idx, channel in enumerate(all_channels):
                 streams = get_channel_streams(conn, channel.id)

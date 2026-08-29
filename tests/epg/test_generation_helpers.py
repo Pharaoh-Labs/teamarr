@@ -8,11 +8,14 @@ Each helper is exercised against a real temp database (conftest db fixtures):
   configured global range (#146) and stays quiet otherwise.
 - _apply_stream_ordering applies rules to stream priorities in the DB, runs
   as a window-sync-only pass without rules, and converts internal failures
-  into an "error" result key instead of raising (generation must not die).
+  into an "error" result key instead of raising (generation must not die). It
+  also bulk-refreshes cached Dispatcharr stream stats before scoring, but only
+  when a stats_metric rule is actually present (#576, #616).
 """
 
 import json
 
+import teamarr.database.channels.streams as streams_mod
 from teamarr.consumers.generation import (
     _apply_stream_ordering,
     _refresh_m3u_accounts,
@@ -242,3 +245,85 @@ def test_ended_event_gets_rule_order(db_factory, db_conn, monkeypatch):
     _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
 
     assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
+
+
+# ---------------------------------------------------------------------------
+# _apply_stream_ordering — pre-scoring stats refresh (#576, #616)
+# ---------------------------------------------------------------------------
+
+
+class _StatsStub:
+    """Records the id lists an ordering pass asks Dispatcharr for."""
+
+    def __init__(self, stats_list=None):
+        self._stats_list = stats_list or []
+        self.calls = []
+
+    def get_stream_stats_by_ids(self, stream_ids):
+        self.calls.append(list(stream_ids))
+        return self._stats_list
+
+
+def _set_rules(conn, rules):
+    conn.execute(
+        "UPDATE settings SET stream_ordering_rules = ? WHERE id = 1", (json.dumps(rules),)
+    )
+    conn.commit()
+
+
+def test_ordering_refreshes_stats_once_before_scoring(db_factory, db_conn, monkeypatch):
+    _seed_channel_with_streams(db_conn)
+    _set_rules(db_conn, [
+        {
+            "type": "stats_metric",
+            "value": "ffmpeg_output_bitrate|>=|5000",
+            "priority": 99,
+            "mode": "score",
+            "points": 10,
+        }
+    ])
+    stub = _StatsStub([
+        {
+            "id": 100,
+            "stream_stats": {"ffmpeg_output_bitrate": 9000},
+            "stream_stats_updated_at": "t",
+        },
+    ])
+    monkeypatch.setattr(streams_mod, "get_dispatcharr_client", lambda: stub)
+
+    result = _apply_stream_ordering(db_factory, None, _noop_progress)
+
+    # One bulk call for the whole pass, not one per channel.
+    assert stub.calls == [[100, 101]]
+    assert result["stats_refreshed"] == 1
+    # And the freshly pulled number is what got scored.
+    assert json.loads(
+        db_conn.execute(
+            "SELECT stream_stats FROM managed_channel_streams "
+            "WHERE dispatcharr_stream_id = 100"
+        ).fetchone()["stream_stats"]
+    ) == {"ffmpeg_output_bitrate": 9000}
+
+
+def test_ordering_skips_the_fetch_when_no_rule_reads_stats(db_factory, db_conn, monkeypatch):
+    _seed_channel_with_streams(db_conn)
+    _set_rules(db_conn, [{"type": "regex", "value": "(?i)1080p", "priority": 1}])
+    stub = _StatsStub()
+    monkeypatch.setattr(streams_mod, "get_dispatcharr_client", lambda: stub)
+
+    result = _apply_stream_ordering(db_factory, None, _noop_progress)
+
+    # A ruleset built from m3u/group/regex gains nothing from the fetch.
+    assert stub.calls == []
+    assert result["stats_refreshed"] == 0
+
+
+def test_ordering_without_rules_never_fetches_stats(db_factory, db_conn, monkeypatch):
+    _seed_channel_with_streams(db_conn)
+    stub = _StatsStub()
+    monkeypatch.setattr(streams_mod, "get_dispatcharr_client", lambda: stub)
+
+    result = _apply_stream_ordering(db_factory, None, _noop_progress)
+
+    assert stub.calls == []
+    assert result["stats_refreshed"] == 0
