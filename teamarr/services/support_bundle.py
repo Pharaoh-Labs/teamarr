@@ -16,10 +16,12 @@ from teamarr.config import BASE_VERSION
 from teamarr.database.channels.types import ManagedChannelStream
 from teamarr.database.connection import get_connection
 from teamarr.database.stats import (
+    MATCHING_EVIDENCE_LIMIT,
     get_failed_matches,
     get_matched_streams,
     get_recent_runs,
     media_server_health,
+    source_matching_health,
 )
 from teamarr.services.stream_ordering import get_stream_ordering_service
 from teamarr.utilities.logging import _get_log_dir
@@ -366,6 +368,44 @@ class SupportBundleService:
                             }
                             for s in failing
                         ]
+                    },
+                }
+            )
+        # Matching outcomes (#657). Every other rule here is about configuration
+        # or infrastructure, so a bundle from an install whose sources matched
+        # nothing still led with "No automatic signals were found" — which is
+        # the first line a triager reads, and it pointed away from a dead
+        # source. These two are derived from run data the bundle already ships.
+        #
+        # Deliberately warning/info rather than critical: on a 447-source
+        # install 41 sources legitimately match nothing ("US | News",
+        # "USA | Peacock LIVE TV" — generic channel groups with no fixtures to
+        # find). The value is a ranked list pointing at the biggest ones, not
+        # an alarm, so the evidence is capped and carries a total.
+        matching = source_matching_health(runs)
+        zero = [s for s in matching if s["zero"]]
+        if zero:
+            signals.append(
+                {
+                    "code": "source_matching_zero",
+                    "severity": "warning",
+                    "message": "Sources matched none of their streams.",
+                    "evidence": {
+                        "total": len(zero),
+                        "sources": zero[:MATCHING_EVIDENCE_LIMIT],
+                    },
+                }
+            )
+        degraded = [s for s in matching if s["degraded"]]
+        if degraded:
+            signals.append(
+                {
+                    "code": "source_matching_degraded",
+                    "severity": "info",
+                    "message": "Sources matched under half of their streams.",
+                    "evidence": {
+                        "total": len(degraded),
+                        "sources": degraded[:MATCHING_EVIDENCE_LIMIT],
                     },
                 }
             )

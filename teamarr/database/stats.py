@@ -1080,3 +1080,70 @@ def cleanup_stuck_runs(conn: Connection) -> int:
     if count > 0:
         logger.info("[STATS] Cleaned up %d stuck processing run(s)", count)
     return count
+
+
+# Minimum post-filter streams before a source's match rate is reported at all
+# (#657). Measured on a 447-source install: 131 sources matched nothing, but
+# 72 of those had fewer than five streams to match — a single unmatched stream
+# is not evidence of anything. At >=10 the list is 41, which is a list a human
+# can actually read.
+MATCHING_MIN_STREAMS = 10
+# Below this share matched, a source that IS matching is worth a second look.
+MATCHING_DEGRADED_RATE = 0.5
+# Longest evidence list. Sources are ranked by stream count, so the cap keeps
+# the biggest offenders and reports the rest as a count.
+MATCHING_EVIDENCE_LIMIT = 10
+
+
+def source_matching_health(
+    runs: list[dict],
+    *,
+    min_streams: int = MATCHING_MIN_STREAMS,
+    degraded_rate: float = MATCHING_DEGRADED_RATE,
+) -> list[dict]:
+    """Per-source match rates from the newest completed run (#657).
+
+    Reads ``extra_metrics.groups``, the per-source breakdown that #645 moved
+    onto the parent ``full_epg`` row when per-group sub-runs were retired. Runs
+    without it (in progress, or written before v90) contribute nothing, so this
+    returns [] rather than guessing from the legacy ``event_group`` rows.
+
+    The denominator is ``matched + unmatched`` — post-filter streams, i.e. the
+    ones matching was actually asked about. ``fetched`` is pre-filter and would
+    make an off-season source look broken: "USA | NFL Teams Backup" fetches 34
+    streams in August and legitimately offers none of them to the matcher.
+    Sources with a zero denominator are therefore absent from the result, not
+    reported at 0%.
+
+    Returned newest-run-only and sorted by stream count descending, so a caller
+    that truncates keeps the sources with the most at stake.
+    """
+    groups: list[dict] = []
+    for run in runs:
+        if run.get("run_type") != "full_epg":
+            continue
+        found = (run.get("extra_metrics") or {}).get("groups")
+        if found:
+            groups = found
+            break
+
+    health = []
+    for group in groups:
+        matched = group.get("matched") or 0
+        streams = matched + (group.get("unmatched") or 0)
+        if streams < min_streams:
+            continue
+        rate = matched / streams
+        health.append(
+            {
+                "id": group.get("id"),
+                "name": group.get("name"),
+                "matched": matched,
+                "streams": streams,
+                "rate": round(rate, 3),
+                "zero": matched == 0,
+                "degraded": 0 < rate < degraded_rate,
+            }
+        )
+    health.sort(key=lambda item: item["streams"], reverse=True)
+    return health

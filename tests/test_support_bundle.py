@@ -80,3 +80,105 @@ def test_bundle_signals_media_server_failing(db_path, tmp_path):
     assert signal["severity"] == "warning"
     assert signal["evidence"]["servers"][0]["consecutive_failures"] == 3
     assert "media_server_refresh_failing" in guide
+
+
+def _run_with_groups(conn, groups):
+    from teamarr.database.stats import create_run, save_run
+
+    run = create_run(conn, run_type="full_epg")
+    run.extra_metrics["groups"] = groups
+    run.complete()
+    save_run(conn, run)
+
+
+def test_bundle_signals_source_matching_zero_and_degraded(db_path, tmp_path):
+    """Matching outcomes reach the signal layer (#657).
+
+    A bundle from an install whose sources matched nothing used to lead with
+    "No automatic signals were found" — the first line a triager reads.
+    """
+    with get_connection(db_path) as conn:
+        _run_with_groups(
+            conn,
+            [
+                {"id": 164, "name": "NCAAF PACKAGE [1080p]", "matched": 0, "unmatched": 30},
+                {"id": 375, "name": "AU | Bar TV", "matched": 0, "unmatched": 200},
+                {"id": 9, "name": "NCAAF Events", "matched": 10, "unmatched": 25},
+                {"id": 2, "name": "Healthy", "matched": 40, "unmatched": 5},
+            ],
+        )
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    bundle = SupportBundleService(db_path, logs).create()
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        report = json.loads(archive.read("support-report.json"))
+        guide = archive.read("AGENTS.md").decode()
+
+    [zero] = [s for s in report["signals"] if s["code"] == "source_matching_zero"]
+    assert zero["severity"] == "warning"
+    assert zero["evidence"]["total"] == 2
+    # Ranked by stream count, so a truncated list keeps the biggest offenders.
+    assert [s["id"] for s in zero["evidence"]["sources"]] == [375, 164]
+
+    [degraded] = [s for s in report["signals"] if s["code"] == "source_matching_degraded"]
+    assert degraded["severity"] == "info"
+    assert [s["id"] for s in degraded["evidence"]["sources"]] == [9]
+
+    assert "source_matching_zero" in guide
+
+
+def test_off_season_source_with_no_matchable_streams_is_silent(db_path, tmp_path):
+    """`fetched` is pre-filter; the denominator is matched + unmatched.
+
+    "USA | NFL Teams Backup" fetches 34 streams in August and offers none of
+    them to the matcher. Reporting that at 0% would fire on every source that
+    is merely out of season.
+    """
+    with get_connection(db_path) as conn:
+        _run_with_groups(
+            conn,
+            [
+                {
+                    "id": 11,
+                    "name": "NFL Teams Backup",
+                    "fetched": 34,
+                    "matched": 0,
+                    "unmatched": 0,
+                },
+                # Too few streams to mean anything: 72 of 131 zero-match sources
+                # on the reference install had fewer than five.
+                {"id": 30, "name": "NCAA Baseball", "matched": 0, "unmatched": 1},
+            ],
+        )
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    bundle = SupportBundleService(db_path, logs).create()
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        report = json.loads(archive.read("support-report.json"))
+
+    codes = {s["code"] for s in report["signals"]}
+    assert "source_matching_zero" not in codes
+    assert "source_matching_degraded" not in codes
+
+
+def test_matching_signals_absent_when_run_predates_group_breakdown(db_path, tmp_path):
+    """#645 moved the per-source breakdown onto the parent run. A run without
+    it (in progress, or written before v90) yields no opinion rather than a
+    guess from the retired event_group rows."""
+    from teamarr.database.stats import create_run, save_run
+
+    with get_connection(db_path) as conn:
+        run = create_run(conn, run_type="full_epg")
+        run.complete()
+        save_run(conn, run)
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    bundle = SupportBundleService(db_path, logs).create()
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        report = json.loads(archive.read("support-report.json"))
+
+    codes = {s["code"] for s in report["signals"]}
+    assert "source_matching_zero" not in codes
