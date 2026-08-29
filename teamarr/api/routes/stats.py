@@ -89,7 +89,6 @@ def get_homepage_stats():
 def get_runs(
     limit: int = Query(50, ge=1, le=500, description="Max runs to return"),
     run_type: str | None = Query(None, description="Filter by run type"),
-    group_id: int | None = Query(None, description="Filter by group ID"),
     status: str | None = Query(None, description="Filter by status"),
 ):
     """Get recent processing runs.
@@ -103,7 +102,6 @@ def get_runs(
             conn,
             limit=limit,
             run_type=cast("RunType | None", run_type),
-            group_id=group_id,
             status=cast("RunStatus | None", status),
         )
         return {

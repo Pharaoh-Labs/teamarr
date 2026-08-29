@@ -112,56 +112,30 @@ def test_fold_is_cumulative_across_cleanups(conn):
     assert totals["streams_matched"] == 30
 
 
-def test_cache_hits_summed_from_event_group_runs(conn):
-    """#312: streams_cached lives ONLY on event_group sub-runs — the full_epg
-    totals filter must not zero it out of All-Time Totals."""
-    _insert_run(conn, run_type="event_group", matched=5, cached=40)
-    _insert_run(conn, run_type="event_group", matched=5, cached=60)
-    _insert_run(conn, run_type="full_epg", matched=10, cached=0)  # parent: never carries it
+def test_cache_hits_summed_from_full_runs(conn):
+    """Cache hits roll up onto the full_epg row like every other counter
+    (#645 retired the per-group sub-runs that used to carry them, #312)."""
+    _insert_run(conn, matched=5, cached=40)
+    _insert_run(conn, matched=5, cached=60)
 
     _, totals = _totals(conn)
     assert totals["streams_cached"] == 100
-    # The full_epg filter still governs everything else
     assert totals["streams_matched"] == 10
 
 
-def test_cleanup_folds_event_group_cache_hits(conn):
-    """#312: pruning event_group rows must fold their cache hits into
-    lifetime_stats, or cache-hit history leaks with the retention window."""
-    _insert_run(conn, run_type="event_group", days_ago=60, matched=999, cached=70)
-    _insert_run(conn, run_type="event_group", days_ago=1, cached=30)
-    _insert_run(conn, days_ago=60, matched=10)  # old full_epg, folds normally
+def test_cleanup_folds_cache_hits(conn):
+    _insert_run(conn, days_ago=60, matched=10, cached=70)
+    _insert_run(conn, days_ago=1, matched=10, cached=30)
 
     _, totals_before = _totals(conn)
     assert totals_before["streams_cached"] == 100
 
-    deleted = cleanup_old_runs(conn, days=30)
-    assert deleted == 2
+    assert cleanup_old_runs(conn, days=30) == 1
 
-    # Cache-hit total unchanged: pruned hits live in lifetime, fresh in the table
     _, totals_after = _totals(conn)
     assert totals_after["streams_cached"] == 100
-
     row = conn.execute("SELECT * FROM lifetime_stats WHERE id = 1").fetchone()
     assert row["streams_cached"] == 70
-    # event_group matched counts still do NOT fold (full_epg-only invariant)
-    assert row["streams_matched"] == 10
-
-
-def test_cleanup_folds_cache_hits_even_without_old_full_epg_runs(conn):
-    """#312 edge: event_group rows pruned in a window with no full_epg rows
-    must still fold their cache hits (the fold can't early-return on runs=0)."""
-    _insert_run(conn, run_type="event_group", days_ago=60, cached=25)
-
-    deleted = cleanup_old_runs(conn, days=30)
-    assert deleted == 1
-
-    row = conn.execute("SELECT * FROM lifetime_stats WHERE id = 1").fetchone()
-    assert row["streams_cached"] == 25
-    assert row["runs"] == 0  # no full_epg rows folded
-
-    _, totals = _totals(conn)
-    assert totals["streams_cached"] == 25
 
 
 def test_cleanup_with_nothing_to_prune_is_noop(conn):

@@ -63,4 +63,4 @@ A collapsible **XML Preview** section contains:
 
 A compact footer shows lifetime totals: generations, programmes, streams matched, channels created, channels deleted, cache hits, and average run time.
 
-These totals are genuinely all-time: before old run records are pruned from the run history (or cleared via **Clear Run History** on Settings → Advanced), their sums are folded into a lifetime accumulator, so the totals keep growing across the retention window. Only full EPG generations count, except cache hits, which are tallied from per-source sub-runs. Average run time reflects the retained run window only. The accumulator shipped in v2.9.0 and starts from the run history present at upgrade.
+These totals are genuinely all-time: before old run records are pruned from the run history (or cleared via **Clear Run History** on Settings → Advanced), their sums are folded into a lifetime accumulator, so the totals keep growing across the retention window. Only full EPG generations count. Average run time reflects the retained run window only. The accumulator shipped in v2.9.0 and starts from the run history present at upgrade.

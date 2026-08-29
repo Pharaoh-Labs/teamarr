@@ -364,6 +364,7 @@ def run_full_generation(
             # aggregating the group half here would parse and serialize the
             # whole guide a second time for a value nothing reads.
             aggregate_xmltv=False,
+            run_id=stats_run.id,  # Details + per-group breakdown key on this run (#645)
         )
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes
@@ -1359,13 +1360,19 @@ def _finalize_stats_run(
     stats_run.programmes_postgame = team_result.total_postgame + group_result.total_postgame
     stats_run.programmes_idle = team_result.total_idle
     stats_run.channels_created = group_result.total_channels_created
+    stats_run.channels_updated = group_result.total_channels_updated
+    stats_run.channels_skipped = group_result.total_channels_skipped
+    stats_run.channels_errors = group_result.total_channel_errors
     stats_run.channels_deleted = channels_deleted_count + group_result.total_channels_deleted
     stats_run.xmltv_size_bytes = result.file_size
     stats_run.streams_fetched = group_result.total_streams_fetched
     stats_run.streams_matched = group_result.total_streams_matched
     stats_run.streams_unmatched = group_result.total_streams_unmatched
+    stats_run.streams_cached = group_result.total_streams_cached
     stats_run.extra_metrics["teams_processed"] = result.teams_processed
     stats_run.extra_metrics["groups_processed"] = result.groups_processed
+    # Per-group breakdown (#645): replaces the old one-row-per-group sub-runs.
+    stats_run.extra_metrics["groups"] = group_result.group_summaries()
     stats_run.extra_metrics["file_written"] = result.file_written
 
     # Post-processing enforcement outcomes (iua3.7): one record per step with

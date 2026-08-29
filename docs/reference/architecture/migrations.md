@@ -70,7 +70,7 @@ Since v2.4.0, reconciliation handles missing columns automatically. Just edit `s
 CREATE TABLE settings (
     ...
     my_new_setting TEXT DEFAULT 'value',  -- Added
-    schema_version INTEGER DEFAULT 88
+    schema_version INTEGER DEFAULT 90
 );
 ```
 
@@ -87,7 +87,7 @@ When the change requires transforming data (not just adding a column), use a ver
 1. **Bump `schema_version` DEFAULT** in `schema.sql`:
 
    ```sql
-   schema_version INTEGER DEFAULT 89  -- was 88
+   schema_version INTEGER DEFAULT 91  -- was 90
    ```
 
 2. **Add a migration block** after the checkpoint call in `_run_migrations()`:

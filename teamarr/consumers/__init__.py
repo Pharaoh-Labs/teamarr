@@ -36,7 +36,6 @@ from teamarr.consumers.event_group_processor import (
     EventGroupProcessor,
     ProcessingResult,
     process_all_event_groups,
-    process_event_group,
 )
 from teamarr.consumers.event_matcher import EventMatcher
 from teamarr.consumers.filler import (
@@ -146,7 +145,6 @@ __all__ = [
     "EventGroupProcessor",
     "ProcessingResult",
     "process_all_event_groups",
-    "process_event_group",
     # Reconciliation
     "ChannelReconciler",
     "detect_stale_groups",

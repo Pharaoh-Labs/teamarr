@@ -476,7 +476,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 89
+    schema_version INTEGER DEFAULT 90
 );
 
 -- Insert default settings
@@ -1844,11 +1844,13 @@ CREATE TABLE IF NOT EXISTS processing_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    -- Run identification
-    run_type TEXT NOT NULL,  -- 'event_group', 'team_epg', 'batch', 'reconciliation', 'scheduler'
+    -- Run identification. One row per full generation ('full_epg'); per-group
+    -- sub-runs were retired in v90 (#645) — their breakdown lives in
+    -- extra_metrics.groups. group_id/team_id are legacy, always NULL.
+    run_type TEXT NOT NULL,
     run_id TEXT,             -- Optional unique run identifier (UUID)
-    group_id INTEGER,        -- For event_group runs
-    team_id INTEGER,         -- For team_epg runs
+    group_id INTEGER,
+    team_id INTEGER,
 
     -- Timing
     started_at TIMESTAMP NOT NULL,
