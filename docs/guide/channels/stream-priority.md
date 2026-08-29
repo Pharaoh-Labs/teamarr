@@ -45,7 +45,7 @@ Any rule type can be used as a Scoring rule or a Priority rule.
 | **Everything Else** | Optional catch-all baseline for any stream not matched by a Priority rule. Only meaningful as a **Priority** rule — it sets the band unmatched streams land in. | Everything else → priority 99 |
 
 {: .note }
-**Stream Stats** values come from Dispatcharr's stream probe and are cached per stream. The cache refreshes when you *view a channel's streams* in the Dashboard (and the stats are missing or older than an hour) — generation itself never probes, it uses whatever is cached. Practical consequence: a Stream Stats comparison rule may not match a channel's streams until you've opened that channel in the Dashboard at least once. For the comparison operators, a stream with no value is treated as not matching; the **Unknown** operator matches exactly those streams.
+**Stream Stats** values come from Dispatcharr's stream probe and are cached per stream. Teamarr refreshes that cache in two places: at the start of generation's ordering step, in one bulk pull covering every stream on a live channel, and when you *view a channel's streams* in the Dashboard (where it re-pulls if the stats are missing or older than an hour). The generation refresh runs only when your ruleset actually contains a Stream Stats rule, so rulesets built from M3U / Group / Regex pay nothing for it. Teamarr never probes streams itself — it reads whatever Dispatcharr last measured, so a stream Dispatcharr has not probed still has no values. For the comparison operators, a stream with no value is treated as not matching; the **Unknown** operator matches exactly those streams.
 
 ### Points
 

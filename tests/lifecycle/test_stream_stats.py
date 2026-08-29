@@ -10,6 +10,10 @@ The DB stores managed_channel_streams.stream_stats as a JSON string.
 - clear_stream_stats drops the cached stats when a group's match cache is
   cleared, so they get freshly pulled on the next run — like everything else
   the cache clear resets.
+- get_active_dispatcharr_stream_ids / refresh_stream_stats_bulk are the
+  ordering pass's route to the same data (#576, #616): one chunked fetch for
+  every stream on a live channel, written to every row that holds it, instead
+  of one HTTP round trip per channel.
 """
 
 import json
@@ -17,7 +21,12 @@ import json
 import pytest
 
 import teamarr.database.channels.streams as streams_mod
-from teamarr.database.channels.streams import clear_stream_stats, refresh_stream_stats
+from teamarr.database.channels.streams import (
+    clear_stream_stats,
+    get_active_dispatcharr_stream_ids,
+    refresh_stream_stats,
+    refresh_stream_stats_bulk,
+)
 from teamarr.database.channels.types import ManagedChannelStream
 
 
@@ -263,3 +272,157 @@ def test_clear_all_nulls_every_active_stream(db_conn):
     assert _stats_row(db_conn, 200)["stream_stats"] is None
     # Removed stream untouched.
     assert _stats_row(db_conn, 300)["stream_stats"] is not None
+
+
+# ---------------------------------------------------------------------------
+# get_active_dispatcharr_stream_ids — the population an ordering pass scores
+# ---------------------------------------------------------------------------
+
+
+def _insert_deleted_channel(db_conn) -> int:
+    cur = db_conn.execute(
+        "INSERT INTO managed_channels (event_id, event_provider, tvg_id, channel_name, deleted_at) "
+        "VALUES ('e2', 'espn', 'tvg-2', 'Gone', '2026-08-01 00:00:00')"
+    )
+    return cur.lastrowid
+
+
+def test_active_ids_excludes_removed_streams(db_conn):
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    _insert_stream(db_conn, cid, 101, removed=True)
+    db_conn.commit()
+
+    assert get_active_dispatcharr_stream_ids(db_conn) == [100]
+
+
+def test_active_ids_excludes_soft_deleted_channels(db_conn):
+    live = _insert_channel(db_conn)
+    dead = _insert_deleted_channel(db_conn)
+    _insert_stream(db_conn, live, 100)
+    _insert_stream(db_conn, dead, 200)
+    db_conn.commit()
+
+    assert get_active_dispatcharr_stream_ids(db_conn) == [100]
+
+
+def test_active_ids_dedupes_a_stream_on_several_channels(db_conn):
+    first = _insert_channel(db_conn)
+    second = _insert_channel(db_conn)
+    _insert_stream(db_conn, first, 100)
+    _insert_stream(db_conn, second, 100)
+    db_conn.commit()
+
+    # One fetch, not one per channel — the reason the bulk path exists.
+    assert get_active_dispatcharr_stream_ids(db_conn) == [100]
+
+
+# ---------------------------------------------------------------------------
+# refresh_stream_stats_bulk — one fetch for the whole ordering population
+# ---------------------------------------------------------------------------
+
+
+def test_bulk_empty_ids_returns_zero_without_client(db_conn, patch_client):
+    install, _ = patch_client
+    stub = _StubClient([{"id": 1, "stream_stats": {"x": 1}, "stream_stats_updated_at": "t"}])
+    install(stub)
+
+    assert refresh_stream_stats_bulk(db_conn, []) == 0
+    assert stub.calls == []
+
+
+def test_bulk_client_none_returns_zero(db_conn, patch_client):
+    install, _ = patch_client
+    install(None)
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    db_conn.commit()
+
+    assert refresh_stream_stats_bulk(db_conn, [100]) == 0
+
+
+def test_bulk_writes_one_stream_onto_every_channel_holding_it(db_conn, patch_client):
+    install, _ = patch_client
+    install(_StubClient([
+        {"id": 100, "stream_stats": {"alive": False}, "stream_stats_updated_at": "t"},
+    ]))
+    first = _insert_channel(db_conn)
+    second = _insert_channel(db_conn)
+    _insert_stream(db_conn, first, 100)
+    _insert_stream(db_conn, second, 100)
+    db_conn.commit()
+
+    # Counted once — the return is distinct streams, matching the per-channel
+    # contract — but both rows carry the verdict.
+    assert refresh_stream_stats_bulk(db_conn, [100]) == 1
+    rows = db_conn.execute(
+        "SELECT stream_stats FROM managed_channel_streams WHERE dispatcharr_stream_id = 100"
+    ).fetchall()
+    assert len(rows) == 2
+    assert all(json.loads(r["stream_stats"]) == {"alive": False} for r in rows)
+
+
+def test_bulk_dedupes_and_sorts_requested_ids(db_conn, patch_client):
+    install, _ = patch_client
+    stub = _StubClient([])
+    install(stub)
+
+    refresh_stream_stats_bulk(db_conn, [101, 100, 101, 100])
+
+    assert stub.calls == [[100, 101]]
+
+
+def test_bulk_chunks_at_the_endpoint_page_size(db_conn, patch_client, monkeypatch):
+    install, _ = patch_client
+    stub = _StubClient([])
+    install(stub)
+    # The real cap is 1000; shrink it so the boundary is testable.
+    monkeypatch.setattr(streams_mod, "STATS_BATCH_SIZE", 2)
+
+    refresh_stream_stats_bulk(db_conn, [1, 2, 3, 4, 5])
+
+    assert stub.calls == [[1, 2], [3, 4], [5]]
+
+
+def test_bulk_leaves_unprobed_streams_alone(db_conn, patch_client):
+    install, _ = patch_client
+    install(_StubClient([
+        {"id": 100, "stream_stats": None, "stream_stats_updated_at": None},
+        {"id": 101, "stream_stats": {"alive": True}, "stream_stats_updated_at": "t"},
+    ]))
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100)
+    _insert_stream(db_conn, cid, 101)
+    db_conn.commit()
+
+    # Absent stats and stats reading zero are different claims; only one is true.
+    assert refresh_stream_stats_bulk(db_conn, [100, 101]) == 1
+    assert _stats_row(db_conn, 100)["stream_stats"] is None
+
+
+def test_bulk_skips_removed_rows(db_conn, patch_client):
+    install, _ = patch_client
+    install(_StubClient([
+        {"id": 100, "stream_stats": {"alive": True}, "stream_stats_updated_at": "t"},
+    ]))
+    cid = _insert_channel(db_conn)
+    _insert_stream(db_conn, cid, 100, removed=True)
+    db_conn.commit()
+
+    assert refresh_stream_stats_bulk(db_conn, [100]) == 0
+    assert _stats_row(db_conn, 100)["stream_stats"] is None
+
+
+def test_per_channel_refresh_still_scopes_its_fetch_to_that_channel(db_conn, patch_client):
+    install, _ = patch_client
+    stub = _StubClient([])
+    install(stub)
+    mine = _insert_channel(db_conn)
+    theirs = _insert_channel(db_conn)
+    _insert_stream(db_conn, mine, 100)
+    _insert_stream(db_conn, theirs, 200)
+    db_conn.commit()
+
+    refresh_stream_stats(db_conn, mine)
+
+    assert stub.calls == [[100]]

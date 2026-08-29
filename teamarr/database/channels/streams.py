@@ -545,13 +545,102 @@ def reorder_channel_streams(
     return updated_count
 
 
+# Dispatcharr's by-ids endpoint is requested with page_size=1000, so a longer id
+# list would be silently truncated at the page boundary — every stream past the
+# first thousand would keep whatever stats it already had, which reads as "the
+# refresh ran" rather than as an error. Chunk to match.
+STATS_BATCH_SIZE = 1000
+
+
+def get_active_dispatcharr_stream_ids(conn: Connection) -> list[int]:
+    """Distinct Dispatcharr stream ids attached to channels Teamarr still owns.
+
+    The population an ordering pass is about to score: streams still on a
+    channel (``removed_at IS NULL``) whose channel has not been soft-deleted.
+    Distinct because one stream is routinely attached to several event channels
+    and only needs fetching once.
+    """
+    cursor = conn.execute(
+        """SELECT DISTINCT s.dispatcharr_stream_id
+           FROM managed_channel_streams s
+           JOIN managed_channels mc ON mc.id = s.managed_channel_id
+           WHERE s.removed_at IS NULL
+             AND mc.deleted_at IS NULL
+             AND s.dispatcharr_stream_id IS NOT NULL"""
+    )
+    return [row[0] for row in cursor.fetchall()]
+
+
+def refresh_stream_stats_bulk(conn: Connection, stream_ids: list[int]) -> int:
+    """Fetch and cache stream_stats for many Dispatcharr streams in one pass.
+
+    Pulls from Dispatcharr's ``/api/channels/streams/by-ids/`` endpoint in
+    chunks of ``STATS_BATCH_SIZE`` and writes the ``stream_stats`` /
+    ``stream_stats_updated_at`` columns. Streams Dispatcharr has not probed
+    return ``stream_stats=null`` and are left unchanged rather than blanked —
+    absent stats and stats that read zero mean different things to a
+    ``stats_metric`` rule, and only one of them is true.
+
+    The write is keyed on ``dispatcharr_stream_id`` alone, not on a channel: a
+    stream sitting on six event channels is fetched once and lands on all six
+    rows. That is the whole reason this exists next to the per-channel call —
+    ordering a full catalogue through the single-channel path costs one HTTP
+    round trip per channel, which is why the ordering pass never made it.
+
+    Args:
+        conn: Database connection
+        stream_ids: Dispatcharr stream ids to refresh
+
+    Returns:
+        Number of distinct streams whose stats were written
+    """
+    ids = sorted({int(sid) for sid in stream_ids if sid is not None})
+    if not ids:
+        return 0
+
+    client = get_dispatcharr_client()
+    if client is None:
+        return 0
+
+    updated = 0
+    for start in range(0, len(ids), STATS_BATCH_SIZE):
+        chunk = ids[start : start + STATS_BATCH_SIZE]
+        stats_list = client.get_stream_stats_by_ids(chunk)
+        if not stats_list:
+            continue
+        for entry in stats_list:
+            sid = entry.get("id")
+            raw_stats = entry.get("stream_stats")
+            updated_at = entry.get("stream_stats_updated_at")
+            if sid is None or raw_stats is None:
+                continue
+            stats_json = json.dumps(raw_stats) if isinstance(raw_stats, dict) else raw_stats
+            result = conn.execute(
+                """UPDATE managed_channel_streams
+                   SET stream_stats = ?, stream_stats_updated_at = ?
+                   WHERE dispatcharr_stream_id = ? AND removed_at IS NULL""",
+                (stats_json, updated_at, sid),
+            )
+            if result.rowcount > 0:
+                updated += 1
+
+    if updated:
+        logger.debug(
+            "[STREAM STATS] Updated stats for %d/%d stream(s) in %d batch(es)",
+            updated,
+            len(ids),
+            (len(ids) + STATS_BATCH_SIZE - 1) // STATS_BATCH_SIZE,
+        )
+    return updated
+
+
 def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     """Fetch and cache stream_stats from Dispatcharr for a managed channel's active streams.
 
-    Pulls stats from Dispatcharr's /api/channels/streams/by-ids/ endpoint and
-    updates the stream_stats / stream_stats_updated_at columns in
-    managed_channel_streams. Streams Dispatcharr hasn't probed yet return
-    stream_stats=null and are left unchanged.
+    Thin wrapper over :func:`refresh_stream_stats_bulk` scoped to one channel's
+    streams. Those streams may also be attached elsewhere, so the refresh can
+    touch rows on other channels too — that is a strictly fresher cache for the
+    same single fetch, never a stale one.
 
     Args:
         conn: Database connection
@@ -570,35 +659,7 @@ def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     if not stream_ids:
         return 0
 
-    client = get_dispatcharr_client()
-    if client is None:
-        return 0
-
-    stats_list = client.get_stream_stats_by_ids(stream_ids)
-    if not stats_list:
-        return 0
-
-    updated = 0
-    for entry in stats_list:
-        sid = entry.get("id")
-        raw_stats = entry.get("stream_stats")
-        updated_at = entry.get("stream_stats_updated_at")
-        if sid is None or raw_stats is None:
-            continue
-        stats_json = json.dumps(raw_stats) if isinstance(raw_stats, dict) else raw_stats
-        result = conn.execute(
-            """UPDATE managed_channel_streams
-               SET stream_stats = ?, stream_stats_updated_at = ?
-               WHERE managed_channel_id = ? AND dispatcharr_stream_id = ? AND removed_at IS NULL""",
-            (stats_json, updated_at, managed_channel_id, sid),
-        )
-        if result.rowcount > 0:
-            updated += 1
-
-    if updated:
-        logger.debug("[STREAM STATS] Updated stats for %d/%d streams on channel %d",
-                     updated, len(stream_ids), managed_channel_id)
-    return updated
+    return refresh_stream_stats_bulk(conn, stream_ids)
 
 
 def get_stream_match_details(
