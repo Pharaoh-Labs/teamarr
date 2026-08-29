@@ -56,9 +56,14 @@ bd close <id>                         # Complete work
 bd doctor                             # Check beads health (sync issues, hooks)
 ```
 
-Beads data syncs automatically: git hooks import/export `.beads/*.jsonl` on
-checkout/merge, and the JSONL rides in normal commits. (`bd sync` no longer
-exists in bd ≥1.1.)
+**Beads sync is Dolt, not JSONL.** The shared source of truth is `refs/dolt/data`
+on origin (set up 2026-08-29). `bd dolt pull` at session start, `bd dolt push` at
+session end — **every machine, every session**, including co-devs. `.beads/*.jsonl`
+is a passive export: never `bd import` it as a sync step, and its presence in a
+PR does not carry beads across machines. A fresh clone gets beads with
+`bd bootstrap`. A machine whose Dolt history has diverged (push says "no common
+ancestor") must `bd export -o mine.jsonl` → `bd bootstrap` → `bd import -i
+mine.jsonl` → `bd dolt push` — never `--force` from a non-maintainer machine.
 
 ## Development Workflow (issue-first — MANDATORY)
 
@@ -98,8 +103,8 @@ exists in bd ≥1.1.)
 
 ### Session rules
 
-- **Start:** `git checkout dev && git pull` · `bd ready` · `gh pr list` (triage anything new).
-- **End:** everything committed AND pushed (work is incomplete until push succeeds — never stop before pushing, never say "ready to push when you are"); report whether dev currently meets a release trigger.
+- **Start:** `git checkout dev && git pull` · `bd dolt pull` · `bd ready` · `gh pr list` (triage anything new).
+- **End:** `bd dolt push` · everything committed AND pushed (work is incomplete until push succeeds — never stop before pushing, never say "ready to push when you are"); report whether dev currently meets a release trigger.
 
 ### Roadmap & Feature Planning
 
@@ -467,11 +472,12 @@ bd close <id>         # Complete work
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **PUSH TO REMOTE** - This is MANDATORY (code AND beads):
    ```bash
    git pull --rebase
    git push
    git status  # MUST show "up to date with origin"
+   bd dolt push  # beads live in refs/dolt/data, not in the commits
    ```
 5. **Clean up** - Clear stashes, prune remote branches
 6. **Verify** - All changes committed AND pushed
