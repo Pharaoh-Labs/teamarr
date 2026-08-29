@@ -181,8 +181,8 @@ Game scheduling information.
 | `{game_day_short}` | Short day of week | base, .next, .last | `Sun` |
 | `{game_time}` | Game time formatted per user settings | base, .next, .last | `1:00 PM EST` |
 | `{days_until}` | Days until game | base, .next, .last | `0` |
-| `{today_tonight}` | 'today' or 'tonight' based on 5pm cutoff | base, .next, .last | `today` |
-| `{today_tonight_title}` | 'Today' or 'Tonight' (title case) | base, .next, .last | `Today` |
+| `{today_tonight}` | 'today' or 'tonight' (5pm cutoff) when the game is today; 'tomorrow', the weekday, or the date when it is further out | base, .next, .last | `today` |
+| `{today_tonight_title}` | Title-case form of `{today_tonight}` | base, .next, .last | `Today` |
 | `{relative_day}` | Relative day: 'today', 'tonight', 'tomorrow', day of week, or date | base, .next | `tomorrow` |
 | `{relative_day_title}` | Relative day (title case) | base, .next | `Tomorrow` |
 | `{day}` | Game day of month, no leading zero | base, .next, .last | `22` |

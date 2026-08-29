@@ -138,26 +138,30 @@ def extract_game_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str
     name="today_tonight",
     category=Category.DATETIME,
     suffix_rules=SuffixRules.ALL,
-    description="'today' or 'tonight' based on 5pm cutoff",
+    description="'today'/'tonight' for a same-day game; 'tomorrow', weekday, or date otherwise",
 )
 def extract_today_tonight(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    dt = _get_local_time(game_ctx)
-    if not dt:
-        return ""
-    return "tonight" if dt.hour >= 17 else "today"
+    """'today'/'tonight' for a same-day game; otherwise the relative-day ladder.
+
+    Used to be a bare time-of-day cutoff with no idea how far away the game
+    was, so any channel that existed a day early — racing weekends where the
+    race channel is created alongside Saturday practice (#550) — described a
+    Sunday race as happening "today". Same-day output is unchanged; earlier
+    channels now say "tomorrow", the weekday, or the date, exactly as
+    {relative_day} does.
+    """
+    return extract_relative_day(ctx, game_ctx)
 
 
 @register_variable(
     name="today_tonight_title",
     category=Category.DATETIME,
     suffix_rules=SuffixRules.ALL,
-    description="'Today' or 'Tonight' (title case)",
+    description="'Today'/'Tonight' for a same-day game; 'Tomorrow', weekday, or date (title case)",
 )
 def extract_today_tonight_title(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    dt = _get_local_time(game_ctx)
-    if not dt:
-        return ""
-    return "Tonight" if dt.hour >= 17 else "Today"
+    """Title-case twin of {today_tonight}; see that variable for the #550 note."""
+    return extract_relative_day_title(ctx, game_ctx)
 
 
 @register_variable(
