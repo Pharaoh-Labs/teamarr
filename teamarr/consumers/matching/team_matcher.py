@@ -680,7 +680,10 @@ class TeamMatcher:
 
         # If match failed with NO_EVENT_FOUND, try reverse alias resolution
         # This handles cases where classifier couldn't detect league but user has aliases
-        if result.is_failed and result.failed_reason == FailedReason.NO_EVENT_FOUND:
+        if result.is_failed and result.failed_reason in (
+            FailedReason.NO_EVENT_FOUND,
+            FailedReason.CANDIDATES_GATED,
+        ):
             retry_result = self._try_reverse_alias_match(ctx, all_events, leagues_to_search)
             if retry_result and retry_result.is_matched:
                 result = retry_result
@@ -1182,6 +1185,12 @@ class TeamMatcher:
         best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
         date_rejected = 0  # Candidates gated by a trusted stream date (#474)
         fixture_rejected = 0  # Candidates in a league these teams never meet in
+        # Candidates skipped before scoring (window / EPG anchor / sport hint),
+        # and the ones that actually reached the scorer (#662). The near-miss
+        # summary reads the latter: reporting 100/100 for an event the loop
+        # never scored sent triage after the fixture gate for a window miss.
+        gated_rejected = 0
+        scored: list[Event] = []
 
         # Which leagues could these two sides actually play each other in (epic
         # goax)? Resolved once per stream, not per candidate — it depends only on
@@ -1197,6 +1206,7 @@ class TeamMatcher:
         for league, event in events:
             # Validate event is within search window (lifecycle handles exclusions)
             if not ctx.is_event_in_search_window(event):
+                gated_rejected += 1
                 continue
 
             # EPG anchored matching (bead t5e): the candidate must air within the
@@ -1207,6 +1217,7 @@ class TeamMatcher:
             if ctx.anchor_dt is not None:
                 anchor_dist = abs(int((event.start_time - ctx.anchor_dt).total_seconds()))
                 if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
+                    gated_rejected += 1
                     continue
 
             event_date = _local_date(event.start_time, ctx.user_tz)
@@ -1234,6 +1245,7 @@ class TeamMatcher:
             # sport naming inconsistencies (e.g., "Football" vs "soccer")
             if ctx.classified.sport_hint and not ctx.classified.league_hint:
                 if not _sport_hint_matches(ctx.classified.sport_hint, event.sport):
+                    gated_rejected += 1
                     continue
 
             # Fixture gate (epic goax). Both stream sides name real teams, and
@@ -1256,6 +1268,8 @@ class TeamMatcher:
             ):
                 fixture_rejected += 1
                 continue
+
+            scored.append(event)
 
             # Try alias match first (100% confidence)
             match_result = self._check_alias_match(team1_normalized, team2_normalized, event)
@@ -1384,6 +1398,11 @@ class TeamMatcher:
             # meet (epic goax). "No event found" would send the user hunting for
             # a scheduling gap that isn't there.
             reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
+        elif gated_rejected and not scored:
+            # Every candidate was skipped before scoring — nothing was ever
+            # compared, so "no event found" would be a claim about scores that
+            # never happened (#662).
+            reason = FailedReason.CANDIDATES_GATED
         else:
             reason = FailedReason.NO_EVENT_FOUND
 
@@ -1396,11 +1415,13 @@ class TeamMatcher:
         )
         near_miss = self._near_miss_summary(
             ctx,
-            [e for _, e in events],
+            scored,
             team1_normalized,
             team2_normalized,
             date_rejected,
         )
+        if gated_rejected:
+            near_miss = f"{near_miss}; gated={gated_rejected}"
         logger.debug("[NEAR_MISS] stream_id=%d %s", ctx.stream_id, near_miss)
         return MatchOutcome.failed(
             reason,

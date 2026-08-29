@@ -90,7 +90,16 @@ function getFailedReasonLabel(reason: string): string {
     tennis_tournament_mismatch: "Different tournament",
     tennis_matchup_unknown: "Tennis matchup not known",
     date_mismatch: "Date mismatch",
+    candidates_gated: "No candidate in window",
     unmatched: "Unmatched",
+    "filtered:not_event": "Not an event",
+    "filtered:league_not_included": "League not enabled",
+    "filtered:include_regex": "Excluded by include pattern",
+    "filtered:exclude_regex": "Excluded by exclude pattern",
+    "filtered:stale": "Stale stream",
+    "skipped:unclassifiable": "Linear channel (no matchup)",
+    "skipped:name_match_disabled": "Stream Name matching off",
+    "skipped:team_streams_disabled": "Team matching off",
   }
   return labels[reason] || reason
 }

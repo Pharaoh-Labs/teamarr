@@ -98,6 +98,12 @@ class FailedReason(Enum):
 
     # Event lookup failures
     NO_EVENT_FOUND = "no_event_found"  # Teams matched, league detected, no game scheduled
+    # Candidates existed but every one was skipped before scoring — outside the
+    # search window, past the EPG anchor tolerance, or a sport-hint mismatch —
+    # so nothing was ever compared (#662). Distinct from NO_EVENT_FOUND, where
+    # candidates were scored and none cleared the floor; the near-miss detail
+    # used to show 100/100 for an event the loop never looked at.
+    CANDIDATES_GATED = "candidates_gated"
 
     # Event card failures (UFC, boxing)
     NO_EVENT_CARD_MATCH = "no_event_card_match"  # Could not match to event card

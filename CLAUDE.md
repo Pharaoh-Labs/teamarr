@@ -305,6 +305,8 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - Tennis programmes (mf7.9, #642): `TennisMatcher.match_program` — binds only with a tournament clue AND (player pair OR court) from title|sub_title|description; pair → one match, court → that court's matches inside the programme slot; otherwise `FailedReason.TENNIS_MATCHUP_UNKNOWN`, surfaced on the linear stream's result via `_epg_tennis_unknown` in `_reconcile_epg`. Never a tournament-wide fan-out (the 2026-07-05 regression).
 - Docs: `docs/guide/matching/program-matching.md`.
 
+**Failure taxonomy** (`epg_failed_matches.reason`, #661/#662): a real `FailedReason` value, or a prefixed verdict — `filtered:<FilteredReason>` (not_event, league_not_included, regex, stale) and `skipped:<exclusion>` (unclassifiable linear names, name_match_disabled, team_streams_disabled). Bare `"unmatched"` is the unreachable last resort. `candidates_gated` = every candidate was skipped before scoring (search window / EPG anchor / sport hint); `no_event_found` = candidates were scored and none cleared the floor. `detail` carries the near-miss summary over *scored* candidates only; `exclusion_reason` rides alongside. Frontend labels: `RunHistoryTable.tsx::getFailedReasonLabel`.
+
 ## Plans & Roadmap
 
 Feature planning lives in beads: `bd list --label roadmap`
