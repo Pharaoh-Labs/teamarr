@@ -735,6 +735,19 @@ def normalize_for_matching(text: str) -> str:
     for network in BROADCAST_NETWORKS:
         text = re.sub(rf"\b{re.escape(network.lower())}\b", " ", text)
 
+    # Remove apostrophes/backticks WITHOUT adding a space, exactly as
+    # normalize_text does (#653). These two normalizers run in sequence —
+    # _match_against_events calls this one, then _score_teams_against_event
+    # calls normalize_text on the result — so a disagreement here is
+    # unrecoverable downstream. Turning the apostrophe into a space split
+    # "Hawai'i" into "hawai i", which shares no token with "hawaii rainbow
+    # warriors": 46.7 against the 100.0 a single normalizer scores, below
+    # BOTH_TEAMS_THRESHOLD, so the whole event was rejected. Same for
+    # "American Int'l" and "G'town Col". unidecode has already run via
+    # apply_city_translations, so a curly ’ is a plain \x27 by now.
+    # Hex escapes avoid source-encoding ambiguity: \x27=apostrophe, \x60=backtick.
+    text = re.sub("[\x27\x60]", "", text)
+
     # Remove punctuation except spaces (hyphens become spaces for matching)
     text = re.sub(r"[^\w\s]", " ", text)
 

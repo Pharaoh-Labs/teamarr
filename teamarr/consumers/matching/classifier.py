@@ -1022,7 +1022,9 @@ def _clean_team_name(name: str) -> str:
     name = re.sub(round_pattern, "", name, flags=re.IGNORECASE | re.VERBOSE)
 
     # Handle "|" separator - preserve pipe content for fuzzy matching disambiguation
-    # The matcher will try both sides of the pipe and pick the one that matches.
+    # The matcher trims to the leading segment as its last fallback tier
+    # (TeamMatcher._prepare_pipe_fallback, #652) — that code did not exist when
+    # this comment was written, so the tail simply rode into the team name.
     # Here we only strip OBVIOUS prefix noise (league hints, channel numbers) from the
     # start, keeping the rest intact for the matcher to disambiguate.
     # "NFL | Bills vs Broncos" → "Bills vs Broncos" (NFL is league hint)
