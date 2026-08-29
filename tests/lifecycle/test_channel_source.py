@@ -59,7 +59,10 @@ def _make_processor(
             get_epg_data_list=lambda: epg_data_list,
         ),
         m3u=SimpleNamespace(
-            list_streams=lambda: streams,
+            # Detail lookup is by id (#647) — the full catalog is never listed.
+            get_streams_by_ids=lambda ids: [
+                s for s in streams if s.id in {int(i) for i in ids}
+            ],
             # Real channels API has no channel_group_name; names come from here (#379).
             list_groups=lambda: dp_groups or [],
         ),
