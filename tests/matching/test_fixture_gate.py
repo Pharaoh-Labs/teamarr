@@ -419,3 +419,80 @@ class TestOneSidedStreamsAreNotVetoed:
 # bare two/three-letter "TB vs DET" into two sides — it returns TEAM_ONLY with
 # team1="TB vs D". That is pre-existing classifier behaviour, unrelated to this
 # gate, and is tracked separately (bead goax.5).
+
+
+class TestMascotlessLeaguesDoNotShadowMascotedOnes:
+    """NCAA soccer publishes no mascots, so its full name IS the bare school —
+    and that made it an *exact* identity that vetoed every other college sport
+    (#650).
+
+    ESPN abbreviates the SCHOOL for college ("Fairmont State Falcons" ->
+    "Fairmont St"), never the mascot, so the short_name prefix rule could not
+    supply "fairmont state" as a reading of the football team. The school-only
+    form therefore reached the soccer row and nothing else, narrowing the
+    fixture to usa.ncaa.w.1 and rejecting college-football for 20 of the 73
+    games on the 2026-08-29 slate.
+    """
+
+    # Exactly the shape that broke: mascoted football row whose short_name is an
+    # abbreviated school, alongside a mascotless soccer row for the same school.
+    COLLEGE = [
+        ("Fairmont State Falcons", "Fairmont St", "FMSU", "college-football", "football"),
+        ("Fairmont State", "Fairmont St", "FAI", "usa.ncaa.w.1", "soccer"),
+        ("Dayton Flyers", "Dayton", "DAY", "college-football", "football"),
+        ("Dayton", "Dayton", "DAY", "usa.ncaa.w.1", "soccer"),
+        # Two-word mascot: dropping a single token is not enough.
+        (
+            "Central Connecticut Blue Devils",
+            "Central Conn",
+            "CCSU",
+            "college-football",
+            "football",
+        ),
+        ("Central Connecticut", "Central Conn", "CCSU", "usa.ncaa.w.1", "soccer"),
+        ("South Dakota Coyotes", "South Dakota", "SDAK", "college-football", "football"),
+        ("South Dakota", "South Dakota", "SD", "usa.ncaa.w.1", "soccer"),
+    ]
+
+    def test_school_only_name_reaches_the_football_team(self):
+        index = TeamIdentityIndex(self.COLLEGE)
+        assert "college-football" in index.resolve("Fairmont State").leagues
+
+    def test_two_word_mascot_is_also_dropped(self):
+        index = TeamIdentityIndex(self.COLLEGE)
+        assert "college-football" in index.resolve("Central Connecticut").leagues
+
+    def test_football_fixture_is_not_vetoed_by_the_soccer_row(self):
+        index = TeamIdentityIndex(self.COLLEGE)
+        leagues = index.fixture_leagues("Fairmont State", "Dayton")
+        assert leagues is not None
+        assert "college-football" in leagues
+
+    def test_two_word_mascot_fixture_is_not_vetoed(self):
+        index = TeamIdentityIndex(self.COLLEGE)
+        leagues = index.fixture_leagues("Central Connecticut", "South Dakota")
+        assert leagues is not None
+        assert "college-football" in leagues
+
+    def test_soccer_remains_a_candidate_for_the_same_names(self):
+        """Widening must not trade one league's false veto for another's."""
+        index = TeamIdentityIndex(self.COLLEGE)
+        assert "usa.ncaa.w.1" in index.fixture_leagues("Fairmont State", "Dayton")
+
+    def test_bare_first_word_is_not_registered_as_a_prefix(self):
+        """Prefixes stop at two tokens, so a lone "central" is never *entered*
+        as a partial reading of every school beginning with it.
+
+        Asserted against the partial table rather than resolve(), because a
+        one-word query still reaches teams through the fuzzy fallback — that
+        path predates this rule and is deliberately left alone.
+        """
+        index = TeamIdentityIndex(self.COLLEGE)
+        assert "central" not in index._partial
+        assert "central connecticut" in index._partial
+
+    def test_cross_sport_veto_still_fires(self):
+        """The widening is scoped to prefixes of a team's own name, so the
+        original crosstalk case is untouched."""
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        assert index.fixture_leagues("Tampa Bay Lightning", "Tampa Bay Rays") == set()
