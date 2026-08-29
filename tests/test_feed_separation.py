@@ -1120,3 +1120,207 @@ class TestResolveFeedTeamsMatchedSide:
         # team names stays a shared feed.
         stream = {"name": "Pittsburgh Pirates vs Miami Marlins"}
         assert self._resolve(stream, event, matched_side=None) is None
+
+
+# ===========================================================================
+# Reclaiming feed channels after the master toggle goes off (#672)
+# ===========================================================================
+
+
+class TestCleanupFeedSeparatedChannels:
+    """_cleanup_feed_separated_channels un-splits after the toggle goes off.
+
+    With separation off every lookup carries feed_team_id=None, so
+    find_existing_channel constrains on `feed_team_id IS NULL` and never
+    returns the rows that already carry a feed team — they were neither
+    synced nor deleted, and sat beside a freshly created duplicate base
+    channel until their scheduled deletion.
+    """
+
+    @staticmethod
+    def _cleanup(channels, passed_event_ids, delete_ok=True):
+        from unittest.mock import MagicMock, patch
+
+        from teamarr.consumers.event_group_processor.matching import StreamMatching
+        from tests.fakes import FakeGroup
+
+        processor = StreamMatching()
+        lifecycle = MagicMock()
+        lifecycle.delete_managed_channel.return_value = delete_ok
+        processor._get_lifecycle_service = lambda: lifecycle
+
+        with patch(
+            "teamarr.database.channels.get_managed_channels_for_group",
+            return_value=channels,
+        ):
+            deleted = processor._cleanup_feed_separated_channels(
+                FakeGroup(), MagicMock(), passed_event_ids
+            )
+        return deleted, lifecycle
+
+    def test_deletes_feed_channels_for_matched_events(self):
+        from tests.fakes import FakeChannel
+
+        channels = [
+            FakeChannel(id=1, event_id="401874913", feed_team_id=None),
+            FakeChannel(id=2, event_id="401874913", feed_team_id="2"),
+            FakeChannel(id=3, event_id="401874913", feed_team_id="10"),
+        ]
+        deleted, lifecycle = self._cleanup(channels, {"401874913"})
+        assert deleted == 2
+        deleted_ids = [c.args[1] for c in lifecycle.delete_managed_channel.call_args_list]
+        assert deleted_ids == [2, 3]
+
+    def test_base_channel_is_never_deleted(self):
+        from tests.fakes import FakeChannel
+
+        channels = [FakeChannel(id=1, event_id="401874913", feed_team_id=None)]
+        deleted, lifecycle = self._cleanup(channels, {"401874913"})
+        assert deleted == 0
+        lifecycle.delete_managed_channel.assert_not_called()
+
+    def test_unmatched_event_keeps_its_feed_channel(self):
+        # No base channel would be created for it this run, so dropping the
+        # feed channel would take a live broadcast off the air. It falls to
+        # its normal end-of-event deletion instead.
+        from tests.fakes import FakeChannel
+
+        channels = [FakeChannel(id=2, event_id="401816721", feed_team_id="19")]
+        deleted, lifecycle = self._cleanup(channels, {"401874913"})
+        assert deleted == 0
+        lifecycle.delete_managed_channel.assert_not_called()
+
+    def test_segment_aware_event_ids_match(self):
+        # Channel identity stores the segment-aware id, and so does
+        # passed_event_ids — a segmented feed channel must still be reclaimed.
+        from tests.fakes import FakeChannel
+
+        channels = [FakeChannel(id=2, event_id="600053-prelims", feed_team_id="2")]
+        deleted, _ = self._cleanup(channels, {"600053-prelims"})
+        assert deleted == 1
+
+    def test_empty_passed_set_is_a_noop(self):
+        from tests.fakes import FakeChannel
+
+        channels = [FakeChannel(id=2, event_id="401874913", feed_team_id="2")]
+        deleted, lifecycle = self._cleanup(channels, set())
+        assert deleted == 0
+        lifecycle.delete_managed_channel.assert_not_called()
+
+    def test_failed_deletion_is_not_counted(self):
+        from tests.fakes import FakeChannel
+
+        channels = [FakeChannel(id=2, event_id="401874913", feed_team_id="2")]
+        deleted, _ = self._cleanup(channels, {"401874913"}, delete_ok=False)
+        assert deleted == 0
+
+    def test_deletion_reason_is_recorded(self):
+        from tests.fakes import FakeChannel
+
+        channels = [FakeChannel(id=2, event_id="401874913", feed_team_id="2")]
+        _, lifecycle = self._cleanup(channels, {"401874913"})
+        assert (
+            lifecycle.delete_managed_channel.call_args.kwargs["reason"]
+            == "feed_separation_disabled"
+        )
+
+
+class TestToggleGatesTheCleanupPass:
+    """The reclaim runs only while the master toggle is off (#672).
+
+    Pipeline-level guard: _process_group_internal must not reach the sweep
+    while separation is enabled — that would delete the very channels the
+    feature just created.
+    """
+
+    @staticmethod
+    def _run_pipeline(db_conn, db_factory, monkeypatch, *, separation_enabled):
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from teamarr.consumers.channel_lifecycle import StreamProcessResult
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+        from teamarr.consumers.matching.matcher import BatchMatchResult
+        from teamarr.database.groups import create_group, get_group
+        from teamarr.database.settings import update_feed_separation_settings
+        from teamarr.services.stream_filter import FilterResult
+        from tests.fakes import make_event
+
+        cur = db_conn.execute(
+            "INSERT INTO templates (name, template_type) VALUES ('T', 'event')"
+        )
+        db_conn.execute(
+            "INSERT INTO subscription_templates (template_id) VALUES (?)", (cur.lastrowid,)
+        )
+        gid = create_group(db_conn, name="G", leagues=["nfl"])
+        update_feed_separation_settings(db_conn, enabled=separation_enabled)
+        db_conn.commit()
+        group = get_group(db_conn, gid)
+
+        proc = EventGroupProcessor(db_factory=db_factory, service=MagicMock())
+        streams = [{"id": 11, "name": "Team A vs Team B"}]
+        event = make_event(
+            home_team=MockTeam(
+                id="1",
+                provider="espn",
+                name="Team A",
+                short_name="A",
+                abbreviation="TA",
+                league="nfl",
+                sport="football",
+            ),
+            away_team=MockTeam(
+                id="2",
+                provider="espn",
+                name="Team B",
+                short_name="B",
+                abbreviation="TB",
+                league="nfl",
+                sport="football",
+            ),
+        )
+        monkeypatch.setattr(proc, "_fetch_streams", lambda g: list(streams))
+        monkeypatch.setattr(
+            proc,
+            "_filter_streams",
+            lambda s, g: (list(streams), FilterResult(total_input=1, passed_count=1)),
+        )
+        monkeypatch.setattr(proc, "_match_streams", lambda *a, **k: BatchMatchResult())
+        monkeypatch.setattr(
+            proc,
+            "_build_matched_stream_list",
+            lambda *a, **k: [{"stream": streams[0], "event": event}],
+        )
+        monkeypatch.setattr(proc, "_enrich_matched_events", lambda ms: ms)
+        reached: list = []
+        monkeypatch.setattr(
+            proc,
+            "_process_channels",
+            lambda *a, **k: reached.append("_process_channels") or StreamProcessResult(),
+        )
+        monkeypatch.setattr(proc, "_generate_xmltv", lambda *a, **k: ("", 0, 0, 0, 0))
+
+        calls: list = []
+        monkeypatch.setattr(
+            proc,
+            "_cleanup_feed_separated_channels",
+            lambda g, conn, passed: calls.append(passed) or 0,
+        )
+
+        result = proc._process_group_internal(db_conn, group, date(2026, 3, 1))
+        # Guard the guard: an exception upstream would also produce zero calls.
+        assert result.errors == []
+        assert reached == ["_process_channels"]
+        return calls
+
+    def test_sweep_runs_when_separation_is_off(self, db_conn, db_factory, monkeypatch):
+        calls = self._run_pipeline(
+            db_conn, db_factory, monkeypatch, separation_enabled=False
+        )
+        assert calls == [{"123"}]
+
+    def test_sweep_skipped_when_separation_is_on(self, db_conn, db_factory, monkeypatch):
+        calls = self._run_pipeline(
+            db_conn, db_factory, monkeypatch, separation_enabled=True
+        )
+        assert calls == []
