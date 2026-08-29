@@ -273,6 +273,19 @@ DATE_PATTERNS = [
     (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:{_MONTH_NAMES})\b", "DATE_MASK"),
     # Dec 31, December 31 - use negative lookahead (?!:) to avoid matching "Jan 11:45pm"
     (rf"\b(?:{_MONTH_NAMES})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?!:)\b", "DATE_MASK"),
+    # 8.29, 08.29 (M.DD without year) — dot-separated dates (#652). Deliberately
+    # LAST: masking happens whether or not the date parses, so a greedy pattern
+    # here would eat text the forms above read correctly, and the loop breaks on
+    # first match.
+    #
+    # Tightly bounded, because a dot between digits is usually NOT a date.
+    # Measured over 1036 dot-numbers in real stream names: 1020 had a two-digit
+    # day and every one was a date (08.27, 8.29); the one-digit-day cases were
+    # noise ("5.1"), and "17.45"/"10.30" were TIMES written with a dot. So the
+    # month is bounded 1-12 (killing 13.4 and 17.45), the day must be two digits
+    # 01-31 (killing 5.1 and decimal spreads like "2.5"), and an am/pm suffix
+    # vetoes the read so "10.30pm" stays a time.
+    (r"\b(1[0-2]|0?[1-9])\.(3[01]|[12]\d|0[1-9])\b(?!\s*[ap]\.?m)", "DATE_MASK_NO_YEAR"),
 ]
 
 # Time patterns to extract and mask (with optional TZ suffix)
@@ -734,6 +747,19 @@ def normalize_for_matching(text: str) -> str:
     # These appear in streams like "MIL Bucks ( ESPN Feed )"
     for network in BROADCAST_NETWORKS:
         text = re.sub(rf"\b{re.escape(network.lower())}\b", " ", text)
+
+    # Remove apostrophes/backticks WITHOUT adding a space, exactly as
+    # normalize_text does (#653). These two normalizers run in sequence —
+    # _match_against_events calls this one, then _score_teams_against_event
+    # calls normalize_text on the result — so a disagreement here is
+    # unrecoverable downstream. Turning the apostrophe into a space split
+    # "Hawai'i" into "hawai i", which shares no token with "hawaii rainbow
+    # warriors": 46.7 against the 100.0 a single normalizer scores, below
+    # BOTH_TEAMS_THRESHOLD, so the whole event was rejected. Same for
+    # "American Int'l" and "G'town Col". unidecode has already run via
+    # apply_city_translations, so a curly ’ is a plain \x27 by now.
+    # Hex escapes avoid source-encoding ambiguity: \x27=apostrophe, \x60=backtick.
+    text = re.sub("[\x27\x60]", "", text)
 
     # Remove punctuation except spaces (hyphens become spaces for matching)
     text = re.sub(r"[^\w\s]", " ", text)

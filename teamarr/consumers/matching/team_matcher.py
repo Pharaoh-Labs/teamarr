@@ -1138,6 +1138,9 @@ class TeamMatcher:
         fallback_t1, fallback_t2, has_stripped_fallback = self._prepare_stripped_fallback(
             ctx.team1, ctx.team2, team1_normalized, team2_normalized
         )
+        pipe_t1, pipe_t2, has_pipe_fallback = self._prepare_pipe_fallback(
+            ctx.team1, ctx.team2, team1_normalized, team2_normalized
+        )
 
         # Check if we have date validation from the stream
         has_date_validation = ctx.classified.normalized.extracted_date is not None
@@ -1225,6 +1228,13 @@ class TeamMatcher:
             if not match_result and has_stripped_fallback:
                 match_result = self._match_teams_to_event(
                     fallback_t1, fallback_t2, event, has_date_validation
+                )
+
+            # Fallback: retry with pipe metadata trimmed (#652). Last tier, so
+            # a name that matches intact never reaches it.
+            if not match_result and has_pipe_fallback:
+                match_result = self._match_teams_to_event(
+                    pipe_t1, pipe_t2, event, has_date_validation
                 )
 
             # Trusted-date gate (#474), applied AFTER team scoring (#480):
@@ -1382,6 +1392,9 @@ class TeamMatcher:
         fallback_t1, fallback_t2, has_stripped_fallback = self._prepare_stripped_fallback(
             ctx.team1, ctx.team2, team1_normalized, team2_normalized
         )
+        pipe_t1, pipe_t2, has_pipe_fallback = self._prepare_pipe_fallback(
+            ctx.team1, ctx.team2, team1_normalized, team2_normalized
+        )
 
         # Check if we have date validation from the stream
         has_date_validation = ctx.classified.normalized.extracted_date is not None
@@ -1475,6 +1488,13 @@ class TeamMatcher:
             if not match_result and has_stripped_fallback:
                 match_result = self._match_teams_to_event(
                     fallback_t1, fallback_t2, event, has_date_validation
+                )
+
+            # Fallback: retry with pipe metadata trimmed (#652). Last tier, so
+            # a name that matches intact never reaches it.
+            if not match_result and has_pipe_fallback:
+                match_result = self._match_teams_to_event(
+                    pipe_t1, pipe_t2, event, has_date_validation
                 )
 
             # Trusted-date gate (#474), applied AFTER team scoring (#480):
@@ -1802,6 +1822,61 @@ class TeamMatcher:
         has_fallback = fallback_t1 != norm_team1 or fallback_t2 != norm_team2
         return fallback_t1, fallback_t2, has_fallback
 
+    @staticmethod
+    def _leading_pipe_segment(name: str) -> str:
+        """The text before the first "|", if it is substantial enough to be a team.
+
+        Minimum 3 chars matches extract_teams_from_separator's own floor — even
+        the shortest real abbreviations (USC, LSU, BYU) clear it.
+        """
+        head = name.split("|")[0].strip()
+        return head if len(head) >= 3 else name
+
+    def _prepare_pipe_fallback(
+        self,
+        raw_team1: str | None,
+        raw_team2: str | None,
+        norm_team1: str | None,
+        norm_team2: str | None,
+    ) -> tuple[str | None, str | None, bool]:
+        """Pre-compute pipe-trimmed team names for fallback matching (#652).
+
+        `_clean_team_name` deliberately keeps pipe content, on the stated
+        expectation that "the matcher will try both sides of the pipe and pick
+        the one that matches". No such code existed: this method is it. The
+        counter-claim that token_set_ratio handles pipes "naturally" is false —
+        the extra tokens are scored against the team, and they cost more than
+        the threshold allows:
+
+            "WAGNER | 8.29 | NEC FRONT ROW"  vs "Wagner Seahawks"  = 57.1
+            "WAGNER"                         vs "Wagner Seahawks"  = 100.0
+
+        with BOTH_TEAMS_THRESHOLD at 60. Streams that do match this shape today
+        do so by luck — "UNLV | 8.29 | FOX" survives only via the abbreviation
+        path, and "VIRGINIA | 8.29 | ESPN" clears the floor by 1.5 points.
+
+        Split from the RAW names for the same reason the parenthetical fallback
+        does: normalize_for_matching drops "|" as punctuation, so the boundary
+        is already gone by the time we hold the normalized form.
+
+        Only the LEADING segment is taken. By this point the classifier has
+        already moved any prefix noise (league hint, sport, provider, bare
+        datetime) to the back, so what remains before the first pipe is the
+        team and what follows is date/time/channel metadata. Trying every
+        segment instead would let a venue or network name score as a team.
+        """
+        fallback_t1 = norm_team1
+        fallback_t2 = norm_team2
+
+        if raw_team1 and "|" in raw_team1:
+            fallback_t1 = normalize_for_matching(self._leading_pipe_segment(raw_team1))
+
+        if raw_team2 and "|" in raw_team2:
+            fallback_t2 = normalize_for_matching(self._leading_pipe_segment(raw_team2))
+
+        has_fallback = fallback_t1 != norm_team1 or fallback_t2 != norm_team2
+        return fallback_t1, fallback_t2, has_fallback
+
     def _score_teams_against_event(
         self,
         team1: str | None,
@@ -1824,9 +1899,13 @@ class TeamMatcher:
         home_normalized = normalize_text(event.home_team.name)
         away_normalized = normalize_text(event.away_team.name)
 
-        # Note: Pipe-separated content (e.g., "Sacramento Kings | Golden 1 Center")
-        # is handled naturally by token_set_ratio which finds best token overlap.
-        # No explicit pipe resolution needed - "Sacramento Kings" tokens will match.
+        # Pipe-separated content is NOT handled here (#652). This function
+        # scores whatever it is given; token_set_ratio charges for the extra
+        # tokens rather than ignoring them ("WAGNER | 8.29 | NEC FRONT ROW"
+        # scores 57.1 against "Wagner Seahawks", under the 60 floor), so a
+        # short tail like "| Golden 1 Center" survives only by luck. The
+        # trimming lives in _prepare_pipe_fallback, tried as the last tier of
+        # the candidate loop so an intact name never reaches it.
 
         if team1 and team2:
             # BOTH teams extracted - require both to match different event teams
