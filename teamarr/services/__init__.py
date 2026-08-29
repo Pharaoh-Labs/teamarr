@@ -34,12 +34,7 @@ from teamarr.services.channel_service import (
 )
 from teamarr.services.detection_keywords import DetectionKeywordService
 from teamarr.services.group_service import (
-    BatchGroupResult,
-    ChannelStats,
-    EPGStats,
-    GroupProcessingResult,
     GroupService,
-    StreamStats,
     create_group_service,
 )
 from teamarr.services.league_mappings import (
@@ -87,12 +82,7 @@ __all__ = [
     "TeamInfo",
     "create_cache_service",
     # Group service
-    "BatchGroupResult",
-    "ChannelStats",
-    "EPGStats",
-    "GroupProcessingResult",
     "GroupService",
-    "StreamStats",
     "create_group_service",
     # Stream ordering service
     "StreamOrderingService",

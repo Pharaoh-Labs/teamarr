@@ -29,6 +29,7 @@ class ProcessingResult:
     streams_unmatched: int = 0  # Distinct streams with no match (coverage)
     match_result_count: int = 0  # Total matched results produced (volume; EPG fans out)
     streams_excluded: int = 0  # Matched but excluded by timing (past/final/early)
+    streams_cached: int = 0  # Match results served from the fingerprint cache
 
     # Excluded breakdown by reason
     excluded_event_final: int = 0
@@ -50,8 +51,32 @@ class ProcessingResult:
     postgame_count: int = 0  # Postgame filler programmes
     xmltv_size: int = 0
 
+    # Per-phase wall time (fetch/filter/match/channels/xmltv) so a slow
+    # source can be diagnosed from the parent run's stats.
+    phase_timings: dict[str, float] = field(default_factory=dict)
+
     # Errors
     errors: list[str] = field(default_factory=list)
+
+    def to_run_summary(self) -> dict:
+        """Compact per-group entry for the parent run's extra_metrics.groups.
+
+        Groups no longer get their own processing_runs row (#645); this is
+        what survives of the old sub-run — enough to spot a slow, failing, or
+        cache-cold source without log archaeology.
+        """
+        return {
+            "id": self.group_id,
+            "name": self.group_name,
+            "fetched": self.streams_fetched,
+            "matched": self.streams_matched,
+            "unmatched": self.streams_unmatched,
+            "cached": self.streams_cached,
+            "channels_created": self.channels_created,
+            "programmes": self.programmes_generated,
+            "phase_timings": self.phase_timings,
+            "error": "; ".join(self.errors) if self.errors else None,
+        }
 
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
@@ -70,6 +95,7 @@ class ProcessingResult:
                 "matched": self.streams_matched,
                 "unmatched": self.streams_unmatched,
                 "match_results": self.match_result_count,
+                "cached": self.streams_cached,
             },
             "channels": {
                 "created": self.channels_created,
@@ -169,9 +195,30 @@ class BatchProcessingResult:
         return sum(r.streams_unmatched for r in self.results)
 
     @property
+    def total_streams_cached(self) -> int:
+        """Total cache-served match results across all groups."""
+        return sum(r.streams_cached for r in self.results)
+
+    @property
     def total_channels_deleted(self) -> int:
         """Total channels deleted across all groups."""
         return sum(r.channels_deleted for r in self.results)
+
+    @property
+    def total_channels_updated(self) -> int:
+        return sum(r.channels_existing for r in self.results)
+
+    @property
+    def total_channels_skipped(self) -> int:
+        return sum(r.channels_skipped for r in self.results)
+
+    @property
+    def total_channel_errors(self) -> int:
+        return sum(r.channel_errors for r in self.results)
+
+    def group_summaries(self) -> list[dict]:
+        """Per-group breakdown for the parent run's stats (#645)."""
+        return [r.to_run_summary() for r in self.results]
 
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""

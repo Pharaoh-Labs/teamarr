@@ -27,7 +27,6 @@ from .processor import (
     EventGroupProcessor,
     preview_event_group,
     process_all_event_groups,
-    process_event_group,
 )
 from .results import (
     BatchProcessingResult,
@@ -47,5 +46,4 @@ __all__ = [
     "ProcessingResult",
     "preview_event_group",
     "process_all_event_groups",
-    "process_event_group",
 ]

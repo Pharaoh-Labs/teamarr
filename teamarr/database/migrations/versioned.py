@@ -308,6 +308,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _advance_version(conn, 89, "reconciliation: Bullpen disable status")
         current_version = 89
 
+    if current_version < 90:
+        _apply_migration(
+            conn, 90,
+            "consolidate per-group sub-runs into their full_epg run (#645)",
+            _migrate_v90_consolidate_group_subruns,
+        )
+        current_version = 90
+
 
 # =============================================================================
 # Migration helpers
@@ -2411,3 +2419,80 @@ def _migrate_v88_numbering_exceptions(conn: sqlite3.Connection) -> None:
         "stability set to compact",
         inserted,
     )
+
+
+def _migrate_v90_consolidate_group_subruns(conn: sqlite3.Connection) -> None:
+    """Retire per-group ``event_group`` sub-run rows (#645).
+
+    Groups no longer write their own processing_runs rows; everything hangs
+    off the parent ``full_epg`` row. For rows that already exist:
+
+    1. Re-key matched/failed stream details from each sub-run to the full run
+       it ran inside (last use of the started_at time-window join that the
+       readers used to do on every request).
+    2. Fold each sub-run's ``streams_cached`` (which only ever lived on
+       sub-runs, #312) into its parent row; sub-runs with no surviving parent
+       fold into ``lifetime_stats`` so all-time cache-hit totals hold.
+    3. Delete every non-``full_epg`` run row (detail rows of sub-runs that
+       had no parent go with them — FK cascade, plus an explicit sweep in
+       case the connection has foreign keys off).
+    """
+    # Tests drive _run_migrations against partial schemas; nothing to do there.
+    for table in ("processing_runs", "epg_matched_streams", "epg_failed_matches", "lifetime_stats"):
+        if not _table_exists(conn, table):
+            return
+
+    conn.execute("DROP TABLE IF EXISTS _v90_subrun_map")
+    conn.execute(
+        """
+        CREATE TEMP TABLE _v90_subrun_map AS
+        SELECT c.id AS child_id,
+               c.streams_cached AS streams_cached,
+               (SELECT p.id FROM processing_runs p
+                 WHERE p.run_type = 'full_epg'
+                   AND p.started_at <= c.started_at
+                   AND (p.completed_at IS NULL OR p.completed_at >= c.started_at)
+                 ORDER BY p.started_at DESC LIMIT 1) AS parent_id
+          FROM processing_runs c
+         WHERE c.run_type != 'full_epg'
+        """
+    )
+    # The detail tables hold ~1M rows on a busy install; without these the
+    # correlated re-key below is a full scan per row (minutes, not seconds).
+    conn.execute("CREATE INDEX _v90_map_child ON _v90_subrun_map(child_id)")
+    conn.execute("CREATE INDEX _v90_map_parent ON _v90_subrun_map(parent_id)")
+    for table in ("epg_matched_streams", "epg_failed_matches"):
+        conn.execute(
+            f"""
+            UPDATE {table}
+               SET run_id = (SELECT m.parent_id FROM _v90_subrun_map m
+                              WHERE m.child_id = {table}.run_id)
+             WHERE run_id IN (SELECT child_id FROM _v90_subrun_map WHERE parent_id IS NOT NULL)
+            """
+        )
+    conn.execute(
+        """
+        UPDATE processing_runs
+           SET streams_cached = COALESCE(streams_cached, 0) + (
+                SELECT COALESCE(SUM(m.streams_cached), 0) FROM _v90_subrun_map m
+                 WHERE m.parent_id = processing_runs.id)
+         WHERE id IN (SELECT parent_id FROM _v90_subrun_map WHERE parent_id IS NOT NULL)
+        """
+    )
+    conn.execute("INSERT OR IGNORE INTO lifetime_stats (id) VALUES (1)")
+    conn.execute(
+        """
+        UPDATE lifetime_stats
+           SET streams_cached = streams_cached + (
+                SELECT COALESCE(SUM(streams_cached), 0) FROM _v90_subrun_map
+                 WHERE parent_id IS NULL)
+         WHERE id = 1
+        """
+    )
+    deleted = conn.execute("DELETE FROM processing_runs WHERE run_type != 'full_epg'").rowcount
+    for table in ("epg_matched_streams", "epg_failed_matches"):
+        conn.execute(
+            f"DELETE FROM {table} WHERE run_id NOT IN (SELECT id FROM processing_runs)"
+        )
+    conn.execute("DROP TABLE IF EXISTS _v90_subrun_map")
+    logger.info("[MIGRATE] v90: consolidated %d per-group sub-run row(s)", deleted)
