@@ -14,6 +14,10 @@ from teamarr.services.stream_filter import FilterResult
 
 logger = logging.getLogger(__name__)
 
+# Per-source skips that are not match failures (#662): the matcher never ran
+# for these, so they carry no FailedReason. Persisted under a "skipped:" prefix.
+_SKIP_REASONS = frozenset({"unclassifiable", "name_match_disabled", "team_streams_disabled"})
+
 
 class MatchPersistence:
     """Saves per-stream match outcomes to the stats tables.
@@ -148,10 +152,23 @@ class MatchPersistence:
                 parsed_team2 = getattr(result, "parsed_team2", None)
                 detected_league = getattr(result, "detected_league", None)
 
-                # Get detailed failure reason if available
-                failed_reason = "unmatched"
+                # Name the outcome honestly (#662). Most rows that used to land
+                # here as the bare string "unmatched" were never match failures:
+                # they were filter verdicts (not an event, league not enabled,
+                # regex) or per-source skips (linear channel names, a matching
+                # type switched off) that only reached this branch because it
+                # is the catch-all. 38% of one install's "failures" were these.
+                # They stay persisted — an EPG-only group still wants its
+                # linear channels listed — but under a prefix that says what
+                # they are, so the failure taxonomy is only real failures.
                 if result.failed_reason:
                     failed_reason = result.failed_reason.value
+                elif result.filtered_reason:
+                    failed_reason = f"filtered:{result.filtered_reason.value}"
+                elif result.exclusion_reason in _SKIP_REASONS:
+                    failed_reason = f"skipped:{result.exclusion_reason}"
+                else:
+                    failed_reason = "unmatched"
 
                 failed_list.append(
                     FailedMatch(
