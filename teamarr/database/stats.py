@@ -476,7 +476,63 @@ def get_current_stats(conn: Connection) -> dict:
         # Average over the retention window only (folded runs keep no durations)
         "avg_duration_ms": int(overall["avg_duration"] or 0),
         "last_run": last_run,
+        "media_server_health": get_media_server_health(conn),
     }
+
+
+# Consecutive failed refreshes before a media server is reported as failing.
+# Hourly runs -> three hours of failures; one transient miss stays quiet.
+MEDIA_SERVER_FAILING_THRESHOLD = 3
+MEDIA_SERVER_HEALTH_LOOKBACK = 10
+
+
+def media_server_health(
+    runs: list[dict], threshold: int = MEDIA_SERVER_FAILING_THRESHOLD
+) -> list[dict]:
+    """Per-server refresh health from run dicts, newest first (#649).
+
+    Each run's ``extra_metrics.media_servers`` holds one outcome per server
+    (see generation._media_server_outcome). A server is ``failing`` once it
+    has failed ``threshold`` consecutive runs counted from the newest run it
+    appears in. Servers absent from the newest run (disabled/removed) are
+    not reported.
+    """
+    latest_seen: dict[tuple[str, str], dict] = {}
+    for run in runs:
+        for o in (run.get("extra_metrics") or {}).get("media_servers") or []:
+            key = (o.get("kind") or "", o.get("server") or "")
+            state = latest_seen.get(key)
+            if state is None:
+                state = latest_seen[key] = {
+                    "kind": key[0],
+                    "server": key[1],
+                    "consecutive_failures": 0,
+                    "last_error": None,
+                    "last_success_at": None,
+                    "_streak_open": True,
+                }
+            if o.get("success"):
+                state["_streak_open"] = False
+                if state["last_success_at"] is None:
+                    state["last_success_at"] = run.get("completed_at") or run.get("started_at")
+            elif state["_streak_open"]:
+                state["consecutive_failures"] += 1
+                if state["last_error"] is None:
+                    state["last_error"] = o.get("error")
+    result = []
+    for state in latest_seen.values():
+        state.pop("_streak_open")
+        state["failing"] = state["consecutive_failures"] >= threshold
+        result.append(state)
+    return result
+
+
+def get_media_server_health(
+    conn: Connection, lookback: int = MEDIA_SERVER_HEALTH_LOOKBACK
+) -> list[dict]:
+    """``media_server_health`` over the latest full_epg runs."""
+    runs = get_recent_runs(conn, limit=lookback, run_type="full_epg")
+    return media_server_health([r.to_dict() for r in runs])
 
 
 def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = ()) -> None:

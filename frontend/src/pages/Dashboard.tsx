@@ -54,7 +54,7 @@ export function Dashboard() {
       </div>
 
       {/* Status strip — at-a-glance system health */}
-      <StatusStrip lastRun={runs[0]} />
+      <StatusStrip lastRun={runs[0]} mediaServers={stats?.media_server_health} />
 
       {/* Generation History — full pipeline runs (matching, channels, EPG) */}
       {runs.length > 0 && (

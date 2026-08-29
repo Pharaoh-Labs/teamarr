@@ -132,5 +132,7 @@ docker exec teamarr cat data/logs/teamarr.log | tail -100  # Log file
 
 Use **Support bundle** in the footer to download a redacted diagnostic ZIP. Attach the ZIP to a support request instead of a database backup. It includes configuration, source and subscription diagnostics, the matching library (aliases, detection and exception keywords, condition presets, persistent corrections, and source-template mappings), recent run and match details, managed-channel ordering evidence, and bounded log excerpts. Stream URLs, M3U account names, passwords, API keys, tokens, template bodies, XMLTV, and provider caches are excluded.
 
+The report opens with automatic **signals** — things worth checking before reading further: Dispatcharr disabled, no enabled sources, active teams without a template, the latest generation not completing, a media server whose refresh has failed on consecutive runs (`media_server_refresh_failing`, with the server and last error as evidence), and no managed channels stored.
+
 - **GitHub Issues**: [github.com/Pharaoh-Labs/teamarr/issues](https://github.com/Pharaoh-Labs/teamarr/issues)
 - **Discord**: Join the Dispatcharr Discord server — there's a Teamarr channel

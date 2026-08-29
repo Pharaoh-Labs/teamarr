@@ -35,6 +35,17 @@ export interface StatsResponse {
   by_type: Record<string, number>
   avg_duration_ms: number
   last_run: string | null
+  media_server_health?: MediaServerHealth[]
+}
+
+/** Per-server refresh health over recent runs (#649). */
+export interface MediaServerHealth {
+  kind: string
+  server: string
+  consecutive_failures: number
+  last_error: string | null
+  last_success_at: string | null
+  failing: boolean
 }
 
 export interface ProcessingRun {
