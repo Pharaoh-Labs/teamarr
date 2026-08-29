@@ -3,6 +3,13 @@
 Two independent defects, both in the shared normalization path that every
 provider's streams pass through, and both found auditing NCAAF on 2026-08-29
 where they accounted for all 22 failures of one source.
+
+A dot-separated date pattern (8.29) was proposed here and withdrawn: UK
+listings write kickoff times the same way, so "Arsenal v Chelsea 7.30" read as
+30 July. Built-in masks are extracted_date_trusted=True and the trusted-date
+gate rejects candidates more than a day out, which would have turned correct
+matches into DATE_MISMATCH. It was never load-bearing anyway -- with the date
+fully extracted, team2 still scores 57.1; the pipe fallback alone is the fix.
 """
 
 from __future__ import annotations
@@ -13,10 +20,7 @@ import pytest
 from rapidfuzz import fuzz
 
 from teamarr.consumers.matching.classifier import classify_stream
-from teamarr.consumers.matching.normalizer import (
-    extract_and_mask_datetime,
-    normalize_for_matching,
-)
+from teamarr.consumers.matching.normalizer import normalize_for_matching
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.utilities.fuzzy_match import normalize_text
 
@@ -123,40 +127,3 @@ class TestPipeMetadataIsTrimmed:
             TeamMatcher._leading_pipe_segment("Sacramento Kings | Golden 1 Center")
             == "Sacramento Kings"
         )
-
-
-class TestDotSeparatedDates:
-    """`8.29` was neither extracted as a date nor removed from the team name."""
-
-    @pytest.mark.parametrize(
-        "text,expected",
-        [("Game | 8.29 7:00PM |", (8, 29)), ("Game | 08.27 7:00PM |", (8, 27))],
-    )
-    def test_dot_date_is_extracted(self, text, expected):
-        _, parsed, _, _ = extract_and_mask_datetime(text)
-        assert parsed is not None
-        assert (parsed.month, parsed.day) == expected
-
-    @pytest.mark.parametrize(
-        "text",
-        [
-            "Spread 2.5 over",  # one-digit day: a decimal, not a date
-            "Game 13.4 rating",  # month out of range
-            "Race at 17.45",  # 24h time written with a dot
-        ],
-    )
-    def test_non_dates_are_left_alone(self, text):
-        masked, parsed, _, _ = extract_and_mask_datetime(text)
-        assert parsed is None
-        assert "DATE_MASK" not in masked
-
-    def test_dot_time_with_meridiem_is_not_read_as_a_date(self):
-        """The am/pm lookahead is what stops this; how the time itself parses
-        is pre-existing behaviour and not asserted here."""
-        _, parsed, _, _ = extract_and_mask_datetime("Show at 10.30pm")
-        assert parsed is None
-
-    def test_slash_dates_still_win(self):
-        """The dot pattern is last, so the established forms are unaffected."""
-        _, parsed, _, _ = extract_and_mask_datetime("Event 12/31/25")
-        assert (parsed.year, parsed.month, parsed.day) == (2025, 12, 31)

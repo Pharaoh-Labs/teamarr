@@ -273,19 +273,6 @@ DATE_PATTERNS = [
     (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:{_MONTH_NAMES})\b", "DATE_MASK"),
     # Dec 31, December 31 - use negative lookahead (?!:) to avoid matching "Jan 11:45pm"
     (rf"\b(?:{_MONTH_NAMES})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?!:)\b", "DATE_MASK"),
-    # 8.29, 08.29 (M.DD without year) — dot-separated dates (#652). Deliberately
-    # LAST: masking happens whether or not the date parses, so a greedy pattern
-    # here would eat text the forms above read correctly, and the loop breaks on
-    # first match.
-    #
-    # Tightly bounded, because a dot between digits is usually NOT a date.
-    # Measured over 1036 dot-numbers in real stream names: 1020 had a two-digit
-    # day and every one was a date (08.27, 8.29); the one-digit-day cases were
-    # noise ("5.1"), and "17.45"/"10.30" were TIMES written with a dot. So the
-    # month is bounded 1-12 (killing 13.4 and 17.45), the day must be two digits
-    # 01-31 (killing 5.1 and decimal spreads like "2.5"), and an am/pm suffix
-    # vetoes the read so "10.30pm" stays a time.
-    (r"\b(1[0-2]|0?[1-9])\.(3[01]|[12]\d|0[1-9])\b(?!\s*[ap]\.?m)", "DATE_MASK_NO_YEAR"),
 ]
 
 # Time patterns to extract and mask (with optional TZ suffix)
