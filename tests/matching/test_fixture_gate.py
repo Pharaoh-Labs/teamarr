@@ -496,3 +496,75 @@ class TestMascotlessLeaguesDoNotShadowMascotedOnes:
         original crosstalk case is untouched."""
         index = TeamIdentityIndex(CACHED_TEAMS)
         assert index.fixture_leagues("Tampa Bay Lightning", "Tampa Bay Rays") == set()
+
+
+class TestPathParity:
+    """Single-league and multi-league entry points must reach the same verdict.
+
+    They were two ~250-line copies of one loop, 89% identical, and they drifted:
+    the #627 league-hint hatch landed in the multi-league copy only, so an
+    "NCAAF only" source — which takes the single-league path — kept vetoing
+    fixtures the hatch was written to rescue (#650). Both now delegate to
+    ``_match_against_candidates`` (#660); this pins them together so a gate or
+    fallback can never again land on one source type and not the other.
+    """
+
+    CASES = [
+        # (stream, event) — the league is the event's own.
+        ("ESPN+ 81 (D): Tampa Bay Lightning vs. Detroit Red Wings", TB_DET),
+        ("MLB: Tampa Bay Rays vs Detroit Tigers", TB_DET),
+        ("Tampa Bay Lightning vs. Detroit Red Wings", NHL_GAME),
+        ("Milwaukee vs New York Mets", BREWERS_METS),
+        ("SEA @ STL", MARINERS_CARDINALS),
+        ("Utah vs Washington", JAZZ_WIZARDS),
+        ("Northern Colorado vs Eastern Washington", TB_DET),
+    ]
+
+    @pytest.mark.parametrize("stream_name,event", CASES, ids=[c[0] for c in CASES])
+    def test_both_paths_agree(self, db_factory, stream_name, event):
+        single = _match(stream_name, event, event.league, db_factory)
+        multi = _match_multi(stream_name, event, db_factory)
+
+        assert single.category is multi.category
+        assert single.failed_reason is multi.failed_reason
+        assert (single.event.id if single.event else None) == (
+            multi.event.id if multi.event else None
+        )
+        assert single.detected_league == multi.detected_league
+
+    def test_league_hint_hatch_covers_the_single_league_path(self, db_factory):
+        """The #627 hatch used to exist in the multi-league copy only."""
+        with db_factory() as conn:
+            conn.executemany(
+                "INSERT INTO team_cache VALUES (?,?,?,?,?)",
+                [
+                    ("Mercyhurst", "Mercyhurst", "MER", "mens-college-basketball", "basketball"),
+                    (
+                        "Youngstown State",
+                        "Youngstown State",
+                        "YSU",
+                        "mens-college-basketball",
+                        "basketball",
+                    ),
+                    ("Ohio State Buckeyes", "Ohio State", "OSU", "college-football", "football"),
+                ],
+            )
+            conn.commit()
+
+        event = _event(
+            _team(
+                "Youngstown State Penguins",
+                "Youngstown State",
+                "YSU",
+                "college-football",
+                "football",
+            ),
+            _team("Mercyhurst Lakers", "Mercyhurst", "MER", "college-football", "football"),
+            "fcs-mer-ysu",
+        )
+        stream = f"NCAAF: Mercyhurst vs. Youngstown State @ {TODAY:%b %-d} 6:00PM ET"
+
+        assert _match(stream, event, "college-football", db_factory).category is (
+            ResultCategory.MATCHED
+        )
+        assert _match_multi(stream, event, db_factory).category is ResultCategory.MATCHED
