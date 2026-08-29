@@ -151,6 +151,29 @@ class ManagedChannelStream:
     stream_stats: dict | None = None
     stream_stats_updated_at: datetime | None = None
 
+    @property
+    def measured_dead_or_blank(self) -> bool:
+        """Whether a probe has actually found this stream unwatchable (#670).
+
+        Reads two conventional keys out of the cached ``stream_stats``: ``alive``
+        false, or ``blank_detected`` true. Both are written by whatever probed
+        the stream — Teamarr never probes anything itself.
+
+        Deliberately three-state in effect, not two. This is False when there
+        are no stats, when the keys are absent, and when they are present but
+        unreadable, because *not knowing* a stream is dead is not the same as
+        knowing it is alive, and every caller here acts on the difference. A
+        zero bitrate is likewise not consulted: an unmeasured stream reports
+        zero exactly as a dead one does, and only these two keys distinguish
+        them.
+        """
+        stats = self.stream_stats
+        if not isinstance(stats, dict):
+            return False
+        if "alive" in stats and stats["alive"] is not None and not stats["alive"]:
+            return True
+        return bool(stats.get("blank_detected"))
+
     @classmethod
     def from_row(cls, row: dict) -> "ManagedChannelStream":
         """Create from database row dict."""

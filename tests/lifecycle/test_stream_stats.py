@@ -426,3 +426,47 @@ def test_per_channel_refresh_still_scopes_its_fetch_to_that_channel(db_conn, pat
     refresh_stream_stats(db_conn, mine)
 
     assert stub.calls == [[100]]
+
+
+# ---------------------------------------------------------------------------
+# ManagedChannelStream.measured_dead_or_blank (#670)
+# ---------------------------------------------------------------------------
+
+
+def _stream_with(stats):
+    return ManagedChannelStream.from_row(_row(stats))
+
+
+def test_measured_dead_when_alive_is_false():
+    assert _stream_with({"alive": False}).measured_dead_or_blank is True
+
+
+def test_measured_dead_when_blank_detected():
+    assert _stream_with({"alive": True, "blank_detected": True}).measured_dead_or_blank is True
+
+
+def test_alive_stream_is_not_dead():
+    assert _stream_with({"alive": True}).measured_dead_or_blank is False
+
+
+def test_absent_stats_is_not_a_death():
+    # Not knowing is not knowing it is dead. Every caller acts on the gap.
+    assert _stream_with(None).measured_dead_or_blank is False
+
+
+def test_stats_without_liveness_keys_is_not_a_death():
+    assert _stream_with({"resolution": "1920x1080"}).measured_dead_or_blank is False
+
+
+def test_unreadable_stats_is_not_a_death():
+    assert _stream_with("{not valid json").measured_dead_or_blank is False
+
+
+def test_null_alive_is_not_a_death():
+    # An explicit null is the probe declining to say, not saying "dead".
+    assert _stream_with({"alive": None}).measured_dead_or_blank is False
+
+
+def test_zero_bitrate_alone_is_not_a_death():
+    # An unmeasured stream reports zero exactly as a dead one does.
+    assert _stream_with({"ffmpeg_output_bitrate": 0}).measured_dead_or_blank is False

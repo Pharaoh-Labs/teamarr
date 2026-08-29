@@ -327,3 +327,82 @@ def test_ordering_without_rules_never_fetches_stats(db_factory, db_conn, monkeyp
 
     assert stub.calls == []
     assert result["stats_refreshed"] == 0
+
+
+# ---------------------------------------------------------------------------
+# _apply_stream_ordering — the pin yields to a dead/blank measurement (#670)
+# ---------------------------------------------------------------------------
+
+
+def _set_stats(conn, dispatcharr_stream_id, stats):
+    """Cache stream_stats against a stream, as a refresh would have."""
+    conn.execute(
+        "UPDATE managed_channel_streams SET stream_stats = ? WHERE dispatcharr_stream_id = ?",
+        (stats if isinstance(stats, str) or stats is None else json.dumps(stats),
+         dispatcharr_stream_id),
+    )
+    conn.commit()
+
+
+def test_pin_releases_an_incumbent_measured_dead(db_factory, db_conn, monkeypatch):
+    # Without this the demotion lands in the DB and never reaches Dispatcharr:
+    # the pin puts the dead stream straight back at #1 for the whole live
+    # window, which is precisely the slot where failover order costs something.
+    _seed_live_channel(db_conn, live=True)
+    _set_stats(db_conn, 100, {"alive": False, "ffmpeg_output_bitrate": 0})
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
+
+
+def test_pin_releases_an_incumbent_measured_blank(db_factory, db_conn, monkeypatch):
+    # A black screen is up, answers, and is worth nothing to a viewer.
+    _seed_live_channel(db_conn, live=True)
+    _set_stats(db_conn, 100, {"alive": True, "blank_detected": True})
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
+
+
+def test_pin_holds_for_an_incumbent_measured_alive(db_factory, db_conn, monkeypatch):
+    _seed_live_channel(db_conn, live=True)
+    _set_stats(db_conn, 100, {"alive": True, "ffmpeg_output_bitrate": 8000})
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [100, 101]})]
+
+
+def test_pin_holds_when_stats_say_nothing_about_liveness(db_factory, db_conn, monkeypatch):
+    # Stats from a probe that reports resolution but no liveness verdict. Not
+    # knowing a stream is dead is not knowing it is alive, and the pin's whole
+    # job is to hold when nothing is known.
+    _seed_live_channel(db_conn, live=True)
+    _set_stats(db_conn, 100, {"resolution": "1920x1080", "source_fps": 60})
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [100, 101]})]
+
+
+def test_pin_holds_when_stats_are_unreadable(db_factory, db_conn, monkeypatch):
+    # Malformed JSON decodes to None. A parse failure must not read as a death.
+    _seed_live_channel(db_conn, live=True)
+    _set_stats(db_conn, 100, "{not valid json")
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [100, 101]})]
+
+
+def test_pin_ignores_a_dead_stream_that_is_not_the_incumbent(db_factory, db_conn, monkeypatch):
+    # Only slot 1 is pinned, so only slot 1's health can lift the pin. A dead
+    # challenger changes nothing about whether the incumbent stays put.
+    _seed_live_channel(db_conn, live=True)
+    _set_stats(db_conn, 101, {"alive": False})
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [100, 101]})]
