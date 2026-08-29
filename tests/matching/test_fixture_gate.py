@@ -302,8 +302,10 @@ class TestExplicitLeagueHints:
             "fcs-mer-ysu",
         )
 
+        # Date must track TODAY (the event's date) or this becomes DATE_MISMATCH
+        # the day after it is written.
         result = _match_multi(
-            "NCAAF: Mercyhurst vs. Youngstown State @ Aug 27 6:00PM ET",
+            f"NCAAF: Mercyhurst vs. Youngstown State @ {TODAY:%b %-d} 6:00PM ET",
             event,
             db_factory,
         )
