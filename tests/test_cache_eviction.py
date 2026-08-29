@@ -10,7 +10,7 @@ cache with room to spare does no scanning at all.
 from __future__ import annotations
 
 import threading
-import time
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from unittest import mock
 
@@ -112,32 +112,54 @@ def test_between_sweeps_eviction_is_plain_lru():
     assert cache.get("k5") is None
 
 
+class _ScanCountingDict(OrderedDict):
+    """An OrderedDict that counts full-table walks (#656).
+
+    The eviction sweep is the only code path that iterates the whole cache on
+    insert, and it does so via ``items()``. Counting those calls measures the
+    algorithmic property directly — the wall-clock version of this test
+    compared a ~2ms baseline ×5 and lost to scheduler noise on shared runners.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.scans = 0
+
+    def items(self):
+        self.scans += 1
+        return super().items()
+
+
 def test_insert_into_a_roomy_cache_does_not_scan():
     """A cache under its limit must not pay for the eviction sweep.
 
     Regression guard: the sweep used to run unconditionally, making every
     new-key insert O(n) — roughly 1ms per `set` at 45k entries, paid thousands
-    of times per generation run for a cache nowhere near full. Timed rather
-    than mocked because the defect was purely asymptotic.
+    of times per generation run for a cache nowhere near full.
     """
     cache = TTLCache(default_ttl_seconds=3600, max_size=200_000)
+    probe = _ScanCountingDict()
+    cache._cache = probe
 
-    def fill(start: int, count: int) -> float:
-        t0 = time.perf_counter()
-        for i in range(start, start + count):
-            cache.set(f"k{i}", i)
-        return time.perf_counter() - t0
+    for i in range(44_000):
+        cache.set(f"k{i}", i)
 
-    fill(0, 2_000)
-    small = fill(2_000, 2_000)
-    fill(4_000, 40_000)
-    large = fill(44_000, 2_000)
+    assert probe.scans == 0, f"insert walked the table {probe.scans} times with room to spare"
+    assert len(cache._cache) == 44_000
 
-    # With a per-insert scan this ratio tracks cache size (>10x here). Allow
-    # generous headroom for a noisy CI box; the defect was orders of magnitude.
-    assert large < small * 5, (
-        f"insert cost grew with cache size: {small:.4f}s at 2k vs {large:.4f}s at 44k"
-    )
+
+def test_insert_at_capacity_does_sweep():
+    """The complement: the sweep still runs once the cache is full, so the
+    probe above is measuring the early return and not a sweep that vanished."""
+    cache = TTLCache(default_ttl_seconds=3600, max_size=100)
+    probe = _ScanCountingDict()
+    cache._cache = probe
+
+    for i in range(100 + int(100 * _EXPIRY_SWEEP_INTERVAL_RATIO) + 1):
+        cache.set(f"k{i}", i)
+
+    assert probe.scans >= 1
+    assert len(cache._cache) <= 100
 
 
 def test_background_maintenance_reaps_expired_entries():
