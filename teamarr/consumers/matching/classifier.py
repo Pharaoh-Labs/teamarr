@@ -15,7 +15,11 @@ from enum import Enum
 from re import Pattern
 from typing import cast
 
-from teamarr.consumers.matching.normalizer import NormalizedStream, normalize_stream
+from teamarr.consumers.matching.normalizer import (
+    QUALITY_TOKEN,
+    NormalizedStream,
+    normalize_stream,
+)
 from teamarr.services.detection_keywords import DetectionKeywordService
 
 logger = logging.getLogger(__name__)
@@ -937,6 +941,10 @@ def extract_teams_from_separator(
     return team1, team2
 
 
+# One quality token, optionally bracketed: "HD", "1080p", "[1080p]", "(4K)".
+_QUALITY_TAG = rf"[\(\[]?\s*{QUALITY_TOKEN}\s*[\)\]]?"
+
+
 def _clean_team_name(name: str) -> str:
     """Clean extracted team name."""
     if not name:
@@ -987,9 +995,13 @@ def _clean_team_name(name: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Remove HD, SD, 4K, UHD quality indicators (at start or end)
-    name = re.sub(r"^\s*\b(HD|SD|FHD|4K|UHD)\b\s*", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+\b(HD|SD|FHD|4K|UHD)\b\s*$", "", name, flags=re.IGNORECASE)
+    # Remove quality indicators at start or end — HD/SD/FHD/4K/UHD and
+    # resolution tags like 1080p/720p/2160p, bare or bracketed (#651). Repeated,
+    # because they stack ("Wagner HD 1080p", "[1080p] HD Wagner"), and the
+    # bracket is consumed with the token so "Wagner []" is never left behind.
+    # A dangling pipe before a trailing tag ("Wagner | 1080p") goes with it.
+    name = re.sub(rf"^\s*(?:{_QUALITY_TAG}\s*)+(?=\S)", "", name, flags=re.IGNORECASE)
+    name = re.sub(rf"(?:\s*\|)?(?:\s*{_QUALITY_TAG})+\s*$", "", name, flags=re.IGNORECASE)
 
     # Remove broadcast network indicators like (CBS), (FOX), (ABC), (NBC), (ESPN)
     name = re.sub(

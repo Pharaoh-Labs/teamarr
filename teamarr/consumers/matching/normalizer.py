@@ -153,6 +153,41 @@ def fix_mojibake(text: str) -> str:
 # =============================================================================
 
 
+# Video-quality tags (#651). A bracketed tag is quality metadata wherever it
+# sits — "[1080p] NCAAF 16: Robert Morris at Wagner", "... at Wagner 12pm [1080p]",
+# "(4K)" — and a bare resolution token (1080p/1080i/720p/2160p/480p) is never a
+# word in a team name: 0 hits across 8,730 corpus team strings, and the [pi]
+# suffix excludes 49ers, 76ers, U20, Daytona 500. Bare HD/SD/FHD/UHD/4K are
+# only stripped at the ends of a team name (`_clean_team_name`), because "SD"
+# mid-string is not safely quality.
+#
+# Stripped from the WHOLE stream name before prefix handling: a leading tag
+# used to block the league-hint/channel-number prefix strips, so team1 came
+# out as "[1080p] NCAAF 16: Robert Morris"; a trailing one rode into team2 as
+# "Wagner [1080p]", which scores 60 on the nose against "Wagner Seahawks" and,
+# worse, "1080p" is a discriminating residual for the fixture gate — so one
+# tagged source matched 0/30 while its untagged twin matched 21/30.
+QUALITY_TOKEN = r"(?:\d{3,4}[pi]|4k|uhd|fhd|hd|sd)"
+_BRACKETED_QUALITY_RE = re.compile(rf"\s*[\(\[]\s*{QUALITY_TOKEN}\s*[\)\]]", re.IGNORECASE)
+_BARE_RESOLUTION_RE = re.compile(r"\s*\b\d{3,4}[pi]\b", re.IGNORECASE)
+
+
+def strip_quality_tags(text: str) -> str:
+    """Remove bracketed quality tags and bare resolution tokens anywhere (#651)."""
+    if not text:
+        return text
+    stripped = _BRACKETED_QUALITY_RE.sub(" ", text)
+    stripped = _BARE_RESOLUTION_RE.sub(" ", stripped)
+    if stripped == text:
+        return text
+    # A tag that sat in its own pipe segment ("... at Wagner | 1080p") leaves
+    # the separator dangling; drop empty segments so the pipe logic downstream
+    # sees the same shape as the untagged twin.
+    stripped = re.sub(r"\s*\|(?=\s*(?:\||$))", " ", stripped)
+    stripped = re.sub(r"^\s*\|\s*", "", stripped)
+    return " ".join(stripped.split())
+
+
 def strip_provider_prefix(text: str) -> tuple[str, str | None]:
     """Remove provider prefix from stream name.
 
@@ -677,6 +712,9 @@ def normalize_stream(stream_name: str) -> NormalizedStream:
         text, found_live = strip_live_status_prefix(text)
         if not found_provider and not found_live:
             break
+
+    # Step 2.5: Drop video-quality tags before anything looks at prefixes (#651)
+    text = strip_quality_tags(text)
 
     # Step 3: Apply city translations (includes unidecode)
     text = apply_city_translations(text)
