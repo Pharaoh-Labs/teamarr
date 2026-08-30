@@ -8,8 +8,8 @@ endpoint (``eqz.3``); keeping them here means the UI, the write path, and the
 validator all enforce the same policy.
 
 Why a hard premium gate (``eqz.1``):
-    TSDB's free tier is too thin for arbitrary leagues — ``eventsnextleague``
-    returns ~5 events/day and ``lookupteam`` is broken — so a free-tier custom
+    TSDB requires a premium key (#676) — keyless, the provider is not even
+    constructed — so a keyless custom
     league would silently produce empty guides. Gating on a premium key keeps
     that failure mode out of the product.
 
@@ -124,8 +124,8 @@ def custom_leagues_enabled(conn: sqlite3.Connection) -> bool:
     """Return whether the custom-league feature is unlocked for this install.
 
     The single gate signal is the presence of a TheSportsDB premium key in
-    settings — the same key that flips the TSDB client into premium mode
-    (``providers/__init__.py``).
+    settings — the same key without which the TSDB provider is not
+    constructed at all (#676, ``providers/__init__.py``).
     """
     key = get_tsdb_api_key(conn)
     return bool(key and key.strip())
@@ -226,7 +226,6 @@ def validate_tsdb_sport_matches(tsdb_str_sport: str | None, chosen_sport: str) -
 # rows). Routes call these and translate the exception types to HTTP codes.
 # ---------------------------------------------------------------------------
 
-_ALLOWED_TSDB_TIERS: frozenset[str] = frozenset({"free", "premium"})
 
 
 def _require_tsdb(provider: str) -> None:
@@ -246,18 +245,6 @@ def _clean_required(value: str | None, field: str) -> str:
     return cleaned
 
 
-def _validate_tier(tsdb_tier: str | None) -> str | None:
-    """Normalize/validate the optional tsdb_tier ('free' | 'premium' | None)."""
-    if tsdb_tier is None or not tsdb_tier.strip():
-        return None
-    tier = tsdb_tier.strip().lower()
-    if tier not in _ALLOWED_TSDB_TIERS:
-        raise CustomLeagueValidationError(
-            f"tsdb_tier '{tsdb_tier}' is invalid. Must be 'free' or 'premium'."
-        )
-    return tier
-
-
 def _resolve_event_type(event_type: str | None, sport: str) -> str:
     """Default the event_type from the sport when omitted, then validate it."""
     resolved = (event_type or "").strip() or default_event_type(sport)
@@ -275,7 +262,6 @@ def create_custom_league(
     display_name: str,
     sport: str,
     event_type: str | None = None,
-    tsdb_tier: str | None = None,
     allow_empty: bool = False,
 ) -> dict:
     """Create a user-added custom league after enforcing all policy.
@@ -301,7 +287,6 @@ def create_custom_league(
     name = _clean_required(display_name, "display_name")
     validate_custom_league_sport(sport)
     resolved_event_type = _resolve_event_type(event_type, sport)
-    tier = _validate_tier(tsdb_tier)
 
     # Collision guard: never let a custom row shadow an existing code (built-in
     # OR an already-created custom). INSERT OR REPLACE would clobber built-ins.
@@ -335,7 +320,6 @@ def create_custom_league(
         display_name=name,
         sport=sport,
         event_type=resolved_event_type,
-        tsdb_tier=tier,
     )
     _auto_subscribe(conn, code)
     row = get_league_row(conn, code)
@@ -426,7 +410,6 @@ def update_custom_league(
     display_name: str,
     sport: str,
     event_type: str | None = None,
-    tsdb_tier: str | None = None,
 ) -> dict:
     """Update an existing custom league (built-ins rejected with 403)."""
     require_custom_leagues_enabled(conn)
@@ -438,7 +421,6 @@ def update_custom_league(
     name = _clean_required(display_name, "display_name")
     validate_custom_league_sport(sport)
     resolved_event_type = _resolve_event_type(event_type, sport)
-    tier = _validate_tier(tsdb_tier)
 
     update_custom_league_row(
         conn,
@@ -448,7 +430,6 @@ def update_custom_league(
         display_name=name,
         sport=sport,
         event_type=resolved_event_type,
-        tsdb_tier=tier,
     )
     row = get_league_row(conn, code)
     assert row is not None  # row just upserted above

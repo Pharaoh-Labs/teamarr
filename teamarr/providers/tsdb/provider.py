@@ -2,6 +2,10 @@
 
 Fetches data from TSDB API and normalizes into our dataclass format.
 Used as fallback for leagues not supported by ESPN.
+
+Requires a TheSportsDB premium API key (#676): without one the provider
+reports is_configured=False and the ProviderRegistry skips it entirely —
+no requests, no free-tier fallback.
 """
 
 import logging
@@ -107,15 +111,12 @@ class TSDBProvider(SportsProvider):
         return "tsdb"
 
     @property
-    def is_premium(self) -> bool:
-        """Check if TSDB has premium/full API access.
-
-        Free tier (measured 2026-08-04) serves only a rolling 1-event
-        next/past window and no league-filtered eventsday — see the
-        TSDBClient docstring. Used by ProviderRegistry for fallback
-        resolution and the cache-prewarm premium gate.
+    def is_configured(self) -> bool:
+        """Whether the provider can run: a premium key is set.
+        ProviderRegistry skips the provider when False, so keyless
+        installs make no TSDB requests at all (#676).
         """
-        return self._client.is_premium
+        return self._client.is_configured
 
     def supports_league(self, league: str) -> bool:
         return self._client.supports_league(league)
@@ -130,7 +131,10 @@ class TSDBProvider(SportsProvider):
 
         Other leagues try multiple endpoints in order:
         1. eventsday.php - Date-specific (works for most leagues)
-        2. eventsnextleague.php - Upcoming events filtered by date
+        2. eventsnextleague.php - Upcoming events filtered by date. Kept
+           after the free-tier deprecation (#676): eventsday queries by
+           league NAME while nextleague queries by ID, so this guards
+           against provider-side league-name drift, not just empty days.
         3. eventsseason.php - Full season events filtered by date, gated to
            SEASON_FALLBACK_LEAGUES (sparse leagues like Unrivaled)
         """
@@ -192,8 +196,8 @@ class TSDBProvider(SportsProvider):
         Used for the template live preview: pulls the last finished events
         (eventspastleague) and the next scheduled ones (eventsnextleague) so the
         caller can prefer a just-completed game (recap/score vars) over an
-        upcoming one. Two calls total — safe for the rate-limited free tier,
-        unlike a per-day scan. Racing leagues go through the season path.
+        upcoming one. Two calls total, unlike a per-day scan. Racing leagues
+        go through the season path.
         """
         if self._client.get_sport(league) == "racing":
             return self._get_racing_events(league)
@@ -234,8 +238,8 @@ class TSDBProvider(SportsProvider):
 
         return parse_racing_events(raw_events, league, sport, self.name)
 
-    # TSDB rate limit optimization: cap at 14 days regardless of caller request
-    # ESPN can handle 30+ days, but TSDB's 25 req/min limit makes that expensive
+    # TSDB rate limit optimization: cap at 14 days regardless of caller
+    # request — even at the premium 100 req/min, a per-day scan is expensive
     TSDB_MAX_DAYS_AHEAD = 14
 
     def get_team_schedule(
@@ -247,11 +251,7 @@ class TSDBProvider(SportsProvider):
         """Get schedule for a team including past and future games.
 
         Uses eventsday.php across multiple days to get both HOME and AWAY
-        games. FREE-TIER CAVEAT (measured 2026-08-04): league-filtered
-        eventsday returns nothing without a premium key, so this whole
-        method yields [] keyless — team channels require premium. Event
-        channels survive on free via get_events' eventsnextleague fallback
-        (rolling 1-event window harvested by per-date polling).
+        games.
 
         Scans:
         - Past DAYS_BACK days for .last variable resolution (cached indefinitely)
@@ -368,8 +368,6 @@ class TSDBProvider(SportsProvider):
     def get_team(self, team_id: str, league: str) -> Team | None:
         """Get team details.
 
-        Note: lookupteam.php is broken on free tier (returns wrong team).
-        This method validates the returned ID matches the requested ID.
         """
         data = self._client.get_team(team_id)
 
@@ -380,23 +378,10 @@ class TSDBProvider(SportsProvider):
         if not teams:
             return None
 
-        team_data = teams[0]
-
-        # Validate - free tier bug returns wrong team
-        if str(team_data.get("idTeam")) != str(team_id):
-            logger.warning(
-                f"TSDB lookupteam.php bug: requested {team_id}, "
-                f"got {team_data.get('idTeam')} ({team_data.get('strTeam')})"
-            )
-            return None
-
-        return self._parse_team(team_data, league)
+        return self._parse_team(teams[0], league)
 
     def search_team(self, team_name: str, league: str) -> Team | None:
-        """Search for a team by name.
-
-        More reliable than get_team on free tier.
-        """
+        """Search for a team by name."""
         data = self._client.search_team(team_name)
 
         if not data:
@@ -452,15 +437,12 @@ class TSDBProvider(SportsProvider):
         TSDB's lookuptable.php only works for featured soccer leagues,
         not hockey/lacrosse/etc. Returns None for unsupported leagues.
         """
-        # lookuptable.php is limited to featured soccer leagues on free tier
-        # For OHL and other non-soccer leagues, stats are not available
+        # lookuptable.php only serves featured soccer leagues; for OHL and
+        # other non-soccer leagues, stats are not available
         return None
 
     def get_teams_in_league(self, league: str) -> list[Team]:
-        """Get all teams in a league.
-
-        Uses search_all_teams.php which works on free tier.
-        """
+        """Get all teams in a league."""
         data = self._client.get_teams_in_league(league)
 
         if not data:

@@ -113,22 +113,36 @@ class ProviderRegistry:
         )
         logger.debug("[REGISTRY] Registered provider: %s (priority=%d)", name, priority)
 
+    @staticmethod
+    def _is_available(provider: "SportsProvider") -> bool:
+        """Whether a provider instance can actually run.
+
+        Providers may declare is_configured (duck-typed) — TSDB reports
+        False without its premium key (#676). Unconfigured providers are
+        skipped everywhere, so no requests are made and league resolution
+        falls through to fallbacks. A later reinitialize_provider() picks
+        up a newly saved key without a restart.
+        """
+        return getattr(provider, "is_configured", True)
+
     @classmethod
     def get(cls, name: str) -> "SportsProvider | None":
-        """Get a specific provider by name."""
+        """Get a specific provider by name (None if disabled/unconfigured)."""
         config = cls._providers.get(name)
         if config and config.enabled:
-            return config.get_instance()
+            instance = config.get_instance()
+            if cls._is_available(instance):
+                return instance
         return None
 
     @classmethod
     def get_all(cls) -> list["SportsProvider"]:
-        """Get all enabled providers, sorted by priority."""
+        """Get all enabled, configured providers, sorted by priority."""
         configs = sorted(
             (c for c in cls._providers.values() if c.enabled),
             key=lambda c: c.priority,
         )
-        return [c.get_instance() for c in configs]
+        return [c.get_instance() for c in configs if cls._is_available(c.get_instance())]
 
     @classmethod
     def get_for_league(cls, league: str) -> "SportsProvider | None":
@@ -225,28 +239,12 @@ class ProviderRegistry:
 
     @classmethod
     def is_provider_premium(cls, name: str) -> bool:
-        """Check if provider has premium/full capabilities.
+        """Whether a provider is available with full capabilities.
 
-        Used for fallback resolution. When a provider's primary functionality
-        is limited (e.g., TSDB free tier has schedule limits), this returns False
-        so the service layer can route to a fallback provider.
-
-        Args:
-            name: Provider name (e.g., 'tsdb', 'espn')
-
-        Returns:
-            True if provider has full capabilities, False if limited.
-            Returns True for providers without an is_premium property
-            (assumes full capability if not explicitly limited).
+        Used for fallback resolution: an unregistered, disabled, or
+        unconfigured provider (TSDB without its premium key, #676) returns
+        False so the service layer routes to a fallback provider instead.
+        Every configured provider has full capabilities — the TSDB free
+        tier, the only partial one, is gone.
         """
-        provider = cls.get(name)
-        if provider is None:
-            return False
-
-        # Check if provider exposes an is_premium property
-        if hasattr(provider, "is_premium"):
-            # Duck-typed: not all SportsProvider subclasses declare is_premium.
-            return provider.is_premium  # type: ignore[attr-defined]
-
-        # Assume full capability if provider doesn't track premium status
-        return True
+        return cls.get(name) is not None

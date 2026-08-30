@@ -166,7 +166,6 @@ def _league_info_dict(lg) -> dict:
         "logo_url_dark": lg.logo_url_dark,
         "import_enabled": lg.import_enabled,
         "league_alias": lg.league_alias,
-        "tsdb_tier": lg.tsdb_tier,
     }
 
 

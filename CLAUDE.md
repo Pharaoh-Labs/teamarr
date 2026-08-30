@@ -234,7 +234,7 @@ Documentation epic: `bd list --parent teamarrv2-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v90) |
+| Schema version | `teamarr/database/schema.sql` (v92) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 
@@ -255,7 +255,7 @@ Provider Layer   → teamarr/providers/ (espn, bellmedia, squiggle, nascar, mlbs
 - MLB Stats (40) - MiLB (Triple-A through Rookie)
 - HockeyTech (50) - CHL, AHL, PWHL, USHL
 - Supabase (55) - Supabase-backed leagues (CBL, etc.)
-- TSDB (100) - Cricket, rugby, boxing, Scandinavian leagues, uru.2
+- TSDB (100) - Cricket, rugby, boxing, Scandinavian leagues, uru.2 — premium key required (#676); keyless = provider not registered
 
 **Dispatcharr Sync Reliability** (`lifecycle/service.py`):
 All `update_channel` calls go through `_safe_update_channel`, which checks `OperationResult.success` before persisting to local DB. On API failure, the DB stays unchanged so drift is re-detected on the next generation run. Profile sync also compares against Dispatcharr's actual state (`current_channel.channel_profile_ids`) for self-healing. Reconciliation (`reconciliation.py`) detects stream and profile drift as additional drift fields.

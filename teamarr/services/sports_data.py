@@ -459,7 +459,7 @@ class SportsDataService:
 
         Candidate gathering is provider-aware only for *efficiency*: TSDB exposes
         a 2-call recent+upcoming bulk fetch (``get_sample_candidates``) so the
-        preview can't hammer its rate-limited free tier; every other provider
+        preview can't hammer its rate-limited API; every other provider
         uses a small bounded scan of recent + near-future days (which captures
         their finals just the same).
         """

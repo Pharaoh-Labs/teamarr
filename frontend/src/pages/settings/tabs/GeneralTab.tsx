@@ -392,12 +392,12 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>TheSportsDB API Key</CardTitle>
-            <Badge variant={display?.tsdb_api_key && display.tsdb_api_key.length > 3 ? "default" : "secondary"} className="text-xs">
-              {display?.tsdb_api_key && display.tsdb_api_key.length > 3 ? "Premium" : "Free Tier"}
+            <Badge variant={display?.tsdb_api_key && display.tsdb_api_key.length > 3 ? "default" : "destructive"} className="text-xs">
+              {display?.tsdb_api_key && display.tsdb_api_key.length > 3 ? "Configured" : "No Key"}
             </Badge>
           </div>
           <CardDescription>
-            Optional premium key for TSDB league coverage, adding custom leagues, and higher rate limits — get one at{" "}
+            Required for all TheSportsDB leagues (and custom leagues) — without a key they produce no events. Get one at{" "}
             <a href="https://www.thesportsdb.com/pricing" target="_blank" rel="noopener noreferrer" className="underline">thesportsdb.com/pricing</a>
           </CardDescription>
         </CardHeader>
@@ -415,7 +415,7 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
                   }
                   setTsdbValidation(null)
                 }}
-                placeholder="Leave blank to use free tier"
+                placeholder="Required for TheSportsDB leagues"
                 className="flex-1"
               />
               <Button
@@ -430,7 +430,7 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
                     const result = await validateTSDBKey(display.tsdb_api_key)
                     setTsdbValidation(result)
                   } catch {
-                    setTsdbValidation({ valid: false, is_premium: false, message: "Connection error" })
+                    setTsdbValidation({ valid: false, message: "Connection error" })
                   } finally {
                     setTsdbValidating(false)
                   }
@@ -440,7 +440,7 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
               </Button>
             </div>
             {tsdbValidation && (
-              <p className={`text-xs ${tsdbValidation.valid ? (tsdbValidation.is_premium ? "text-green-500" : "text-yellow-500") : "text-red-500"}`}>
+              <p className={`text-xs ${tsdbValidation.valid ? "text-green-500" : "text-red-500"}`}>
                 {tsdbValidation.message}
               </p>
             )}

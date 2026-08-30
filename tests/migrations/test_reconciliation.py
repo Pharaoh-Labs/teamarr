@@ -374,7 +374,7 @@ class TestFullSchemaReconciliation:
             "SELECT schema_version, proxy_enabled, proxy_url, proxy_user_agent, "
             "proxy_excluded_providers, bullpen_api_key FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 91
+        assert row["schema_version"] == 92
         assert row["proxy_enabled"] == 0
         assert row["proxy_url"] is None
         assert row["proxy_user_agent"] is None

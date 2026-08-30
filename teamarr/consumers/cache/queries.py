@@ -122,7 +122,7 @@ class TeamLeagueCache:
                            display_name as league_name, sport, logo_url,
                            logo_url_dark,
                            cached_team_count as team_count, import_enabled,
-                           league_alias, tsdb_tier
+                           league_alias
                     FROM leagues
                     WHERE enabled = 1
                 """
@@ -143,7 +143,7 @@ class TeamLeagueCache:
                            display_name as league_name, sport, logo_url,
                            logo_url_dark,
                            cached_team_count as team_count, import_enabled,
-                           league_alias, tsdb_tier
+                           league_alias
                     FROM leagues
                     WHERE import_enabled = 1 AND enabled = 1
                 """
@@ -163,14 +163,14 @@ class TeamLeagueCache:
                 query = """
                     SELECT league_slug, provider, league_name, sport,
                            logo_url, logo_url_dark, team_count, import_enabled,
-                           league_alias, tsdb_tier
+                           league_alias
                     FROM (
                         -- Configured leagues (preferred)
                         SELECT league_code as league_slug, provider,
                                display_name as league_name, sport, logo_url,
                                logo_url_dark,
                                cached_team_count as team_count, import_enabled,
-                               league_alias, tsdb_tier,
+                               league_alias,
                                1 as priority
                         FROM leagues
                         WHERE enabled = 1
@@ -183,7 +183,6 @@ class TeamLeagueCache:
                                NULL as logo_url_dark,
                                lc.team_count, 0 as import_enabled,
                                NULL as league_alias,
-                               NULL as tsdb_tier,
                                2 as priority
                         FROM league_cache lc
                         WHERE NOT EXISTS (
@@ -217,7 +216,6 @@ class TeamLeagueCache:
                     team_count=row[6] or 0,
                     import_enabled=bool(row[7]),
                     league_alias=row[8],
-                    tsdb_tier=row[9],
                 )
                 for row in cursor.fetchall()
             ]

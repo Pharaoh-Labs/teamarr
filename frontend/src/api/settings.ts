@@ -93,7 +93,6 @@ export interface DisplaySettings {
 
 export interface TSDBKeyValidationResult {
   valid: boolean
-  is_premium: boolean
   message: string
 }
 

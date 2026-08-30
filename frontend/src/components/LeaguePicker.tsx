@@ -85,12 +85,13 @@ export function LeaguePicker({
 
   const sports = Object.keys(leaguesBySport).sort()
 
-  // Check if any selected premium leagues lack a configured key
-  const selectedPremiumWithoutKey = useMemo(() => {
+  // TSDB is premium-key only (#676): any selected TSDB league without a
+  // configured key will produce no events.
+  const selectedTsdbWithoutKey = useMemo(() => {
     if (hasPremiumKey || !cachedLeagues) return false
     return selectedLeagues.some(slug => {
       const league = cachedLeagues.find(l => l.slug === slug)
-      return league?.tsdb_tier === "premium"
+      return league?.provider === "tsdb"
     })
   }, [selectedLeagues, cachedLeagues, hasPremiumKey])
 
@@ -229,14 +230,14 @@ export function LeaguePicker({
         />
       )}
 
-      {/* Premium key warning */}
-      {selectedPremiumWithoutKey && (
+      {/* TSDB key warning */}
+      {selectedTsdbWithoutKey && (
         <Alert
           variant="warning"
           className="text-xs"
           icon={<Crown className="h-3 w-3" />}
         >
-          Premium leagues need a TSDB API key for full event coverage. Add one in Settings &gt; System.
+          TheSportsDB leagues require a premium API key — without one they produce no events. Add one in Settings &gt; General.
         </Alert>
       )}
 
@@ -382,8 +383,8 @@ export function LeaguePicker({
                             <img src={league.logo_url} alt="" className="h-4 w-4 object-contain" />
                           )}
                           <span className="truncate">{getLeagueDisplayName(league, true)}</span>
-                          {league.tsdb_tier === "premium" && (
-                            <span title="Requires TSDB premium key">
+                          {league.provider === "tsdb" && !hasPremiumKey && (
+                            <span title="Requires a TheSportsDB premium key — no events without one">
                               <Crown className="h-3 w-3 text-amber-500 shrink-0" />
                             </span>
                           )}

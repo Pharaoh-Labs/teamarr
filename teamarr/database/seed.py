@@ -168,7 +168,7 @@ def should_seed_tsdb_cache(conn) -> bool:
         seed_count = len(seed_data.get("teams", []))
 
         # Seed if we have significantly fewer teams than the seed file
-        # (accounts for free tier limitations)
+        # (e.g., cache was built keyless, before the premium key was added)
         if current_count < seed_count * 0.8:
             logger.info(
                 "[SEED] TSDB cache has %d teams, seed has %d. Recommending re-seed.",

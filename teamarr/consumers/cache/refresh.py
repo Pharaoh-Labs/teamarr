@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # These are approximate and used for work-proportional progress allocation
 EXPECTED_LEAGUES = {
     "espn": 280,  # ~98 configured + ~180 discovered soccer leagues
-    "tsdb": 6,  # NRL, Boxing, IPL, BBL, SA20, Svenska Cupen + free tier leagues
+    "tsdb": 6,  # NRL, Boxing, IPL, BBL, SA20, Svenska Cupen, … (premium key required)
     "hockeytech": 6,
     "mlbstats": 5,  # AAA, AA, High-A, Single-A, Rookie
     "squiggle": 1,  # AFL
@@ -70,15 +70,6 @@ class CacheRefresher:
                     "league_id": row["league_id"],
                 }
         return None
-
-    def _premium_tsdb_leagues(self) -> set[str]:
-        """League codes that require a TSDB premium key (tsdb_tier='premium')."""
-        with self._db() as conn:
-            rows = conn.execute(
-                "SELECT league_code FROM leagues "
-                "WHERE provider = 'tsdb' AND tsdb_tier = 'premium'"
-            ).fetchall()
-        return {row["league_code"] for row in rows}
 
     def refresh(
         self,
@@ -158,7 +149,7 @@ class CacheRefresher:
                 all_teams.extend(teams)
 
             # Merge TSDB seed data with API results before saving
-            # This fills in teams that the free tier API doesn't return
+            # This fills in teams the live API didn't return
             all_teams, all_leagues = self._merge_with_seed(all_teams, all_leagues)
 
             # Save to database (95-100%)
@@ -537,26 +528,10 @@ class CacheRefresher:
         leagues: list[dict] = []
         teams: list[dict] = []
 
-        # Get leagues this provider supports
+        # Get leagues this provider supports. (No TSDB tier gate anymore:
+        # a keyless TSDB provider is skipped by ProviderRegistry entirely
+        # and never reaches this point — #676.)
         supported_leagues = provider.get_supported_leagues()
-
-        # Premium-key gate: without a TSDB premium key, skip premium-only TSDB
-        # leagues entirely so prewarm doesn't waste free-tier calls on data it
-        # can't fully fetch. Re-included automatically once a key is configured
-        # (the provider then reports is_premium and this filter no-ops).
-        if provider_name == "tsdb" and not getattr(provider, "is_premium", False):
-            premium_leagues = self._premium_tsdb_leagues()
-            skipped = sorted(lg for lg in supported_leagues if lg in premium_leagues)
-            if skipped:
-                supported_leagues = [
-                    lg for lg in supported_leagues if lg not in premium_leagues
-                ]
-                logger.info(
-                    "[CACHE_REFRESH] Skipping %d premium-only TSDB league(s) — no TSDB "
-                    "premium key configured: %s",
-                    len(skipped),
-                    ", ".join(skipped),
-                )
 
         # For ESPN, also discover dynamic soccer leagues
         if provider_name == "espn":
@@ -937,7 +912,7 @@ class CacheRefresher:
     ) -> tuple[list[dict], list[dict]]:
         """Merge API results with TSDB seed data.
 
-        TSDB free tier only returns 10 teams per league. The seed file contains
+        A keyless cache build returned few or no TSDB teams. The seed file contains
         complete team rosters. This merges them efficiently in memory:
         - Seed data provides the base
         - API data overwrites seed for matching keys (fresher data)

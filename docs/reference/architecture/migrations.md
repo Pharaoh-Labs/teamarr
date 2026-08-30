@@ -161,7 +161,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 84** (32 migration blocks across the 41 versions since the checkpoint — not every version number has a block)
+**Current schema version: 92** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|

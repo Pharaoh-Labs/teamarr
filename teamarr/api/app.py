@@ -144,6 +144,44 @@ def _run_ufc_segment_migration(db_factory, migration_name: str = "ufc_segment_fi
         logger.warning("[MIGRATION] %s failed: %s", migration_name, e)
 
 
+def _warn_if_tsdb_leagues_keyless(db_factory) -> None:
+    """One-time startup notice (#676): TSDB is premium-key only.
+
+    Without a key the provider isn't constructed, so subscribed TSDB
+    leagues silently produce no events — say so once, loudly, at startup.
+    Never blocks startup.
+    """
+    import json as _json
+
+    try:
+        if ProviderRegistry.get("tsdb") is not None:
+            return  # key configured — nothing to warn about
+        with db_factory() as conn:
+            row = conn.execute(
+                "SELECT leagues FROM sports_subscription WHERE id = 1"
+            ).fetchone()
+            subscribed = set(_json.loads(row["leagues"] or "[]")) if row else set()
+            if not subscribed:
+                return
+            tsdb_leagues = sorted(
+                r["league_code"]
+                for r in conn.execute(
+                    "SELECT league_code FROM leagues WHERE provider = 'tsdb' AND enabled = 1"
+                )
+                if r["league_code"] in subscribed
+            )
+        if tsdb_leagues:
+            logger.warning(
+                "[STARTUP] %d subscribed league(s) use TheSportsDB, which now "
+                "requires a premium API key — they will produce no events until "
+                "a key is added in Settings > General: %s",
+                len(tsdb_leagues),
+                ", ".join(tsdb_leagues),
+            )
+    except Exception:  # noqa: BLE001 — advisory only, never block startup
+        logger.debug("[STARTUP] TSDB keyless-subscription check failed", exc_info=True)
+
+
 def _run_startup_tasks():
     """Run startup tasks in background thread."""
 
@@ -158,6 +196,7 @@ def _run_startup_tasks():
 
         reload_provider_request_policy()
         logger.info("[STARTUP] League mapping service and providers initialized")
+        _warn_if_tsdb_leagues_keyless(get_db)
 
         # One-time migrations: Clear UFC caches for segment fixes
         # v1: Initial segment_times and segment-aware event_ids

@@ -32,16 +32,15 @@ Leagues have different levels of support:
 | **Squiggle** | AFL (Australian Football League). Free, no API key required. See [provider docs](providers/squiggle). |
 | **HockeyTech** | Canadian and US junior/minor hockey leagues (CHL, AHL, ECHL, PWHL, USHL, Junior A) |
 | **Supabase** | Supabase-backed leagues such as the Canadian Baseball League (CBL). No API key required. See [provider docs](providers/supabase). |
-| **TheSportsDB** | Rugby, cricket, boxing, Scandinavian leagues, and more. Free and [premium tiers](providers/tsdb.md). |
+| **TheSportsDB** | Rugby, cricket, boxing, Scandinavian leagues, and more. Requires a [premium API key](providers/tsdb.md). |
 
-### TSDB Tier Legend
+### TSDB Key Requirement
 
-TSDB leagues are classified by tier. Most work on the free tier. Leagues marked with a crown (**P**) require a [premium API key](providers/tsdb.md) for full event coverage.
+Every TSDB-sourced league requires a [TheSportsDB premium API key](providers/tsdb.md). Without one, TSDB leagues are unavailable — no events, no team channels — and the league picker marks them with a crown.
 
 | Tier | Meaning |
 |------|---------|
-| TSDB | Works on free tier (low event volume) |
-| TSDB **P** | Requires premium key for full coverage |
+| TSDB | Requires a TheSportsDB premium key |
 
 ---
 
@@ -68,8 +67,8 @@ NCAA Football aggregates ESPN's FBS, FCS, lower-division, and cross-division fix
 | NCAA Men's Basketball | `ncaam` | ESPN |
 | NCAA Women's Basketball | `ncaaw` | ESPN |
 | National Basketball League (Australia) | `nbl` | ESPN |
-| FIBA Basketball World Cup | `fiba` | TSDB **P** |
-| FIBA Women's Basketball World Cup | `fibaw` | TSDB **P** |
+| FIBA Basketball World Cup | `fiba` | TSDB |
+| FIBA Women's Basketball World Cup | `fibaw` | TSDB |
 | Unrivaled | `unrivaled` | TSDB |
 
 ---
@@ -126,7 +125,7 @@ NCAA Football aggregates ESPN's FBS, FCS, lower-division, and cross-division fix
 | League | ID | Provider |
 |--------|-----|----------|
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | TSDB |
-| Swedish Hockey League | `shl` | TSDB **P** |
+| Swedish Hockey League | `shl` | TSDB |
 
 ---
 
@@ -163,7 +162,7 @@ Teamarr automatically discovers **~228 soccer leagues** from ESPN's API during c
 | NCAA Men's Soccer | `ncaas` | ESPN |
 | NCAA Women's Soccer | `ncaaws` | ESPN |
 | Liga MX | `ligamx` | ESPN |
-| Canadian Premier League | `can.1` | TSDB **P** |
+| Canadian Premier League | `can.1` | TSDB |
 
 ### England
 
@@ -197,7 +196,7 @@ Teamarr automatically discovers **~228 soccer leagues** from ESPN's API during c
 | Turkish Süper Lig | `super-lig` | ESPN |
 | Greek Super League | `greek-super-league` | ESPN |
 | Saudi Pro League | `spl` | ESPN |
-| Northern Irish Premiership | `nifl.1` | TSDB **P** |
+| Northern Irish Premiership | `nifl.1` | TSDB |
 
 ### UEFA Competitions
 
@@ -216,12 +215,12 @@ Teamarr automatically discovers **~228 soccer leagues** from ESPN's API during c
 | Colombian Primera A | `dimayor` | ESPN |
 | Copa Libertadores | `libertadores` | ESPN |
 | Copa Sudamericana | `sudamericana` | ESPN |
-| Venezuelan Segunda División | `ven.2` | TSDB **P** |
-| Uruguayan Segunda División (AUF Segunda) | `uru.2` | TSDB **P** |
+| Venezuelan Segunda División | `ven.2` | TSDB |
+| Uruguayan Segunda División (AUF Segunda) | `uru.2` | TSDB |
 
 #### Brazilian state championships
 
-All 27 Brazilian state championships (*campeonatos estaduais*) are supported. ESPN covers four (free, with richer match data); the remaining 23 come from TheSportsDB and require a premium key (**P**). State championships run roughly January–April.
+All 27 Brazilian state championships (*campeonatos estaduais*) are supported. ESPN covers four (no key needed, with richer match data); the remaining 23 come from TheSportsDB and require a premium key. State championships run roughly January–April.
 
 | League | ID | Provider |
 |--------|-----|----------|
@@ -229,29 +228,29 @@ All 27 Brazilian state championships (*campeonatos estaduais*) are supported. ES
 | Campeonato Paulista (São Paulo) | `paulista` | ESPN |
 | Campeonato Gaúcho (Rio Grande do Sul) | `gaucho` | ESPN |
 | Campeonato Mineiro (Minas Gerais) | `mineiro` | ESPN |
-| Campeonato Acreano (Acre) | `acreano` | TSDB **P** |
-| Campeonato Alagoano (Alagoas) | `alagoano` | TSDB **P** |
-| Campeonato Amapaense (Amapá) | `amapaense` | TSDB **P** |
-| Campeonato Amazonense (Amazonas) | `amazonense` | TSDB **P** |
-| Campeonato Baiano (Bahia) | `baiano` | TSDB **P** |
-| Campeonato Brasiliense (Distrito Federal) | `brasiliense` | TSDB **P** |
-| Campeonato Capixaba (Espírito Santo) | `capixaba` | TSDB **P** |
-| Campeonato Catarinense (Santa Catarina) | `catarinense` | TSDB **P** |
-| Campeonato Cearense (Ceará) | `cearense` | TSDB **P** |
-| Campeonato Goiano (Goiás) | `goiano` | TSDB **P** |
-| Campeonato Maranhense (Maranhão) | `maranhense` | TSDB **P** |
-| Campeonato Mato-Grossense (Mato Grosso) | `matogrossense` | TSDB **P** |
-| Campeonato Paraense (Pará) | `paraense` | TSDB **P** |
-| Campeonato Paraibano (Paraíba) | `paraibano` | TSDB **P** |
-| Campeonato Paranaense (Paraná) | `paranaense` | TSDB **P** |
-| Campeonato Pernambucano (Pernambuco) | `pernambucano` | TSDB **P** |
-| Campeonato Piauiense (Piauí) | `piauiense` | TSDB **P** |
-| Campeonato Potiguar (Rio Grande do Norte) | `potiguar` | TSDB **P** |
-| Campeonato Rondoniense (Rondônia) | `rondoniense` | TSDB **P** |
-| Campeonato Roraimense (Roraima) | `roraimense` | TSDB **P** |
-| Campeonato Sergipano (Sergipe) | `sergipano` | TSDB **P** |
-| Campeonato Sul-Mato-Grossense (Mato Grosso do Sul) | `sulmatogrossense` | TSDB **P** |
-| Campeonato Tocantinense (Tocantins) | `tocantinense` | TSDB **P** |
+| Campeonato Acreano (Acre) | `acreano` | TSDB |
+| Campeonato Alagoano (Alagoas) | `alagoano` | TSDB |
+| Campeonato Amapaense (Amapá) | `amapaense` | TSDB |
+| Campeonato Amazonense (Amazonas) | `amazonense` | TSDB |
+| Campeonato Baiano (Bahia) | `baiano` | TSDB |
+| Campeonato Brasiliense (Distrito Federal) | `brasiliense` | TSDB |
+| Campeonato Capixaba (Espírito Santo) | `capixaba` | TSDB |
+| Campeonato Catarinense (Santa Catarina) | `catarinense` | TSDB |
+| Campeonato Cearense (Ceará) | `cearense` | TSDB |
+| Campeonato Goiano (Goiás) | `goiano` | TSDB |
+| Campeonato Maranhense (Maranhão) | `maranhense` | TSDB |
+| Campeonato Mato-Grossense (Mato Grosso) | `matogrossense` | TSDB |
+| Campeonato Paraense (Pará) | `paraense` | TSDB |
+| Campeonato Paraibano (Paraíba) | `paraibano` | TSDB |
+| Campeonato Paranaense (Paraná) | `paranaense` | TSDB |
+| Campeonato Pernambucano (Pernambuco) | `pernambucano` | TSDB |
+| Campeonato Piauiense (Piauí) | `piauiense` | TSDB |
+| Campeonato Potiguar (Rio Grande do Norte) | `potiguar` | TSDB |
+| Campeonato Rondoniense (Rondônia) | `rondoniense` | TSDB |
+| Campeonato Roraimense (Roraima) | `roraimense` | TSDB |
+| Campeonato Sergipano (Sergipe) | `sergipano` | TSDB |
+| Campeonato Sul-Mato-Grossense (Mato Grosso do Sul) | `sulmatogrossense` | TSDB |
+| Campeonato Tocantinense (Tocantins) | `tocantinense` | TSDB |
 
 ### International
 
@@ -268,19 +267,19 @@ All 27 Brazilian state championships (*campeonatos estaduais*) are supported. ES
 
 | League | ID | Provider |
 |--------|-----|----------|
-| Svenska Cupen (Sweden) | `svenska-cupen` | TSDB **P** |
-| Swedish Superettan | `swe.2` | TSDB **P** |
-| Swedish Division 1 North | `swe.3.n` | TSDB **P** |
-| Swedish Division 1 South | `swe.3.s` | TSDB **P** |
-| Icelandic Úrvalsdeild karla | `ice.1` | TSDB **P** |
-| Icelandic 1. deild karla | `ice.2` | TSDB **P** |
+| Svenska Cupen (Sweden) | `svenska-cupen` | TSDB |
+| Swedish Superettan | `swe.2` | TSDB |
+| Swedish Division 1 North | `swe.3.n` | TSDB |
+| Swedish Division 1 South | `swe.3.s` | TSDB |
+| Icelandic Úrvalsdeild karla | `ice.1` | TSDB |
+| Icelandic 1. deild karla | `ice.2` | TSDB |
 
 ### Other Regions
 
 | League | ID | Provider |
 |--------|-----|----------|
-| Gambia GFA League | `gam.1` | TSDB **P** |
-| Aruban Division di Honor | `arb.1` | TSDB **P** |
+| Gambia GFA League | `gam.1` | TSDB |
+| Aruban Division di Honor | `arb.1` | TSDB |
 
 ### Asia/Pacific
 
@@ -317,8 +316,8 @@ Motorsports are **Event Only** - no team import available.
 | NASCAR O'Reilly Auto Parts Series | `nascar-xfinity` | NASCAR API | Event |
 | NASCAR Craftsman Truck Series | `nascar-truck` | NASCAR API | Event |
 | IndyCar Series | `indycar` | ESPN | Event |
-| IMSA WeatherTech SportsCar Championship | `imsa` | TSDB **P** | Event |
-| FIA World Endurance Championship | `wec` | TSDB **P** | Event |
+| IMSA WeatherTech SportsCar Championship | `imsa` | TSDB | Event |
+| FIA World Endurance Championship | `wec` | TSDB | Event |
 
 Motorsports events are race weekends made up of multiple sessions (Practice,
 Qualifying, Race), each exposed as its own EPG program block. See the
@@ -351,13 +350,13 @@ splitting and matching details.
 
 | League | ID | Provider |
 |--------|-----|----------|
-| Indian Premier League | `ipl` | TSDB **P** |
-| Big Bash League | `bbl` | TSDB **P** |
-| SA20 | `sa20` | TSDB **P** |
+| Indian Premier League | `ipl` | TSDB |
+| Big Bash League | `bbl` | TSDB |
+| SA20 | `sa20` | TSDB |
 | Major League Cricket | `mlc` | TSDB |
 
 {: .note }
-IPL, BBL, and SA20 are TSDB premium tier — a [premium API key](providers/tsdb.md) is required for full event coverage of their long seasons. Major League Cricket works on the free tier: its short T20 season fits within TSDB's free rolling next-events window.
+All four are TSDB-sourced, so a [premium API key](providers/tsdb.md) is required.
 
 ---
 
@@ -385,7 +384,7 @@ IPL, BBL, and SA20 are TSDB premium tier — a [premium API key](providers/tsdb.
 | Olympic Men's Rugby Sevens | `om7s` | ESPN |
 | Olympic Women's Rugby Sevens | `ow7s` | ESPN |
 | National Rugby League (Australia) | `nrl` | ESPN |
-| English Rugby League Super League | `super-league` | TSDB **P** |
+| English Rugby League Super League | `super-league` | TSDB |
 
 ---
 

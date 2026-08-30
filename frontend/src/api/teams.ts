@@ -104,7 +104,6 @@ export interface CachedLeague {
   logo_url_dark: string | null
   import_enabled: boolean
   league_alias: string | null
-  tsdb_tier: "free" | "premium" | null
 }
 
 export interface LeaguesResponse {

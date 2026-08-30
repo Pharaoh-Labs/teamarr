@@ -3,9 +3,7 @@
 Handles raw HTTP requests to TSDB endpoints with rate limiting and caching.
 No data transformation - just fetch and return JSON.
 
-Rate limits (free tier):
-- 30 requests/minute overall
-- Some endpoints: 1 request/minute
+Rate limit (premium key): 100 requests/minute.
 
 Caching is aggressive to stay within rate limits:
 - Events by date: 2 hours (games don't change often)
@@ -119,28 +117,23 @@ class RateLimiter:
 
     Tracks all wait events for UI feedback. Never fails - always waits and continues.
 
-    Rate limits per TSDB tier (measured 2026-08-04):
-    - Free: 30 req/min; rolling 1-event next/past; league-filtered eventsday
-      returns nothing (filter is premium-gated); 15-event season cap
-    - Premium: 100 req/min, 20-event next/past, 3000 events/season
+    TSDB premium rate limit: 100 req/min, 20-event next/past,
+    3000 events/season (measured 2026-08-04).
     """
 
     # Cooldown duration when internal limit is hit (seconds)
     INTERNAL_COOLDOWN = 30.0
 
-    # Per-tier rate limits (requests per minute)
-    FREE_RATE_LIMIT = 30
+    # TSDB premium rate limit (requests per minute)
     PREMIUM_RATE_LIMIT = 100
 
     def __init__(
         self,
-        max_requests: int = 30,
+        max_requests: int = PREMIUM_RATE_LIMIT,
         window_seconds: float = 60.0,
-        is_premium: bool = False,
     ):
-        self._max_requests = self.PREMIUM_RATE_LIMIT if is_premium else max_requests
+        self._max_requests = max_requests
         self._window = window_seconds
-        self._is_premium = is_premium
         self._requests: deque[float] = deque()
         self._lock = threading.Lock()
         self._stats = RateLimitStats()
@@ -165,8 +158,7 @@ class RateLimiter:
     def acquire(self) -> None:
         """Block until a request slot is available. Never fails.
 
-        Both tiers are rate-limited (free: 30/min, premium: 100/min).
-        Waits 30 seconds when limit is reached.
+        Waits 30 seconds when the 100/min premium limit is reached.
         """
         with self._lock:
             self._stats.total_requests += 1
@@ -184,9 +176,8 @@ class RateLimiter:
                 self._stats.last_wait_at = datetime.now()
                 self._stats.last_wait_seconds = self.INTERNAL_COOLDOWN
 
-                tier = "premium" if self._is_premium else "free"
                 logger.info(
-                    f"TSDB {tier} API limit reached ({self._max_requests}/min). "
+                    f"TSDB API limit reached ({self._max_requests}/min). "
                     f"Waiting {self.INTERNAL_COOLDOWN:.0f}s..."
                 )
 
@@ -209,22 +200,11 @@ class RateLimiter:
 class TSDBClient(BaseHTTPClient):
     """Low-level TheSportsDB API client with rate limiting.
 
-    API key resolution:
-    1. Explicit api_key parameter (from database via factory)
-    2. Free test key "123"
-
-    Configure premium key in Settings UI.
-
-    Free tier limitations (measured 2026-08-04 — TSDB tightened these in 2026):
-    - 30 requests/minute
-    - eventsnextleague/eventspastleague: 1 event (rolling window). The
-      pipeline's per-date polling still harvests every game as it becomes
-      the league's next (see provider.get_events), but with short lead time.
-    - eventsday WITH a league filter returns nothing — the l= filter is
-      premium-gated (unfiltered free returns the global top-3 events/day).
-      Our get_events_by_date always filters, so it yields 0 keyless; this
-      is why get_team_schedule (eventsday-only) is empty on free.
-    - eventsseason: 15-event cap; all_leagues: sample only
+    A premium API key is REQUIRED (#676) — the free test key "123" is no
+    longer used and the provider is not constructed keyless (see
+    ProviderRegistry, which skips unconfigured providers). The key comes
+    from database settings via the factory in providers/__init__.py;
+    configure it in Settings UI.
 
     League mappings provided via LeagueMappingSource (no direct database access).
 
@@ -236,9 +216,6 @@ class TSDBClient(BaseHTTPClient):
     PROVIDER = "tsdb"
     LOG_TAG = "TSDB"
 
-    # Free test key
-    FREE_API_KEY = "123"
-
     def __init__(
         self,
         league_mapping_source: LeagueMappingSource | None = None,
@@ -246,7 +223,7 @@ class TSDBClient(BaseHTTPClient):
         timeout: float = 10.0,
         retry_count: int = 3,
         retry_delay: float = 1.0,
-        requests_per_minute: int = 30,  # TSDB free tier limit
+        requests_per_minute: int = 100,  # TSDB premium limit
     ):
         super().__init__(
             timeout=timeout,
@@ -259,36 +236,30 @@ class TSDBClient(BaseHTTPClient):
         self._retry_delay = retry_delay
         self._requests_per_minute = requests_per_minute
         self._base_url = TSDB_BASE_URL
-        # Rate limiter initialized lazily after we can check is_premium
+        # Rate limiter initialized lazily
         self._rate_limiter: RateLimiter | None = None
         self._cache = TTLCache()
 
     @property
     def _api_key(self) -> str:
-        """Resolve API key.
-
-        Uses explicit parameter (from database via factory) or free key.
-        Configure premium key in Settings UI.
-        """
-        if self._explicit_key:
-            return self._explicit_key
-        return self.FREE_API_KEY
+        """The configured premium key (empty when unconfigured — but an
+        unconfigured client is never asked to make requests, because
+        ProviderRegistry skips the provider entirely, #676)."""
+        return self._explicit_key or ""
 
     @property
-    def is_premium(self) -> bool:
-        """Check if using a premium API key."""
-        return self._api_key != self.FREE_API_KEY
+    def is_configured(self) -> bool:
+        """Whether this client can make requests: a premium API key is set.
+        ProviderRegistry skips the provider when this is False (#676)."""
+        return bool(self._explicit_key)
 
     def _get_rate_limiter(self) -> RateLimiter:
-        """Get or create rate limiter (lazy init to check is_premium)."""
+        """Get or create rate limiter (lazy init)."""
         if self._rate_limiter is None:
             self._rate_limiter = RateLimiter(
                 max_requests=self._requests_per_minute,
                 window_seconds=60.0,
-                is_premium=self.is_premium,
             )
-            if self.is_premium:
-                logger.info("[TSDB] Using premium API key (100 req/min)")
         return self._rate_limiter
 
     # Exponential backoff for 429 responses
@@ -301,7 +272,7 @@ class TSDBClient(BaseHTTPClient):
         """Make HTTP request with rate limiting and retry logic.
 
         Rate limiting strategy:
-        1. Preemptive: Internal limit (30/min for free API) with 30s cooldown
+        1. Preemptive: Internal limit (100/min) with 30s cooldown
         2. Reactive: If 429 received, exponential backoff (5s, 10s, 20s, 40s, 80s)
 
         Never fails due to rate limits - always waits and continues.
@@ -625,10 +596,6 @@ class TSDBClient(BaseHTTPClient):
     def get_team(self, team_id: str) -> dict | None:
         """Fetch team details.
 
-        Note: lookupteam.php is broken on free tier (returns wrong team).
-        This method still uses it for premium keys, but callers should
-        prefer search_team() for free tier reliability.
-
         Args:
             team_id: TSDB team ID
 
@@ -674,7 +641,6 @@ class TSDBClient(BaseHTTPClient):
         """Get all events for a league season.
 
         Uses eventsseason.php with league ID.
-        Free tier returns 15 events per request.
 
         Args:
             league: Canonical league code
@@ -705,9 +671,10 @@ class TSDBClient(BaseHTTPClient):
     def get_teams_in_league(self, league: str) -> dict | None:
         """Get all teams in a league.
 
-        Uses a two-phase approach to work around free tier 10-team limit:
-        1. search_all_teams.php - returns up to 10 teams with full details
-        2. eventsseason.php - extract additional teams from scheduled games
+        Two-phase: search_all_teams.php gives the roster with full details;
+        eventsseason.php supplements it with any team that only surfaces
+        through scheduled games (sparse or badly-indexed leagues — kept
+        deliberately after the free-tier deprecation, #676).
 
         Results are merged and cached for 24 hours.
 
@@ -727,7 +694,7 @@ class TSDBClient(BaseHTTPClient):
         if not league_name:
             return None
 
-        # Phase 1: Get teams from search_all_teams (capped at 10 on free tier)
+        # Phase 1: roster from search_all_teams
         search_result = self._request("search_all_teams.php", {"l": league_name})
         teams_by_id: dict[str, dict] = {}
 
@@ -739,8 +706,7 @@ class TSDBClient(BaseHTTPClient):
 
         logger.debug("[TSDB] search_all_teams for %s: %d teams", league, len(teams_by_id))
 
-        # Phase 2: Extract additional teams from season events
-        # This works around the 10-team limit by finding teams in scheduled games
+        # Phase 2: supplement with teams that only appear in season events
         season_result = self.get_season_events(league)
         if season_result and isinstance(season_result.get("events"), list):
             for event in season_result["events"]:

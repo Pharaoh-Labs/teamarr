@@ -320,6 +320,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _advance_version(conn, 91, "reconciliation: provider proxy settings")
         current_version = 91
 
+    if current_version < 92:
+        _apply_migration(
+            conn, 92,
+            "retire tsdb_tier — TSDB is premium-key only (#676)",
+            _migrate_v92_retire_tsdb_tier,
+        )
+        current_version = 92
+
 
 # =============================================================================
 # Migration helpers
@@ -2500,3 +2508,18 @@ def _migrate_v90_consolidate_group_subruns(conn: sqlite3.Connection) -> None:
         )
     conn.execute("DROP TABLE IF EXISTS _v90_subrun_map")
     logger.info("[MIGRATE] v90: consolidated %d per-group sub-run row(s)", deleted)
+
+
+def _migrate_v92_retire_tsdb_tier(conn: sqlite3.Connection) -> None:
+    """#676: the TSDB free tier is deprecated — every TSDB league needs a key.
+
+    Clears tsdb_tier values; the column itself stays one release as a
+    rollback aid (no reader remains, schema.sql seeds NULL).
+    """
+    # Safety net for tests that run migrations against partial schemas.
+    if not _column_exists(conn, "leagues", "tsdb_tier"):
+        return
+    cleared = conn.execute(
+        "UPDATE leagues SET tsdb_tier = NULL WHERE tsdb_tier IS NOT NULL"
+    ).rowcount
+    logger.info("[MIGRATE] v92: cleared tsdb_tier on %d league row(s)", cleared)

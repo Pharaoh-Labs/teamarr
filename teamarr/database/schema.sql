@@ -468,7 +468,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 91
+    schema_version INTEGER DEFAULT 92
 );
 
 -- Insert default settings
@@ -968,10 +968,9 @@ CREATE TABLE IF NOT EXISTS leagues (
     league_id TEXT,                          -- URL-safe identifier for {league_id} (e.g., 'epl', 'ncaabb')
     gracenote_category TEXT,                 -- Gracenote/Schedules Direct category (e.g., 'NFL Football')
 
-    -- TSDB Tier Classification
-    -- NULL: Non-TSDB leagues (ESPN, HockeyTech, etc.)
-    -- 'free': Low event volume, works within free tier limits (5 events/day/league)
-    -- 'premium': High event volume, requires premium key for full data coverage
+    -- RETIRED (#676, v92): TSDB is premium-key only, so the free/premium
+    -- tier split is gone. Column kept one release as a rollback aid — no
+    -- reader remains, values are NULL, and seeding writes NULL. Drop at v93+.
     tsdb_tier TEXT CHECK(tsdb_tier IN ('free', 'premium')),
 
     -- Matching Classification
@@ -1043,9 +1042,9 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- Basketball (TSDB) - Leagues not on ESPN
     -- FIBA World Cups: ESPN's basketball/fiba only tracks the World Cup final
     -- event itself (dead between tournaments); TSDB tracks qualifiers year-round.
-    ('fiba', 'tsdb', '4549', 'FIBA Basketball World Cup', 'FIBA Basketball World Cup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/x45gjq1764423537.png', NULL, 1, 'FIBA', 'fiba', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('fiba-women', 'tsdb', '4891', 'FIBA Womens World Cup', 'FIBA Women''s Basketball World Cup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/tlkdaq1726930250.png', NULL, 1, 'FIBA W', 'fibaw', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('unrivaled', 'tsdb', '5622', 'Unrivaled Basketball', 'Unrivaled', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/71mier1746291561.png', NULL, 1, NULL, 'unrivaled', 'team_vs_team', 'Unrivaled Basketball', NULL, NULL, 'free', 1),
+    ('fiba', 'tsdb', '4549', 'FIBA Basketball World Cup', 'FIBA Basketball World Cup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/x45gjq1764423537.png', NULL, 1, 'FIBA', 'fiba', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('fiba-women', 'tsdb', '4891', 'FIBA Womens World Cup', 'FIBA Women''s Basketball World Cup', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/tlkdaq1726930250.png', NULL, 1, 'FIBA W', 'fibaw', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('unrivaled', 'tsdb', '5622', 'Unrivaled Basketball', 'Unrivaled', 'basketball', 'https://r2.thesportsdb.com/images/media/league/badge/71mier1746291561.png', NULL, 1, NULL, 'unrivaled', 'team_vs_team', 'Unrivaled Basketball', NULL, NULL, NULL, 1),
 
     -- Hockey (ESPN)
     ('nhl', 'espn', 'hockey/nhl', NULL, 'National Hockey League', 'hockey', 'https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png', NULL, 1, 'NHL', 'nhl', 'team_vs_team', 'NHL Hockey', NULL, NULL, NULL, 1),
@@ -1080,8 +1079,8 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('gohl', 'hockeytech', 'gojhl', NULL, 'Greater Ontario Hockey League', 'hockey', 'https://www.gohl.ca/wp-content/uploads/sites/2/2025/09/cropped-GOHLLogoTeamNavBar.png', NULL, 1, 'GOHL', 'gohl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Hockey - European Leagues (TSDB)
-    ('norwegian-hockey', 'tsdb', '4926', 'Norwegian Fjordkraft-ligaen', 'Norwegian Fjordkraft-ligaen', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/lpfdvc1697194460.png', NULL, 1, NULL, 'norwegian-hockey', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
-    ('shl', 'tsdb', '4419', 'Swedish Hockey League', 'Swedish Hockey League', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/95fnqb1547547893.png', NULL, 1, 'SHL', 'shl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('norwegian-hockey', 'tsdb', '4926', 'Norwegian Fjordkraft-ligaen', 'Norwegian Fjordkraft-ligaen', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/lpfdvc1697194460.png', NULL, 1, NULL, 'norwegian-hockey', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('shl', 'tsdb', '4419', 'Swedish Hockey League', 'Swedish Hockey League', 'hockey', 'https://r2.thesportsdb.com/images/media/league/badge/95fnqb1547547893.png', NULL, 1, 'SHL', 'shl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Australian Football (TSDB)
     ('afl', 'squiggle', 'afl', NULL, 'Australian Football League', 'australian-football', 'https://r2.thesportsdb.com/images/media/league/badge/wvx4721525519372.png', NULL, 1, 'AFL', 'afl', 'team_vs_team', 'AFL', NULL, NULL, NULL, 1),
@@ -1101,7 +1100,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('world-baseball-classic', 'espn', 'baseball/world-baseball-classic', NULL, 'World Baseball Classic', 'baseball', 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/World_Baseball_Classic_logo.svg/500px-World_Baseball_Classic_logo.svg.png', NULL, 1, 'WBC', 'wbc', 'team_vs_team', 'World Baseball Classic', NULL, NULL, NULL, 1),
     ('cbl', 'supabase', 'https://cbl.ca', NULL, 'Canadian Baseball League', 'baseball', 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Canadian_Baseball_League.svg/1280px-Canadian_Baseball_League.svg.png', NULL, 1, 'CBL', 'cbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- WPBL (Women's Pro Baseball League, #284): TSDB-only — ESPN airs games but exposes no API data. 4 teams, ~30-game season.
-    ('wpbl', 'tsdb', '5929', 'WPBL', 'WPBL', 'baseball', 'https://r2.thesportsdb.com/images/media/league/badge/rkx1371785226521.png', NULL, 1, 'WPBL', 'wpbl', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
+    ('wpbl', 'tsdb', '5929', 'WPBL', 'WPBL', 'baseball', 'https://r2.thesportsdb.com/images/media/league/badge/rkx1371785226521.png', NULL, 1, 'WPBL', 'wpbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- LLB (#556): Little League Baseball World Series. As with WBC, ESPN serves only a generic
     -- baseball icon for this league, so hardcode the Wikimedia mark. Teams are regional all-star
     -- squads ESPN re-seeds each season, and the calendar is whitelisted to ~3 weeks each August.
@@ -1169,43 +1168,43 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Soccer (TSDB Premium) - Leagues requiring premium key for full event coverage
     -- uru.2: ESPN data is severely stale (2011 roster, 2010 scoreboard) — TSDB only
-    ('uru.2', 'tsdb', '5072', 'Uruguayan Segunda División', 'AUF Segunda', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/htc3kb1740672581.png', NULL, 1, NULL, 'uru.2', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('svenska-cupen', 'tsdb', '4756', 'Svenska Cupen', 'Svenska Cupen', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/p37u1n1694211430.png', NULL, 1, NULL, 'svenska-cupen', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('uru.2', 'tsdb', '5072', 'Uruguayan Segunda División', 'AUF Segunda', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/htc3kb1740672581.png', NULL, 1, NULL, 'uru.2', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('svenska-cupen', 'tsdb', '4756', 'Svenska Cupen', 'Svenska Cupen', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/p37u1n1694211430.png', NULL, 1, NULL, 'svenska-cupen', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- Brazilian state championships (#60) — the 23 states ESPN does NOT cover (Carioca/Paulista/Gaucho/Mineiro live on ESPN above); idLeague + badge validated against TSDB search_all_leagues.php, 2026 fixtures confirmed
-    ('bra.camp.acreano', 'tsdb', '5676', 'Brazilian Campeonato Acreano', 'Brazilian Campeonato Acreano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/4d9le21754492204.png', NULL, 1, 'Acreano', 'acreano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.alagoano', 'tsdb', '5677', 'Brazilian Campeonato Alagoano', 'Brazilian Campeonato Alagoano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/2tcrj61767438744.png', NULL, 1, 'Alagoano', 'alagoano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.amapaense', 'tsdb', '5678', 'Brazilian Campeonato Amapaense', 'Brazilian Campeonato Amapaense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/6sy3xd1754493984.png', NULL, 1, 'Amapaense', 'amapaense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.amazonense', 'tsdb', '5679', 'Brazilian Campeonato Amazonense', 'Brazilian Campeonato Amazonense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/t9nfej1754494955.png', NULL, 1, 'Amazonense', 'amazonense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.baiano', 'tsdb', '5684', 'Brazilian Campeonato Baiano', 'Brazilian Campeonato Baiano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/ehk7hw1756631450.png', NULL, 1, 'Baiano', 'baiano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.brasiliense', 'tsdb', '5685', 'Brazilian Campeonato Brasiliense', 'Brazilian Campeonato Brasiliense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/7z9n1v1756632496.png', NULL, 1, 'Brasiliense', 'brasiliense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.capixaba', 'tsdb', '5686', 'Brazilian Campeonato Capixaba', 'Brazilian Campeonato Capixaba', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/5f2rcm1756633054.png', NULL, 1, 'Capixaba', 'capixaba', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.catarinense', 'tsdb', '5687', 'Brazilian Campeonato Catarinense', 'Brazilian Campeonato Catarinense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/rvn16n1756635839.png', NULL, 1, 'Catarinense', 'catarinense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.cearense', 'tsdb', '5689', 'Brazilian Campeonato Cearense', 'Brazilian Campeonato Cearense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/gm4k7s1756639011.png', NULL, 1, 'Cearense', 'cearense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.goiano', 'tsdb', '5760', 'Brazilian Campeonato Goiano', 'Brazilian Campeonato Goiano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/8c7y7a1766562491.png', NULL, 1, 'Goiano', 'goiano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.maranhense', 'tsdb', '5761', 'Brazilian Campeonato Maranhense', 'Brazilian Campeonato Maranhense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/elyo6m1766564369.png', NULL, 1, 'Maranhense', 'maranhense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.matogrossense', 'tsdb', '5762', 'Brazilian Campeonato MatoGrossense', 'Brazilian Campeonato MatoGrossense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/sdodne1766565649.png', NULL, 1, 'MatoGrossense', 'matogrossense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.paraense', 'tsdb', '5764', 'Brazilian Campeonato Paraense', 'Brazilian Campeonato Paraense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/2l12dd1766567504.png', NULL, 1, 'Paraense', 'paraense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.paraibano', 'tsdb', '5765', 'Brazilian Campeonato Paraibano', 'Brazilian Campeonato Paraibano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/35w0h11766570162.png', NULL, 1, 'Paraibano', 'paraibano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.paranaense', 'tsdb', '5766', 'Brazilian Campeonato Paranaense', 'Brazilian Campeonato Paranaense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/fp5qis1766570793.png', NULL, 1, 'Paranaense', 'paranaense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.pernambucano', 'tsdb', '5768', 'Brazilian Campeonato Pernambucano', 'Brazilian Campeonato Pernambucano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/2rleuk1766573797.png', NULL, 1, 'Pernambucano', 'pernambucano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.piauiense', 'tsdb', '5769', 'Brazilian Campeonato Piauiense', 'Brazilian Campeonato Piauiense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/xvlw7i1766575848.png', NULL, 1, 'Piauiense', 'piauiense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.potiguar', 'tsdb', '5770', 'Brazilian Campeonato Potiguar', 'Brazilian Campeonato Potiguar', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/dw5y8q1766577811.png', NULL, 1, 'Potiguar', 'potiguar', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.rondoniense', 'tsdb', '5771', 'Brazilian Campeonato Rondoniense', 'Brazilian Campeonato Rondoniense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/vnv80t1766578247.png', NULL, 1, 'Rondoniense', 'rondoniense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.roraimense', 'tsdb', '5772', 'Brazilian Campeonato Roraimense', 'Brazilian Campeonato Roraimense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/rxf2n11766581225.png', NULL, 1, 'Roraimense', 'roraimense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.sergipano', 'tsdb', '5773', 'Brazilian Campeonato Sergipano', 'Brazilian Campeonato Sergipano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/g5e1ig1766584230.png', NULL, 1, 'Sergipano', 'sergipano', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.sulmatogrossense', 'tsdb', '5774', 'Brazilian Campeonato SulMatoGrossense', 'Brazilian Campeonato SulMatoGrossense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/rzdwrs1766584859.png', NULL, 1, 'SulMatoGrossense', 'sulmatogrossense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bra.camp.tocantinense', 'tsdb', '5775', 'Brazilian Campeonato Tocantinense', 'Brazilian Campeonato Tocantinense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/ghbod11766585463.png', NULL, 1, 'Tocantinense', 'tocantinense', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('bra.camp.acreano', 'tsdb', '5676', 'Brazilian Campeonato Acreano', 'Brazilian Campeonato Acreano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/4d9le21754492204.png', NULL, 1, 'Acreano', 'acreano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.alagoano', 'tsdb', '5677', 'Brazilian Campeonato Alagoano', 'Brazilian Campeonato Alagoano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/2tcrj61767438744.png', NULL, 1, 'Alagoano', 'alagoano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.amapaense', 'tsdb', '5678', 'Brazilian Campeonato Amapaense', 'Brazilian Campeonato Amapaense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/6sy3xd1754493984.png', NULL, 1, 'Amapaense', 'amapaense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.amazonense', 'tsdb', '5679', 'Brazilian Campeonato Amazonense', 'Brazilian Campeonato Amazonense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/t9nfej1754494955.png', NULL, 1, 'Amazonense', 'amazonense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.baiano', 'tsdb', '5684', 'Brazilian Campeonato Baiano', 'Brazilian Campeonato Baiano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/ehk7hw1756631450.png', NULL, 1, 'Baiano', 'baiano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.brasiliense', 'tsdb', '5685', 'Brazilian Campeonato Brasiliense', 'Brazilian Campeonato Brasiliense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/7z9n1v1756632496.png', NULL, 1, 'Brasiliense', 'brasiliense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.capixaba', 'tsdb', '5686', 'Brazilian Campeonato Capixaba', 'Brazilian Campeonato Capixaba', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/5f2rcm1756633054.png', NULL, 1, 'Capixaba', 'capixaba', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.catarinense', 'tsdb', '5687', 'Brazilian Campeonato Catarinense', 'Brazilian Campeonato Catarinense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/rvn16n1756635839.png', NULL, 1, 'Catarinense', 'catarinense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.cearense', 'tsdb', '5689', 'Brazilian Campeonato Cearense', 'Brazilian Campeonato Cearense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/gm4k7s1756639011.png', NULL, 1, 'Cearense', 'cearense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.goiano', 'tsdb', '5760', 'Brazilian Campeonato Goiano', 'Brazilian Campeonato Goiano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/8c7y7a1766562491.png', NULL, 1, 'Goiano', 'goiano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.maranhense', 'tsdb', '5761', 'Brazilian Campeonato Maranhense', 'Brazilian Campeonato Maranhense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/elyo6m1766564369.png', NULL, 1, 'Maranhense', 'maranhense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.matogrossense', 'tsdb', '5762', 'Brazilian Campeonato MatoGrossense', 'Brazilian Campeonato MatoGrossense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/sdodne1766565649.png', NULL, 1, 'MatoGrossense', 'matogrossense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.paraense', 'tsdb', '5764', 'Brazilian Campeonato Paraense', 'Brazilian Campeonato Paraense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/2l12dd1766567504.png', NULL, 1, 'Paraense', 'paraense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.paraibano', 'tsdb', '5765', 'Brazilian Campeonato Paraibano', 'Brazilian Campeonato Paraibano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/35w0h11766570162.png', NULL, 1, 'Paraibano', 'paraibano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.paranaense', 'tsdb', '5766', 'Brazilian Campeonato Paranaense', 'Brazilian Campeonato Paranaense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/fp5qis1766570793.png', NULL, 1, 'Paranaense', 'paranaense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.pernambucano', 'tsdb', '5768', 'Brazilian Campeonato Pernambucano', 'Brazilian Campeonato Pernambucano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/2rleuk1766573797.png', NULL, 1, 'Pernambucano', 'pernambucano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.piauiense', 'tsdb', '5769', 'Brazilian Campeonato Piauiense', 'Brazilian Campeonato Piauiense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/xvlw7i1766575848.png', NULL, 1, 'Piauiense', 'piauiense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.potiguar', 'tsdb', '5770', 'Brazilian Campeonato Potiguar', 'Brazilian Campeonato Potiguar', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/dw5y8q1766577811.png', NULL, 1, 'Potiguar', 'potiguar', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.rondoniense', 'tsdb', '5771', 'Brazilian Campeonato Rondoniense', 'Brazilian Campeonato Rondoniense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/vnv80t1766578247.png', NULL, 1, 'Rondoniense', 'rondoniense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.roraimense', 'tsdb', '5772', 'Brazilian Campeonato Roraimense', 'Brazilian Campeonato Roraimense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/rxf2n11766581225.png', NULL, 1, 'Roraimense', 'roraimense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.sergipano', 'tsdb', '5773', 'Brazilian Campeonato Sergipano', 'Brazilian Campeonato Sergipano', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/g5e1ig1766584230.png', NULL, 1, 'Sergipano', 'sergipano', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.sulmatogrossense', 'tsdb', '5774', 'Brazilian Campeonato SulMatoGrossense', 'Brazilian Campeonato SulMatoGrossense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/rzdwrs1766584859.png', NULL, 1, 'SulMatoGrossense', 'sulmatogrossense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bra.camp.tocantinense', 'tsdb', '5775', 'Brazilian Campeonato Tocantinense', 'Brazilian Campeonato Tocantinense', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/ghbod11766585463.png', NULL, 1, 'Tocantinense', 'tocantinense', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- Community league requests (#220-229) — provider_league_name validated against TSDB lookupleague.php (strLeague exact)
-    ('can.1', 'tsdb', '4820', 'Canadian Premier League', 'Canadian Premier League', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/7jqvqs1589104556.png', NULL, 1, NULL, 'can.1', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('swe.2', 'tsdb', '4403', 'Swedish Superettan', 'Swedish Superettan', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/uvzmu21707459258.png', NULL, 1, NULL, 'swe.2', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('swe.3.n', 'tsdb', '4674', 'Swedish Division 1 North', 'Swedish Division 1 North', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/w8f05c1579901188.png', NULL, 1, NULL, 'swe.3.n', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('swe.3.s', 'tsdb', '4845', 'Swedish Division 1 South', 'Swedish Division 1 South', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/w8f05c1579901188.png', NULL, 1, NULL, 'swe.3.s', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('ven.2', 'tsdb', '5659', 'Venezuelan Segunda Division', 'Venezuelan Segunda División', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/9tgsja1754302332.png', NULL, 1, NULL, 'ven.2', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('gam.1', 'tsdb', '5238', 'Gambia GFA League', 'Gambia GFA League', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/tqdf9k1645215996.png', NULL, 1, NULL, 'gam.1', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('ice.1', 'tsdb', '4642', 'Icelandic Úrvalsdeild karla', 'Icelandic Úrvalsdeild karla', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/7z7rcg1686156462.png', NULL, 1, NULL, 'ice.1', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('ice.2', 'tsdb', '4906', 'Icelandic 1 deild karla', 'Icelandic 1 deild karla', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/ent23s1614355568.png', NULL, 1, NULL, 'ice.2', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('arb.1', 'tsdb', '5230', 'Aruban Division di Honor', 'Aruban Division di Honor', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/1uwxfa1645196203.png', NULL, 1, NULL, 'arb.1', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('nifl.1', 'tsdb', '4659', 'Northern Irish Premiership', 'Northern Irish Premiership', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/at2i0n1625851036.png', NULL, 1, NULL, 'nifl.1', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('can.1', 'tsdb', '4820', 'Canadian Premier League', 'Canadian Premier League', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/7jqvqs1589104556.png', NULL, 1, NULL, 'can.1', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('swe.2', 'tsdb', '4403', 'Swedish Superettan', 'Swedish Superettan', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/uvzmu21707459258.png', NULL, 1, NULL, 'swe.2', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('swe.3.n', 'tsdb', '4674', 'Swedish Division 1 North', 'Swedish Division 1 North', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/w8f05c1579901188.png', NULL, 1, NULL, 'swe.3.n', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('swe.3.s', 'tsdb', '4845', 'Swedish Division 1 South', 'Swedish Division 1 South', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/w8f05c1579901188.png', NULL, 1, NULL, 'swe.3.s', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('ven.2', 'tsdb', '5659', 'Venezuelan Segunda Division', 'Venezuelan Segunda División', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/9tgsja1754302332.png', NULL, 1, NULL, 'ven.2', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('gam.1', 'tsdb', '5238', 'Gambia GFA League', 'Gambia GFA League', 'soccer', 'https://r2.thesportsdb.com/images/media/league/badge/tqdf9k1645215996.png', NULL, 1, NULL, 'gam.1', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('ice.1', 'tsdb', '4642', 'Icelandic Úrvalsdeild karla', 'Icelandic Úrvalsdeild karla', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/7z7rcg1686156462.png', NULL, 1, NULL, 'ice.1', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('ice.2', 'tsdb', '4906', 'Icelandic 1 deild karla', 'Icelandic 1 deild karla', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/ent23s1614355568.png', NULL, 1, NULL, 'ice.2', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('arb.1', 'tsdb', '5230', 'Aruban Division di Honor', 'Aruban Division di Honor', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/1uwxfa1645196203.png', NULL, 1, NULL, 'arb.1', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('nifl.1', 'tsdb', '4659', 'Northern Irish Premiership', 'Northern Irish Premiership', 'soccer', 'https://r2.thesportsdb.com/images/media/league/logo/at2i0n1625851036.png', NULL, 1, NULL, 'nifl.1', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- MMA (ESPN) - Combat sport with event cards
     ('ufc', 'espn', 'mma/ufc', NULL, 'Ultimate Fighting Championship', 'mma', 'https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png', NULL, 0, 'UFC', 'ufc', 'event_card', NULL, NULL, NULL, NULL, 1),
@@ -1223,11 +1222,11 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('pll', 'espn', 'lacrosse/pll', NULL, 'Premier Lacrosse League', 'lacrosse', 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pll.png', NULL, 1, 'PLL', 'pll', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Cricket (TSDB) - Premium tier, requires TSDB premium key for full event coverage
-    ('ipl', 'tsdb', '4460', 'Indian Premier League', 'Indian Premier League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/gaiti11741709844.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
-    ('sa20', 'tsdb', '5532', 'SA20', 'South Africa Twenty20', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/aakvuk1734183412.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('ipl', 'tsdb', '4460', 'Indian Premier League', 'Indian Premier League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/gaiti11741709844.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('sa20', 'tsdb', '5532', 'SA20', 'South Africa Twenty20', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/aakvuk1734183412.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- MLC: short US T20 season fits the free rolling next-events window (eventsnextleague), so no premium key needed.
-    ('mlc', 'tsdb', '5401', 'Major League Cricket', 'Major League Cricket', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/mbbos01689159510.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, 'free', 1),
+    ('mlc', 'tsdb', '5401', 'Major League Cricket', 'Major League Cricket', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/mbbos01689159510.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Rugby (ESPN)
     ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
@@ -1253,10 +1252,10 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Rugby League (TSDB) - ESPN's rugby-league tree carries only the NRL, so Super League comes from TSDB.
     -- Premium tier: free-tier eventsseason caps at 5 events and eventspastleague returns 1, so a keyless fetch is near-empty.
-    ('super-league', 'tsdb', '4415', 'English Rugby League Super League', 'English Rugby League Super League', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gp2sfv1641835011.png', NULL, 1, 'SL', 'super-league', 'team_vs_team', NULL, NULL, NULL, 'premium', 1),
+    ('super-league', 'tsdb', '4415', 'English Rugby League Super League', 'English Rugby League Super League', 'rugby', 'https://r2.thesportsdb.com/images/media/league/badge/gp2sfv1641835011.png', NULL, 1, 'SL', 'super-league', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Boxing (TSDB) - Combat sport with event cards
-    ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, 'free', 1),
+    ('boxing', 'tsdb', '4445', 'Boxing', 'Boxing', 'boxing', NULL, NULL, 0, NULL, 'boxing', 'event_card', NULL, NULL, NULL, NULL, 1),
 
     -- Motorsports (ESPN) - Race weekends with multi-driver sessions, no home/away
     -- 'f1' is the fully-implemented reference league. IndyCar verified 2026-07
@@ -1281,8 +1280,8 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
     -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).
-    ('imsa', 'tsdb', '4488', 'IMSA SportsCar Championship', 'IMSA WeatherTech SportsCar Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/t3fpd41536244390.png', NULL, 0, 'IMSA', 'imsa', 'event', NULL, NULL, NULL, 'premium', 1),
-    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/2fjrko1705526433.png', NULL, 0, 'WEC', 'wec', 'event', NULL, NULL, NULL, 'premium', 1),
+    ('imsa', 'tsdb', '4488', 'IMSA SportsCar Championship', 'IMSA WeatherTech SportsCar Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/t3fpd41536244390.png', NULL, 0, 'IMSA', 'imsa', 'event', NULL, NULL, NULL, NULL, 1),
+    ('wec', 'tsdb', '4413', 'WEC', 'FIA World Endurance Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/2fjrko1705526433.png', NULL, 0, 'WEC', 'wec', 'event', NULL, NULL, NULL, NULL, 1),
 
     -- Tennis (ESPN) - One Event per MATCH (players as home/away), parsed from
     -- tournament groupings (teamarr/providers/espn/tennis.py). Grand slams are
@@ -2095,6 +2094,7 @@ WHERE template_id IS NOT NULL
 -- Add tsdb_tier column to leagues table for free/premium classification
 -- Free tier: 5 events/day/league, 30 req/min (key "123")
 -- Premium tier: full event coverage, 100 req/min (>3 digit key)
+-- (Retired at v92: TSDB became premium-key only, #676.)
 
 -- v67: Remove Cricbuzz provider
 -- Cricket leagues now use TSDB exclusively (no Cricbuzz fallback)

@@ -58,7 +58,6 @@ class CustomLeagueCreate(BaseModel):
     display_name: str = Field(..., description="Human-readable league name")
     sport: str = Field(..., description="Functional sport code")
     event_type: str | None = Field(None, description="team_vs_team | event_card")
-    tsdb_tier: str | None = Field(None, description="'free' | 'premium'")
     allow_empty: bool = Field(
         False,
         description="Override the zero-events guardrail for an off-season league",
@@ -74,7 +73,6 @@ class CustomLeagueUpdate(BaseModel):
     display_name: str
     sport: str
     event_type: str | None = None
-    tsdb_tier: str | None = None
 
 
 class CustomLeagueTestFetch(BaseModel):
@@ -180,7 +178,7 @@ def get_custom_leagues() -> dict:
 
     Returns:
         ``{custom_leagues: [{league_code, provider, provider_league_id,
-        provider_league_name, display_name, sport, event_type, tsdb_tier,
+        provider_league_name, display_name, sport, event_type,
         enabled, subscribed}]}``
     """
     with get_db() as conn:
@@ -224,7 +222,6 @@ def post_custom_league(body: CustomLeagueCreate) -> dict:
             display_name=body.display_name,
             sport=body.sport,
             event_type=body.event_type,
-            tsdb_tier=body.tsdb_tier,
             allow_empty=body.allow_empty,
         )
     except Exception as exc:  # noqa: BLE001
@@ -244,7 +241,6 @@ def put_custom_league(league_code: str, body: CustomLeagueUpdate) -> dict:
                 display_name=body.display_name,
                 sport=body.sport,
                 event_type=body.event_type,
-                tsdb_tier=body.tsdb_tier,
             )
     except Exception as exc:  # noqa: BLE001
         _raise_http(exc)

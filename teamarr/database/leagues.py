@@ -271,7 +271,7 @@ def list_custom_leagues(conn: sqlite3.Connection) -> list[dict]:
     cursor = conn.execute(
         """
         SELECT league_code, provider, provider_league_id, provider_league_name,
-               display_name, sport, event_type, tsdb_tier, enabled
+               display_name, sport, event_type, enabled
         FROM leagues
         WHERE is_custom = 1
         ORDER BY display_name
@@ -289,7 +289,6 @@ def insert_custom_league(
     display_name: str,
     sport: str,
     event_type: str,
-    tsdb_tier: str | None = None,
 ) -> None:
     """Insert a new user-added (``is_custom=1``) TSDB league row.
 
@@ -300,9 +299,9 @@ def insert_custom_league(
         """
         INSERT INTO leagues (
             league_code, provider, provider_league_id, provider_league_name,
-            display_name, sport, event_type, tsdb_tier,
+            display_name, sport, event_type,
             enabled, import_enabled, is_custom
-        ) VALUES (?, 'tsdb', ?, ?, ?, ?, ?, ?, 1, 1, 1)
+        ) VALUES (?, 'tsdb', ?, ?, ?, ?, ?, 1, 1, 1)
         """,
         (
             league_code,
@@ -311,7 +310,6 @@ def insert_custom_league(
             display_name,
             sport,
             event_type,
-            tsdb_tier,
         ),
     )
 
@@ -325,7 +323,6 @@ def update_custom_league_row(
     display_name: str,
     sport: str,
     event_type: str,
-    tsdb_tier: str | None = None,
 ) -> int:
     """Update an existing custom league. Returns the number of rows changed.
 
@@ -336,7 +333,7 @@ def update_custom_league_row(
         """
         UPDATE leagues
         SET provider_league_id = ?, provider_league_name = ?, display_name = ?,
-            sport = ?, event_type = ?, tsdb_tier = ?
+            sport = ?, event_type = ?
         WHERE league_code = ? AND is_custom = 1
         """,
         (
@@ -345,7 +342,6 @@ def update_custom_league_row(
             display_name,
             sport,
             event_type,
-            tsdb_tier,
             league_code,
         ),
     )
