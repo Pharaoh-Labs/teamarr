@@ -6,8 +6,9 @@ import {
   getPriorityTeams,
   addPriorityTeam,
   deletePriorityTeam,
+  updatePriorityTeamScope,
 } from "@/api/sortPriorities"
-import type { SortPriorityReorderItem } from "@/api/sortPriorities"
+import type { PriorityTeamScope, SortPriorityReorderItem } from "@/api/sortPriorities"
 import type { TeamFilterEntry } from "@/api/types"
 
 export function useSortPriorities() {
@@ -53,7 +54,20 @@ export function useAddPriorityTeam() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (team: TeamFilterEntry) => addPriorityTeam(team),
+    mutationFn: ({ team, scope }: { team: TeamFilterEntry; scope?: PriorityTeamScope }) =>
+      addPriorityTeam(team, scope),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["priority-teams"] })
+    },
+  })
+}
+
+export function useUpdatePriorityTeamScope() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, scope }: { id: number; scope: PriorityTeamScope }) =>
+      updatePriorityTeamScope(id, scope),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["priority-teams"] })
     },

@@ -102,11 +102,11 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
               <Pin className="h-4 w-4" /> Pinned Blocks
             </CardTitle>
             <CardDescription>
-              Give a team, league, or sport its own block of channel numbers. Everything else
-              numbers from the channel range start ({rangeStart}). Most specific wins:
-              Team › League › Sport. Each start belongs to one block — to put a team first
-              inside its league&apos;s block, use Priority Teams below. Blocks spill forward
-              if they fill up.
+              Give a team, league, or sport its own block of channel numbers, starting
+              anywhere — above, below, or inside the Everything Else range ({rangeStart}+),
+              which flows around it. Most specific wins: Team › League › Sport. Each start
+              belongs to one block — to put a team first inside its league&apos;s block, use
+              Priority Teams above. Blocks spill forward if they fill up.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -121,7 +121,7 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
           </div>
         ) : sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground py-2">
-            No pinned blocks. All channels number from {rangeStart} in priority order.
+            No pinned blocks. All channels number from {rangeStart} in lineup order.
           </p>
         ) : (
           <div className="border rounded-md divide-y">
@@ -324,8 +324,8 @@ function AddBlockDialog({
         <DialogHeader>
           <DialogTitle>Add pinned block</DialogTitle>
           <DialogDescription>
-            Channels matching this scope number from the block start instead of the
-            channel range.
+            Channels matching this scope number from the block start instead of
+            Everything Else. The start can be anywhere.
           </DialogDescription>
         </DialogHeader>
 
@@ -429,7 +429,7 @@ function AddBlockDialog({
                 placeholder="No limit"
               />
               <p className="text-xs text-muted-foreground">
-                When the block is full, extra channels overflow to the channel range instead
+                When the block is full, extra channels overflow to Everything Else instead
                 of spilling forward.
               </p>
             </div>

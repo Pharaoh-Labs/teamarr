@@ -64,7 +64,10 @@ export async function autoPopulateSortPriorities(): Promise<AutoPopulateResponse
   return api.post("/sort-priorities/auto-populate", {})
 }
 
-// Priority Teams — a team-level tier that floats channels above sport/league order
+// Priority Teams — a team-level tier that floats channels to the top of a scope:
+// everything ('all'), its sport, or its league.
+export type PriorityTeamScope = "all" | "sport" | "league"
+
 export interface PriorityTeam {
   id: number
   provider: string
@@ -72,18 +75,30 @@ export interface PriorityTeam {
   team_name: string
   league: string | null
   sport: string
+  scope: PriorityTeamScope
 }
 
 export async function getPriorityTeams(): Promise<PriorityTeam[]> {
   return api.get("/sort-priorities/teams")
 }
 
-export async function addPriorityTeam(team: TeamFilterEntry): Promise<PriorityTeam> {
+export async function addPriorityTeam(
+  team: TeamFilterEntry,
+  scope: PriorityTeamScope = "league"
+): Promise<PriorityTeam> {
   return api.post("/sort-priorities/teams", {
     provider: team.provider,
     team_id: team.team_id,
     league: team.league,
+    scope,
   })
+}
+
+export async function updatePriorityTeamScope(
+  id: number,
+  scope: PriorityTeamScope
+): Promise<PriorityTeam> {
+  return api.put(`/sort-priorities/teams/${id}`, { scope })
 }
 
 export async function deletePriorityTeam(id: number): Promise<void> {

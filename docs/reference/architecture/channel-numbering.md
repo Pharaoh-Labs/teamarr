@@ -22,7 +22,7 @@ range of numbers with its own start:
 | Lane | Where it comes from |
 |------|---------------------|
 | Pinned block | One row in `numbering_exceptions` (a team, league or sport pin), or several rows sharing a start under one label (a *group*) |
-| Default | The global channel range (`channel_range_start` / `channel_range_end`) |
+| Default | "Everything Else" in the UI — the global channel range (`channel_range_start` / `channel_range_end`) |
 
 The allocator runs the **same placement code per lane** — compact, gap or
 strict, sticky locks, daily re-layout — with the lane's start in place of the
@@ -94,6 +94,27 @@ sticky modes, exactly as changing the channel range does.
 The sticky allocator's "invalid anchor" rule — a locked channel whose number
 is outside its range is re-placed — now uses the **lane's** range, so moving
 a block (say Lions from 800 to 900) re-places those channels on the next run.
+
+## Global sort and priority-team scope
+
+`get_all_channels_sorted` produces one ordered list that every lane is then
+partitioned from. The key is
+
+```
+(all_tier, sport_pri, sport_tier, league_pri, league_tier, event_time, event_id, keyword)
+```
+
+where the three `*_tier` values (0 = floats, 1 = normal) come from
+`channel_priority_teams.scope` — `'all'` sets every tier, `'sport'` sets
+`sport_tier` + `league_tier`, `'league'` only `league_tier`. A team listed
+several times keeps its broadest scope. The column was added by reconciliation
+with `DEFAULT 'all'`, so pre-scope rows keep the old float-above-everything
+behaviour; new rows default to `'league'`. Because lanes are cut after the
+sort, a priority team moves only relative to channels in its own lane.
+
+The API for the preview (`GET /numbering-exceptions/preview`) returns lanes
+sorted by start so the default lane appears where it actually sits when a
+block starts below or inside the range.
 
 ## Creation-time allocation
 

@@ -220,6 +220,8 @@ def preview_layout():
                     spills_into_next=spills,
                 )
             )
+        # Read like the dial: a block may start below (or inside) Everything Else.
+        out.sort(key=lambda m: m.start)
         return out
 
 

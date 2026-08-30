@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { RadioCards } from "@/components/ui/radio-cards"
-import { SortPriorityManager } from "@/components/SortPriorityManager"
+import { PriorityTeamsCard, SportLeagueOrderCard } from "@/components/SortPriorityManager"
 import { PinnedBlocks } from "@/components/PinnedBlocks"
 import { Button } from "@/components/ui/button"
 import { requestChannelRelayout } from "@/api/settings"
@@ -19,12 +19,13 @@ import {
 import type { LifecycleSettings, ChannelNumberingSettings } from "@/api/settings"
 
 /**
- * Channels → Numbering. The lineup pipeline: the channel range every unpinned
- * channel numbers from (lifecycle blob), pinned blocks (#333, their own table
- * — saved immediately), number stability (channel-numbering blob), and sort
- * priority. Save full-PUTs the range + stability blobs; this page leaves the
- * consolidation mode and lifecycle timing/buffers untouched, and since only
- * one Channels view mounts at a time the full-PUT is safe.
+ * Channels → Numbering, listed most-specific first (a channel takes the first
+ * rule that matches it): Priority Teams and Pinned Blocks (own tables, saved
+ * immediately), Sport & League Order (saved immediately), then Everything Else
+ * (the range in the lifecycle blob) and Number Stability (channel-numbering
+ * blob) under one Save. This page leaves the consolidation mode and lifecycle
+ * timing/buffers untouched, and since only one Channels view mounts at a time
+ * the full-PUT is safe.
  */
 export function ChannelNumbering() {
   const { data: settings } = useSettings()
@@ -112,18 +113,35 @@ export function ChannelNumbering() {
 
   return (
     <div className="space-y-3">
+      <p className="text-sm text-muted-foreground px-1">
+        Rules are listed most-specific first — a channel takes the first one that matches
+        it. Priority Teams and Pinned Blocks save as you edit; the rest save with the button
+        at the bottom.
+      </p>
+
+      {/* 1. Priority Teams — team-level float (own table, saved immediately) */}
+      <PriorityTeamsCard />
+
+      {/* 2. Pinned Blocks — team › league › sport starts (own table, saved immediately) */}
+      <PinnedBlocks rangeStart={rangeStartNum} />
+
+      {/* 3. Sport & League Order — lineup order inside every block and Everything Else */}
+      <SportLeagueOrderCard currentSortBy="sport_league_time" showWhenSortBy="sport_league_time" />
+
+      {/* 4. Everything Else — the range for whatever no block claims */}
       <Card>
         <CardHeader>
-          <CardTitle>Channel Range</CardTitle>
+          <CardTitle>Everything Else</CardTitle>
           <CardDescription>
-            Where channels number from. Pinned blocks below carve out their own ranges;
-            everything else numbers from here in priority order.
+            Channels that don&apos;t belong to a pinned block number from here, in
+            Sport &amp; League order. Numbers already used by your other Dispatcharr
+            channels — or by a pinned block that starts inside this range — are skipped.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="ch-range-start-num">Channel Range Start</Label>
+              <Label htmlFor="ch-range-start-num">Everything Else Start</Label>
               <Input
                 id="ch-range-start-num"
                 type="number"
@@ -144,11 +162,11 @@ export function ChannelNumbering() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                First channel number for everything that isn&apos;t pinned
+                First number for channels no pinned block claims
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ch-range-end-num">Channel Range End</Label>
+              <Label htmlFor="ch-range-end-num">Everything Else End</Label>
               <Input
                 id="ch-range-end-num"
                 type="number"
@@ -175,22 +193,26 @@ export function ChannelNumbering() {
                 placeholder="No limit"
               />
               <p className="text-xs text-muted-foreground">
-                Last channel number (leave empty for no limit)
+                Last number for these channels (leave empty for no limit). Pinned blocks are
+                not limited by it.
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Number Stability — applies inside every block and the range */}
-          <div className="space-y-3 pt-2 border-t">
-            <div>
-              <Label className="text-sm font-medium">Number Stability</Label>
-              <p className="text-xs text-muted-foreground mt-1">
-                Controls whether a channel can be renumbered while an event is
-                live. Dispatcharr relies on stable numbers, so a game shouldn&apos;t
-                move when another event starts or ends. Applies inside every pinned
-                block as well as the channel range.
-              </p>
-            </div>
+      {/* 5. Number Stability — global; applies inside every block and Everything Else */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Number Stability</CardTitle>
+          <CardDescription>
+            Whether a channel can be renumbered while its event is live. Dispatcharr
+            relies on stable numbers, so a game shouldn&apos;t move when another event
+            starts or ends. Applies inside every pinned block as well as Everything Else.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
             <RadioCards
               name="channel-stability-mode"
               value={channelNumbering.channel_stability_mode}
@@ -256,7 +278,7 @@ export function ChannelNumbering() {
                       })
                     }
                   />
-                  Daily re-layout (reclaim gaps &amp; restore priority order)
+                  Daily re-layout (reclaim gaps &amp; restore lineup order)
                 </label>
                 {channelNumbering.channel_daily_reset_enabled && (
                   <div className="space-y-2 max-w-xs">
@@ -296,10 +318,10 @@ export function ChannelNumbering() {
                         : "Re-grid channels now"}
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Renumber every channel back into priority order on the next
-                    generation, without waiting for the daily window. Use after
-                    changing the gap size, mode, sort priority, or pinned blocks.
-                    (These changes also queue a re-grid automatically.)
+                    Renumber every channel back into lineup order on the next
+                    generation, without waiting for the daily window. Changing the gap
+                    size, mode, priority teams, pinned blocks, or Sport &amp; League order
+                    queues this automatically.
                   </p>
                 </div>
               </div>
@@ -312,20 +334,12 @@ export function ChannelNumbering() {
               pending={updateChannelNumbering.isPending || updateLifecycle.isPending}
             />
             <p className="text-xs text-muted-foreground mt-2">
-              Channel numbers will be updated on the next EPG generation.
+              Saves Everything Else and Number Stability. Channel numbers update on the
+              next EPG generation.
             </p>
           </div>
         </CardContent>
       </Card>
-
-      {/* Pinned Blocks — saved immediately, not part of the Save above */}
-      <PinnedBlocks rangeStart={rangeStartNum} />
-
-      {/* Channel Ordering — lineup sort priority (within sport → league → time) */}
-      <SortPriorityManager
-        currentSortBy="sport_league_time"
-        showWhenSortBy="sport_league_time"
-      />
     </div>
   )
 }
