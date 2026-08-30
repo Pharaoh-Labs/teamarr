@@ -241,7 +241,6 @@ def list_leagues(
                 "logo_url_dark": league.logo_url_dark,
                 "import_enabled": league.import_enabled,
                 "league_alias": league.league_alias,
-                "tsdb_tier": league.tsdb_tier,
             }
             for league in leagues
         ],

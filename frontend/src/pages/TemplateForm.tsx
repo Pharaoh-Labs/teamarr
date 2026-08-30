@@ -57,7 +57,7 @@ export function TemplateForm() {
   const [previewLeague, setPreviewLeague] = useState("nba")
   // Default to live: preview real event data when available (green "Live"
   // indicator), falling back to static samples when there's no event. TSDB
-  // leagues read cache-only so this can't hammer the free tier.
+  // leagues read cache-only so this can't hammer the rate-limited API.
   const [liveRequested, setLiveRequested] = useState(true)
 
   // Refs for template fields

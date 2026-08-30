@@ -666,7 +666,7 @@ class StreamMatcher:
                         _record(slot, e)
 
         # Isolated per slot exactly like the concurrent path above. TSDB runs
-        # here and is the flakiest fetch we make (rate-limited free tier), so
+        # here and is the flakiest fetch we make (rate-limited), so
         # letting it propagate would let one league take down the whole
         # prefetch for every other league.
         for slot in inline_slots:

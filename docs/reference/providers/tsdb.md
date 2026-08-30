@@ -7,104 +7,73 @@ nav_order: 7
 
 # TheSportsDB Provider
 
-TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 48 leagues in total (5 free-tier, 43 premium).
+TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 49 leagues in total — **all of them require a TheSportsDB premium API key**.
 
 ## API Details
 
 | | |
 |---|---|
 | **Base URL** | `https://www.thesportsdb.com/api/v1/json/{api_key}/{endpoint}` |
-| **Auth** | API key in URL path (`123` for free tier) |
+| **Auth** | Premium API key in URL path (**required**) |
 | **Priority** | 100 (last resort) |
-| **Rate Limit** | 30 req/min free, 100 req/min premium |
+| **Rate Limit** | 100 req/min (premium) |
 
-## API Tiers
+## Premium Key Required
 
-Measured 2026-08-04 (two networks, three client types; matches TSDB's published limits — TSDB quietly tightened the free tier sometime in 2026):
+**As of v2.15, TheSportsDB support is premium-key only.** TSDB tightened its free tier during 2026 (measured 2026-08-04: a rolling 1-event next/past window, a premium-gated `eventsday` league filter, a 15-event `eventsseason` cap) to the point where a keyless install got day-of event channels at best and zero team-channel support. The free tier — and the free test key `123` — are no longer used.
 
-| | Free (`123`) | Premium |
-|---|---|---|
-| **Rate Limit** | 30 req/min | 100 req/min |
-| **`eventsnextleague` / `eventspastleague`** | **1 event** (rolling next/last) | 20 |
-| **`eventsday` with `l=` league filter** | **always 0 — the filter is premium-gated** (unfiltered returns the global top-3 events/day) | full |
-| **`eventsseason`** | 15-event cap | 3,000 |
-| **`all_leagues`** | sample only | full list |
-| **Cost** | Free | ~$9/month |
+Without a key configured, the TSDB provider is **not constructed at all**: no requests are made, and every TSDB league is unavailable (the league picker shows a crown on TSDB leagues and warns when one is selected keyless; a startup log lists subscribed TSDB leagues that will produce no events). Add a key and it takes effect immediately — no restart.
 
-### How the free tier actually behaves in Teamarr
+With a key, coverage is the full premium capability set: 100 req/min, 20-event next/past windows, league-filtered `eventsday` (which is what makes team channels work), and 3,000-event season fetches. A premium key costs ~$9/month.
 
-Teamarr's event pipeline polls `get_events(league, date)` per date on 30min–8h cache TTLs. Each game enters the guide **the moment it becomes the league's rolling "next" game** — so on the free tier every game does appear, but with short lead time (day-of for stacked schedules), and a second same-day game only appears after the first finishes (replacing it in that date's cache). **Team channels get zero events on the free tier**: `get_team_schedule` iterates only the league-filtered `eventsday` endpoint, which free keys can't use. In short: free = event-source channels with day-of lead; premium = full forward guide + working team channels.
+### League migration notes
 
-### Free Tier Leagues
+AFL was formerly a TSDB league but is now served by the free [Squiggle](squiggle) provider. NRL and Super Rugby Pacific also migrated from TSDB to ESPN. Super League stays on TSDB: ESPN's `rugby-league` tree carries only the NRL.
 
-These leagues remain classified free: their event-source channels work through the rolling-next capture described above (team channels still require a premium key, as on every TSDB league):
-
-- CFL, Unrivaled, Norwegian Hockey, Boxing
-- Major League Cricket (MLC) — its short US T20 season fits within the free rolling next-events window
-- WPBL (Women's Pro Baseball League) — 4 teams, ~30-game season, roughly one game per day
-
-### Premium Tier Leagues
-
-These leagues have high event volume or unreliable free-tier data and require a premium key for full coverage:
-
-- SHL (Swedish Hockey League) — a full ~52-round, 14-team season far exceeds the free tier's 15-events/call cap
-- IPL, BBL, SA20 (cricket)
-- Svenska Cupen and other regional soccer leagues (Canadian Premier League, Swedish Superettan / Division 1, Icelandic, Venezuelan, Gambian, Aruban, Northern Irish)
-- 23 Brazilian state championships (*campeonatos estaduais*) — every state except the four ESPN already covers (Carioca, Paulista, Gaúcho, Mineiro); see [Supported Leagues](../supported-leagues#brazilian-state-championships)
-- IMSA and WEC (motor racing). WEC's 62 events/season exceeds the free `eventsseason.php` 15-event cap; IMSA fits it but is gated premium too, so all TSDB racing is premium (no silent truncation if a schedule grows).
-- FIBA Basketball World Cup (M/W: `fiba`, `fibaw`) — gated premium since qualifiers run in parallel across multiple confederations, which can exceed the free tier's 5-events/day/league cap during busy qualifying windows.
-- Uruguayan Segunda División (`uru.2`)
-- English Rugby League Super League (`super-league`) — a 12-team, ~27-round season well past the free tier's caps
-
-The `tsdb_tier` column in `schema.sql` classifies each league as `free` or `premium`.
-
-AFL was formerly a TSDB premium league but is now served by the free [Squiggle](squiggle) provider. NRL and Super Rugby Pacific also migrated from TSDB to ESPN. Super League stays on TSDB: ESPN's `rugby-league` tree carries only the NRL.
+The `tsdb_tier` column that used to classify leagues as `free`/`premium` is retired (values cleared at schema v92; the column is dropped one release later).
 
 ## Configuration
 
-Add your premium key in **Settings > General > TheSportsDB API Key**. The key takes effect immediately (no restart required). The league picker shows a crown icon on premium-tier leagues and warns if you select one without a key configured.
+Add your premium key in **Settings > General > TheSportsDB API Key**. The key takes effect immediately (no restart required). Keyless, the league picker shows a crown icon on every TSDB league and warns if you select one.
 
 Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
-
-Routing TSDB through Settings → Proxy does not change its API tier. Configure a
-premium TheSportsDB key to unlock the higher provider limits.
 
 ## Supported Leagues
 
 TSDB serves **49 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
-| League | Code | TSDB ID | Sport | Tier |
+| League | Code | TSDB ID | Sport |
 |--------|------|---------|-------|------|
-| Unrivaled | `unrivaled` | 5622 | Basketball | Free |
-| Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey | Free |
-| Boxing | `boxing` | 4445 | Boxing | Free |
-| Major League Cricket | `mlc` | 5401 | Cricket | Free |
-| WPBL | `wpbl` | 5929 | Baseball | Free |
-| Swedish Hockey League | `shl` | 4419 | Hockey | Premium |
-| Indian Premier League | `ipl` | 4460 | Cricket | Premium |
-| Big Bash League | `bbl` | 4461 | Cricket | Premium |
-| South Africa Twenty20 (SA20) | `sa20` | 5532 | Cricket | Premium |
-| Svenska Cupen | `svenska-cupen` | 4756 | Soccer | Premium |
-| Canadian Premier League | `can.1` | 4820 | Soccer | Premium |
-| Swedish Superettan | `swe.2` | 4403 | Soccer | Premium |
-| Swedish Division 1 North | `swe.3.n` | 4674 | Soccer | Premium |
-| Swedish Division 1 South | `swe.3.s` | 4845 | Soccer | Premium |
-| Icelandic Úrvalsdeild karla | `ice.1` | 4642 | Soccer | Premium |
-| Icelandic 1. deild karla | `ice.2` | 4906 | Soccer | Premium |
-| Venezuelan Segunda División | `ven.2` | 5659 | Soccer | Premium |
-| Gambia GFA League | `gam.1` | 5238 | Soccer | Premium |
-| Aruban Division di Honor | `arb.1` | 5230 | Soccer | Premium |
-| Northern Irish Premiership | `nifl.1` | 4659 | Soccer | Premium |
-| IMSA SportsCar Championship | `imsa` | 4488 | Motor Racing | Premium |
-| FIA World Endurance Championship | `wec` | 4413 | Motor Racing | Premium |
-| English Rugby League Super League | `super-league` | 4415 | Rugby | Premium |
+| Unrivaled | `unrivaled` | 5622 | Basketball |
+| Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey |
+| Boxing | `boxing` | 4445 | Boxing |
+| Major League Cricket | `mlc` | 5401 | Cricket |
+| WPBL | `wpbl` | 5929 | Baseball |
+| Swedish Hockey League | `shl` | 4419 | Hockey |
+| Indian Premier League | `ipl` | 4460 | Cricket |
+| Big Bash League | `bbl` | 4461 | Cricket |
+| South Africa Twenty20 (SA20) | `sa20` | 5532 | Cricket |
+| Svenska Cupen | `svenska-cupen` | 4756 | Soccer |
+| Canadian Premier League | `can.1` | 4820 | Soccer |
+| Swedish Superettan | `swe.2` | 4403 | Soccer |
+| Swedish Division 1 North | `swe.3.n` | 4674 | Soccer |
+| Swedish Division 1 South | `swe.3.s` | 4845 | Soccer |
+| Icelandic Úrvalsdeild karla | `ice.1` | 4642 | Soccer |
+| Icelandic 1. deild karla | `ice.2` | 4906 | Soccer |
+| Venezuelan Segunda División | `ven.2` | 5659 | Soccer |
+| Gambia GFA League | `gam.1` | 5238 | Soccer |
+| Aruban Division di Honor | `arb.1` | 5230 | Soccer |
+| Northern Irish Premiership | `nifl.1` | 4659 | Soccer |
+| IMSA SportsCar Championship | `imsa` | 4488 | Motor Racing |
+| FIA World Endurance Championship | `wec` | 4413 | Motor Racing |
+| English Rugby League Super League | `super-league` | 4415 | Rugby |
 
 ## Event Resolution
 
 TSDB uses a three-step fallback chain when fetching events:
 
 1. **`eventsday.php`** — date-specific lookup (primary, works for most leagues)
-2. **`eventsnextleague.php`** — upcoming events filtered by date (fallback)
+2. **`eventsnextleague.php`** — upcoming events filtered by date (fallback; kept after the premium-only change because `eventsday` queries by league *name* while this queries by *ID*, guarding against provider-side name drift)
 3. **`eventsseason.php`** — full-season events filtered by date (last resort, gated to sparse leagues like Unrivaled where the day endpoints return nothing)
 
 ### Racing Leagues (IMSA, WEC)
@@ -120,9 +89,6 @@ groups these by `(strSeason, intRound)` into the same `Event(sessions=[...],
 circuit_name=...)` shape the racing pipeline expects from ESPN/static
 providers — one EPG program block per session (Practice, Qualifying,
 Hyperpole, Race).
-
-Both racing leagues are gated premium — see the free-cap rationale under
-[Premium Tier Leagues](#premium-tier-leagues) above.
 
 ## Rate Limiting
 

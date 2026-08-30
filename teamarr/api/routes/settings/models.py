@@ -285,10 +285,13 @@ class TSDBKeyValidationRequest(BaseModel):
 
 
 class TSDBKeyValidationResponse(BaseModel):
-    """Response from TSDB API key validation."""
+    """Response from TSDB API key validation.
+
+    TSDB is premium-key only (#676): validity is the only signal, the old
+    is_premium flag is gone.
+    """
 
     valid: bool
-    is_premium: bool = False
     message: str
 
 

@@ -71,7 +71,7 @@ The filter is **league-scoped**: it only affects leagues where you've selected a
 Custom Leagues let you add a competition Teamarr doesn't ship with. They live inside Subscriptions and are powered by [TheSportsDB](https://www.thesportsdb.com/).
 
 {: .note }
-> Custom Leagues require a **TheSportsDB premium key**. The tile is hidden until you add one in **Settings → General → TheSportsDB API Key**. TheSportsDB's free tier returns too few upcoming events to build a reliable guide, so the premium key is a hard requirement.
+> Custom Leagues require a **TheSportsDB premium key** — the same key every TSDB league now needs (TheSportsDB's free tier is deprecated). The tile is hidden until you add one in **Settings → General → TheSportsDB API Key**.
 
 ### Adding a custom league
 

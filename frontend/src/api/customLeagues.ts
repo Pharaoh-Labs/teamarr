@@ -15,7 +15,6 @@ export interface CustomLeague {
   display_name: string
   sport: string
   event_type: string
-  tsdb_tier: string | null
   enabled: number
   /** False = exists but the global subscription won't match its events (#240). */
   subscribed: boolean
@@ -28,7 +27,6 @@ export interface CustomLeagueCreate {
   display_name: string
   sport: string
   event_type?: string | null
-  tsdb_tier?: string | null
   allow_empty?: boolean
 }
 

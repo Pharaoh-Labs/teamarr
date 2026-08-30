@@ -56,16 +56,9 @@ Manually trigger a full generation run without waiting for the schedule.
 
 ## TheSportsDB API Key
 
-Optional premium API key for TheSportsDB — used for TSDB league coverage, adding [Custom Leagues](../subscriptions#custom-leagues) (a premium key is the gate for that whole feature), and higher rate limits.
+**Required for every TheSportsDB-sourced league.** TheSportsDB's free tier was deprecated in v2.15 — without a key, TSDB leagues produce no events and no team channels, the league picker crowns them, and a startup log lists any subscribed ones. The same key gates [Custom Leagues](../subscriptions#custom-leagues). A premium key is ~$9/month (100 req/min, full event coverage + team schedules) — get one at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
-| Tier | Rate Limit | Coverage |
-|------|------------|----------|
-| **Free** | 30 req/min | Rolling single next/last game per league; no team schedules |
-| **Premium** | 100 req/min | Full event coverage + team schedules |
-
-A handful of TSDB leagues (CFL, Unrivaled, boxing, Norwegian Fjordkraft-ligaen, WPBL) are classified free-tier: without a key their games still appear via event-source channels, but only as each becomes the league's next game (short lead time), and **team channels stay empty without a premium key**. Most TSDB-sourced leagues are premium-tier — the crown icon in the league picker is the authoritative marker, and [Supported Leagues](../../reference/supported-leagues) lists tiers per league. See [TSDB free-tier details](../../reference/providers/tsdb#how-the-free-tier-actually-behaves-in-teamarr). Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
-
-A saved key displays masked (`********`); type over it to replace it. The **Premium** badge in the card header only means a key is stored — it isn't a validated tier. To actually verify a key, **retype it and click Validate**, which tests it against TSDB live and reports the real tier (clicking Validate on the masked placeholder will report invalid).
+A saved key displays masked (`********`); type over it to replace it. The **Configured** badge in the card header only means a key is stored — it isn't validated. To actually verify a key, **retype it and click Validate**, which tests it against TSDB live (clicking Validate on the masked placeholder will report invalid).
 
 See [TSDB Provider](../../reference/providers/tsdb) for technical details.
 

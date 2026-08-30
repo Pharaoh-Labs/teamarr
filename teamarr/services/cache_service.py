@@ -38,7 +38,6 @@ class LeagueInfo:
     logo_url_dark: str | None = None
     import_enabled: bool = False
     league_alias: str | None = None  # Short display alias (e.g., 'EPL', 'UCL')
-    tsdb_tier: str | None = None  # 'free', 'premium', or None (non-TSDB)
 
 
 @dataclass
@@ -175,7 +174,6 @@ class CacheService:
                 logo_url_dark=lg.logo_url_dark,
                 import_enabled=lg.import_enabled,
                 league_alias=lg.league_alias,
-                tsdb_tier=lg.tsdb_tier,
             )
             for lg in leagues
         ]

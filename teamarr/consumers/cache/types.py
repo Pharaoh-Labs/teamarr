@@ -47,4 +47,3 @@ class LeagueEntry:
     team_count: int
     import_enabled: bool = False  # Show in team importer
     league_alias: str | None = None  # Short display alias (e.g., 'EPL', 'UCL')
-    tsdb_tier: str | None = None  # 'free', 'premium', or None (non-TSDB)
