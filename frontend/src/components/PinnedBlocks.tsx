@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ArrowDown, ArrowUp, LoaderCircle, Pin, Plus, Trash2 } from "lucide-react"
+import { LoaderCircle, Pin, Plus, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +27,6 @@ import {
   useDeleteNumberingException,
   useNumberingExceptions,
   useNumberingPreview,
-  useReorderNumberingExceptions,
   useUpdateNumberingException,
 } from "@/hooks/useNumberingExceptions"
 import type { NumberingException, NumberingScope } from "@/api/numberingExceptions"
@@ -36,9 +35,10 @@ import type { TeamFilterEntry } from "@/api/types"
 /**
  * Channels → Numbering → Pinned Blocks (#333).
  *
- * A block pins a team / league / sport to a fixed channel start; rows sharing a
- * start + label form a group. Most specific wins (team › league › sport), then
- * list order. Everything unmatched numbers from the global range. Edits arm a
+ * A block pins a team / league / sport to a fixed channel start. A start belongs
+ * to one block; rows may share a start only under the same group name (the
+ * server rejects any other collision). Most specific wins (team › league ›
+ * sport). Everything unmatched numbers from the global range. Edits arm a
  * re-grid in sticky modes, so the change lands on the next generation.
  */
 
@@ -57,7 +57,6 @@ const SCOPE_VARIANT: Record<NumberingScope, "default" | "secondary" | "outline">
 export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
   const { data: blocks, isLoading } = useNumberingExceptions()
   const { data: preview } = useNumberingPreview()
-  const reorder = useReorderNumberingExceptions()
   const remove = useDeleteNumberingException()
   const update = useUpdateNumberingException()
   const { data: sportsData } = useSports()
@@ -66,18 +65,6 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
   const [addOpen, setAddOpen] = useState(false)
 
   const sorted = useMemo(() => blocks ?? [], [blocks])
-
-  const move = async (index: number, dir: -1 | 1) => {
-    const next = [...sorted]
-    const j = index + dir
-    if (j < 0 || j >= next.length) return
-    ;[next[index], next[j]] = [next[j], next[index]]
-    try {
-      await reorder.mutateAsync(next.map((b) => b.id))
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reorder")
-    }
-  }
 
   const onDelete = async (b: NumberingException) => {
     try {
@@ -117,8 +104,9 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
             <CardDescription>
               Give a team, league, or sport its own block of channel numbers. Everything else
               numbers from the channel range start ({rangeStart}). Most specific wins:
-              Team › League › Sport; use the arrows to break ties. Blocks spill forward if
-              they fill up.
+              Team › League › Sport. Each start belongs to one block — to put a team first
+              inside its league&apos;s block, use Priority Teams below. Blocks spill forward
+              if they fill up.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -137,31 +125,11 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
           </p>
         ) : (
           <div className="border rounded-md divide-y">
-            {sorted.map((b, i) => (
+            {sorted.map((b) => (
               <div
                 key={b.id}
                 className={`flex items-center gap-3 px-3 py-2 ${b.enabled ? "" : "opacity-60"}`}
               >
-                <div className="flex flex-col">
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                    disabled={i === 0 || reorder.isPending}
-                    onClick={() => move(i, -1)}
-                    aria-label="Move up"
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                    disabled={i === sorted.length - 1 || reorder.isPending}
-                    onClick={() => move(i, 1)}
-                    aria-label="Move down"
-                  >
-                    <ArrowDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
                 <Input
                   type="number"
                   min={1}
@@ -445,7 +413,8 @@ function AddBlockDialog({
             </div>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
-            Blocks that share a group name and start share one block of numbers.
+            Each start belongs to one block. To share a block between several teams, leagues,
+            or sports, give them the same group name and start.
           </p>
 
           {showEnd ? (

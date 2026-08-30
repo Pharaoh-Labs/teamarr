@@ -39,13 +39,16 @@ A pinned block gives a **team**, **league**, or **sport** its own block of chann
 
 Rules:
 
-- **Most specific wins.** A channel goes to the team block if either team is pinned, else the league block, else the sport block, else the channel range. When both teams are pinned, the **home** team's block wins; among equals, the block higher in the list wins — use the arrows to reorder.
+- **Most specific wins.** A channel goes to the team block if either team is pinned, else the league block, else the sport block, else the channel range. When both teams are pinned, the **home** team's block wins.
+- **Each start belongs to one block.** Teamarr refuses a second block at a start that's already taken unless both carry the same group name (then they share it). Pinning "Brewers at 550" *and* "MLB at 550" is not a way to put the Brewers first — it would merge both into one block in normal lineup order. To float a team to the top of its league's block, add it under [Priority Teams](#channel-ordering); to give it its own numbers, pick a different start.
 - **A team pin follows the team everywhere** — league games and cup games alike, matched by name within the sport (the same rule Priority Teams use).
 - **Feeds stay together.** Home/away feeds and keyword variants of one game land on adjacent numbers inside the block, exactly as in the channel range.
 - **Blocks spill forward.** A block with more channels than room simply continues past its start; the next block skips over it (you'll see a ⚠ in the effective-layout preview). Set an **end channel** (under *advanced*) if you'd rather overflow into the channel range.
 - **Disable** a block with its switch to keep it without applying it.
 
-Block changes are saved immediately and queue a re-grid in Gapped/Strict modes, so they take effect on the next generation. The **effective layout** strip under the list shows where today's channels would land under the current blocks.
+Block changes are saved immediately and queue a re-grid in Gapped/Strict modes, so they take effect on the next generation. The list is shown in placement order (lowest start first), and the **effective layout** strip under it shows where today's channels would land under the current blocks.
+
+Inside every block, channels follow the same [channel ordering](#channel-ordering) as the range: priority teams first, then sport and league order, then start time. A **sport** block is the simplest way to keep all of one sport together — soccer at 500 numbers every soccer league back-to-back in your league order, with no per-league starts to maintain.
 
 {: .note }
 **Upgrading from Manual mode.** Manual mode's per-league starting channels became league-scoped pinned blocks automatically — same starts, same numbers. Leagues that had no configured start now share the channel range in priority order instead of each restarting at the range start (which could hand two leagues the same number).
@@ -93,11 +96,11 @@ Number Stability applies **inside every pinned block** as well as the channel ra
 
 Channel ordering controls *where channels land in the lineup* — distinct from [Stream Priority](stream-priority), which orders streams *inside* a channel.
 
-**Priority Teams** — add teams here and their channels float to the very top of the channel list, ahead of all sport/league/time ordering. A team floats up wherever it plays (league and cup), matched by name within its sport. This is purely an ordering preference — it has no connection to the [Teams](../epg/teams) page or EPG generation.
+**Priority Teams** — add teams here and their channels float to the top of whichever block they number in: the top of the channel range, or the top of their league's pinned block if one exists (pin MLB at 550 and make the Brewers a priority team, and every Brewers game sits at the start of the MLB block). A team floats up wherever it plays (league and cup), matched by name within its sport. This is purely an ordering preference — it has no connection to the [Teams](../epg/teams) page or EPG generation.
 
-The **Sort Priority Order** list lets you drag and drop sports and leagues into your preferred order. Higher items get lower channel numbers. Click **Auto-populate** to pre-fill with all currently subscribed sports and leagues.
+**Sport & League Order** — the order sports and leagues take inside the channel range and inside every pinned block. Drag sports to reorder; expand a sport to reorder its leagues. Higher in the list = lower channel numbers; games within a league sort by start time; sports and leagues not in the list go last. Click **Auto-populate** to pre-fill with all currently subscribed sports and leagues.
 
-The full order is: **Priority Teams → Sport → League → Event time**, with two deterministic tie-breakers after that — event id, then main channel before its keyword variants (your Spanish feed always sorts right after the main channel).
+The full order, applied inside each block and inside the range, is: **Priority Teams → Sport → League → Event time**, with two deterministic tie-breakers after that — event id, then main channel before its keyword variants (your Spanish feed always sorts right after the main channel).
 
 {: .note }
 Channel numbers are updated on the next EPG generation run.

@@ -1,8 +1,9 @@
 import { api } from "./client"
 
 // Pinned channel-number blocks (#333). A block numbers a team / league / sport
-// from a fixed start; rows sharing start + label form a group. Everything
-// unmatched numbers from the global channel range.
+// from a fixed start; a start belongs to one block, and rows may share a start
+// only under the same group name. Everything unmatched numbers from the global
+// channel range.
 
 export type NumberingScope = "team" | "league" | "sport"
 
@@ -74,12 +75,6 @@ export async function updateNumberingException(
 
 export async function deleteNumberingException(id: number): Promise<{ success: boolean }> {
   return api.delete(`/numbering-exceptions/${id}`)
-}
-
-export async function reorderNumberingExceptions(
-  orderedIds: number[]
-): Promise<{ success: boolean }> {
-  return api.put("/numbering-exceptions/reorder", { ordered_ids: orderedIds })
 }
 
 export async function getNumberingPreview(): Promise<LanePreview[]> {

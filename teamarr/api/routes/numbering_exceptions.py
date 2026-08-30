@@ -1,8 +1,9 @@
 """Numbering exceptions (pinned channel-number blocks, #333) endpoints.
 
-CRUD over ``numbering_exceptions`` plus a reorder endpoint (UI drag order is
-the within-level tie-break) and an effective-layout preview that shows where
-today's channels would land under the current blocks.
+CRUD over ``numbering_exceptions`` plus an effective-layout preview that shows
+where today's channels would land under the current blocks. A start belongs
+to one block (or one named group); conflicting starts are rejected with a
+400 whose detail says what to do instead.
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -10,10 +11,10 @@ from pydantic import BaseModel, Field
 
 from teamarr.database import get_db
 from teamarr.database.numbering_exceptions import (
+    StartConflict,
     add_numbering_exception,
     delete_numbering_exception,
     get_numbering_exceptions,
-    reorder_numbering_exceptions,
     update_numbering_exception,
 )
 
@@ -72,10 +73,6 @@ class NumberingExceptionUpdate(BaseModel):
     label: str | None = None
     clear_label: bool = False
     enabled: bool | None = None
-
-
-class NumberingExceptionReorder(BaseModel):
-    ordered_ids: list[int]
 
 
 class LanePreviewModel(BaseModel):
@@ -144,27 +141,30 @@ def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
 
 @router.get("", response_model=list[NumberingExceptionModel])
 def list_numbering_exceptions():
-    """List pinned blocks in precedence order (drag order)."""
+    """List pinned blocks in placement order (ascending start)."""
     with get_db() as conn:
         return _with_counts(conn, get_numbering_exceptions(conn))
 
 
 @router.post("", response_model=NumberingExceptionModel)
 def create_numbering_exception(data: NumberingExceptionCreate):
-    """Add a pinned block."""
+    """Add a pinned block. 400 if the start is already used by another block."""
     with get_db() as conn:
-        created = add_numbering_exception(
-            conn,
-            scope=data.scope,
-            start=data.start,
-            end=data.end,
-            label=data.label,
-            sport=data.sport,
-            league_code=data.league_code,
-            provider=data.provider,
-            provider_team_id=data.team_id,
-            team_league=data.team_league,
-        )
+        try:
+            created = add_numbering_exception(
+                conn,
+                scope=data.scope,
+                start=data.start,
+                end=data.end,
+                label=data.label,
+                sport=data.sport,
+                league_code=data.league_code,
+                provider=data.provider,
+                provider_team_id=data.team_id,
+                team_league=data.team_league,
+            )
+        except StartConflict as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
         if created is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -174,14 +174,6 @@ def create_numbering_exception(data: NumberingExceptionCreate):
                 ),
             )
         return _with_counts(conn, [created])[0]
-
-
-@router.put("/reorder")
-def reorder(data: NumberingExceptionReorder):
-    """Persist drag order (the tie-break within a precedence level)."""
-    with get_db() as conn:
-        reorder_numbering_exceptions(conn, data.ordered_ids)
-    return {"success": True}
 
 
 @router.get("/preview", response_model=list[LanePreviewModel])
@@ -233,16 +225,21 @@ def preview_layout():
 
 @router.put("/{exception_id}", response_model=NumberingExceptionModel)
 def update(exception_id: int, data: NumberingExceptionUpdate):
-    """Update a block's start / end / label / enabled."""
+    """Update a block's start / end / label / enabled. 400 on a start conflict."""
     with get_db() as conn:
-        updated = update_numbering_exception(
-            conn,
-            exception_id,
-            start=data.start,
-            end=None if data.clear_end else (data.end if data.end is not None else ...),
-            label=None if data.clear_label else (data.label if data.label is not None else ...),
-            enabled=data.enabled,
-        )
+        try:
+            updated = update_numbering_exception(
+                conn,
+                exception_id,
+                start=data.start,
+                end=None if data.clear_end else (data.end if data.end is not None else ...),
+                label=None
+                if data.clear_label
+                else (data.label if data.label is not None else ...),
+                enabled=data.enabled,
+            )
+        except StartConflict as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
         if updated is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

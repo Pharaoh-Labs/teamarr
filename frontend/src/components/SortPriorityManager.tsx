@@ -34,7 +34,8 @@ function teamKey(provider: string, teamId: string, league: string | null | undef
 
 /**
  * Priority Teams — a team-level tier that floats a followed team's channels to
- * the top of the global channel list, ahead of sport/league/time ordering.
+ * the top of whichever block they land in (a pinned block or the channel
+ * range), ahead of sport/league/time ordering.
  * Reuses TeamPicker: the saved list IS the picker's selection; add/remove diff
  * against the server list and fire the matching mutation.
  */
@@ -92,9 +93,10 @@ function PriorityTeamsCard() {
       <CardHeader>
         <CardTitle className="text-base">Priority Teams</CardTitle>
         <CardDescription>
-          Channels for these teams float to the top of the channel list, before any
-          sport/league/time ordering. A team floats up wherever it plays. Ordering only —
-          unrelated to the Teams page or EPG.
+          Channels for these teams float to the top of whichever block they number in —
+          the channel range, or their league&apos;s pinned block — ahead of the sport/league/time
+          order. A team floats up wherever it plays. Ordering only — unrelated to the Teams
+          page or EPG.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -231,9 +233,12 @@ export function SortPriorityManager({ showWhenSortBy = "sport_league_time", curr
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Sort Priority Order</CardTitle>
+              <CardTitle className="text-base">Sport &amp; League Order</CardTitle>
               <CardDescription>
-                Drag sports to reorder. Expand to reorder leagues within each sport.
+                The order sports and leagues take inside the channel range and inside every
+                pinned block: higher in this list = lower channel numbers. Games within a
+                league sort by start time. Drag sports to reorder; expand to reorder leagues
+                within each sport. Unlisted sports/leagues go last.
               </CardDescription>
             </div>
             <Button
