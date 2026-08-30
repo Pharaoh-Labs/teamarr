@@ -628,7 +628,13 @@ def test_epg_tennis_tournament_only_is_matchup_unknown():
     name = [MatchedStreamResult(stream_name="ESPN", stream_id=1, matched=False,
                                 exclusion_reason="teams_not_parsed")]
     merged = m._reconcile_epg(name, [], "espn")
-    assert merged[0].exclusion_reason == "tennis_matchup_unknown"
+    # #683: a real FailedReason now (the old exclusion_reason overwrite
+    # persisted as the bare "unmatched" catch-all); exclusion stays intact.
+    from teamarr.consumers.matching.result import FailedReason
+
+    assert merged[0].failed_reason == FailedReason.TENNIS_MATCHUP_UNKNOWN
+    assert merged[0].detail
+    assert merged[0].exclusion_reason == "teams_not_parsed"
 
 
 def test_epg_tennis_pair_without_tournament_is_matchup_unknown():

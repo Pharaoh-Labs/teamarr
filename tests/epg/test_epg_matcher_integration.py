@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from teamarr.consumers.matching.classifier import StreamCategory
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
 from teamarr.consumers.matching.matcher import MatchedStreamResult
-from teamarr.consumers.matching.result import MatchMethod, MatchOutcome
+from teamarr.consumers.matching.result import FailedReason, MatchMethod, MatchOutcome
 from teamarr.dispatcharr.types import DispatcharrProgram
 from tests.fakes import make_stream_matcher
 
@@ -592,3 +592,77 @@ def test_description_fallback_league_hint_scopes_scan(monkeypatch):
 
     out = m._match_via_epg(1, "Sky Sports UHD", "sky", date(2026, 8, 3))
     assert [o.event.id for o in out] == ["epl1"]
+
+
+# ========================================= #683: unmatched EPG pass diagnosis
+
+
+def test_epg_no_match_records_programme_summary(monkeypatch):
+    progs = [
+        _prog(sub="Chicago Cubs at St. Louis Cardinals", start=BASE),
+        _prog(cats=("Sports non-event",), start=BASE + timedelta(hours=4)),
+    ]
+    index = EPGProgramIndex({"espn": progs})
+    m = _bare_matcher(index)
+    monkeypatch.setattr(
+        m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
+    )
+    assert m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1)) == []
+    detail = m._epg_no_match["espn"]
+    assert "2 programme(s)" in detail
+    assert "1 attempted" in detail
+    assert "1 non-event" in detail
+    assert "Chicago Cubs at St. Louis Cardinals" in detail
+
+
+def test_reconcile_unmatched_linear_carries_no_epg_program_match(monkeypatch):
+    """The bare-"unmatched" rows (#683): guide had programmes, none bound."""
+    index = EPGProgramIndex({"espn": [_prog(), _prog(start=BASE + timedelta(hours=4))]})
+    m = _bare_matcher(index)
+    monkeypatch.setattr(
+        m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
+    )
+    epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+    assert epg == []
+    # Two streams mirroring one linear channel both carry the diagnosis
+    # (the summary is keyed by tvg_id, not popped by the first stream).
+    for _ in range(2):
+        name = [_result(matched=False)]
+        out = m._reconcile_epg(name, epg, "espn")
+        assert out[0].failed_reason == FailedReason.NO_EPG_PROGRAM_MATCH
+        assert "programme(s) in window" in (out[0].detail or "")
+
+
+def test_reconcile_keeps_specific_name_failure():
+    """A name-path verdict with evidence is more specific — never overridden."""
+    index = EPGProgramIndex({"espn": [_prog(), _prog(start=BASE + timedelta(hours=4))]})
+    m = _bare_matcher(index)
+    m._epg_no_match["espn"] = "EPG: 2 programme(s) in window, 2 attempted, 0 non-event"
+    name = [_result(matched=False)]
+    name[0].failed_reason = FailedReason.NO_EVENT_FOUND
+    name[0].detail = "near-miss: Cubs at Cardinals 95/100"
+    out = m._reconcile_epg(name, [], "espn")
+    assert out[0].failed_reason == FailedReason.NO_EVENT_FOUND
+    assert out[0].detail == "near-miss: Cubs at Cardinals 95/100"
+
+
+def test_reconcile_no_programmes_leaves_result_untouched():
+    index = EPGProgramIndex({"espn": []})
+    m = _bare_matcher(index)
+    name = [_result(matched=False)]
+    name[0].exclusion_reason = "name_match_disabled"
+    out = m._reconcile_epg(name, [], "espn")
+    assert out[0].failed_reason is None
+    assert out[0].exclusion_reason == "name_match_disabled"
+
+
+def test_reconcile_matched_stream_gets_no_failure_diagnosis(monkeypatch):
+    """A matched stream must never be stamped with an EPG failure reason."""
+    index = EPGProgramIndex({"espn": [_prog(), _prog(start=BASE + timedelta(hours=4))]})
+    m = _bare_matcher(index)
+    m._epg_no_match["espn"] = "EPG: 2 programme(s) in window, 2 attempted, 0 non-event"
+    name = [_result(matched=True)]
+    out = m._reconcile_epg(name, [], "espn")
+    assert out[0].failed_reason is None

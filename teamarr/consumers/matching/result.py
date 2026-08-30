@@ -120,6 +120,12 @@ class FailedReason(Enum):
     # court) — the matchup cannot be known, so nothing is bound (mf7.9).
     TENNIS_MATCHUP_UNKNOWN = "tennis_matchup_unknown"
 
+    # EPG path (#683): the guide channel had programmes in the window and the
+    # matcher attempted them, but none bound to an event. Carries a programme
+    # summary in detail so a miss is diagnosable from the failure row — the
+    # rows that used to land as the bare "unmatched" catch-all.
+    NO_EPG_PROGRAM_MATCH = "no_epg_program_match"
+
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
 
@@ -447,6 +453,7 @@ FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.NO_TENNIS_MATCH: "No matching tennis match",
     FailedReason.TENNIS_TOURNAMENT_MISMATCH: "Stream names a different tournament",
     FailedReason.TENNIS_MATCHUP_UNKNOWN: "Tennis matchup not known",
+    FailedReason.NO_EPG_PROGRAM_MATCH: "No guide programme matched",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 
