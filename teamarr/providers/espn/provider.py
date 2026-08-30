@@ -23,7 +23,6 @@ from teamarr.core import (
     Venue,
 )
 from teamarr.core.sports import normalize_sport
-from teamarr.providers.base_client import BullpenConfig
 from teamarr.providers.espn.client import ESPN_TEAM_ID_CORRECTIONS, ESPNClient
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
 from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
@@ -45,9 +44,8 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         self,
         client: ESPNClient | None = None,
         league_mapping_source: LeagueMappingSource | None = None,
-        bullpen: BullpenConfig | None = None,
     ):
-        self._client = client or ESPNClient(bullpen=bullpen)
+        self._client = client or ESPNClient()
         self._league_mapping_source = league_mapping_source
         # Optional cached, league-wide events fetcher injected by SportsDataService.
         # When set, the future-day team scan reuses the shared per-(league, date)

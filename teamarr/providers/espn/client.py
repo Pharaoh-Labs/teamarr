@@ -12,7 +12,7 @@ Configuration via environment variables:
 import logging
 import os
 
-from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
+from teamarr.providers.base_client import BaseHTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,6 @@ class ESPNClient(BaseHTTPClient):
         timeout: float | None = None,
         retry_count: int | None = None,
         max_connections: int | None = None,
-        bullpen: BullpenConfig | None = None,
     ):
         super().__init__(
             timeout=timeout if timeout is not None else ESPN_TIMEOUT,
@@ -89,13 +88,10 @@ class ESPNClient(BaseHTTPClient):
                 max_connections if max_connections is not None else ESPN_MAX_CONNECTIONS
             ),
             headers={"User-Agent": ESPN_USER_AGENT},
-            bullpen=bullpen,
         )
-        # site.api.espn.com -> bullpen target "espn-site"; sports.core.api.espn.com
-        # (UFC athletes and season-tree endpoints) -> bullpen target "espn-core".
-        self._base_url = bullpen_rewrite(ESPN_BASE_URL, "espn-site", bullpen)
-        self._core_url = bullpen_rewrite(ESPN_CORE_URL, "espn-core", bullpen)
-        self._ufc_athlete_url = bullpen_rewrite(ESPN_UFC_ATHLETE_URL, "espn-core", bullpen)
+        self._base_url = ESPN_BASE_URL
+        self._core_url = ESPN_CORE_URL
+        self._ufc_athlete_url = ESPN_UFC_ATHLETE_URL
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
         label = url.split("/sports/")[-1] if "/sports/" in url else url

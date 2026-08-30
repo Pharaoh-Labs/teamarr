@@ -106,20 +106,14 @@ The settings table is a single row with 133 columns, organized into these groups
 | `default_channel_profile_ids` | JSON | Default channel profiles |
 | `default_stream_profile_id` | null | Default stream profile |
 
-### Bullpen Proxy
+### Provider SOCKS5 Proxy
 
 | Column | Default | Description |
 |--------|---------|-------------|
-| `bullpen_enabled` | 0 | Master switch for the [bullpen](../providers/bullpen) proxy |
-| `bullpen_api_key` | null | Sent as `X-Bullpen-Key` on proxied requests |
-| `bullpen_base_url` | `https://bullpen.direct` | Proxy base URL |
-| `bullpen_espn_enabled` | 0 | Route ESPN requests through bullpen |
-| `bullpen_bellmedia_enabled` | 0 | Route Bell Media CFL requests through bullpen |
-| `bullpen_squiggle_enabled` | 0 | Route Squiggle requests through bullpen |
-| `bullpen_nascar_enabled` | 0 | Route NASCAR requests through bullpen |
-| `bullpen_mlbstats_enabled` | 0 | Route MLB Stats requests through bullpen |
-| `bullpen_hockeytech_enabled` | 0 | Route HockeyTech requests through bullpen |
-| `bullpen_tsdb_enabled` | 0 | Route TheSportsDB requests through bullpen; also makes `is_premium` report `True` |
+| `proxy_enabled` | 0 | Master switch for provider SOCKS5 routing |
+| `proxy_url` | null | Credential-bearing `socks5://` URL, masked by the API |
+| `proxy_user_agent` | null | Optional User-Agent override for all provider requests |
+| `proxy_excluded_providers` | `[]` | Registered provider names that bypass the proxy |
 
 ## Database Modules
 

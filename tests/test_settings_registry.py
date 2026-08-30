@@ -100,7 +100,7 @@ def test_pydantic_models_field_parity():
         ("emby", m.EmbySettingsModel, m.EmbySettingsUpdate),
         ("jellyfin", m.JellyfinSettingsModel, m.JellyfinSettingsUpdate),
         ("channelsdvr", m.ChannelsDVRSettingsModel, m.ChannelsDVRSettingsUpdate),
-        ("bullpen", m.BullpenSettingsModel, m.BullpenSettingsUpdate),
+        ("proxy", m.ProxySettingsModel, m.ProxySettingsUpdate),
     ]
     # Update models may carry control flags that are not persisted fields.
     control_flags = {"clear_include_teams", "clear_exclude_teams"}

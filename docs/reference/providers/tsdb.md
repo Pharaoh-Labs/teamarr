@@ -66,7 +66,8 @@ Add your premium key in **Settings > General > TheSportsDB API Key**. The key ta
 
 Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
-Alternatively, enabling TSDB in [Bullpen](bullpen) settings (`/bullpen`) counts as holding a premium key — `is_premium` reports `True` and requests route through bullpen's `thesportsdb` target — independent of whether `tsdb_api_key` is also set.
+Routing TSDB through Settings → Proxy does not change its API tier. Configure a
+premium TheSportsDB key to unlock the higher provider limits.
 
 ## Supported Leagues
 

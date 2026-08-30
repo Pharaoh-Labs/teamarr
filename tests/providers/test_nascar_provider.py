@@ -13,8 +13,6 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from teamarr.providers.base_client import BullpenConfig
-from teamarr.providers.nascar import provider as nascar_provider
 from teamarr.providers.nascar.provider import NASCARProvider, _session_code_and_name
 
 # ---------------------------------------------------------------------------
@@ -384,43 +382,6 @@ def test_fresh_cache_not_refetched():
     p._fetch = lambda url: calls.append(url)
     p.get_events("nascar-cup", date(2026, 2, 15))
     assert calls == []
-
-
-def test_bullpen_401_retries_then_disables(monkeypatch):
-    calls = []
-    disabled = []
-
-    class _Response:
-        status_code = 401
-
-    class _Client:
-        def __init__(self, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def get(self, url):
-            calls.append(url)
-            return _Response()
-
-    monkeypatch.setattr(nascar_provider.httpx, "Client", _Client)
-    monkeypatch.setattr(nascar_provider.time, "sleep", lambda s: None)
-    bullpen = BullpenConfig(
-        api_key="key",
-        base_url="https://proxy.test",
-        on_unauthorized=lambda: disabled.append(True),
-    )
-    provider = NASCARProvider(bullpen=bullpen)
-
-    url = "https://proxy.test/v1/nascar/cacher/2026/1/race_list_basic.json"
-    assert provider._fetch(url) is None
-    assert len(calls) == 3
-    assert bullpen.disabled is True
-    assert disabled == [True]
 
 
 # ---------------------------------------------------------------------------

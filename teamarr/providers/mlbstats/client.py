@@ -13,7 +13,7 @@ import os
 from datetime import date
 from typing import Any
 
-from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
+from teamarr.providers.base_client import BaseHTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,6 @@ class MLBStatsClient(BaseHTTPClient):
         timeout: float | None = None,
         retry_count: int | None = None,
         max_connections: int | None = None,
-        bullpen: BullpenConfig | None = None,
     ):
         super().__init__(
             timeout=timeout if timeout is not None else MLBSTATS_TIMEOUT,
@@ -50,9 +49,8 @@ class MLBStatsClient(BaseHTTPClient):
             max_connections=(
                 max_connections if max_connections is not None else MLBSTATS_MAX_CONNECTIONS
             ),
-            bullpen=bullpen,
         )
-        self._base_url = bullpen_rewrite(self.BASE_URL, "mlb-stats", bullpen)
+        self._base_url = self.BASE_URL
 
     def _request(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
         return self._request_json(f"{self._base_url}{path}", params, label=path)

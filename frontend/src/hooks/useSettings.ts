@@ -43,8 +43,9 @@ import {
   testChannelsDVRConnection,
   getChannelsDVRSources,
   getChannelsDVRLineups,
-  getBullpenSettings,
-  updateBullpenSettings,
+  getProxyProviders,
+  getProxySettings,
+  updateProxySettings,
 } from "@/api/settings"
 
 // ---------------------------------------------------------------------------
@@ -175,10 +176,11 @@ export const useUpdateChannelsDVRSettings = settingsMutationHook(updateChannelsD
   ["channelsdvr", "lineups"],
 ])
 
-export const useBullpenSettings = settingsQueryHook("bullpen", getBullpenSettings)
-export const useUpdateBullpenSettings = settingsMutationHook(updateBullpenSettings, [
-  ["settings", "bullpen"],
+export const useProxySettings = settingsQueryHook("proxy", getProxySettings)
+export const useUpdateProxySettings = settingsMutationHook(updateProxySettings, [
+  ["settings", "proxy"],
 ])
+export const useProxyProviders = settingsQueryHook("proxy-providers", getProxyProviders)
 
 // ---------------------------------------------------------------------------
 // Connection tests (no cache interaction)

@@ -31,26 +31,13 @@ class DispatcharrSettings:
 
 
 @dataclass
-class BullpenSettings:
-    """Bullpen proxy settings (https://bullpen.direct).
-
-    Optional caching proxy that fronts several provider upstreams behind a
-    single API key. Master switch + key/base URL, plus one enable flag per
-    supported provider (all default off).
-    """
+class ProxySettings:
+    """SOCKS5 policy for provider upstream requests only."""
 
     enabled: bool = False
-    api_key: str | None = None
-    base_url: str = "https://bullpen.direct"
-    disabled_reason: str | None = None
-    disabled_at: str | None = None
-    espn_enabled: bool = False
-    bellmedia_enabled: bool = False
-    squiggle_enabled: bool = False
-    nascar_enabled: bool = False
-    mlbstats_enabled: bool = False
-    hockeytech_enabled: bool = False
-    tsdb_enabled: bool = False
+    url: str | None = None
+    user_agent: str | None = None
+    excluded_providers: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -405,6 +392,6 @@ class AllSettings:
     emby: EmbySettings = field(default_factory=EmbySettings)
     jellyfin: JellyfinSettings = field(default_factory=JellyfinSettings)
     channelsdvr: ChannelsDVRSettings = field(default_factory=ChannelsDVRSettings)
-    bullpen: BullpenSettings = field(default_factory=BullpenSettings)
+    proxy: ProxySettings = field(default_factory=ProxySettings)
     epg_generation_counter: int = 0
     schema_version: int = 52

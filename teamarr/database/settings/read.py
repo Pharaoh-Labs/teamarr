@@ -15,7 +15,6 @@ from .registry import GROUPS, GroupSpec
 from .types import (
     AllSettings,
     BackupSettings,
-    BullpenSettings,
     ChannelNumberingSettings,
     ChannelsDVRSettings,
     DispatcharrSettings,
@@ -25,6 +24,7 @@ from .types import (
     FeedSeparationSettings,
     JellyfinSettings,
     LifecycleSettings,
+    ProxySettings,
     SchedulerSettings,
     StreamFilterSettings,
     StreamOrderingSettings,
@@ -169,6 +169,6 @@ def get_channelsdvr_settings(conn: Connection) -> ChannelsDVRSettings:
     return _get_group(conn, "channelsdvr")
 
 
-def get_bullpen_settings(conn: Connection) -> BullpenSettings:
-    """Get bullpen proxy settings."""
-    return _get_group(conn, "bullpen")
+def get_proxy_settings(conn: Connection) -> ProxySettings:
+    """Get provider SOCKS5 proxy settings."""
+    return _get_group(conn, "proxy")
