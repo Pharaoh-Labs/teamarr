@@ -305,7 +305,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         current_version = 88
 
     if current_version < 89:
-        _advance_version(conn, 89, "reconciliation: Bullpen disable status")
+        _advance_version(conn, 89, "reconciliation: legacy proxy status")
         current_version = 89
 
     if current_version < 90:
@@ -315,6 +315,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             _migrate_v90_consolidate_group_subruns,
         )
         current_version = 90
+
+    if current_version < 91:
+        _advance_version(conn, 91, "reconciliation: provider proxy settings")
+        current_version = 91
 
 
 # =============================================================================

@@ -154,6 +154,9 @@ def _run_startup_tasks():
         startup_state.set_phase(StartupPhase.INITIALIZING)
         league_mapping_service = init_league_mapping_service(get_db)
         ProviderRegistry.initialize(league_mapping_service)
+        from teamarr.providers import reload_provider_request_policy
+
+        reload_provider_request_policy()
         logger.info("[STARTUP] League mapping service and providers initialized")
 
         # One-time migrations: Clear UFC caches for segment fixes

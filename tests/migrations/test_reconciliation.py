@@ -347,6 +347,40 @@ class TestFullSchemaReconciliation:
         assert "subscription_soccer_mode" in cols
         assert "subscription_soccer_followed_teams" in cols
 
+    def test_proxy_columns_are_added_without_removing_legacy_columns(self):
+        """Proxy settings arrive through reconciliation without erasing saved legacy data."""
+        from teamarr.database.migrations import _run_migrations
+        from tests.helpers import SCHEMA_PATH
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript(
+            """
+            CREATE TABLE settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                schema_version INTEGER DEFAULT 90,
+                bullpen_enabled BOOLEAN DEFAULT 1,
+                bullpen_api_key TEXT
+            );
+            INSERT INTO settings (id, schema_version, bullpen_api_key)
+            VALUES (1, 90, 'legacy-secret');
+            """
+        )
+
+        reconcile_schema(conn, SCHEMA_PATH.read_text())
+        _run_migrations(conn)
+
+        row = conn.execute(
+            "SELECT schema_version, proxy_enabled, proxy_url, proxy_user_agent, "
+            "proxy_excluded_providers, bullpen_api_key FROM settings WHERE id = 1"
+        ).fetchone()
+        assert row["schema_version"] == 91
+        assert row["proxy_enabled"] == 0
+        assert row["proxy_url"] is None
+        assert row["proxy_user_agent"] is None
+        assert row["proxy_excluded_providers"] == "[]"
+        assert row["bullpen_api_key"] == "legacy-secret"
+
         conn.close()
 
 

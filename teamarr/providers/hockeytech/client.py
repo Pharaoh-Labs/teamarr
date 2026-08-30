@@ -14,7 +14,7 @@ import logging
 from datetime import date, timedelta
 
 from teamarr.core.interfaces import LeagueMappingSource
-from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -97,17 +97,15 @@ class HockeyTechClient(BaseHTTPClient):
         league_mapping_source: LeagueMappingSource | None = None,
         timeout: float = 10.0,
         retry_count: int = 3,
-        bullpen: BullpenConfig | None = None,
     ):
         super().__init__(
             timeout=timeout,
             retry_count=retry_count,
             max_connections=100,
             max_keepalive_connections=50,
-            bullpen=bullpen,
         )
         self._league_mapping_source = league_mapping_source
-        self._base_url = bullpen_rewrite(HOCKEYTECH_BASE_URL, "hockeytech", bullpen)
+        self._base_url = HOCKEYTECH_BASE_URL
         self._cache = TTLCache()
 
     def supports_league(self, league: str) -> bool:

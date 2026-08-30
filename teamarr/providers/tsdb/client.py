@@ -35,14 +35,7 @@ from datetime import date, datetime
 import httpx
 
 from teamarr.core import LeagueMappingSource
-from teamarr.providers.base_client import (
-    BULLPEN_UNAUTHORIZED_ATTEMPTS,
-    BaseHTTPClient,
-    BullpenConfig,
-    bullpen_headers,
-    bullpen_rewrite,
-    is_bullpen_url,
-)
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities import call_metrics
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
@@ -254,21 +247,18 @@ class TSDBClient(BaseHTTPClient):
         retry_count: int = 3,
         retry_delay: float = 1.0,
         requests_per_minute: int = 30,  # TSDB free tier limit
-        bullpen: BullpenConfig | None = None,
     ):
         super().__init__(
             timeout=timeout,
             retry_count=retry_count,
             max_connections=10,
             max_keepalive_connections=5,
-            bullpen=bullpen,
         )
         self._league_mapping_source = league_mapping_source
         self._explicit_key = api_key
         self._retry_delay = retry_delay
         self._requests_per_minute = requests_per_minute
-        self._bullpen_enabled = bullpen is not None
-        self._base_url = bullpen_rewrite(TSDB_BASE_URL, "thesportsdb", bullpen)
+        self._base_url = TSDB_BASE_URL
         # Rate limiter initialized lazily after we can check is_premium
         self._rate_limiter: RateLimiter | None = None
         self._cache = TTLCache()
@@ -286,8 +276,8 @@ class TSDBClient(BaseHTTPClient):
 
     @property
     def is_premium(self) -> bool:
-        """Check if using premium API key or bullpen (bullpen counts as premium)."""
-        return self._bullpen_enabled or self._api_key != self.FREE_API_KEY
+        """Check if using a premium API key."""
+        return self._api_key != self.FREE_API_KEY
 
     def _get_rate_limiter(self) -> RateLimiter:
         """Get or create rate limiter (lazy init to check is_premium)."""
@@ -317,9 +307,6 @@ class TSDBClient(BaseHTTPClient):
         Never fails due to rate limits - always waits and continues.
         All waits are tracked in rate_limit_stats() for UI feedback.
         """
-        if self._bullpen and self._bullpen.disabled:
-            return None
-
         # Wait for rate limit slot (preemptive)
         rate_limiter = self._get_rate_limiter()
         rate_limiter.acquire()
@@ -330,23 +317,7 @@ class TSDBClient(BaseHTTPClient):
         for attempt in range(self._retry_count + self.BACKOFF_MAX_RETRIES):
             try:
                 client = self._get_client()
-                headers = bullpen_headers(url, self._bullpen)
-                if headers:
-                    response = client.get(url, params=params, headers=headers)
-                else:
-                    response = client.get(url, params=params)
-
-                if response.status_code == 401 and is_bullpen_url(url, self._bullpen):
-                    if attempt < BULLPEN_UNAUTHORIZED_ATTEMPTS - 1:
-                        time.sleep(self._retry_delay * (attempt + 1))
-                        continue
-                    logger.error(
-                        "[TSDB] Bullpen unauthorized after %d attempts; disabling proxy",
-                        BULLPEN_UNAUTHORIZED_ATTEMPTS,
-                    )
-                    if self._bullpen:
-                        self._bullpen.disable()
-                    return None
+                response = client.get(url, params=params)
 
                 # Handle rate limit response (reactive) with exponential backoff
                 if response.status_code == 429:

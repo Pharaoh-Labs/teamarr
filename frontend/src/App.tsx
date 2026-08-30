@@ -23,7 +23,6 @@ import {
   EventGroupForm,
   EventGroupImport,
   Settings,
-  BullpenSettings,
 } from "@/pages"
 
 const queryClient = new QueryClient({
@@ -98,10 +97,6 @@ function AppContent() {
 
             {/* Settings (system/integration) */}
             <Route path="settings" element={<Settings />} />
-
-            {/* Bullpen proxy settings — deliberately no NAV_ITEMS entry;
-                only reachable by navigating to /bullpen directly. */}
-            <Route path="bullpen" element={<BullpenSettings />} />
 
             {/* Legacy URL redirects — keep bookmarks & in-app links working */}
             <Route path="event-groups" element={<Redirect to="/sources" />} />

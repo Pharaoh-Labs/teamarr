@@ -24,9 +24,8 @@ Requests include `brand=tsn` and `lang=en`. The provider uses the league
 calendar to resolve a requested date to a weekly schedule group, then filters
 that group locally. Event detail uses the numeric TSN event ID.
 
-Teamarr can optionally route these JSON requests through the [Bullpen](bullpen)
-proxy's `bellmedia` target. This preserves the `/v2` path and adds Bullpen's
-`X-Bullpen-Key` header; the direct public API remains the default.
+Teamarr can optionally route these JSON requests through Settings → Proxy using
+a SOCKS5 transport. The direct public API remains the default.
 
 This is an unofficial API discovered from TSN's public scores page. It may
 change without notice. OHL and PWHL remain on HockeyTech because it provides

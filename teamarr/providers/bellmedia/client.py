@@ -8,7 +8,7 @@ import logging
 from datetime import date
 
 from teamarr.core.interfaces import LeagueMapping, LeagueMappingSource
-from teamarr.providers.base_client import BaseHTTPClient, BullpenConfig, bullpen_rewrite
+from teamarr.providers.base_client import BaseHTTPClient
 from teamarr.utilities.cache import TTLCache, make_cache_key
 
 logger = logging.getLogger(__name__)
@@ -32,11 +32,10 @@ class BellMediaClient(BaseHTTPClient):
         league_mapping_source: LeagueMappingSource | None = None,
         timeout: float = 10.0,
         retry_count: int = 3,
-        bullpen: BullpenConfig | None = None,
     ):
-        super().__init__(timeout=timeout, retry_count=retry_count, bullpen=bullpen)
+        super().__init__(timeout=timeout, retry_count=retry_count)
         self._league_mapping_source = league_mapping_source
-        self._base_url = bullpen_rewrite(BELLMEDIA_BASE_URL, "bellmedia", bullpen)
+        self._base_url = BELLMEDIA_BASE_URL
         self._cache = TTLCache()
 
     def supports_league(self, league: str) -> bool:

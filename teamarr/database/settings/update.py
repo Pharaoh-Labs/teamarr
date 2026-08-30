@@ -550,41 +550,23 @@ def update_channelsdvr_settings(
     return _apply(conn, "channelsdvr", provided)
 
 
-def update_bullpen_settings(
+def update_proxy_settings(
     conn: Connection,
     enabled: bool | None = None,
-    api_key: str | None | object = _NOT_PROVIDED,
-    base_url: str | None = None,
-    disabled_reason: str | None | object = _NOT_PROVIDED,
-    disabled_at: str | None | object = _NOT_PROVIDED,
-    espn_enabled: bool | None = None,
-    bellmedia_enabled: bool | None = None,
-    squiggle_enabled: bool | None = None,
-    nascar_enabled: bool | None = None,
-    mlbstats_enabled: bool | None = None,
-    hockeytech_enabled: bool | None = None,
-    tsdb_enabled: bool | None = None,
+    url: str | None | object = _NOT_PROVIDED,
+    user_agent: str | None | object = _NOT_PROVIDED,
+    excluded_providers: list[str] | None | object = _NOT_PROVIDED,
 ) -> bool:
-    """Update bullpen proxy settings (only provided fields)."""
-    provided = _skip_none(
-        enabled=enabled,
-        base_url=base_url,
-        espn_enabled=espn_enabled,
-        bellmedia_enabled=bellmedia_enabled,
-        squiggle_enabled=squiggle_enabled,
-        nascar_enabled=nascar_enabled,
-        mlbstats_enabled=mlbstats_enabled,
-        hockeytech_enabled=hockeytech_enabled,
-        tsdb_enabled=tsdb_enabled,
-    )
+    """Update provider SOCKS5 proxy settings (only provided fields)."""
+    provided = _skip_none(enabled=enabled)
     provided.update(
         _skip_missing(
-            api_key=api_key,
-            disabled_reason=disabled_reason,
-            disabled_at=disabled_at,
+            url=url,
+            user_agent=user_agent,
+            excluded_providers=excluded_providers,
         )
     )
-    return _apply(conn, "bullpen", provided)
+    return _apply(conn, "proxy", provided)
 
 
 def update_backup_settings(

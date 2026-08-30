@@ -8,13 +8,15 @@ import { GeneralTab } from "./settings/tabs/GeneralTab"
 import { DispatcharrTab } from "./settings/tabs/DispatcharrTab"
 import { MediaServersTab } from "./settings/tabs/MediaServersTab"
 import { AdvancedTab } from "./settings/tabs/AdvancedTab"
+import { ProxyTab } from "./settings/tabs/ProxyTab"
 
-type SettingsTab = "general" | "dispatcharr" | "media-servers" | "advanced"
+type SettingsTab = "general" | "dispatcharr" | "media-servers" | "proxy" | "advanced"
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "dispatcharr", label: "Dispatcharr" },
   { id: "media-servers", label: "Media Servers" },
+  { id: "proxy", label: "Proxy" },
   { id: "advanced", label: "Advanced" },
 ]
 
@@ -62,6 +64,7 @@ export function Settings() {
         {activeTab === "general" && <GeneralTab settings={settings} />}
         {activeTab === "dispatcharr" && <DispatcharrTab initial={settings.dispatcharr} />}
         {activeTab === "media-servers" && <MediaServersTab />}
+        {activeTab === "proxy" && <ProxyTab />}
         {activeTab === "advanced" && <AdvancedTab />}
       </div>
     </div>

@@ -286,20 +286,12 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Premium key ($9/mo) gives 100 req/min and higher limits
     tsdb_api_key TEXT,
 
-    -- Bullpen proxy (https://bullpen.direct) - optional caching proxy for provider upstreams
-    -- Master switch + key/base URL, plus per-provider opt-in (all default off)
-    bullpen_enabled BOOLEAN DEFAULT 0,
-    bullpen_api_key TEXT,
-    bullpen_base_url TEXT DEFAULT 'https://bullpen.direct',
-    bullpen_disabled_reason TEXT,
-    bullpen_disabled_at TEXT,
-    bullpen_espn_enabled BOOLEAN DEFAULT 0,
-    bullpen_bellmedia_enabled BOOLEAN DEFAULT 0,
-    bullpen_squiggle_enabled BOOLEAN DEFAULT 0,
-    bullpen_nascar_enabled BOOLEAN DEFAULT 0,
-    bullpen_mlbstats_enabled BOOLEAN DEFAULT 0,
-    bullpen_hockeytech_enabled BOOLEAN DEFAULT 0,
-    bullpen_tsdb_enabled BOOLEAN DEFAULT 0,
+    -- SOCKS5 proxy policy for provider upstreams only. All providers use it
+    -- when enabled unless their name appears in proxy_excluded_providers.
+    proxy_enabled BOOLEAN DEFAULT 0,
+    proxy_url TEXT,
+    proxy_user_agent TEXT,
+    proxy_excluded_providers JSON DEFAULT '[]',
 
     -- Channel ID Format
     channel_id_format TEXT DEFAULT '{team_name|pascal}.{league_id}',
@@ -476,7 +468,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 90
+    schema_version INTEGER DEFAULT 91
 );
 
 -- Insert default settings
