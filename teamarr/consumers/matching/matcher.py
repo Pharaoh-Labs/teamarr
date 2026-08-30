@@ -395,6 +395,12 @@ class StreamMatcher:
         # tvg_id (mf7.9) — surfaced on the linear stream's result in
         # _reconcile_epg when nothing else matched.
         self._epg_tennis_unknown: dict[str, list[str]] = {}
+        # Per-tvg_id summary of an EPG pass that attempted programmes but
+        # matched none (#683) — surfaced as NO_EPG_PROGRAM_MATCH + detail on
+        # the linear stream's failure row instead of the bare catch-all.
+        # Keyed (not popped): mirrors of one linear channel share the tvg_id
+        # and every one of them should carry the same diagnosis.
+        self._epg_no_match: dict[str, str] = {}
 
         # League event types + sports cache
         self._league_event_types: dict[str, str] = {}
@@ -948,6 +954,7 @@ class StreamMatcher:
         programs = self._epg_index.programs_for(tvg_id) if self._epg_index is not None else []
         attempted = 0
         skipped_non_event = 0
+        attempted_titles: list[str] = []
         for program in programs:
             if not should_attempt(program):
                 skipped_non_event += 1
@@ -955,6 +962,7 @@ class StreamMatcher:
             attempted += 1
 
             epg_input = build_match_input(program)
+            attempted_titles.append(epg_input)
             # NOTE: event_league_sport is deliberately NOT passed here. One
             # guide programme ("Wimbledon, Day 7") covers MANY concurrent
             # matches, so routing programme titles through the tennis
@@ -1111,6 +1119,15 @@ class StreamMatcher:
                     best_by_event[key] = (skew_s, outcome, eff_classified)
 
         plan = [(o, c) for _, o, c in best_by_event.values()]
+        if programs and not plan:
+            # Nothing on this guide channel bound to an event — record what
+            # the pass actually saw so the failure row is diagnosable (#683).
+            sample = " | ".join(t[:60] for t in attempted_titles[:3])
+            self._epg_no_match[tvg_id] = (
+                f"EPG: {len(programs)} programme(s) in window, {attempted} attempted, "
+                f"{skipped_non_event} non-event"
+                + (f"; e.g. {sample}" if sample else "")
+            )
         if programs:
             tennis_unknown = len(self._epg_tennis_unknown.get(tvg_id, ()))
             logger.info(
@@ -1183,16 +1200,30 @@ class StreamMatcher:
           name found nothing (a static-named single-event stream).
         """
         epg_matched = [r for r in epg_results if r.matched]
-        # Tennis programmes that had no resolvable matchup (mf7.9): when the
-        # stream ends up unmatched, say so instead of the generic name-match
-        # failure — the guide DID carry tennis, it just didn't say which match.
-        unknown = self._epg_tennis_unknown.pop(tvg_id, None)
-        if unknown and not epg_matched and not any(r.matched for r in name_results):
+        name_matched = any(r.matched for r in name_results)
+        if not epg_matched and not name_matched:
+            # The stream will persist as a failure — say what the EPG pass
+            # actually saw (#683) instead of the bare catch-all. Only rows
+            # without a real failure/filter verdict are upgraded: a name-path
+            # NO_EVENT_FOUND with near-miss detail is more specific and wins.
+            # .get, not .pop: mirrors sharing the tvg_id all get the reason.
+            unknown = self._epg_tennis_unknown.get(tvg_id)
+            no_match = self._epg_no_match.get(tvg_id)
             for r in name_results:
-                r.exclusion_reason = FailedReason.TENNIS_MATCHUP_UNKNOWN.value
+                if r.failed_reason is not None or r.filtered_reason is not None:
+                    continue
+                if unknown:
+                    # Tennis programmes with no resolvable matchup (mf7.9):
+                    # the guide DID carry tennis, it just didn't say which
+                    # match. A real FailedReason now — the old exclusion_reason
+                    # overwrite persisted as bare "unmatched" (#683).
+                    r.failed_reason = FailedReason.TENNIS_MATCHUP_UNKNOWN
+                    r.detail = "; ".join(unknown[:3])
+                elif no_match:
+                    r.failed_reason = FailedReason.NO_EPG_PROGRAM_MATCH
+                    r.detail = no_match
         if self._epg_index is not None and self._epg_index.is_linear(tvg_id):
             return epg_matched if epg_matched else name_results
-        name_matched = any(r.matched for r in name_results)
         if not name_matched and epg_matched:
             return epg_matched
         return name_results

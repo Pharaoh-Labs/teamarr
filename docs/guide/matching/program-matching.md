@@ -180,6 +180,7 @@ Work down this list:
 3. **Do the streams resolve to a guide?** They must match by a linked Dispatcharr channel, direct tvg_id, or an exact normalized name against an **active** imported EPG. Channels with no EPG coverage can't match — unless the provider is Xtream and you enable the **XC provider EPG fallback** (Matching → Provider EPG Backup).
 4. **Is anything actually on?** Check the channel's guide — overnight/offseason slots are mostly replays and studio shows, which are skipped by design.
 5. **Are the leagues subscribed?** The program's game must map to an event in a league you follow.
+6. **Read the failure row.** A linear channel whose guide programmes were attempted but matched nothing is recorded as **"No guide programme matched"** with a summary in its detail — how many programmes were in the window, how many were attempted vs skipped as non-events, and sample titles. That detail (in Run History and support bundles) usually answers which of the questions above applies.
 
 ---
 
