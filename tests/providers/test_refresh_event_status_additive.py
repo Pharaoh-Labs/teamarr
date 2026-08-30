@@ -149,6 +149,37 @@ class TestRefreshIsAdditive:
         # Empty broadcasts from summary shouldn't wipe the original list.
         assert result.broadcasts == ["FOX"]
 
+    def test_zero_score_overlays_from_fresh(self):
+        """#680: a shutout side's 0 is a real score, not a missing value.
+
+        The overlay's falsy check treated a fresh 0 like None and fell back to
+        the original's pre-game None, leaving {home_team_score} and
+        {final_score} empty whenever a team was shut out.
+        """
+        original = _make_event(status_state="in_progress")  # scores still None
+        fresh = _make_event(status_state="final", home_score=0, away_score=3)
+        service = SportsDataService(providers=[])
+        with (
+            patch.object(service, "get_event", return_value=fresh),
+            patch.object(service._cache, "delete"),
+        ):
+            result = service.refresh_event_status(original)
+        assert result.home_score == 0
+        assert result.away_score == 3
+
+    def test_zero_zero_draw_overlays_from_fresh(self):
+        """#680 edge: 0-0 (a soccer draw in progress) populates both sides."""
+        original = _make_event(status_state="scheduled")
+        fresh = _make_event(status_state="in_progress", home_score=0, away_score=0)
+        service = SportsDataService(providers=[])
+        with (
+            patch.object(service, "get_event", return_value=fresh),
+            patch.object(service._cache, "delete"),
+        ):
+            result = service.refresh_event_status(original)
+        assert result.home_score == 0
+        assert result.away_score == 0
+
     def test_static_fields_never_replaced(self):
         original = _make_event()
         # Adversarial fresh: pretend summary returned wrong league/sport/start_time.

@@ -726,6 +726,12 @@ class SportsDataService:
                 # when present, even if state is unchanged (other status fields
                 # like clock/period may have updated).
                 overlay[field_name] = fresh_val if fresh_val is not None else orig_val
+            elif field_name in ("home_score", "away_score"):
+                # A score of 0 is a real value (#680): the falsy check below
+                # made a shutout side's fresh 0 fall back to the original —
+                # None before the game — so {home_team_score}/{final_score}
+                # rendered empty. For scores, only None means "not provided".
+                overlay[field_name] = fresh_val if fresh_val is not None else orig_val
             else:
                 overlay[field_name] = fresh_val if fresh_val else orig_val
         return replace(event, **overlay)
