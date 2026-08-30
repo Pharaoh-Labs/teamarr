@@ -115,8 +115,8 @@ export function ChannelNumbering() {
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground px-1">
         Rules are listed most-specific first — a channel takes the first one that matches
-        it. Priority Teams and Pinned Blocks save as you edit; the rest save with the button
-        at the bottom.
+        it. The first three sections save as you edit; Everything Else and Number Stability
+        save with the button at the bottom.
       </p>
 
       {/* 1. Priority Teams — team-level float (own table, saved immediately) */}

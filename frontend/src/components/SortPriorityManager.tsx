@@ -1,8 +1,18 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { LoaderCircle, Star, Trash2, WandSparkles } from "lucide-react"
+import { LoaderCircle, Plus, Star, Trash2, WandSparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { RadioCards } from "@/components/ui/radio-cards"
 import { Select } from "@/components/ui/select"
 import { useSports } from "@/hooks/useSports"
 import { getSportDisplayName } from "@/lib/utils"
@@ -36,9 +46,9 @@ interface SortPriorityManagerProps {
 }
 
 const SCOPE_OPTIONS: { value: PriorityTeamScope; label: string; hint: string }[] = [
-  { value: "league", label: "Top of its league", hint: "first among its league's games" },
-  { value: "sport", label: "Top of its sport", hint: "first among every league in its sport" },
-  { value: "all", label: "Top of everything", hint: "ahead of every sport and league" },
+  { value: "league", label: "Top of its league", hint: "First among its league's games; sport and league order untouched." },
+  { value: "sport", label: "Top of its sport", hint: "First among every league in its sport." },
+  { value: "all", label: "Top of everything", hint: "Ahead of every sport and league." },
 ]
 
 /**
@@ -67,11 +77,19 @@ export function PriorityTeamsCard() {
     [leagueData],
   )
 
-  const onAdd = async (picked: TeamFilterEntry[]) => {
-    const team = picked[picked.length - 1]
+  const [addOpen, setAddOpen] = useState(false)
+  const [pick, setPick] = useState<TeamFilterEntry[]>([])
+  const [pickScope, setPickScope] = useState<PriorityTeamScope>("league")
+
+  const onAdd = async () => {
+    const team = pick[0]
     if (!team) return
     try {
-      await addMutation.mutateAsync({ team, scope: "league" })
+      await addMutation.mutateAsync({ team, scope: pickScope })
+      toast.success(`${team.name} added — re-grid queued for the next generation`)
+      setPick([])
+      setPickScope("league")
+      setAddOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add priority team")
     }
@@ -96,15 +114,22 @@ export function PriorityTeamsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Star className="h-4 w-4" /> Priority Teams
-        </CardTitle>
-        <CardDescription>
-          Float a team&apos;s games to the top of its league, its sport, or everything.
-          A team floats up wherever it plays (league and cup). Inside a pinned block the
-          float applies within that block. Ordering only — unrelated to the Teams page or
-          EPG.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Star className="h-4 w-4" /> Priority Teams
+            </CardTitle>
+            <CardDescription>
+              Float a team&apos;s games to the top of its league, its sport, or everything.
+              A team floats up wherever it plays (league and cup). Inside a pinned block the
+              float applies within that block. Ordering only — unrelated to the Teams page
+              or EPG.
+            </CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Add team
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (
@@ -153,14 +178,57 @@ export function PriorityTeamsCard() {
             No priority teams. Games number in Sport &amp; League order, then by start time.
           </p>
         )}
-        <TeamPicker
-          leagues={leagues}
-          selectedTeams={[]}
-          onSelectionChange={onAdd}
-          placeholder="Add a priority team…"
-          singleSelect
-        />
       </CardContent>
+
+      <Dialog
+        open={addOpen}
+        onOpenChange={(v) => {
+          if (!v) {
+            setPick([])
+            setPickScope("league")
+          }
+          setAddOpen(v)
+        }}
+      >
+        <DialogContent className="max-w-lg" onClose={() => setAddOpen(false)}>
+          <DialogHeader>
+            <DialogTitle>Add priority team</DialogTitle>
+            <DialogDescription>
+              Pick a team and how far its games float in the lineup.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <RadioCards
+              name="priority-scope"
+              value={pickScope}
+              onChange={(v) => setPickScope(v as PriorityTeamScope)}
+              options={SCOPE_OPTIONS.map((o) => ({
+                value: o.value,
+                label: o.label,
+                description: o.hint,
+              }))}
+            />
+            <div className="space-y-2">
+              <Label>Team</Label>
+              <TeamPicker
+                leagues={leagues}
+                selectedTeams={pick}
+                onSelectionChange={(t) => setPick(t.slice(-1))}
+                placeholder="Pick a team…"
+                singleSelect
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={onAdd} disabled={pick.length !== 1 || addMutation.isPending}>
+              {addMutation.isPending ? "Adding…" : "Add team"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
@@ -283,7 +351,7 @@ export function SportLeagueOrderCard({ showWhenSortBy = "sport_league_time", cur
             <div>
               <CardTitle className="text-base">Sport &amp; League Order</CardTitle>
               <CardDescription>
-                The order sports and leagues take inside the channel range and inside every
+                The order sports and leagues take inside Everything Else and inside every
                 pinned block: higher in this list = lower channel numbers. Games within a
                 league sort by start time. Drag sports to reorder; expand to reorder leagues
                 within each sport. Unlisted sports/leagues go last.
