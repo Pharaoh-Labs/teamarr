@@ -468,7 +468,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 90
+    schema_version INTEGER DEFAULT 91
 );
 
 -- Insert default settings
