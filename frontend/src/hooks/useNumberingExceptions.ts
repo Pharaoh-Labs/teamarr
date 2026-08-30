@@ -4,7 +4,6 @@ import {
   createNumberingException,
   updateNumberingException,
   deleteNumberingException,
-  reorderNumberingExceptions,
   getNumberingPreview,
 } from "@/api/numberingExceptions"
 import type {
@@ -53,14 +52,6 @@ export function useDeleteNumberingException() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => deleteNumberingException(id),
-    onSuccess: invalidate,
-  })
-}
-
-export function useReorderNumberingExceptions() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (ids: number[]) => reorderNumberingExceptions(ids),
     onSuccess: invalidate,
   })
 }

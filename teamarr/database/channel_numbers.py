@@ -437,8 +437,11 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         if p.league_code is not None
     }
 
-    # Priority teams: (sport_lower, team_name_lower) keys; a channel floats to the
-    # top if either its home or away team matches one (see channel_priority_teams).
+    # Priority teams: {(sport_lower, team_name_lower): scope}; a channel floats
+    # when either its home or away team matches one. The scope decides *where*
+    # the float tier slots into the key: 'all' ahead of sport order, 'sport'
+    # ahead of league order within its sport, 'league' ahead of time within its
+    # league (see channel_priority_teams).
     priority_keys = get_priority_team_match_keys(conn)
 
     # 2. Get all channels from enabled groups with event info.
@@ -494,7 +497,8 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             }
         )
 
-    # 3. Sort by: priority team → sport priority → league priority → time → event_id → keyword
+    # 3. Sort by: priority team (all) → sport → priority team (sport) → league →
+    #    priority team (league) → time → event_id → keyword
     def sort_key(ch):
         sport = ch.get("sport") or ""
         league = ch.get("league") or ""
@@ -505,12 +509,15 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         sport_lower = sport.lower()
         league_lower = league.lower()
 
-        # Priority-team tier (0 = priority, 1 = normal): match either team by name
-        # within sport. Sorts first so followed teams lead, then normal ordering.
+        # Priority-team tiers (0 = priority, 1 = normal), one per scope: match
+        # either team by name within sport; the broadest matching scope wins.
         home = (ch.get("home_team") or "").lower()
         away = (ch.get("away_team") or "").lower()
-        is_priority = (sport_lower, home) in priority_keys or (sport_lower, away) in priority_keys
-        priority_tier = 0 if is_priority else 1
+        sides = ((sport_lower, home), (sport_lower, away))
+        scopes = {priority_keys[k] for k in sides if k in priority_keys}
+        all_tier = 0 if "all" in scopes else 1
+        sport_tier = 0 if scopes & {"all", "sport"} else 1
+        league_tier = 0 if scopes else 1
 
         sport_pri = sport_order.get(sport_lower, 9999)
         league_pri = league_order.get((sport_lower, league_lower), 9999)
@@ -531,7 +538,10 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         # Main channel (no keyword) sorts before keyword channels
         keyword_sort = (0, "") if not keyword else (1, keyword)
 
-        return (priority_tier, sport_pri, league_pri, event_date, str(event_id), keyword_sort)
+        return (
+            all_tier, sport_pri, sport_tier, league_pri, league_tier,
+            event_date, str(event_id), keyword_sort,
+        )
 
     sorted_channels = sorted(channels, key=sort_key)
 

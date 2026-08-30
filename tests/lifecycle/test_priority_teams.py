@@ -17,6 +17,7 @@ from teamarr.database.priority_teams import (
     delete_priority_team,
     get_priority_team_match_keys,
     get_priority_teams,
+    update_priority_team_scope,
 )
 from tests.helpers import SCHEMA_PATH
 
@@ -83,7 +84,34 @@ def test_delete_removes_row(conn):
 
 def test_match_keys_are_sport_scoped_lowercase(conn):
     add_priority_team(conn, provider="espn", provider_team_id="364", league="eng.1")
-    assert get_priority_team_match_keys(conn) == {("soccer", "liverpool")}
+    # New teams default to floating within their league.
+    assert get_priority_team_match_keys(conn) == {("soccer", "liverpool"): "league"}
+
+
+def test_scope_update_and_validation(conn):
+    row = add_priority_team(conn, provider="espn", provider_team_id="364", league="eng.1")
+    assert row["scope"] == "league"
+    assert update_priority_team_scope(conn, row["id"], "sport")["scope"] == "sport"
+    assert update_priority_team_scope(conn, row["id"], "bogus") is None
+    assert update_priority_team_scope(conn, 9999, "all") is None
+    assert add_priority_team(
+        conn, provider="espn", provider_team_id="364", league="eng.1", scope="bogus"
+    ) is None
+    # Re-adding is idempotent and updates scope.
+    row = add_priority_team(conn, provider="espn", provider_team_id="364", league="eng.1",
+                            scope="all")
+    assert row["scope"] == "all"
+    assert get_priority_team_match_keys(conn) == {("soccer", "liverpool"): "all"}
+
+
+def test_existing_rows_without_scope_column_float_everywhere(conn):
+    """Pre-scope installs (column added by reconciliation, DEFAULT 'all') keep
+    today's behaviour; a bare test schema without the column reads as 'all'."""
+    conn.execute("ALTER TABLE channel_priority_teams RENAME TO cpt_old")
+    conn.execute("CREATE TABLE channel_priority_teams (id INTEGER PRIMARY KEY, sport TEXT, "
+                 "team_name TEXT)")
+    conn.execute("INSERT INTO channel_priority_teams (sport, team_name) VALUES ('soccer', 'X')")
+    assert get_priority_team_match_keys(conn) == {("soccer", "x"): "all"}
 
 
 # ---------------------------------------------------------------------------
@@ -142,3 +170,55 @@ def test_priority_does_not_cross_sports(conn):
     conn.commit()
     # soccer Liverpool prioritized; the football "Liverpool" channel must not float.
     assert [c["id"] for c in get_all_channels_sorted(conn)] == [1, 2]
+
+
+# ---------------------------------------------------------------------------
+# Float scope: all / sport / league
+# ---------------------------------------------------------------------------
+
+
+def _lineup(conn):
+    """Two sports, two leagues each; Liverpool's (soccer, eng.1) game is the
+    latest event in the lowest-priority league of the lowest-priority sport."""
+    conn.executescript(
+        """
+        INSERT INTO channel_sort_priorities (sport, league_code, sort_priority) VALUES
+          ('football', NULL, 0), ('football', 'nfl', 0),
+          ('soccer', NULL, 1), ('soccer', 'usa.1', 0), ('soccer', 'eng.1', 1);
+        """
+    )
+    _add_channel(conn, ch_id=1, sport="football", league="nfl",
+                 home="Lions", away="Bears", date="2026-02-01T12:00:00Z")
+    _add_channel(conn, ch_id=2, sport="soccer", league="usa.1",
+                 home="LAFC", away="Galaxy", date="2026-02-01T12:00:00Z")
+    _add_channel(conn, ch_id=3, sport="soccer", league="eng.1",
+                 home="Arsenal", away="Chelsea", date="2026-02-01T12:00:00Z")
+    _add_channel(conn, ch_id=4, sport="soccer", league="eng.1",
+                 home="Liverpool", away="Everton", date="2026-02-09T12:00:00Z")
+    conn.commit()
+    assert [c["id"] for c in get_all_channels_sorted(conn)] == [1, 2, 3, 4]
+
+
+def _order(conn):
+    return [c["id"] for c in get_all_channels_sorted(conn)]
+
+
+def test_scope_league_floats_within_league_only(conn):
+    _lineup(conn)
+    add_priority_team(conn, provider="espn", provider_team_id="364", league="eng.1",
+                      scope="league")
+    assert _order(conn) == [1, 2, 4, 3]
+
+
+def test_scope_sport_floats_above_other_leagues_in_sport(conn):
+    _lineup(conn)
+    add_priority_team(conn, provider="espn", provider_team_id="364", league="eng.1",
+                      scope="sport")
+    assert _order(conn) == [1, 4, 2, 3]
+
+
+def test_scope_all_floats_above_everything(conn):
+    _lineup(conn)
+    add_priority_team(conn, provider="espn", provider_team_id="364", league="eng.1",
+                      scope="all")
+    assert _order(conn) == [4, 1, 2, 3]

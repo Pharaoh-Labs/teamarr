@@ -458,7 +458,7 @@ def test_add_team_pin_resolves_from_cache_and_rejects_unknown():
     c = build()
     exc = pin(c, "team", 800, provider="espn", provider_team_id="8")
     assert (exc.team_name, exc.sport, exc.scope) == ("Detroit Lions", "football", "team")
-    assert ne.add_numbering_exception(c, scope="team", start=800, provider="espn",
+    assert ne.add_numbering_exception(c, scope="team", start=810, provider="espn",
                                       provider_team_id="nope") is None
 
 
@@ -466,7 +466,7 @@ def test_add_league_pin_resolves_sport():
     c = build()
     exc = pin(c, "league", 500, league_code="NFL")
     assert (exc.league_code, exc.sport) == ("nfl", "football")
-    assert ne.add_numbering_exception(c, scope="league", start=500, league_code="zzz") is None
+    assert ne.add_numbering_exception(c, scope="league", start=510, league_code="zzz") is None
 
 
 @pytest.mark.parametrize("kw", [
@@ -479,27 +479,68 @@ def test_validation_rejects(kw):
     assert ne.add_numbering_exception(c, **kw) is None
 
 
-def test_update_and_reorder():
+def test_update_range_and_label():
     c = build()
     a = pin(c, "league", 500, league_code="nfl")
-    b = pin(c, "league", 500, league_code="nba", label="Ball")
     upd = ne.update_numbering_exception(c, a.id, end=520, label="Football")
     assert (upd.end, upd.label) == (520, "Football")
     upd = ne.update_numbering_exception(c, a.id, end=None, label=None)
     assert (upd.end, upd.label) == (None, None)
     assert ne.update_numbering_exception(c, a.id, start=600, end=500) is None  # end < start
-    ne.reorder_numbering_exceptions(c, [b.id, a.id])
-    assert [e.id for e in ne.get_numbering_exceptions(c)] == [b.id, a.id]
 
 
-def test_list_order_follows_sort_order_not_start():
-    """The reorder arrows must visibly move rows: list order is sort_order, not start."""
+def test_list_order_is_placement_order():
+    """No reorder arrows any more: the list reads like the effective layout."""
     c = build()
     hi = pin(c, "league", 900, league_code="nfl")
     lo = pin(c, "league", 100, league_code="nba")
-    assert [e.id for e in ne.get_numbering_exceptions(c)] == [hi.id, lo.id]
-    ne.reorder_numbering_exceptions(c, [lo.id, hi.id])
     assert [e.id for e in ne.get_numbering_exceptions(c)] == [lo.id, hi.id]
-    # placement order is still by start
     resolver = ne.LaneResolver.load(c, cn._default_lane(c))
     assert [lane.start for lane in resolver.lanes()] == [100, 900, 101]
+
+
+# ---------------------------------------------------------------------------
+# A start belongs to one block (the "Brewers at 550 + MLB at 550" confusion)
+# ---------------------------------------------------------------------------
+
+
+def test_same_start_without_group_is_rejected():
+    c = build()
+    pin(c, "league", 550, league_code="mlb")
+    with pytest.raises(ne.StartConflict) as exc:
+        pin(c, "team", 550, provider="espn", provider_team_id="1", team_league="mlb")
+    assert "550" in str(exc.value) and "Priority Teams" in str(exc.value)
+    # Nothing was written.
+    assert len(ne.get_numbering_exceptions(c)) == 1
+
+
+def test_same_start_with_matching_group_is_allowed():
+    c = build()
+    pin(c, "league", 850, league_code="fifa.world", label="Big events")
+    pin(c, "league", 850, league_code="nhl", label="big events")  # case-insensitive
+    assert len(ne.get_numbering_exceptions(c)) == 2
+
+
+def test_same_start_with_different_group_is_rejected():
+    c = build()
+    pin(c, "league", 850, league_code="fifa.world", label="Big events")
+    with pytest.raises(ne.StartConflict) as exc:
+        pin(c, "league", 850, league_code="nhl", label="Hockey")
+    assert '"Big events"' in str(exc.value)
+    with pytest.raises(ne.StartConflict):
+        pin(c, "league", 850, league_code="nhl")  # no label at all
+
+
+def test_update_start_onto_another_block_is_rejected():
+    c = build()
+    a = pin(c, "league", 500, league_code="nfl")
+    b = pin(c, "league", 600, league_code="nba")
+    with pytest.raises(ne.StartConflict):
+        ne.update_numbering_exception(c, b.id, start=500)
+    assert ne.get_numbering_exception(c, b.id).start == 600
+    # Moving onto a group by adopting its label is fine.
+    ne.update_numbering_exception(c, a.id, label="Ball")
+    upd = ne.update_numbering_exception(c, b.id, start=500, label="Ball")
+    assert upd.start == 500
+    # Touching only `enabled` never re-validates (legacy same-start rows keep working).
+    assert ne.update_numbering_exception(c, b.id, enabled=False).enabled is False

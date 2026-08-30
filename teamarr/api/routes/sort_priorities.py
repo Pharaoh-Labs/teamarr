@@ -57,7 +57,7 @@ class AutoPopulateResponse(BaseModel):
 
 
 class PriorityTeamModel(BaseModel):
-    """A team whose channels float to the top of the global channel list."""
+    """A team whose channels float to the top of its scope in the lineup."""
 
     id: int
     provider: str
@@ -65,17 +65,25 @@ class PriorityTeamModel(BaseModel):
     team_name: str
     league: str | None = None
     sport: str
+    scope: str = "all"  # 'all' | 'sport' | 'league'
 
 
 class PriorityTeamCreate(BaseModel):
     """Add a priority team (a TeamPicker ``TeamFilterEntry``).
 
-    Name + sport are resolved server-side from ``team_cache``.
+    Name + sport are resolved server-side from ``team_cache``. ``scope`` is how
+    far the team floats: top of everything, of its sport, or of its league
+    (default).
     """
 
     provider: str
     team_id: str
     league: str | None = None
+    scope: str = "league"
+
+
+class PriorityTeamUpdate(BaseModel):
+    scope: str
 
 
 # =============================================================================
@@ -178,7 +186,7 @@ def create_sort_priority(data: SortPriorityCreate):
 
 @router.get("/teams", response_model=list[PriorityTeamModel])
 def get_priority_teams():
-    """List teams whose channels float to the top of the global channel list."""
+    """List priority teams and how far each floats (all / sport / league)."""
     from teamarr.database.priority_teams import get_priority_teams
 
     with get_db() as conn:
@@ -198,14 +206,32 @@ def add_priority_team(data: PriorityTeamCreate):
             provider=data.provider,
             provider_team_id=data.team_id,
             league=data.league,
+            scope=data.scope,
         )
 
     if team is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Team not found in cache — refresh the team directory and try again",
+            detail="Team not found in cache (or invalid scope) — refresh the team "
+            "directory and try again",
         )
 
+    return PriorityTeamModel(**team)
+
+
+@router.put("/teams/{team_pk}", response_model=PriorityTeamModel)
+def update_priority_team(team_pk: int, data: PriorityTeamUpdate):
+    """Change how far a priority team floats: 'all', 'sport', or 'league'."""
+    from teamarr.database.priority_teams import update_priority_team_scope
+
+    with get_db() as conn:
+        team = update_priority_team_scope(conn, team_pk, data.scope)
+
+    if team is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Priority team not found or invalid scope",
+        )
     return PriorityTeamModel(**team)
 
 

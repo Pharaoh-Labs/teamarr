@@ -51,7 +51,7 @@ For an **EPG-matched** event channel, **red is usually normal** — it just mean
 
 ### Channel numbers colliding with existing channels
 
-Teamarr automatically skips numbers used by non-Teamarr channels, but for a clean block set the **Channel Range Start** in [Channels → Numbering](channels/numbering) to a range that doesn't overlap your existing Dispatcharr channels.
+Teamarr automatically skips numbers used by non-Teamarr channels, but for a clean block set the **Everything Else Start** in [Channels → Numbering](channels/numbering) to a range that doesn't overlap your existing Dispatcharr channels.
 
 ### Stale logos in media server
 

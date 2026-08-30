@@ -8,8 +8,15 @@ channel range — the *default lane*.
 
 Every channel resolves to exactly one lane via :func:`resolve_lane`:
 most specific wins (home-team pin › away-team pin › league › sport ›
-default), ties broken by ``sort_order``. Resolution reads only fields that
-never change during an event, so a channel's lane is stable for its lifetime.
+default). Resolution reads only fields that never change during an event, so
+a channel's lane is stable for its lifetime.
+
+A start belongs to one block. Two rows may share a start only as members of
+the same named group — the lane is keyed on ``start``, so an ungrouped
+collision ("Brewers at 550" *and* "MLB at 550") would silently merge into one
+block ordered by the normal lineup sort, which is never what the user meant
+(they want Priority Teams, or a different start). :func:`add_numbering_exception`
+and :func:`update_numbering_exception` raise :class:`StartConflict` instead.
 
 The allocator in :mod:`teamarr.database.channel_numbers` runs the same
 placement code (compact / gap / strict) inside each lane. See
@@ -101,6 +108,10 @@ def _row_to_exception(row: sqlite3.Row) -> NumberingException:
     )
 
 
+class StartConflict(ValueError):
+    """A block start is already used by another block outside this group."""
+
+
 def _table_exists(conn: Connection) -> bool:
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'numbering_exceptions'"
@@ -116,18 +127,17 @@ def _table_exists(conn: Connection) -> bool:
 def get_numbering_exceptions(
     conn: Connection, *, enabled_only: bool = False
 ) -> list[NumberingException]:
-    """All pinned blocks in precedence order (sort_order, then id).
+    """All pinned blocks in placement order (ascending start, then id).
 
-    This is the UI list order: the reorder arrows edit ``sort_order``, so the
-    list must follow it rather than ``start`` or a move would be invisible.
-    Placement order (ascending start) is derived separately by
-    ``LaneResolver.lanes``.
+    This is the UI list order too, so the list reads like the effective
+    layout: lower starts first, group members adjacent.
     """
     if not _table_exists(conn):
         return []
     where = "WHERE enabled = 1" if enabled_only else ""
     rows = conn.execute(
-        f"SELECT {_COLUMNS} FROM numbering_exceptions {where} ORDER BY sort_order ASC, id ASC"
+        f"SELECT {_COLUMNS} FROM numbering_exceptions {where} "
+        "ORDER BY start ASC, sort_order ASC, id ASC"
     ).fetchall()
     return [_row_to_exception(r) for r in rows]
 
@@ -169,6 +179,37 @@ def _validate(scope: str, start: int, end: int | None) -> str | None:
     return None
 
 
+def _check_start_conflict(
+    conn: Connection, start: int, label: str | None, *, exclude_id: int | None = None
+) -> None:
+    """Raise :class:`StartConflict` unless ``start`` is free or every block
+    already at ``start`` is in the same non-empty group ``label``."""
+    if not _table_exists(conn):
+        return
+    rows = conn.execute(
+        "SELECT id, scope, sport, league_code, team_name, label FROM numbering_exceptions "
+        "WHERE start = ? AND (? IS NULL OR id != ?) ORDER BY id",
+        (int(start), exclude_id, exclude_id),
+    ).fetchall()
+    if not rows:
+        return
+    label = (label or "").strip()
+    if label and all((r["label"] or "").strip().lower() == label.lower() for r in rows):
+        return
+    r = rows[0]
+    holder = r["team_name"] or r["league_code"] or r["sport"] or "another block"
+    hint = (
+        f'Give it the group name "{r["label"]}" to share that block, '
+        if r["label"]
+        else "Give both blocks the same group name to share it, "
+    )
+    raise StartConflict(
+        f"Channel {start} already starts the {holder} block. {hint}"
+        "pick a different start, or use Priority Teams to put a team first "
+        "inside its league's block."
+    )
+
+
 def add_numbering_exception(
     conn: Connection,
     *,
@@ -192,11 +233,14 @@ def add_numbering_exception(
     - ``scope='sport'``: pass ``sport``.
 
     Returns the stored row, or ``None`` on validation / lookup failure.
+    Raises :class:`StartConflict` when ``start`` is taken by a block outside
+    the group ``label``.
     """
     err = _validate(scope, start, end)
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None
+    _check_start_conflict(conn, start, label)
 
     team_name: str | None = None
     if scope == "team":
@@ -293,6 +337,8 @@ def update_numbering_exception(
         new_label = current.label
     else:
         new_label = (label.strip() or None) if isinstance(label, str) else None
+    if new_start != current.start or new_label != current.label:
+        _check_start_conflict(conn, new_start, new_label, exclude_id=exception_id)
     new_enabled = current.enabled if enabled is None else bool(enabled)
     conn.execute(
         """
@@ -314,16 +360,6 @@ def delete_numbering_exception(conn: Connection, exception_id: int) -> bool:
     return False
 
 
-def reorder_numbering_exceptions(conn: Connection, ordered_ids: list[int]) -> bool:
-    """Persist UI drag order as sort_order (the within-level tie-break)."""
-    for position, exception_id in enumerate(ordered_ids):
-        conn.execute(
-            "UPDATE numbering_exceptions SET sort_order = ?, updated_at = CURRENT_TIMESTAMP "
-            "WHERE id = ?",
-            (position, int(exception_id)),
-        )
-    _arm_relayout(conn)
-    return True
 
 
 # =============================================================================
@@ -336,6 +372,11 @@ class LaneResolver:
 
     Built once per allocation pass (``LaneResolver.load(conn)``) so resolving
     hundreds of channels costs no queries. ``default`` is the global range lane.
+
+    Within one precedence level a channel can only match one row (one league,
+    one sport, one home team, one away team), so the ``(sort_order, id)``
+    ordering below is just a deterministic fallback for legacy rows that were
+    created before starts became unique per group.
     """
 
     def __init__(self, exceptions: list[NumberingException], default: Lane):

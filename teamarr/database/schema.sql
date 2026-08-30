@@ -903,6 +903,10 @@ CREATE TABLE IF NOT EXISTS channel_priority_teams (
     team_name TEXT NOT NULL,                 -- Display + match key (e.g., 'Liverpool')
     league TEXT,                             -- League slug the team was picked from
     sport TEXT NOT NULL,                     -- Sport code (scopes name matching)
+    -- How far the team floats: top of everything, of its sport, or of its league.
+    -- DEFAULT 'all' preserves pre-scope behaviour for existing rows; new rows
+    -- are created with 'league' (see priority_teams.add_priority_team).
+    scope TEXT NOT NULL DEFAULT 'all' CHECK(scope IN ('all', 'sport', 'league')),
 
     -- One entry per team-in-league
     UNIQUE(provider, provider_team_id, league)

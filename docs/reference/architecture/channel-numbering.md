@@ -22,7 +22,7 @@ range of numbers with its own start:
 | Lane | Where it comes from |
 |------|---------------------|
 | Pinned block | One row in `numbering_exceptions` (a team, league or sport pin), or several rows sharing a start under one label (a *group*) |
-| Default | The global channel range (`channel_range_start` / `channel_range_end`) |
+| Default | "Everything Else" in the UI — the global channel range (`channel_range_start` / `channel_range_end`) |
 
 The allocator runs the **same placement code per lane** — compact, gap or
 strict, sticky locks, daily re-layout — with the lane's start in place of the
@@ -46,8 +46,9 @@ channel. Precedence:
 4. **Sport** pin
 5. Default lane
 
-Within one level, ties break by the block's `sort_order` (the drag order in
-the UI). Team matching is `(sport, team_name)` case-insensitive on either side
+Within one level a channel can match only one row (one league, one sport,
+one team per side), so there is no user-facing tie-break; `(sort_order, id)`
+remains as a deterministic fallback for legacy rows. Team matching is `(sport, team_name)` case-insensitive on either side
 of the event — the same key `channel_priority_teams` uses — so a team pin
 follows the club into cup competitions. A team pin covers both the team's
 dedicated team channel and every event channel it plays in.
@@ -67,6 +68,18 @@ sticky modes, exactly as changing the channel range does.
   existing invariant ("gap only between events") holds inside every lane.
 - A **group** is just several rows with the same `start` and `label`; there
   is no separate table. "850 — Big events: World Cup, Olympics" is two rows.
+- **A start belongs to one block.** `LaneResolver` keys lanes on `start`
+  alone, so any two rows at one start *are* one lane whatever their labels.
+  Because users read "Brewers at 550 + MLB at 550" as "Brewers first in the
+  MLB block" (it is not — the merged lane sorts in normal lineup order, which
+  is the 2.14.0 Discord confusion), `add_numbering_exception` and
+  `update_numbering_exception` raise `StartConflict` (→ HTTP 400 with a
+  what-to-do-instead message) unless every existing row at that start shares
+  the new row's non-empty label (case-insensitive). Toggling `enabled` alone
+  never re-validates, so rows created before this rule keep working. The
+  reorder endpoint and UI arrows were removed with it — they never changed
+  placement (lanes place in ascending `start`), only the never-exercised
+  within-level tie-break.
 
 ## Stability modes inside lanes
 
@@ -81,6 +94,27 @@ sticky modes, exactly as changing the channel range does.
 The sticky allocator's "invalid anchor" rule — a locked channel whose number
 is outside its range is re-placed — now uses the **lane's** range, so moving
 a block (say Lions from 800 to 900) re-places those channels on the next run.
+
+## Global sort and priority-team scope
+
+`get_all_channels_sorted` produces one ordered list that every lane is then
+partitioned from. The key is
+
+```
+(all_tier, sport_pri, sport_tier, league_pri, league_tier, event_time, event_id, keyword)
+```
+
+where the three `*_tier` values (0 = floats, 1 = normal) come from
+`channel_priority_teams.scope` — `'all'` sets every tier, `'sport'` sets
+`sport_tier` + `league_tier`, `'league'` only `league_tier`. A team listed
+several times keeps its broadest scope. The column was added by reconciliation
+with `DEFAULT 'all'`, so pre-scope rows keep the old float-above-everything
+behaviour; new rows default to `'league'`. Because lanes are cut after the
+sort, a priority team moves only relative to channels in its own lane.
+
+The API for the preview (`GET /numbering-exceptions/preview`) returns lanes
+sorted by start so the default lane appears where it actually sits when a
+block starts below or inside the range.
 
 ## Creation-time allocation
 
@@ -133,6 +167,6 @@ CREATE TABLE numbering_exceptions (
 );
 ```
 
-API: `/api/v1/numbering-exceptions` (list, create, update, delete, reorder,
-`preview` = effective layout of today's channels). UI: Channels → Numbering →
-Pinned Blocks.
+API: `/api/v1/numbering-exceptions` (list — ascending start —, create,
+update, delete, `preview` = effective layout of today's channels). UI:
+Channels → Numbering → Pinned Blocks.
