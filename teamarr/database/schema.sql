@@ -257,6 +257,10 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Display Preferences
     time_format TEXT DEFAULT '12h' CHECK(time_format IN ('12h', '24h')),
     show_timezone BOOLEAN DEFAULT 1,
+    -- Sport naming (#691): 'us' = Football / Soccer; 'international' =
+    -- American Football / Football. Applied to the sports.display_name map
+    -- everywhere it is read (templates, {sport} channel groups, UI labels).
+    sport_naming TEXT DEFAULT 'us' CHECK(sport_naming IN ('us', 'international')),
 
     -- Event-Based EPG Options
     include_final_events BOOLEAN DEFAULT 0,      -- Include completed events for today

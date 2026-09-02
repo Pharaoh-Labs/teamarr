@@ -5,6 +5,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, status
 
 from teamarr.config import set_display_settings as set_config_display
+from teamarr.core.sports import SPORT_NAMING_MODES
 from teamarr.database import get_db
 from teamarr.database.settings import (
     get_all_settings,
@@ -14,6 +15,7 @@ from teamarr.database.settings import (
     update_duration_settings as db_update,
 )
 from teamarr.providers.registry import ProviderRegistry
+from teamarr.services.league_mappings import get_league_mapping_service
 
 from .models import (
     DisplaySettingsModel,
@@ -129,12 +131,19 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid time_format. Valid: {valid_time_formats}",
         )
+    if update.sport_naming not in SPORT_NAMING_MODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sport_naming. Valid: {sorted(SPORT_NAMING_MODES)}",
+        )
 
     with get_db() as conn:
+        previous_naming = get_all_settings(conn).display.sport_naming
         update_display_settings(
             conn,
             time_format=update.time_format,
             show_timezone=update.show_timezone,
+            sport_naming=update.sport_naming,
             channel_id_format=update.channel_id_format,
             xmltv_generator_name=update.xmltv_generator_name,
             xmltv_generator_url=update.xmltv_generator_url,
@@ -150,10 +159,14 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
         xmltv_generator_url=update.xmltv_generator_url,
     )
 
+    # Sport naming feeds the league-mapping service's cached display names
+    # ({sport} template variable); reload so the next render uses them (#691).
+    if update.sport_naming != previous_naming:
+        get_league_mapping_service().reload()
+
     # Reinitialize TSDB provider so it picks up the new API key
     # without requiring a restart. The factory re-reads the key from DB.
     if unmask_or_skip(update.tsdb_api_key) is not None:
-
         ProviderRegistry.reinitialize_provider("tsdb")
 
     with get_db() as conn:
@@ -165,6 +178,7 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
 # =============================================================================
 # TSDB API KEY VALIDATION
 # =============================================================================
+
 
 @router.post("/settings/tsdb/validate-key", response_model=TSDBKeyValidationResponse)
 def validate_tsdb_key(request: TSDBKeyValidationRequest):
@@ -187,10 +201,7 @@ def validate_tsdb_key(request: TSDBKeyValidationRequest):
     if len(key) <= 3:
         return TSDBKeyValidationResponse(
             valid=False,
-            message=(
-                "The TheSportsDB free tier is no longer supported — "
-                "enter a premium API key"
-            ),
+            message=("The TheSportsDB free tier is no longer supported — enter a premium API key"),
         )
 
     # Test the key against a lightweight endpoint
@@ -220,11 +231,6 @@ def validate_tsdb_key(request: TSDBKeyValidationRequest):
         )
 
     except httpx.TimeoutException:
-        return TSDBKeyValidationResponse(
-            valid=False, message="Connection to TSDB timed out"
-        )
+        return TSDBKeyValidationResponse(valid=False, message="Connection to TSDB timed out")
     except Exception as e:
-        return TSDBKeyValidationResponse(
-            valid=False, message=f"Connection error: {e}"
-        )
-
+        return TSDBKeyValidationResponse(valid=False, message=f"Connection error: {e}")
