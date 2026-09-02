@@ -155,9 +155,9 @@ Core identifiers for teams, leagues, and matchups.
 | `{opponent_ranked_the}` | Opponent with rank and article composed | base, .next, .last | `the No. 14 Chicago Bears` |
 | `{opponent_abbrev}` | Opponent team abbreviation uppercase | base, .next, .last | `CHI` |
 | `{opponent_short}` | Opponent short name | base, .next, .last | `Bears` |
-| `{matchup}` | Full matchup string | base, .next, .last | `Chicago Bears @ Detroit Lions` |
-| `{matchup_abbrev}` | Abbreviated matchup uppercase | base, .next, .last | `CHI @ DET` |
-| `{matchup_short}` | Short name matchup | base, .next, .last | `Bears @ Lions` |
+| `{matchup}` | Full matchup in the sport's convention: visitor first with `@` for US team sports, home first with `v` for soccer/rugby/cricket; neutral-site games use `v` | base, .next, .last | `Chicago Bears @ Detroit Lions` · `Ipswich Town v Liverpool` |
+| `{matchup_abbrev}` | Abbreviated matchup uppercase, same convention | base, .next, .last | `CHI @ DET` · `IPS v LIV` |
+| `{matchup_short}` | Short-name matchup, same convention | base, .next, .last | `Bears @ Lions` · `Ipswich v Liverpool` |
 | `{league}` | League short alias | base | `NFL` |
 | `{league_name}` | League display name from the leagues table | base | `NFL` |
 | `{league_abbrev}` | League abbreviation built from the league name — existing capitals plus the first letter of each word | base | `WC` (from `World Cup`) |
@@ -588,7 +588,7 @@ Result variables for the headline bout — empty until the fight is final. Ideal
 | `{judge_scores}` | Judge scores for decisions | `48-47, 49-46, 48-47` |
 
 {: .note }
-UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout. Use `{matchup_combat}` for the fight-conventional "Volkanovski vs Lopes" form — the generic `{matchup}` renders `{away} @ {home}` ("Lopes @ Volkanovski") for every sport, combat included.
+UFC events are split into segments (Early Prelims, Prelims, Main Card). When using segment-based channel routing, each channel gets a `{card_segment}` value indicating which segment it covers. The `{fighter1}` and `{fighter2}` variables always refer to the headline (main event) bout. Use `{matchup_combat}` for the fight-conventional "Volkanovski vs Lopes" form — the generic `{matchup}` keeps the provider's title order for individual sports ("Lopes v Volkanovski").
 
 ---
 

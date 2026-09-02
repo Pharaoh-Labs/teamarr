@@ -152,6 +152,36 @@ def matchup_connector(sport: str | None, neutral_site: bool = False) -> str:
     return "at" if (sport or "").lower() in _AT_SPORTS else "vs."
 
 
+# Sports whose matchup convention lists the HOME side first ("Ipswich Town v
+# Liverpool"). US team sports list the visitor first ("Bears @ Lions");
+# individual sports (tennis, combat) keep the provider's title order, which
+# Teamarr stores as away-then-home. (#692 phase 1)
+_HOME_FIRST_SPORTS = frozenset({"soccer", "rugby", "cricket", "australian-football"})
+
+
+def matchup_home_first(sport: str | None) -> bool:
+    """Does this sport's matchup convention name the home side first?"""
+    return (sport or "").lower() in _HOME_FIRST_SPORTS
+
+
+def format_matchup(
+    away: str,
+    home: str,
+    sport: str | None,
+    neutral_site: bool = False,
+) -> str:
+    """Sport-conventional matchup string for the {matchup*} variables (#692).
+
+    Order follows matchup_home_first; the symbol mirrors matchup_connector
+    ("at" → "@", directional; "vs." → "v"), so `{matchup}` and
+    `{away_team} {at_vs} {home_team}` always agree on the sport:
+    "Bears @ Lions", "Ipswich Town v Liverpool", neutral-site "Miami v Ohio State".
+    """
+    symbol = "@" if matchup_connector(sport, neutral_site) == "at" else "v"
+    first, second = (home, away) if matchup_home_first(sport) else (away, home)
+    return f"{first} {symbol} {second}"
+
+
 def surnames(name: str) -> str:
     """Surname portion of a person or pairing display name.
 

@@ -4,7 +4,7 @@ These variables identify teams and the competition context.
 Most are BASE_ONLY since they don't change between games.
 """
 
-from teamarr.core.naming import ranked_with_article, team_with_article
+from teamarr.core.naming import format_matchup, ranked_with_article, team_with_article
 from teamarr.services.league_mappings import get_league_mapping_service
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
@@ -94,43 +94,50 @@ def extract_opponent_short(ctx: TemplateContext, game_ctx: GameContext | None) -
     return opponent.short_name if opponent else ""
 
 
+def _matchup(game_ctx: GameContext | None, field: str, upper: bool = False) -> str:
+    """Sport-conventional matchup from one Team field (#692 phase 1)."""
+    if not game_ctx or not game_ctx.event:
+        return ""
+    event = game_ctx.event
+    away = getattr(event.away_team, field) or ""
+    home = getattr(event.home_team, field) or ""
+    if upper:
+        away, home = away.upper(), home.upper()
+    return format_matchup(away, home, event.sport, event.neutral_site)
+
+
 @register_variable(
     name="matchup",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.ALL,
-    description="Full matchup string (e.g., 'Tampa Bay @ Detroit')",
+    description="Full matchup in the sport's convention: 'Tampa Bay @ Detroit' "
+    "for US team sports (visitor first), 'Ipswich Town v Liverpool' for "
+    "soccer/rugby/cricket (home first); neutral-site games read 'v'",
 )
 def extract_matchup(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    event = game_ctx.event
-    return f"{event.away_team.name} @ {event.home_team.name}"
+    return _matchup(game_ctx, "name")
 
 
 @register_variable(
     name="matchup_abbrev",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.ALL,
-    description="Abbreviated matchup uppercase (e.g., 'TB @ DET')",
+    description="Abbreviated matchup uppercase in the sport's convention "
+    "(e.g., 'TB @ DET', 'IPS v LIV')",
 )
 def extract_matchup_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    event = game_ctx.event
-    return f"{event.away_team.abbreviation.upper()} @ {event.home_team.abbreviation.upper()}"
+    return _matchup(game_ctx, "abbreviation", upper=True)
 
 
 @register_variable(
     name="matchup_short",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.ALL,
-    description="Short name matchup (e.g., 'Buccaneers @ Lions')",
+    description="Short-name matchup in the sport's convention "
+    "(e.g., 'Buccaneers @ Lions', 'Ipswich v Liverpool')",
 )
 def extract_matchup_short(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    if not game_ctx or not game_ctx.event:
-        return ""
-    event = game_ctx.event
-    return f"{event.away_team.short_name} @ {event.home_team.short_name}"
+    return _matchup(game_ctx, "short_name")
 
 
 @register_variable(
