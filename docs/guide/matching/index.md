@@ -42,7 +42,9 @@ Tennis streams are matched on player surnames plus date/time, and get the same k
 
 - **Tournament check.** If the stream names a tournament that is running that day (`Wimbledon: Zheng vs Norrie`, `US Open Court 5`), only matches from that tournament are eligible — a same-day match between the same players at another event is rejected, shown in **Run History** as **"Different tournament"**. Streams that don't name a tournament (`ATP: Zheng vs Norrie`) are matched on players and time alone. Teamarr uses ESPN's own tournament names; there is no tournament alias list to maintain.
 - **Singles vs doubles.** A stream naming one player per side never binds to a doubles match, and a stream written as pairs (`Sinner/Sonego vs Krajicek/Ram`) never binds to a singles match.
-- **Court and round feeds** (`Day #8 No 1 Court`, `Ladies' Singles Semifinals`) fan out to every match on that court/round for the day, filtered by the same tournament check.
+- **Court and round feeds** (`Day #8 No 1 Court`, `Ladies' Singles Semifinals`) fan out to every match on that court/round for the day, filtered by the same tournament check. Courts are recognised by number (`Court 12`, `Stadium 17`, `No. 1 Court`) and by name (`Centre Court`, `Arthur Ashe Stadium`, `Louis Armstrong Stadium`, `Grandstand`), matching the names ESPN publishes per match.
+
+- **Court feeds in mixed sources.** ESPN+ and TSN+ carry a Grand Slam as one stream per court (`ESPN+ 17: Arthur Ashe Stadium @ Sep 01 11:30AM ET`, `US Open: Day #3 - Court 7`) with no "tennis" in the name. In a source that mixes tennis with team sports, such a stream is tried as a court feed after the team-sport match fails, provided the source includes a tennis league (ATP or WTA) and the day's schedule actually has that court. A day-only feed (`US Open Day 3`), `Court TBD`, or a "RedZone" whip-around stream has nothing to join on and stays unmatched by design.
 
 To limit tennis to the four Grand Slams, use **Tennis: majors only** under [Subscriptions → Teams](../subscriptions#default-team-filter).
 
