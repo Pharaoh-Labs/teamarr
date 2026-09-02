@@ -453,7 +453,7 @@ def test_prior_generation_content_healed_to_current(db_conn):
     assert row.id == tid  # healed in place, not duplicated
     labels = {r.get("label") for r in row.conditional_descriptions}
     assert "Marquee note" in labels and "Neutral site" in labels
-    assert row.subtitle_template == "{away_team} {at_vs} {home_team}"
+    assert row.subtitle_template == "{team1} {at_vs} {team2}"  # #692 phase 2
 
 
 def test_soccer_idle_generation_healed(db_conn):
@@ -524,7 +524,13 @@ def test_pre_420_row_with_v80_migrated_rows_heals_to_native_rows(db_conn):
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
     spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Team (Starter)")
-    g4_migrated = _prior_generations("Default Team (Starter)", spec)[0]
+    # Generations are newest-first; G5 (#692) comes before the pre-#420 pair.
+    g4_migrated = next(
+        g
+        for g in _prior_generations("Default Team (Starter)", spec)
+        if g.get("postgame_conditional_rows")
+        and g["postgame_conditional_rows"][0].get("label") == "Final (migrated)"
+    )
     assert g4_migrated["postgame_conditional"]["enabled"] is True
     assert g4_migrated["postgame_conditional_rows"][0]["label"] == "Final (migrated)"
     tid = create_template(db_conn, **g4_migrated)
@@ -541,12 +547,13 @@ def test_pre_420_row_with_v80_migrated_rows_heals_to_native_rows(db_conn):
 def test_pre_420_row_with_empty_rows_heals_to_native_rows(db_conn):
     """#420 cajd.6: a starter created in the post-v80/pre-#420 window
     (enabled legacy conditionals, empty rows columns) also heals."""
-    from teamarr.database.default_templates import _revert_filler_rows
+    from teamarr.database.default_templates import _revert_filler_rows, _revert_team_order
 
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
     spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Event (Starter)")
-    g4_empty = _revert_filler_rows(spec)
+    # A pre-#420 row predates #692 too, so it carries away/home subtitles (G5 base).
+    g4_empty = _revert_filler_rows(_revert_team_order(spec))
     assert g4_empty["postgame_conditional_rows"] == []
     tid = create_template(db_conn, **g4_empty)
 
@@ -646,3 +653,32 @@ def test_seed_variables_respect_template_scope():
                 if m.group(1) not in allowed:
                     violations.append((spec["name"], m.group(1)))
     assert not violations, f"scope-invalid variables in seeds: {sorted(set(violations))}"
+
+
+def test_pre_692_team_order_generation_healed_to_current(db_conn):
+    """#692 phase 2: an unedited row still carrying the pre-#692 subtitles
+    ({away_team} {at_vs} {home_team}) and channel name upgrades in place to
+    the order-aware {team1}/{team2} forms; the G5 generation reverts exactly
+    what shipped, so soccer's literal 'vs' subtitle is reconstructed too."""
+    from teamarr.database.default_templates import _prior_generations
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Event (Starter)")
+    g5 = _prior_generations("Default Event (Starter)", spec)[0]
+    assert g5["subtitle_template"] == "{away_team} {at_vs} {home_team}"
+    assert g5["event_channel_name"] == "{league} | {away_team_abbrev}/{home_team_abbrev}"
+    assert spec["subtitle_template"] == "{team1} {at_vs} {team2}"
+    tid = create_template(db_conn, **g5)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Default Event (Starter)"]
+    assert row.id == tid
+    assert row.subtitle_template == "{team1} {at_vs} {team2}"
+    assert row.event_channel_name == "{league} | {team1_abbrev}/{team2_abbrev}"
+
+    soccer = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Soccer Team (Starter)")
+    soccer_g5 = _prior_generations("Soccer Team (Starter)", soccer)[0]
+    assert soccer_g5["subtitle_template"] == "{away_team} vs {home_team}"
+    assert soccer["subtitle_template"] == "{team1} vs {team2}"

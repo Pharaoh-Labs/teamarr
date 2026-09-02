@@ -7,13 +7,13 @@ nav_order: 6
 
 # Template Engine
 
-The template engine resolves `{variable}` placeholders in EPG titles, descriptions, and filler content. It supports 252 variables across 20 categories (plus chainable `|filter` value transforms), 33 condition evaluators, suffix rules for multi-game context, and template-type scoping for the variable picker.
+The template engine resolves `{variable}` placeholders in EPG titles, descriptions, and filler content. It supports 258 variables across 20 categories (plus chainable `|filter` value transforms), 33 condition evaluators, suffix rules for multi-game context, and template-type scoping for the variable picker.
 
 ## Architecture
 
 ```
 TemplateResolver
-  ├── VariableRegistry (252 variables, 20 categories)
+  ├── VariableRegistry (258 variables, 20 categories)
   ├── ConditionEvaluator (33 evaluators)
   └── ContextBuilder (Event + Team → TemplateContext)
 ```
@@ -233,7 +233,7 @@ optimistic layer while the debounced server render is in flight.
 | `templates/conditions.py` | 33 condition evaluators |
 | `templates/context.py` | Context dataclasses (Odds, GameContext, TemplateContext) |
 | `templates/context_builder.py` | Build TemplateContext from Event + Team |
-| `templates/variables/` | 20 category modules with 252 variable definitions |
+| `templates/variables/` | 20 category modules with 258 variable definitions |
 | `templates/variables/registry.py` | VariableRegistry singleton |
 | `templates/filters.py` | Chainable filter transforms (legacy aliases live in `resolver.py`) |
 | `templates/validation.py` | Template validation |

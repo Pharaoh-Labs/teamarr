@@ -261,6 +261,11 @@ CREATE TABLE IF NOT EXISTS settings (
     -- American Football / Football. Applied to the sports.display_name map
     -- everywhere it is read (templates, {sport} channel groups, UI labels).
     sport_naming TEXT DEFAULT 'us' CHECK(sport_naming IN ('us', 'international')),
+    -- Matchup order (#692): 'auto' = the sport's convention (visitor first for
+    -- US team sports, home first for soccer/rugby/cricket); 'away_first' /
+    -- 'home_first' force it. Governs {matchup*} and {team1}/{team2}; a
+    -- per-league override lives on subscription_league_config.
+    matchup_order TEXT DEFAULT 'auto' CHECK(matchup_order IN ('auto', 'away_first', 'home_first')),
 
     -- Event-Based EPG Options
     include_final_events BOOLEAN DEFAULT 0,      -- Include completed events for today
@@ -711,7 +716,10 @@ CREATE TABLE IF NOT EXISTS subscription_league_config (
     league_code TEXT NOT NULL UNIQUE,
     channel_profile_ids JSON DEFAULT NULL,     -- NULL = use global default
     channel_group_id INTEGER DEFAULT NULL,     -- NULL = use global default
-    channel_group_mode TEXT DEFAULT NULL        -- NULL = use global default ('static', 'sport', 'league', or custom pattern)
+    channel_group_mode TEXT DEFAULT NULL,       -- NULL = use global default ('static', 'sport', 'league', or custom pattern)
+    -- Matchup order override (#692): NULL = use the global setting
+    matchup_order TEXT DEFAULT NULL
+        CHECK(matchup_order IS NULL OR matchup_order IN ('auto', 'away_first', 'home_first'))
 );
 
 

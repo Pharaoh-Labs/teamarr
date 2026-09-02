@@ -42,6 +42,7 @@ class SubscriptionLeagueConfig:
     channel_profile_ids: list[int | str] | None = None
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
+    matchup_order: str | None = None  # #692: NULL = global setting
 
 
 @dataclass
@@ -493,17 +494,19 @@ def upsert_league_config(
     channel_profile_ids: list[int | str] | None = None,
     channel_group_id: int | None = None,
     channel_group_mode: str | None = None,
+    matchup_order: str | None = None,
 ) -> SubscriptionLeagueConfig:
     """Create or update per-league config. Returns the saved config."""
     conn.execute(
         """INSERT INTO subscription_league_config
            (league_code, channel_profile_ids, channel_group_id,
-            channel_group_mode)
-           VALUES (?, ?, ?, ?)
+            channel_group_mode, matchup_order)
+           VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(league_code) DO UPDATE SET
                channel_profile_ids = excluded.channel_profile_ids,
                channel_group_id = excluded.channel_group_id,
-               channel_group_mode = excluded.channel_group_mode
+               channel_group_mode = excluded.channel_group_mode,
+               matchup_order = excluded.matchup_order
         """,
         (
             league_code,
@@ -512,6 +515,7 @@ def upsert_league_config(
             else None,
             channel_group_id,
             channel_group_mode,
+            matchup_order,
         ),
     )
     logger.info("[LEAGUE_CONFIG] Upserted config for %s", league_code)
@@ -546,4 +550,5 @@ def _build_league_config(row) -> SubscriptionLeagueConfig:
         channel_profile_ids=profile_ids,
         channel_group_id=row["channel_group_id"],
         channel_group_mode=row["channel_group_mode"],
+        matchup_order=row["matchup_order"] if "matchup_order" in row.keys() else None,
     )

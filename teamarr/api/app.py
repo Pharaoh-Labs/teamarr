@@ -36,10 +36,11 @@ from teamarr.api.routes import (
     variables,
 )
 from teamarr.api.startup_state import StartupPhase, get_startup_state
-from teamarr.config import BASE_VERSION, set_display_settings, set_timezone
+from teamarr.config import BASE_VERSION, set_display_settings, set_matchup_orders, set_timezone
 from teamarr.database import get_db, init_db
 from teamarr.database.settings import get_display_settings, get_epg_settings, get_scheduler_settings
 from teamarr.database.stats import cleanup_stuck_runs
+from teamarr.database.subscription import get_league_configs
 from teamarr.dispatcharr import close_dispatcharr, get_factory
 from teamarr.providers import ProviderRegistry
 from teamarr.services import (
@@ -240,6 +241,11 @@ def _run_startup_tasks():
                 channel_id_format=display.channel_id_format,
                 xmltv_generator_name=display.xmltv_generator_name,
                 xmltv_generator_url=display.xmltv_generator_url,
+            )
+            # Matchup order (#692): global + per-league overrides
+            set_matchup_orders(
+                display.matchup_order,
+                {c.league_code: c.matchup_order for c in get_league_configs(conn)},
             )
         logger.info("[STARTUP] Display settings loaded into config cache")
 

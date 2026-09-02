@@ -27,14 +27,14 @@ export const ASSIGNMENTS_TAB: { id: Tab; label: string; icon: LucideIcon } = {
 // Default filler content
 export const DEFAULT_PREGAME: FillerContent = {
   title: "Coming up: {league} {sport} starting at {game_time.next}",
-  subtitle: "{away_team} at {home_team}",
+  subtitle: "{team1} {at_vs} {team2}",
   description: "The {away_team_record.next} {away_team.next} travel to {venue_city} to play the {home_team_record.next} {home_team.next} today at {game_time.next}.",
   art_url: null,
 }
 
 export const DEFAULT_POSTGAME: FillerContent = {
   title: "{league} {sport}: {team_name} Postgame Recap",
-  subtitle: "{away_team.last} at {home_team.last}",
+  subtitle: "{team1.last} {at_vs.last} {team2.last}",
   description: "{team_name} {result_text.last} the {opponent.last} {final_score.last}",
   art_url: null,
 }
@@ -117,7 +117,7 @@ export const DEFAULT_FORM: TemplateCreate = {
   // (pre-selected in the create type chooser).
   template_type: "event",
   title_format: "{league} {sport}",
-  subtitle_template: "{away_team} at {home_team}",
+  subtitle_template: "{team1} {at_vs} {team2}",
   description_template: "{matchup} | {venue_full}",
   program_art_url: null,
   game_duration_mode: "sport",
@@ -148,7 +148,7 @@ export const DEFAULT_FORM: TemplateCreate = {
   // idle title (no .next in it).
   idle_offseason: { title_enabled: false, title: null, subtitle_enabled: true, subtitle: "No upcoming game currently on schedule", description_enabled: true, description: "No upcoming {team_name} games scheduled." },
   conditional_descriptions: [],
-  event_channel_name: "{away_team} @ {home_team}",
+  event_channel_name: "{matchup}",
   event_channel_logo_url: null,
 }
 

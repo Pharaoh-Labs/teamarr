@@ -334,6 +334,34 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
             </p>
           </div>
 
+          {/* Subsection: Matchup order (#692) */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Matchup Order</Label>
+            <div className="flex gap-2">
+              {([
+                ["auto", "Auto"],
+                ["away_first", "Away first"],
+                ["home_first", "Home first"],
+              ] as const).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant={(display?.matchup_order ?? "auto") === value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => display && setDisplay({ ...display, matchup_order: value })}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Auto follows each sport's convention: visitor first for football, basketball,
+              baseball and hockey ("Bears @ Lions"); home first for soccer, rugby and cricket
+              ("Ipswich Town v Liverpool"). Applies to {"{matchup}"} and {"{team1}"}/{"{team2}"}
+              in templates. Override per league under Channels → Dispatcharr Output.
+            </p>
+          </div>
+
           <SaveButton
             onClick={handleSaveEPGAndDisplay}
             pending={updateDisplay.isPending || updateEPG.isPending}

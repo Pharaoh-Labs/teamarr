@@ -45,7 +45,7 @@ EPG:     Kansas City Chiefs @ Philadelphia Eagles
 
 - **174 pre-configured leagues across 15 sports**, plus ~228 more soccer leagues discovered live from ESPN — football, basketball, hockey, baseball, soccer, cricket, lacrosse, MMA, boxing, rugby, volleyball, Australian football, softball, racing (F1, NASCAR, IndyCar, IMSA, WEC), and tennis (ATP, WTA)
 - **Custom leagues** — add any competition from TheSportsDB (premium key required)
-- **252 template variables + chainable filters** — customize channel names and EPG with records, scores, venues, broadcasts, standings, playoff status, motorsports sessions, tennis context, and more
+- **258 template variables + chainable filters** — customize channel names and EPG with records, scores, venues, broadcasts, standings, playoff status, motorsports sessions, tennis context, and more
 - **Flexible matching** — stream-name matching, team streams, and EPG program matching per source; aliases, fuzzy matching, and custom regex extractors for inconsistent IPTV naming
 - **Channel management** — automatic create/update/delete lifecycle, numbering strategies, consolidation, feed separation, and stream priority rules
 - **Dynamic groups & profiles** — use existing Dispatcharr groups/profiles or create them on the fly with `{sport}` / `{league}` wildcards

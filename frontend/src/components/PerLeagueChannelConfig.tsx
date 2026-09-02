@@ -49,12 +49,14 @@ function LeagueConfigRow({
     channel_profile_ids?: (number | string)[] | null
     channel_group_id?: number | null
     channel_group_mode?: string | null
+    matchup_order?: string | null
   }) => Promise<void>
   onClear: () => Promise<void>
 }) {
   const [localProfileIds, setLocalProfileIds] = useState<(number | string)[]>([])
   const [localGroupId, setLocalGroupId] = useState<number | null>(null)
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
+  const [localMatchupOrder, setLocalMatchupOrder] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Sync local state when config changes or row expands (render-time "adjust
@@ -73,10 +75,12 @@ function LeagueConfigRow({
       )
       setLocalGroupId(config.channel_group_id)
       setLocalGroupMode(config.channel_group_mode)
+      setLocalMatchupOrder(config.matchup_order ?? null)
     } else if (isExpanded && !config) {
       setLocalProfileIds([])
       setLocalGroupId(null)
       setLocalGroupMode(null)
+      setLocalMatchupOrder(null)
     }
   }
 
@@ -106,6 +110,12 @@ function LeagueConfigRow({
     return `Custom: ${mode}`
   })()
 
+  const matchupOrderSummary = (() => {
+    const v = config?.matchup_order
+    if (!v || v === "auto") return v ? "Auto" : "Default"
+    return v === "home_first" ? "Home first" : "Away first"
+  })()
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -113,6 +123,7 @@ function LeagueConfigRow({
         channel_profile_ids: localProfileIds.length > 0 ? localProfileIds : null,
         channel_group_id: localGroupId,
         channel_group_mode: localGroupMode,
+        matchup_order: localMatchupOrder,
       })
     } finally {
       setSaving(false)
@@ -146,6 +157,11 @@ function LeagueConfigRow({
             {modeSummary}
           </span>
         </td>
+        <td className="px-3 py-1.5">
+          <span className={cn("text-xs", !hasOverride && "text-muted-foreground")}>
+            {matchupOrderSummary}
+          </span>
+        </td>
         <td className="px-3 py-1.5 text-right">
           {hasOverride && (
             <Button
@@ -165,7 +181,7 @@ function LeagueConfigRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={7} className="px-4 py-3 bg-muted/20 border-t-0">
+          <td colSpan={8} className="px-4 py-3 bg-muted/20 border-t-0">
             <div className="space-y-4 max-w-2xl">
               {/* Channel Profiles */}
               <div>
@@ -246,6 +262,25 @@ function LeagueConfigRow({
                     className="w-64 mt-2"
                   />
                 )}
+              </div>
+
+              {/* Matchup Order (#692) */}
+              <div>
+                <Label className="text-sm font-medium">Matchup Order</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Which team {"{matchup}"} and {"{team1}"}/{"{team2}"} name first for this league.
+                  Default inherits the global setting (Settings → General → Localization).
+                </p>
+                <Select
+                  value={localMatchupOrder ?? ""}
+                  onChange={(e) => setLocalMatchupOrder(e.target.value || null)}
+                  className="w-64"
+                >
+                  <option value="">Default (inherit)</option>
+                  <option value="auto">Auto (sport convention)</option>
+                  <option value="away_first">Away first</option>
+                  <option value="home_first">Home first</option>
+                </Select>
               </div>
 
               <div className="flex items-center gap-2">
@@ -382,6 +417,7 @@ export function PerLeagueChannelConfig() {
                 <th className="px-3 py-2 text-left font-medium">Profiles</th>
                 <th className="px-3 py-2 text-left font-medium">Channel Group</th>
                 <th className="px-3 py-2 text-left font-medium">Group Mode</th>
+                <th className="px-3 py-2 text-left font-medium">Matchup Order</th>
                 <th className="px-3 py-2 text-right font-medium w-16"></th>
               </tr>
             </thead>

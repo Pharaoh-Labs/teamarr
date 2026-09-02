@@ -271,6 +271,38 @@ _V80_LABELS = {
 }
 
 
+# --- pre-#692 team order (phase 2) ------------------------------------------
+
+_TEAM_ORDER_REVERTS = (
+    tuple((f"{{team1{sfx}}}", f"{{away_team{sfx}}}") for sfx in ("", ".next", ".last"))
+    + tuple((f"{{team2{sfx}}}", f"{{home_team{sfx}}}") for sfx in ("", ".next", ".last"))
+    + (("{team1_abbrev}", "{away_team_abbrev}"), ("{team2_abbrev}", "{home_team_abbrev}"))
+)
+
+
+def _revert_team_order_text(text):
+    """Undo #692 phase 2: order-aware {team1}/{team2} back to away/home."""
+    if not text:
+        return text
+    for new, old in _TEAM_ORDER_REVERTS:
+        text = text.replace(new, old)
+    return text
+
+
+def _revert_team_order(spec: dict) -> dict:
+    """The spec's content in its pre-#692 shape: subtitles and the event
+    channel name spelled with {away_team}/{home_team} instead of the
+    order-aware {team1}/{team2} (G5)."""
+    g = copy.deepcopy(spec)
+    for f in ("subtitle_template", "event_channel_name"):
+        g[f] = _revert_team_order_text(g.get(f))
+    for section in ("pregame_fallback", "postgame_fallback", "idle_content"):
+        block = g.get(section) or {}
+        if block.get("subtitle"):
+            block["subtitle"] = _revert_team_order_text(block["subtitle"])
+    return g
+
+
 def _revert_filler_rows(spec: dict) -> dict:
     """The spec's content in its pre-#420 shape: native condition rows
     reverted to the enabled legacy final/not-final dicts those generations
@@ -306,8 +338,10 @@ def _with_v80_rows(gen: dict) -> dict:
 def _prior_generations(name: str, spec: dict) -> list[dict]:
     """Registered prior content generations of a set member, newest first.
 
-    G4 (pre-#420 cajd.6): current content with the filler condition rows
-        reverted to the enabled legacy final/not-final conditionals.
+    G5 (pre-#692 phase 2): current content with {team1}/{team2} reverted
+        to {away_team}/{home_team} in subtitles / event channel name.
+    G4 (pre-#420 cajd.6): G5 with the filler condition rows reverted to
+        the enabled legacy final/not-final conditionals.
     G3 (#367 era, pre-#369): G4 minus the soccer idle overrides.
     G2 (#364 era, pre-#367): G3 minus neutral-site rows, marquee rows in
         the original travel/host framing, hard-coded 'at' subtitles.
@@ -325,8 +359,14 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     """
     legacy_chain: list[dict] = []
 
-    g4 = _revert_filler_rows(spec)
-    if g4 != spec:
+    # G5 (#692 phase 2): current content with {team1}/{team2} reverted to
+    # {away_team}/{home_team} in subtitles and the event channel name. It
+    # postdates #420, so it carries native rows and is emitted as-is (no
+    # v80/empty-rows variants) — see the tail of this function.
+    g5 = _revert_team_order(spec)
+
+    g4 = _revert_filler_rows(g5)
+    if g4 != g5:
         legacy_chain.append(g4)
 
     g3 = copy.deepcopy(g4)
@@ -361,7 +401,7 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     if g0 != g2:
         legacy_chain.append(g0)
 
-    gens: list[dict] = []
+    gens: list[dict] = [g5] if g5 != spec else []
     for g in legacy_chain:
         gens.append(_with_v80_rows(g))
         gens.append(g)  # empty-rows variant (post-v80 window)
@@ -393,7 +433,7 @@ def _team_base(**overrides) -> dict:
     base = {
         "template_type": "team",
         "title_format": "{gracenote_category}",
-        "subtitle_template": "{away_team} {at_vs} {home_team}",
+        "subtitle_template": "{team1} {at_vs} {team2}",
         "program_art_url": _TEAM_ART,
         "game_duration_mode": "sport",
         "pregame_enabled": True,
@@ -408,7 +448,7 @@ def _team_base(**overrides) -> dict:
         # the constructed prose is the fallback when no preview exists yet.
         "pregame_fallback": {
             "title": "Coming up: {gracenote_category} at {game_time.next}",
-            "subtitle": "{away_team.next} {at_vs.next} {home_team.next}",
+            "subtitle": "{team1.next} {at_vs.next} {team2.next}",
             "description": "{game_preview.next}",
             "description_fallback": (
                 "The {away_team_record.next} {away_team.next} travel to "
@@ -424,7 +464,7 @@ def _team_base(**overrides) -> dict:
         # constructed result line renders.
         "postgame_fallback": {
             "title": "{gracenote_category}: {team_name} Postgame",
-            "subtitle": "{away_team.last} {at_vs.last} {home_team.last}",
+            "subtitle": "{team1.last} {at_vs.last} {team2.last}",
             "description": (
                 "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
             ),
@@ -562,7 +602,7 @@ def _event_base(**overrides) -> dict:
     base = {
         "template_type": "event",
         "title_format": "{gracenote_category}",
-        "subtitle_template": "{away_team} {at_vs} {home_team}",
+        "subtitle_template": "{team1} {at_vs} {team2}",
         "program_art_url": _EVENT_ART,
         "game_duration_mode": "sport",
         "pregame_enabled": True,
@@ -577,7 +617,7 @@ def _event_base(**overrides) -> dict:
         # the constructed prose is the fallback when no preview exists yet.
         "pregame_fallback": {
             "title": "Coming up: {gracenote_category} at {game_time}",
-            "subtitle": "{away_team} {at_vs} {home_team}",
+            "subtitle": "{team1} {at_vs} {team2}",
             "description": "{game_preview}",
             "description_fallback": (
                 "The {away_team_record} {away_team} travel to {venue_city}, "
@@ -594,7 +634,7 @@ def _event_base(**overrides) -> dict:
         # {result_text}, which are TEAM_ONLY and fail builder validation, #354).
         "postgame_fallback": {
             "title": "{gracenote_category}: Postgame",
-            "subtitle": "{away_team} {at_vs} {home_team}",
+            "subtitle": "{team1} {at_vs} {team2}",
             "description": "Final: {event_result}",
             "art_url": _EVENT_ART,
         },
@@ -699,7 +739,7 @@ def _event_base(**overrides) -> dict:
             },
         ],
         # SUPER SHORT: "NBA | DET/LAL" — abbrev-first, fits truncating guides.
-        "event_channel_name": "{league} | {away_team_abbrev}/{home_team_abbrev}",
+        "event_channel_name": "{league} | {team1_abbrev}/{team2_abbrev}",
         "event_channel_logo_url": _EVENT_LOGO,
     }
     base.update(overrides)
@@ -734,7 +774,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # naming; W-D-L records come through the generic record vars.
     _team_base(
         name="Soccer Team (Starter)",
-        subtitle_template="{away_team} vs {home_team}",
+        subtitle_template="{team1} vs {team2}",
         # Match register (#355 item 5): soccer filler says 'match', never
         # 'game'. College keeps the base text — 'game' IS its register.
         idle_content={
@@ -778,7 +818,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         },
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time.next}",
-            "subtitle": "{away_team.next} vs {home_team.next}",
+            "subtitle": "{team1.next} vs {team2.next}",
             "description": "{game_preview.next}",
             "description_fallback": (
                 "{away_team_the.next} face {home_team_the.next} at {venue.next} "
@@ -945,7 +985,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # connector; national-team tournaments use International Event instead.
     _event_base(
         name="Soccer Club Event (Starter)",
-        subtitle_template="{away_team} vs {home_team}",
+        subtitle_template="{team1} vs {team2}",
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time}",
             "subtitle": "{away_team} vs {home_team}",
@@ -990,7 +1030,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _event_base(
         name="Combat Event (Starter)",
         title_format="{league} {event_number}: {card_segment_display}",
-        subtitle_template="{away_team} vs {home_team}",
+        subtitle_template="{team1} vs {team2}",
         pregame_fallback={
             "title": "Coming up: {league} {event_number} at {game_time}",
             "subtitle": "{away_team} vs {home_team}",
@@ -1054,7 +1094,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _event_base(
         name="International Event (Starter)",
         title_format="{gracenote_category} {year}",
-        subtitle_template="{away_team} vs {home_team}",
+        subtitle_template="{team1} vs {team2}",
         # "NED v JPN"
         event_channel_name="{away_team_abbrev} v {home_team_abbrev}",
         postgame_fallback={

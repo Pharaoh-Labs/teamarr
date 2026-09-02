@@ -5,25 +5,25 @@
   </channel>
   <programme start="20260710090000 +0000" stop="20260710120000 +0000" channel="teamarr-event-e1">
     <title lang="en">Coming up: FIFA World Cup at 3:00 PM EDT</title>
-    <sub-title lang="en">Belgium vs. Spain</sub-title>
+    <sub-title lang="en">Spain vs. Belgium</sub-title>
     <desc lang="en">The Belgium travel to East Rutherford, to play the Spain today at 3:00 PM EDT.</desc>
     <icon src="world-cup/Belgium/Spain/cover.png?style=6&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710120000 +0000" stop="20260710180000 +0000" channel="teamarr-event-e1">
     <title lang="en">Coming up: FIFA World Cup at 3:00 PM EDT</title>
-    <sub-title lang="en">Belgium vs. Spain</sub-title>
+    <sub-title lang="en">Spain vs. Belgium</sub-title>
     <desc lang="en">The Belgium travel to East Rutherford, to play the Spain today at 3:00 PM EDT.</desc>
     <icon src="world-cup/Belgium/Spain/cover.png?style=6&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710180000 +0000" stop="20260710190000 +0000" channel="teamarr-event-e1">
     <title lang="en">Coming up: FIFA World Cup at 3:00 PM EDT</title>
-    <sub-title lang="en">Belgium vs. Spain</sub-title>
+    <sub-title lang="en">Spain vs. Belgium</sub-title>
     <desc lang="en">The Belgium travel to East Rutherford, to play the Spain today at 3:00 PM EDT.</desc>
     <icon src="world-cup/Belgium/Spain/cover.png?style=6&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710190000 +0000" stop="20260710213000 +0000" channel="teamarr-event-e1">
     <title lang="en">FIFA World Cup 2026</title>
-    <sub-title lang="en">Belgium vs Spain</sub-title>
+    <sub-title lang="en">Spain vs Belgium</sub-title>
     <desc lang="en">Belgium face Spain at MetLife Stadium. Belgium have won 3 of their last five; Spain have won 4 of their last five.</desc>
     <date>20260710</date>
     <category lang="en">Sports</category>

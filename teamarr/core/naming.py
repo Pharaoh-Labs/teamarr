@@ -159,9 +159,22 @@ def matchup_connector(sport: str | None, neutral_site: bool = False) -> str:
 _HOME_FIRST_SPORTS = frozenset({"soccer", "rugby", "cricket", "australian-football"})
 
 
-def matchup_home_first(sport: str | None) -> bool:
-    """Does this sport's matchup convention name the home side first?"""
+def matchup_home_first(sport: str | None, order: str = "auto") -> bool:
+    """Does the matchup name the home side first?
+
+    ``order`` is the user's matchup-order mode (#692 phase 2): 'away_first'
+    and 'home_first' force it; 'auto' (default) follows the sport's
+    convention.
+    """
+    if order == "home_first":
+        return True
+    if order == "away_first":
+        return False
     return (sport or "").lower() in _HOME_FIRST_SPORTS
+
+
+# Values of the matchup_order setting (global + per-league override).
+MATCHUP_ORDER_MODES: frozenset[str] = frozenset({"auto", "away_first", "home_first"})
 
 
 def format_matchup(
@@ -169,16 +182,18 @@ def format_matchup(
     home: str,
     sport: str | None,
     neutral_site: bool = False,
+    order: str = "auto",
 ) -> str:
     """Sport-conventional matchup string for the {matchup*} variables (#692).
 
-    Order follows matchup_home_first; the symbol mirrors matchup_connector
-    ("at" → "@", directional; "vs." → "v"), so `{matchup}` and
+    Order follows matchup_home_first (sport convention, or the user's
+    order mode); the symbol mirrors matchup_connector ("at" → "@",
+    directional; "vs." → "v"), so `{matchup}` and
     `{away_team} {at_vs} {home_team}` always agree on the sport:
     "Bears @ Lions", "Ipswich Town v Liverpool", neutral-site "Miami v Ohio State".
     """
     symbol = "@" if matchup_connector(sport, neutral_site) == "at" else "v"
-    first, second = (home, away) if matchup_home_first(sport) else (away, home)
+    first, second = (home, away) if matchup_home_first(sport, order) else (away, home)
     return f"{first} {symbol} {second}"
 
 

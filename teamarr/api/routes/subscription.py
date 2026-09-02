@@ -6,6 +6,8 @@ Global sports/league subscription and template assignment management.
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from teamarr.config import set_league_matchup_order
+from teamarr.core.naming import MATCHUP_ORDER_MODES
 from teamarr.database import get_db
 from teamarr.database.subscription import (
     add_subscription_template,
@@ -90,6 +92,7 @@ class LeagueConfigResponse(BaseModel):
     channel_profile_ids: list[int | str] | None = None
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
+    matchup_order: str | None = None  # #692: None = global setting
 
 
 class LeagueConfigUpdate(BaseModel):
@@ -98,6 +101,7 @@ class LeagueConfigUpdate(BaseModel):
     channel_profile_ids: list[int | str] | None = None
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
+    matchup_order: str | None = None  # #692: 'auto' | 'away_first' | 'home_first'
 
 
 class LeagueConfigListResponse(BaseModel):
@@ -303,6 +307,7 @@ def list_league_configs():
                 channel_profile_ids=c.channel_profile_ids,
                 channel_group_id=c.channel_group_id,
                 channel_group_mode=c.channel_group_mode,
+                matchup_order=c.matchup_order,
             )
             for c in configs
         ],
@@ -316,6 +321,11 @@ def list_league_configs():
 )
 def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate):
     """Create or update per-league subscription config."""
+    if request.matchup_order is not None and request.matchup_order not in MATCHUP_ORDER_MODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid matchup_order. Valid: {sorted(MATCHUP_ORDER_MODES)}",
+        )
 
     with get_db() as conn:
         config = upsert_league_config(
@@ -324,13 +334,16 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
             channel_profile_ids=request.channel_profile_ids,
             channel_group_id=request.channel_group_id,
             channel_group_mode=request.channel_group_mode,
+            matchup_order=request.matchup_order,
         )
+    set_league_matchup_order(league_code, config.matchup_order)  # render-time cache (#692)
 
     return LeagueConfigResponse(
         league_code=config.league_code,
         channel_profile_ids=config.channel_profile_ids,
         channel_group_id=config.channel_group_id,
         channel_group_mode=config.channel_group_mode,
+        matchup_order=config.matchup_order,
     )
 
 
@@ -343,6 +356,7 @@ def delete_league_config_endpoint(league_code: str):
 
     with get_db() as conn:
         deleted = delete_league_config(conn, league_code)
+    set_league_matchup_order(league_code, None)
 
     if not deleted:
         raise HTTPException(
