@@ -217,10 +217,10 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
         <h2 className="text-lg font-semibold">General Settings</h2>
       </div>
 
-      {/* Tile 1: Time/Localization Settings */}
+      {/* Tile 1: Localization */}
       <Card>
         <CardHeader>
-          <CardTitle>Time/Localization Settings</CardTitle>
+          <CardTitle>Localization</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Explainer: the two timezones */}
@@ -304,6 +304,34 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Subsection: Sport naming (#691) */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Sport Naming</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={(display?.sport_naming ?? "us") === "us" ? "default" : "outline"}
+                size="sm"
+                onClick={() => display && setDisplay({ ...display, sport_naming: "us" })}
+              >
+                US
+              </Button>
+              <Button
+                type="button"
+                variant={display?.sport_naming === "international" ? "default" : "outline"}
+                size="sm"
+                onClick={() => display && setDisplay({ ...display, sport_naming: "international" })}
+              >
+                International
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              US: Football, Soccer · International: American Football, Football. Applies to
+              {" "}{"{sport}"} in templates and channel groups, and to labels in this interface.
+              Channel groups built from {"{sport}"} are renamed on the next generation.
+            </p>
           </div>
 
           <SaveButton

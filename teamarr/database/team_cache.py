@@ -218,8 +218,8 @@ def list_sports(conn: Connection) -> dict[str, str]:
     Returns:
         Dict mapping sport codes to display names
     """
-    cursor = conn.execute("SELECT sport_code, display_name FROM sports ORDER BY display_name")
-    return {row["sport_code"]: row["display_name"] for row in cursor.fetchall()}
+    names = get_sport_display_names_from_db(conn)  # sport naming applied (#691)
+    return dict(sorted(names.items(), key=lambda item: item[1]))
 
 
 def get_league_teams(conn: Connection, league_slug: str) -> list[dict]:

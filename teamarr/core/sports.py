@@ -79,8 +79,38 @@ def normalize_sport(sport: str) -> str:
     return lower
 
 
+# Sport naming (#691): the seeded display names use US vocabulary. The
+# "international" mode relabels the two sports whose names differ; every
+# other sport keeps its seeded display name. Applied in ONE place —
+# get_sport_display_names_from_db — so templates ({sport}), the {sport}
+# Dispatcharr group wildcard, and every UI label inherit it. Matching keywords
+# and product vocabulary ("soccer mode", starter template names) are untouched.
+SPORT_NAMING_MODES: frozenset[str] = frozenset({"us", "international"})
+SPORT_NAMING_OVERRIDES: dict[str, dict[str, str]] = {
+    "international": {"soccer": "Football", "football": "American Football"},
+}
+
+
+def apply_sport_naming(names: dict[str, str], mode: str | None) -> dict[str, str]:
+    """Return ``names`` with the naming-mode overrides applied (a new dict)."""
+    overrides = SPORT_NAMING_OVERRIDES.get(mode or "us", {})
+    if not overrides:
+        return dict(names)
+    return {code: overrides.get(code, name) for code, name in names.items()}
+
+
+def get_sport_naming_mode(conn) -> str:
+    """Read the sport naming mode from settings; 'us' when unset or pre-column."""
+    try:
+        row = conn.execute("SELECT sport_naming FROM settings WHERE id = 1").fetchone()
+    except Exception:  # settings table/column absent (bare test DBs)
+        return "us"
+    mode = row[0] if row else None
+    return mode if mode in SPORT_NAMING_MODES else "us"
+
+
 def get_sport_display_names_from_db(conn) -> dict[str, str]:
-    """Get all sport display names from database.
+    """Get all sport display names from database, with sport naming applied.
 
     Args:
         conn: Database connection
@@ -89,4 +119,5 @@ def get_sport_display_names_from_db(conn) -> dict[str, str]:
         Dict mapping sport_code to display_name
     """
     cursor = conn.execute("SELECT sport_code, display_name FROM sports")
-    return {row["sport_code"]: row["display_name"] for row in cursor.fetchall()}
+    names = {row["sport_code"]: row["display_name"] for row in cursor.fetchall()}
+    return apply_sport_naming(names, get_sport_naming_mode(conn))

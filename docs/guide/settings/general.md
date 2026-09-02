@@ -11,7 +11,7 @@ System-level configuration: time, scheduled generation, the TheSportsDB API key,
 
 ![Settings → General — timezones, formatting, and the generation schedule](../../assets/images/settings-general.png)
 
-## Time / Localization
+## Localization
 
 Teamarr uses two timezones — they can differ on purpose (browse in your local time while your media server expects EPG in its own timezone):
 
@@ -30,6 +30,19 @@ environment:
 
 - **Time format** — 12-hour (`3:45 PM`) or 24-hour (`15:45`). Applies to both the UI and EPG output.
 - **Show timezone abbreviation** — toggle whether abbreviations (EST, PST, …) appear alongside times.
+
+### Sport Naming
+
+Choose the vocabulary Teamarr uses for the two sports whose names differ by region:
+
+| Setting | Association football | Gridiron |
+|---------|----------------------|----------|
+| **US** (default) | Soccer | Football |
+| **International** | Football | American Football |
+
+The choice applies everywhere a sport is named from data: the `{sport}` template variable, the `{sport}` wildcard in Dispatcharr channel-group and profile patterns, and sport labels throughout this interface. It does not change stream matching (stream names are matched on both words already), the **soccer mode** subscription setting, or the names of the starter templates.
+
+Switching the setting renames any Dispatcharr channel group built from `{sport}` on the next generation: with **International**, NFL channels move to a new "American Football" group and the existing "Football" group becomes association football.
 
 ## Schedule
 

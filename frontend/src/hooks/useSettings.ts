@@ -122,6 +122,7 @@ export const useUpdateDurationSettings = settingsMutationHook(updateDurationSett
 export const useDisplaySettings = settingsQueryHook("display", getDisplaySettings)
 export const useUpdateDisplaySettings = settingsMutationHook(updateDisplaySettings, [
   ["settings", "display"],
+  ["sports"], // sport naming (#691) changes every sport label
 ])
 
 export const useTeamFilterSettings = settingsQueryHook("team-filter", getTeamFilterSettings)

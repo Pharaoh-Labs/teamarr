@@ -84,6 +84,7 @@ export interface ReconciliationSettings {
 
 export interface DisplaySettings {
   time_format: string
+  sport_naming: "us" | "international"
   show_timezone: boolean
   channel_id_format: string
   xmltv_generator_name: string
