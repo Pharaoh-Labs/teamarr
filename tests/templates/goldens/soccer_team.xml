@@ -4,25 +4,25 @@
   </channel>
   <programme start="20260710090000 +0000" stop="20260710100000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
     <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710100000 +0000" stop="20260710160000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
     <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710160000 +0000" stop="20260710190000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
     <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710190000 +0000" stop="20260710213000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer</title>
-    <sub-title lang="en">Arsenal vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
     <desc lang="en">Arsenal face Chelsea at Stamford Bridge. Arsenal have won 4 of their last five; Chelsea have won 3 of their last five.</desc>
     <date>20260710</date>
     <category lang="en">Sports</category>
@@ -34,13 +34,13 @@
   </programme>
   <programme start="20260710213000 +0000" stop="20260710220000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Chelsea Postgame</title>
-    <sub-title lang="en">Arsenal vs. Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
     <desc lang="en">The game between Chelsea and Arsenal on Friday, July 10, 2026 has not yet ended as of the last update.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710220000 +0000" stop="20260711040000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Chelsea Postgame</title>
-    <sub-title lang="en">Arsenal vs. Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
     <desc lang="en">The game between Chelsea and Arsenal on Friday, July 10, 2026 has not yet ended as of the last update.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
@@ -66,25 +66,25 @@
   </programme>
   <programme start="20260712040000 +0000" stop="20260712100000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Liverpool vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
     <desc lang="en">Liverpool face Chelsea at The Palace sunday at 3:00 PM EDT.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712100000 +0000" stop="20260712160000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Liverpool vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
     <desc lang="en">Liverpool face Chelsea at The Palace sunday at 3:00 PM EDT.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712160000 +0000" stop="20260712190000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Liverpool vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
     <desc lang="en">Liverpool face Chelsea at The Palace sunday at 3:00 PM EDT.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712190000 +0000" stop="20260712213000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer</title>
-    <sub-title lang="en">Liverpool vs Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
     <desc lang="en">Liverpool face Chelsea at The Palace.</desc>
     <date>20260712</date>
     <category lang="en">Sports</category>
@@ -96,13 +96,13 @@
   </programme>
   <programme start="20260712213000 +0000" stop="20260712220000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Chelsea Postgame</title>
-    <sub-title lang="en">Liverpool vs. Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
     <desc lang="en">The game between Chelsea and Liverpool on Sunday, July 12, 2026 has not yet ended as of the last update.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712220000 +0000" stop="20260713040000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Chelsea Postgame</title>
-    <sub-title lang="en">Liverpool vs. Chelsea</sub-title>
+    <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
     <desc lang="en">The game between Chelsea and Liverpool on Sunday, July 12, 2026 has not yet ended as of the last update.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>

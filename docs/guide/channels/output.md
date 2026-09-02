@@ -49,7 +49,7 @@ A few failure modes are handled gracefully: a pattern whose wildcard can't resol
 
 ## Per-League Channel Config
 
-Override channel profiles, channel groups, and group modes on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off to see all; the search field filters within whatever's visible). Click a league row to expand its configuration.
+Override channel profiles, channel groups, group modes, and the [matchup order](../settings/general.md#matchup-order) on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off to see all; the search field filters within whatever's visible). Click a league row to expand its configuration.
 
 ### Available Overrides
 
@@ -63,3 +63,5 @@ When Channel Group Mode is set to **Custom**, a pattern field appears where you 
 
 {: .note }
 Per-league overrides take precedence over the global defaults above. Use the **X** button to clear an override and revert to the default.
+
+**Matchup Order** decides which team `{matchup}` and `{team1}`/`{team2}` name first for that league: **Default** inherits the global setting under Settings → General → Localization; **Auto** follows the sport's convention; **Away first** / **Home first** force it. Useful when one competition breaks its sport's habit (a soccer league you want listed visitor-first, or vice versa).

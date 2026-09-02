@@ -5,6 +5,8 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException, status
 
 from teamarr.config import set_display_settings as set_config_display
+from teamarr.config import set_global_matchup_order
+from teamarr.core.naming import MATCHUP_ORDER_MODES
 from teamarr.core.sports import SPORT_NAMING_MODES
 from teamarr.database import get_db
 from teamarr.database.settings import (
@@ -136,6 +138,11 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid sport_naming. Valid: {sorted(SPORT_NAMING_MODES)}",
         )
+    if update.matchup_order not in MATCHUP_ORDER_MODES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid matchup_order. Valid: {sorted(MATCHUP_ORDER_MODES)}",
+        )
 
     with get_db() as conn:
         previous_naming = get_all_settings(conn).display.sport_naming
@@ -144,6 +151,7 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
             time_format=update.time_format,
             show_timezone=update.show_timezone,
             sport_naming=update.sport_naming,
+            matchup_order=update.matchup_order,
             channel_id_format=update.channel_id_format,
             xmltv_generator_name=update.xmltv_generator_name,
             xmltv_generator_url=update.xmltv_generator_url,
@@ -158,6 +166,9 @@ def update_display_settings_endpoint(update: DisplaySettingsModel):
         xmltv_generator_name=update.xmltv_generator_name,
         xmltv_generator_url=update.xmltv_generator_url,
     )
+
+    # Matchup order is read at render time from the config cache (#692).
+    set_global_matchup_order(update.matchup_order)
 
     # Sport naming feeds the league-mapping service's cached display names
     # ({sport} template variable); reload so the next render uses them (#691).

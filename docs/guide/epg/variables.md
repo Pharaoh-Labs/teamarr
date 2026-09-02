@@ -10,7 +10,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 252 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 258 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -158,6 +158,12 @@ Core identifiers for teams, leagues, and matchups.
 | `{matchup}` | Full matchup in the sport's convention: visitor first with `@` for US team sports, home first with `v` for soccer/rugby/cricket; neutral-site games use `v` | base, .next, .last | `Chicago Bears @ Detroit Lions` · `Ipswich Town v Liverpool` |
 | `{matchup_abbrev}` | Abbreviated matchup uppercase, same convention | base, .next, .last | `CHI @ DET` · `IPS v LIV` |
 | `{matchup_short}` | Short-name matchup, same convention | base, .next, .last | `Bears @ Lions` · `Ipswich v Liverpool` |
+| `{team1}` | First team in the matchup order: the visitor for US team sports, the home side for soccer/rugby/cricket, or whatever the [Matchup Order](../settings/general.md#matchup-order) setting says | base, .next, .last | `Chicago Bears` |
+| `{team2}` | Second team in the matchup order | base, .next, .last | `Detroit Lions` |
+| `{team1_short}` | First team's short name in the matchup order | base, .next, .last | `Bears` |
+| `{team2_short}` | Second team's short name in the matchup order | base, .next, .last | `Lions` |
+| `{team1_abbrev}` | First team's abbreviation uppercase in the matchup order | base, .next, .last | `CHI` |
+| `{team2_abbrev}` | Second team's abbreviation uppercase in the matchup order | base, .next, .last | `DET` |
 | `{league}` | League short alias | base | `NFL` |
 | `{league_name}` | League display name from the leagues table | base | `NFL` |
 | `{league_abbrev}` | League abbreviation built from the league name — existing capitals plus the first letter of each word | base | `WC` (from `World Cup`) |

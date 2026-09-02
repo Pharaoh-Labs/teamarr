@@ -147,6 +147,12 @@ class Config:
     # Display settings - Loaded from DB at startup
     _display_settings_cache: dict | None = None
 
+    # Matchup order (#692): global mode + per-league overrides, loaded at
+    # startup and kept current by the settings / league-config routes. Read
+    # at template render time by the {matchup*} and {team1}/{team2} variables.
+    _matchup_order: str = "auto"
+    _league_matchup_orders: dict[str, str] = {}
+
     # Default display settings (used before DB is loaded)
     _DEFAULT_DISPLAY_SETTINGS: dict = {
         "time_format": "12h",
@@ -251,6 +257,33 @@ class Config:
         cls._display_settings_cache = None
 
     @classmethod
+    def set_matchup_orders(cls, global_mode: str, per_league: dict[str, str]) -> None:
+        """Replace the matchup-order cache (startup / full reload)."""
+        cls._matchup_order = global_mode or "auto"
+        cls._league_matchup_orders = {k: v for k, v in per_league.items() if v}
+
+    @classmethod
+    def set_global_matchup_order(cls, mode: str) -> None:
+        cls._matchup_order = mode or "auto"
+
+    @classmethod
+    def set_league_matchup_order(cls, league: str, mode: str | None) -> None:
+        """Set or clear (None) one league's override."""
+        if mode:
+            cls._league_matchup_orders[league.lower()] = mode
+        else:
+            cls._league_matchup_orders.pop(league.lower(), None)
+
+    @classmethod
+    def get_matchup_order(cls, league: str | None = None) -> str:
+        """Effective matchup-order mode for a league: override, else global."""
+        if league:
+            override = cls._league_matchup_orders.get(league.lower())
+            if override:
+                return override
+        return cls._matchup_order
+
+    @classmethod
     def clear_timezone_cache(cls) -> None:
         """Clear cached timezone (forces reload on next access)."""
         cls._timezone_cache = None
@@ -320,6 +353,24 @@ def set_timezone(timezone: str) -> None:
 def clear_timezone_cache() -> None:
     """Clear cached timezone (call after epg_timezone setting update)."""
     Config.clear_timezone_cache()
+
+
+def set_matchup_orders(global_mode: str, per_league: dict[str, str]) -> None:
+    """Load the matchup-order cache (#692): global mode + per-league overrides."""
+    Config.set_matchup_orders(global_mode, per_league)
+
+
+def set_global_matchup_order(mode: str) -> None:
+    Config.set_global_matchup_order(mode)
+
+
+def set_league_matchup_order(league: str, mode: str | None) -> None:
+    Config.set_league_matchup_order(league, mode)
+
+
+def get_matchup_order(league: str | None = None) -> str:
+    """Effective matchup-order mode ('auto' | 'away_first' | 'home_first')."""
+    return Config.get_matchup_order(league)
 
 
 def get_display_settings() -> dict:

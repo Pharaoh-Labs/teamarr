@@ -44,6 +44,20 @@ The choice applies everywhere a sport is named from data: the `{sport}` template
 
 Switching the setting renames any Dispatcharr channel group built from `{sport}` on the next generation: with **International**, NFL channels move to a new "American Football" group and the existing "Football" group becomes association football.
 
+### Matchup Order
+
+Which team is named first in a matchup:
+
+| Setting | Behaviour |
+|---------|-----------|
+| **Auto** (default) | The sport's convention: visitor first for football, basketball, baseball and hockey (`Bears @ Lions`); home first for soccer, rugby, cricket and Australian football (`Ipswich Town v Liverpool`). Neutral-site games read `v`. |
+| **Away first** | Always visitor first |
+| **Home first** | Always home first |
+
+The setting governs the order-aware variables only: `{matchup}`, `{matchup_short}`, `{matchup_abbrev}`, and `{team1}`/`{team2}` with their `_short` and `_abbrev` forms. The starter templates use these, so switching the setting changes their subtitles and channel names on the next generation. Text you have typed yourself as `{away_team} vs {home_team}` keeps that order; use `{team1} {at_vs} {team2}` instead if you want it to follow the setting.
+
+Override the order for one league on the [per-league table](../channels/output.md#per-league-overrides) under Channels → Dispatcharr Output.
+
 ## Schedule
 
 Enable automatic EPG generation on a cron schedule. A status badge shows whether the scheduler is **Running** or **Stopped**, along with the last run time.

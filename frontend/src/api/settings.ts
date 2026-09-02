@@ -85,6 +85,7 @@ export interface ReconciliationSettings {
 export interface DisplaySettings {
   time_format: string
   sport_naming: "us" | "international"
+  matchup_order: "auto" | "away_first" | "home_first"
   show_timezone: boolean
   channel_id_format: string
   xmltv_generator_name: string
@@ -569,6 +570,7 @@ export interface SubscriptionLeagueConfig {
   channel_profile_ids: (number | string)[] | null
   channel_group_id: number | null
   channel_group_mode: string | null
+  matchup_order: string | null // "auto" | "away_first" | "home_first"; null = global setting
 }
 
 export interface LeagueConfigListResponse {
@@ -587,6 +589,7 @@ export async function upsertLeagueConfig(
     channel_profile_ids?: (number | string)[] | null
     channel_group_id?: number | null
     channel_group_mode?: string | null
+    matchup_order?: string | null
   }
 ): Promise<SubscriptionLeagueConfig> {
   return api.put(`/league-configs/${encodeURIComponent(leagueCode)}`, data)

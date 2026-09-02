@@ -268,6 +268,7 @@ class DisplaySettingsModel(BaseModel):
     time_format: str = "12h"
     show_timezone: bool = True
     sport_naming: str = "us"  # 'us' | 'international' (#691)
+    matchup_order: str = "auto"  # 'auto' | 'away_first' | 'home_first' (#692)
     channel_id_format: str = "{team_name|pascal}.{league_id}"
     xmltv_generator_name: str = "Teamarr"
     xmltv_generator_url: str = "https://github.com/Pharaoh-Labs/teamarr"
