@@ -1333,3 +1333,256 @@ def test_atp_wta_league_hints_are_builtin():
         c = classify_stream(text)
         assert c.category == StreamCategory.TENNIS_MATCH
         assert c.league_hint == code
+
+
+# ---------------------------------------------------------------------------
+# #689 — US Open per-court feeds (ESPN+ / TSN+), captured live 2026-09-01
+# ---------------------------------------------------------------------------
+
+
+def test_us_open_named_courts_reduce_to_espn_keys():
+    from teamarr.consumers.matching.tennis_matcher import _court_key, _extract_courts
+
+    # ESPN venue.court values seen on the 2026 US Open scoreboard
+    assert _court_key("Arthur Ashe Stadium") == "ashe"
+    assert _court_key("Louis Armstrong Stadium") == "armstrong"
+    assert _court_key("Grandstand") == "grandstand"
+    assert _court_key("Stadium 17") == "17"
+    assert _court_key("Court 5") == "5"
+    # ESPN+ stream names (court and nothing else)
+    norm = normalize_text
+    assert _extract_courts(norm("ESPN+ 17: Arthur Ashe Stadium @ Sep 01 11:30AM ET")) == {"ashe"}
+    assert _extract_courts(norm("ESPN+ 07: Stadium 17 @ Sep 01 11:00AM ET")) == {"17"}
+    assert _extract_courts(norm("ESPN+ 11: Grandstand @ Sep 01 11:00AM ET")) == {"grandstand"}
+    # TSN+ writes "Court 17" for Stadium 17 and misspells Armstrong
+    assert _extract_courts(norm("TSN+ 06: US Open: Day #1 - Court 17 (ft. Fernandez)")) == {"17"}
+    tsn_typo = "TSN+ 09: US Open: Day #1 - Louis Armstong Stadium (ft. Gauff)"
+    assert _extract_courts(norm(tsn_typo)) == {"armstrong"}
+    # Wimbledon keys unchanged
+    assert _extract_courts("wimbledon day 6 court 18 court 16 no 2 court") == {"18", "16", "2"}
+
+
+def _us_open_event(eid, league, court, start, p1=None, p2=None):
+    e = _court_event(eid, league, court, start)
+    e.tournament_name, e.tournament_id = "US Open", "189"
+    e.name = f"US Open: {e.away_team.name} vs {e.home_team.name}"
+    if p1 and p2:
+        e.away_team, e.home_team = p1, p2
+    return e
+
+
+def test_named_tournaments_us_token_needs_the_phrase():
+    """'US Open' reduces to the lone token 'us', which every 'US:'-prefixed
+    stream carries — it used to veto every other tournament for US-region
+    streams. A tournament is named by a ≥3-char distinctive token or by its
+    full name as a phrase."""
+    from teamarr.consumers.matching.tennis_matcher import _named_tournaments
+
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 8, 28, 12, tzinfo=tz)
+    us_open = _us_open_event("uso-1", "atp", "Court 5", day)
+    ws = _court_event("ws-1", "atp", "Center Court", day)
+    ws.tournament_name, ws.tournament_id = "Winston-Salem Open", "421"
+    pool = [us_open, ws]
+
+    def named(text):
+        return _named_tournaments(normalize_text(text), pool)
+
+    assert named("US: Tennis: Alex de Minaur vs Ben Shelton") == set()
+    assert named("TSN+ 03: US Open: Day #1 - Court 7") == {"189"}
+    assert named("ATP 250 Tennis: Winston-Salem - Final") == {"421"}
+    assert named("US: ATP Winston-Salem: Shelton vs Fery") == {"421"}
+
+
+def test_us_prefixed_stream_is_not_vetoed_from_other_tournament():
+    """End-to-end on the pair path: a US-region Winston-Salem stream must
+    still bind to its Winston-Salem match while the US Open is in the pool."""
+    from teamarr.consumers.matching.tennis_matcher import TennisMatchContext
+
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 8, 28, 19, 0, tzinfo=tz)
+    shelton, fery = _player("Ben Shelton", "Shelton"), _player("Arthur Fery", "Fery")
+    ws = _tennis_event("ws-sf", shelton, fery, day)
+    ws.tournament_name, ws.tournament_id = "Winston-Salem Open", "421"
+    other = _us_open_event("uso-2", "atp", "Court 5", day)
+
+    c = classify_stream(
+        "US: Tennis: Ben Shelton vs Arthur Fery @ Aug 28 19:00",
+        league_event_type="event",
+        event_league_sport="tennis",
+    )
+    ctx = TennisMatchContext(
+        stream_name=c.normalized.original, stream_id=1, group_id=1,
+        target_date=date(2026, 8, 28), generation=1, user_tz=tz, classified=c,
+    )
+    outcome = _TM._match_to_event(ctx, [other, ws], "atp")
+    assert outcome.is_matched and outcome.event.id == "ws-sf"
+
+
+# A team-dominant mixed group, like prod's "USA | ESPN+" (hundreds of team
+# leagues + atp/wta): dominant event type is team_vs_team, so court feeds never
+# classify tennis on the primary pass.
+_MIXED_LEAGUES = ("nfl", "mlb", "nba", "nhl", "atp", "wta")
+_MIXED_EVENT_TYPES = {
+    "nfl": "team_vs_team", "mlb": "team_vs_team", "nba": "team_vs_team",
+    "nhl": "team_vs_team", "atp": "event", "wta": "event",
+}
+_MIXED_SPORTS = {
+    "nfl": "football", "mlb": "baseball", "nba": "basketball",
+    "nhl": "hockey", "atp": "tennis", "wta": "tennis",
+}
+
+
+def _mixed_group_with_us_open(monkeypatch, events, **kw):
+    """Team-dominant group (nfl + atp/wta) whose primary route finds nothing."""
+    from teamarr.consumers.matching.result import MatchOutcome
+    from tests.fakes import make_stream_matcher
+
+    m = make_stream_matcher(
+        leagues=_MIXED_LEAGUES,
+        league_event_types=_MIXED_EVENT_TYPES,
+        league_sports=_MIXED_SPORTS,
+        user_tz=ZoneInfo("America/New_York"),
+        **kw,
+    )
+    m._tennis_matcher._service = _PoolService(events)
+    monkeypatch.setattr(
+        m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
+    )
+    return m
+
+
+def _day3_slate():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 9, 1, 11, 0, tzinfo=tz)
+    ws_c7 = _court_event("ws-c7", "atp", "Court 7", day)
+    ws_c7.tournament_name, ws_c7.tournament_id = "Winston-Salem Open", "421"
+    return [
+        _us_open_event("ashe-1", "wta", "Arthur Ashe Stadium", day.replace(hour=12)),
+        _us_open_event("ashe-2", "atp", "Arthur Ashe Stadium", day.replace(hour=19)),
+        _us_open_event("c7-1", "wta", "Court 7", day),
+        _us_open_event("c12-1", "atp", "Court 12", day),
+        _us_open_event("s17-1", "atp", "Stadium 17", day.replace(hour=13)),
+        ws_c7,
+    ]
+
+
+def test_espn_plus_court_feed_matches_in_mixed_group(monkeypatch):
+    """'ESPN+ 17: Arthur Ashe Stadium @ …' has no tennis token; in a
+    team-dominant group it classified TEAM_VS_TEAM and died team2_not_found.
+    The fallback re-classifies under tennis and fans out across that court."""
+    m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
+    out = m._match_single(1, "ESPN+ 17: Arthur Ashe Stadium @ Sep 01 11:30AM ET", date(2026, 9, 1))
+    assert {r.event.id for r in out if r.matched} == {"ashe-1", "ashe-2"}
+    assert all(r.category == StreamCategory.TENNIS_MATCH for r in out)
+    # Numbered courts: the court number must not be eaten as a day-of-month
+    out = m._match_single(2, "ESPN+ 06: Court 12 @ Sep 01 11:00AM ET", date(2026, 9, 1))
+    assert {r.event.id for r in out if r.matched} == {"c12-1"}
+    out = m._match_single(3, "ESPN+ 07: Stadium 17 @ Sep 01 11:00AM ET", date(2026, 9, 1))
+    assert {r.event.id for r in out if r.matched} == {"s17-1"}
+
+
+def test_tsn_plus_court_feed_stays_inside_the_named_tournament(monkeypatch):
+    m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
+    out = m._match_single(
+        1, "TSN+ 03: US Open: Day #3 - Court 7 (ft. Rinderknech, Zverev) @ 1 Sep 11:00 AM ET",
+        date(2026, 9, 1),
+    )
+    # Winston-Salem's Court 7 the same day is vetoed by the tournament guard
+    assert {r.event.id for r in out if r.matched} == {"c7-1"}
+
+
+def test_court_feed_fallback_requires_court_evidence(monkeypatch):
+    """TV shows with 'court' in the name, day-only feeds and round words are
+    not evidence; nothing reaches the tennis feed matcher."""
+    m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
+    called = []
+    monkeypatch.setattr(
+        m._tennis_matcher, "match_feed", lambda *a, **kw: called.append(1) or []
+    )
+    for name in (
+        "Court Cam | Episode 10",
+        "Divorce Court | Controlling Love: Nalayah Casey vs. Robert Williams",
+        "US Open Day 3 @ Sep 1 3:30 PM",
+        "NBA Finals Game 5 @ Sep 01 8:00PM ET",
+    ):
+        out = m._match_single(1, name, date(2026, 9, 1))
+        assert not any(r.matched for r in out), name
+    assert not called
+
+
+def test_court_feed_fallback_is_veto_only_without_that_court(monkeypatch):
+    """A court the day's slate does not have → the feed matcher fails as before."""
+    m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
+    out = m._match_single(1, "ESPN+ 11: Grandstand @ Sep 01 11:00AM ET", date(2026, 9, 1))
+    assert not any(r.matched for r in out)
+
+
+def test_court_feed_fallback_gated_by_name_match(monkeypatch):
+    m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
+    m._name_match_enabled = False
+    out = m._match_single(1, "ESPN+ 17: Arthur Ashe Stadium @ Sep 01 11:30AM ET", date(2026, 9, 1))
+    assert not any(r.matched for r in out)
+
+
+def _us_open_epg_matcher(programs):
+    from teamarr.consumers.matching.epg_index import EPGProgramIndex
+    from tests.fakes import make_stream_matcher
+
+    tz = ZoneInfo("UTC")
+    day = datetime(2026, 9, 1, 15, tzinfo=tz)
+    shelton, griek = _player("Ben Shelton", "Shelton"), _player("Tallon Griekspoor", "Griekspoor")
+    a = _us_open_event("uso-sg", "atp", "Court 5", day, shelton, griek)
+    b = _us_open_event("uso-c5b", "wta", "Court 5", day.replace(hour=17))
+    c = _us_open_event("uso-ashe", "atp", "Arthur Ashe Stadium", day)
+    m = make_stream_matcher(
+        leagues=_MIXED_LEAGUES,
+        league_event_types=_MIXED_EVENT_TYPES,
+        league_sports=_MIXED_SPORTS,
+        epg_index=EPGProgramIndex({"espn": programs}),
+        user_tz=tz,
+    )
+    m._tennis_matcher._service = _PoolService([a, b, c])
+    return m
+
+
+def test_epg_programme_naming_pooled_tournament_reaches_tennis_path(monkeypatch):
+    """Guide title with no tennis token but a pooled tournament and a pair
+    ('US Open 2026 | Men's First Round: Ben Shelton/Tallon Griekspoor') used
+    to take the team path and die no_event_found."""
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "US Open 2026", "Men's First Round: Ben Shelton/Tallon Griekspoor",
+        datetime(2026, 9, 1, 15, tzinfo=tz), datetime(2026, 9, 1, 18, tzinfo=tz),
+    )
+    m = _us_open_epg_matcher([prog])
+    results = m._match_via_epg(
+        stream_id=1, stream_name="ESPN", tvg_id="espn", target_date=date(2026, 9, 1)
+    )
+    ids = {r.event.id: r for r in results if r.matched}
+    assert set(ids) == {"uso-sg"}
+    assert ids["uso-sg"].match_method.value == "epg"
+
+
+def test_epg_programme_naming_tournament_without_pair_or_court_falls_through(monkeypatch):
+    """Tournament name alone never fans out (the 2026-07-05 regression); the
+    programme continues to ordinary routing instead."""
+    from teamarr.consumers.matching.result import MatchOutcome
+
+    tz = ZoneInfo("UTC")
+    prog = _epg_program(
+        1, "SportsCenter", "at the US Open",
+        datetime(2026, 9, 1, 15, tzinfo=tz), datetime(2026, 9, 1, 16, tzinfo=tz),
+    )
+    m = _us_open_epg_matcher([prog])
+    routed = []
+    monkeypatch.setattr(
+        m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: routed.append(c) or [MatchOutcome.failed(None)],
+    )
+    results = m._match_via_epg(
+        stream_id=1, stream_name="ESPN", tvg_id="espn", target_date=date(2026, 9, 1)
+    )
+    assert not any(r.matched for r in results)
+    assert routed, "programme must fall through to ordinary routing"

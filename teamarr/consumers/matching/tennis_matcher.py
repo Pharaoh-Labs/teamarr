@@ -59,13 +59,26 @@ TENNIS_MATCH_THRESHOLD = 75
 # several at once ("Court 4 AND Court 12"). ESPN names them "No. 1 Court",
 # "Court 18", "Centre Court", "Court 17 Roehampton" (qualifying). Both sides
 # reduce to a canonical key: "centre", "show 1", or the bare number.
+#
+# Named show courts (#689): the US Open's per-court feeds are "Arthur Ashe
+# Stadium", "Louis Armstrong Stadium", "Grandstand", "Stadium 17" on ESPN's
+# side and on ESPN+ stream names; TSN+ writes "Louis Armstong Stadium" (sic)
+# and "Court 17" for Stadium 17. Named courts are listed first so they claim
+# their span before the generic "court N" / "stadium N" patterns.
 
 _COURT_PATTERNS = [
+    (re.compile(r"\barthur\s+ashe(?:\s+stadium)?\b"), lambda m: "ashe"),
+    (
+        re.compile(r"\b(?:louis\s+armstr?ong(?:\s+stadium)?|armstr?ong\s+stadium)\b"),
+        lambda m: "armstrong",
+    ),
+    (re.compile(r"\bgrandstand\b"), lambda m: "grandstand"),
     (re.compile(r"\bcent(?:re|er)\s+court\b"), lambda m: "centre"),
     (re.compile(r"\bshow\s+court\s+(\d{1,2})\b"), lambda m: f"show {m.group(1)}"),
     (re.compile(r"\bno\s*(\d{1,2})\s+court\b"), lambda m: m.group(1)),
     (re.compile(r"\bcourt\s+no\s*(\d{1,2})\b"), lambda m: m.group(1)),
     (re.compile(r"\bcourt\s+(\d{1,2})\b"), lambda m: m.group(1)),
+    (re.compile(r"\bstadium\s+(\d{1,2})\b"), lambda m: m.group(1)),
 ]
 
 # Ordinal / keyword round labels → canonical ESPN round.displayName form
@@ -128,10 +141,17 @@ def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
 
     The hint set is derived from the candidate pool itself: a tournament is
     "named" when any of its distinctive name tokens (generic words like
-    open/cup/masters excluded) appears in the stream text. No alias table —
-    ESPN's own tournament names are the vocabulary.
+    open/cup/masters excluded) appears in the stream text, or when its full
+    normalized name appears as a phrase. No alias table — ESPN's own
+    tournament names are the vocabulary.
+
+    A distinctive token must be at least three characters (#689): "US Open"
+    reduces to the lone token "us", which every "US:"-prefixed stream carries,
+    so the guard vetoed all other tournaments for any US-region stream. The
+    phrase rule ("us open") keeps such short-token names nameable.
     """
     text_tokens = set(text.split())
+    padded_text = f" {text} "
     named: set[str] = set()
     seen: set[str] = set()
     for event in pool:
@@ -140,10 +160,13 @@ def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
         if not key or not tname or key in seen:
             continue
         seen.add(key)
-        distinctive = (
-            set(normalize_text(tname).split()) - _GENERIC_TOURNAMENT_TOKENS
-        )
-        if distinctive and distinctive & text_tokens:
+        tnorm = normalize_text(tname)
+        distinctive = {
+            tok
+            for tok in tnorm.split()
+            if tok not in _GENERIC_TOURNAMENT_TOKENS and len(tok) >= 3
+        }
+        if (distinctive & text_tokens) or (tnorm and f" {tnorm} " in padded_text):
             named.add(key)
     return named
 
@@ -204,6 +227,15 @@ def _extract_courts(text: str) -> set[str]:
             claimed.append(span)
             courts.add(keyfn(m))
     return courts
+
+
+def has_court_evidence(text: str) -> bool:
+    """Does a raw stream name name a court? (#689 mixed-group fallback gate).
+
+    Courts only — never rounds: "final"/"semifinal" appear in every sport's
+    stream names, and a failed team stream must not fan onto a tennis final.
+    """
+    return bool(_extract_courts(normalize_text(text)))
 
 
 def _court_key(court: str) -> str | None:
@@ -267,6 +299,9 @@ class TennisMatcher:
         # major=true; with the flag on, smaller tournaments never enter the
         # candidate pool, so their channels are never created.
         self._majors_only = majors_only
+        # (leagues, local date) -> day pool, for names_tournament (#689); one
+        # matcher instance lives for one generation run, so no expiry needed.
+        self._pool_cache: dict[tuple[tuple[str, ...], date], list[Event]] = {}
 
     def match(
         self,
@@ -574,6 +609,26 @@ class TennisMatcher:
             how,
         )
         return outcomes
+
+    def names_tournament(
+        self, text: str, leagues: list[str], at: datetime, user_tz: ZoneInfo
+    ) -> bool:
+        """Does ``text`` name a tournament in the pool for ``at``'s local date? (#689)
+
+        The EPG path's gate for programmes that carry no tennis token of
+        their own ("US Open 2026 | Men's First Round: Shelton/Griekspoor"):
+        naming a pooled tournament routes the programme to match_program,
+        which still demands a player pair or a court before binding.
+        """
+        local_date = at.astimezone(user_tz).date()
+        key = (tuple(leagues), local_date)
+        pool = self._pool_cache.get(key)
+        if pool is None:
+            pool = []
+            for league in leagues:
+                pool.extend(self._events_for_local_date(league, local_date, user_tz))
+            self._pool_cache[key] = pool
+        return bool(_named_tournaments(normalize_text(text), pool))
 
     # =========================================================================
     # PRIVATE METHODS

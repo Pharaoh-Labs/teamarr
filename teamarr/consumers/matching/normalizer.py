@@ -299,8 +299,16 @@ DATE_PATTERNS = [
     (r"\b(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})\b", "DATE_MASK"),
     # 30 @ Jun - reversed day-@-month tail (some MiLB feeds). Masking removes the
     # stray "@" so it can't beat " at " as the matchup separator. Month NAME
-    # required so real matchups ("LAL @ BOS") are untouched.
-    (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s*@\s*(?:{_MONTH_NAMES})\b", "DATE_MASK"),
+    # required so real matchups ("LAL @ BOS") are untouched. The month must
+    # NOT be followed by its own day number ("Court 12 @ Sep 01 11:00AM"):
+    # there the number before "@" is a court/race/game number and the real
+    # date is "Sep 01" (#689) — a following time ("Jun 06:30", "Jun 7 PM")
+    # is not a day number.
+    (
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s*@\s*(?:{_MONTH_NAMES})\b"
+        rf"(?!\s+\d{{1,2}}(?:st|nd|rd|th)?\b(?!:|\s*[AaPp][Mm]\b))",
+        "DATE_MASK",
+    ),
     # 1/17, 12/31 (MM/DD without year) - infer year based on proximity to today
     # Must come after MM/DD/YYYY to avoid partial matches
     (r"\b(\d{1,2})[/\-](\d{1,2})\b", "DATE_MASK_NO_YEAR"),

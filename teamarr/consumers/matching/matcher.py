@@ -52,7 +52,7 @@ from teamarr.consumers.matching.result import (
     ResultAggregator,
 )
 from teamarr.consumers.matching.team_matcher import TeamMatcher
-from teamarr.consumers.matching.tennis_matcher import TennisMatcher
+from teamarr.consumers.matching.tennis_matcher import TennisMatcher, has_court_evidence
 from teamarr.consumers.racing_segments import nearest_session
 from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
@@ -759,15 +759,9 @@ class StreamMatcher:
             # chance before writing it off as unclassifiable (same gate as
             # the TEAM_ONLY path below).
             if self._name_match_enabled:
-                fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+                fallback = self._try_mixed_group_fallbacks(stream_name, stream_id, target_date)
                 if fallback is not None:
-                    outcome, racing_classified = fallback
-                    return [self._outcome_to_result(
-                        outcome=outcome,
-                        stream_id=stream_id,
-                        stream_name=stream_name,
-                        classified=racing_classified,
-                    )]
+                    return fallback
             return [MatchedStreamResult(
                 stream_name=stream_name,
                 stream_id=stream_id,
@@ -784,15 +778,9 @@ class StreamMatcher:
             # fallback a chance before dropping it. Racing-by-name is a
             # Stream Name matching type, so it stays gated on name_match.
             if self._name_match_enabled:
-                fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+                fallback = self._try_mixed_group_fallbacks(stream_name, stream_id, target_date)
                 if fallback is not None:
-                    outcome, racing_classified = fallback
-                    return [self._outcome_to_result(
-                        outcome=outcome,
-                        stream_id=stream_id,
-                        stream_name=stream_name,
-                        classified=racing_classified,
-                    )]
+                    return fallback
             return [MatchedStreamResult(
                 stream_name=stream_name,
                 stream_id=stream_id,
@@ -824,25 +812,18 @@ class StreamMatcher:
 
         outcomes = self._route_to_outcomes(classified, stream_id, target_date)
 
-        # Racing fallback for mixed groups (see _try_racing_fallback): the
-        # primary route found nothing and the stream may be a racing stream
-        # whose classification was masked by a team_vs_team-dominant group.
-        # Gated on name_match: TEAM_ONLY routing runs even when Stream Name
-        # matching is off, and racing-by-name must not sneak in through it.
-        if (
-            self._name_match_enabled
-            and classified.category != StreamCategory.RACING_EVENT
-            and not any(o.is_matched for o in outcomes)
-        ):
-            fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+        # Mixed-group fallbacks (see _try_mixed_group_fallbacks): the primary
+        # route found nothing and the stream may be a racing stream or a
+        # tennis court feed whose classification was masked by a
+        # team_vs_team-dominant group. Gated on name_match: TEAM_ONLY routing
+        # runs even when Stream Name matching is off, and by-name matching
+        # must not sneak in through it.
+        if self._name_match_enabled and not any(o.is_matched for o in outcomes):
+            fallback = self._try_mixed_group_fallbacks(
+                stream_name, stream_id, target_date, primary=classified.category
+            )
             if fallback is not None:
-                outcome, racing_classified = fallback
-                return [self._outcome_to_result(
-                    outcome=outcome,
-                    stream_id=stream_id,
-                    stream_name=stream_name,
-                    classified=racing_classified,
-                )]
+                return fallback
 
         return [
             self._outcome_to_result(
@@ -979,10 +960,18 @@ class StreamMatcher:
             )
             if classified.category == StreamCategory.PLACEHOLDER:
                 continue
-            if classified.category == StreamCategory.TENNIS_MATCH:
-                for outcome in self._match_tennis_program(
+            # A programme with no tennis token of its own ("US Open 2026 |
+            # Men's First Round: Shelton/Griekspoor") still takes the tennis
+            # programme path when it names a tournament in the day's pool
+            # (#689); match_program then demands a pair or a court, so the
+            # 2026-07-05 fan-out cannot recur. If it binds nothing, the
+            # programme falls through to the ordinary routing below.
+            is_tennis = classified.category == StreamCategory.TENNIS_MATCH
+            if is_tennis or self._program_names_tennis_tournament(program, epg_input):
+                tennis_outcomes = self._match_tennis_program(
                     program, classified, epg_input, stream_id, tvg_id
-                ):
+                )
+                for outcome in tennis_outcomes:
                     outcome.match_method = MatchMethod.EPG
                     outcome.epg_program_start = program.start_dt
                     outcome.epg_program_end = program.end_dt
@@ -995,7 +984,8 @@ class StreamMatcher:
                     )
                     if prev is None or skew_s < prev[0]:
                         best_by_event[ev_id] = (skew_s, outcome, classified)
-                continue
+                if is_tennis or tennis_outcomes:
+                    continue
 
             # Same text-evidence gate as the racing fallback, applied to the
             # PRIMARY classification too: in a racing-dominant group
@@ -1143,6 +1133,17 @@ class StreamMatcher:
             )
         return plan
 
+    def _program_names_tennis_tournament(self, program, epg_input: str) -> bool:
+        """EPG gate (#689): does this programme name a pooled tennis tournament?"""
+        tennis_leagues = self._tennis_leagues()
+        if not tennis_leagues or program.start_dt is None:
+            return False
+        description = (program.description or "").strip()
+        text = f"{epg_input} | {description}" if description else epg_input
+        return self._tennis_matcher.names_tournament(
+            text, tennis_leagues, program.start_dt, self._user_tz
+        )
+
     def _match_tennis_program(
         self,
         program,
@@ -1157,12 +1158,7 @@ class StreamMatcher:
         a TENNIS_MATCHUP_UNKNOWN failure is recorded per tvg_id so the linear
         stream's result can carry it when nothing else matches.
         """
-        tennis_leagues = [
-            lg
-            for lg in self._search_leagues
-            if self._league_event_types.get(lg) == "event"
-            and self._league_sports.get(lg) == "tennis"
-        ]
+        tennis_leagues = self._tennis_leagues()
         if not tennis_leagues or program.start_dt is None or program.end_dt is None:
             return []
         description = (program.description or "").strip()
@@ -1593,6 +1589,100 @@ class StreamMatcher:
             detail="No matching racing event found",
         )
 
+    def _tennis_leagues(self) -> list[str]:
+        """Configured tennis leagues (event-type leagues whose sport is tennis)."""
+        return [
+            lg
+            for lg in self._search_leagues
+            if self._league_event_types.get(lg) == "event"
+            and self._league_sports.get(lg) == "tennis"
+        ]
+
+    def _try_mixed_group_fallbacks(
+        self,
+        stream_name: str,
+        stream_id: int,
+        target_date: date,
+        primary: StreamCategory | None = None,
+    ) -> list[MatchedStreamResult] | None:
+        """Stream-name fallbacks for mixed groups, in order: racing, tennis feeds.
+
+        ``primary`` is the category the first pass already tried, so the same
+        sub-matcher is not asked twice. Returns finished results (the fallback
+        classification rides in each result), or None when nothing applied.
+        """
+        if primary != StreamCategory.RACING_EVENT:
+            fallback = self._try_racing_fallback(stream_name, stream_id, target_date)
+            if fallback is not None:
+                outcome, racing_classified = fallback
+                return [self._outcome_to_result(
+                    outcome=outcome,
+                    stream_id=stream_id,
+                    stream_name=stream_name,
+                    classified=racing_classified,
+                )]
+        if primary != StreamCategory.TENNIS_MATCH:
+            fallback = self._try_tennis_feed_fallback(stream_name, stream_id, target_date)
+            if fallback is not None:
+                outcomes, tennis_classified = fallback
+                return [
+                    self._outcome_to_result(
+                        outcome=o,
+                        stream_id=stream_id,
+                        stream_name=stream_name,
+                        classified=tennis_classified,
+                    )
+                    for o in outcomes
+                ]
+        return None
+
+    def _try_tennis_feed_fallback(
+        self,
+        text: str,
+        stream_id: int,
+        target_date: date,
+    ) -> "tuple[list[MatchOutcome], ClassifiedStream] | None":
+        """Tennis court-feed fallback for mixed groups (#689).
+
+        ESPN+ carries a grand slam as one stream per court ("ESPN+ 17: Arthur
+        Ashe Stadium @ Sep 01 11:30AM ET"); TSN+ as "US Open: Day #1 - Court 7
+        (ft. …)". Neither carries a tennis token, so in a team-dominant group
+        they classify TEAM_VS_TEAM/TEAM_ONLY/PLACEHOLDER and never reach
+        TennisMatcher.match_feed. When the primary route found nothing, the
+        group includes a tennis league, and the text names a COURT, re-classify
+        under the tennis sport and let match_feed join the court against that
+        day's slate. Veto-only in effect: no court in the pool that day → the
+        feed matcher fails exactly as before. Rounds are deliberately not
+        evidence (see has_court_evidence), and a re-classification that yields
+        a player pair is left alone — pair streams reach the tennis path on
+        their own tokens.
+        """
+        tennis_leagues = self._tennis_leagues()
+        if not tennis_leagues or not has_court_evidence(text):
+            return None
+
+        tennis_classified = classify_stream(
+            text, "event", self._custom_regex,
+            self._feed_home_terms, self._feed_away_terms,
+            event_league_sport="tennis",
+        )
+        if tennis_classified.category != StreamCategory.TENNIS_MATCH:
+            return None
+        if tennis_classified.team1 and tennis_classified.team2:
+            return None
+
+        outcomes = self._tennis_matcher.match_feed(
+            classified=tennis_classified,
+            leagues=tennis_leagues,
+            target_date=target_date,
+            stream_id=stream_id,
+            user_tz=self._user_tz,
+            duration_hours=self._sport_durations.get("tennis", 3.0),
+        )
+        if not any(o.is_matched for o in outcomes):
+            return None
+        return outcomes, tennis_classified
+
     def _try_racing_fallback(
         self,
         text: str,
@@ -1657,12 +1747,7 @@ class StreamMatcher:
         court/round for the day (one outcome per match, each carrying its own
         time-share window — mirrors the TEAM_ONLY/EPG fan-out shape).
         """
-        tennis_leagues = [
-            lg
-            for lg in self._search_leagues
-            if self._league_event_types.get(lg) == "event"
-            and self._league_sports.get(lg) == "tennis"
-        ]
+        tennis_leagues = self._tennis_leagues()
 
         if not tennis_leagues:
             return [MatchOutcome.filtered(

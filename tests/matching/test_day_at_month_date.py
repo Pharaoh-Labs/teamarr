@@ -74,3 +74,26 @@ class TestNoRegressions:
         norm = normalize_stream("Game on June 30 tonight")
         assert norm.extracted_date is not None
         assert (norm.extracted_date.month, norm.extracted_date.day) == (6, 30)
+
+
+class TestNumberBeforeAtIsNotADay:
+    """#689: 'Court 12 @ Sep 01 11:00AM ET' — the number before '@' is a court
+    (or race/game) number; the date is the 'Sep 01' AFTER the month."""
+
+    def test_court_number_not_eaten_as_day(self):
+        norm = normalize_stream("ESPN+ 06: Court 12 @ Sep 01 11:00AM ET")
+        assert (norm.extracted_date.month, norm.extracted_date.day) == (9, 1)
+        assert "Court 12" in norm.normalized
+
+    def test_stadium_and_race_numbers(self):
+        for name in (
+            "ESPN+ 07: Stadium 17 @ Sep 01 11:00AM ET",
+            "NASCAR Cup Series Race 2 @ Sep 01 3:00PM ET",
+        ):
+            norm = normalize_stream(name)
+            assert (norm.extracted_date.month, norm.extracted_date.day) == (9, 1), name
+
+    def test_reversed_tail_with_hour_only_time_still_reads_day_at_month(self):
+        # "Jun 7 PM" is a time, not a day number — the reversed form still wins.
+        norm = normalize_stream("Tortugas at Marauders 30 @ Jun 7 PM ET")
+        assert (norm.extracted_date.month, norm.extracted_date.day) == (6, 30)

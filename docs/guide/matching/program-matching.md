@@ -153,6 +153,8 @@ Guide entries for tennis are usually tournament-level ("Wimbledon", "WTA 1000 To
 
 A pair binds that one match. A court binds every match on that court that falls inside the programme's broadcast slot. A programme that gives only the tournament (or only players, with no tournament) binds nothing and the stream shows **"Tennis matchup not known"** in Run History — Teamarr never spreads one programme across a whole tournament.
 
+A programme does not need the word "tennis" in its title to take this path: a title that names a tournament in that day's schedule (`US Open 2026 | Men's First Round: Shelton/Griekspoor`) is tried as a tennis programme first, and only falls back to ordinary team-sport matching if it binds nothing.
+
 ## Why some channels show red in Dispatcharr
 
 A channel that shows **red** in Dispatcharr means no streams are currently attached to it. With EPG program matching, that is often **completely normal**: time-sharing means the linear stream is attached only inside the window around each matched program — outside it, the stream is intentionally detached so it's free to serve the next event's channel, and the channel goes red.
