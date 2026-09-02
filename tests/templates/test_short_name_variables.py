@@ -236,4 +236,5 @@ class TestContextPlumbing:
         ctx = _event_context(event)
         assert extract_home_team_short(ctx, ctx.game_context) == "Arsenal"
         assert extract_away_team_short(ctx, ctx.game_context) == "Liverpool"
-        assert extract_matchup_short(ctx, ctx.game_context) == "Liverpool @ Arsenal"
+        # Soccer convention is home first with "v" (#692 phase 1)
+        assert extract_matchup_short(ctx, ctx.game_context) == "Arsenal v Liverpool"
