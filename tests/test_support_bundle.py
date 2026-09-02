@@ -63,8 +63,13 @@ def test_bundle_signals_media_server_failing(db_path, tmp_path):
         for _ in range(3):
             run = create_run(conn, run_type="full_epg")
             run.extra_metrics["media_servers"] = [
-                {"kind": "emby", "server": "Emby", "success": False, "duration": 0.02,
-                 "error": "connection refused"}
+                {
+                    "kind": "emby",
+                    "server": "Emby",
+                    "success": False,
+                    "duration": 0.02,
+                    "error": "connection refused",
+                }
             ]
             run.complete()
             save_run(conn, run)
@@ -182,3 +187,44 @@ def test_matching_signals_absent_when_run_predates_group_breakdown(db_path, tmp_
 
     codes = {s["code"] for s in report["signals"]}
     assert "source_matching_zero" not in codes
+
+
+def test_bundle_redacts_credentials_nested_in_json_settings(db_path, tmp_path):
+    """JSON-typed settings columns are parsed and redacted at every depth (#686).
+
+    ``emby_servers`` / ``jellyfin_servers`` are stored as JSON text. Key-name
+    redaction only ran on dict keys, so the ``api_key`` and ``password`` inside
+    the text survived while the top-level ``emby_api_key`` was masked.
+    """
+    servers = json.dumps(
+        [
+            {
+                "name": "Living Room",
+                "url": "http://emby.local:8096",
+                "username": "media",
+                "password": "hunter2-emby",
+                "api_key": "emby-key-0123456789",
+            }
+        ]
+    )
+    with get_connection(db_path) as conn:
+        conn.execute(
+            "UPDATE settings SET emby_servers = ?, jellyfin_servers = ?",
+            (servers, servers.replace("emby", "jelly")),
+        )
+        conn.commit()
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    bundle = SupportBundleService(db_path, logs).create()
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        contents = "\n".join(archive.read(name).decode() for name in archive.namelist())
+        report = json.loads(archive.read("support-report.json"))
+
+    for leaked in ("hunter2-emby", "emby-key-0123456789", "hunter2-jelly", "jelly-key-0123456789"):
+        assert leaked not in contents
+    [emby] = report["configuration"]["settings"]["emby_servers"]
+    assert emby["name"] == "Living Room"
+    assert emby["password"] == "[REDACTED]"
+    assert emby["api_key"] == "[REDACTED]"
+    assert "emby.local" not in emby["url"]

@@ -432,11 +432,30 @@ class SupportBundleService:
         if isinstance(value, (datetime, Path)):
             return str(value)
         if isinstance(value, str):
+            # JSON-typed columns (emby_servers, jellyfin_servers, ...) arrive as
+            # text, so key-name redaction never saw the api_key/password nested
+            # inside them (#686). Parse and recurse so every depth is covered;
+            # the redacted structure replaces the string in the report.
+            nested = self._parse_json_container(value)
+            if nested is not None:
+                return self._sanitize(nested)
             sanitized = _TOKEN_VALUE.sub(REDACTED, _URL.sub(REDACTED, value))
             for account_name in self._account_names:
                 sanitized = sanitized.replace(account_name, REDACTED)
             return sanitized
         return value
+
+    @staticmethod
+    def _parse_json_container(value: str) -> dict[str, Any] | list[Any] | None:
+        """Return the parsed dict/list when ``value`` is a JSON container, else None."""
+        stripped = value.lstrip()
+        if not stripped or stripped[0] not in "{[":
+            return None
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return None
+        return parsed if isinstance(parsed, (dict, list)) else None
 
     def _log_tail(self, filename: str) -> str | None:
         path = self.log_dir / filename
@@ -458,7 +477,7 @@ class SupportBundleService:
             f"bundle_schema_version: {SCHEMA_VERSION}",
             "report_path: support-report.json",
             "report_format: json",
-            "redaction: stream URLs, M3U account names, and credentials are excluded",
+            "redaction: stream URLs, M3U account names, and credentials are excluded, including inside JSON-typed settings",
             f"captured_at: {report['summary']['captured_at']}",
             "---",
             "",
@@ -486,7 +505,7 @@ class SupportBundleService:
                 f"Recent runs: {RUN_LIMIT}; matched/failed stream details per run: {MATCH_DETAIL_LIMIT}; log tail per file: {LOG_BYTES} bytes.",
                 "",
                 "## Privacy and Exclusions",
-                "Stream URLs, M3U account names, credentials, tokens, raw template bodies, raw XMLTV, and provider cache payloads are excluded.",
+                "Stream URLs, M3U account names, credentials, tokens, raw template bodies, raw XMLTV, and provider cache payloads are excluded. JSON-typed settings (media-server lists, filters) are parsed and redacted at every depth.",
                 "",
                 "## Suggested Triage",
                 "Review critical signals, collection_errors, recent failed runs and logs, source subscription overrides/template mappings, then managed channels and stream ordering evidence.",
