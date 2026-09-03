@@ -61,25 +61,55 @@ def filter_title(value: str) -> str:
     )
 
 
+def _per_side(transform: Callable[[str], str]) -> Callable[[str], str]:
+    """Run a path transform over each side of a pairing, rejoined with ``+``.
+
+    ESPN publishes a doubles/pairing competitor as ONE name joined by ``/``
+    ("Isabelle Haverlag / Nika Radisic"), and game-thumbs addresses a pair with
+    ``+`` between the two players (``/wta/a+b/c+d/logo.png``). The path filters
+    split on every non-alphanumeric run, so a plain transform dissolved the
+    separator into the surrounding words — game-thumbs then fuzzy-matched the
+    mashed string to a SINGLE athlete and rendered one player per side instead
+    of the two-player composite (#699). Splitting first keeps the pairing.
+    """
+
+    def apply(value: str) -> str:
+        sides = [transform(side) for side in (value or "").split("/")]
+        return "+".join(side for side in sides if side)
+
+    return apply
+
+
+def _pascal_one(value: str) -> str:
+    words = re.split(r"[^a-zA-Z0-9]+", _ascii_fold(value or ""))
+    return "".join(word.capitalize() for word in words if word)
+
+
+def _slug_one(value: str) -> str:
+    folded = _ascii_fold(value or "").lower()
+    return re.sub(r"[^a-z0-9]+", "-", folded).strip("-")
+
+
 def filter_pascal(value: str) -> str:
     """PascalCase for channel IDs: ``Detroit Tigers`` -> ``DetroitTigers``.
 
     Identical to the retired ``*_pascal`` variables' transform: accents
     normalized, split on non-alphanumeric, each word capitalized.
-    ``D.C. United`` -> ``DCUnited``.
+    ``D.C. United`` -> ``DCUnited``. A ``/``-joined pairing keeps its two sides
+    apart as ``+`` (see :func:`_per_side`): ``Nys / Roger-Vasselin`` ->
+    ``Nys+RogerVasselin``.
     """
-    words = re.split(r"[^a-zA-Z0-9]+", _ascii_fold(value or ""))
-    return "".join(word.capitalize() for word in words if word)
+    return _per_side(_pascal_one)(value)
 
 
 def filter_slug(value: str) -> str:
     """URL/identifier slug: ``St. Louis Cardinals`` -> ``st-louis-cardinals``.
 
     Accents normalized, lowercased, non-alphanumeric runs collapse to a single
-    hyphen, no leading/trailing hyphens.
+    hyphen, no leading/trailing hyphens. A ``/``-joined pairing keeps its two
+    sides apart as ``+`` (see :func:`_per_side`).
     """
-    folded = _ascii_fold(value or "").lower()
-    return re.sub(r"[^a-z0-9]+", "-", folded).strip("-")
+    return _per_side(_slug_one)(value)
 
 
 # Registry of `|filter` modifiers usable in templates. Opt-in by design so

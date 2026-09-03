@@ -49,6 +49,58 @@ class TestCaseFilters:
         assert filter_slug("Atlético  Madrid!") == "atletico-madrid"
 
 
+class TestDoublesPairSeparator:
+    """A "/"-joined pairing survives the path filters as "+" (#699).
+
+    ESPN gives a doubles competitor one name ("Isabelle Haverlag / Nika
+    Radisic"); game-thumbs addresses a pair as /wta/a+b/c+d/logo.png. Before
+    the fix the separator dissolved into the surrounding words and the service
+    fuzzy-matched the mash to a SINGLE athlete, rendering one player per side.
+    """
+
+    def test_pascal_keeps_pair(self):
+        assert (
+            filter_pascal("Isabelle Haverlag / Nika Radisic")
+            == "IsabelleHaverlag+NikaRadisic"
+        )
+        assert (
+            filter_pascal("Hugo Nys / Edouard Roger-Vasselin")
+            == "HugoNys+EdouardRogerVasselin"
+        )
+
+    def test_slug_keeps_pair(self):
+        assert (
+            filter_slug("Serena Williams / Venus Williams")
+            == "serena-williams+venus-williams"
+        )
+
+    def test_accents_still_folded_per_side(self):
+        assert (
+            filter_pascal("Constantin Frantzén / Robin Haase")
+            == "ConstantinFrantzen+RobinHaase"
+        )
+
+    def test_singles_unchanged(self):
+        assert filter_pascal("Serena Williams") == "SerenaWilliams"
+        assert filter_slug("St. Louis Cardinals") == "st-louis-cardinals"
+
+    def test_art_path_renders_both_sides(self):
+        rendered = TemplateResolver().resolve_with_map(
+            "{away_team|pascal}/{home_team|pascal}/logo.png",
+            {
+                "away_team": "Isabelle Haverlag / Nika Radisic",
+                "home_team": "Leylah Fernandez / Janice Tjen",
+            },
+        )
+        assert rendered == (
+            "IsabelleHaverlag+NikaRadisic/LeylahFernandez+JaniceTjen/logo.png"
+        )
+
+    def test_empty_side_does_not_leave_a_dangling_separator(self):
+        assert filter_pascal("Nys / ") == "Nys"
+        assert filter_slug("/ Radisic") == "radisic"
+
+
 class TestChaining:
     def test_left_to_right(self):
         assert _resolve("{team_name|pascal|urlencode}") == "DetroitTigers"

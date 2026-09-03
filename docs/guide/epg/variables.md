@@ -101,12 +101,18 @@ Any variable accepts a `|filter` modifier that transforms its resolved value:
 | `lower` | lowercase | `detroit lions` |
 | `upper` | UPPERCASE | `DETROIT LIONS` |
 | `title` | Title Case each word | `Detroit Lions` |
-| `pascal` | PascalCase, accents folded, punctuation dropped | `DetroitLions` |
-| `slug` | lowercase, hyphen-separated, URL-safe | `detroit-lions` |
+| `pascal` | PascalCase, accents folded, punctuation dropped (`/` pairings kept as `+`) | `DetroitLions` |
+| `slug` | lowercase, hyphen-separated, URL-safe (`/` pairings kept as `+`) | `detroit-lions` |
 | `urlencode` (alias `url`) | percent-encode for URL query strings | `Detroit%20Lions` |
 
 Filters **chain** left-to-right: `{home_team|pascal|url}` PascalCases the name, then
 URL-encodes the result. Suffixes come before the filter: `{opponent.next|upper}`.
+
+`pascal` and `slug` are the path filters, and they treat `/` as a **pairing separator**
+rather than punctuation to drop: a tennis doubles side arrives from the provider as one
+name (`Isabelle Haverlag / Nika Radisic`) and renders as `IsabelleHaverlag+NikaRadisic`
+(`isabelle-haverlag+nika-radisic` for `slug`) — `+` is how Game Thumbs addresses a pair,
+so both players end up in the artwork. Singles names are unaffected.
 
 - Filters are **opt-in**: variables without one are unchanged, so a variable that already
   holds a full URL is never double-encoded.
