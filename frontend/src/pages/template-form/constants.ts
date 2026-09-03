@@ -176,6 +176,32 @@ function asciiFold(value: string): string {
   return value.normalize("NFKD").replace(/[̀-ͯ]/g, "")
 }
 
+// A "/"-joined pairing (ESPN doubles: "Haverlag / Radisic") is transformed
+// side-by-side and rejoined with "+", the separator game-thumbs uses to address
+// a pair (/wta/a+b/c+d/logo.png) — collapsing it resolves to one player (#699).
+function perSide(value: string, transform: (part: string) => string): string {
+  return (value || "")
+    .split("/")
+    .map(transform)
+    .filter(Boolean)
+    .join("+")
+}
+
+function pascalOne(value: string): string {
+  return asciiFold(value)
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+    .join("")
+}
+
+function slugOne(value: string): string {
+  return asciiFold(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
 // Template `|filter` modifiers, mirroring the backend registry
 // (teamarr/templates/filters.py, #478/#484). Chains apply left-to-right:
 // {team_name|pascal|url}. Kept in lockstep with the backend by
@@ -186,17 +212,8 @@ export const TEMPLATE_FILTERS: Record<string, (value: string) => string> = {
   lower: (v) => v.toLowerCase(),
   upper: (v) => v.toUpperCase(),
   title: (v) => v.replace(/[A-Za-z]+/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()),
-  pascal: (v) =>
-    asciiFold(v)
-      .split(/[^a-zA-Z0-9]+/)
-      .filter(Boolean)
-      .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
-      .join(""),
-  slug: (v) =>
-    asciiFold(v)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, ""),
+  pascal: (v) => perSide(v, pascalOne),
+  slug: (v) => perSide(v, slugOne),
 }
 
 // Retired pure-transform variables (#484): resolved forever as base+filter so

@@ -26,6 +26,15 @@ The full path-joining rules (what counts as relative, why paths must not start w
 
 The base URL is applied uniformly to all three art sinks — the EPG `<icon>`, the Dispatcharr channel logo, and filler art — so guide artwork and channel logos always match. Prefixing is idempotent and self-repairing: applying it twice never double-prefixes, and older values corrupted into `/https://…` form are fixed automatically.
 
+### Tennis doubles
+
+Game Thumbs addresses a doubles pair with a `+` between the two players
+(`/wta/haverlag+radisic/fernandez+tjen/logo.png`). Providers publish a doubles side as a
+single `/`-joined name, and the `pascal`/`slug` filters preserve that pairing as `+`, so
+the shipped art paths compose **both** players per side with no template changes. Without
+the separator Game Thumbs matches the joined string to a single athlete and renders one
+player per side.
+
 ### Conventions the starter templates use
 
 The shipped [starter templates](../templates/defaults) use these Game Thumbs query parameters:
