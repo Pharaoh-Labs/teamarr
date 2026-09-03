@@ -101,9 +101,12 @@ class StreamOrderingService:
         self._group_name_cache: dict[int, str] = {}
         # Keyed by rule.value string so different team selections cache separately
         self._team_feed_patterns: dict[str, re.Pattern | None] = {}
-        # Rule value → provider team ids it selects (#489); compared against a
-        # stream's persisted feed_team_id ahead of the name regex
-        self._team_feed_ids: dict[str, frozenset[str] | None] = {}
+        # Rule value → (sport, provider team id) pairs it selects (#489, #687);
+        # compared against a stream's persisted feed_team_id ahead of the name
+        # regex, scoped by the stream's channel sport (see _feed_team_selected)
+        self._team_feed_ids: dict[str, frozenset[tuple[str | None, str]] | None] = {}
+        self._league_sports: dict[str, str | None] = {}
+        self._channel_sports: dict[int, str | None] = {}
         # Keyed by sorted comma-joined keys for simple team-presence patterns
         self._team_presence_patterns: dict[str, re.Pattern | None] = {}
 
@@ -387,7 +390,7 @@ class StreamOrderingService:
         """
         if stream.feed_team_id:
             team_ids = self._get_team_feed_ids(rule_value)
-            return team_ids is not None and stream.feed_team_id in team_ids
+            return team_ids is not None and self._feed_team_selected(stream, team_ids)
         if not stream.stream_name:
             return False
         pattern = self._get_team_feed_pattern(rule_value)
@@ -404,7 +407,7 @@ class StreamOrderingService:
         """
         if stream.feed_team_id:
             team_ids = self._get_team_feed_ids(rule_value)
-            return team_ids is not None and stream.feed_team_id not in team_ids
+            return team_ids is not None and not self._feed_team_selected(stream, team_ids)
         if not stream.stream_name:
             return False
         if not self._FEED_INDICATOR_RE.search(stream.stream_name):
@@ -652,46 +655,114 @@ class StreamOrderingService:
 
         return rows
 
-    def _get_team_feed_ids(self, rule_value: str) -> frozenset[str] | None:
-        """Resolve a team_feed rule value to the provider team ids it selects (#489).
+    def _league_sport(self, league: str) -> str | None:
+        """Sport of a league code, from the leagues table (cached)."""
+        key = league.lower()
+        if key not in self._league_sports:
+            sport = None
+            if self.conn:
+                try:
+                    row = self.conn.execute(
+                        "SELECT sport FROM leagues WHERE league_code = ?", (key,)
+                    ).fetchone()
+                    sport = row[0] if row and row[0] else None
+                except Exception as e:
+                    logger.debug("[STREAM_ORDER] league sport lookup failed for %s: %s", key, e)
+            self._league_sports[key] = sport
+        return self._league_sports[key]
 
-        Compared against a stream's persisted feed_team_id (which holds the
-        provider team id, same namespace as managed_channels.feed_team_id).
-        Keyed formats carry the id directly ('espn:mlb:158' → '158'); the
-        legacy integer format holds teams-table row ids and needs a lookup.
-        Returns None when nothing resolves (rule matches no resolved stream).
-        Results are cached per rule_value string.
+    def _stream_sport(self, stream: ManagedChannelStream) -> str | None:
+        """Sport of the channel a stream belongs to (cached per channel).
+
+        None when unknown — no connection, or a transient stream that is not
+        on a channel yet (attach-time scoring; the end-of-generation reorder
+        pass re-scores real rows).
+        """
+        channel_id = stream.managed_channel_id
+        if not channel_id or not self.conn:
+            return None
+        if channel_id not in self._channel_sports:
+            sport = None
+            try:
+                row = self.conn.execute(
+                    "SELECT sport FROM managed_channels WHERE id = ?", (channel_id,)
+                ).fetchone()
+                sport = row[0] if row and row[0] else None
+            except Exception as e:
+                logger.debug("[STREAM_ORDER] channel sport lookup failed for %s: %s", channel_id, e)
+            self._channel_sports[channel_id] = sport
+        return self._channel_sports[channel_id]
+
+    def _feed_team_selected(
+        self, stream: ManagedChannelStream, keys: frozenset[tuple[str | None, str]]
+    ) -> bool:
+        """Does the stream's persisted feed team fall inside the rule's selection?
+
+        Provider team ids are only unique within a SPORT (#687): ESPN's Cubs
+        are mlb:16 and its Vikings nfl:16, so a bare-id compare let a Vikings
+        selection tag every Cubs feed. Within a sport the id IS stable across
+        competitions (Liverpool is 364 in the Premier League and the Champions
+        League), so the scope is the sport, never the league — a team picked
+        from one competition must keep matching its feeds in another.
+
+        A key without a sport (legacy 2-part 'provider:id') or a stream whose
+        channel sport is unknown falls back to the bare-id compare.
+        """
+        feed_id = stream.feed_team_id
+        stream_sport = self._stream_sport(stream)
+        for key_sport, key_id in keys:
+            if key_id != feed_id:
+                continue
+            if key_sport is None or stream_sport is None or key_sport == stream_sport:
+                return True
+        return False
+
+    def _get_team_feed_ids(self, rule_value: str) -> frozenset[tuple[str | None, str]] | None:
+        """Resolve a team_feed rule value to the (sport, provider team id) pairs it
+        selects (#489, #687).
+
+        Compared against a stream's persisted feed_team_id (the provider team
+        id, same namespace as managed_channels.feed_team_id) scoped by sport —
+        see _feed_team_selected. 3-part keys ('espn:mlb:158') resolve their
+        league to a sport; legacy 2-part keys ('espn:158') carry no league and
+        get sport None (bare-id compare); the legacy integer format holds
+        teams-table row ids and needs a lookup. Returns None when nothing
+        resolves (rule matches no resolved stream). Cached per rule_value.
         """
         if rule_value in self._team_feed_ids:
             return self._team_feed_ids[rule_value]
 
-        ids: set[str] = set()
+        keys: set[tuple[str | None, str]] = set()
         if rule_value:
             if ":" in rule_value:
                 for key in rule_value.split(","):
-                    key = key.strip()
-                    if ":" in key:
-                        # 2-part provider:id or 3-part provider:league:id —
-                        # the provider team id is always the last segment
-                        ids.add(key.split(":")[-1])
+                    parts = [p.strip() for p in key.strip().split(":")]
+                    if len(parts) >= 3:
+                        # provider:league:id — the league names the sport
+                        keys.add((self._league_sport(parts[1]), parts[-1]))
+                    elif len(parts) == 2:
+                        # legacy provider:id — no league, no sport scope
+                        keys.add((None, parts[-1]))
             elif self.conn:
                 row_ids = [int(x) for x in rule_value.split(",") if x.strip().isdigit()]
                 if row_ids:
                     placeholders = ",".join("?" * len(row_ids))
                     try:
                         rows = self.conn.execute(
-                            f"SELECT provider_team_id FROM teams"
+                            f"SELECT provider_team_id, sport FROM teams"
                             f" WHERE id IN ({placeholders}) AND active = 1",
                             row_ids,
                         ).fetchall()
-                        ids.update(str(r[0]) for r in rows if r[0] is not None)
+                        keys.update(
+                            ((r[1] or None), str(r[0])) for r in rows if r[0] is not None
+                        )
                     except Exception as e:
                         logger.warning(
                             "[STREAM_ORDER] Failed to resolve team ids for team_feed rule: %s",
                             e,
                         )
 
-        result = frozenset(ids) if ids else None
+        result = frozenset(keys) if keys else None
         self._team_feed_ids[rule_value] = result
         return result
 

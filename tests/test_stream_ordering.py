@@ -792,3 +792,82 @@ class TestTeamFeedResolved:
 
         unresolved = compute_stream_priority_from_rules(seeded_db, "Pirates.TV", None, None)
         assert unresolved == NO_MATCH_PRIORITY
+
+
+# ---------------------------------------------------------------------------
+# team_feed selection is scoped by SPORT, not bare provider id (#687)
+# ---------------------------------------------------------------------------
+
+
+def _channel(conn, league: str, sport: str) -> int:
+    cur = conn.execute(
+        "INSERT INTO managed_channels"
+        " (event_id, event_provider, tvg_id, channel_name, league, sport)"
+        " VALUES (?, 'espn', ?, ?, ?, ?)",
+        (f"ev-{league}", f"teamarr.{league}", f"{league} channel", league, sport),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+class TestTeamFeedSportScope:
+    """ESPN reuses team ids across sports (#687): Cubs = mlb:16, Vikings =
+    nfl:16. A bare-id compare let a Vikings selection give every Cubs feed
+    +500. Within a sport the id is stable across competitions, so the scope
+    is the sport — a Liverpool picked from eng.1 still matches in the UCL."""
+
+    def test_cross_sport_collision_does_not_match(self, seeded_db):
+        mlb = _channel(seeded_db, "mlb", "baseball")
+        nfl = _channel(seeded_db, "nfl", "football")
+        rule = StreamOrderingRule("team_feed", "espn:mlb:9,espn:nfl:16", 1)
+        svc = StreamOrderingService([rule], seeded_db)
+        cubs = _feed_stream("US: MLB CHICAGO CUBS RAW", feed_team_id="16")
+        cubs.managed_channel_id = mlb
+        vikings = _feed_stream("NFL Vikings feed", feed_team_id="16")
+        vikings.managed_channel_id = nfl
+        assert svc.compute_priority(cubs) != 1  # Cubs are not selected
+        assert svc.compute_priority(vikings) == 1  # Vikings are
+
+    def test_same_sport_other_competition_still_matches(self, seeded_db):
+        ucl = _channel(seeded_db, "uefa.champions", "soccer")
+        rule = StreamOrderingRule("team_feed", "espn:eng.1:364", 1)
+        svc = StreamOrderingService([rule], seeded_db)
+        liverpool = _feed_stream("Liverpool TV", feed_team_id="364")
+        liverpool.managed_channel_id = ucl
+        assert svc.compute_priority(liverpool) == 1
+
+    def test_not_team_feed_treats_colliding_id_as_another_team(self, seeded_db):
+        mlb = _channel(seeded_db, "mlb", "baseball")
+        rule = StreamOrderingRule("not_team_feed", "espn:nfl:16", 1)
+        svc = StreamOrderingService([rule], seeded_db)
+        cubs = _feed_stream("Cubs feed", feed_team_id="16")
+        cubs.managed_channel_id = mlb
+        assert svc.compute_priority(cubs) == 1  # a team feed, but not the Vikings'
+
+    def test_legacy_two_part_key_keeps_bare_id_compare(self, seeded_db):
+        mlb = _channel(seeded_db, "mlb", "baseball")
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", "espn:16", 1)], seeded_db)
+        cubs = _feed_stream("Cubs feed", feed_team_id="16")
+        cubs.managed_channel_id = mlb
+        assert svc.compute_priority(cubs) == 1
+
+    def test_unknown_channel_falls_back_to_bare_id(self, seeded_db):
+        # Attach-time scoring of a stream not yet on a channel: no sport to
+        # scope by, so the legacy compare applies until the reorder pass.
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", "espn:nfl:16", 1)], seeded_db)
+        assert svc.compute_priority(_feed_stream("x", feed_team_id="16")) == 1
+
+    def test_legacy_integer_ids_carry_sport(self, seeded_db):
+        row = seeded_db.execute("SELECT id FROM teams WHERE team_abbrev = 'DET'").fetchone()
+        tigers_id = row[0]
+        mlb = _channel(seeded_db, "mlb", "baseball")
+        nfl = _channel(seeded_db, "nfl", "football")
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", str(tigers_id), 1)], seeded_db)
+        keys = svc._get_team_feed_ids(str(tigers_id))
+        assert keys == {("baseball", "8")}
+        lions = _feed_stream("Lions feed", feed_team_id="8")  # NFL Lions are also id 8
+        lions.managed_channel_id = nfl
+        tigers = _feed_stream("Tigers feed", feed_team_id="8")
+        tigers.managed_channel_id = mlb
+        assert svc.compute_priority(lions) != 1
+        assert svc.compute_priority(tigers) == 1
