@@ -218,6 +218,48 @@ class TestCheckAbbreviationMatch:
         result = matcher._check_abbreviation_match("SWE", "FIN", event)
         assert result is None
 
+    def test_stopword_abbreviation_single_team_does_not_match(self, matcher):
+        """Stop words like 'THE', 'FOR', 'AND' must never match as single-team abbreviations (#705).
+        """
+        home = _make_team("Brockport Golden Eagles", "THE")
+        away = _make_team("Buffalo State Bengals", "BUF")
+        event = _make_event(home, away)
+
+        # Lone stop word code
+        assert matcher._check_abbreviation_match("THE", None, event) is None
+        assert matcher._check_abbreviation_match(None, "THE", event) is None
+
+        # Stop word in multi-token stream names
+        assert matcher._check_abbreviation_match("The Golics", None, event) is None
+        assert matcher._check_abbreviation_match("RedZone at the US Open", None, event) is None
+        assert matcher._check_abbreviation_match(None, "the movies", event) is None
+
+        # Fordham (FOR) and Anderson (AND)
+        for_event = _make_event(
+            _make_team("Fordham Rams", "FOR"),
+            _make_team("Colgate Raiders", "COLG"),
+        )
+        assert matcher._check_abbreviation_match("NFL Live for Thursday", None, for_event) is None
+        assert matcher._check_abbreviation_match("FOR", None, for_event) is None
+
+        and_event = _make_event(
+            _make_team("Anderson Trojans", "AND"),
+            _make_team("Furman Paladins", "FUR"),
+        )
+        assert matcher._check_abbreviation_match("Highlights and Analysis", None, and_event) is None
+        assert matcher._check_abbreviation_match("AND", None, and_event) is None
+
+    def test_stopword_abbreviation_in_multitoken_matchup_does_not_match(self, matcher):
+        """In two-team matchups, stop word abbreviations cannot match in multi-word phrases (#705).
+        """
+        home = _make_team("Brockport Golden Eagles", "THE")
+        away = _make_team("Buffalo State Bengals", "BUF")
+        event = _make_event(home, away)
+
+        # 'BUF' matches Buffalo State, but 'THE MOVIES' contains 'the' as a stop word, not Brockport
+        assert matcher._check_abbreviation_match("BUF", "THE MOVIES", event) is None
+        assert matcher._check_abbreviation_match("THE MOVIES", "BUF", event) is None
+
     def test_case_insensitive(self, matcher):
         """Matching should be case-insensitive (normalize_text lowercases)."""
         home = _make_team("Sweden", "SWE")
@@ -273,3 +315,25 @@ class TestMatchTeamsToEventAbbreviationIntegration:
 
         result = matcher._match_teams_to_event("DEN", "PHI", event)
         assert result is None
+
+    def test_brockport_the_stopword_does_not_match_random_streams(self, matcher):
+        """ESPN abbreviation 'THE' for Brockport Golden Eagles must not match random streams (#705).
+        """
+        home = _make_team("Brockport Golden Eagles", "THE")
+        away = _make_team("Buffalo State Bengals", "BUF")
+        event = _make_event(home, away)
+
+        # Single-team or unseparated streams containing "the"
+        assert matcher._match_teams_to_event("The Golics", None, event) is None
+        assert (
+            matcher._match_teams_to_event(
+                "RedZone at the US Open Presented by American Express", None, event
+            )
+            is None
+        )
+        assert matcher._match_teams_to_event(None, "the movies", event) is None
+        assert matcher._match_teams_to_event("THE", None, event) is None
+
+        # Two-team streams with a stop word in a phrase
+        assert matcher._match_teams_to_event("BUF", "THE MOVIES", event) is None
+
