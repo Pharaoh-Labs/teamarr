@@ -3,46 +3,11 @@
 import re
 from collections import OrderedDict
 
-from teamarr.core import Event, Team
+from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, Team
 
 SUPPORTED_SPORTS = frozenset({"baseball", "football", "basketball"})
 
-_DETAIL_FIELDS = (
-    "home_team_record",
-    "away_team_record",
-    "home_last_five",
-    "away_last_five",
-    "series_summary",
-    "week",
-    "home_probable_starter",
-    "away_probable_starter",
-    "home_home_runs_leader",
-    "away_home_runs_leader",
-    "home_batting_average_leader",
-    "away_batting_average_leader",
-    "home_rbi_leader",
-    "away_rbi_leader",
-    "home_passing_leader",
-    "away_passing_leader",
-    "home_rushing_leader",
-    "away_rushing_leader",
-    "home_receiving_leader",
-    "away_receiving_leader",
-    "home_total_yards_per_game",
-    "away_total_yards_per_game",
-    "home_rushing_yards_per_game",
-    "away_rushing_yards_per_game",
-    "home_points_leader",
-    "away_points_leader",
-    "home_rebounds_leader",
-    "away_rebounds_leader",
-    "home_assists_leader",
-    "away_assists_leader",
-    "home_points_per_game",
-    "away_points_per_game",
-    "home_points_allowed_per_game",
-    "away_points_allowed_per_game",
-)
+_DETAIL_FIELDS = GENERATED_PREVIEW_FIELDS
 
 _ENRICHED_FIELDS = tuple(
     field
@@ -308,7 +273,7 @@ def _basketball_sentence(event: Event, side: str) -> str:
         getattr(event, f"{side}_team_record"),
         getattr(event, f"{side}_last_five"),
     )
-    scored = getattr(event, f"{side}_points_per_game")
+    scored = getattr(event, f"{side}_team_ppg")
     allowed = getattr(event, f"{side}_points_allowed_per_game")
     if scored:
         text += f", averaging {_clean_number(scored)} points"

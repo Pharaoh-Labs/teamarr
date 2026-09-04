@@ -1,15 +1,19 @@
 """Typed ESPN preview facts and opt-in generated prose."""
 
+from dataclasses import fields
 from datetime import UTC, datetime
+from unittest.mock import patch
 
-from teamarr.core import Event, EventStatus, Team, Venue
+from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, EventStatus, Team, Venue
 from teamarr.database.provider_cache import dict_to_event, event_to_dict
 from teamarr.providers.espn.preview import apply_generated_preview_fields
+from teamarr.services.sports_data import SportsDataService
 from teamarr.templates.conditions import ConditionEvaluator
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
 from teamarr.templates.generated_preview import build_generated_preview
 from teamarr.templates.variables.generated_preview import extract_generated_preview
 from teamarr.templates.variables.registry import get_registry
+from tests.fakes import FakeCache
 
 
 def _team(name: str, team_id: str) -> Team:
@@ -353,7 +357,7 @@ def test_basketball_parser_and_renderer_include_all_secondary_stats():
 
     assert event.away_rebounds_leader == "Kamilla Cardoso — 8.8 rebounds per game"
     assert event.home_points_leader == "Leila Lacan — 11.6 points per game"
-    assert event.away_points_per_game == "87.4"
+    assert event.away_team_ppg == "87.4"
     assert "averaging 87.4 points while allowing 89.9 per game" in text
     assert "Kamilla Cardoso with 14.7 points per game and 8.8 rebounds per game" in text
     assert "Natasha Cloud with 5.0 assists per game" in text
@@ -379,20 +383,45 @@ def test_named_variables_are_exact_and_generated_preview_is_opt_in():
     assert ConditionEvaluator().evaluate("has_generated_preview", None, ctx, game)
 
 
-def test_typed_preview_fields_survive_provider_cache_round_trip():
-    event = _event(
-        week=3,
-        away_probable_starter="Payton Tolle (8-6, 3.08 ERA)",
-        home_passing_leader="Bo Nix — 246 passing yards",
-        away_points_allowed_per_game="89.9",
+def test_generated_preview_field_registry_cache_and_refresh_parity():
+    """The canonical field tuple drives every persistence and public path."""
+    assert len(GENERATED_PREVIEW_FIELDS) == len(set(GENERATED_PREVIEW_FIELDS))
+    event_fields = {field.name for field in fields(Event)}
+    assert set(GENERATED_PREVIEW_FIELDS) <= event_fields
+    assert SportsDataService._PREVIEW_FIELDS == (
+        "game_preview",
+        *GENERATED_PREVIEW_FIELDS,
+    )
+    assert set(GENERATED_PREVIEW_FIELDS) <= set(SportsDataService._REFRESH_FIELDS)
+
+    original_values = {
+        field_name: 3 if field_name == "week" else f"original:{field_name}"
+        for field_name in GENERATED_PREVIEW_FIELDS
+    }
+    live_values = {
+        field_name: 4 if field_name == "week" else f"live:{field_name}"
+        for field_name in GENERATED_PREVIEW_FIELDS
+    }
+    original = _event(**original_values)
+    serialized = event_to_dict(original)
+    restored = dict_to_event(serialized)
+    legacy_restored = dict_to_event(
+        {key: value for key, value in serialized.items() if key != "week"}
     )
 
-    restored = dict_to_event(event_to_dict(event))
+    service = SportsDataService.__new__(SportsDataService)
+    service._cache = FakeCache()
+    live = _event(status=EventStatus(state="in_progress"), **live_values)
+    with patch.object(SportsDataService, "get_event", return_value=live):
+        refreshed = service.refresh_event_status(original)
 
-    assert restored.week == 3
-    assert restored.away_probable_starter == "Payton Tolle (8-6, 3.08 ERA)"
-    assert restored.home_passing_leader == "Bo Nix — 246 passing yards"
-    assert restored.away_points_allowed_per_game == "89.9"
+    registry = get_registry()
+    assert legacy_restored.week is None
+    for field_name, expected in original_values.items():
+        assert serialized[field_name] == expected
+        assert getattr(restored, field_name) == expected
+        assert getattr(refreshed, field_name) == expected
+        assert registry.get(field_name) is not None
 
 
 def test_formatted_football_leader_is_not_given_a_duplicate_label():

@@ -39,7 +39,7 @@ _TEAM_STAT_FIELDS = {
         "rushingYardsPerGame": "rushing_yards_per_game",
     },
     "basketball": {
-        "avgPoints": "points_per_game",
+        "avgPoints": "team_ppg",
         "avgPointsAgainst": "points_allowed_per_game",
     },
 }

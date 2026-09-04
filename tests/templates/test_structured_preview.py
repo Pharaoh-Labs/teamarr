@@ -129,29 +129,29 @@ def test_cached_preview_snapshot_survives_kickoff():
 def test_status_refresh_cannot_replace_frozen_preview_with_live_stats():
     svc = _service()
     original = _event(
-        home_points_per_game="117.2",
+        home_team_ppg="117.2",
         home_points_leader="Player — 28.4 points per game",
     )
     fresh = _event(
         status=EventStatus(state="in_progress"),
-        home_points_per_game="7",
+        home_team_ppg="7",
         home_points_leader="Live Player — 5 points",
     )
     with patch.object(SportsDataService, "get_event", return_value=fresh):
         refreshed = svc.refresh_event_status(original)
     assert refreshed.status.state == "in_progress"
-    assert refreshed.home_points_per_game == "117.2"
+    assert refreshed.home_team_ppg == "117.2"
     assert refreshed.home_points_leader == "Player — 28.4 points per game"
 
 
 def test_status_refresh_does_not_create_preview_from_live_summary():
     svc = _service()
     original = _event()
-    fresh = _event(status=EventStatus(state="in_progress"), home_points_per_game="7")
+    fresh = _event(status=EventStatus(state="in_progress"), home_team_ppg="7")
     with patch.object(SportsDataService, "get_event", return_value=fresh):
         refreshed = svc.refresh_event_status(original)
     assert refreshed.status.state == "in_progress"
-    assert refreshed.home_points_per_game == ""
+    assert refreshed.home_team_ppg == ""
 
 
 def test_partial_last_five_does_not_block_richer_refresh():

@@ -6,7 +6,7 @@ JSON for storage in PersistentTTLCache (SQLite-backed).
 
 from datetime import datetime
 
-from teamarr.core import Event, EventStatus, Team, TeamStats, Venue
+from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, EventStatus, Team, TeamStats, Venue
 from teamarr.core.types import Bout, RacingResult, RacingSession
 
 
@@ -48,40 +48,7 @@ def event_to_dict(event: Event) -> dict:
         "game_event_note": event.game_event_note,
         "soccer_match_note": event.soccer_match_note,
         "game_preview": event.game_preview,
-        "series_summary": event.series_summary,
-        "home_last_five": event.home_last_five,
-        "away_last_five": event.away_last_five,
-        "home_team_record": event.home_team_record,
-        "away_team_record": event.away_team_record,
-        "week": event.week,
-        "home_probable_starter": event.home_probable_starter,
-        "away_probable_starter": event.away_probable_starter,
-        "home_home_runs_leader": event.home_home_runs_leader,
-        "away_home_runs_leader": event.away_home_runs_leader,
-        "home_batting_average_leader": event.home_batting_average_leader,
-        "away_batting_average_leader": event.away_batting_average_leader,
-        "home_rbi_leader": event.home_rbi_leader,
-        "away_rbi_leader": event.away_rbi_leader,
-        "home_passing_leader": event.home_passing_leader,
-        "away_passing_leader": event.away_passing_leader,
-        "home_rushing_leader": event.home_rushing_leader,
-        "away_rushing_leader": event.away_rushing_leader,
-        "home_receiving_leader": event.home_receiving_leader,
-        "away_receiving_leader": event.away_receiving_leader,
-        "home_total_yards_per_game": event.home_total_yards_per_game,
-        "away_total_yards_per_game": event.away_total_yards_per_game,
-        "home_rushing_yards_per_game": event.home_rushing_yards_per_game,
-        "away_rushing_yards_per_game": event.away_rushing_yards_per_game,
-        "home_points_leader": event.home_points_leader,
-        "away_points_leader": event.away_points_leader,
-        "home_rebounds_leader": event.home_rebounds_leader,
-        "away_rebounds_leader": event.away_rebounds_leader,
-        "home_assists_leader": event.home_assists_leader,
-        "away_assists_leader": event.away_assists_leader,
-        "home_points_per_game": event.home_points_per_game,
-        "away_points_per_game": event.away_points_per_game,
-        "home_points_allowed_per_game": event.home_points_allowed_per_game,
-        "away_points_allowed_per_game": event.away_points_allowed_per_game,
+        **{field_name: getattr(event, field_name) for field_name in GENERATED_PREVIEW_FIELDS},
         # Betting odds — the has_odds condition and odds vars read this; a
         # cache hit must not silently drop it (#366).
         "odds_data": event.odds_data,
@@ -225,40 +192,12 @@ def dict_to_event(data: dict) -> Event:
         game_event_note=data.get("game_event_note", ""),
         soccer_match_note=data.get("soccer_match_note", ""),
         game_preview=data.get("game_preview", ""),
-        series_summary=data.get("series_summary", ""),
-        home_last_five=data.get("home_last_five", ""),
-        away_last_five=data.get("away_last_five", ""),
-        home_team_record=data.get("home_team_record", ""),
-        away_team_record=data.get("away_team_record", ""),
-        week=data.get("week"),
-        home_probable_starter=data.get("home_probable_starter", ""),
-        away_probable_starter=data.get("away_probable_starter", ""),
-        home_home_runs_leader=data.get("home_home_runs_leader", ""),
-        away_home_runs_leader=data.get("away_home_runs_leader", ""),
-        home_batting_average_leader=data.get("home_batting_average_leader", ""),
-        away_batting_average_leader=data.get("away_batting_average_leader", ""),
-        home_rbi_leader=data.get("home_rbi_leader", ""),
-        away_rbi_leader=data.get("away_rbi_leader", ""),
-        home_passing_leader=data.get("home_passing_leader", ""),
-        away_passing_leader=data.get("away_passing_leader", ""),
-        home_rushing_leader=data.get("home_rushing_leader", ""),
-        away_rushing_leader=data.get("away_rushing_leader", ""),
-        home_receiving_leader=data.get("home_receiving_leader", ""),
-        away_receiving_leader=data.get("away_receiving_leader", ""),
-        home_total_yards_per_game=data.get("home_total_yards_per_game", ""),
-        away_total_yards_per_game=data.get("away_total_yards_per_game", ""),
-        home_rushing_yards_per_game=data.get("home_rushing_yards_per_game", ""),
-        away_rushing_yards_per_game=data.get("away_rushing_yards_per_game", ""),
-        home_points_leader=data.get("home_points_leader", ""),
-        away_points_leader=data.get("away_points_leader", ""),
-        home_rebounds_leader=data.get("home_rebounds_leader", ""),
-        away_rebounds_leader=data.get("away_rebounds_leader", ""),
-        home_assists_leader=data.get("home_assists_leader", ""),
-        away_assists_leader=data.get("away_assists_leader", ""),
-        home_points_per_game=data.get("home_points_per_game", ""),
-        away_points_per_game=data.get("away_points_per_game", ""),
-        home_points_allowed_per_game=data.get("home_points_allowed_per_game", ""),
-        away_points_allowed_per_game=data.get("away_points_allowed_per_game", ""),
+        **{
+            field_name: data.get(
+                field_name, Event.__dataclass_fields__[field_name].default
+            )
+            for field_name in GENERATED_PREVIEW_FIELDS
+        },
         # Betting odds (#366) — absent in pre-upgrade cache entries
         odds_data=data.get("odds_data"),
         # UFC-specific fields

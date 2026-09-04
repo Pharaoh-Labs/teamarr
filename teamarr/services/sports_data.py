@@ -17,7 +17,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast, overload
 
-from teamarr.core import Event, SportsProvider, Team, TeamStats
+from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, SportsProvider, Team, TeamStats
 from teamarr.database import get_db
 from teamarr.database.provider_cache import (
     dict_to_event,
@@ -648,46 +648,6 @@ class SportsDataService:
     # sport, season_type, etc. don't change between fetches and the summary
     # endpoint may return degraded versions of them (e.g. ESPN omits
     # shortDisplayName), so overwriting would be destructive, not additive.
-    # Source-grounded generated-preview inputs. These form one pregame
-    # snapshot: once a summary reports the event as live/final, none may be
-    # attached or overwritten by live box-score data.
-    _GENERATED_PREVIEW_FIELDS = (
-        "series_summary",
-        "home_last_five",
-        "away_last_five",
-        "home_team_record",
-        "away_team_record",
-        "week",
-        "home_probable_starter",
-        "away_probable_starter",
-        "home_home_runs_leader",
-        "away_home_runs_leader",
-        "home_batting_average_leader",
-        "away_batting_average_leader",
-        "home_rbi_leader",
-        "away_rbi_leader",
-        "home_passing_leader",
-        "away_passing_leader",
-        "home_rushing_leader",
-        "away_rushing_leader",
-        "home_receiving_leader",
-        "away_receiving_leader",
-        "home_total_yards_per_game",
-        "away_total_yards_per_game",
-        "home_rushing_yards_per_game",
-        "away_rushing_yards_per_game",
-        "home_points_leader",
-        "away_points_leader",
-        "home_rebounds_leader",
-        "away_rebounds_leader",
-        "home_assists_leader",
-        "away_assists_leader",
-        "home_points_per_game",
-        "away_points_per_game",
-        "home_points_allowed_per_game",
-        "away_points_allowed_per_game",
-    )
-
     _REFRESH_FIELDS = (
         "status",
         "home_score",
@@ -701,7 +661,7 @@ class SportsDataService:
         # they must overlay from the fresh fetch (the scoreboard-parsed original
         # has them empty). The summary call is already made here; zero extra cost.
         "game_preview",
-        *_GENERATED_PREVIEW_FIELDS,
+        *GENERATED_PREVIEW_FIELDS,
     )
 
     def refresh_event_status(self, event: Event) -> Event:
@@ -768,7 +728,7 @@ class SportsDataService:
                 # None before the game — so {home_team_score}/{final_score}
                 # rendered empty. For scores, only None means "not provided".
                 overlay[field_name] = fresh_val if fresh_val is not None else orig_val
-            elif field_name in self._GENERATED_PREVIEW_FIELDS:
+            elif field_name in GENERATED_PREVIEW_FIELDS:
                 # Generated-preview facts are a pregame snapshot, not a live box score.
                 # Never attach summary facts first observed after kickoff, and
                 # never replace a snapshot already carried by this event.
@@ -794,7 +754,7 @@ class SportsDataService:
     PREVIEW_FETCH_BUDGET = 40  # summary fetches per budget window
     PREVIEW_BUDGET_WINDOW = 3600
 
-    _PREVIEW_FIELDS = ("game_preview", *_GENERATED_PREVIEW_FIELDS)
+    _PREVIEW_FIELDS = ("game_preview", *GENERATED_PREVIEW_FIELDS)
 
     def enrich_event_preview(self, event: Event) -> Event:
         """Overlay days-ahead preview fields onto a future event, cheaply.
