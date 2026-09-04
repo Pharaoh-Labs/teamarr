@@ -55,6 +55,22 @@ COLLEGE_SCOREBOARD_GROUPS: dict[str, tuple[str, ...]] = {
     # NCAA soccer and women's hockey expose no season groups.
 }
 
+# ESPN publishes poll rankings only for college leagues — /rankings 404s for
+# every pro league (verified 2026-09-04: nfl, usa.1, college-baseball all 404).
+# Confirmed to carry polls: college-football (AP / AFCA coaches / FCS coaches /
+# D-II), both college basketballs (AP / coaches), college volleyball and
+# lacrosse (AVCA, Inside Lacrosse), college hockey (USCHO), and NCAA soccer
+# (United Soccer Coaches). college-baseball and college-softball 404 today but
+# match the 'college' rule, so they light up on their own if ESPN adds a poll —
+# the cost is one 404 per league per cache window.
+NCAA_SOCCER_RANKED_SLUGS = frozenset({"usa.ncaa.m.1", "usa.ncaa.w.1"})
+
+
+def league_publishes_rankings(espn_league: str) -> bool:
+    """True when ESPN exposes a /rankings endpoint for this league slug."""
+    return "college" in espn_league or espn_league in NCAA_SOCCER_RANKED_SLUGS
+
+
 # ESPN team ID corrections for known mismatches between /teams endpoint and scoreboard
 # Format: (league, wrong_id) -> correct_id
 # These are cases where ESPN's /teams endpoint returns a different ID than the scoreboard uses
@@ -280,6 +296,27 @@ class ESPNClient(BaseHTTPClient):
         team_id = self._correct_team_id(league, team_id)
         sport, espn_league = self.get_sport_league(league, sport_league)
         url = f"{self._base_url}/{sport}/{espn_league}/teams/{team_id}"
+        return self._request(url)
+
+    def get_rankings(
+        self,
+        league: str,
+        sport_league: tuple[str, str] | None = None,
+    ) -> dict | None:
+        """Fetch the league's current poll rankings.
+
+        Only college leagues publish polls; everything else 404s (the caller
+        gates on RANKED_LEAGUE_SLUGS so we don't spend the call).
+
+        Args:
+            league: Canonical league code
+            sport_league: Optional (sport, league) tuple from database config
+
+        Returns:
+            Raw ESPN rankings response or None on error
+        """
+        sport, espn_league = self.get_sport_league(league, sport_league)
+        url = f"{self._base_url}/{sport}/{espn_league}/rankings"
         return self._request(url)
 
     def get_event(

@@ -574,6 +574,7 @@ CACHE_TTL_EVENTS = 8 * 60 * 60  # 8 hours - scoreboard (league events list)
 CACHE_TTL_SINGLE_EVENT = 30 * 60  # 30 minutes - individual event (scores, odds)
 CACHE_TTL_TEAM_INFO = 24 * 60 * 60  # 24 hours - static team data
 CACHE_TTL_NEGATIVE = 4 * 60 * 60  # 4 hours - provider returned nothing (off-season etc.)
+CACHE_TTL_RANKINGS = 6 * 60 * 60  # 6 hours - polls are published weekly
 
 
 def make_cache_key(*parts: str) -> str:

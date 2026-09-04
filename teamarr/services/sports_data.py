@@ -31,6 +31,7 @@ from teamarr.database.team_cache import get_team_identity
 from teamarr.providers import ProviderRegistry
 from teamarr.utilities.cache import (
     CACHE_TTL_NEGATIVE,
+    CACHE_TTL_RANKINGS,
     CACHE_TTL_SCHEDULE,
     CACHE_TTL_SINGLE_EVENT,
     CACHE_TTL_TEAM_INFO,
@@ -824,11 +825,36 @@ class SportsDataService:
             if provider.supports_league(league):
                 stats = provider.get_team_stats(team_id, league)
                 if stats:
+                    if stats.rank is None:
+                        rank = self.get_rankings(league).get(team_id)
+                        if rank:
+                            stats = replace(stats, rank=rank)
                     # Serialize to dict before caching
                     self._cache.set(cache_key, stats_to_dict(stats), CACHE_TTL_TEAM_STATS)
                     return stats
         self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
         return None
+
+    def get_rankings(self, league: str) -> dict[str, int]:
+        """Get the league's poll rankings as {team_id: rank}.
+
+        One fetch per league feeds every team's rank (#710) — ESPN's per-team
+        payload has no rank field, so the poll endpoint is the only source. The
+        empty result is cached too: most leagues publish no poll at all, and
+        re-asking them once per team would be the expensive way to learn that.
+        """
+        cache_key = make_cache_key("rankings", league)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            logger.debug("[CACHE_HIT] %s", cache_key)
+            return cached
+
+        for provider in self._providers:
+            if provider.supports_league(league):
+                rankings = provider.get_rankings(league)
+                self._cache.set(cache_key, rankings, CACHE_TTL_RANKINGS)
+                return rankings
+        return {}
 
     # Cache management
 

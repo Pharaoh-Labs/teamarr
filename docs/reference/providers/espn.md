@@ -26,6 +26,7 @@ ESPN is the primary data provider (priority 0), serving 99 pre-configured league
 | `/{sport}/{league}/teams/{team_id}` | Team details |
 | `/{sport}/{league}/summary?event={event_id}` | Event details and scores |
 | `/{sport}/{league}/teams` | All teams in a league (cache refresh) |
+| `/{sport}/{league}/rankings` | Poll rankings — college leagues only |
 
 ## HTTP Client Configuration
 
@@ -84,6 +85,7 @@ Rugby uses numeric slug IDs instead of string slugs — `rugby/180659` (Six Nati
 - **Team ID corrections**: Hardcoded mapping for known ESPN data mismatches (e.g., some women's hockey teams)
 - **NCAA scoreboards**: NCAA leagues whose ungrouped ESPN scoreboard omits subdivisions fetch and merge ESPN's division groups. This includes FBS, FCS, lower-division, and cross-division fixtures when ESPN lists them. Teamarr cannot match fixtures ESPN does not expose in a public scoreboard group.
 - **Tournament sports**: Racing events have no home/away teams — parsed via `TournamentParserMixin`. (Golf is wired into the same code path but no golf leagues are currently seeded.) Tennis is the exception: `TennisParserMixin` expands each tournament into one Event per MATCH, with the two players as home/away teams (surname as abbreviation). Grand slams appear on both the atp and wta endpoints, so each league keeps only its own draw types (atp: men's + mixed doubles; wta: women's). Tennis quirks: ESPN ignores `?dates=YYYYMMDD` for tennis and returns whole tournaments overlapping the window, so Teamarr slices per-day client-side; scoreboard `athlete.id` is null, so tennis team ids are name-derived and matching is name-based; doubles competitors carry only `roster.displayName` ("A / B"), no athlete objects; `venue.court` can be empty (walkovers/unassigned) and qualifying courts are named "Court N Roehampton", both tolerated by court mapping.
+- **Poll rankings**: ESPN's team payload carries no rank field for any league, so `TeamStats.rank` comes from the league's `/rankings` polls, fetched once per league and cached for 6 hours. Only college leagues publish polls (pro leagues 404, and the endpoint is not called for them). Every live poll in the payload is merged, AP first, so an FBS team gets its AP rank while FCS and Division II teams get theirs from their own polls. Tournament seedings are ignored (that is `playoff_seed`), and a poll older than 45 days is treated as an ended season — ESPN keeps serving a season's final poll all offseason, so without that cutoff last season's ranks would appear on this season's listings.
 - **UFC**: Parsed via `UFCParserMixin` with fighter name extraction from the core API
 
 ## File Locations
