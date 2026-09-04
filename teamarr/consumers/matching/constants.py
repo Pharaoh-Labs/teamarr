@@ -56,3 +56,30 @@ ALTERNATE_TEAM_CODES: dict[str, str] = {
     "kcr": "kc",
     "wsn": "wsh",
 }
+
+# Stop words that must never be treated as valid team abbreviations in
+# abbreviation matching (#705). Providers (e.g. ESPN) sometimes generate
+# 3-letter codes from team names that happen to be common English words
+# (Brockport Golden Eagles -> "THE", Fordham Rams -> "FOR", Anderson Trojans
+# -> "AND"). Matching these words as abbreviation tokens causes unrelated
+# streams containing everyday English words (e.g. "AT THE MOVIES", "The
+# Golics", "RedZone at the US Open") to false-match with 100% confidence.
+ABBREVIATION_STOPWORDS: frozenset[str] = frozenset({
+    "the",
+    "and",
+    "for",
+    "with",
+    "all",
+    "not",
+    "out",
+    "but",
+    "are",
+    "was",
+    "one",
+    "two",
+    "our",
+    "its",
+    "who",
+    "how",
+    "any",
+})

@@ -22,6 +22,7 @@ from rapidfuzz import fuzz
 from teamarr.consumers.matching import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.classifier import ClassifiedStream, StreamCategory
 from teamarr.consumers.matching.constants import (
+    ABBREVIATION_STOPWORDS,
     ALTERNATE_TEAM_CODES,
     BOTH_TEAMS_THRESHOLD,
     HIGH_CONFIDENCE_THRESHOLD,
@@ -232,11 +233,17 @@ def _code_tokens(team_name: str) -> frozenset[str]:
 
 
 def _abbrev_equals(stream_code: str, event_abbrev: str | None) -> bool:
-    """Does a short stream code equal the event team's abbreviation (#472)?"""
+    """Does a short stream code equal the event team's abbreviation (#472)?
+
+    Disallows matching if either code is an abbreviation stop word (#705).
+    """
     if not event_abbrev:
         return False
     code = ALTERNATE_TEAM_CODES.get(stream_code, stream_code)
-    return code == normalize_text(event_abbrev)
+    norm_event = normalize_text(event_abbrev)
+    if code in ABBREVIATION_STOPWORDS or norm_event in ABBREVIATION_STOPWORDS:
+        return False
+    return code == norm_event
 
 
 def _initialism(tokens: list[str]) -> str:
@@ -1537,16 +1544,35 @@ class TeamMatcher:
 
         # Both teams must match different event teams
         if team1 and team2:
-            opt1 = home_abbr in t1_tokens and away_abbr in t2_tokens
-            opt2 = away_abbr in t1_tokens and home_abbr in t2_tokens
+            def _valid_abbr_hit(abbr: str, tokens: frozenset[str]) -> bool:
+                if not abbr:
+                    return False
+                if abbr in ABBREVIATION_STOPWORDS and len(tokens) > 1:
+                    return False
+                return abbr in tokens
+
+            opt1 = _valid_abbr_hit(home_abbr, t1_tokens) and _valid_abbr_hit(away_abbr, t2_tokens)
+            opt2 = _valid_abbr_hit(away_abbr, t1_tokens) and _valid_abbr_hit(home_abbr, t2_tokens)
             if opt1 or opt2:
                 return (MatchMethod.FUZZY, 100.0)
         elif len(home_abbr) >= 3 and len(away_abbr) >= 3:
             if team1:
-                if home_abbr in t1_tokens or away_abbr in t1_tokens:
+                if (
+                    home_abbr not in ABBREVIATION_STOPWORDS
+                    and home_abbr in t1_tokens
+                ) or (
+                    away_abbr not in ABBREVIATION_STOPWORDS
+                    and away_abbr in t1_tokens
+                ):
                     return (MatchMethod.FUZZY, 100.0)
             elif team2:
-                if home_abbr in t2_tokens or away_abbr in t2_tokens:
+                if (
+                    home_abbr not in ABBREVIATION_STOPWORDS
+                    and home_abbr in t2_tokens
+                ) or (
+                    away_abbr not in ABBREVIATION_STOPWORDS
+                    and away_abbr in t2_tokens
+                ):
                     return (MatchMethod.FUZZY, 100.0)
 
         return None
