@@ -1259,9 +1259,12 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 if not isinstance(entry, dict):
                     continue
                 team_id = str((entry.get("team") or {}).get("id") or "")
+                current = entry.get("current")
+                if not isinstance(current, (int, str)):
+                    continue
                 try:
-                    rank = int(entry.get("current"))
-                except (TypeError, ValueError):
+                    rank = int(current)
+                except ValueError:
                     continue
                 if team_id and 1 <= rank <= RANKING_MAX:
                     rankings.setdefault(team_id, rank)
