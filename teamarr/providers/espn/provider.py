@@ -23,7 +23,11 @@ from teamarr.core import (
     Venue,
 )
 from teamarr.core.sports import normalize_sport
-from teamarr.providers.espn.client import ESPN_TEAM_ID_CORRECTIONS, ESPNClient
+from teamarr.providers.espn.client import (
+    ESPN_TEAM_ID_CORRECTIONS,
+    ESPNClient,
+    league_publishes_rankings,
+)
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
 from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
 from teamarr.providers.espn.tennis import TennisParserMixin
@@ -32,6 +36,23 @@ from teamarr.providers.espn.ufc import UFCParserMixin
 from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
+
+# Poll rankings (#710). ESPN's /teams/{id} payload carries no rank field for any
+# league, so TeamStats.rank has to come from the league's /rankings polls.
+#
+# A poll only counts while it is being voted on: ESPN keeps serving a season's
+# final poll all offseason (on 2026-09-04 the latest college-hockey poll was
+# 2026-04-13), which would stamp last season's ranks onto this season's
+# listings. In-season polls refresh weekly, so anything older than the cutoff is
+# an ended season, not a bye week.
+RANKING_POLL_MAX_AGE_DAYS = 45
+# Tournament brackets ride in the same payload ("NCAA Men's Hockey Tournament
+# Seedings"); a 4-team seed is not a poll rank — that's playoff_seed's job.
+RANKING_SEEDING_POLL_TYPE = "tournament"
+# AP wins ties so an FBS team gets its AP rank rather than the coaches poll,
+# while polls AP does not cover (FCS, D-II) still fill in their own teams.
+RANKING_PRIMARY_POLL_TYPE = "ap"
+RANKING_MAX = 25
 
 
 class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, SportsProvider):
@@ -1193,7 +1214,9 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             away_record=away_record,
             streak=streak_str,
             streak_count=streak_count,
-            rank=team_data.get("rank") if team_data.get("rank", 99) <= 25 else None,
+            # ESPN's team payload carries no rank field for any league (#710);
+            # rank is filled from the league polls by SportsDataService.
+            rank=None,
             playoff_seed=int(stats.get("playoffSeed", 0)) or None,
             games_back=float(stats.get("gamesBehind", 0)) or None,
             conference=conference,
@@ -1202,6 +1225,86 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             ppg=float(stats.get("avgPointsFor", 0)) or None,
             papg=float(stats.get("avgPointsAgainst", 0)) or None,
         )
+
+    def get_rankings(self, league: str) -> dict[str, int]:
+        """Fetch the league's current poll rankings as {team_id: rank}.
+
+        Merges every live poll in the payload, AP first, so an FBS team gets its
+        AP rank while FCS and D-II teams — whom AP never covers — still get
+        theirs from their own polls. Tournament seedings and offseason-stale
+        polls are skipped; see the module constants for why.
+        """
+        sport_league = self._get_sport_league_from_db(league)
+        _, espn_league = self._client.get_sport_league(league, sport_league)
+        if not league_publishes_rankings(espn_league):
+            return {}
+
+        data = self._client.get_rankings(league, sport_league)
+        if not data or not isinstance(data.get("rankings"), list):
+            return {}
+
+        polls = sorted(
+            (p for p in data["rankings"] if isinstance(p, dict)),
+            key=lambda p: str(p.get("type", "")).lower() != RANKING_PRIMARY_POLL_TYPE,
+        )
+
+        rankings: dict[str, int] = {}
+        for poll in polls:
+            if str(poll.get("type", "")).lower() == RANKING_SEEDING_POLL_TYPE:
+                continue
+            entries = poll.get("ranks")
+            if not isinstance(entries, list) or self._poll_is_stale(entries, league, poll):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                team_id = str((entry.get("team") or {}).get("id") or "")
+                current = entry.get("current")
+                if not isinstance(current, (int, str)):
+                    continue
+                try:
+                    rank = int(current)
+                except ValueError:
+                    continue
+                if team_id and 1 <= rank <= RANKING_MAX:
+                    rankings.setdefault(team_id, rank)
+
+        logger.debug("[ESPN] %s rankings: %d ranked teams", league, len(rankings))
+        return rankings
+
+    def _poll_is_stale(self, entries: list, league: str, poll: dict) -> bool:
+        """True when the poll's newest entry predates the staleness cutoff."""
+        latest = max(
+            (d for d in (self._parse_poll_date(e) for e in entries) if d is not None),
+            default=None,
+        )
+        if latest is None:
+            return False
+        if datetime.now(UTC) - latest <= timedelta(days=RANKING_POLL_MAX_AGE_DAYS):
+            return False
+        logger.debug(
+            "[ESPN] %s poll '%s' is stale (last updated %s) - skipping",
+            league,
+            poll.get("name"),
+            latest.date(),
+        )
+        return True
+
+    @staticmethod
+    def _parse_poll_date(entry: object) -> datetime | None:
+        """Parse a rank entry's lastUpdated/date stamp (ESPN uses 'Z' suffixes)."""
+        if not isinstance(entry, dict):
+            return None
+        for field in ("lastUpdated", "date"):
+            raw = entry.get(field)
+            if not isinstance(raw, str):
+                continue
+            try:
+                parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        return None
 
     def _parse_record_string(self, record_str: str) -> tuple[int, int, int]:
         """Parse record string like '10-2' or '8-3-1' into (wins, losses, ties)."""

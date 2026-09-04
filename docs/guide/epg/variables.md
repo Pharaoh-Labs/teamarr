@@ -466,7 +466,10 @@ Because these populate only for some games, pair them with other content or a st
 
 ## Rankings
 
-College rankings (NCAAF, NCAAM, NCAAW).
+College rankings — any college league ESPN polls, including NCAAF (AP, FCS and Division II polls), NCAAM and NCAAW (AP), plus college hockey, volleyball, lacrosse and NCAA soccer.
+
+{: .note }
+Ranks come from the current published poll and are empty out of season: ESPN keeps serving a season's final poll year-round, so Teamarr ignores polls older than 45 days rather than stamping last season's ranks onto this season's listings. College basketball ranks appear once the preseason AP poll lands in November, football's in August.
 
 | Variable | Description | Suffixes | Sample |
 |----------|-------------|----------|--------|

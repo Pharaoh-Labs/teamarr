@@ -181,6 +181,21 @@ class SportsProvider(ABC):
         """
         return None
 
+    def get_rankings(self, league: str) -> dict[str, int]:
+        """Get the league's current poll rankings.
+
+        Args:
+            league: League identifier
+
+        Returns:
+            {team_id: rank} for ranked teams, empty dict if unsupported
+
+        Note:
+            This method has a default implementation returning an empty dict.
+            Providers should override if the league publishes polls.
+        """
+        return {}
+
     def get_league_teams(self, league: str) -> list[Team]:
         """Get all teams in a league.
 
