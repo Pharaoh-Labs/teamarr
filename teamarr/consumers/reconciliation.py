@@ -429,6 +429,7 @@ class ChannelReconciler:
         - Stream assignment mismatch (DB streams vs Dispatcharr streams)
         - Profile assignment mismatch (DB profiles vs Dispatcharr profiles)
         """
+        from teamarr.consumers.lifecycle import is_channel_event_live
         from teamarr.database.channels import (
             get_all_managed_channels,
             get_ordered_stream_ids,
@@ -481,16 +482,31 @@ class ChannelReconciler:
             # active set (get_ordered_stream_ids) as "expected" so time-shared
             # linear streams that are correctly out of their window (183.5) are
             # not flagged as drift — this is exactly the set we push to Dispatcharr.
-            db_stream_ids = set(get_ordered_stream_ids(conn, channel.id))
-            dispatcharr_stream_ids = set(dispatcharr_channel.streams or ())
+            #
+            # Compared as ORDERED lists (#712). Two bugs lived in the old
+            # set/sorted form: order drift was invisible to drift detection, and
+            # the auto-fix pushed `sorted(db_stream_ids)` — stream IDs in numeric
+            # order — which actively destroyed the priority order on any channel
+            # it "fixed". The expected value is the priority order, and that is
+            # what the fix must write.
+            db_stream_ids = get_ordered_stream_ids(conn, channel.id)
+            dispatcharr_stream_ids = list(dispatcharr_channel.streams or ())
             if db_stream_ids and db_stream_ids != dispatcharr_stream_ids:
-                drift_fields.append(
-                    {
-                        "field": "streams",
-                        "expected": sorted(db_stream_ids),
-                        "actual": sorted(dispatcharr_stream_ids),
-                    }
+                # An order-only difference on a LIVE channel is the #232 pin
+                # holding the watched stream at #1 against the DB's rule-truth
+                # order — deliberate, and not ours to "fix" mid-broadcast.
+                order_only = sorted(db_stream_ids) == sorted(dispatcharr_stream_ids)
+                pinned = order_only and is_channel_event_live(
+                    channel.event_date, channel.scheduled_delete_at
                 )
+                if not pinned:
+                    drift_fields.append(
+                        {
+                            "field": "streams",
+                            "expected": db_stream_ids,
+                            "actual": dispatcharr_stream_ids,
+                        }
+                    )
 
             # Check profile assignments (DB vs Dispatcharr)
             if dispatcharr_channel.channel_profile_ids is not None:
