@@ -260,6 +260,8 @@ Provider Layer   → teamarr/providers/ (espn, bellmedia, squiggle, nascar, mlbs
 **Dispatcharr Sync Reliability** (`lifecycle/service.py`):
 All `update_channel` calls go through `_safe_update_channel`, which checks `OperationResult.success` before persisting to local DB. On API failure, the DB stays unchanged so drift is re-detected on the next generation run. Profile sync also compares against Dispatcharr's actual state (`current_channel.channel_profile_ids`) for self-healing. Reconciliation (`reconciliation.py`) detects stream and profile drift as additional drift fields.
 
+**Stream order converges every run (#712).** Array order in a `{"streams": [...]}` push IS the channel's stream priority, so every comparison of DB vs Dispatcharr streams must be *ordered* — a `set()` or `sorted()` on either side silently blinds it. `_apply_stream_ordering` reads Dispatcharr's real order once per run (`channel_mgr.get_channels()`, cached) and pushes on any difference; gating on local priority *change* alone was the #712 bug, since priorities are computed at insert time and so never change on a steady-state channel. Reconciliation's drift `expected` must be the priority order — it is written straight back to Dispatcharr by the auto-fix. The one legitimate DB↔Dispatcharr order difference is the live-event #1 pin (#232), which both the audit and reconciliation exempt while the event is live.
+
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):

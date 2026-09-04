@@ -80,6 +80,12 @@ Both **Stream Type** (team streams) and **Specific Team's Feed** rules let you p
 
 The **Specific Team's Feed** rule first checks the **resolved feed team** stored during matching — the [Feed Separation](consolidation#feed-separation) engine's verdict from broadcast-market listings, team-branded names (`Brewers.TV`), and tvg-id/tvg-name. Identification always runs, whether or not the Feed Separation toggle is on (the toggle only controls channel splitting), and team streams (`MLB | Milwaukee Brewers`) carry their matched team the same way. When no team was resolved, it falls back to scanning the stream name for your selected teams plus a feed indicator — a matchup (`vs`, `at`, `@`), a side (`home`/`away`), a camera label, or a `(Team feed)` marker. Generic streams with neither are left for other rules.
 
+## Teamarr keeps Dispatcharr's order in step
+
+Every generation run compares the order Dispatcharr is actually holding for each channel against the order your rules call for, and re-pushes whenever the two differ — not only when a rule changed something. So an order that drifted for any reason (a push Dispatcharr rejected, a hand edit in Dispatcharr, a channel repaired by reconciliation) is corrected on the next run instead of sticking.
+
+Channels already in the right order aren't touched, and a live event's pinned #1 stream is left alone (see below).
+
 ## Live events keep their #1 stream
 
 While an event is airing, scheduled generation runs won't displace the channel's top stream — the one a viewer is most likely watching. Rule changes still take effect in the background (priorities are recomputed and stored), and new streams that match mid-event are added **below** the current #1, but the top slot itself stays put until the event ends. The first run after the event restores full rule ordering.

@@ -5,6 +5,7 @@ persisting local DB state, enabling self-healing via the scheduler retry loop.
 """
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -504,6 +505,33 @@ def recon_conn():
     db.close()
 
 
+def _insert_ordered_stream_channel(
+    conn,
+    first=456,
+    second=789,
+    event_date=None,
+    scheduled_delete_at=None,
+):
+    """One managed channel with two streams in an explicit priority order."""
+    conn.execute(
+        "INSERT INTO managed_channels "
+        "(id, event_epg_group_id, event_id, event_provider, channel_name, "
+        "tvg_id, dispatcharr_channel_id, dispatcharr_uuid, channel_group_id, "
+        "channel_number, event_date, scheduled_delete_at) "
+        "VALUES (1, 1, '123', 'espn', 'Test', 'teamarr-event-123', "
+        "100, 'uuid-100', 10, '5001', ?, ?)",
+        (event_date, scheduled_delete_at),
+    )
+    for priority, stream_id in enumerate((first, second)):
+        conn.execute(
+            "INSERT INTO managed_channel_streams "
+            "(managed_channel_id, dispatcharr_stream_id, stream_name, priority) "
+            "VALUES (1, ?, ?, ?)",
+            (stream_id, f"Stream {stream_id}", priority),
+        )
+    conn.commit()
+
+
 class TestReconciliationStreamDrift:
     """Reconciliation detects stream assignment drift."""
 
@@ -580,6 +608,107 @@ class TestReconciliationStreamDrift:
 
         issues = reconciler._detect_drift(recon_conn)
         assert len(issues) == 0
+
+    def test_detects_order_only_drift(self, recon_conn):
+        """Same streams in a different order IS drift (#712).
+
+        The old set-based comparison saw membership only, so a channel whose
+        Dispatcharr order had diverged from its priority order was reported as
+        healthy forever.
+        """
+        _insert_ordered_stream_channel(recon_conn)
+
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(789, 456),  # same streams, wrong order
+            channel_profile_ids=None,
+        )
+
+        reconciler = ChannelReconciler(
+            db_factory=lambda: recon_conn,
+            channel_manager=cm,
+        )
+
+        issues = reconciler._detect_drift(recon_conn)
+        stream_drift = [
+            d for issue in issues for d in issue.details["drift_fields"] if d["field"] == "streams"
+        ]
+        assert len(stream_drift) == 1
+        assert stream_drift[0]["expected"] == [456, 789]
+        assert stream_drift[0]["actual"] == [789, 456]
+
+    def test_expected_is_priority_order_not_id_order(self, recon_conn):
+        """The auto-fix payload must be priority order, never sorted IDs (#712).
+
+        `expected` is written straight to Dispatcharr by the drift fix, and
+        Dispatcharr reads the array as the channel's stream priority — so
+        sorting it numerically actively destroyed the order it claimed to fix.
+        """
+        _insert_ordered_stream_channel(recon_conn, first=789, second=456)
+
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(456,),
+            channel_profile_ids=None,
+        )
+
+        reconciler = ChannelReconciler(
+            db_factory=lambda: recon_conn,
+            channel_manager=cm,
+        )
+
+        issues = reconciler._detect_drift(recon_conn)
+        stream_drift = [
+            d for issue in issues for d in issue.details["drift_fields"] if d["field"] == "streams"
+        ]
+        assert stream_drift[0]["expected"] == [789, 456]
+
+    def test_order_only_drift_ignored_while_event_live(self, recon_conn):
+        """A live channel's order belongs to the #1 pin (#232), not to drift fix."""
+        now = datetime.now(UTC)
+        _insert_ordered_stream_channel(
+            recon_conn,
+            event_date=(now - timedelta(minutes=30)).isoformat(),
+            scheduled_delete_at=(now + timedelta(hours=3)).isoformat(),
+        )
+
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(789, 456),  # pinned: watched stream held at #1
+            channel_profile_ids=None,
+        )
+
+        reconciler = ChannelReconciler(
+            db_factory=lambda: recon_conn,
+            channel_manager=cm,
+        )
+
+        assert reconciler._detect_drift(recon_conn) == []
+
+    def test_membership_drift_still_flagged_while_event_live(self, recon_conn):
+        """The pin excuses a reordering, never a missing stream."""
+        now = datetime.now(UTC)
+        _insert_ordered_stream_channel(
+            recon_conn,
+            event_date=(now - timedelta(minutes=30)).isoformat(),
+            scheduled_delete_at=(now + timedelta(hours=3)).isoformat(),
+        )
+
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(456,),
+            channel_profile_ids=None,
+        )
+
+        reconciler = ChannelReconciler(
+            db_factory=lambda: recon_conn,
+            channel_manager=cm,
+        )
+
+        issues = reconciler._detect_drift(recon_conn)
+        assert any(
+            d["field"] == "streams" for issue in issues for d in issue.details["drift_fields"]
+        )
 
 
 class TestReconciliationProfileDrift:
