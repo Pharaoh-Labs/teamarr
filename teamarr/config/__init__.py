@@ -257,7 +257,9 @@ class Config:
         cls._display_settings_cache = None
 
     @classmethod
-    def set_matchup_orders(cls, global_mode: str, per_league: dict[str, str]) -> None:
+    def set_matchup_orders(
+        cls, global_mode: str, per_league: dict[str, str | None]
+    ) -> None:
         """Replace the matchup-order cache (startup / full reload)."""
         cls._matchup_order = global_mode or "auto"
         cls._league_matchup_orders = {k: v for k, v in per_league.items() if v}
@@ -355,7 +357,9 @@ def clear_timezone_cache() -> None:
     Config.clear_timezone_cache()
 
 
-def set_matchup_orders(global_mode: str, per_league: dict[str, str]) -> None:
+def set_matchup_orders(
+    global_mode: str, per_league: dict[str, str | None]
+) -> None:
     """Load the matchup-order cache (#692): global mode + per-league overrides."""
     Config.set_matchup_orders(global_mode, per_league)
 

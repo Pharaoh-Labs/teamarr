@@ -32,7 +32,7 @@ def _has_league_hint(stream_name: str) -> bool:
 
 # Try to import 'regex' module which supports advanced features
 try:
-    import regex
+    import regex  # pyright: ignore[reportMissingModuleSource]
 
     REGEX_MODULE = regex
     SUPPORTS_VARIABLE_LOOKBEHIND = True
