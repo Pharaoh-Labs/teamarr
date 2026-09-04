@@ -23,6 +23,9 @@ export default defineConfig([
       // Rest-destructure omission (`const { drop, ...keep } = obj`) is the
       // idiomatic way to exclude fields; don't flag the dropped names.
       '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+      // Teamarr does not use React Compiler, and TanStack Virtual's useVirtualizer
+      // intentionally returns functions that React Compiler flags.
+      'react-hooks/incompatible-library': 'off',
     },
   },
 ])
