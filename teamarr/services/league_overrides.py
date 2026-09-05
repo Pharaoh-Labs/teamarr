@@ -96,9 +96,24 @@ def set_gracenote_override(league_code: str, value: str | None) -> dict:
 
 
 def _require_league(league_code: str) -> None:
+    """Accept any league the league picker can offer (#709).
+
+    The picker lists the UNION of configured leagues and discovered ones
+    (``league_cache``), so gating on the ``leagues`` table alone rejected
+    every discovered league — e.g. ``eng.5`` (English National League) —
+    with "Unknown league". The override read path already resolves those:
+    ``get_default_gracenote_category`` falls back to the league_cache name
+    and sport, so an override on a discovered league renders correctly.
+    """
     with get_db() as conn:
         row = conn.execute(
-            "SELECT 1 FROM leagues WHERE league_code = ?", (league_code,)
+            """
+            SELECT 1 FROM leagues WHERE league_code = ?
+            UNION ALL
+            SELECT 1 FROM league_cache WHERE league_slug = ?
+            LIMIT 1
+            """,
+            (league_code, league_code),
         ).fetchone()
     if row is None:
         raise LeagueNotFoundError(f"Unknown league: {league_code}")
