@@ -86,3 +86,30 @@ def test_list_overrides():
 def test_unknown_league_rejected():
     with pytest.raises(LeagueNotFoundError):
         set_gracenote_override("not-a-league", "X")
+
+
+def test_discovered_league_accepted(db_conn):
+    """#709: the league picker offers configured ∪ discovered leagues, so a
+    league_cache-only league (eng.5) must be overridable too — it used to
+    fail with "Unknown league"."""
+    db_conn.execute(
+        """
+        INSERT INTO league_cache (league_slug, provider, league_name, sport)
+        VALUES ('eng.5', 'espn', 'English National League', 'soccer')
+        """
+    )
+    db_conn.commit()
+    lm.get_league_mapping_service().reload()
+
+    # Derived default comes from the league_cache name + sport
+    state = get_gracenote_override_state("eng.5")
+    assert state["override"] is None
+    assert state["default"] == "English National League Soccer"
+
+    state = set_gracenote_override("eng.5", "National League Soccer")
+    assert state["override"] == "National League Soccer"
+    assert state["effective"] == "National League Soccer"
+    assert (
+        lm.get_league_mapping_service().get_gracenote_category("eng.5")
+        == "National League Soccer"
+    )
