@@ -97,10 +97,20 @@ def _display_name(conn, exc) -> str:
     if exc.scope == "team":
         return exc.team_name or "?"
     if exc.scope == "league":
+        # Configured first, then discovered (#720) — a league_cache-only pin
+        # would otherwise render as its raw code ("arg.2").
         row = conn.execute(
-            "SELECT display_name FROM leagues WHERE league_code = ?", (exc.league_code,)
+            """
+            SELECT display_name FROM leagues
+            WHERE league_code = ? AND display_name IS NOT NULL
+            UNION ALL
+            SELECT league_name FROM league_cache
+            WHERE league_slug = ? AND league_name IS NOT NULL
+            LIMIT 1
+            """,
+            (exc.league_code, exc.league_code),
         ).fetchone()
-        return (row["display_name"] if row and row["display_name"] else exc.league_code) or "?"
+        return (row["display_name"] if row else exc.league_code) or "?"
     from teamarr.core.sports import get_sport_display_names_from_db
 
     names = get_sport_display_names_from_db(conn)

@@ -229,7 +229,7 @@ def add_numbering_exception(
       entry); name + sport are resolved from ``team_cache`` so the match key
       stays canonical. ``team_league`` narrows the cache lookup.
     - ``scope='league'``: pass ``league_code`` (+ ``sport`` if known; resolved
-      from ``leagues`` otherwise).
+      from ``leagues``, then ``league_cache``, otherwise).
     - ``scope='sport'``: pass ``sport``.
 
     Returns the stored row, or ``None`` on validation / lookup failure.
@@ -271,8 +271,18 @@ def add_numbering_exception(
             return None
         league_code = league_code.lower()
         if not sport:
+            # The league dropdown offers configured leagues UNION discovered
+            # ones from league_cache (#720), so resolve the sport across both
+            # — gating on the leagues table alone rejected every discovered
+            # league with "Unknown league (no sport)".
             row = conn.execute(
-                "SELECT sport FROM leagues WHERE league_code = ?", (league_code,)
+                """
+                SELECT sport FROM leagues WHERE league_code = ?
+                UNION ALL
+                SELECT sport FROM league_cache WHERE league_slug = ?
+                LIMIT 1
+                """,
+                (league_code, league_code),
             ).fetchone()
             sport = row["sport"] if row else None
         if not sport:
