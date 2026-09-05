@@ -1,6 +1,7 @@
 """Resolve channel-source stream-profile overrides."""
 
 from sqlite3 import Connection
+from typing import cast
 
 from teamarr.database.channels import get_channel_streams
 from teamarr.database.settings import get_epg_settings
@@ -21,7 +22,12 @@ def resolve_stream_profile_for_group(
             mapping.get("target_type") == "dispatcharr_channel_group"
             and mapping.get("target_id") == dispatcharr_channel_group_id
         ):
-            return mapping.get("stream_profile_id")
+            stream_profile_id = mapping.get("stream_profile_id")
+            return (
+                stream_profile_id
+                if isinstance(stream_profile_id, int)
+                else default_stream_profile_id
+            )
     return default_stream_profile_id
 
 
@@ -32,7 +38,9 @@ def resolve_channel_stream_profile(
 ) -> int | None:
     """Return the top active ordered stream's override or the global default."""
     for stream in get_channel_streams(conn, managed_channel_id):
-        if is_stream_in_window(stream.attach_at, stream.detach_at):
+        attach_at = cast(str | None, stream.attach_at)
+        detach_at = cast(str | None, stream.detach_at)
+        if is_stream_in_window(attach_at, detach_at):
             return resolve_stream_profile_for_group(
                 conn, default_stream_profile_id, stream.dispatcharr_channel_group_id
             )
