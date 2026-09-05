@@ -115,6 +115,17 @@ def test_build_input_dash_separator_inline():
     assert build_match_input(p) == "Premier League | Arsenal vs Chelsea"
 
 
+def test_build_input_ascii_dash_separator_inline():
+    p = _prog("College Football - Missouri State at Texas A&M", None)
+    match_input = build_match_input(p)
+    assert match_input == "College Football | Missouri State at Texas A&M"
+
+    classified = classify_stream(match_input, "team", None, None, None)
+    assert classified.category is StreamCategory.TEAM_VS_TEAM
+    assert classified.team1 == "Missouri State"
+    assert classified.team2 == "Texas A&M"
+
+
 def test_build_input_no_split_when_subtitle_present():
     # A real title|sub_title split is authoritative; an in-title colon stays put.
     p = _prog("MLB Baseball: Special", "Cubs at Cardinals")

@@ -35,10 +35,10 @@ _EPG_DECORATION = re.compile(
 )
 
 # Inline matchup separators used by feeds that put the whole matchup in the
-# title with no sub_title ("MLB Baseball : Mets at Mariners", "… — …", "… – …").
+# title with no sub_title ("MLB Baseball : Mets at Mariners", "… - …", "… — …").
 # Converting the FIRST one to the pipe boundary lets classify_stream treat the
 # leading league/category as a strippable hint, same as a real sub_title split.
-_INLINE_SEP = re.compile(r"\s+[:–—]\s+")
+_INLINE_SEP = re.compile(r"\s+[-:–—]\s+")
 
 # Category tokens (lowercased) that classify a program.
 _CLASSIC = "classic sport event"
