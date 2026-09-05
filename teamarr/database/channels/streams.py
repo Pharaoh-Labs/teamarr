@@ -55,6 +55,7 @@ def add_stream_to_channel(
         "feed_team_id",  # resolved feed/matched team; drives team_feed rules (#489)
         "feed_side",  # 'home'/'away'; NULL = unknown. Drives home_feed/away_feed rules (#533)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
+        "dispatcharr_channel_group_id",  # Stable DP channel group id for profile overrides
         "attach_at",   # time-windowed membership (183.5); None = full-life
         "detach_at",
     ]
@@ -292,6 +293,26 @@ def update_stream_name(
             dispatcharr_stream_id,
             new_name,
         )
+    return cursor.rowcount > 0
+
+
+def update_stream_channel_source_group(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    dispatcharr_channel_group_id: int,
+) -> bool:
+    """Backfill channel-source group metadata for an active stream.
+
+    Only channel-source candidates supply this immutable Dispatcharr group id;
+    ordinary M3U/name-matched streams must remain NULL.
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET dispatcharr_channel_group_id = ?
+           WHERE managed_channel_id = ? AND dispatcharr_stream_id = ? AND removed_at IS NULL""",
+        (dispatcharr_channel_group_id, managed_channel_id, dispatcharr_stream_id),
+    )
     return cursor.rowcount > 0
 
 

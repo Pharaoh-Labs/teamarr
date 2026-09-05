@@ -142,6 +142,8 @@ class ManagedChannelStream:
     # DP channel's own group name (channel-source streams) — drives the
     # dispatcharr_group ordering rule (ybt.3). NULL for non-channel-source streams.
     dispatcharr_channel_group: str | None = None
+    # Stable DP channel group id for channel-source stream-profile overrides.
+    dispatcharr_channel_group_id: int | None = None
     added_at: datetime | None = None
     removed_at: datetime | None = None
     # Time-windowed membership (epic teamarrv2-183.5). NULL = full-life.
@@ -203,6 +205,7 @@ class ManagedChannelStream:
             feed_team_id=row.get("feed_team_id"),
             feed_side=row.get("feed_side"),
             dispatcharr_channel_group=row.get("dispatcharr_channel_group"),
+            dispatcharr_channel_group_id=row.get("dispatcharr_channel_group_id"),
             added_at=row.get("added_at"),
             removed_at=row.get("removed_at"),
             attach_at=row.get("attach_at"),

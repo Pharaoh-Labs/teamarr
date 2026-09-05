@@ -213,6 +213,7 @@ class KeywordEnforcer:
                             attach_at=stream.attach_at,
                             detach_at=stream.detach_at,
                             dispatcharr_channel_group=stream.dispatcharr_channel_group,
+                            dispatcharr_channel_group_id=stream.dispatcharr_channel_group_id,
                         )
 
                         # Sync to Dispatcharr

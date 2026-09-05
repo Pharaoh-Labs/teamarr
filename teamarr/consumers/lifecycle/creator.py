@@ -15,6 +15,7 @@ from teamarr.core import Event
 
 from ._host import _LifecycleHost
 from .feed_side import resolve_feed_side
+from .stream_profiles import resolve_stream_profile_for_group
 from .timing import compute_stream_window, is_channel_event_live, is_stream_in_window
 from .types import (
     ChannelCreationResult,
@@ -111,8 +112,7 @@ class ChannelCreator(_LifecycleHost):
                 }
                 self._league_configs = league_configs
 
-                # Stream profile: always global default
-                stream_profile_id = dispatcharr_settings.default_stream_profile_id
+                default_stream_profile_id = dispatcharr_settings.default_stream_profile_id
 
                 for matched in matched_streams:
                     try:
@@ -132,6 +132,9 @@ class ChannelCreator(_LifecycleHost):
                         event_provider = getattr(event, "provider", "espn")
                         stream_name = stream.get("name", "")
                         stream_id = stream.get("id")
+                        stream_profile_id = resolve_stream_profile_for_group(
+                            conn, default_stream_profile_id, stream.get("dp_channel_group_id")
+                        )
 
                         # UFC segment support: extract segment info if present
                         segment = matched.get("segment")  # e.g., "prelims", "main_card"
@@ -498,6 +501,7 @@ class ChannelCreator(_LifecycleHost):
             remove_stream_from_channel,
             stream_exists_on_channel,
             update_stream_account_name,
+            update_stream_channel_source_group,
             update_stream_feed_side,
             update_stream_feed_team,
             update_stream_window,
@@ -615,6 +619,7 @@ class ChannelCreator(_LifecycleHost):
                     feed_team_id=stream_feed_team_id,
                     feed_side=stream_feed_side,
                     dispatcharr_channel_group=stream.get("dp_channel_group"),
+                    dispatcharr_channel_group_id=stream.get("dp_channel_group_id"),
                     attach_at=attach_at,
                     detach_at=detach_at,
                 )
@@ -742,7 +747,6 @@ class ChannelCreator(_LifecycleHost):
                     update_stream_feed_side(
                         conn, existing.id, stream_id, stream_feed_side
                     )
-
             result.existing.append(
                 {
                     "stream": stream_name,
@@ -760,6 +764,12 @@ class ChannelCreator(_LifecycleHost):
                     "channel_number": existing.channel_number,
                     "action": "separate_exists",
                 }
+            )
+
+        dp_channel_group_id = stream.get("dp_channel_group_id")
+        if dp_channel_group_id is not None:
+            update_stream_channel_source_group(
+                conn, existing.id, stream_id, dp_channel_group_id
             )
 
         # Sync channel settings
@@ -1087,6 +1097,7 @@ class ChannelCreator(_LifecycleHost):
                 feed_team_id=stream_feed_team_id,
                 feed_side=stream_feed_side,
                 dispatcharr_channel_group=stream.get("dp_channel_group"),
+                dispatcharr_channel_group_id=stream.get("dp_channel_group_id"),
                 attach_at=attach_at,
                 detach_at=detach_at,
             )

@@ -56,7 +56,7 @@ Global settings for matching static linear channels (ESPN, FS1) to events via Di
 
 - **Provider EPG Backup** — opt-in fallback to an Xtream (XC) provider's own EPG for streams Dispatcharr has no guide for, with a **Cache for (hours)** control (default 24).
 - **Attach/Detach Timing** — **Attach before (minutes)** / **Detach after (minutes)** buffers (default 60/60) controlling the time-share window around each matched program.
-- **Dispatcharr as a Stream Source** — opt-in additive source that matches streams already curated onto Dispatcharr channels using each channel's own EPG, with a **Dispatcharr groups to include** picker.
+- **Dispatcharr as a Stream Source** — opt-in additive source that matches streams already curated onto Dispatcharr channels using each channel's own EPG, with a **Dispatcharr groups to include** picker. Selected groups can optionally override the global stream profile. The highest-ranked active stream decides: its override applies when present, otherwise Teamarr uses the global profile.
 
 The feature itself is enabled per source; see the full [EPG Program Matching guide](program-matching) for how it works and every setting's detail.
 

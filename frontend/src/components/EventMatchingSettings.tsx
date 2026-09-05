@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { ToggleCard } from "@/components/ui/toggle-card"
 import { CheckboxListPicker } from "@/components/ui/checkbox-list-picker"
+import { Button } from "@/components/ui/button"
+import { StreamProfileSelector } from "@/components/StreamProfileSelector"
 import {
   useEPGSettings,
   useUpdateEPGSettings,
@@ -146,7 +148,12 @@ export function EpgMatchingSettings() {
             label="Dispatcharr groups to include"
             selected={(epg?.epg_channel_source_groups ?? []).map(String)}
             onChange={(vals) =>
-              epg && setEPG({ ...epg, epg_channel_source_groups: vals.map(Number) })
+              epg && setEPG({
+                ...epg,
+                epg_channel_source_groups: vals.map(Number),
+                stream_profile_overrides:
+                  epg.stream_profile_overrides.filter((m) => m.target_type !== "dispatcharr_channel_group" || vals.includes(String(m.target_id))),
+              })
             }
             items={(channelGroupsQuery.data ?? []).map((g) => ({
               value: String(g.id),
@@ -159,6 +166,22 @@ export function EpgMatchingSettings() {
             scanned — fewer = faster. Empty = all. They also become sort options
             under Channels → Stream Priority.
           </p>
+          {(epg?.epg_channel_source_groups.length ?? 0) > 0 && (
+            <div className="space-y-2 pt-3">
+              <Label>Stream profile overrides</Label>
+              <p className="text-xs text-muted-foreground">
+                These apply to Teamarr event channels created from matching streams in the selected Dispatcharr group. The highest-ranked active stream decides: its override is used when present, otherwise the global stream profile applies.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                To make a group's override win, add a <strong>Dispatcharr Group</strong> rule under Channels → Stream Priority → Priority rules to rank that group's streams higher.
+              </p>
+              {(epg?.stream_profile_overrides ?? []).filter((mapping) => mapping.target_type === "dispatcharr_channel_group").map((mapping) => {
+                const group = channelGroupsQuery.data?.find((item) => item.id === mapping.target_id)
+                return <div key={mapping.target_id} className="flex items-center gap-2"><span className="min-w-32 text-sm">{group?.name ?? mapping.target_id}</span><StreamProfileSelector value={mapping.stream_profile_id} onChange={(streamProfileId) => epg && setEPG({ ...epg, stream_profile_overrides: streamProfileId === null ? epg.stream_profile_overrides.filter((item) => item !== mapping) : epg.stream_profile_overrides.map((item) => item.target_type === "dispatcharr_channel_group" && item.target_id === mapping.target_id ? { ...item, stream_profile_id: streamProfileId } : item) })} /><Button variant="ghost" size="sm" onClick={() => epg && setEPG({ ...epg, stream_profile_overrides: epg.stream_profile_overrides.filter((item) => item !== mapping) })}>Remove</Button></div>
+              })}
+              <Select value="" onChange={(event) => { const groupId = Number(event.target.value); if (groupId && epg) setEPG({ ...epg, stream_profile_overrides: [...epg.stream_profile_overrides, { target_type: "dispatcharr_channel_group", target_id: groupId, stream_profile_id: 0 }] }) }}><option value="">Add selected group...</option>{(channelGroupsQuery.data ?? []).filter((group) => epg?.epg_channel_source_groups.includes(group.id) && !epg.stream_profile_overrides.some((mapping) => mapping.target_type === "dispatcharr_channel_group" && mapping.target_id === group.id)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select>
+            </div>
+          )}
         </div>
       </ToggleCard>
 

@@ -54,3 +54,8 @@ def test_combined_settings_includes_xtream_fallback_key():
     # Explicit guard for the exact field that regressed.
     epg = client.get("/api/v1/settings").json().get("epg", {})
     assert "epg_xtream_fallback_enabled" in epg
+
+
+def test_combined_settings_includes_stream_profile_overrides():
+    epg = client.get("/api/v1/settings").json().get("epg", {})
+    assert "stream_profile_overrides" in epg
