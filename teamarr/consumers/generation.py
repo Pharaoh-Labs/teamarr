@@ -428,6 +428,7 @@ def run_full_generation(
         )
         # Compute external channel numbers to avoid collisions (#146)
         lifecycle_service.compute_external_occupied()
+        lifecycle_service.sync_stream_profiles()
 
         # Step 5: Dispatcharr EPG refresh + channel association (96-98%)
         check_cancelled()
@@ -1599,4 +1600,3 @@ def _finalize_stats_run(
 
     with db_factory() as conn:
         save_run(conn, stats_run)
-

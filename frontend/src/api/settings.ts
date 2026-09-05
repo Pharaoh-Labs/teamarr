@@ -58,11 +58,18 @@ export interface EPGSettings {
   epg_xtream_cache_hours: number
   epg_channel_source_enabled: boolean
   epg_channel_source_groups: number[]
+  stream_profile_overrides: StreamProfileOverride[]
   epg_stream_pre_buffer_minutes: number
   epg_stream_post_buffer_minutes: number
   tennis_majors_only: boolean
   /** Game-thumbs base URL prefixed onto relative art paths in templates (z02s). */
   art_base_url: string
+}
+
+export interface StreamProfileOverride {
+  target_type: "dispatcharr_channel_group"
+  target_id: number
+  stream_profile_id: number
 }
 
 // Note: team_schedule_days_ahead default is 30 (for Team EPG)

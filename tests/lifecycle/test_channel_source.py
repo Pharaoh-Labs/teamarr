@@ -229,6 +229,30 @@ def test_empty_selection_includes_all_groups(monkeypatch):
     assert sorted(s["id"] for s in out) == [500, 501]
 
 
+def test_channel_source_group_id_persists_and_backfills(db_conn):
+    from teamarr.database.channels import (
+        add_stream_to_channel,
+        get_channel_streams,
+        update_stream_channel_source_group,
+    )
+
+    db_conn.execute(
+        "INSERT INTO managed_channels (event_id, event_provider, tvg_id, channel_name) "
+        "VALUES ('event', 'espn', 'tvg-event', 'Event')"
+    )
+    channel_id = db_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    add_stream_to_channel(
+        db_conn,
+        channel_id,
+        500,
+        dispatcharr_channel_group_id=7,
+    )
+    assert get_channel_streams(db_conn, channel_id)[0].dispatcharr_channel_group_id == 7
+
+    update_stream_channel_source_group(db_conn, channel_id, 500, 9)
+    assert get_channel_streams(db_conn, channel_id)[0].dispatcharr_channel_group_id == 9
+
+
 def test_ensure_channel_source_group_idempotent_and_synced(db_conn):
     gid = ensure_channel_source_group(db_conn, enabled=True)
     g = get_group(db_conn, gid)

@@ -210,6 +210,11 @@ CREATE TABLE IF NOT EXISTS settings (
     -- undesired groups (faster generation) and drives the "Dispatcharr Group"
     -- stream-ordering rule. (epic teamarrv2-ybt.2)
     epg_channel_source_groups TEXT DEFAULT '[]',
+    -- Optional stream-profile overrides. Each item has a target_type and stable
+    -- target_id, e.g. {"target_type":"dispatcharr_channel_group","target_id":7,
+    -- "stream_profile_id":3}. Current UI supports Dispatcharr channel groups;
+    -- this discriminated shape also permits future Sources-tab target types.
+    stream_profile_overrides TEXT DEFAULT '[]',
 
     -- EPG stream time-windowing buffers (epic teamarrv2-183.5).
     -- SEPARATE from the channel create/delete buffers above: these apply to the
@@ -1594,6 +1599,7 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     feed_side TEXT                            -- (#533) which side this feed is: 'home', 'away', or NULL = UNKNOWN. Tri-state by design — NULL is a real value (no feed signal, or a sport with no sides), never "not home therefore away". Drives home_feed/away_feed ordering rules; unknown matches neither.
         CHECK(feed_side IN ('home', 'away')),
     dispatcharr_channel_group TEXT,           -- (ybt.3) the DP channel's own group name, for channel-source streams; drives the 'dispatcharr_group' stream-ordering rule. NULL for non-channel-source streams.
+    dispatcharr_channel_group_id INTEGER,     -- Stable DP channel-group id for channel-source stream-profile overrides. NULL for non-channel-source streams.
 
     -- Priority (0 = primary, higher = failover)
     priority INTEGER DEFAULT 0,

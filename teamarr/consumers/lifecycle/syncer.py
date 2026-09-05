@@ -14,6 +14,7 @@ from typing import Any
 from teamarr.core import Event
 
 from ._host import _LifecycleHost
+from .stream_profiles import resolve_channel_stream_profile
 from .types import StreamProcessResult, generate_event_tvg_id
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ class ChannelSyncer(_LifecycleHost):
         | league_config/group | channel_profile_ids | Per-league → group → global |
         | template            | logo_id             | Upload/update if different  |
         | event_id            | tvg_id              | Ensures EPG matching        |
-        | settings (global)   | stream_profile_id   | Always global default       |
+        | top active stream   | stream_profile_id   | Override or global default    |
         """
         from teamarr.database.channels import (
             log_channel_history,
@@ -508,11 +509,13 @@ class ChannelSyncer(_LifecycleHost):
         current_channel: Any,
         changes_made: list[str],
     ) -> None:
-        """Sync stream_profile_id (always global default)."""
+        """Sync stream_profile_id from the top active stream's override or default."""
         from teamarr.database.settings import get_dispatcharr_settings
 
         dispatcharr_settings = get_dispatcharr_settings(conn)
-        expected_stream_profile = dispatcharr_settings.default_stream_profile_id
+        expected_stream_profile = resolve_channel_stream_profile(
+            conn, existing.id, dispatcharr_settings.default_stream_profile_id
+        )
 
         current_stream_profile = current_channel.stream_profile_id
         if expected_stream_profile != current_stream_profile:
@@ -532,6 +535,26 @@ class ChannelSyncer(_LifecycleHost):
                 changes_made.append(
                     f"stream_profile: {current_stream_profile} → {expected_stream_profile}"
                 )
+
+    def sync_stream_profiles(self) -> int:
+        """Reapply stream-profile precedence after final stream ordering."""
+        from teamarr.database.channels import get_all_managed_channels
+
+        if not self._channel_manager:
+            return 0
+        updated = 0
+        with self._db_factory() as conn:
+            for channel in get_all_managed_channels(conn, include_deleted=False):
+                if not channel.dispatcharr_channel_id:
+                    continue
+                with self._dispatcharr_lock:
+                    current = self._channel_manager.get_channel(channel.dispatcharr_channel_id)
+                if not current:
+                    continue
+                changes: list[str] = []
+                self._sync_stream_profile(conn, channel, current, changes)
+                updated += bool(changes)
+        return updated
 
     def associate_epg_with_channels(self, epg_source_id: int | None = None) -> dict:
         """Associate EPG data with managed channels after EPG refresh.

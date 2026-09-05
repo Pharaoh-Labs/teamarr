@@ -100,6 +100,11 @@ class EPGSettings:
     # Which DP channel groups to include as channel-source candidates (group ids).
     # Empty = include all (ybt.2). Scopes the scan and drives the sorting rule.
     epg_channel_source_groups: list[int] = field(default_factory=list)
+    # Explicit stream-profile override targets. Current target_type is
+    # 'dispatcharr_channel_group'; future source types can share this contract.
+    stream_profile_overrides: list[dict[str, int | str]] = field(
+        default_factory=list
+    )
     epg_stream_pre_buffer_minutes: int = 60
     epg_stream_post_buffer_minutes: int = 60
     # Tennis: only match/attach grand-slam tournaments (#283 first slice) —

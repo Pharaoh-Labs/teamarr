@@ -67,6 +67,8 @@ As a backup, enable **Matching → Provider EPG Backup** (the `/matching` page).
 
 Normally each source pulls its candidate streams from an **M3U group** — so EPG matching considers *every* stream in that provider group. If you'd rather match only the channel versions you've **already curated in Dispatcharr**, enable **Matching → Dispatcharr as a Stream Source** (the `/matching` page).
 
+For explicitly selected Dispatcharr groups, you can optionally choose a stream-profile override. Teamarr resolves the profile after **Channels → Stream Priority** produces the final order: the highest-ranked active stream is decisive. If it belongs to a mapped group, that group's override applies. If it has no override, Teamarr uses the global Dispatcharr stream profile, even if a lower-ranked stream has an override.
+
 When on, Teamarr adds a second, **additive** source that:
 
 - Enumerates the Dispatcharr **channels** you've mapped that carry an active, non-`_Teamarr` EPG link.
