@@ -46,6 +46,9 @@ CREATE TABLE channel_sort_priorities (
   created_at TEXT, updated_at TEXT);
 CREATE TABLE channel_priority_teams (id INTEGER PRIMARY KEY, sport TEXT, team_name TEXT);
 CREATE TABLE leagues (league_code TEXT PRIMARY KEY, sport TEXT, display_name TEXT);
+CREATE TABLE league_cache (
+  league_slug TEXT, provider TEXT, league_name TEXT, sport TEXT NOT NULL,
+  PRIMARY KEY (league_slug, provider));
 CREATE TABLE team_cache (
   id INTEGER PRIMARY KEY, provider TEXT, provider_team_id TEXT, team_name TEXT,
   sport TEXT, league TEXT);
@@ -61,6 +64,8 @@ INSERT INTO settings (id) VALUES (1);
 INSERT INTO leagues VALUES ('nfl','football','NFL'),('nba','basketball','NBA'),
   ('nhl','hockey','NHL'),('mlb','baseball','MLB'),('ncaaf','football','NCAA Football'),
   ('fifa.world','soccer','FIFA World Cup');
+-- Discovered-only league (#720): offered by the picker, absent from `leagues`
+INSERT INTO league_cache VALUES ('arg.2','espn','Argentine Nacional B','soccer');
 INSERT INTO team_cache (provider, provider_team_id, team_name, sport, league) VALUES
   ('espn','8','Detroit Lions','football','nfl'),
   ('espn','9','Green Bay Packers','football','nfl'),
@@ -467,6 +472,27 @@ def test_add_league_pin_resolves_sport():
     exc = pin(c, "league", 500, league_code="NFL")
     assert (exc.league_code, exc.sport) == ("nfl", "football")
     assert ne.add_numbering_exception(c, scope="league", start=510, league_code="zzz") is None
+
+
+def test_add_league_pin_resolves_discovered_league_sport():
+    """#720: the dropdown offers configured ∪ discovered leagues, so a
+    league_cache-only league must pin too — it used to be rejected with
+    "Unknown league (no sport)"."""
+    c = build()
+    exc = pin(c, "league", 520, league_code="ARG.2")
+    assert (exc.league_code, exc.sport, exc.scope) == ("arg.2", "soccer", "league")
+
+
+def test_league_pin_display_name_spans_both_tables():
+    """The block list labels a pin by league name, configured or discovered
+    (#720) — a league_cache-only pin used to render as its raw code."""
+    from teamarr.api.routes.numbering_exceptions import _display_name
+
+    c = build()
+    assert _display_name(c, pin(c, "league", 500, league_code="nfl")) == "NFL"
+    assert _display_name(c, pin(c, "league", 520, league_code="arg.2")) == (
+        "Argentine Nacional B"
+    )
 
 
 @pytest.mark.parametrize("kw", [
