@@ -37,8 +37,28 @@ export function escapeRegex(str: string): string {
 // accented team names — Atlético, Bayern München, Plzeň, São Paulo — are
 // captured, not just ASCII. Ranges: ASCII, Latin-1 letters (À-ÿ minus the ×/÷
 // math symbols), and Latin Extended-A (Ā-ž) for Czech/Polish/etc.
-const TEAM_CHARS = "A-Za-zÀ-ÖØ-öø-ÿĀ-ž"
-const TEAM_BODY = `[${TEAM_CHARS}][${TEAM_CHARS} .'-]+[${TEAM_CHARS}.]`
+const TEAM_LETTERS = "A-Za-zÀ-ÖØ-öø-ÿĀ-ž"
+
+// Team names also carry digits — "1. FC Köln", "Schalke 04", "1899 Hoffenheim"
+// (#708). Digits used to be excluded outright to keep a neighbouring date out of
+// the capture; instead the guards below fence off date-shaped tokens, so a
+// number that belongs to the club name is kept and one that belongs to a date
+// is not.
+const TEAM_CHARS = `0-9${TEAM_LETTERS}`
+
+// The head of a date-shaped token: 04-09-2026, 04/09, 2026-09-04, 09.04.2026.
+// Two components are enough to recognise one — the year, if any, follows.
+const DATE_TOKEN = "\\d{1,4}[-/.]\\d{1,2}"
+
+// A digit may open a team name only when it isn't already inside a date: the
+// lookbehind rejects a start in the middle of "04-09-2026" and the lookahead
+// rejects its leading digit. Letters open a name unconditionally, as before.
+const TEAM_START = `(?:[${TEAM_LETTERS}]|(?<![\\d/.-])(?!${DATE_TOKEN})\\d)`
+
+// The body stops before a whitespace-separated date token, so "Bayern 04-09-2026"
+// captures "Bayern" while "Schalke 04" stays whole.
+const TEAM_BODY =
+  `${TEAM_START}(?:(?!\\s+${DATE_TOKEN})[${TEAM_CHARS} .'-])+[${TEAM_CHARS}.]`
 
 /**
  * Attempt to generalize a literal selection into a broader pattern.
@@ -56,8 +76,8 @@ function generalizeForField(
     case "team2":
     case "fighter1":
     case "fighter2":
-      // Team / fighter names: letters (accent-inclusive), spaces, dots, hyphens,
-      // apostrophes (no digits — avoids grabbing dates)
+      // Team / fighter names: letters (accent-inclusive), digits, spaces, dots,
+      // hyphens, apostrophes — date-shaped runs are fenced out by TEAM_BODY
       return `(${TEAM_BODY})`
 
     case "event_name":
