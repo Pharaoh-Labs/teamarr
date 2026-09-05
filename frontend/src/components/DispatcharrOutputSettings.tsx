@@ -263,8 +263,8 @@ export function DispatcharrOutputSettings() {
             </Select>
             <p className="text-xs text-muted-foreground">
               Static uses the group above. Dynamic modes auto-create groups named by sport or league.
-              Custom lets you define a pattern with {"{sport}"}, {"{league}"}, and {"{conference}"}{" "}
-              (NCAA) placeholders.
+              Custom lets you define a pattern with {"{sport}"}, {"{league}"}, {"{conference}"}, and{" "}
+              {"{division}"} (NCAA) placeholders.
             </p>
           </div>
 
@@ -281,8 +281,10 @@ export function DispatcharrOutputSettings() {
                 className="w-64"
               />
               <p className="text-xs text-muted-foreground">
-                Use {"{sport}"}, {"{league}"}, and {"{conference}"} (NCAA leagues) as placeholders.
-                Example: "{"{sport}"} | {"{league}"}" creates groups like "Hockey | NHL".
+                Use {"{sport}"}, {"{league}"}, {"{conference}"}, and {"{division}"} (the last two
+                NCAA only) as placeholders. Example: "{"{sport}"} | {"{league}"}" creates groups like
+                "Hockey | NHL"; "{"{league}"} | {"{division}"}" splits college football into
+                "NCAAF | FBS" and "NCAAF | FCS".
               </p>
             </div>
           )}

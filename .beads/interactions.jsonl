@@ -898,3 +898,4 @@
 {"id":"int-99988cebba87b0315377641ade523df7","kind":"field_change","created_at":"2026-09-04T16:32:41.771333587Z","actor":"Luke Pukatch","issue_id":"teamarrv2-crvt","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-4175cd55eb44fbbab793007bb6cd15ee","kind":"field_change","created_at":"2026-09-04T21:33:31.304465788Z","actor":"luke","issue_id":"teamarrv2-dsz0","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-e34fcc620413ad067c31d6bdf0020677","kind":"field_change","created_at":"2026-09-04T21:45:39.092743772Z","actor":"luke","issue_id":"teamarrv2-dsz0","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-ad7a489d239f450d0f1df34944bd45c9","kind":"field_change","created_at":"2026-09-05T19:56:54.629068772Z","actor":"luke","issue_id":"teamarrv2-yuo7","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}

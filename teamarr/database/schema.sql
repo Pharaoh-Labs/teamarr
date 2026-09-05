@@ -1496,6 +1496,11 @@ CREATE TABLE IF NOT EXISTS provider_group_cache (
     group_key TEXT NOT NULL,              -- provider's stable group id (SEC=8, Big Ten=5, ...)
     group_name TEXT NOT NULL,             -- 'Southeastern Conference'
     group_abbrev TEXT,                    -- 'SEC' (core tree shortName)
+    -- Parent group in the provider's season tree: the division the conference
+    -- sits under (football 80/81 = FBS/FCS, basketball 50 = NCAA Division I).
+    -- Powers the {division} channel-group wildcard (#717).
+    parent_key TEXT,                      -- '80'
+    parent_name TEXT,                     -- 'FBS'
     season INTEGER,                       -- season year the tree was read from
     last_refreshed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
