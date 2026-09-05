@@ -139,6 +139,9 @@ class MatchedStreamResult:
     parsed_team2: str | None = None
     detected_league: str | None = None
     card_segment: str | None = None  # For UFC: "early_prelims", "prelims", "main_card"
+    extracted_date: str | None = None
+    extracted_time: str | None = None
+    extracted_tz: str | None = None
 
     # Exception handling
     exception_keyword: str | None = None
@@ -746,6 +749,21 @@ class StreamMatcher:
             event_league_sport=event_league_sport,
         )
 
+        extracted_date_str = (
+            classified.normalized.extracted_date.isoformat()
+            if classified.normalized.extracted_date
+            else None
+        )
+        extracted_time_str = (
+            classified.normalized.extracted_time.strftime("%H:%M:%S")
+            if classified.normalized.extracted_time
+            else None
+        )
+        league_hint = classified.league_hint
+        detected_league_str = (
+            ", ".join(league_hint) if isinstance(league_hint, list) else league_hint
+        )
+
         # Step 2: Handle placeholders (streams that couldn't be classified)
         # Note: Placeholder pattern detection and unsupported sports filtering
         # is now handled by StreamFilter before streams reach the matcher.
@@ -769,6 +787,12 @@ class StreamMatcher:
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="unclassifiable",
+                parsed_team1=classified.team1,
+                parsed_team2=classified.team2,
+                detected_league=detected_league_str,
+                extracted_date=extracted_date_str,
+                extracted_time=extracted_time_str,
+                extracted_tz=classified.normalized.extracted_tz,
             )]
 
         # Step 3: Gate TEAM_ONLY when disabled, then route by category.
@@ -788,6 +812,12 @@ class StreamMatcher:
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="team_streams_disabled",
+                parsed_team1=classified.team1,
+                parsed_team2=classified.team2,
+                detected_league=detected_league_str,
+                extracted_date=extracted_date_str,
+                extracted_time=extracted_time_str,
+                extracted_tz=classified.normalized.extracted_tz,
             )]
 
         # Gate the name-identifies-event categories when Stream Name matching is
@@ -808,6 +838,12 @@ class StreamMatcher:
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="name_match_disabled",
+                parsed_team1=classified.team1,
+                parsed_team2=classified.team2,
+                detected_league=detected_league_str,
+                extracted_date=extracted_date_str,
+                extracted_time=extracted_time_str,
+                extracted_tz=classified.normalized.extracted_tz,
             )]
 
         outcomes = self._route_to_outcomes(classified, stream_id, target_date)
@@ -1824,6 +1860,16 @@ class StreamMatcher:
         detected_league_str = (
             ", ".join(league_hint) if isinstance(league_hint, list) else league_hint
         )
+        extracted_date_str = (
+            classified.normalized.extracted_date.isoformat()
+            if classified.normalized.extracted_date
+            else None
+        )
+        extracted_time_str = (
+            classified.normalized.extracted_time.strftime("%H:%M:%S")
+            if classified.normalized.extracted_time
+            else None
+        )
 
         return MatchedStreamResult(
             stream_name=stream_name,
@@ -1842,6 +1888,9 @@ class StreamMatcher:
             parsed_team2=classified.team2,
             detected_league=detected_league_str,
             card_segment=classified.card_segment,  # UFC segment from stream name
+            extracted_date=extracted_date_str,
+            extracted_time=extracted_time_str,
+            extracted_tz=classified.normalized.extracted_tz,
             # Preserve detailed reason enums from MatchOutcome
             failed_reason=outcome.failed_reason,
             filtered_reason=outcome.filtered_reason,

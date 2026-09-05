@@ -161,6 +161,12 @@ class PreviewBuilder:
                     ),
                     from_cache=getattr(r, "from_cache", False),
                     exclusion_reason=r.exclusion_reason,
+                    parsed_team1=getattr(r, "parsed_team1", None),
+                    parsed_team2=getattr(r, "parsed_team2", None),
+                    detected_league=getattr(r, "detected_league", None),
+                    extracted_date=getattr(r, "extracted_date", None),
+                    extracted_time=getattr(r, "extracted_time", None),
+                    extracted_tz=getattr(r, "extracted_tz", None),
                 )
                 result.streams.append(preview_stream)
 
