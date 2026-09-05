@@ -23,7 +23,9 @@ def save_provider_groups(
     """Replace a league's cached groups with a fresh tree snapshot.
 
     Args:
-        groups: [{"key", "name", "abbrev", "team_ids": [...]}, ...]
+        groups: [{"key", "name", "abbrev", "parent_key", "parent_name",
+            "team_ids": [...]}, ...] — parent_* is the division the conference
+            sits under and may be absent (#717).
 
     Returns:
         Number of groups saved.
@@ -40,9 +42,19 @@ def save_provider_groups(
     for group in groups:
         cursor = conn.execute(
             """INSERT INTO provider_group_cache
-               (provider, league, group_key, group_name, group_abbrev, season)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (provider, league, group["key"], group["name"], group.get("abbrev"), season),
+               (provider, league, group_key, group_name, group_abbrev,
+                parent_key, parent_name, season)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                provider,
+                league,
+                group["key"],
+                group["name"],
+                group.get("abbrev"),
+                group.get("parent_key"),
+                group.get("parent_name"),
+                season,
+            ),
         )
         group_cache_id = cursor.lastrowid
         conn.executemany(
@@ -60,7 +72,8 @@ def get_league_groups(conn: Connection, league: str) -> list[dict]:
     Returns [] for leagues with no cached tree (the UI hides the filter).
     """
     rows = conn.execute(
-        """SELECT g.id, g.group_key, g.group_name, g.group_abbrev, g.season
+        """SELECT g.id, g.group_key, g.group_name, g.group_abbrev,
+                  g.parent_name, g.season
            FROM provider_group_cache g
            WHERE g.league = ?
            ORDER BY g.group_name""",
@@ -77,6 +90,7 @@ def get_league_groups(conn: Connection, league: str) -> list[dict]:
                 "key": row["group_key"],
                 "name": row["group_name"],
                 "abbrev": row["group_abbrev"],
+                "division": row["parent_name"],
                 "season": row["season"],
                 "team_ids": [m["provider_team_id"] for m in member_rows],
                 "team_count": len(member_rows),
@@ -88,9 +102,13 @@ def get_league_groups(conn: Connection, league: str) -> list[dict]:
 def get_team_group(
     conn: Connection, provider: str, league: str, provider_team_id: str
 ) -> dict | None:
-    """The group (conference) a team belongs to in a league, or None."""
+    """The group (conference) a team belongs to in a league, or None.
+
+    ``division`` is the parent group's name ('FBS', 'FCS', 'NCAA Division I')
+    and is None for trees cached before #717 — callers fall back.
+    """
     row = conn.execute(
-        """SELECT g.group_name, g.group_abbrev
+        """SELECT g.group_name, g.group_abbrev, g.parent_name
            FROM provider_group_cache g
            JOIN provider_group_members m ON m.group_cache_id = g.id
            WHERE g.provider = ? AND g.league = ? AND m.provider_team_id = ?""",
@@ -98,4 +116,8 @@ def get_team_group(
     ).fetchone()
     if row is None:
         return None
-    return {"name": row["group_name"], "abbrev": row["group_abbrev"]}
+    return {
+        "name": row["group_name"],
+        "abbrev": row["group_abbrev"],
+        "division": row["parent_name"],
+    }

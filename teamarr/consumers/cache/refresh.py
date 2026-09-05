@@ -276,6 +276,11 @@ class CacheRefresher:
         Children and teams arrive as $ref links; group ids and team ids are
         parsed from the ref URLs (teams need no follow-up fetch — ids join
         against team_cache.provider_team_id).
+
+        Each conference is tagged with its root group, which IS the division
+        ESPN names 'FBS'/'FCS' (football) or 'NCAA Division I' (basketball) —
+        one extra fetch per root, and the source of the {division} wildcard
+        (#717).
         """
 
         def _ref_tail_id(ref: str, segment: str) -> str | None:
@@ -287,6 +292,10 @@ class CacheRefresher:
 
         groups: list[dict] = []
         for root_id in root_group_ids:
+            root_meta = client.get_season_group(sport, espn_league, season, root_id) or {}
+            # shortName is the compact division label ('Division I' vs the
+            # full 'NCAA Division I'); football names both the same.
+            root_name = root_meta.get("shortName") or root_meta.get("name")
             children = client.get_season_group_children(sport, espn_league, season, root_id)
             for item in (children or {}).get("items", []):
                 group_id = _ref_tail_id(item.get("$ref", ""), "groups")
@@ -310,6 +319,8 @@ class CacheRefresher:
                         # shortName is the display abbrev ('SEC'); the
                         # 'abbreviation' field is lowercase ('sec')
                         "abbrev": meta.get("shortName") or meta.get("abbreviation"),
+                        "parent_key": root_id,
+                        "parent_name": root_name,
                         "team_ids": team_ids,
                     }
                 )

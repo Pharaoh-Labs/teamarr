@@ -255,12 +255,19 @@ function LeagueConfigRow({
                   <option value="custom">Custom pattern</option>
                 </Select>
                 {localGroupMode && !["static", "sport", "league"].includes(localGroupMode) && (
-                  <Input
-                    value={localGroupMode}
-                    onChange={(e) => setLocalGroupMode(e.target.value)}
-                    placeholder="{sport} | {league}"
-                    className="w-64 mt-2"
-                  />
+                  <>
+                    <Input
+                      value={localGroupMode}
+                      onChange={(e) => setLocalGroupMode(e.target.value)}
+                      placeholder="{sport} | {league}"
+                      className="w-64 mt-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {"{sport}"}, {"{league}"}, plus {"{conference}"} and {"{division}"} for NCAA
+                      leagues — "{"{league}"} | {"{division}"}" splits college football into
+                      "NCAAF | FBS" and "NCAAF | FCS".
+                    </p>
+                  </>
                 )}
               </div>
 
