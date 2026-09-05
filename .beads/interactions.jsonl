@@ -900,3 +900,4 @@
 {"id":"int-e34fcc620413ad067c31d6bdf0020677","kind":"field_change","created_at":"2026-09-04T21:45:39.092743772Z","actor":"luke","issue_id":"teamarrv2-dsz0","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-ad7a489d239f450d0f1df34944bd45c9","kind":"field_change","created_at":"2026-09-05T19:56:54.629068772Z","actor":"luke","issue_id":"teamarrv2-yuo7","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-7bdb1ab271c0a858a8c1f78f7d421c5c","kind":"field_change","created_at":"2026-09-05T20:02:50.329217563Z","actor":"luke","issue_id":"teamarrv2-yuo7","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-a08ed692718dcb2078d441c8662b4376","kind":"field_change","created_at":"2026-09-05T20:10:03.584766419Z","actor":"luke","issue_id":"teamarrv2-f7kp","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
