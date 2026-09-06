@@ -316,6 +316,8 @@ export interface PreviewStream {
   start_time: string | null
   from_cache: boolean
   exclusion_reason: string | null
+  failed_reason?: string | null
+  detail?: string | null
   parsed_team1?: string | null
   parsed_team2?: string | null
   detected_league?: string | null

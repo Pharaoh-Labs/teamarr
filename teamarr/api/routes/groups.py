@@ -1907,6 +1907,8 @@ class PreviewStreamModel(BaseModel):
     start_time: str | None = None
     from_cache: bool = False
     exclusion_reason: str | None = None
+    failed_reason: str | None = None
+    detail: str | None = None
     parsed_team1: str | None = None
     parsed_team2: str | None = None
     detected_league: str | None = None
@@ -1986,6 +1988,8 @@ def preview_group(group_id: int):
                 start_time=s.start_time,
                 from_cache=s.from_cache,
                 exclusion_reason=s.exclusion_reason,
+                failed_reason=s.failed_reason,
+                detail=s.detail,
                 parsed_team1=s.parsed_team1,
                 parsed_team2=s.parsed_team2,
                 detected_league=s.detected_league,

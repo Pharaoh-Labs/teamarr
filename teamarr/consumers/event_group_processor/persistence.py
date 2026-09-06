@@ -3,7 +3,7 @@
 import logging
 from sqlite3 import Connection
 
-from teamarr.consumers.matching import BatchMatchResult
+from teamarr.consumers.matching import BatchMatchResult, MatchedStreamResult
 from teamarr.database.stats import (
     FailedMatch,
     MatchedStream,
@@ -17,6 +17,29 @@ logger = logging.getLogger(__name__)
 # Per-source skips that are not match failures (#662): the matcher never ran
 # for these, so they carry no FailedReason. Persisted under a "skipped:" prefix.
 _SKIP_REASONS = frozenset({"unclassifiable", "name_match_disabled", "team_streams_disabled"})
+
+
+def failure_reason_code(result: MatchedStreamResult) -> str:
+    """Name an unmatched stream's outcome honestly (#662).
+
+    Most rows that used to land here as the bare string "unmatched" were never
+    match failures: they were filter verdicts (not an event, league not
+    enabled, regex) or per-source skips (linear channel names, a matching type
+    switched off) that only reached the catch-all because it is the catch-all.
+    38% of one install's "failures" were these. They stay reported — an EPG-only
+    group still wants its linear channels listed — but under a prefix that says
+    what they are, so the failure taxonomy is only real failures.
+
+    Shared by run-history persistence and the preview modal so a stream reads
+    the same in both places.
+    """
+    if result.failed_reason:
+        return result.failed_reason.value
+    if result.filtered_reason:
+        return f"filtered:{result.filtered_reason.value}"
+    if result.exclusion_reason in _SKIP_REASONS:
+        return f"skipped:{result.exclusion_reason}"
+    return "unmatched"
 
 
 class MatchPersistence:
@@ -152,23 +175,7 @@ class MatchPersistence:
                 parsed_team2 = getattr(result, "parsed_team2", None)
                 detected_league = getattr(result, "detected_league", None)
 
-                # Name the outcome honestly (#662). Most rows that used to land
-                # here as the bare string "unmatched" were never match failures:
-                # they were filter verdicts (not an event, league not enabled,
-                # regex) or per-source skips (linear channel names, a matching
-                # type switched off) that only reached this branch because it
-                # is the catch-all. 38% of one install's "failures" were these.
-                # They stay persisted — an EPG-only group still wants its
-                # linear channels listed — but under a prefix that says what
-                # they are, so the failure taxonomy is only real failures.
-                if result.failed_reason:
-                    failed_reason = result.failed_reason.value
-                elif result.filtered_reason:
-                    failed_reason = f"filtered:{result.filtered_reason.value}"
-                elif result.exclusion_reason in _SKIP_REASONS:
-                    failed_reason = f"skipped:{result.exclusion_reason}"
-                else:
-                    failed_reason = "unmatched"
+                failed_reason = failure_reason_code(result)
 
                 failed_list.append(
                     FailedMatch(
