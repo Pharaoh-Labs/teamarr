@@ -27,6 +27,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from typing import TypedDict
 from zoneinfo import ZoneInfo
 
 from teamarr.config import get_user_timezone
@@ -100,6 +101,44 @@ class _PrefetchSlot:
     failed: bool = False
 
 
+class _ExtractionFields(TypedDict):
+    """The fields _extraction_fields fills. A TypedDict, not a plain dict, so
+    pyright still checks the ** spread at each MatchedStreamResult call site."""
+
+    parsed_team1: str | None
+    parsed_team2: str | None
+    detected_league: str | None
+    extracted_date: str | None
+    extracted_time: str | None
+    extracted_tz: str | None
+
+
+def _extraction_fields(classified: ClassifiedStream) -> _ExtractionFields:
+    """Classification metadata carried on every result for the preview modal.
+
+    Built once here rather than at each construction site: the matcher has four
+    of them (three early-return gates plus _outcome_to_result), and #660 is the
+    standing lesson that near-identical copies in this file drift apart.
+    """
+    league_hint = classified.league_hint
+    normalized = classified.normalized
+    return {
+        "parsed_team1": classified.team1,
+        "parsed_team2": classified.team2,
+        # Multi-league hints are stored comma-separated.
+        "detected_league": (
+            ", ".join(league_hint) if isinstance(league_hint, list) else league_hint
+        ),
+        "extracted_date": (
+            normalized.extracted_date.isoformat() if normalized.extracted_date else None
+        ),
+        "extracted_time": (
+            normalized.extracted_time.strftime("%H:%M:%S") if normalized.extracted_time else None
+        ),
+        "extracted_tz": normalized.extracted_tz,
+    }
+
+
 @dataclass
 class MatchedStreamResult:
     """Result of matching a single stream.
@@ -139,6 +178,9 @@ class MatchedStreamResult:
     parsed_team2: str | None = None
     detected_league: str | None = None
     card_segment: str | None = None  # For UFC: "early_prelims", "prelims", "main_card"
+    extracted_date: str | None = None
+    extracted_time: str | None = None
+    extracted_tz: str | None = None
 
     # Exception handling
     exception_keyword: str | None = None
@@ -769,6 +811,7 @@ class StreamMatcher:
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="unclassifiable",
+                **_extraction_fields(classified),
             )]
 
         # Step 3: Gate TEAM_ONLY when disabled, then route by category.
@@ -788,6 +831,7 @@ class StreamMatcher:
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="team_streams_disabled",
+                **_extraction_fields(classified),
             )]
 
         # Gate the name-identifies-event categories when Stream Name matching is
@@ -808,6 +852,7 @@ class StreamMatcher:
                 included=False,
                 category=StreamCategory.PLACEHOLDER,
                 exclusion_reason="name_match_disabled",
+                **_extraction_fields(classified),
             )]
 
         outcomes = self._route_to_outcomes(classified, stream_id, target_date)
@@ -1819,12 +1864,6 @@ class StreamMatcher:
             reason = outcome.failed_reason.value if outcome.failed_reason else "failed"
             exclusion_reason = reason
 
-        # Convert list hint to comma-separated string for storage
-        league_hint = classified.league_hint
-        detected_league_str = (
-            ", ".join(league_hint) if isinstance(league_hint, list) else league_hint
-        )
-
         return MatchedStreamResult(
             stream_name=stream_name,
             stream_id=stream_id,
@@ -1838,10 +1877,8 @@ class StreamMatcher:
             from_cache=outcome.match_method == MatchMethod.CACHE if outcome.match_method else False,
             origin_match_method=outcome.origin_match_method,  # For cache hits
             category=classified.category,
-            parsed_team1=classified.team1,
-            parsed_team2=classified.team2,
-            detected_league=detected_league_str,
             card_segment=classified.card_segment,  # UFC segment from stream name
+            **_extraction_fields(classified),
             # Preserve detailed reason enums from MatchOutcome
             failed_reason=outcome.failed_reason,
             filtered_reason=outcome.filtered_reason,

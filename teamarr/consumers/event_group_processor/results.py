@@ -248,6 +248,16 @@ class PreviewStream:
     start_time: str | None = None
     from_cache: bool = False
     exclusion_reason: str | None = None
+    # The taxonomy code (#661/#662) and the evidence behind it, so preview
+    # reads the same as the run-history Failed drill-down.
+    failed_reason: str | None = None
+    detail: str | None = None
+    parsed_team1: str | None = None
+    parsed_team2: str | None = None
+    detected_league: str | None = None
+    extracted_date: str | None = None
+    extracted_time: str | None = None
+    extracted_tz: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -262,6 +272,14 @@ class PreviewStream:
             "start_time": self.start_time,
             "from_cache": self.from_cache,
             "exclusion_reason": self.exclusion_reason,
+            "failed_reason": self.failed_reason,
+            "detail": self.detail,
+            "parsed_team1": self.parsed_team1,
+            "parsed_team2": self.parsed_team2,
+            "detected_league": self.detected_league,
+            "extracted_date": self.extracted_date,
+            "extracted_time": self.extracted_time,
+            "extracted_tz": self.extracted_tz,
         }
 
 

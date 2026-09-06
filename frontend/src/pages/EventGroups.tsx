@@ -67,7 +67,7 @@ import {
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { BulkEditDialog } from "./event-groups/BulkEditDialog"
-import { getLeagueDisplayName } from "@/lib/utils"
+import { getFailedReasonLabel, getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
 const getDisplayName = (group: EventGroup) => group.display_name || group.name
@@ -192,6 +192,19 @@ export function EventGroups() {
       return map.get(slug) ?? slug.toUpperCase()
     }
   }, [cachedLeagues])
+
+  // A detected league hint can name several leagues ("nba, wnba"), which is one
+  // string to the map and so would fall through to the raw slug. Resolve each.
+  const getLeagueHintDisplay = useMemo(
+    () => (hint: string | null | undefined) =>
+      !hint
+        ? "-"
+        : hint
+            .split(",")
+            .map((slug) => getLeagueDisplay(slug.trim()))
+            .join(", "),
+    [getLeagueDisplay]
+  )
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
@@ -952,7 +965,7 @@ export function EventGroups() {
 
       {/* Stream Preview Modal */}
       <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
-        <DialogContent onClose={() => setShowPreviewModal(false)} className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent onClose={() => setShowPreviewModal(false)} className="max-w-5xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
               Stream Preview: {previewData?.group_name}
@@ -1024,11 +1037,58 @@ export function EventGroups() {
                           )}
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {stream.stream_name}
+                          <div className="break-all">{stream.stream_name}</div>
+                          {!stream.matched &&
+                            (stream.parsed_team1 ||
+                              stream.parsed_team2 ||
+                              stream.extracted_date ||
+                              stream.extracted_time) && (
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-sans font-normal text-muted-foreground mt-1.5">
+                                <span className="text-muted-foreground/70 font-medium">Extracted:</span>
+                                {stream.parsed_team1 && (
+                                  <span className="bg-muted/70 px-1.5 py-0.5 rounded border border-border/40">
+                                    <span className="text-muted-foreground/60 font-medium">T1:</span>{" "}
+                                    <span className="text-foreground/90 font-mono text-[10.5px]">
+                                      {stream.parsed_team1}
+                                    </span>
+                                  </span>
+                                )}
+                                {stream.parsed_team2 && (
+                                  <span className="bg-muted/70 px-1.5 py-0.5 rounded border border-border/40">
+                                    <span className="text-muted-foreground/60 font-medium">T2:</span>{" "}
+                                    <span className="text-foreground/90 font-mono text-[10.5px]">
+                                      {stream.parsed_team2}
+                                    </span>
+                                  </span>
+                                )}
+                                {(stream.extracted_date || stream.extracted_time) && (
+                                  <span className="bg-muted/70 px-1.5 py-0.5 rounded border border-border/40">
+                                    <span className="text-muted-foreground/60 font-medium">When:</span>{" "}
+                                    <span className="text-foreground/90">
+                                      {[
+                                        stream.extracted_date,
+                                        stream.extracted_time,
+                                        stream.extracted_tz ? `(${stream.extracted_tz})` : null,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" ")}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
                         </TableCell>
                         <TableCell>
                           {stream.league ? (
                             <Badge variant="secondary">{getLeagueDisplay(stream.league)}</Badge>
+                          ) : stream.detected_league ? (
+                            <Badge
+                              variant="outline"
+                              className="border-dashed text-muted-foreground text-xs"
+                              title="Detected league hint"
+                            >
+                              {getLeagueHintDisplay(stream.detected_league)}
+                            </Badge>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -1043,12 +1103,19 @@ export function EventGroups() {
                                 </div>
                               )}
                             </div>
-                          ) : stream.exclusion_reason ? (
-                            <span className="text-muted-foreground text-xs">
-                              {stream.exclusion_reason}
-                            </span>
                           ) : (
-                            <span className="text-muted-foreground">No match</span>
+                            <div className="text-xs text-muted-foreground">
+                              <div>
+                                {getFailedReasonLabel(
+                                  stream.failed_reason || stream.exclusion_reason || "unmatched"
+                                )}
+                              </div>
+                              {stream.detail && (
+                                <div className="text-muted-foreground/70 mt-0.5 break-words">
+                                  {stream.detail}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>

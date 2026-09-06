@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from teamarr.database.groups import get_group
 from teamarr.utilities.sorting import natural_sort_key
 
+from .persistence import failure_reason_code
 from .results import PreviewResult, PreviewStream
 
 logger = logging.getLogger(__name__)
@@ -159,8 +160,16 @@ class PreviewBuilder:
                         if r.event and r.event.start_time
                         else None
                     ),
-                    from_cache=getattr(r, "from_cache", False),
+                    from_cache=r.from_cache,
                     exclusion_reason=r.exclusion_reason,
+                    failed_reason=None if r.matched else failure_reason_code(r),
+                    detail=r.detail,
+                    parsed_team1=r.parsed_team1,
+                    parsed_team2=r.parsed_team2,
+                    detected_league=r.detected_league,
+                    extracted_date=r.extracted_date,
+                    extracted_time=r.extracted_time,
+                    extracted_tz=r.extracted_tz,
                 )
                 result.streams.append(preview_stream)
 

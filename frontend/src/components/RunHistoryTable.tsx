@@ -26,7 +26,7 @@ import { VirtualizedTable } from "@/components/VirtualizedTable"
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getMatchedStreams, getFailedMatches } from "@/api/epg"
 import { getLeagues } from "@/api/teams"
-import { getLeagueDisplayName } from "@/lib/utils"
+import { getFailedReasonLabel, getLeagueDisplayName } from "@/lib/utils"
 import type { ProcessingRun, MatchedStream, FailedMatch } from "@/api/epg"
 
 // ---------------------------------------------------------------------------
@@ -71,38 +71,6 @@ function StatusIcon({ status }: { status: string }) {
     default:
       return <Clock className="h-4 w-4 text-muted-foreground" />
   }
-}
-
-function getFailedReasonLabel(reason: string): string {
-  const labels: Record<string, string> = {
-    teams_not_parsed: "Could not parse teams",
-    team1_not_found: "Team 1 not found",
-    team2_not_found: "Team 2 not found",
-    both_teams_not_found: "Neither team found",
-    no_common_league: "No common league",
-    fixture_not_in_league: "Teams don't play in this league",
-    no_league_detected: "No league detected",
-    ambiguous_league: "Ambiguous league",
-    no_event_found: "No event found",
-    no_event_card_match: "No event card match",
-    no_racing_match: "No racing match",
-    no_tennis_match: "No tennis match",
-    tennis_tournament_mismatch: "Different tournament",
-    tennis_matchup_unknown: "Tennis matchup not known",
-    no_epg_program_match: "No guide programme matched",
-    date_mismatch: "Date mismatch",
-    candidates_gated: "No candidate in window",
-    unmatched: "Unmatched",
-    "filtered:not_event": "Not an event",
-    "filtered:league_not_included": "League not enabled",
-    "filtered:include_regex": "Excluded by include pattern",
-    "filtered:exclude_regex": "Excluded by exclude pattern",
-    "filtered:stale": "Stale stream",
-    "skipped:unclassifiable": "Linear channel (no matchup)",
-    "skipped:name_match_disabled": "Stream Name matching off",
-    "skipped:team_streams_disabled": "Team matching off",
-  }
-  return labels[reason] || reason
 }
 
 function getMatchMethodBadge(method: string | null) {

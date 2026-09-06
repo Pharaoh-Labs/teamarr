@@ -316,6 +316,14 @@ export interface PreviewStream {
   start_time: string | null
   from_cache: boolean
   exclusion_reason: string | null
+  failed_reason?: string | null
+  detail?: string | null
+  parsed_team1?: string | null
+  parsed_team2?: string | null
+  detected_league?: string | null
+  extracted_date?: string | null
+  extracted_time?: string | null
+  extracted_tz?: string | null
 }
 
 export interface PreviewGroupResponse {
