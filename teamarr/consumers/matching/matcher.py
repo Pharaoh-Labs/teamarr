@@ -27,6 +27,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from typing import TypedDict
 from zoneinfo import ZoneInfo
 
 from teamarr.config import get_user_timezone
@@ -100,7 +101,19 @@ class _PrefetchSlot:
     failed: bool = False
 
 
-def _extraction_fields(classified: ClassifiedStream) -> dict[str, str | None]:
+class _ExtractionFields(TypedDict):
+    """The fields _extraction_fields fills. A TypedDict, not a plain dict, so
+    pyright still checks the ** spread at each MatchedStreamResult call site."""
+
+    parsed_team1: str | None
+    parsed_team2: str | None
+    detected_league: str | None
+    extracted_date: str | None
+    extracted_time: str | None
+    extracted_tz: str | None
+
+
+def _extraction_fields(classified: ClassifiedStream) -> _ExtractionFields:
     """Classification metadata carried on every result for the preview modal.
 
     Built once here rather than at each construction site: the matcher has four
