@@ -4,8 +4,9 @@ Lightweight HTTP client using httpx to authenticate with Emby
 and trigger a Live TV guide refresh after EPG generation.
 
 Jellyfin (which forked from Emby) is API-compatible. JellyfinClient
-subclasses this and only overrides the URL path prefix — Emby uses
-``/emby/...`` while Jellyfin omits the prefix.
+subclasses this and overrides the URL path prefix — Emby uses
+``/emby/...`` while Jellyfin omits the prefix — and the auth headers,
+because Jellyfin 12 dropped the legacy ``X-Emby-*`` header family (#749).
 """
 
 import logging
@@ -16,8 +17,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Auth header required for all Emby API calls
-_EMBY_AUTH_HEADER = (
+# MediaBrowser client identification, shared by Emby and Jellyfin. Emby
+# sends it in ``X-Emby-Authorization``; Jellyfin sends it in the standard
+# ``Authorization`` header (see JellyfinClient, #749).
+MEDIABROWSER_AUTH_HEADER = (
     'MediaBrowser Client="Teamarr", Device="Server",'
     ' DeviceId="teamarr", Version="1.0"'
 )
@@ -55,9 +58,14 @@ class EmbyClient:
         return f"{self.base_url}{self.PATH_PREFIX}{path}"
 
     def _auth_headers(self) -> dict[str, str]:
-        """Build headers for unauthenticated requests."""
+        """Build headers for unauthenticated requests.
+
+        Every request that carries credentials goes through this or
+        :meth:`_token_headers`; subclasses override BOTH to change the
+        auth scheme.
+        """
         return {
-            "X-Emby-Authorization": _EMBY_AUTH_HEADER,
+            "X-Emby-Authorization": MEDIABROWSER_AUTH_HEADER,
             "Content-Type": "application/json",
         }
 

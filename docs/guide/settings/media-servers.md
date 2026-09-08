@@ -21,6 +21,8 @@ Each server entry takes a URL and either an API key (recommended — generate in
 
 The refresh triggers the server's own **Refresh Guide** scheduled task and waits for it to complete (with live progress, up to 5 minutes) — that's why a generation run can sit near the end while a slow server churns.
 
+Jellyfin 10.x and 12+ are both supported: Teamarr authenticates to Jellyfin with the standard `Authorization: MediaBrowser …` header rather than the legacy `X-Emby-Token` header that Jellyfin 12 removed.
+
 Saved secrets display as `********` — leave them as-is to keep the stored value, or type over them to replace.
 
 A failed refresh never fails the generation — but it is recorded. Each run stores every server's outcome (success, duration, error) with its run stats, and once a server has failed three consecutive runs the Dashboard status strip shows a **Media servers … not refreshing** warning (hover for the error) and the support bundle raises a `media_server_refresh_failing` signal. If you see it, check the URL first: a server that moved hosts fails instantly on every run and is otherwise invisible.
