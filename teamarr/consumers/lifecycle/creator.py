@@ -994,7 +994,7 @@ class ChannelCreator(_LifecycleHost):
                     channel_name,
                     stream_profile_id,
                 )
-                # Window-gate the INITIAL stream membership (bead teamarrv2-uye).
+                # Window-gate the INITIAL stream membership (bead teamarr-uye).
                 # An EPG-matched linear stream carries an attach_at/detach_at slot;
                 # channel creation is event-anchored (create_threshold) and usually
                 # fires hours before the attach window opens. Pushing the stream

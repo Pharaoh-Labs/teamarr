@@ -1,4 +1,4 @@
-"""Tests for EPG program-data matching logic (teamarrv2-183.4 pure helpers).
+"""Tests for EPG program-data matching logic (teamarr-183.4 pure helpers).
 
 Grounded in the live-probe findings: teams in sub_title, category gating with
 classic-replay precedence, and graceful fallback when categories are absent.

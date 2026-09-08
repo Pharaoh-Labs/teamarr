@@ -1,4 +1,4 @@
-"""Regression tests for stale channel-group handling (bead teamarrv2-nr7).
+"""Regression tests for stale channel-group handling (bead teamarr-nr7).
 
 A configured static/per-league channel group that was deleted in Dispatcharr
 must not fail every channel creation ("Invalid pk … object does not exist" → 0

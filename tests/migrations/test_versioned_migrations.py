@@ -310,7 +310,7 @@ class TestV73RemapsUserData:
         assert "aaa" not in leagues
 
     def test_channel_sort_priorities_dedupes_when_old_and_new_both_present(self, tmp_path):
-        """Regression for #202 / teamarrv2-98x: a user with sort priorities
+        """Regression for #202 / teamarr-98x: a user with sort priorities
         configured under both the old MiLB code and the new code for the same
         sport used to crash startup with UNIQUE(sport, league_code) violation.
         The migration should now drop the colliding old row in favor of the

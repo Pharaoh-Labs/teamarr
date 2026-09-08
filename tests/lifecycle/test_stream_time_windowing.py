@@ -1,4 +1,4 @@
-"""Tests for time-windowed stream membership (teamarrv2-183.5).
+"""Tests for time-windowed stream membership (teamarr-183.5).
 
 Covers compute_stream_window() and the window-aware active set returned by
 get_ordered_stream_ids() — the mechanism that lets one linear stream rotate

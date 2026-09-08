@@ -1,5 +1,5 @@
 /**
- * Custom Leagues API (epic teamarrv2-eqz).
+ * Custom Leagues API (epic teamarr-eqz).
  *
  * TSDB-only, premium-gated user-added leagues. The whole feature is locked
  * behind a TheSportsDB premium key — `getCustomLeagueCapability` reports the

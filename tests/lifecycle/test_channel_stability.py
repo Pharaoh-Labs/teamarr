@@ -474,7 +474,7 @@ def test_reset_clears_armed_flag(db):
 
 
 # ---------------------------------------------------------------------------
-# Auto-arm on settings changes (teamarrv2-kc43)
+# Auto-arm on settings changes (teamarr-kc43)
 # ---------------------------------------------------------------------------
 
 

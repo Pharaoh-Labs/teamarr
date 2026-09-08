@@ -1,4 +1,4 @@
-"""Custom-league API endpoints (epic teamarrv2-eqz).
+"""Custom-league API endpoints (epic teamarr-eqz).
 
 Hosts the custom-league feature: the premium-gated capability check (eqz.1),
 the TSDB-only CRUD write path (eqz.2), and the live test-fetch validator

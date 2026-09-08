@@ -1,6 +1,6 @@
 """Coverage (distinct streams) vs volume (matched results) accounting.
 
-Regression for the >100% match-rate bug (bead teamarrv2-nnj): EPG/TEAM_ONLY
+Regression for the >100% match-rate bug (bead teamarr-nnj): EPG/TEAM_ONLY
 matching fans one source stream out to many matched results, so a result-count
 numerator over a stream-count denominator pushed the per-group rate over 100%.
 ``matched_stream_count`` must count distinct streams; ``matched_count`` remains

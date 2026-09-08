@@ -1,11 +1,11 @@
 """Tests for EPGManager.search_programs() + program-search feature detection.
 
-Covers the client surface added in teamarrv2-183.2:
+Covers the client surface added in teamarr-183.2:
 - DispatcharrProgram.from_api parsing (embedded streams/channels, datetimes)
 - supports_program_search() caching + 404 graceful degradation
 - search_programs() param building, pagination, and unsupported short-circuit
 
-The broader matching/lifecycle test matrix lives in teamarrv2-183.7.
+The broader matching/lifecycle test matrix lives in teamarr-183.7.
 """
 
 from unittest.mock import MagicMock

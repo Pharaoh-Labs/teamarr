@@ -180,13 +180,13 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Buffer minutes for after_event delete timing and same_day midnight crossover (default 60)
     channel_post_buffer_minutes INTEGER DEFAULT 60,
 
-    -- EPG program-data matching master switch (epic teamarrv2-183.6). Default
+    -- EPG program-data matching master switch (epic teamarr-183.6). Default
     -- OFF (opt-in); also feature-gated on the connected Dispatcharr exposing
     -- /api/epg/programs/search/. Per-group epg_match_enabled has no effect unless
     -- this global switch is on.
     epg_match_enabled BOOLEAN DEFAULT 0,
 
-    -- XC (Xtream) provider EPG fallback (epic teamarrv2-crs). Default OFF
+    -- XC (Xtream) provider EPG fallback (epic teamarr-crs). Default OFF
     -- (opt-in). EPG matching normally requires a valid stream-to-EPG mapping in
     -- Dispatcharr (curated channel link or imported-guide name match). As a
     -- backup, when a stream's M3U account is an Xtream panel, Teamarr can fetch
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS settings (
     -- happens only when the cache is older than this. Default 24h.
     epg_xtream_cache_hours INTEGER DEFAULT 24,
 
-    -- EPG channel-source mode (epic teamarrv2-183.9). When enabled, an additional
+    -- EPG channel-source mode (epic teamarr-183.9). When enabled, an additional
     -- system-managed source ("Dispatcharr Channels") feeds EPG matching from the
     -- streams already assigned to curated Dispatcharr channels (using each
     -- channel's own EPG), alongside the per-group M3U-group EPG matching. Teamarr's
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS settings (
     -- (JSON array of channel_group ids). Empty array = include all groups
     -- (back-compatible). Scoping to selected groups skips EPG-matching work for
     -- undesired groups (faster generation) and drives the "Dispatcharr Group"
-    -- stream-ordering rule. (epic teamarrv2-ybt.2)
+    -- stream-ordering rule. (epic teamarr-ybt.2)
     epg_channel_source_groups TEXT DEFAULT '[]',
     -- Optional stream-profile overrides. Each item has a target_type and stable
     -- target_id, e.g. {"target_type":"dispatcharr_channel_group","target_id":7,
@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS settings (
     -- this discriminated shape also permits future Sources-tab target types.
     stream_profile_overrides TEXT DEFAULT '[]',
 
-    -- EPG stream time-windowing buffers (epic teamarrv2-183.5).
+    -- EPG stream time-windowing buffers (epic teamarr-183.5).
     -- SEPARATE from the channel create/delete buffers above: these apply to the
     -- attach/detach window of time-shared linear streams (EPG matching), so one
     -- linear stream attaches to an event channel only near game time. Global
@@ -1003,7 +1003,7 @@ CREATE TABLE IF NOT EXISTS leagues (
     last_cache_refresh TIMESTAMP,
 
     -- Custom League Flag
-    -- 1: user-added via the UI (TSDB-only, premium-gated; see epic teamarrv2-eqz).
+    -- 1: user-added via the UI (TSDB-only, premium-gated; see epic teamarr-eqz).
     --    Lives only in the DB, not schema.sql. The CRUD API only ever mutates or
     --    deletes rows with is_custom=1, so built-in leagues can't be touched.
     -- 0: built-in league seeded from schema.sql.
@@ -1617,7 +1617,7 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
     removed_at TIMESTAMP,
     remove_reason TEXT,
 
-    -- Time-windowed membership (epic teamarrv2-183.5).
+    -- Time-windowed membership (epic teamarr-183.5).
     -- NULL = full-life membership (default; dedicated/name-matched streams stay
     -- attached for the channel's whole life). Non-NULL = time-shared linear
     -- stream that is only active in Dispatcharr while attach_at <= now < detach_at

@@ -237,7 +237,7 @@ def get_all_leagues(conn: sqlite3.Connection) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Custom-league write path (epic teamarrv2-eqz)
+# Custom-league write path (epic teamarr-eqz)
 #
 # The functions above are read-only. These add the write path the table lacked.
 # They are deliberately low-level (raw row I/O); all policy — premium gate,

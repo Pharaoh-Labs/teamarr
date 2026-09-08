@@ -7,7 +7,7 @@ nav_order: 20
 
 # Gracenote-Modeled Best-in-Class Templates — Design & Research
 
-Reference + design spec for the curated default templates (epic `teamarrv2-tvnk`).
+Reference + design spec for the curated default templates (epic `teamarr-tvnk`).
 Captures everything learned modeling Teamarr EPG output on authoritative Gracenote
 data across sports, the available data sources, the confirmed gaps, and the
 resulting template/scoping/fallback design.

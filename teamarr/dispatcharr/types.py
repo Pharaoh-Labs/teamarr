@@ -159,7 +159,7 @@ class DispatcharrProgram:
 
     Represents a single guide entry on a tvg_id's timeline. The endpoint
     embeds the channels and streams that carry this program; we keep their
-    ids so the matcher (epic teamarrv2-183) can link a program back to the
+    ids so the matcher (epic teamarr-183) can link a program back to the
     Dispatcharr stream that airs it.
 
     Requires a Dispatcharr build that exposes the program-search endpoint;

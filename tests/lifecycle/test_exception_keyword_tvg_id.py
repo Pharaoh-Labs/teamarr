@@ -1,4 +1,4 @@
-"""Tests for exception keyword EPG uniqueness (teamarrv2-a6b).
+"""Tests for exception keyword EPG uniqueness (teamarr-a6b).
 
 Verifies that:
 1. generate_event_tvg_id produces unique IDs per exception keyword

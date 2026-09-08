@@ -227,7 +227,7 @@ Identical sections to the Dev Push Template, with two differences: the header is
 
 If the change touches a count referenced in docs (variables, leagues, sports, conditions, schema version), grep for the old number across `docs/`, `CLAUDE.md`, and `README.md` — don't fix just one occurrence.
 
-Documentation epic: `bd list --parent teamarrv2-nv4`
+Documentation epic: `bd list --parent teamarr-nv4`
 
 ## Single Source of Truth
 
@@ -278,7 +278,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - Suffix rules: `.next`, `.last` for multi-game scenarios
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
 
-**Settings Registry** (`teamarr/database/settings/`, bead `teamarrv2-iua3.8`):
+**Settings Registry** (`teamarr/database/settings/`, bead `teamarr-iua3.8`):
 - Each setting is declared once: a typed dataclass field in `types.py` plus a column/JSON/hook binding in `registry.py` (`GROUPS`). `read.py` and `update.py` are generic (registry-driven); group-specific behavior (validation, relayout arming, clear-to-NULL, `_NOT_PROVIDED` sentinels) lives in the update wrappers — public signatures are stable, don't change them without auditing callers.
 - Adding a setting: add the column to `schema.sql` + the field to its dataclass; touch `registry.py` only if the column name differs from the field name or it needs JSON/custom parse/dump hooks. Parity tests (`tests/test_settings_registry.py`) enforce schema ↔ registry ↔ dataclass ↔ Pydantic alignment.
 - API routes build responses with `to_model(Model, dataclass)` from `api/routes/settings/models.py`; frontend hooks are factory-generated with scoped cache invalidation (`frontend/src/hooks/useSettings.ts`).
@@ -288,12 +288,12 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - Auto-creates in Dispatcharr
 - **Group/profile names are keyed through `_group_key` — trim + lowercase, never collapse internal whitespace (#745).** Both `create_channel_group` and `create_profile` post `name.strip()`, so a name differing only at the ends can never create what it was looking for: the cache lookup misses, Dispatcharr refuses the create as a duplicate of the group that was already there, the channel gets a null `channel_group_id`, and it repeats every run because nothing about that state changes. Collapsing *internal* runs looks like the same idea and is not safe — on a live install's 3,097 groups, trimming collided 0 keys while collapsing collided 18, all real distinct groups separated only by `\xa0` vs a regular space. Any new name→id cache against Dispatcharr must go through `_group_key` on both populate and lookup.
 
-**Per-Source Matching Types** (epic `teamarrv2-ahow`):
+**Per-Source Matching Types** (epic `teamarr-ahow`):
 - Each source declares which matching pipeline(s) it runs — three independent booleans on `event_epg_groups`: `name_match_enabled` (Stream Name → TEAM_VS_TEAM/EVENT_CARD/RACING categories), `team_streams_enabled` (Team → TEAM_ONLY), `epg_match_enabled` (EPG). Multi-select; ≥1 required (enforced in `api/routes/groups.py::require_matching_type`).
 - Gating is by **category at the matcher router** (`matcher.py::_match_single`, reason `name_match_disabled`) — classification always runs so the types stay independent; never skip `classify_stream`. `name_match_enabled` defaults 1 (DEFAULT-1 column backfills existing sources). The hidden `is_channel_source` group is name-off (EPG/team only).
 - UI: three toggles on add/edit/bulk-add/bulk-edit; color-coded Sources badges (Stream Name=sky, Team=emerald, EPG=violet). The Matched-column coverage % shows only when Stream Name is on (Team/EPG fan one stream → many events).
 
-**Fixture Gate** (epic `teamarrv2-goax`, `teamarr/consumers/matching/identity.py`):
+**Fixture Gate** (epic `teamarr-goax`, `teamarr/consumers/matching/identity.py`):
 - Cross-sport false positives came from `token_set_ratio` weighing every token equally, so a shared **city** cleared `BOTH_TEAMS_THRESHOLD` (60) on its own — "Tampa Bay Lightning"/"Tampa Bay Rays" = 78.3. 161 such cross-league pairs exist in the 6 major pro leagues alone; "New York Mets"/"New York Jets" = 92.3.
 - `TeamIdentityIndex` resolves each stream side against the **global** `team_cache` (all leagues, incl. unconfigured ones) and yields the leagues where both sides could actually meet. `_match_against_candidates` skips candidates outside that set → `FailedReason.FIXTURE_NOT_IN_LEAGUE`.
 - **Veto-only, never a selector** — resolution is a strong negative signal and a weak positive one (`D-backs` resolves to "ACL D-backs"; `SF Giants` and `NY Giants` give the same 4-way tie). Ties are kept, not collapsed. Returns `None` (defer) whenever it cannot speak, so an unseeded cache is inert.
@@ -310,7 +310,7 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 - **Tennis gate (#283, `tennis_matcher.py`)** — same veto-only shape, no alias table: a stream that names a pooled tournament (distinctive ESPN name tokens; generic open/cup/masters ignored) vetoes candidates from other tournaments → `FailedReason.TENNIS_TOURNAMENT_MISMATCH`; a stream naming none defers. Keyed on `Event.tournament_id` (season-stable ESPN id, threaded through both caches). Draw shape is validated per side: doubles pairs (`abbreviation` "A/B") match exact-only because `token_set_ratio("sinner", "Sinner/Sonego")` = 100, and a side written as a pair (`/`, `&`) never matches a singles player; `_` defers. Tournament tier selection beyond majors/all and include/exclude lists were deliberately rejected (maintenance).
 - **Per-court feeds (#689, US Open 2026 live data).** ESPN+ carries a slam as one stream per court with nothing else in the name (`ESPN+ 17: Arthur Ashe Stadium @ Sep 01 11:30AM ET`); TSN+ as `US Open: Day #1 - Court 7 (ft. …)` (and `Louis Armstong Stadium`, sic). Three stacked causes, all fixed: (1) `_COURT_PATTERNS` knew only Wimbledon shapes — named show courts (`ashe`/`armstrong`/`grandstand`) and `Stadium N` → `N` added, keys shared with ESPN's `venue.court`; (2) mixed groups never reached the tennis path — `_try_mixed_group_fallbacks` (racing, then tennis) runs after a failed primary route when the group has a tennis league and the text names a **court** (never a round: "final" is everywhere), then `match_feed` still has to join that court on the day's slate; the EPG path gates on `names_tournament` and `match_program` still demands pair-or-court; (3) the normalizer's reversed `DD @ Mon` pattern ate `Court 12 @ Sep 01` as Sep 12 — it now yields when the month is followed by its own day number. Also fixed: `_named_tournaments` reduced "US Open" to the lone token `us`, so every `US:`-prefixed stream vetoed all other tournaments — distinctive tokens are ≥3 chars, or the full name as a phrase.
 
-**EPG Program Matching** (epic `teamarrv2-183`, `teamarr/consumers/matching/epg_*.py`):
+**EPG Program Matching** (epic `teamarr-183`, `teamarr/consumers/matching/epg_*.py`):
 - Matches static-named linear channels (ESPN, FS1) to events via Dispatcharr's program guide (`GET /api/epg/programs/search/`, feature-detected, Dispatcharr 0.24.0+), then time-shares one stream across many event channels (attach/detach window per program).
 - Opt-in: per-group `epg_match_enabled` only (no global switch as of eqz/3lp1 — EPG matching is always available; each event-group opts in). Global tuning (attach/detach buffers, `epg_stream_pre/post_buffer_minutes`, default 60) lives on the **Matching** page (`/matching`, `EpgMatchingSettings` component) as of the v2.7.0 IA overhaul — not Settings. Per-group flag also sets `skip_builtin` so static names survive filtering.
 - Channel-source mode (183.9, `epg_channel_source_enabled`): additive source from streams curated onto Dispatcharr channels (each channel's own EPG), run as a hidden system group (`is_channel_source`, `ensure_channel_source_group`); excludes Teamarr's own channels and dedupes streams already in EPG-match M3U groups. Candidate builder: `_fetch_channel_source_streams`.
@@ -333,7 +333,7 @@ Legacy plans in `plans/` (gitignored) may have additional context.
 
 **On-demand, not scheduled.** Run with: `audit`
 
-The cyclical epic (`teamarrv2-5hq`) was **retired 2026-08-23** — the quarterly cadence collapsed after Apr 2026 and its function migrated to continuous `# TODO: PRUNE/REFACTOR` markers during normal work plus on-demand `/code-review` and `/simplify`. Do NOT create recurring audit beads. File findings as their own beads.
+The cyclical epic (`teamarr-5hq`) was **retired 2026-08-23** — the quarterly cadence collapsed after Apr 2026 and its function migrated to continuous `# TODO: PRUNE/REFACTOR` markers during normal work plus on-demand `/code-review` and `/simplify`. Do NOT create recurring audit beads. File findings as their own beads.
 
 When the user says **"audit"**, run the full sweep:
 
@@ -366,7 +366,7 @@ When the user says **"audit"**, run the full sweep:
 - These TODO markers are the standing backlog — they get cleaned up at the next `audit` run, whenever the user calls one.
 - After each audit, update these evaluation principles with any new lessons learned.
 
-**Prior audit history (14 passes, Feb–Apr 2026):** `bd show teamarrv2-5hq`
+**Prior audit history (14 passes, Feb–Apr 2026):** `bd show teamarr-5hq`
 
 ## Sync Status
 

@@ -48,7 +48,7 @@ router = APIRouter()
 # Flat string fields that accept template variables. Used to log advisory
 # validation warnings on write so programmatic saves (API/import) surface the
 # same issues the editor shows. Nested conditional/fallback templates are
-# validated separately (see teamarrv2-3zjp.3).
+# validated separately (see teamarr-3zjp.3).
 _VALIDATED_TEXT_FIELDS = (
     "title_format",
     "subtitle_template",

@@ -476,7 +476,7 @@ def update_stream_window(
 ) -> bool:
     """Refresh the time-window (attach_at/detach_at) of an attached stream.
 
-    Used by epic teamarrv2-183.5 (bead teamarrv2-095): the window is recomputed
+    Used by epic teamarr-183.5 (bead teamarr-095): the window is recomputed
     every generation run from the fresh EPG program slot + current buffers, so a
     change to epg_stream_pre/post_buffer_minutes takes effect on already-attached
     streams instead of only at first attach. Targets the active (not removed) row.
@@ -907,7 +907,7 @@ def get_ordered_stream_ids(
     """Get the ACTIVE stream IDs for a channel in priority order.
 
     This is the set pushed to Dispatcharr. It honors time-windowed membership
-    (epic teamarrv2-183.5): a stream is active when it has no window
+    (epic teamarr-183.5): a stream is active when it has no window
     (attach_at IS NULL — full-life, the default) OR the current time is inside
     its window (attach_at <= now < detach_at). Out-of-window time-shared linear
     streams are excluded so they swap out of the channel until their next slot.

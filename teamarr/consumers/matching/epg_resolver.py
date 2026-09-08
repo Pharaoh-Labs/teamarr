@@ -1,4 +1,4 @@
-"""Resolve candidate streams to EPG-source program tvg_ids (epic teamarrv2-183).
+"""Resolve candidate streams to EPG-source program tvg_ids (epic teamarr-183).
 
 A raw M3U stream's ``tvg_id`` (e.g. "FoxSports1.us") usually lives in a
 different namespace from the EPG source's program ``tvg_id`` (e.g. "82547"), so

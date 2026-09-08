@@ -1,4 +1,4 @@
-"""Tests for the Dispatcharr-channels EPG source (epic teamarrv2-183.9).
+"""Tests for the Dispatcharr-channels EPG source (epic teamarr-183.9).
 
 Covers EventGroupProcessor._fetch_channel_source_streams: building EPG-match
 candidates from streams curated onto Dispatcharr channels, with the right

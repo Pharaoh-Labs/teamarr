@@ -1,6 +1,6 @@
 """Tests for the team filter master toggle (settings.team_filter_enabled).
 
-Bead `teamarrv2-zer`: when the global toggle is off, _get_effective_team_filter
+Bead `teamarr-zer`: when the global toggle is off, _get_effective_team_filter
 must return no-filter regardless of group-level or global team selections.
 That single chokepoint controls both the per-event filter (_filter_by_teams)
 and the post-filter channel cleanup (_cleanup_team_filtered_channels), so

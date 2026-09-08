@@ -44,7 +44,7 @@ export function DispatcharrOutputSettings() {
   )
 
   // Always fetch the full group list (with from_m3u flag) so a saved M3U-sourced
-  // group always has a matching <option> to bind to (teamarrv2-t6d). The
+  // group always has a matching <option> to bind to (teamarr-t6d). The
   // includeM3uGroups toggle filters the displayed list; the selected group is
   // always kept visible.
   const [includeM3uGroups, setIncludeM3uGroups] = useState(false)

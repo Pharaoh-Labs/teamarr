@@ -743,7 +743,7 @@ class TestFeedSeparationSettings:
 # must read feed_team from the matched_stream and pass its id, so live EPG
 # programmes and filler programmes land on the same per-feed XMLTV channel.
 # Regressed in v2.4.4 (filler path missed the new feed_team_id arg) — bead
-# teamarrv2-eg9.
+# teamarr-eg9.
 # ===========================================================================
 
 

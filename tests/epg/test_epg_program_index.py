@@ -1,6 +1,6 @@
 """Tests for EPGProgramIndex — scoped fetch + tvg_id index + overlap lookup.
 
-Covers teamarrv2-183.3:
+Covers teamarr-183.3:
 - fetch is scoped to the distinct candidate tvg_ids (one call per tvg_id)
 - _Teamarr programs are excluded
 - unsupported endpoint / empty tvg_id set short-circuit cleanly

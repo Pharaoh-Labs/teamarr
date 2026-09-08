@@ -1,4 +1,4 @@
-"""Xtream-Codes provider EPG support (epic teamarrv2-crs).
+"""Xtream-Codes provider EPG support (epic teamarr-crs).
 
 When a stream's M3U account is an Xtream-Codes panel (Dispatcharr account_type
 "XC"), the provider exposes its OWN guide at a standard endpoint:

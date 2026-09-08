@@ -1,4 +1,4 @@
-"""Per-run provider fetch-count regression guard (#285, teamarrv2-ddpi.5).
+"""Per-run provider fetch-count regression guard (#285, teamarr-ddpi.5).
 
 Call-volume regressions ship silently: #254's per-event refetch made 2,027
 summary calls per run instead of ~289, and the pre-t82y miss storms fired

@@ -1,4 +1,4 @@
-"""Tests for tennis support (epic teamarrv2-mf7): ESPN per-match parsing,
+"""Tests for tennis support (epic teamarr-mf7): ESPN per-match parsing,
 TENNIS_MATCH classification, and TennisMatcher surname scoring.
 
 Fixture shapes and stream names are taken from LIVE data captured during

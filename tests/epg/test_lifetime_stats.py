@@ -1,4 +1,4 @@
-"""Lifetime stats accumulator (bead teamarrv2-3qyp).
+"""Lifetime stats accumulator (bead teamarr-3qyp).
 
 processing_runs is pruned to a rolling window and can be cleared from the UI,
 so the Dashboard's "All-Time Totals" must come from lifetime_stats: run sums

@@ -1,4 +1,4 @@
-"""Regression tests for ESPN provider league routing (#218, teamarrv2-4vz).
+"""Regression tests for ESPN provider league routing (#218, teamarr-4vz).
 
 ESPN.supports_league() decides whether ESPN claims a league during the
 provider race in SportsDataService (ESPN is priority 0, so it wins ties).

@@ -1,4 +1,4 @@
-"""Tests for stream-level disabled-group cleanup (teamarrv2-5xou).
+"""Tests for stream-level disabled-group cleanup (teamarr-5xou).
 
 Disabling a source group must detach only that group's streams and delete a
 channel only when nothing else feeds it — so consolidated/multi-source channels

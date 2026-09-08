@@ -455,7 +455,7 @@ class StreamMatcher:
         # Prefetched events (populated in match_all for multi-league matching)
         self._prefetched_events: dict[str, list[Event]] | None = None
 
-        # EPG program index (epic teamarrv2-183). When present (group opted in
+        # EPG program index (epic teamarr-183). When present (group opted in
         # via 183.6), the matcher augments name matching with EPG-title matching
         # for streams carrying a tvg_id. None = no EPG matching (default).
         self._epg_index = epg_index

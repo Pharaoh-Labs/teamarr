@@ -684,7 +684,7 @@ class ChannelCleanup(_LifecycleHost):
         is STREAM-LEVEL: detach only the disabled group's streams from each channel,
         then delete the channel only if it has no active streams left. This protects
         consolidated/multi-source channels — disabling one source must not delete a
-        channel still fed by other enabled groups (teamarrv2-5xou).
+        channel still fed by other enabled groups (teamarr-5xou).
 
         Returns:
             Dict with 'deleted', 'detached', and 'errors' lists/counts

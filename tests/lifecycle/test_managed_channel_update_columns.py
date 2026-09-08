@@ -1,4 +1,4 @@
-"""Regression tests for managed_channels update column safety (bead teamarrv2-91l).
+"""Regression tests for managed_channels update column safety (bead teamarr-91l).
 
 The stream-drift path in _sync_channel_settings used to write
 db_updates["dispatcharr_stream_id"] and pass it to update_managed_channel(),

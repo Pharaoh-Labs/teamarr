@@ -1,6 +1,6 @@
 """Regression: combined GET /settings must serialize the full EPG section.
 
-Bug teamarrv2-335: the combined `/settings` handler built EPGSettingsModel
+Bug teamarr-335: the combined `/settings` handler built EPGSettingsModel
 without `epg_xtream_fallback_enabled`, so it silently fell back to the model
 default (False) regardless of the stored value. The Settings page loads its EPG
 state from the combined endpoint, so the saved XC-fallback toggle reverted on

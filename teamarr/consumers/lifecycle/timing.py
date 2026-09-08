@@ -39,7 +39,7 @@ def compute_stream_window(
 ) -> tuple[str | None, str | None]:
     """Compute the (attach_at, detach_at) window for a time-shared linear stream.
 
-    Used by epic teamarrv2-183.5: an EPG-matched linear stream attaches to an
+    Used by epic teamarr-183.5: an EPG-matched linear stream attaches to an
     event channel only near game time and detaches after. The window is the
     matched EPG program slot widened by the global stream buffers:
 
@@ -48,7 +48,7 @@ def compute_stream_window(
 
     The buffers apply unclipped: if two programs on the same channel overlap once
     widened, the stream is simply a member of both event channels during the
-    overlap (bead teamarrv2-6qx — the user owns the buffer values and accepts
+    overlap (bead teamarr-6qx — the user owns the buffer values and accepts
     overlap).
 
     Returns SQLite-native UTC strings (comparable to datetime('now')), or
@@ -80,7 +80,7 @@ def is_stream_in_window(
 
     Used by the channel-creation path so a brand-new channel whose sole source is
     an out-of-window EPG stream is not pushed live to Dispatcharr before its
-    attach window opens (bead teamarrv2-uye).
+    attach window opens (bead teamarr-uye).
     """
     if not attach_at:
         return True

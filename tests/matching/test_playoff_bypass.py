@@ -1,6 +1,6 @@
 """Tests for canonical season_type producers and playoff bypass filtering.
 
-Covers the full producer/consumer chain fixed in bead teamarrv2-sua (#197):
+Covers the full producer/consumer chain fixed in bead teamarr-sua (#197):
 
 - ESPN scoreboard path parses season slug/type to canonical values
 - ESPN summary path (get_event) passes season through so refresh doesn't wipe it

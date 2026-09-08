@@ -1,4 +1,4 @@
-"""EPG program-data matching logic (epic teamarrv2-183.4).
+"""EPG program-data matching logic (epic teamarr-183.4).
 
 Pure, dependency-light helpers that turn a Dispatcharr EPG program into an
 input string for the EXISTING classify_stream -> TeamMatcher pipeline, and that

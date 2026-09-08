@@ -1199,7 +1199,7 @@ def _apply_stream_ordering(
             ordering_settings = get_stream_ordering_settings(conn)
             # No early return when rules are absent: time-windowed (EPG-matched)
             # streams still need their membership synced each run so they attach
-            # when their window opens and detach when it closes (bead teamarrv2-uye).
+            # when their window opens and detach when it closes (bead teamarr-uye).
             ordering_service = (
                 StreamOrderingService(rules=ordering_settings.rules, conn=conn)
                 if ordering_settings.rules

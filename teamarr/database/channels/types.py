@@ -146,7 +146,7 @@ class ManagedChannelStream:
     dispatcharr_channel_group_id: int | None = None
     added_at: datetime | None = None
     removed_at: datetime | None = None
-    # Time-windowed membership (epic teamarrv2-183.5). NULL = full-life.
+    # Time-windowed membership (epic teamarr-183.5). NULL = full-life.
     attach_at: datetime | None = None
     detach_at: datetime | None = None
     # Stream stats cached from Dispatcharr (video codec, resolution, bitrate, fps, etc.)

@@ -1,7 +1,7 @@
 """Custom-league policy: premium gate and sport guardrails.
 
 Single source of truth for the rules that govern user-added (custom) leagues
-(epic ``teamarrv2-eqz``). Custom leagues are TSDB-only and the whole feature is
+(epic ``teamarr-eqz``). Custom leagues are TSDB-only and the whole feature is
 gated behind a TheSportsDB *premium* key. These helpers are consumed by the
 custom-league write routes (``eqz.2``) and the live test-fetch / validation
 endpoint (``eqz.3``); keeping them here means the UI, the write path, and the

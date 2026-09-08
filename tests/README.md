@@ -1,6 +1,6 @@
 # Test Suite Map
 
-~1,320 tests organized by subject directory (bead `teamarrv2-iua3.5`). Run
+~1,320 tests organized by subject directory (bead `teamarr-iua3.5`). Run
 everything with `pytest tests/ -q` — the full suite finishes in under 10s.
 
 ## Layout

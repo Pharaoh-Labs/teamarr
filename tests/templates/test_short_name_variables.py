@@ -1,4 +1,4 @@
-"""Tests for team short_name template variables (teamarrv2-d33).
+"""Tests for team short_name template variables (teamarr-d33).
 
 Verifies that {team_short}, {opponent_short}, {matchup_short},
 {home_team_short}, and {away_team_short} extract correctly

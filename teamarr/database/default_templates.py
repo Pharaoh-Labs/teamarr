@@ -1,4 +1,4 @@
-"""Curated default template set (epic teamarrv2-tvnk, issue #329).
+"""Curated default template set (epic teamarr-tvnk, issue #329).
 
 Gracenote-modeled defaults, seeded UNASSIGNED — the user scopes them (see
 docs/guide/templates/defaults.md for the recommended scoping table). Design

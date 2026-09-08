@@ -1,4 +1,4 @@
-"""Per-run EPG program index for stream-to-event matching (epic teamarrv2-183).
+"""Per-run EPG program index for stream-to-event matching (epic teamarr-183).
 
 Builds an in-memory index of Dispatcharr EPG programs keyed by ``tvg_id`` so
 the matcher can ask "what was airing on this stream's guide channel during this
@@ -12,7 +12,7 @@ per linear channel, not per stream).
 
 This module is a pure data layer: it fetches, indexes, and answers time-window
 overlap queries. It contains NO matching logic — interpreting program titles
-and categories is the matcher's job (teamarrv2-183.4).
+and categories is the matcher's job (teamarr-183.4).
 """
 
 import logging

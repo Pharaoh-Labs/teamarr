@@ -1,4 +1,4 @@
-"""Tests for unsubscribed-league channel cleanup (teamarrv2-psoi).
+"""Tests for unsubscribed-league channel cleanup (teamarr-psoi).
 
 When followed leagues change while the source group stays enabled, channels for
 dropped leagues must be deleted on the next run (immediate-removal policy). The
