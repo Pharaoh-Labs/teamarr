@@ -383,15 +383,19 @@ class ESPNClient(BaseHTTPClient):
         url = self._season_group_url(sport, espn_league, season, group_id) + "/teams"
         return self._request(url, {"limit": 500})
 
-    # UFC-specific endpoints
+    # MMA-specific endpoints
 
-    def get_ufc_scoreboard(self, date_str: str | None = None) -> dict | None:
-        """Fetch UFC scoreboard with correct bout times.
+    def get_mma_scoreboard(
+        self, espn_league: str = "ufc", date_str: str | None = None
+    ) -> dict | None:
+        """Fetch an MMA promotion's scoreboard with correct bout times.
 
         The scoreboard endpoint returns accurate segment times, unlike the
         app API which is 3 hours off.
 
         Args:
+            espn_league: ESPN MMA league slug ('ufc', 'pfl', ...) — the second
+                half of the league's ``provider_league_id``.
             date_str: YYYYMMDD date or YYYYMMDD-YYYYMMDD range. When None,
                 ESPN returns ONLY its current featured card — any other card
                 is invisible without an explicit date (#345).
@@ -399,10 +403,12 @@ class ESPNClient(BaseHTTPClient):
         Returns:
             Raw ESPN scoreboard response or None on error
         """
-        url = f"{self._base_url}/mma/ufc/scoreboard"
+        url = f"{self._base_url}/mma/{espn_league}/scoreboard"
         params: dict = {"dates": date_str} if date_str else {}
         return self._request(url, params)
 
+    # TODO: PRUNE — get_fighter/get_fighter_record have no callers anywhere in
+    # teamarr/ or tests/; fighter records ride on the scoreboard competitors.
     def get_fighter(self, fighter_id: str) -> dict | None:
         """Fetch UFC fighter profile.
 

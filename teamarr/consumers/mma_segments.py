@@ -1,6 +1,7 @@
-"""UFC card segment handling.
+"""MMA card segment handling.
 
-Expands UFC events into segment-based channels (Early Prelims, Prelims, Main Card).
+Expands MMA cards (UFC, PFL, ...) into segment-based channels
+(Early Prelims, Prelims, Main Card).
 Streams are routed to correct segment channel based on detected card_segment.
 
 Segment timing comes from ESPN bout-level data:
@@ -54,7 +55,7 @@ def canonicalize_segment(detected: str, event: Event) -> str:
 
     Args:
         detected: Segment detected from stream name
-        event: UFC Event with segment_times from ESPN
+        event: MMA Event with segment_times from ESPN
 
     Returns:
         Validated segment code that exists in ESPN's data
@@ -78,7 +79,7 @@ def canonicalize_segment(detected: str, event: Event) -> str:
         for segment in SEGMENT_ORDER[detected_idx:]:
             if segment in espn_segments:
                 logger.info(
-                    "[UFC_SEGMENTS] Mapped '%s' to '%s' (not in ESPN data: %s)",
+                    "[MMA_SEGMENTS] Mapped '%s' to '%s' (not in ESPN data: %s)",
                     detected,
                     segment,
                     sorted(espn_segments),
@@ -88,7 +89,7 @@ def canonicalize_segment(detected: str, event: Event) -> str:
         for segment in reversed(SEGMENT_ORDER[:detected_idx]):
             if segment in espn_segments:
                 logger.info(
-                    "[UFC_SEGMENTS] Mapped '%s' to '%s' (not in ESPN data: %s)",
+                    "[MMA_SEGMENTS] Mapped '%s' to '%s' (not in ESPN data: %s)",
                     detected,
                     segment,
                     sorted(espn_segments),
@@ -97,11 +98,11 @@ def canonicalize_segment(detected: str, event: Event) -> str:
 
     # Last resort: use main_card if available, else first available
     if "main_card" in espn_segments:
-        logger.warning("[UFC_SEGMENTS] Unknown segment '%s', defaulting to main_card", detected)
+        logger.warning("[MMA_SEGMENTS] Unknown segment '%s', defaulting to main_card", detected)
         return "main_card"
 
     fallback = next(iter(espn_segments))
-    logger.warning("[UFC_SEGMENTS] Unknown segment '%s', defaulting to '%s'", detected, fallback)
+    logger.warning("[MMA_SEGMENTS] Unknown segment '%s', defaulting to '%s'", detected, fallback)
     return fallback
 
 
@@ -193,7 +194,7 @@ def extract_time_from_stream(stream_name: str) -> time | None:
 
 @dataclass
 class SegmentInfo:
-    """Information about a UFC card segment."""
+    """Information about an MMA card segment."""
 
     code: str  # "early_prelims", "prelims", "main_card"
     display_name: str  # "Early Prelims", "Prelims", ""
@@ -201,11 +202,16 @@ class SegmentInfo:
     end_time: datetime
 
 
-def is_ufc_event(event: Event | None) -> bool:
-    """Check if event is a UFC/MMA event that should have segment handling."""
+def is_mma_event(event: Event | None) -> bool:
+    """Check if event is an MMA card that should have segment handling.
+
+    Keyed on sport, not league, so every ESPN MMA promotion (UFC, PFL, ...)
+    gets the same prelims/main-card split (#756). Boxing is sport ``boxing``
+    and stays out — its cards carry no segment times.
+    """
     if not event:
         return False
-    return event.sport == "mma" and event.league == "ufc"
+    return event.sport == "mma"
 
 
 def get_stream_segment(stream: dict, classified: ClassifiedStream | None = None) -> str | None:
@@ -228,7 +234,7 @@ def get_stream_segment(stream: dict, classified: ClassifiedStream | None = None)
 
 
 def should_exclude_stream(stream: dict) -> bool:
-    """Check if UFC stream should be excluded (weigh-in, press conference, etc.)."""
+    """Check if an MMA stream should be excluded (weigh-in, press conference, etc.)."""
     stream_name = stream.get("name", "")
     return is_combat_sports_excluded(stream_name)
 
@@ -264,7 +270,7 @@ def determine_segment_from_time(
 
     Args:
         stream_time: Time extracted from stream name
-        event: UFC Event with segment_times from ESPN (UTC)
+        event: MMA Event with segment_times from ESPN (UTC)
         extracted_tz: IANA timezone name extracted from stream (tier 1)
         group_tz: Group-configured stream_timezone (tier 2)
 
@@ -320,7 +326,7 @@ def determine_segment_from_time(
         # Reject if time is too far from any segment
         if best_distance_min > MAX_SEGMENT_TIME_DISTANCE_MINUTES:
             logger.debug(
-                "[UFC_SEGMENTS] Time %s too far from any segment (dist=%d min > %d max), ignoring",
+                "[MMA_SEGMENTS] Time %s too far from any segment (dist=%d min > %d max), ignoring",
                 stream_time,
                 best_distance_min,
                 MAX_SEGMENT_TIME_DISTANCE_MINUTES,
@@ -328,7 +334,7 @@ def determine_segment_from_time(
             return None
 
         logger.info(
-            "[UFC_SEGMENTS] Determined segment '%s' from time %s (tz=%s, dist=%d min)",
+            "[MMA_SEGMENTS] Determined segment '%s' from time %s (tz=%s, dist=%d min)",
             best_segment,
             stream_time,
             tz_source,
@@ -358,7 +364,7 @@ def disambiguate_prelims_by_time(
     Args:
         detected_segment: Segment detected from stream name ("prelims")
         stream_time: Time extracted from stream name
-        event: UFC Event with segment_times from ESPN (UTC)
+        event: MMA Event with segment_times from ESPN (UTC)
         extracted_tz: IANA timezone name extracted from stream (tier 1)
         group_tz: Group-configured stream_timezone (tier 2)
 
@@ -424,7 +430,7 @@ def disambiguate_prelims_by_time(
     # Simple "closest to" logic - assign to whichever segment is closer
     if dist_to_early < dist_to_prelims:
         logger.info(
-            "[UFC_SEGMENTS] Disambiguated 'prelims' → 'early_prelims' "
+            "[MMA_SEGMENTS] Disambiguated 'prelims' → 'early_prelims' "
             "(stream=%s tz=%s, early=%s, prelims=%s, dist=%d/%d min)",
             stream_time,
             tz_source,
@@ -449,7 +455,7 @@ def get_segment_times(
     only if ESPN data is not available (should be rare).
 
     Args:
-        event: UFC Event with segment_times from ESPN
+        event: MMA Event with segment_times from ESPN
         segment: Segment code ("early_prelims", "prelims", "main_card")
         sport_durations: Optional duration settings (for fallback only)
 
@@ -481,7 +487,7 @@ def get_segment_times(
 
     # Fallback: estimate if no ESPN data (should be rare)
     logger.warning(
-        "[UFC_SEGMENTS] No ESPN segment_times for event %s segment %s, using estimates",
+        "[MMA_SEGMENTS] No ESPN segment_times for event %s segment %s, using estimates",
         event.id,
         segment,
     )
@@ -519,15 +525,15 @@ def _estimate_segment_times_fallback(
         return start, start + segment_duration
 
 
-def expand_ufc_segments(
+def expand_mma_segments(
     matched_streams: list[dict],
     sport_durations: dict[str, float] | None = None,
     stream_timezone: str | None = None,
 ) -> list[dict]:
-    """Expand UFC matched streams into segment-based channels.
+    """Expand MMA matched streams into segment-based channels.
 
-    Groups UFC streams by detected segment and creates separate channel
-    entries for each segment. Non-UFC streams pass through unchanged.
+    Groups MMA streams by detected segment and creates separate channel
+    entries for each segment. Non-MMA streams pass through unchanged.
 
     Args:
         matched_streams: List of {'stream': ..., 'event': ...} dicts
@@ -535,20 +541,20 @@ def expand_ufc_segments(
         stream_timezone: Group-configured timezone for stream time interpretation
 
     Returns:
-        Expanded list with UFC streams grouped by segment
+        Expanded list with MMA streams grouped by segment
     """
     result = []
 
-    # Group UFC streams by event ID and segment
+    # Group MMA streams by event ID and segment
     # {event_id: {segment: [streams]}}
-    ufc_by_segment: dict[str, dict[str, list[dict]]] = {}
+    cards_by_segment: dict[str, dict[str, list[dict]]] = {}
 
     for match in matched_streams:
         event = match.get("event")
         stream = match.get("stream", {})
 
-        # Non-UFC events pass through — normalize card_segment → segment
-        if not is_ufc_event(event):
+        # Non-MMA events pass through — normalize card_segment → segment
+        if not is_mma_event(event):
             card_seg = match.get("card_segment")
             if card_seg and "segment" not in match:
                 match["segment"] = card_seg
@@ -556,13 +562,13 @@ def expand_ufc_segments(
             result.append(match)
             continue
 
-        # is_ufc_event returned True, so event is a non-None UFC Event.
+        # is_mma_event returned True, so event is a non-None MMA Event.
         assert event is not None
 
         # Check for excluded streams (weigh-ins, etc.)
         if should_exclude_stream(stream):
             logger.debug(
-                "[UFC_SEGMENTS] Excluding stream '%s' (non-event content)",
+                "[MMA_SEGMENTS] Excluding stream '%s' (non-event content)",
                 stream.get("name", "")[:50],
             )
             continue
@@ -608,19 +614,19 @@ def expand_ufc_segments(
         segment = canonicalize_segment(segment, event)
 
         event_id = event.id
-        if event_id not in ufc_by_segment:
-            ufc_by_segment[event_id] = {}
-        if segment not in ufc_by_segment[event_id]:
-            ufc_by_segment[event_id][segment] = []
+        if event_id not in cards_by_segment:
+            cards_by_segment[event_id] = {}
+        if segment not in cards_by_segment[event_id]:
+            cards_by_segment[event_id][segment] = []
 
-        ufc_by_segment[event_id][segment].append(match)
+        cards_by_segment[event_id][segment].append(match)
 
-    # Create segment entries for each UFC event
-    for event_id, segments in ufc_by_segment.items():
+    # Create segment entries for each MMA card
+    for event_id, segments in cards_by_segment.items():
         # Get the event from any stream (they all have the same event)
         first_match = next(iter(next(iter(segments.values()))))
         event = first_match.get("event")
-        # Every match grouped into ufc_by_segment carries its UFC Event.
+        # Every match grouped into cards_by_segment carries its MMA Event.
         assert event is not None
 
         # Create entry for each discovered segment
@@ -652,7 +658,7 @@ def expand_ufc_segments(
                 result.append(segment_match)
 
             logger.debug(
-                "[UFC_SEGMENTS] Event %s segment '%s': %d streams, %s - %s",
+                "[MMA_SEGMENTS] Event %s segment '%s': %d streams, %s - %s",
                 event_id,
                 segment,
                 len(streams_for_segment),
@@ -661,12 +667,14 @@ def expand_ufc_segments(
             )
 
     # Log summary
-    ufc_count = sum(len(streams) for segs in ufc_by_segment.values() for streams in segs.values())
-    segment_count = sum(len(segs) for segs in ufc_by_segment.values())
-    if ufc_count > 0:
+    segment_stream_count = sum(
+        len(streams) for segs in cards_by_segment.values() for streams in segs.values()
+    )
+    segment_count = sum(len(segs) for segs in cards_by_segment.values())
+    if segment_stream_count > 0:
         logger.info(
-            "[UFC_SEGMENTS] Expanded %d UFC streams into %d segment channels",
-            ufc_count,
+            "[MMA_SEGMENTS] Expanded %d MMA streams into %d segment channels",
+            segment_stream_count,
             segment_count,
         )
 

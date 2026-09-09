@@ -1,19 +1,42 @@
-"""UFC event parsing for ESPN provider.
+"""MMA event parsing for ESPN provider.
 
 Pure parsing layer - converts raw ESPN API responses into Event objects.
 No API calls, no date filtering - that's the provider's responsibility.
+
+Every ESPN MMA promotion (UFC, PFL, ...) serves the same scoreboard shape:
+one event per card, one competition per bout, segment times on the bouts.
+The league code is threaded through as a parameter so a new promotion is a
+``schema.sql`` row, not a parser (#756).
 """
 
 import logging
+import re
+import unicodedata
 from typing import TYPE_CHECKING, Any
 
 from teamarr.core import Bout, Event, EventStatus, Team
 
 logger = logging.getLogger(__name__)
 
+# Tokens too short or too common to identify a fighter in a card name.
+_NAME_STOPWORDS = frozenset({"vs", "and", "the", "def", "jr", "sr"})
 
-class UFCParserMixin:
-    """Mixin providing UFC-specific parsing methods.
+
+def _name_tokens(text: str) -> set[str]:
+    """Accent-folded word tokens of a name, minus noise, for headline matching."""
+    if not text:
+        return set()
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return {
+        t
+        for t in re.split(r"[^a-z0-9]+", folded.lower())
+        if len(t) >= 3 and t not in _NAME_STOPWORDS
+    }
+
+
+class MMAParserMixin:
+    """Mixin providing MMA card parsing methods.
 
     Pure parsing only - no API calls or business logic.
 
@@ -30,13 +53,14 @@ class UFCParserMixin:
 
         def _parse_datetime(self, date_str: str) -> "datetime | None": ...
 
-    def _parse_ufc_events(self, data: dict) -> list[Event]:
-        """Parse UFC scoreboard response into Event objects.
+    def _parse_mma_events(self, data: dict, league: str = "ufc") -> list[Event]:
+        """Parse an MMA scoreboard response into Event objects.
 
         Pure parsing - no filtering, no API calls.
 
         Args:
             data: Raw ESPN scoreboard response
+            league: Teamarr league code the card belongs to ('ufc', 'pfl')
 
         Returns:
             List of parsed Event objects
@@ -46,14 +70,14 @@ class UFCParserMixin:
 
         events = []
         for event_data in data.get("events", []):
-            event = self._parse_ufc_event(event_data)
+            event = self._parse_mma_event(event_data, league)
             if event:
                 events.append(event)
 
         return events
 
-    def _parse_ufc_event(self, data: dict) -> Event | None:
-        """Parse UFC fight card into Event.
+    def _parse_mma_event(self, data: dict, league: str = "ufc") -> Event | None:
+        """Parse an MMA fight card into Event.
 
         Maps the main event fighters as home_team/away_team for compatibility.
         Extracts exact segment times from ESPN bout-level data:
@@ -149,19 +173,19 @@ class UFCParserMixin:
                     )
                 )
 
-            # Find the main event (last bout = headline fight)
-            main_event = competitions[-1]
+            # Find the main event — the card's name is the authority
+            main_event = self._select_main_event(competitions, data.get("name", ""))
 
             # Extract fighters as "teams"
             competitors = main_event.get("competitors", [])
             if len(competitors) < 2:
                 return None
 
-            fighter1 = self._parse_fighter_as_team(competitors[0])
-            fighter2 = self._parse_fighter_as_team(competitors[1])
+            fighter1 = self._parse_fighter_as_team(competitors[0], league)
+            fighter2 = self._parse_fighter_as_team(competitors[1], league)
 
             # Parse status from main event
-            status = self._parse_ufc_status(main_event.get("status", {}))
+            status = self._parse_mma_status(main_event.get("status", {}))
 
             # Parse fight result data (only populated for finished fights)
             fight_result_method, finish_round, finish_time = self._parse_fight_result(main_event)
@@ -169,7 +193,7 @@ class UFCParserMixin:
             weight_class = self._parse_weight_class(main_event)
 
             logger.debug(
-                "[ESPN_UFC] Event %s segments: %s, bouts: %d, result: %s",
+                "[ESPN_MMA] Event %s segments: %s, bouts: %d, result: %s",
                 event_id,
                 {k: v.isoformat() for k, v in segment_times.items()},
                 len(bouts),
@@ -185,7 +209,7 @@ class UFCParserMixin:
                 home_team=fighter1,
                 away_team=fighter2,
                 status=status,
-                league="ufc",
+                league=league,
                 sport="mma",  # Lowercase code; display name from sports table
                 main_card_start=main_card_start,
                 segment_times=segment_times,
@@ -198,11 +222,37 @@ class UFCParserMixin:
                 fighter2_scores=fighter2_scores,
             )
         except Exception as e:
-            logger.warning("[ESPN_UFC] Failed to parse event %s: %s", data.get("id", "unknown"), e)
+            logger.warning("[ESPN_MMA] Failed to parse event %s: %s", data.get("id", "unknown"), e)
             return None
 
-    def _parse_fighter_as_team(self, competitor: dict) -> Team:
-        """Convert UFC fighter to Team dataclass for compatibility."""
+    def _select_main_event(self, competitions: list[dict], event_name: str) -> dict:
+        """Pick the headline bout from a card's competitions.
+
+        Bout ORDER is not a reliable signal across promotions: UFC and PFL list
+        the main event last, LFA lists it first ("LFA 228: Natividad vs. Garcia"
+        opens with Garcia/Natividad), and same-time cards give the clock nothing
+        to sort on. The card's own name is the authority — it names the headline
+        fighters — so the bout whose BOTH competitors appear in it wins, and
+        bout order is only the tiebreak (#756).
+
+        Falls back to the last competition when the name carries no fighter
+        names at all ("PFL Dubai", "UFC 335"), which is the pre-#756 behavior.
+        """
+        name_tokens = _name_tokens(event_name)
+        if name_tokens:
+            for comp in reversed(competitions):
+                competitors = comp.get("competitors", [])
+                if len(competitors) < 2:
+                    continue
+                if all(
+                    _name_tokens(c.get("athlete", {}).get("displayName", "")) & name_tokens
+                    for c in competitors[:2]
+                ):
+                    return comp
+        return competitions[-1]
+
+    def _parse_fighter_as_team(self, competitor: dict, league: str = "ufc") -> Team:
+        """Convert an MMA fighter to a Team dataclass for compatibility."""
         athlete = competitor.get("athlete", {})
 
         # Get headshot URL
@@ -237,15 +287,15 @@ class UFCParserMixin:
             name=display_name,
             short_name=short_name,
             abbreviation=last_name,
-            league="ufc",
+            league=league,
             sport="mma",  # Lowercase code; display name from sports table
             logo_url=logo_url,
             color=None,
             record_summary=record_summary,
         )
 
-    def _parse_ufc_status(self, status_data: dict) -> EventStatus:
-        """Parse UFC event status."""
+    def _parse_mma_status(self, status_data: dict) -> EventStatus:
+        """Parse MMA event status."""
         state_map = {
             "pre": "scheduled",
             "in": "live",

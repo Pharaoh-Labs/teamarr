@@ -303,8 +303,10 @@ class EventCardMatcher:
         if not event_num:
             stream_norm = normalize_text(ctx.stream_name)
             # Strip generic/noise words to ensure the stream has a distinct name.
+            # The promotion token must be stripped: every event in `events`
+            # carries it, so leaving it in scores 100 against an arbitrary card.
             stream_norm_clean = re.sub(
-                r'\b(ufc|mma|boxing|prelims|main card|early prelims'
+                r'\b(ufc|pfl|lfa|bellator|mma|boxing|prelims|main card|early prelims'
                 r'|live|event|ppv|pm|am|et|pt|ct|mt)\b',
                 '',
                 stream_norm
@@ -378,9 +380,9 @@ class EventCardMatcher:
         if match:
             return match.group(1).upper().replace("  ", " ")
 
-        # PFL 5, Bellator 300
+        # PFL 5, LFA 235, Bellator 300
         match = re.search(
-            r"((?:pfl|bellator|one\s*fc)\s*\d+)",
+            r"((?:pfl|lfa|bellator|one\s*fc)\s*\d+)",
             hint,
             re.IGNORECASE,
         )

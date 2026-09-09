@@ -230,7 +230,7 @@ Each rule runs in one of two modes: `priority` (band assignment) or `score` (num
 | `consumers/filler/` | Team and event filler programme generation |
 | `consumers/team_epg.py` / `consumers/event_epg.py` | XMLTV programme generation for team and event channels |
 | `consumers/scheduler.py` | Background EPG cron scheduler |
-| `consumers/racing_segments.py` / `consumers/ufc_segments.py` | Racing-weekend and fight-card segment expansion |
+| `consumers/racing_segments.py` / `consumers/mma_segments.py` | Racing-weekend and fight-card segment expansion |
 | `consumers/channel_lifecycle.py` | Lifecycle helpers shared across consumers |
 | `consumers/stream_match_cache.py` | Fingerprint match cache persistence |
 | `consumers/generation_status.py` | Generation progress state machine |

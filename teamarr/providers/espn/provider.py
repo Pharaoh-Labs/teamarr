@@ -30,9 +30,9 @@ from teamarr.providers.espn.client import (
 )
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
 from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
+from teamarr.providers.espn.mma import MMAParserMixin
 from teamarr.providers.espn.tennis import TennisParserMixin
 from teamarr.providers.espn.tournament import TournamentParserMixin
-from teamarr.providers.espn.ufc import UFCParserMixin
 from teamarr.utilities.event_status import is_event_final
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ RANKING_PRIMARY_POLL_TYPE = "ap"
 RANKING_MAX = 25
 
 
-class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, SportsProvider):
+class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, SportsProvider):
     """ESPN implementation of SportsProvider.
 
     Pure fetch + normalize layer. No caching - that's handled by SportsDataService.
@@ -200,9 +200,39 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         except Exception:
             pass  # Best-effort, don't break event fetching
 
+    def _is_mma(self, league: str, sport: str | None = None) -> bool:
+        """Whether a league is an MMA promotion, and so takes the card path.
+
+        Sport is the authoritative signal, so a new promotion needs only a
+        ``schema.sql`` row (#756). MMA_LEAGUES is the fallback for when the
+        leagues-table lookup can't answer — a provider built without a mapping
+        source, or a DB that predates the row — because the alternative is a
+        silent fall-through to the team scoreboard path with a bad URL.
+        """
+        if sport is None:
+            sport = self._get_sport(league)
+        return sport == "mma" or league in self.MMA_LEAGUES
+
+    def _espn_mma_slug(
+        self, league: str, sport_league: tuple[str, str] | None = None
+    ) -> str:
+        """ESPN's MMA league slug for a Teamarr league code.
+
+        Reads the second half of ``provider_league_id`` ('mma/pfl' → 'pfl')
+        so a new promotion needs only a ``schema.sql`` row. Falls back to the
+        league code itself, which is what every ESPN MMA slug happens to be.
+        """
+        if sport_league is None:
+            sport_league = self._get_sport_league_from_db(league)
+        return sport_league[1] if sport_league else league
+
     def get_events(self, league: str, target_date: date) -> list[Event]:
-        # UFC uses different API endpoint
-        if league == "ufc":
+        # Get sport/league from database config
+        sport_league = self._get_sport_league_from_db(league)
+        sport = self._get_sport(league)
+
+        # MMA promotions use a different API endpoint
+        if self._is_mma(league, sport):
             # ESPN's default MMA scoreboard returns ONLY the current featured
             # card, so any other card was invisible regardless of stream name
             # or regex (#345). Query a ±1-day window around target_date: a
@@ -212,20 +242,18 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 (target_date - timedelta(days=1)).strftime("%Y%m%d"),
                 (target_date + timedelta(days=1)).strftime("%Y%m%d"),
             )
-            data = self._client.get_ufc_scoreboard(window)
+            data = self._client.get_mma_scoreboard(
+                self._espn_mma_slug(league, sport_league), window
+            )
             if not data:
                 return []
             # Mixin handles: pure parsing only. The ±1-day fetch window IS the
             # superset; segment-aware date membership (a card touching two
             # days belongs to both, #345) is decided by the user-day window
             # at the service seam (#590).
-            return self._parse_ufc_events(data)
-
-        # Get sport/league from database config
-        sport_league = self._get_sport_league_from_db(league)
+            return self._parse_mma_events(data, league)
 
         # Check if this is a tournament sport
-        sport = self._get_sport(league)
         if sport in TOURNAMENT_SPORTS:
             return self._get_tournament_events(league, target_date, sport, sport_league)
 
@@ -237,7 +265,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         target_date: date,
         sport_league: tuple[str, str] | None,
     ) -> list[Event]:
-        """Standard per-date scoreboard fetch (non-UFC, non-tournament)."""
+        """Standard per-date scoreboard fetch (non-MMA, non-tournament)."""
         date_str = target_date.strftime("%Y%m%d")
         data = self._client.get_scoreboard(league, date_str, sport_league)
         if not data:
@@ -265,7 +293,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         schedules (NBA Finals, weekly NFL).
         """
         sport = self._get_sport(league)
-        if league == "ufc":
+        if self._is_mma(league, sport):
             # Cards run ~weekly, so a today/yesterday scan is empty most of the
             # week and combat previews always fell back to static samples
             # (#260). One ±7-day range call captures both the last finished
@@ -276,8 +304,8 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 (today - timedelta(days=7)).strftime("%Y%m%d"),
                 (today + timedelta(days=7)).strftime("%Y%m%d"),
             )
-            data = self._client.get_ufc_scoreboard(window)
-            return self._parse_ufc_events(data) if data else []
+            data = self._client.get_mma_scoreboard(self._espn_mma_slug(league), window)
+            return self._parse_mma_events(data, league) if data else []
         if sport in TOURNAMENT_SPORTS:
             # Special endpoints — reuse the per-date path over a few days.
             by_event_id: dict[str, Event] = {}
@@ -310,9 +338,10 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         then returns the most recent one — e.g. NFL in June → the Super Bowl.
         Best sample, since a finished game populates every postgame variable.
         """
-        if self._get_sport(league) in TOURNAMENT_SPORTS:
+        sport = self._get_sport(league)
+        if sport in TOURNAMENT_SPORTS:
             return None
-        if league == "ufc":
+        if self._is_mma(league, sport):
             # Cards are ~weekly; the longest dark stretches (holidays) are a
             # few weeks, so one 35-day window nearly always hits. Finished-
             # first matters for combat: a final card is the only sample that
@@ -320,12 +349,13 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             end = date.today()
             for _ in range(3):
                 start = end - timedelta(days=35)
-                data = self._client.get_ufc_scoreboard(
-                    f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}"
+                data = self._client.get_mma_scoreboard(
+                    self._espn_mma_slug(league),
+                    f"{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}",
                 )
                 finals = [
                     e
-                    for e in (self._parse_ufc_events(data) if data else [])
+                    for e in (self._parse_mma_events(data, league) if data else [])
                     if e.home_team and e.away_team and is_event_final(e)
                 ]
                 if finals:
@@ -572,11 +602,17 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             return logos[0].get("href")
         return None
 
+    # ESPN MMA promotions. Every card fetch is keyed on the league's SPORT, so
+    # a new promotion is a schema.sql row — this set is only the fallback for
+    # when that lookup can't answer (see _is_mma), and the source of truth for
+    # the endpoint-capability sets below.
+    MMA_LEAGUES = {"ufc", "pfl", "lfa"}
+
     # Leagues without summary endpoint support
     # These leagues only have scoreboard data - no per-event detail endpoint
     # When get_event() is called for these, we return None immediately to avoid 404s
     # Tennis: site/v2 summary returns HTTP 400 for atp/wta (#282)
-    LEAGUES_WITHOUT_SUMMARY = {"ufc", "atp", "wta"}
+    LEAGUES_WITHOUT_SUMMARY = MMA_LEAGUES | {"atp", "wta"}
 
     # Leagues without teams endpoint support
     # Leagues where /teams endpoint doesn't work or isn't needed:
@@ -584,8 +620,7 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     # - Olympics: teams only in events, no team filtering/import needed
     # - Tennis: players ride as Teams with synthetic player_* ids (scoreboard
     #   athlete ids are null); ESPN's teams endpoints 400 on them (#282)
-    LEAGUES_WITHOUT_TEAMS = {
-        "ufc",
+    LEAGUES_WITHOUT_TEAMS = MMA_LEAGUES | {
         "boxing",
         "olympics-mens-ice-hockey",
         "olympics-womens-ice-hockey",

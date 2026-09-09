@@ -1432,8 +1432,8 @@ def extract_event_card_hint(text: str) -> str | None:
     if ufc_match:
         return ufc_match.group(1).upper().replace("  ", " ")
 
-    # PFL 5, Bellator 300, etc.
-    org_match = re.search(r"\b((?:pfl|bellator|one\s*fc)\s*\d+)\b", text, re.IGNORECASE)
+    # PFL 5, LFA 235, Bellator 300, etc.
+    org_match = re.search(r"\b((?:pfl|lfa|bellator|one\s*fc)\s*\d+)\b", text, re.IGNORECASE)
     if org_match:
         return org_match.group(1).upper()
 
@@ -1559,12 +1559,12 @@ def _clean_fighter_name(name: str) -> str | None:
     # Strip empty parentheses left after segment removal
     name = re.sub(r"\(\s*\)", "", name)
 
-    # Strip UFC event number prefix: "324 - Gaethje" → "Gaethje"
-    # Also handles "UFC 324 Gaethje"
-    name = re.sub(r"^(?:ufc\s+)?\d+\s*[-:]?\s*", "", name, flags=re.IGNORECASE)
+    # Strip promotion event number prefix: "324 - Gaethje" → "Gaethje"
+    # Also handles "UFC 324 Gaethje" / "PFL 5 Gaethje"
+    name = re.sub(r"^(?:(?:ufc|pfl|lfa|bellator)\s+)?\d+\s*[-:]?\s*", "", name, flags=re.IGNORECASE)
 
-    # Strip "UFC" prefix
-    name = re.sub(r"^ufc\s+", "", name, flags=re.IGNORECASE)
+    # Strip promotion prefix
+    name = re.sub(r"^(?:ufc|pfl|lfa|bellator)\s+", "", name, flags=re.IGNORECASE)
 
     # Strip channel prefixes like "LIVE EVENT 03 -"
     name = re.sub(r"^live\s+event\s+\d+\s*[-:]\s*", "", name, flags=re.IGNORECASE)
