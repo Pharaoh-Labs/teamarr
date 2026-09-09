@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from sqlite3 import Connection
 
 from teamarr.database.channels.types import ManagedChannelStream
-from teamarr.database.settings import get_stream_ordering_settings
 from teamarr.database.settings.types import StreamOrderingRule
 
 logger = logging.getLogger(__name__)
@@ -882,7 +881,11 @@ class StreamOrderingService:
         return None
 
 
-def get_stream_ordering_service(conn: Connection) -> StreamOrderingService:
+def get_stream_ordering_service(
+    conn: Connection,
+    sport: str | None = None,
+    league: str | None = None,
+) -> StreamOrderingService:
     """Factory function to create a StreamOrderingService with rules from database.
 
     Args:
@@ -892,5 +895,7 @@ def get_stream_ordering_service(conn: Connection) -> StreamOrderingService:
         Configured StreamOrderingService
     """
 
-    settings = get_stream_ordering_settings(conn)
-    return StreamOrderingService(rules=settings.rules, conn=conn)
+    from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
+
+    rules, _ = resolve_stream_ordering_rules(conn, sport, league)
+    return StreamOrderingService(rules=rules, conn=conn)

@@ -9,7 +9,12 @@ import pytest
 
 from teamarr.database.channels.types import ManagedChannelStream
 from teamarr.database.connection import get_connection, get_db, init_db
+from teamarr.database.settings import update_stream_ordering_rules
 from teamarr.database.settings.types import StreamOrderingRule
+from teamarr.database.stream_ordering_scopes import (
+    create_stream_ordering_scope,
+    resolve_stream_ordering_rules,
+)
 from teamarr.services.stream_ordering import (
     BAND_STRIDE,
     NO_MATCH_PRIORITY,
@@ -88,6 +93,101 @@ class TestBasicRules:
         svc = StreamOrderingService(rules)
         # ESPN rule has lower number → evaluated first → wins
         assert svc.compute_priority(_stream("ESPN 1080p")) == 2
+
+
+class TestScopedRules:
+    def test_league_scope_beats_sport_and_inherits_scoring(self, seeded_db):
+        update_stream_ordering_rules(
+            seeded_db,
+            [
+                {"type": "regex", "value": "HD", "priority": 99, "mode": "score", "points": 10},
+                {"type": "m3u", "value": "Global", "priority": 1, "mode": "priority", "points": 0},
+            ],
+        )
+        create_stream_ordering_scope(
+            seeded_db,
+            name="Baseball",
+            sports=["baseball"],
+            leagues=[],
+            rules=[
+                {"type": "m3u", "value": "Sport", "priority": 2, "mode": "priority", "points": 0}
+            ],
+            use_global_scoring=True,
+            use_global_priority=False,
+        )
+        create_stream_ordering_scope(
+            seeded_db,
+            name="MLB",
+            sports=[],
+            leagues=["mlb"],
+            rules=[
+                {"type": "m3u", "value": "League", "priority": 3, "mode": "priority", "points": 0}
+            ],
+            use_global_scoring=True,
+            use_global_priority=False,
+        )
+
+        rules, scope = resolve_stream_ordering_rules(seeded_db, "baseball", "mlb")
+
+        assert scope is not None
+        assert scope.name == "MLB"
+        assert [(rule.mode, rule.value) for rule in rules] == [
+            ("score", "HD"),
+            ("priority", "League"),
+        ]
+
+    def test_scope_can_inherit_priority_and_use_local_scoring(self, seeded_db):
+        update_stream_ordering_rules(
+            seeded_db,
+            [
+                {"type": "regex", "value": "Global", "priority": 99, "mode": "score", "points": 10},
+                {"type": "catch_all", "value": "", "priority": 50, "mode": "priority", "points": 0},
+            ],
+        )
+        create_stream_ordering_scope(
+            seeded_db,
+            name="Football",
+            sports=["football"],
+            leagues=[],
+            rules=[
+                {"type": "regex", "value": "Local", "priority": 99, "mode": "score", "points": 20}
+            ],
+            use_global_scoring=False,
+            use_global_priority=True,
+        )
+
+        rules, _ = resolve_stream_ordering_rules(seeded_db, "football", "nfl")
+
+        assert [(rule.mode, rule.value) for rule in rules] == [
+            ("score", "Local"),
+            ("priority", ""),
+        ]
+
+    def test_scope_keeps_local_rules_alongside_inherited_family(self, seeded_db):
+        update_stream_ordering_rules(
+            seeded_db,
+            [
+                {"type": "regex", "value": "Global", "priority": 99, "mode": "score", "points": 10},
+            ],
+        )
+        create_stream_ordering_scope(
+            seeded_db,
+            name="Basketball",
+            sports=["basketball"],
+            leagues=[],
+            rules=[
+                {"type": "regex", "value": "Local", "priority": 99, "mode": "score", "points": 20}
+            ],
+            use_global_scoring=True,
+            use_global_priority=True,
+        )
+
+        rules, _ = resolve_stream_ordering_rules(seeded_db, "basketball", "nba")
+
+        assert [(rule.mode, rule.value) for rule in rules] == [
+            ("score", "Global"),
+            ("score", "Local"),
+        ]
 
 
 # ---------------------------------------------------------------------------

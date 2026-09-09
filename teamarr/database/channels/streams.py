@@ -187,6 +187,8 @@ def compute_stream_priority_from_rules(
     dispatcharr_channel_group: str | None = None,
     feed_team_id: str | None = None,
     feed_side: str | None = None,
+    sport: str | None = None,
+    league: str | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
@@ -219,7 +221,7 @@ def compute_stream_priority_from_rules(
     from teamarr.database.channels.types import ManagedChannelStream
     from teamarr.services.stream_ordering import get_stream_ordering_service
 
-    ordering_service = get_stream_ordering_service(conn)
+    ordering_service = get_stream_ordering_service(conn, sport, league)
     if not ordering_service.rules:
         # No rules - use sequential ordering (will be assigned by get_next_stream_priority)
         return None  # type: ignore
@@ -535,8 +537,14 @@ def reorder_channel_streams(
     if not streams:
         return 0
 
-    # Get ordering service with rules
-    ordering_service = get_stream_ordering_service(conn)
+    channel = conn.execute(
+        "SELECT sport, league FROM managed_channels WHERE id = ?", (managed_channel_id,)
+    ).fetchone()
+    ordering_service = get_stream_ordering_service(
+        conn,
+        channel["sport"] if channel else None,
+        channel["league"] if channel else None,
+    )
     if not ordering_service.rules:
         # No rules defined - skip reordering
         return 0

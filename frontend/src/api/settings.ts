@@ -176,6 +176,25 @@ export interface StreamOrderingSettingsUpdate {
   rules: StreamOrderingRule[]
 }
 
+export interface StreamOrderingScope {
+  id: number
+  name: string
+  sports: string[]
+  leagues: string[]
+  rules: StreamOrderingRule[]
+  use_global_scoring: boolean
+  use_global_priority: boolean
+}
+
+export interface StreamOrderingScopeUpdate {
+  name: string
+  sports: string[]
+  leagues: string[]
+  rules: StreamOrderingRule[]
+  use_global_scoring: boolean
+  use_global_priority: boolean
+}
+
 export interface UpdateCheckSettings {
   enabled: boolean
   notify_stable: boolean
@@ -545,6 +564,31 @@ export async function updateStreamOrderingSettings(
   data: StreamOrderingSettingsUpdate
 ): Promise<StreamOrderingSettings> {
   return api.put("/settings/stream-ordering", data)
+}
+
+export async function getStreamOrderingScopes(): Promise<StreamOrderingScope[]> {
+  return api.get("/settings/stream-ordering/scopes")
+}
+
+export async function getStreamOrderingScope(id: number): Promise<StreamOrderingScope> {
+  return api.get(`/settings/stream-ordering/scopes/${id}`)
+}
+
+export async function createStreamOrderingScope(
+  data: StreamOrderingScopeUpdate,
+): Promise<StreamOrderingScope> {
+  return api.post("/settings/stream-ordering/scopes", data)
+}
+
+export async function updateStreamOrderingScope(
+  id: number,
+  data: StreamOrderingScopeUpdate,
+): Promise<StreamOrderingScope> {
+  return api.put(`/settings/stream-ordering/scopes/${id}`, data)
+}
+
+export async function deleteStreamOrderingScope(id: number): Promise<void> {
+  return api.delete(`/settings/stream-ordering/scopes/${id}`)
 }
 
 // Update Check Settings API

@@ -14,6 +14,7 @@ from teamarr.database import init_db
 client = TestClient(app)
 
 STREAM_ORDERING = "/api/v1/settings/stream-ordering"
+STREAM_ORDERING_SCOPES = f"{STREAM_ORDERING}/scopes"
 
 
 @pytest.fixture(autouse=True)
@@ -87,3 +88,38 @@ def test_combined_settings_carries_mode_and_points():
     rules = combined["stream_ordering"]["rules"]
     assert rules[0]["mode"] == "score"
     assert rules[0]["points"] == 10
+
+
+def test_scoped_ruleset_rejects_duplicate_league_assignments():
+    payload = {
+        "name": "Baseball",
+        "sports": ["baseball"],
+        "leagues": ["mlb"],
+        "rules": [],
+        "use_global_scoring": True,
+        "use_global_priority": True,
+    }
+    created = client.post(STREAM_ORDERING_SCOPES, json=payload)
+    assert created.status_code == 201
+    assert created.json()["leagues"] == ["mlb"]
+
+    duplicate = client.post(
+        STREAM_ORDERING_SCOPES,
+        json={**payload, "name": "MLB alternate", "sports": [], "leagues": ["mlb"]},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_scoped_ruleset_requires_a_sport_or_league():
+    response = client.post(
+        STREAM_ORDERING_SCOPES,
+        json={
+            "name": "Empty",
+            "sports": [],
+            "leagues": [],
+            "rules": [],
+            "use_global_scoring": True,
+            "use_global_priority": True,
+        },
+    )
+    assert response.status_code == 400

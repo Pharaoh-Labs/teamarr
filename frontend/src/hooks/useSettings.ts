@@ -24,6 +24,11 @@ import {
   updateChannelNumberingSettings,
   getStreamOrderingSettings,
   updateStreamOrderingSettings,
+  getStreamOrderingScopes,
+  getStreamOrderingScope,
+  createStreamOrderingScope,
+  updateStreamOrderingScope,
+  deleteStreamOrderingScope,
   getUpdateCheckSettings,
   updateUpdateCheckSettings,
   checkForUpdates,
@@ -146,6 +151,40 @@ export const useStreamOrderingSettings = settingsQueryHook(
 export const useUpdateStreamOrderingSettings = settingsMutationHook(updateStreamOrderingSettings, [
   ["settings", "stream-ordering"],
 ])
+
+export const useStreamOrderingScopes = settingsQueryHook(
+  "stream-ordering-scopes",
+  getStreamOrderingScopes,
+)
+
+export function useStreamOrderingScope(id: number | null) {
+  return useQuery({
+    queryKey: ["settings", "stream-ordering-scopes", id],
+    queryFn: () => getStreamOrderingScope(id!),
+    enabled: id !== null,
+  })
+}
+
+function streamOrderingScopeMutationHook<TData, TVariables>(
+  mutationFn: (variables: TVariables) => Promise<TData>,
+) {
+  return function useStreamOrderingScopeMutation() {
+    const queryClient = useQueryClient()
+    return useMutation({
+      mutationFn,
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["settings", "stream-ordering-scopes"] })
+      },
+    })
+  }
+}
+
+export const useCreateStreamOrderingScope = streamOrderingScopeMutationHook(createStreamOrderingScope)
+export const useUpdateStreamOrderingScope = streamOrderingScopeMutationHook(
+  ({ id, data }: { id: number; data: Parameters<typeof updateStreamOrderingScope>[1] }) =>
+    updateStreamOrderingScope(id, data),
+)
+export const useDeleteStreamOrderingScope = streamOrderingScopeMutationHook(deleteStreamOrderingScope)
 
 export const useUpdateCheckSettings = settingsQueryHook("update-check", getUpdateCheckSettings)
 export const useUpdateUpdateCheckSettings = settingsMutationHook(updateUpdateCheckSettings, [

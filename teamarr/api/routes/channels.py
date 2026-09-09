@@ -29,9 +29,10 @@ from teamarr.database.channels.streams import (
 )
 from teamarr.database.groups import get_group_names_by_ids
 from teamarr.database.settings import get_dispatcharr_settings
+from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
 from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 from teamarr.services import create_channel_service, create_default_service
-from teamarr.services.stream_ordering import get_stream_ordering_service
+from teamarr.services.stream_ordering import StreamOrderingService
 from teamarr.utilities.tz import parse_db_timestamp
 
 logger = logging.getLogger(__name__)
@@ -208,6 +209,7 @@ class ChannelStreamEntry(BaseModel):
     stream_stats: dict | None = None
     stream_stats_updated_at: str | None = None
     matched_rules: list[StreamRuleMatch] = []
+    sorting_scope: str = "Global"
     # Cache-derived match detail (absent for EPG / dedicated matches)
     matched_event: str | None = None
     matched_league: str | None = None
@@ -374,7 +376,11 @@ def get_managed_channel_streams(channel_id: int):
         # plus the priority those current rules WOULD produce (for the staleness
         # flag — the stored priority is a collapsed band*stride-score int once
         # scoring is in play, so the UI can't recompute it from matched_rules alone).
-        ordering_service = get_stream_ordering_service(conn)
+        ordering_rules, ordering_scope = resolve_stream_ordering_rules(
+            conn, channel.sport, channel.league
+        )
+        ordering_service = StreamOrderingService(ordering_rules, conn)
+        sorting_scope = ordering_scope.name if ordering_scope else "Global"
         # With no rules configured, generation never reorders (streams keep their
         # sequential added order), so 'expected' must mirror the stored priority
         # rather than the service's no-match baseline — otherwise every stream
@@ -429,6 +435,7 @@ def get_managed_channel_streams(channel_id: int):
                 stream_stats=s.stream_stats,
                 stream_stats_updated_at=_safe_isoformat(s.stream_stats_updated_at),
                 matched_rules=matched_by_stream.get(s.dispatcharr_stream_id, []),
+                sorting_scope=sorting_scope,
                 matched_event=channel_event,
                 matched_league=channel.league,
                 cache_match_method=(d := match_details.get(

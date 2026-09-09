@@ -189,8 +189,8 @@ const fmtSigned = (n: number) => (n > 0 ? `+${n}` : String(n))
 // number is decoded to band(+score); staleness compares stored vs the freshly
 // recomputed `expected` priority.
 function PriorityCell(
-  { priority, expected, rules, generating }:
-  { priority: number; expected: number; rules: StreamRuleMatch[]; generating: boolean },
+  { priority, expected, rules, sortingScope, generating }:
+  { priority: number; expected: number; rules: StreamRuleMatch[]; sortingScope: string; generating: boolean },
 ) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -250,6 +250,9 @@ function PriorityCell(
         <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover p-1.5 shadow-lg">
           <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
             Matched rules
+          </div>
+          <div className="px-1 pb-1 text-[10px] text-muted-foreground">
+            Sorting scope: <span className="font-medium text-foreground">{sortingScope}</span>
           </div>
           <div className="space-y-0.5">
             {priorityMatches.map((r, i) => (
@@ -637,7 +640,7 @@ const ChannelRow = React.memo(function ChannelRow({
                       <td className="py-1 pr-4 text-muted-foreground">{stream.m3u_account_name ?? "—"}</td>
                       <td className="py-1 pr-4"><MethodCell stream={stream} /></td>
                       <td className="py-1 pr-4"><FeedSideCell side={stream.feed_side} /></td>
-                      <td className="py-1 pr-4"><PriorityCell priority={stream.priority} expected={stream.expected_priority} rules={stream.matched_rules} generating={isGenerating} /></td>
+                      <td className="py-1 pr-4"><PriorityCell priority={stream.priority} expected={stream.expected_priority} rules={stream.matched_rules} sortingScope={stream.sorting_scope} generating={isGenerating} /></td>
                       <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
                     </tr>
                   ))}

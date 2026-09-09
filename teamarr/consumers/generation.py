@@ -21,7 +21,6 @@ from teamarr.emby.client import EmbyClient
 from teamarr.jellyfin.client import JellyfinClient
 from teamarr.services import create_default_service
 from teamarr.services.sports_data import flush_shared_cache
-from teamarr.services.stream_ordering import StreamOrderingService
 from teamarr.utilities import call_metrics
 from teamarr.utilities.xmltv import merge_xmltv_content
 
@@ -1185,6 +1184,8 @@ def _apply_stream_ordering(
         refresh_stream_stats_bulk,
     )
     from teamarr.database.settings import get_stream_ordering_settings
+    from teamarr.database.stream_ordering_scopes import get_stream_ordering_scopes
+    from teamarr.services.stream_ordering import get_stream_ordering_service
     from teamarr.utilities.tz import now_utc
 
     reorder_result: dict = {
@@ -1200,15 +1201,14 @@ def _apply_stream_ordering(
             # No early return when rules are absent: time-windowed (EPG-matched)
             # streams still need their membership synced each run so they attach
             # when their window opens and detach when it closes (bead teamarr-uye).
-            ordering_service = (
-                StreamOrderingService(rules=ordering_settings.rules, conn=conn)
-                if ordering_settings.rules
-                else None
-            )
-            if ordering_service:
-                logger.info(
-                    "[ORDERING] Applying %d ordering rule(s)", len(ordering_settings.rules)
-                )
+            scoped_ordering = get_stream_ordering_scopes(conn)
+            all_ordering_rules = ordering_settings.rules + [
+                rule
+                for scope in scoped_ordering
+                for rule in scope.rules
+            ]
+            if all_ordering_rules:
+                logger.info("[ORDERING] Applying scoped stream ordering rules")
             else:
                 logger.debug(
                     "[ORDERING] No ordering rules configured; running window sync only"
@@ -1267,8 +1267,9 @@ def _apply_stream_ordering(
             #
             # Skipped outright when no rule reads stats: the fetch buys nothing
             # for a ruleset built from m3u/group/regex, and most are.
-            if ordering_service and any(
-                rule.type == "stats_metric" for rule in ordering_settings.rules
+            if any(
+                (rule.type if hasattr(rule, "type") else rule.get("type")) == "stats_metric"
+                for rule in all_ordering_rules
             ):
                 stat_stream_ids = get_active_dispatcharr_stream_ids(conn)
                 refreshed = refresh_stream_stats_bulk(conn, stat_stream_ids)
@@ -1344,7 +1345,10 @@ def _apply_stream_ordering(
                             pinned_top = None
 
                 reordered_count = 0
-                if ordering_service:
+                ordering_service = get_stream_ordering_service(
+                    conn, channel.sport, channel.league
+                )
+                if ordering_service.rules:
                     for stream in streams:
                         new_priority = ordering_service.compute_priority(stream)
                         if stream.priority != new_priority:
