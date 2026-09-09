@@ -10,13 +10,13 @@ import { api } from "@/api/client"
 import { ScheduledChannelResetCard } from "@/components/ScheduledChannelResetCard"
 import {
   useCacheStatus,
-  useRefreshCache,
   useGameDataCacheStats,
   useClearGameDataCache,
   useClearAllRuns,
   useMatchCacheStats,
   useClearAllMatchCache,
 } from "@/hooks/useEPG"
+import { useCacheRefresh } from "@/contexts/CacheRefreshContext"
 import { GracenoteOverridesCard } from "@/components/GracenoteOverridesCard"
 import { BackupRestoreCard } from "../BackupRestoreCard"
 import { formatRelativeTime } from "../format"
@@ -90,7 +90,7 @@ function LogLevelCard() {
 
 function DataCachesCard() {
   const { data: cacheStatus, refetch: refetchCache } = useCacheStatus()
-  const refreshCacheMutation = useRefreshCache()
+  const { isRefreshing, startRefresh } = useCacheRefresh()
   const { data: gameDataCacheStats } = useGameDataCacheStats()
   const clearGameDataCacheMutation = useClearGameDataCache()
   const clearAllRunsMutation = useClearAllRuns()
@@ -99,8 +99,7 @@ function DataCachesCard() {
 
   const handleRefreshCache = async () => {
     try {
-      const result = await refreshCacheMutation.mutateAsync()
-      toast.success(result.message)
+      await startRefresh()
       refetchCache()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start cache refresh")
@@ -156,14 +155,14 @@ function DataCachesCard() {
 
             <Button
               onClick={handleRefreshCache}
-              disabled={refreshCacheMutation.isPending || cacheStatus?.refresh_in_progress}
+              disabled={isRefreshing || cacheStatus?.refresh_in_progress}
               className="w-full mt-auto"
               size="sm"
             >
-              {(refreshCacheMutation.isPending || cacheStatus?.refresh_in_progress) && (
+               {(isRefreshing || cacheStatus?.refresh_in_progress) && (
                 <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {cacheStatus?.refresh_in_progress ? "Refreshing..." : "Refresh Directory"}
+               {isRefreshing || cacheStatus?.refresh_in_progress ? "Refreshing..." : "Refresh Directory"}
             </Button>
           </div>
 

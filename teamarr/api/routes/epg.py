@@ -30,6 +30,7 @@ from teamarr.consumers.generation_status import (
     start_generation,
     update_status,
 )
+from teamarr.consumers.media_refresh_status import get_status as get_media_refresh_status
 from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
     compute_fingerprint,
@@ -60,6 +61,12 @@ router = APIRouter()
 # =============================================================================
 # EPG Generation endpoints
 # =============================================================================
+
+
+@router.get("/epg/media-refresh/status")
+def get_media_refresh_progress() -> dict:
+    """Return status for the active background media-server refresh batch."""
+    return get_media_refresh_status()
 
 
 @router.post("/epg/generate", response_model=EPGGenerateResponse)

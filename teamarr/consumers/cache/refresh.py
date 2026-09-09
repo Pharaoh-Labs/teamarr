@@ -20,17 +20,6 @@ from .queries import TeamLeagueCache
 
 logger = logging.getLogger(__name__)
 
-# Expected league counts per provider (for progress estimation)
-# These are approximate and used for work-proportional progress allocation
-EXPECTED_LEAGUES = {
-    "espn": 280,  # ~98 configured + ~180 discovered soccer leagues
-    "tsdb": 6,  # NRL, Boxing, IPL, BBL, SA20, Svenska Cupen, … (premium key required)
-    "hockeytech": 6,
-    "mlbstats": 5,  # AAA, AA, High-A, Single-A, Rookie
-    "squiggle": 1,  # AFL
-}
-
-
 class CacheRefresher:
     """Refreshes team and league cache from providers."""
 
@@ -115,38 +104,41 @@ class CacheRefresher:
                     "error": "No providers registered",
                 }
 
-            # Calculate work-proportional progress allocation
-            # Reserve 5% for start, 5% for saving = 90% for discovery
-            total_expected_leagues = sum(EXPECTED_LEAGUES.get(p.name, 10) for p in providers)
-
-            # Calculate progress ranges per provider based on expected work
-            provider_progress: list[tuple[SportsProvider, int, int]] = []
-            current_pct = 5  # Start at 5%
+            # Build the complete work list before fetching teams so progress is
+            # based on the leagues this refresh will actually visit.
+            provider_leagues: list[tuple[SportsProvider, list[str]]] = []
             for provider in providers:
-                expected = EXPECTED_LEAGUES.get(provider.name, 10)
-                # Proportional share of the 90% discovery budget
-                share = int(90 * expected / total_expected_leagues)
-                end_pct = min(current_pct + share, 95)
-                provider_progress.append((provider, current_pct, end_pct))
-                current_pct = end_pct
+                provider_leagues.append(
+                    (provider, self._get_supported_leagues(provider, progress_callback=report))
+                )
 
-            for provider, start_pct, end_pct in provider_progress:
-                report(f"Fetching from {provider.name}...", start_pct)
+            total_leagues = sum(len(leagues) for _, leagues in provider_leagues)
+            completed_leagues = 0
+            for provider, supported_leagues in provider_leagues:
+                provider_total = len(supported_leagues)
+                report(f"Fetching {provider.name}: {completed_leagues}/{total_leagues} leagues", 5)
 
-                # Create progress callback with captured values
-                def make_progress_callback(sp: int, ep: int) -> Callable[[str, int], None]:
+                def make_progress_callback(
+                    base: int, total: int, provider_name: str
+                ) -> Callable[[str, int], None]:
                     def callback(msg: str, pct: int) -> None:
-                        # Map 0-100% within this provider to start_pct-end_pct
-                        actual_pct = sp + int(pct * (ep - sp) / 100)
-                        report(msg, actual_pct)
+                        completed = base + int(pct * total / 100)
+                        actual_pct = 5 + int(90 * completed / total_leagues)
+                        report(
+                            f"Fetching {provider_name}: {completed}/{total_leagues} leagues",
+                            actual_pct,
+                        )
 
                     return callback
 
                 leagues, teams = self._discover_from_provider(
-                    provider, make_progress_callback(start_pct, end_pct)
+                    provider,
+                    make_progress_callback(completed_leagues, provider_total, provider.name),
+                    supported_leagues,
                 )
                 all_leagues.extend(leagues)
                 all_teams.extend(teams)
+                completed_leagues += provider_total
 
             # Merge TSDB seed data with API results before saving
             # This fills in teams the live API didn't return
@@ -522,6 +514,7 @@ class CacheRefresher:
         self,
         provider: SportsProvider,
         progress_callback: Callable[[str, int], None] | None = None,
+        supported_leagues: list[str] | None = None,
     ) -> tuple[list[dict], list[dict]]:
         """Discover all leagues and teams from a provider.
 
@@ -539,20 +532,8 @@ class CacheRefresher:
         leagues: list[dict] = []
         teams: list[dict] = []
 
-        # Get leagues this provider supports. (No TSDB tier gate anymore:
-        # a keyless TSDB provider is skipped by ProviderRegistry entirely
-        # and never reaches this point — #676.)
-        supported_leagues = provider.get_supported_leagues()
-
-        # For ESPN, also discover dynamic soccer leagues
-        if provider_name == "espn":
-            if progress_callback:
-                progress_callback("Discovering ESPN soccer leagues...", 0)
-            soccer_slugs = self._fetch_espn_soccer_league_slugs(progress_callback)
-            # Add soccer leagues not already in supported_leagues
-            for slug in soccer_slugs:
-                if slug not in supported_leagues:
-                    supported_leagues.append(slug)
+        if supported_leagues is None:
+            supported_leagues = self._get_supported_leagues(provider, progress_callback)
 
         if not supported_leagues:
             logger.info("[CACHE_REFRESH] No leagues found for provider %s", provider_name)
@@ -667,6 +648,21 @@ class CacheRefresher:
             len(teams),
         )
         return leagues, teams
+
+    def _get_supported_leagues(
+        self,
+        provider: SportsProvider,
+        progress_callback: Callable[[str, int], None] | None = None,
+    ) -> list[str]:
+        """Return the actual league list the provider refresh will process."""
+        supported_leagues = list(provider.get_supported_leagues())
+        if provider.name != "espn":
+            return supported_leagues
+
+        if progress_callback:
+            progress_callback("Discovering ESPN soccer leagues...", 5)
+        soccer_slugs = self._fetch_espn_soccer_league_slugs(progress_callback)
+        return supported_leagues + [slug for slug in soccer_slugs if slug not in supported_leagues]
 
     def _infer_sport_from_league(self, league_slug: str) -> str:
         """Infer sport from league slug.

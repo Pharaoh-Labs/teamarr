@@ -40,6 +40,10 @@ _ORDERING_PUSH_WORKERS = 8
 _generation_lock = threading.Lock()
 _generation_running = False
 
+# Guide refreshes can take minutes. Keep batches serialized without holding the
+# generation lock so a new EPG run can complete while an older guide refresh runs.
+_media_refresh_lock = threading.Lock()
+
 
 @dataclass
 class GenerationResult:
@@ -463,90 +467,12 @@ def run_full_generation(
             )
         timer.mark("dispatcharr_epg_refresh")
 
-        # Steps 5b-5d: media-server guide refreshes — Emby, Jellyfin, and
-        # Channels DVR servers ALL refresh in parallel (#471). They are
-        # independent HTTP targets; per-server failures are isolated and
-        # non-blocking, and one slow/offline server never delays the rest.
+        # Capture the configured guide refreshes now, then run them after the
+        # EPG itself has completed and its run has been persisted.
         check_cancelled()
-        try:
-            from teamarr.database.settings import (
-                get_channelsdvr_settings,
-                get_emby_settings,
-                get_jellyfin_settings,
-            )
-
-            with db_factory() as conn:
-                emby_settings = get_emby_settings(conn)
-                jellyfin_settings = get_jellyfin_settings(conn)
-                channelsdvr_settings = get_channelsdvr_settings(conn)
-
-            jobs: list[tuple[str, Any]] = []
-            if emby_settings.enabled:
-                jobs += [("emby", s) for s in emby_settings.servers if s.url]
-            if jellyfin_settings.enabled:
-                jobs += [("jellyfin", s) for s in jellyfin_settings.servers if s.url]
-            if channelsdvr_settings.enabled:
-                jobs += [("channelsdvr", s) for s in channelsdvr_settings.servers if s.url]
-
-            if jobs and _dry_run_media_refresh(result, jobs):
-                jobs = []
-            if jobs:
-                update_progress(
-                    "media_servers", 97,
-                    f"Refreshing {len(jobs)} media server(s) in parallel...",
-                )
-                outcomes = _run_media_server_refreshes(
-                    jobs, update_progress, is_cancellation_requested
-                )
-                result.media_server_outcomes = [
-                    _media_server_outcome(kind, label, o) for kind, label, o in outcomes
-                ]
-
-                emby_results = [
-                    {"server": label, **o["guide"]}
-                    for kind, label, o in outcomes
-                    if kind == "emby" and o.get("guide") is not None
-                ]
-                if emby_results:
-                    result.emby_refresh = {
-                        "success": all(r.get("success") for r in emby_results),
-                        "servers": emby_results,
-                    }
-
-                jellyfin_results = [
-                    {"server": label, **o["guide"]}
-                    for kind, label, o in outcomes
-                    if kind == "jellyfin" and o.get("guide") is not None
-                ]
-                if jellyfin_results:
-                    result.jellyfin_refresh = {
-                        "success": all(r.get("success") for r in jellyfin_results),
-                        "servers": jellyfin_results,
-                    }
-
-                cdvr_m3u = [
-                    {"server": label, **o["m3u"]}
-                    for kind, label, o in outcomes
-                    if kind == "channelsdvr" and o.get("m3u") is not None
-                ]
-                if cdvr_m3u:
-                    result.channelsdvr_refresh = {
-                        "success": all(r.get("success") for r in cdvr_m3u),
-                        "servers": cdvr_m3u,
-                    }
-                cdvr_epg = [
-                    {"server": label, **o["epg"]}
-                    for kind, label, o in outcomes
-                    if kind == "channelsdvr" and o.get("epg") is not None
-                ]
-                if cdvr_epg:
-                    result.channelsdvr_epg_refresh = {
-                        "success": all(r.get("success") for r in cdvr_epg),
-                        "servers": cdvr_epg,
-                    }
-        except Exception as e:
-            logger.warning("[MEDIA_SERVERS] Refresh failed (non-blocking): %s", e)
-        timer.mark("media_server_refresh")
+        media_jobs = _get_media_refresh_jobs(db_factory)
+        if media_jobs and _dry_run_media_refresh(result, media_jobs):
+            media_jobs = []
 
         # Step 6: Process scheduled deletions (98-99%)
         check_cancelled()
@@ -612,6 +538,9 @@ def run_full_generation(
             channels_deleted_count, db_factory,
         )
 
+        if media_jobs and result.run_id is not None:
+            _start_media_server_refresh(db_factory, result.run_id, media_jobs)
+
         result.completed_at = time.time()
         result.duration_seconds = round(result.completed_at - result.started_at, 1)
         result.success = True
@@ -668,6 +597,119 @@ def run_full_generation(
     return result
 
 
+def _get_media_refresh_jobs(db_factory: Callable[[], Any]) -> list[tuple[str, Any]]:
+    """Snapshot enabled media servers for the post-generation refresh batch."""
+    from teamarr.database.settings import (
+        get_channelsdvr_settings,
+        get_emby_settings,
+        get_jellyfin_settings,
+    )
+
+    try:
+        with db_factory() as conn:
+            emby_settings = get_emby_settings(conn)
+            jellyfin_settings = get_jellyfin_settings(conn)
+            channelsdvr_settings = get_channelsdvr_settings(conn)
+    except Exception as exc:
+        logger.warning("[MEDIA_SERVERS] Could not load refresh settings: %s", exc)
+        return []
+
+    jobs: list[tuple[str, Any]] = []
+    if emby_settings.enabled:
+        jobs.extend(("emby", server) for server in emby_settings.servers if server.url)
+    if jellyfin_settings.enabled:
+        jobs.extend(("jellyfin", server) for server in jellyfin_settings.servers if server.url)
+    if channelsdvr_settings.enabled:
+        jobs.extend(
+            ("channelsdvr", server) for server in channelsdvr_settings.servers if server.url
+        )
+    return jobs
+
+
+def _start_media_server_refresh(
+    db_factory: Callable[[], Any], run_id: int, jobs: list[tuple[str, Any]]
+) -> None:
+    """Run a guide refresh batch after generation completion.
+
+    Batches wait for one another so a server never receives overlapping guide
+    refreshes, but this worker never blocks the next generation's core work.
+    """
+
+    def run() -> None:
+        with _media_refresh_lock:
+            started_at = time.time()
+            try:
+                from teamarr.consumers.media_refresh_status import (
+                    complete_refresh,
+                    start_refresh,
+                    update_refresh,
+                )
+
+                start_refresh(len(jobs))
+                outcomes = _run_media_server_refreshes(
+                    jobs,
+                    lambda phase, _percent, _message, *_: update_refresh(
+                        f"Refreshing {_media_refresh_title(phase)} guide..."
+                    ),
+                    lambda: False,
+                    lambda current, _total: update_refresh("Refreshing media servers...", current),
+                )
+                flattened = [
+                    _media_server_outcome(kind, label, outcome)
+                    for kind, label, outcome in outcomes
+                ]
+                complete_refresh(flattened)
+            except Exception as exc:  # noqa: BLE001 - detached worker must not escape
+                logger.exception("[MEDIA_SERVERS] Background refresh failed")
+                from teamarr.consumers.media_refresh_status import fail_refresh
+
+                fail_refresh(str(exc))
+                flattened = [
+                    {
+                        "kind": kind,
+                        "server": getattr(server, "name", None) or getattr(server, "url", ""),
+                        "success": False,
+                        "duration": 0.0,
+                        "error": str(exc),
+                    }
+                    for kind, server in jobs
+                ]
+
+            _save_media_refresh_outcomes(
+                db_factory, run_id, flattened, round(time.time() - started_at, 2)
+            )
+
+    threading.Thread(target=run, daemon=True, name=f"media-refresh-{run_id}").start()
+
+
+def _media_refresh_title(kind: str) -> str:
+    """Return a user-facing integration name without exposing server details."""
+    return {"emby": "Emby", "jellyfin": "Jellyfin", "channelsdvr": "Channels DVR"}.get(
+        kind, "media server"
+    )
+
+
+def _save_media_refresh_outcomes(
+    db_factory: Callable[[], Any], run_id: int, outcomes: list[dict], duration: float
+) -> None:
+    """Attach detached refresh outcomes to the EPG run that scheduled them."""
+    from teamarr.database.stats import get_run, save_run
+
+    try:
+        with db_factory() as conn:
+            run = get_run(conn, run_id)
+            if run is None:
+                logger.warning(
+                    "[MEDIA_SERVERS] Run %d disappeared before refresh completed", run_id
+                )
+                return
+            run.extra_metrics["media_servers"] = outcomes
+            run.extra_metrics.setdefault("phase_timings", {})["media_server_refresh"] = duration
+            save_run(conn, run)
+    except Exception as exc:  # noqa: BLE001 - guide refresh must never affect generation
+        logger.exception("[MEDIA_SERVERS] Could not save background refresh outcomes: %s", exc)
+
+
 def _dry_run_media_refresh(result: Any, jobs: list[tuple[str, Any]]) -> bool:
     """DRY_RUN (#554): record what would have been refreshed, run nothing.
 
@@ -702,6 +744,7 @@ def _run_media_server_refreshes(
     jobs: list[tuple[str, Any]],
     update_progress: Callable[..., None],
     is_cancellation_requested: Callable[[], bool],
+    completion_callback: Callable[[int, int], None] | None = None,
 ) -> list[tuple[str, str, dict]]:
     """Run every media-server refresh job concurrently (#471).
 
@@ -726,7 +769,8 @@ def _run_media_server_refreshes(
             ): (kind, server)
             for kind, server in jobs
         }
-        for future, (kind, server) in futures.items():
+        for completed, future in enumerate(as_completed(futures), start=1):
+            kind, server = futures[future]
             label = server.name or server.url or ""
             try:
                 results.append((kind, label, future.result()))
@@ -740,6 +784,8 @@ def _run_media_server_refreshes(
                 results.append(
                     (kind, label, {"guide": {"success": False, "error": str(e)}})
                 )
+            if completion_callback:
+                completion_callback(completed, len(jobs))
     return results
 
 

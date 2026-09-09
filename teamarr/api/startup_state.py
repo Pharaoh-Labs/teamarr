@@ -10,7 +10,6 @@ class StartupPhase(StrEnum):
     """Phases of application startup."""
 
     INITIALIZING = "initializing"
-    REFRESHING_CACHE = "refreshing_cache"
     LOADING_SETTINGS = "loading_settings"
     CONNECTING_DISPATCHARR = "connecting_dispatcharr"
     STARTING_SCHEDULER = "starting_scheduler"
@@ -20,7 +19,6 @@ class StartupPhase(StrEnum):
 # Human-readable descriptions for each phase
 PHASE_DESCRIPTIONS = {
     StartupPhase.INITIALIZING: "Initializing database...",
-    StartupPhase.REFRESHING_CACHE: "Refreshing team/league cache...",
     StartupPhase.LOADING_SETTINGS: "Loading settings...",
     StartupPhase.CONNECTING_DISPATCHARR: "Connecting to Dispatcharr...",
     StartupPhase.STARTING_SCHEDULER: "Starting scheduler...",

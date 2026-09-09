@@ -6,7 +6,6 @@ interface StartupStatus {
   phase: string
   message: string
   is_ready: boolean
-  elapsed_seconds: number
   error: string | null
 }
 
@@ -91,11 +90,6 @@ export function StartupOverlay() {
           <p className="text-sm font-medium">
             {status?.message || "Connecting..."}
           </p>
-          {status && status.elapsed_seconds > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {Math.round(status.elapsed_seconds)}s elapsed
-            </p>
-          )}
         </div>
 
         {/* Error State */}
