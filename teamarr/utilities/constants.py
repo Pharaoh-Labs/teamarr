@@ -473,6 +473,14 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bufc\s*\d+", "ufc"),
     (r"\bufc\b", "ufc"),
     (r"\bfight\s+night\b", "ufc"),
+    # PFL cards are named by city ("PFL Dubai: Nurmagomedov vs. Davis") as often
+    # as by number, so the bare token has to hint too — same shape as UFC (#756).
+    (r"\bpfl\s*\d+", "pfl"),
+    (r"\bpfl\b", "pfl"),
+    (r"\bprofessional\s+fighters\s+league\b", "pfl"),
+    (r"\blfa\s*\d+", "lfa"),
+    (r"\blfa\b", "lfa"),
+    (r"\blegacy\s+fighting\s+alliance\b", "lfa"),
     (r"\bboxing[:\s-]", "boxing"),
     (r"\bpbc[:\s-]", "boxing"),  # Premier Boxing Champions
     (r"\btop\s+rank\b", "boxing"),

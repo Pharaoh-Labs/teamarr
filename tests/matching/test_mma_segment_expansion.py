@@ -1,6 +1,6 @@
 """UFC segment expansion must preserve matcher metadata (#344).
 
-expand_ufc_segments rebuilds each matched dict into per-segment entries; it
+expand_mma_segments rebuilds each matched dict into per-segment entries; it
 used to construct the new dicts from scratch, silently dropping match_method,
 match_type, feed fields, and the EPG program window. EPG-matched streams then
 persisted match_method=NULL and were ordered as plain event streams with
@@ -10,7 +10,7 @@ full-life membership.
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from teamarr.consumers.ufc_segments import expand_ufc_segments
+from teamarr.consumers.mma_segments import expand_mma_segments
 
 
 @dataclass
@@ -59,7 +59,7 @@ def test_ufc_expansion_preserves_matcher_metadata():
         )
     ]
 
-    expanded = expand_ufc_segments(matched)
+    expanded = expand_mma_segments(matched)
 
     assert expanded, "UFC stream should expand into at least one segment entry"
     for entry in expanded:
@@ -84,7 +84,7 @@ def test_ufc_expansion_segment_fields_override_spread():
         _matched("UFC 329 Main Card", event, card_segment="main_card", match_method="epg"),
     ]
 
-    expanded = expand_ufc_segments(matched)
+    expanded = expand_mma_segments(matched)
 
     segments = {e["segment"] for e in expanded}
     assert segments == {"prelims", "main_card"}
@@ -100,7 +100,7 @@ def test_non_ufc_stream_passes_through_untouched():
     event = make_event(sport="soccer", league="fifa.world")
     matched = [_matched("TNT Sports 2", event, match_method="epg")]
 
-    expanded = expand_ufc_segments(matched)
+    expanded = expand_mma_segments(matched)
 
     assert len(expanded) == 1
     assert expanded[0]["match_method"] == "epg"

@@ -505,7 +505,7 @@ class StreamMatching:
 
         # Apply UFC segment expansion
         # This splits UFC streams into separate segment channels
-        matched = self._expand_ufc_segments(matched, stream_timezone)
+        matched = self._expand_mma_segments(matched, stream_timezone)
 
         # Apply racing session expansion
         # This splits racing streams into separate per-session channels
@@ -840,7 +840,7 @@ class StreamMatching:
 
         return None
 
-    def _expand_ufc_segments(
+    def _expand_mma_segments(
         self, matched_streams: list[dict], stream_timezone: str | None = None
     ) -> list[dict]:
         """Expand UFC streams into segment-based channels.
@@ -855,10 +855,10 @@ class StreamMatching:
         Returns:
             Expanded list with UFC streams grouped by segment
         """
-        from teamarr.consumers.ufc_segments import expand_ufc_segments
+        from teamarr.consumers.mma_segments import expand_mma_segments
 
         sport_durations = self._load_sport_durations_cached()
-        return expand_ufc_segments(matched_streams, sport_durations, stream_timezone)
+        return expand_mma_segments(matched_streams, sport_durations, stream_timezone)
 
     def _expand_racing_segments(self, matched_streams: list[dict]) -> list[dict]:
         """Expand racing streams into session-based channels.

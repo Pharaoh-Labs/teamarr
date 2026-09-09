@@ -1226,6 +1226,9 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
 
     -- MMA (ESPN) - Combat sport with event cards
     ('ufc', 'espn', 'mma/ufc', NULL, 'Ultimate Fighting Championship', 'mma', 'https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png', NULL, 0, 'UFC', 'ufc', 'event_card', NULL, NULL, NULL, NULL, 1),
+    ('pfl', 'espn', 'mma/pfl', NULL, 'Professional Fighters League', 'mma', 'https://a.espncdn.com/i/teamlogos/leagues/500/pfl.png', NULL, 0, 'PFL', 'pfl', 'event_card', NULL, NULL, NULL, NULL, 1),
+    -- LFA has no league logo on ESPN's CDN (500/lfa.png is a 404) — the generic MMA icon is the only option.
+    ('lfa', 'espn', 'mma/lfa', NULL, 'Legacy Fighting Alliance', 'mma', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-mma.png', NULL, 0, 'LFA', 'lfa', 'event_card', NULL, NULL, NULL, NULL, 1),
 
     -- Volleyball (ESPN)
     ('mens-college-volleyball', 'espn', 'volleyball/mens-college-volleyball', NULL, 'NCAA Men''s Volleyball', 'volleyball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png', NULL, 1, 'NCAA Volleyball', 'ncaavb', 'team_vs_team', 'Men''s College Volleyball', NULL, NULL, NULL, 1),

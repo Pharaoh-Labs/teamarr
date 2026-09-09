@@ -33,13 +33,15 @@ def _card(event_id: str, name: str, comp_dates: list[str], state: str = "pre") -
 
 
 class CapturingClient:
-    """Fake ESPNClient returning one payload per get_ufc_scoreboard call."""
+    """Fake ESPNClient returning one payload per get_mma_scoreboard call."""
 
     def __init__(self, payloads: list[dict | None]):
         self.payloads = payloads
         self.requested_dates: list[str | None] = []
+        self.requested_leagues: list[str] = []
 
-    def get_ufc_scoreboard(self, date_str=None):
+    def get_mma_scoreboard(self, espn_league="ufc", date_str=None):
+        self.requested_leagues.append(espn_league)
         self.requested_dates.append(date_str)
         if not self.payloads:
             return {"events": []}

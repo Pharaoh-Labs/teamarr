@@ -34,13 +34,15 @@ def _card(event_id: str, name: str, comp_dates: list[str]) -> dict:
 
 
 class CapturingClient:
-    """Fake ESPNClient capturing the dates= argument."""
+    """Fake ESPNClient capturing the league slug and dates= argument."""
 
     def __init__(self, payload: dict):
         self.payload = payload
         self.requested_dates: list[str | None] = []
+        self.requested_leagues: list[str] = []
 
-    def get_ufc_scoreboard(self, date_str=None):
+    def get_mma_scoreboard(self, espn_league="ufc", date_str=None):
+        self.requested_leagues.append(espn_league)
         self.requested_dates.append(date_str)
         return self.payload
 

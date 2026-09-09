@@ -16,7 +16,7 @@ from tests.fakes import make_bare_processor
 def _make_processor():
     # Segment expansion needs DB-backed sport durations — pass entries through.
     return make_bare_processor(
-        _expand_ufc_segments=lambda matched, tz=None: matched,
+        _expand_mma_segments=lambda matched, tz=None: matched,
         _expand_racing_segments=lambda matched: matched,
     )
 
