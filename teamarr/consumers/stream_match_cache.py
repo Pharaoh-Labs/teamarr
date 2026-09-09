@@ -310,22 +310,32 @@ class StreamMatchCache:
         stream_id: int,
         stream_name: str,
         generation: int,
+        reason: str | None = None,
     ) -> bool:
         """Cache a failed match attempt.
 
-        Failed matches are cached with a shorter TTL to avoid re-attempting
-        expensive matching on every run for streams that never match.
+        Failed matches are cached with a shorter TTL
+        (``PURGE_FAILED_AFTER_GENERATIONS``) to avoid re-attempting expensive
+        matching every run for streams that never match.
+
+        ``reason`` is stored so a cache hit can report the SAME
+        ``FailedReason`` the real attempt produced (#754). Without it a hit
+        would flatten every cached failure to one generic verdict and quietly
+        wreck the failure taxonomy the UI reads — the same trap #747 hit with
+        FIXTURE_NOT_IN_LEAGUE.
 
         Args:
             group_id: Event group ID
             stream_id: Stream ID
             stream_name: Exact stream name
             generation: Current EPG generation counter
+            reason: The FailedReason value this attempt produced
 
         Returns:
             True if cached successfully
         """
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
+        failed_payload = json.dumps({"failed_reason": reason}) if reason else None
 
         try:
             with self._conn() as conn:
@@ -336,10 +346,11 @@ class StreamMatchCache:
                          event_id, league, cached_event_data, last_seen_generation,
                          match_method, user_corrected,
                          created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, '', NULL, ?, 'no_match', 0,
+                    VALUES (?, ?, ?, ?, ?, '', ?, ?, 'no_match', 0,
                             CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON CONFLICT (fingerprint)
                     DO UPDATE SET
+                        cached_event_data = excluded.cached_event_data,
                         last_seen_generation = excluded.last_seen_generation,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE user_corrected = 0  -- Don't overwrite user corrections
@@ -350,6 +361,7 @@ class StreamMatchCache:
                         stream_id,
                         stream_name,
                         FAILED_MATCH_EVENT_ID,
+                        failed_payload,
                         generation,
                     ),
                 )

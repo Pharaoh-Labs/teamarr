@@ -56,6 +56,7 @@ from teamarr.consumers.matching.team_matcher import TeamMatcher
 from teamarr.consumers.matching.tennis_matcher import TennisMatcher, has_court_evidence
 from teamarr.consumers.racing_segments import nearest_session
 from teamarr.consumers.stream_match_cache import (
+    FAILED_MATCH_EVENT_ID,
     StreamMatchCache,
     get_generation_counter,
     increment_generation_counter,
@@ -269,6 +270,58 @@ class BatchMatchResult:
     def cache_hit_rate(self) -> float:
         total = self.cache_hits + self.cache_misses
         return self.cache_hits / total if total > 0 else 0.0
+
+
+# --- Negative match caching (#754) -----------------------------------------
+#
+# 49% of match time goes to streams that never match, and a failing stream
+# costs about what a matching one does (1.19ms vs 1.33ms). The same streams
+# fail identically every run, so the verdict is worth remembering.
+#
+# ALLOWLIST, NEVER A DENYLIST. A FailedReason absent from this set is not
+# cached, so adding a reason can never silently start suppressing matches —
+# the failure mode here is invisible (a match that simply stops appearing),
+# which is exactly the kind that must not be opt-out.
+#
+# Membership was measured, not guessed: for every stream that failed in run N,
+# how often did it match in run N+1? Replayed over 24 consecutive production
+# run pairs (~123,000 observations):
+#
+#   team1/team2_not_found      0 of   7,746   0.000%
+#   no_tennis_match            0 of   5,436   0.000%
+#   tennis_matchup_unknown     0 of     864   0.000%
+#   fixture_not_in_league      3 of  14,973   0.020%
+#   no_event_found            16 of  39,933   0.040%
+#   ---- excluded below this line ----
+#   no_epg_program_match      47 of  14,042   0.335%
+#   no_event_card_match        8 of   1,579   0.507%
+#   date_mismatch              6 of     543   1.105%
+#
+# The excluded three are an order of magnitude churnier: they depend on the
+# event set moving under the stream rather than on anything stable about it.
+# DATE_MISMATCH is the clearest case — it exists precisely because the dates
+# disagreed, and that is what changes.
+_CACHEABLE_FAILED_REASONS = frozenset({
+    FailedReason.TEAM1_NOT_FOUND,
+    FailedReason.TEAM2_NOT_FOUND,
+    FailedReason.BOTH_TEAMS_NOT_FOUND,
+    FailedReason.FIXTURE_NOT_IN_LEAGUE,
+    FailedReason.NO_EVENT_FOUND,
+    FailedReason.NO_TENNIS_MATCH,
+    FailedReason.TENNIS_MATCHUP_UNKNOWN,
+})
+
+
+def _negative_cache_enabled() -> bool:
+    """Whether failed matches are remembered between runs (#754). Default OFF.
+
+    Read per call so a soak can be started and stopped with a restart, and so
+    tests can toggle it without reloading the module — same convention as
+    TEAMARR_TOKEN_INDEX.
+    """
+    return os.environ.get("TEAMARR_NEGATIVE_CACHE", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
 
 
 class StreamMatcher:
@@ -855,6 +908,15 @@ class StreamMatcher:
                 **_extraction_fields(classified),
             )]
 
+        # Negative cache (#754): this stream failed recently for a reason that
+        # does not change between runs, so skip routing, candidate scoring AND
+        # the mixed-group fallbacks below. Classification has already run — it
+        # happens before any cache check — so an unclassifiable stream is not a
+        # target here and gains nothing.
+        cached_fail = self._cached_failure(classified, stream_id, stream_name)
+        if cached_fail is not None:
+            return cached_fail
+
         outcomes = self._route_to_outcomes(classified, stream_id, target_date)
 
         # Mixed-group fallbacks (see _try_mixed_group_fallbacks): the primary
@@ -870,7 +932,7 @@ class StreamMatcher:
             if fallback is not None:
                 return fallback
 
-        return [
+        results = [
             self._outcome_to_result(
                 outcome=o,
                 stream_id=stream_id,
@@ -879,6 +941,84 @@ class StreamMatcher:
             )
             for o in outcomes
         ]
+        self._remember_failure(outcomes, stream_id, stream_name)
+        return results
+
+    def _cached_failure(
+        self, classified, stream_id: int, stream_name: str
+    ) -> "list[MatchedStreamResult] | None":
+        """A remembered failure for this stream, or None to match it properly (#754).
+
+        Returns the SAME ``FailedReason`` the real attempt produced, read back
+        from the cache entry. Reporting a generic verdict instead would flatten
+        the failure taxonomy the UI reads — the trap #747 hit with
+        FIXTURE_NOT_IN_LEAGUE — so a hit whose stored reason is missing or no
+        longer cacheable is treated as a miss and re-matched.
+        """
+        # No database, no cache. A matcher built without a db_factory (unit
+        # tests, ad-hoc callers) holds a StreamMatchCache whose connection
+        # factory is None, and every read on it raises.
+        if not _negative_cache_enabled() or self._db_factory is None:
+            return None
+
+        entry = self._cache.get(
+            self._group_id, stream_id, stream_name, include_failed=True
+        )
+        if entry is None or entry.event_id != FAILED_MATCH_EVENT_ID:
+            return None
+
+        raw = (entry.cached_data or {}).get("failed_reason")
+        try:
+            reason = FailedReason(raw)
+        except ValueError:
+            return None
+        if reason not in _CACHEABLE_FAILED_REASONS:
+            # Written by an older build, or the allowlist shrank. Re-match
+            # rather than trust a verdict this build no longer stands behind.
+            return None
+
+        # from_cache=True is what BatchMatchResult counts; no separate tally.
+        return [MatchedStreamResult(
+            stream_name=stream_name,
+            stream_id=stream_id,
+            matched=False,
+            included=False,
+            category=classified.category,
+            failed_reason=reason,
+            from_cache=True,
+            **_extraction_fields(classified),
+        )]
+
+    def _remember_failure(
+        self, outcomes: "list[MatchOutcome]", stream_id: int, stream_name: str
+    ) -> None:
+        """Remember a failure whose reason is stable between runs (#754).
+
+        Only when EVERY outcome failed: a TEAM_ONLY stream that fanned out to
+        one match and one miss has matched, and caching that as a failure would
+        lose the match on the next run. The reason must also be identical
+        across outcomes — a mixed pair says the verdict is not the stable
+        property this cache assumes.
+        """
+        if not _negative_cache_enabled() or self._db_factory is None or not outcomes:
+            return
+        if any(o.is_matched for o in outcomes):
+            return
+
+        reasons = {o.failed_reason for o in outcomes}
+        if len(reasons) != 1:
+            return
+        reason = reasons.pop()
+        if reason not in _CACHEABLE_FAILED_REASONS:
+            return
+
+        self._cache.set_failed(
+            group_id=self._group_id,
+            stream_id=stream_id,
+            stream_name=stream_name,
+            generation=self._generation,
+            reason=reason.value,
+        )
 
     def _route_to_outcomes(
         self,
