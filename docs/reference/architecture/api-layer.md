@@ -45,6 +45,10 @@ The lifespan handler in `app.py` orchestrates startup in phases:
 4. **STARTING_SCHEDULER** — Background EPG cron scheduler
 5. **READY** — Fully operational; the team/league cache refresh then runs in the background (skippable via `SKIP_CACHE_REFRESH`)
 
+After a successful EPG generation, configured Emby, Jellyfin, and Channels DVR
+guide refreshes run in a serialized background batch. Their outcomes are added
+to the completed generation's run history without extending generation duration.
+
 ## Generation Status
 
 `teamarr/consumers/generation_status.py` provides a global thread-safe state machine for EPG generation progress:

@@ -253,7 +253,7 @@ function MediaServerCard({
           <Label>Enable {title} Integration</Label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Every server listed below gets its guide refreshed after each generation.
+          Every server listed below refreshes its guide in the background after each generation.
         </p>
 
         {servers.map((server, i) => (
@@ -563,7 +563,7 @@ function ChannelsDVRForm({ initial }: { initial: ChannelsDVRSettings }) {
           <Label>Enable Channels DVR Integration</Label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Every server listed below gets its channels and guide refreshed after each generation.
+          Every server listed below refreshes its channels and guide in the background after each generation.
         </p>
 
         {servers.map((server, i) => (

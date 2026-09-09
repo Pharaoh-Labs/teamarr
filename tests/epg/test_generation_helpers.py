@@ -19,6 +19,7 @@ import teamarr.database.channels.streams as streams_mod
 from teamarr.consumers.generation import (
     _apply_stream_ordering,
     _refresh_m3u_accounts,
+    _save_media_refresh_outcomes,
     _validate_channel_ranges,
 )
 from teamarr.services.stream_ordering import NO_MATCH_PRIORITY
@@ -26,6 +27,40 @@ from teamarr.services.stream_ordering import NO_MATCH_PRIORITY
 
 def _noop_progress(*args):
     pass
+
+
+def test_background_media_refresh_outcomes_update_originating_run(db_factory):
+    """A detached guide refresh records against its own generation, not the latest run."""
+    from teamarr.database.stats import create_run, get_run, save_run
+
+    with db_factory() as conn:
+        run = create_run(conn, run_type="full_epg")
+        run.complete()
+        save_run(conn, run)
+        run_id = run.id
+
+    assert run_id is not None
+    _save_media_refresh_outcomes(
+        db_factory,
+        run_id,
+        [
+            {
+                "kind": "jellyfin",
+                "server": "Living Room",
+                "success": True,
+                "duration": 3.2,
+                "error": None,
+            }
+        ],
+        3.2,
+    )
+
+    with db_factory() as conn:
+        saved = get_run(conn, run_id)
+
+    assert saved is not None
+    assert saved.extra_metrics["media_servers"][0]["server"] == "Living Room"
+    assert saved.extra_metrics["phase_timings"]["media_server_refresh"] == 3.2
 
 
 class _ExplodingClient:
