@@ -161,11 +161,11 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 92** (not every version number has a migration block — column-only versions are handled by reconciliation)
+**Current schema version: 93** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|
 | 2 | Base | Initial V2 schema |
 | 3-42 | Consolidated | Merged into checkpoint_v43 |
 | 43 | Checkpoint | Checkpoint baseline |
-| 44-84 | Incremental | Individual migrations in `migrations/versioned.py` |
+| 44-93 | Incremental | Individual migrations in `migrations/versioned.py` |
