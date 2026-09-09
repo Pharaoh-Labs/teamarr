@@ -38,7 +38,7 @@ Each keyword has:
 
 - **Enabled** — an API-only flag (there's no UI toggle); keywords disabled via the API disappear from the card.
 
-A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box.
+A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box. Each seeded keyword is offered **once**: delete or rename one and it stays gone across restarts and upgrades. To get a deleted default back, add it again by hand.
 
 {: .note }
 The Exception Keywords card is only *shown* in Consolidate mode, but stored keywords are checked on every run regardless of mode — a keyword's behavior overrides the global mode per-stream (an **Ignore** keyword drops its streams even in Separate mode).

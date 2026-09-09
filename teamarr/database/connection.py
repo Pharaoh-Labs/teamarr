@@ -140,6 +140,10 @@ def init_db(db_path: Path | str | None = None) -> None:
             # shipped with zero templates.
             from teamarr.database.default_templates import seed_default_templates
             seed_default_templates(conn)
+            # Seed the default language exception keywords — once per label per
+            # install, so a deleted default never comes back (#726).
+            from teamarr.database.exception_keywords import seed_default_exception_keywords
+            seed_default_exception_keywords(conn)
 
             # Final verification: ensure settings table exists and is queryable
             conn.execute("SELECT id FROM settings LIMIT 1")

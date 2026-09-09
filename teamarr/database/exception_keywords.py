@@ -263,3 +263,75 @@ def delete_keyword(conn: Connection, keyword_id: int) -> bool:
         logger.info("[DELETED] Exception keyword id=%d", keyword_id)
         return True
     return False
+
+
+# =============================================================================
+# DEFAULT SEED (#726)
+# =============================================================================
+# These used to be an `INSERT OR IGNORE` block in schema.sql, which
+# `conn.executescript` replays on EVERY startup — so a default the user
+# deleted came straight back on the next restart. Seeding is now a one-shot
+# per label, recorded in `seeded_default_exception_keywords`: a label listed
+# there is never offered again, which makes a delete (or a rename away from
+# the default label) permanent. New defaults added in a later release still
+# reach existing installs, because only the labels already seeded are skipped.
+
+DEFAULT_EXCEPTION_KEYWORDS: tuple[tuple[str, str, ExceptionBehavior], ...] = (
+    ("Spanish", "Spanish, En Español, (ESP), Español", "consolidate"),
+    ("French", "French, En Français, (FRA), Français", "consolidate"),
+    ("German", "German, (GER), Deutsch", "consolidate"),
+    ("Portuguese", "Portuguese, (POR), Português", "consolidate"),
+    ("Italian", "Italian, (ITA), Italiano", "consolidate"),
+    ("Japanese", "Japanese, (JPN), 日本語", "consolidate"),
+    ("Korean", "Korean, (KOR), 한국어", "consolidate"),
+    ("Chinese", "Chinese, (CHN), (CHI), 中文", "consolidate"),
+)
+
+
+def get_seeded_default_labels(conn: Connection) -> set[str]:
+    """Default labels this install has already been seeded (see #726)."""
+    try:
+        rows = conn.execute("SELECT label FROM seeded_default_exception_keywords").fetchall()
+    except Exception:
+        return set()  # pre-reconciliation startup order safety
+    return {row[0] for row in rows}
+
+
+def mark_defaults_seeded(conn: Connection, labels: set[str]) -> None:
+    """Record labels as already seeded so they are never re-inserted."""
+    conn.executemany(
+        "INSERT OR IGNORE INTO seeded_default_exception_keywords (label) VALUES (?)",
+        [(label,) for label in sorted(labels)],
+    )
+
+
+def seed_default_exception_keywords(conn: Connection) -> int:
+    """Seed the default language keywords, once per label per install.
+
+    Idempotent and safe on every startup: a label already recorded in
+    `seeded_default_exception_keywords` is skipped even if the row is gone,
+    so user deletions stick. Returns the number of rows created.
+    """
+    already_seeded = get_seeded_default_labels(conn)
+    pending = [spec for spec in DEFAULT_EXCEPTION_KEYWORDS if spec[0] not in already_seeded]
+    if not pending:
+        return 0
+
+    created = 0
+    for label, match_terms, behavior in pending:
+        cursor = conn.execute(
+            """INSERT OR IGNORE INTO consolidation_exception_keywords
+               (label, match_terms, behavior)
+               VALUES (?, ?, ?)""",
+            (label, match_terms, behavior),
+        )
+        created += cursor.rowcount
+
+    # Mark every pending label, including ones an existing row shadowed — the
+    # point is "offered once", not "inserted once".
+    mark_defaults_seeded(conn, {spec[0] for spec in pending})
+    conn.commit()
+
+    if created:
+        logger.info("[SEED] Created %d default exception keyword(s)", created)
+    return created

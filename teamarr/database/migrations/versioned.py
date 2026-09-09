@@ -328,6 +328,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 92
 
+    if current_version < 93:
+        _apply_migration(
+            conn, 93,
+            "stop resurrecting deleted default exception keywords (#726)",
+            _migrate_v93_mark_default_exception_keywords_seeded,
+        )
+        current_version = 93
+
 
 # =============================================================================
 # Migration helpers
@@ -2508,6 +2516,31 @@ def _migrate_v90_consolidate_group_subruns(conn: sqlite3.Connection) -> None:
         )
     conn.execute("DROP TABLE IF EXISTS _v90_subrun_map")
     logger.info("[MIGRATE] v90: consolidated %d per-group sub-run row(s)", deleted)
+
+
+def _migrate_v93_mark_default_exception_keywords_seeded(conn: sqlite3.Connection) -> None:
+    """#726: record every default exception keyword as already seeded.
+
+    The defaults used to live in a schema.sql `INSERT OR IGNORE` that
+    executescript replayed on every startup, so a default the user deleted
+    reappeared on the next restart. Seeding moved into Python, guarded by
+    `seeded_default_exception_keywords`; existing installs are backfilled with
+    the full default set here so the move itself doesn't re-add the rows one
+    last time. Defaults introduced after v93 are absent from the marker table
+    and so still reach these installs.
+    """
+    from teamarr.database.exception_keywords import (
+        DEFAULT_EXCEPTION_KEYWORDS,
+        mark_defaults_seeded,
+    )
+
+    # Safety net for tests that run migrations against partial schemas.
+    if not _table_exists(conn, "seeded_default_exception_keywords"):
+        return
+
+    labels = {label for label, _terms, _behavior in DEFAULT_EXCEPTION_KEYWORDS}
+    mark_defaults_seeded(conn, labels)
+    logger.info("[MIGRATE] v93: marked %d default exception keyword(s) as seeded", len(labels))
 
 
 def _migrate_v92_retire_tsdb_tier(conn: sqlite3.Connection) -> None:

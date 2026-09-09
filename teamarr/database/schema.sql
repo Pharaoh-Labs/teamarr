@@ -483,7 +483,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 92
+    schema_version INTEGER DEFAULT 93
 );
 
 -- Insert default settings
@@ -1705,16 +1705,17 @@ CREATE TABLE IF NOT EXISTS consolidation_exception_keywords (
     enabled BOOLEAN DEFAULT 1
 );
 
--- Seed default language keywords
-INSERT OR IGNORE INTO consolidation_exception_keywords (label, match_terms, behavior) VALUES
-    ('Spanish', 'Spanish, En Español, (ESP), Español', 'consolidate'),
-    ('French', 'French, En Français, (FRA), Français', 'consolidate'),
-    ('German', 'German, (GER), Deutsch', 'consolidate'),
-    ('Portuguese', 'Portuguese, (POR), Português', 'consolidate'),
-    ('Italian', 'Italian, (ITA), Italiano', 'consolidate'),
-    ('Japanese', 'Japanese, (JPN), 日本語', 'consolidate'),
-    ('Korean', 'Korean, (KOR), 한국어', 'consolidate'),
-    ('Chinese', 'Chinese, (CHN), (CHI), 中文', 'consolidate');
+-- Default language keywords are NOT seeded here (#726): executescript runs on
+-- every startup, so an INSERT OR IGNORE seed resurrects rows the user deleted.
+-- Seeding lives in database/exception_keywords.py::seed_default_exception_keywords,
+-- which inserts a default at most once per install and records it below.
+
+-- Which default labels this install has already been offered. A label present
+-- here is never seeded again, so deleting or renaming a default is permanent.
+CREATE TABLE IF NOT EXISTS seeded_default_exception_keywords (
+    label TEXT PRIMARY KEY,
+    seeded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_behavior ON consolidation_exception_keywords(behavior);
