@@ -1,6 +1,7 @@
 """Cache refresh lifecycle and progress tests."""
 
 import time
+from threading import Event
 from types import SimpleNamespace
 
 from teamarr.api import cache_refresh_status
@@ -45,10 +46,14 @@ def test_background_refresh_updates_shared_status_and_reloads_mappings(monkeypat
     """Startup and manual callers share one terminal refresh status."""
     cache_refresh_status._status.reset()
     reloaded = False
+    refresh_started = Event()
+    allow_completion = Event()
 
     class Service:
         def refresh(self, progress_callback):
             progress_callback("Fetching espn: 2/4 leagues", 50)
+            refresh_started.set()
+            assert allow_completion.wait(timeout=1)
             return RefreshResult(leagues_added=4, teams_added=12, duration_seconds=0.1)
 
     class MappingService:
@@ -62,7 +67,9 @@ def test_background_refresh_updates_shared_status_and_reloads_mappings(monkeypat
     )
 
     assert start_cache_refresh(lambda: None)
+    assert refresh_started.wait(timeout=1)
     assert not start_cache_refresh(lambda: None)
+    allow_completion.set()
 
     for _ in range(20):
         status = cache_refresh_status.get_refresh_status()
