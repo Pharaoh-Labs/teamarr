@@ -639,13 +639,31 @@ def _start_media_server_refresh(
         with _media_refresh_lock:
             started_at = time.time()
             try:
-                outcomes = _run_media_server_refreshes(jobs, lambda *_: None, lambda: False)
+                from teamarr.consumers.media_refresh_status import (
+                    complete_refresh,
+                    start_refresh,
+                    update_refresh,
+                )
+
+                start_refresh(len(jobs))
+                outcomes = _run_media_server_refreshes(
+                    jobs,
+                    lambda phase, _percent, _message, *_: update_refresh(
+                        f"Refreshing {_media_refresh_title(phase)} guide..."
+                    ),
+                    lambda: False,
+                    lambda current, _total: update_refresh("Refreshing media servers...", current),
+                )
                 flattened = [
                     _media_server_outcome(kind, label, outcome)
                     for kind, label, outcome in outcomes
                 ]
+                complete_refresh(flattened)
             except Exception as exc:  # noqa: BLE001 - detached worker must not escape
                 logger.exception("[MEDIA_SERVERS] Background refresh failed")
+                from teamarr.consumers.media_refresh_status import fail_refresh
+
+                fail_refresh(str(exc))
                 flattened = [
                     {
                         "kind": kind,
@@ -662,6 +680,13 @@ def _start_media_server_refresh(
             )
 
     threading.Thread(target=run, daemon=True, name=f"media-refresh-{run_id}").start()
+
+
+def _media_refresh_title(kind: str) -> str:
+    """Return a user-facing integration name without exposing server details."""
+    return {"emby": "Emby", "jellyfin": "Jellyfin", "channelsdvr": "Channels DVR"}.get(
+        kind, "media server"
+    )
 
 
 def _save_media_refresh_outcomes(
@@ -719,6 +744,7 @@ def _run_media_server_refreshes(
     jobs: list[tuple[str, Any]],
     update_progress: Callable[..., None],
     is_cancellation_requested: Callable[[], bool],
+    completion_callback: Callable[[int, int], None] | None = None,
 ) -> list[tuple[str, str, dict]]:
     """Run every media-server refresh job concurrently (#471).
 
@@ -743,7 +769,8 @@ def _run_media_server_refreshes(
             ): (kind, server)
             for kind, server in jobs
         }
-        for future, (kind, server) in futures.items():
+        for completed, future in enumerate(as_completed(futures), start=1):
+            kind, server = futures[future]
             label = server.name or server.url or ""
             try:
                 results.append((kind, label, future.result()))
@@ -757,6 +784,8 @@ def _run_media_server_refreshes(
                 results.append(
                     (kind, label, {"guide": {"success": False, "error": str(e)}})
                 )
+            if completion_callback:
+                completion_callback(completed, len(jobs))
     return results
 
 
