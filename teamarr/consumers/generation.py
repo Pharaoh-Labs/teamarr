@@ -1202,12 +1202,8 @@ def _apply_stream_ordering(
             # streams still need their membership synced each run so they attach
             # when their window opens and detach when it closes (bead teamarr-uye).
             scoped_ordering = get_stream_ordering_scopes(conn)
-            all_ordering_rules = ordering_settings.rules + [
-                rule
-                for scope in scoped_ordering
-                for rule in scope.rules
-            ]
-            if all_ordering_rules:
+            has_scoped_rules = any(scope.rules for scope in scoped_ordering)
+            if ordering_settings.rules or has_scoped_rules:
                 logger.info("[ORDERING] Applying scoped stream ordering rules")
             else:
                 logger.debug(
@@ -1267,10 +1263,14 @@ def _apply_stream_ordering(
             #
             # Skipped outright when no rule reads stats: the fetch buys nothing
             # for a ruleset built from m3u/group/regex, and most are.
-            if any(
-                (rule.type if hasattr(rule, "type") else rule.get("type")) == "stats_metric"
-                for rule in all_ordering_rules
-            ):
+            has_stats_rule = any(
+                rule.type == "stats_metric" for rule in ordering_settings.rules
+            ) or any(
+                rule.get("type") == "stats_metric"
+                for scope in scoped_ordering
+                for rule in scope.rules
+            )
+            if has_stats_rule:
                 stat_stream_ids = get_active_dispatcharr_stream_ids(conn)
                 refreshed = refresh_stream_stats_bulk(conn, stat_stream_ids)
                 reorder_result["stats_refreshed"] = refreshed
