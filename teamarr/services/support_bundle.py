@@ -224,18 +224,25 @@ class SupportBundleService:
         groups = {
             row["id"]: row.get("name") for row in self._query(conn, "event_epg_groups", errors)
         }
-        ordering = self._safe_stream_ordering(conn, errors)
+        channel_context = {
+            channel["id"]: (channel.get("sport"), channel.get("league"))
+            for channel in channels
+            if isinstance(channel.get("id"), int)
+        }
         by_channel: dict[int, list[dict[str, Any]]] = {}
         for stream in stream_rows:
             model = ManagedChannelStream.from_row(stream)
             stream.pop("m3u_account_name", None)
             stream.pop("m3u_account_id", None)
             stream["source_group_name"] = groups.get(stream.get("source_group_id"))
-            stream["matched_rules"] = self._matched_rules(
-                ordering, model, stream.get("source_group_name")
-            )
             channel_id = stream.get("managed_channel_id")
             if isinstance(channel_id, int):
+                sport, league = channel_context.get(channel_id, (None, None))
+                stream["matched_rules"] = self._matched_rules(
+                    get_stream_ordering_service(conn, sport, league),
+                    model,
+                    stream.get("source_group_name"),
+                )
                 by_channel.setdefault(channel_id, []).append(stream)
 
         channel_entries = []

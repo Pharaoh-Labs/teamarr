@@ -483,7 +483,28 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 93
+    schema_version INTEGER DEFAULT 94
+);
+
+-- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
+-- separate; this table only owns the persisted configuration and assignments.
+CREATE TABLE IF NOT EXISTS stream_ordering_scopes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    rules JSON NOT NULL DEFAULT '[]',
+    use_global_scoring BOOLEAN NOT NULL DEFAULT 1,
+    use_global_priority BOOLEAN NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS stream_ordering_scope_assignments (
+    ruleset_id INTEGER NOT NULL,
+    scope_type TEXT NOT NULL CHECK(scope_type IN ('sport', 'league')),
+    scope_value TEXT NOT NULL,
+    PRIMARY KEY (ruleset_id, scope_type, scope_value),
+    UNIQUE (scope_type, scope_value),
+    FOREIGN KEY (ruleset_id) REFERENCES stream_ordering_scopes(id) ON DELETE CASCADE
 );
 
 -- Insert default settings

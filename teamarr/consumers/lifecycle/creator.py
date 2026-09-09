@@ -599,6 +599,8 @@ class ChannelCreator(_LifecycleHost):
                     dispatcharr_channel_group=stream.get("dp_channel_group"),
                     feed_team_id=stream_feed_team_id,
                     feed_side=stream_feed_side,
+                    sport=event.sport,
+                    league=event.league,
                 )
                 if priority is None:
                     priority = get_next_stream_priority(conn, existing.id)

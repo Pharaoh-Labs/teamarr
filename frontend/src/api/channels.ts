@@ -188,6 +188,7 @@ export interface ChannelStreamEntry {
   stream_stats: Record<string, unknown> | null
   stream_stats_updated_at: string | null
   matched_rules: StreamRuleMatch[]
+  sorting_scope: string
   matched_event: string | null
   matched_league: string | null
   cache_match_method: string | null

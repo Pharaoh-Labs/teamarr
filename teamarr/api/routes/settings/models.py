@@ -95,6 +95,7 @@ class DispatcharrSettingsModel(BaseModel):
     @classmethod
     def _mask_password(cls, v: str | None) -> str | None:
         return MASKED_SECRET if v else None
+
     epg_id: int | None = None
     # None = all profiles, [] = no profiles, [1,2,...] = specific profiles
     # Supports int IDs and string wildcards like "{sport}", "{league}"
@@ -398,6 +399,29 @@ class StreamOrderingSettingsUpdate(BaseModel):
     )
 
 
+class StreamOrderingScopeModel(BaseModel):
+    """A scoped stream-ordering ruleset, independently persisted from global rules."""
+
+    id: int
+    name: str = Field(..., min_length=1)
+    sports: list[str] = Field(default_factory=list)
+    leagues: list[str] = Field(default_factory=list)
+    rules: list[StreamOrderingRuleModel] = Field(default_factory=list)
+    use_global_scoring: bool = True
+    use_global_priority: bool = True
+
+
+class StreamOrderingScopeUpdate(BaseModel):
+    """Create or fully replace a scoped stream-ordering ruleset."""
+
+    name: str = Field(..., min_length=1)
+    sports: list[str] = Field(default_factory=list)
+    leagues: list[str] = Field(default_factory=list)
+    rules: list[StreamOrderingRuleModel] = Field(default_factory=list)
+    use_global_scoring: bool = True
+    use_global_priority: bool = True
+
+
 # =============================================================================
 # UPDATE CHECK SETTINGS
 # =============================================================================
@@ -529,9 +553,7 @@ class EmbySettingsUpdate(BaseModel):
 class EmbyConnectionTestRequest(BaseModel):
     """Request to test Emby connection."""
 
-    url: str | None = Field(
-        None, description="Override URL (uses saved if not provided)"
-    )
+    url: str | None = Field(None, description="Override URL (uses saved if not provided)")
     username: str | None = Field(None, description="Override username")
     password: str | None = Field(None, description="Override password")
     api_key: str | None = Field(None, description="Override API key")
@@ -570,9 +592,7 @@ class JellyfinSettingsUpdate(BaseModel):
 class JellyfinConnectionTestRequest(BaseModel):
     """Request to test Jellyfin connection."""
 
-    url: str | None = Field(
-        None, description="Override URL (uses saved if not provided)"
-    )
+    url: str | None = Field(None, description="Override URL (uses saved if not provided)")
     username: str | None = Field(None, description="Override username")
     password: str | None = Field(None, description="Override password")
     api_key: str | None = Field(None, description="Override API key")
@@ -621,9 +641,7 @@ class ChannelsDVRSettingsUpdate(BaseModel):
 class ChannelsDVRConnectionTestRequest(BaseModel):
     """Request to test Channels DVR connection."""
 
-    url: str | None = Field(
-        None, description="Override URL (uses saved if not provided)"
-    )
+    url: str | None = Field(None, description="Override URL (uses saved if not provided)")
     source_name: str | None = Field(None, description="Override source name")
 
 

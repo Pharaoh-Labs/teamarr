@@ -11,6 +11,8 @@ import {
   Info,
   Download,
   Upload,
+  Pencil,
+  Copy,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -27,17 +29,28 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { RichTooltip } from "@/components/ui/rich-tooltip"
+import { Label } from "@/components/ui/label"
+import { CheckboxListPicker } from "@/components/ui/checkbox-list-picker"
+import type { CheckboxListGroup } from "@/components/ui/checkbox-list-picker"
 import { cn } from "@/lib/utils"
 import {
   useStreamOrderingSettings,
   useUpdateStreamOrderingSettings,
+  useStreamOrderingScopes,
+  useCreateStreamOrderingScope,
+  useUpdateStreamOrderingScope,
+  useDeleteStreamOrderingScope,
   useTeamFilterSettings,
 } from "@/hooks/useSettings"
 import { useGroups } from "@/hooks/useGroups"
 import { useChannelGroupsWithChannels } from "@/hooks/useDispatcharr"
-import { getLeagueTeams, getTeamPickerLeagues } from "@/api/teams"
+import { useSubscription } from "@/hooks/useSubscription"
+import { getLeagueTeams, getTeamPickerLeagues, getLeagues } from "@/api/teams"
 import type { CachedTeam } from "@/api/teams"
 import { getSettings } from "@/api/settings"
+import type { StreamOrderingRule, StreamOrderingScope, StreamOrderingScopeUpdate } from "@/api/settings"
+import { useSports } from "@/hooks/useSports"
+import { getSportDisplayName } from "@/lib/utils"
 
 function TeamMultiSelect({
   selected,
@@ -435,6 +448,7 @@ function RuleRow({
   m3uAccounts,
   groupNames,
   dpGroupNames,
+  disabled = false,
 }: {
   rule: RuleFormData
   index: number
@@ -443,6 +457,7 @@ function RuleRow({
   m3uAccounts: string[]
   groupNames: string[]
   dpGroupNames: string[]
+  disabled?: boolean
 }) {
   const isCatchAll = rule.type === "catch_all"
 
@@ -457,7 +472,7 @@ function RuleRow({
 
   if (isCatchAll) {
     return (
-      <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
+      <fieldset disabled={disabled} className="flex items-center gap-2 rounded-md border bg-muted/30 p-2 disabled:opacity-60">
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2 md:items-center">
           <div className="col-span-12 md:col-span-2">
             <span className="text-sm font-medium px-3">Everything Else</span>
@@ -482,12 +497,12 @@ function RuleRow({
             </Button>
           </div>
         </div>
-      </div>
+      </fieldset>
     )
   }
 
   return (
-    <div className="flex items-center gap-2 p-2 rounded-md border bg-card">
+    <fieldset disabled={disabled} className="flex items-center gap-2 rounded-md border bg-card p-2 disabled:opacity-60">
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-2 md:items-center">
         <div className="col-span-12 md:col-span-2">
           <Select
@@ -672,7 +687,7 @@ function RuleRow({
           </Button>
         </div>
       </div>
-    </div>
+    </fieldset>
   )
 }
 
@@ -808,16 +823,44 @@ function StatsMetricBuilder({ value, onChange }: { value: string; onChange: (v: 
 let nextRuleId = 0
 const allocateId = () => ++nextRuleId
 
+const isScoringRule = (rule: { mode: RuleFormData["mode"] }) => rule.mode === "score"
+const isPriorityRule = (rule: { mode: RuleFormData["mode"] }) => rule.mode === "priority"
+
+interface ScopeDraft {
+  id?: number
+  name: string
+  sports: string[]
+  leagues: string[]
+}
+
 export function StreamOrderingManager() {
   const { data: settings, isLoading, error } = useStreamOrderingSettings()
   const updateSettings = useUpdateStreamOrderingSettings()
+  const { data: scopes = [], isLoading: scopesLoading } = useStreamOrderingScopes()
+  const createScope = useCreateStreamOrderingScope()
+  const updateScope = useUpdateStreamOrderingScope()
+  const deleteScope = useDeleteStreamOrderingScope()
   const { data: groupsData } = useGroups(true) // Include disabled groups
+  const { data: subscription } = useSubscription()
 
+  const [activeTab, setActiveTab] = useState("global")
   const [rules, setRules] = useState<RuleFormData[]>([])
+  const [useGlobalScoring, setUseGlobalScoring] = useState(true)
+  const [useGlobalPriority, setUseGlobalPriority] = useState(true)
   const [hasChanges, setHasChanges] = useState(false)
+  const [scopeDraft, setScopeDraft] = useState<ScopeDraft | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [exportWarning, setExportWarning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const activeScope = activeTab === "global"
+    ? undefined
+    : scopes.find((scope) => scope.id === Number(activeTab.slice("scope-".length)))
+  const isScoped = !!activeScope
+
+  if (activeTab !== "global" && !activeScope && !scopesLoading) {
+    setActiveTab("global")
+  }
 
   // Extract unique M3U account names and group names from groups
   const { m3uAccounts, groupNames } = useMemo(() => {
@@ -856,15 +899,77 @@ export function StreamOrderingManager() {
     return dpChannelGroups.filter(g => selected.has(g.id)).map(g => g.name).sort()
   }, [appSettings, dpChannelGroups])
 
+  const { data: sportsData } = useSports()
+  const { data: leaguesData } = useQuery({ queryKey: ["leagues"], queryFn: () => getLeagues() })
+  const sportsMap = useMemo(() => sportsData?.sports ?? {}, [sportsData])
+  const configuredLeagues = subscription?.leagues
+  const subscribedLeagues = useMemo(() => configuredLeagues ?? [], [configuredLeagues])
+  const sportItems = useMemo(() =>
+    [...new Set(
+      (leaguesData?.leagues ?? [])
+        .filter((league) => subscribedLeagues.includes(league.slug))
+        .map((league) => league.sport),
+    )]
+      .map((sport) => ({ value: sport, label: getSportDisplayName(sport, sportsMap) }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    [leaguesData, sportsMap, subscribedLeagues],
+  )
+  const leagueGroups: CheckboxListGroup[] = useMemo(() => {
+    const bySport: Record<string, { slug: string; name: string }[]> = {}
+    for (const league of leaguesData?.leagues ?? []) {
+      if (!subscribedLeagues.includes(league.slug)) continue
+      if (!bySport[league.sport]) bySport[league.sport] = []
+      bySport[league.sport].push({ slug: league.slug, name: league.name })
+    }
+    return Object.entries(bySport)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([sport, leagues]) => ({
+        key: sport,
+        label: getSportDisplayName(sport, sportsMap),
+        items: leagues
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((league) => ({ value: league.slug, label: league.name })),
+      }))
+  }, [leaguesData, sportsMap, subscribedLeagues])
+  const unavailableScopes = useMemo(() => {
+    const sports = new Set<string>()
+    const leagues = new Set<string>()
+    for (const scope of scopes) {
+      if (scope.id === scopeDraft?.id) continue
+      scope.sports.forEach((sport) => sports.add(sport))
+      scope.leagues.forEach((league) => leagues.add(league))
+    }
+    return { sports, leagues }
+  }, [scopes, scopeDraft?.id])
+  const selectableSportItems = useMemo(
+    () => sportItems.filter((item) => !unavailableScopes.sports.has(item.value)
+      || scopeDraft?.sports.includes(item.value)),
+    [sportItems, unavailableScopes, scopeDraft?.sports],
+  )
+  const selectableLeagueGroups = useMemo(
+    () => leagueGroups.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !unavailableScopes.leagues.has(item.value)
+        || scopeDraft?.leagues.includes(item.value)),
+    })).filter((group) => group.items.length > 0),
+    [leagueGroups, unavailableScopes, scopeDraft?.leagues],
+  )
+
   // Initialize rules from settings. Legacy rows without mode default to
   // 'priority' (backend already coerces, but guard here for safety). The
   // catch_all baseline is optional — no longer auto-injected.
   // (render-time "adjust state when props change" pattern — see
   // DispatcharrOutputSettings.tsx).
-  const [syncedSettings, setSyncedSettings] = useState<typeof settings>(undefined)
-  if (settings?.rules && settings !== syncedSettings) {
-    setSyncedSettings(settings)
-    const loaded: RuleFormData[] = settings.rules.map(r => ({
+  const currentRules = activeScope?.rules ?? settings?.rules
+  const currentSource = activeScope ?? settings
+  const globalRuleForms = useMemo<RuleFormData[]>(() => (settings?.rules ?? []).map((rule) => ({
+    ...rule,
+    _id: allocateId(),
+  })), [settings])
+  const [syncedSource, setSyncedSource] = useState<typeof currentSource>(undefined)
+  if (currentRules && currentSource !== syncedSource) {
+    setSyncedSource(currentSource)
+    const loaded: RuleFormData[] = currentRules.map(r => ({
       _id: allocateId(),
       type: r.type,
       value: r.value,
@@ -873,6 +978,8 @@ export function StreamOrderingManager() {
       points: r.points ?? 0,
     }))
     setRules(loaded)
+    setUseGlobalScoring(activeScope?.use_global_scoring ?? false)
+    setUseGlobalPriority(activeScope?.use_global_priority ?? false)
     setHasChanges(false)
   }
 
@@ -889,7 +996,10 @@ export function StreamOrderingManager() {
   const handleAddPriorityRule = () => {
     // Find next available priority among priority-mode rules.
     const usedPriorities = new Set(
-      rules.filter(r => r.mode === "priority").map(r => r.priority)
+      [
+        ...rules,
+        ...(isScoped && useGlobalPriority ? globalRuleForms : []),
+      ].filter(r => r.mode === "priority").map(r => r.priority)
     )
     let nextPriority = 1
     while (usedPriorities.has(nextPriority) && nextPriority < 99) {
@@ -922,6 +1032,28 @@ export function StreamOrderingManager() {
     setHasChanges(true)
   }
 
+  const serializedRules = (source: RuleFormData[] = rules): StreamOrderingRule[] => source.map((r) => ({
+    type: r.type,
+    value: r.value.trim(),
+    priority: r.priority,
+    mode: r.mode,
+    points: r.mode === "score" ? r.points : 0,
+  }))
+
+  const saveScope = (scope: StreamOrderingScope, overrides: Partial<StreamOrderingScopeUpdate> = {}) =>
+    updateScope.mutateAsync({
+      id: scope.id,
+      data: {
+        name: scope.name,
+        sports: scope.sports,
+        leagues: scope.leagues,
+        rules: serializedRules(),
+        use_global_scoring: useGlobalScoring,
+        use_global_priority: useGlobalPriority,
+        ...overrides,
+      },
+    })
+
   const handleSave = async () => {
     // Validate rules — no-value types (team_feed, not_team_feed, catch_all) don't require a value
     const invalidRules = rules.filter(r => !NO_VALUE_TYPES.has(r.type) && !r.value.trim())
@@ -932,15 +1064,8 @@ export function StreamOrderingManager() {
     }
 
     try {
-      await updateSettings.mutateAsync({
-        rules: rules.map((r: RuleFormData) => ({
-          type: r.type,
-          value: r.value.trim(),
-          priority: r.priority,
-          mode: r.mode,
-          points: r.mode === "score" ? r.points : 0,
-        })),
-      })
+      if (activeScope) await saveScope(activeScope)
+      else await updateSettings.mutateAsync({ rules: serializedRules() })
       toast.success("Stream ordering rules saved")
       setHasChanges(false)
     } catch {
@@ -948,10 +1073,33 @@ export function StreamOrderingManager() {
     }
   }
 
+  const copyGlobalFamily = (family: "scoring" | "priority") => {
+    if (!confirm(`Replace this scope's ${family} rules with the Global rules?`)) return
+    const globalRules = settings?.rules ?? []
+    const copied = globalRules.filter((rule) =>
+      family === "scoring" ? isScoringRule(rule) : isPriorityRule(rule),
+    )
+    setRules((current) => [
+      ...current.filter((rule) => family === "scoring" ? !isScoringRule(rule) : !isPriorityRule(rule)),
+      ...copied.map((rule) => ({ ...rule, _id: allocateId() })),
+    ])
+    if (family === "scoring") setUseGlobalScoring(false)
+    else setUseGlobalPriority(false)
+    setHasChanges(true)
+  }
+
+  const clearLocalFamily = (family: "scoring" | "priority") => {
+    if (!confirm(`Clear all local ${family} rules for this scope?`)) return
+    setRules((current) => current.filter((rule) =>
+      family === "scoring" ? !isScoringRule(rule) : !isPriorityRule(rule),
+    ))
+    setHasChanges(true)
+  }
+
   // Always exports the last *saved* rules, never unsaved editor edits.
   const doExport = () => {
     const payload = {
-      rules: (settings?.rules ?? []).map((r) => ({
+      rules: (currentRules ?? []).map((r) => ({
         type: r.type,
         value: r.value,
         priority: r.priority,
@@ -1030,7 +1178,15 @@ export function StreamOrderingManager() {
       const skipped = importedRules.length - accepted
       // catch_all is optional now — do not force-inject one on import.
 
-      await updateSettings.mutateAsync({ rules: clean })
+      if (activeScope) {
+        await saveScope(activeScope, {
+          rules: clean,
+          use_global_scoring: false,
+          use_global_priority: false,
+        })
+      } else {
+        await updateSettings.mutateAsync({ rules: clean })
+      }
       const message = skipped > 0
         ? `Imported ${accepted} rules (${skipped} skipped - invalid)`
         : `Imported ${accepted} rules`
@@ -1043,6 +1199,48 @@ export function StreamOrderingManager() {
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
+    }
+  }
+
+  const handleScopeDraftSave = async () => {
+    if (!scopeDraft?.name.trim()) {
+      toast.error("Enter a name for this ruleset")
+      return
+    }
+    try {
+      if (scopeDraft.id && activeScope) {
+        await saveScope(activeScope, {
+          name: scopeDraft.name.trim(),
+          sports: scopeDraft.sports,
+          leagues: scopeDraft.leagues,
+        })
+        setHasChanges(false)
+      } else {
+        const created = await createScope.mutateAsync({
+          name: scopeDraft.name.trim(),
+          sports: scopeDraft.sports,
+          leagues: scopeDraft.leagues,
+          rules: [],
+          use_global_scoring: true,
+          use_global_priority: true,
+        })
+        setActiveTab(`scope-${created.id}`)
+      }
+      setScopeDraft(null)
+      toast.success(scopeDraft.id ? "Ruleset updated" : "Ruleset created")
+    } catch {
+      toast.error(scopeDraft.id ? "Failed to update ruleset" : "Failed to create ruleset")
+    }
+  }
+
+  const handleDeleteScope = async () => {
+    if (!activeScope || !confirm(`Delete the ${activeScope.name} ruleset?`)) return
+    try {
+      await deleteScope.mutateAsync(activeScope.id)
+      setActiveTab("global")
+      toast.success("Ruleset deleted")
+    } catch {
+      toast.error("Failed to delete ruleset")
     }
   }
 
@@ -1067,11 +1265,23 @@ export function StreamOrderingManager() {
     )
   }
 
+  // Inherited sections render the saved Global family first, followed by their
+  // local rules. The Global rows are read-only, while scope-specific rules stay
+  // editable and are evaluated alongside their inherited family.
+  const displayedRules = isScoped
+    ? [
+        ...(useGlobalScoring ? globalRuleForms.filter(isScoringRule) : []),
+        ...rules.filter(isScoringRule),
+        ...(useGlobalPriority ? globalRuleForms.filter(isPriorityRule) : []),
+        ...rules.filter(isPriorityRule),
+      ]
+    : rules
+
   // Split rules by class for the two sections. catch_all is the optional
-  // baseline, rendered at the end of the Priority section.
-  const priorityRules = rules.filter(r => r.mode === "priority" && r.type !== "catch_all")
-  const scoreRules = rules.filter(r => r.mode === "score")
-  const catchAll = rules.find(r => r.type === "catch_all")
+  // baseline and sorts among the other Priority rows by its band number.
+  const priorityRules = displayedRules.filter(r => r.mode === "priority")
+  const scoreRules = displayedRules.filter(r => r.mode === "score")
+  const catchAll = displayedRules.find(r => r.type === "catch_all")
 
   const renderRow = (rule: RuleFormData) => (
     <RuleRow
@@ -1083,12 +1293,72 @@ export function StreamOrderingManager() {
       m3uAccounts={m3uAccounts}
       groupNames={groupNames}
       dpGroupNames={dpGroupNames}
+      disabled={isScoped && globalRuleForms.includes(rule)}
     />
   )
 
   return (
     <>
-    <Card>
+    <div className="mb-0 flex flex-wrap items-end gap-2 border-b">
+      <div role="tablist" aria-label="Stream priority rulesets" className="-mb-px flex flex-wrap items-end gap-1">
+        {[
+          { key: "global", label: "Global" },
+          ...scopes.map((scope) => ({ key: `scope-${scope.id}`, label: scope.name })),
+        ].map((tab) => {
+          const isActive = activeTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls="stream-priority-panel"
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-medium transition-colors",
+                isActive
+                  ? "border-border bg-card text-foreground"
+                  : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+      <div className="ml-auto flex gap-2 pb-1">
+        {activeScope && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setScopeDraft({
+                id: activeScope.id,
+                name: activeScope.name,
+                sports: activeScope.sports,
+                leagues: activeScope.leagues,
+              })}
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit scope
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDeleteScope} disabled={deleteScope.isPending}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete
+            </Button>
+          </>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setScopeDraft({ name: "", sports: [], leagues: [] })}
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Add scope
+        </Button>
+      </div>
+    </div>
+    <Card className="rounded-t-none border border-t-0">
       <CardHeader>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
@@ -1099,7 +1369,7 @@ export function StreamOrderingManager() {
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={!settings?.rules?.length}>
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={!currentRules?.length}>
               <Download className="h-4 w-4 mr-1" />
               Export
             </Button>
@@ -1121,17 +1391,46 @@ export function StreamOrderingManager() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent id="stream-priority-panel" role="tabpanel" className="space-y-6">
         {/* Scoring section (primary — new rules default here) */}
         <div className="space-y-2">
-          <div className="space-y-0.5">
-            <h3 className="text-sm font-semibold">Scoring</h3>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="space-y-0.5">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold">Scoring</h3>
+              {isScoped && (
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={useGlobalScoring}
+                    onCheckedChange={(checked) => {
+                      setUseGlobalScoring(checked === true)
+                      setHasChanges(true)
+                    }}
+                  />
+                  Inherit Global
+                </label>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Every matching rule adds its points; streams sort by total (highest first) within
               their band. Use negative points to push streams down.
             </p>
+            </div>
+            {isScoped && !useGlobalScoring && (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => copyGlobalFamily("scoring")}>
+                  <Copy className="h-4 w-4 mr-1" />
+                  Clone from Global
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => clearLocalFamily("scoring")}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Clear rules
+                </Button>
+              </div>
+            )}
           </div>
 
+          <div className="space-y-2">
           {scoreRules.length > 0 && (
             <div className="space-y-2">
               <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
@@ -1140,7 +1439,7 @@ export function StreamOrderingManager() {
                 <div className="col-span-2 text-center">Points</div>
                 <div className="col-span-1"></div>
               </div>
-              {scoreRules.map(renderRow)}
+              {scoreRules.slice().sort((a, b) => b.points - a.points).map(renderRow)}
             </div>
           )}
 
@@ -1148,20 +1447,50 @@ export function StreamOrderingManager() {
             <Plus className="h-4 w-4 mr-1" />
             Add scoring rule
           </Button>
+          </div>
         </div>
 
         {/* Priority section (hard-order escape hatch) */}
         <div className="space-y-2 border-t pt-4">
-          <div className="space-y-0.5">
-            <h3 className="text-sm font-semibold">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="space-y-0.5">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold">
               Priority <span className="font-normal text-muted-foreground">— hard order</span>
-            </h3>
+              </h3>
+              {isScoped && (
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={useGlobalPriority}
+                    onCheckedChange={(checked) => {
+                      setUseGlobalPriority(checked === true)
+                      setHasChanges(true)
+                    }}
+                  />
+                  Inherit Global
+                </label>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               The first rule a stream matches sets its band, and bands always outrank scoring — use
               these for “must always win/lose”. Lower number = higher. Optional.
             </p>
+            </div>
+            {isScoped && !useGlobalPriority && (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => copyGlobalFamily("priority")}>
+                  <Copy className="h-4 w-4 mr-1" />
+                  Clone from Global
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => clearLocalFamily("priority")}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Clear rules
+                </Button>
+              </div>
+            )}
           </div>
 
+          <div className="space-y-2">
           {(priorityRules.length > 0 || catchAll) && (
             <div className="space-y-2">
               <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
@@ -1171,7 +1500,6 @@ export function StreamOrderingManager() {
                 <div className="col-span-1"></div>
               </div>
               {priorityRules.slice().sort((a, b) => a.priority - b.priority).map(renderRow)}
-              {catchAll && renderRow(catchAll)}
             </div>
           )}
 
@@ -1187,9 +1515,10 @@ export function StreamOrderingManager() {
               </Button>
             )}
           </div>
+          </div>
         </div>
 
-        {rules.length === 0 && (
+        {displayedRules.length === 0 && (
           <p className="text-center text-xs text-muted-foreground pt-1">
             No rules yet — streams keep their addition order.
           </p>
@@ -1198,7 +1527,7 @@ export function StreamOrderingManager() {
         <div className="flex items-center justify-end pt-2 border-t">
           <SaveButton
             onClick={handleSave}
-            pending={updateSettings.isPending}
+            pending={updateSettings.isPending || updateScope.isPending}
             disabled={!hasChanges}
           />
         </div>
@@ -1229,6 +1558,65 @@ export function StreamOrderingManager() {
             }}
           >
             Export saved rules
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={!!scopeDraft} onOpenChange={(open) => !open && setScopeDraft(null)}>
+      <DialogContent onClose={() => setScopeDraft(null)} className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{scopeDraft?.id ? "Edit stream ordering scope" : "Add stream ordering scope"}</DialogTitle>
+          <DialogDescription>
+            Apply this ruleset to any combination of sports and leagues. A matching league takes
+            precedence over a sport-only scope.
+          </DialogDescription>
+        </DialogHeader>
+        {scopeDraft && (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="stream-ordering-scope-name">Name</Label>
+              <Input
+                id="stream-ordering-scope-name"
+                value={scopeDraft.name}
+                onChange={(event) => setScopeDraft({ ...scopeDraft, name: event.target.value })}
+                placeholder="e.g., Baseball"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Sports (optional)</Label>
+              <CheckboxListPicker
+                selected={scopeDraft.sports}
+                onChange={(sports) => setScopeDraft({ ...scopeDraft, sports })}
+                items={selectableSportItems}
+                searchPlaceholder="Search sports..."
+                maxHeight="max-h-36"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Leagues (optional)</Label>
+              <CheckboxListPicker
+                selected={scopeDraft.leagues}
+                onChange={(leagues) => setScopeDraft({ ...scopeDraft, leagues })}
+                groups={selectableLeagueGroups}
+                searchPlaceholder="Search leagues..."
+                maxHeight="max-h-48"
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setScopeDraft(null)}>Cancel</Button>
+          <Button
+            onClick={handleScopeDraftSave}
+            disabled={
+              createScope.isPending || updateScope.isPending || !scopeDraft?.name.trim()
+              || (!scopeDraft?.sports.length && !scopeDraft?.leagues.length)
+            }
+          >
+            {(createScope.isPending || updateScope.isPending) && <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />}
+            {scopeDraft?.id ? "Update scope" : "Create scope"}
           </Button>
         </DialogFooter>
       </DialogContent>
