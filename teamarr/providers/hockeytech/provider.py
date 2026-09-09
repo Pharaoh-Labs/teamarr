@@ -190,8 +190,20 @@ class HockeyTechProvider(SportsProvider):
             )
 
         except Exception as e:
+            # Name the exception TYPE, not just its message: this handler drops
+            # the entire game, and "'list' object has no attribute 'get'" (#752)
+            # took a reproduction to trace back to a field. Debug carries the
+            # traceback for the next one.
             logger.warning(
-                "[HOCKEYTECH] Failed to parse game %s: %s", game.get("game_id", "unknown"), e
+                "[HOCKEYTECH] Failed to parse game %s: %s: %s",
+                game.get("game_id", "unknown"),
+                type(e).__name__,
+                e,
+            )
+            logger.debug(
+                "[HOCKEYTECH] Parse failure detail for game %s",
+                game.get("game_id", "unknown"),
+                exc_info=True,
             )
             return None
 
@@ -388,9 +400,21 @@ class HockeyTechProvider(SportsProvider):
         )
 
     def _parse_broadcasts(self, game: dict) -> list[str]:
-        """Parse broadcast info from HockeyTech data."""
-        broadcasts = []
-        broadcasters = game.get("broadcasters", {})
+        """Parse broadcast info from HockeyTech data.
+
+        HockeyTech sends ``broadcasters`` as a mapping of home/away/national
+        when a game has any, and as an empty LIST when it has none — the usual
+        JSON idiom, and the shape this used to crash on (#752). The crash cost
+        far more than the field: the exception reached ``_parse_event``'s
+        handler, which drops the whole game, so a fixture with no listed
+        broadcaster never became an Event at all and no stream could match it
+        (17 distinct games a day on one install). Broadcast names are cosmetic,
+        so any shape that is not a mapping simply yields none.
+        """
+        broadcasts: list[str] = []
+        broadcasters = game.get("broadcasters")
+        if not isinstance(broadcasters, dict):
+            return broadcasts
 
         # Handle different broadcaster types
         for key in ["home", "away", "national"]:
