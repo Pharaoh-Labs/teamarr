@@ -605,6 +605,43 @@ class StreamMatchCache:
             logger.warning("[STREAM_CACHE_ERROR] Delete failed: %s", e)
             return False
 
+    def clear_failed(self) -> int:
+        """Drop every cached FAILURE, leaving successes and pins untouched (#757).
+
+        Cached failures are derived from team identity, aliases and league
+        membership, so any change to those invalidates them — and the way it
+        fails is silent: the stale verdict short-circuits before the newly-fixed
+        logic ever runs, so a user who adds an alias sees nothing happen and
+        reasonably concludes the fix did not work.
+
+        Successful matches are deliberately kept: they are validated on read,
+        and clearing them would throw away the bulk of the cache for no
+        correctness gain. User corrections are pinned and never cleared.
+
+        Returns:
+            Number of entries cleared
+        """
+        try:
+            with self._conn() as conn:
+                cursor = conn.execute(
+                    """
+                    DELETE FROM stream_match_cache
+                    WHERE event_id = ? AND user_corrected = 0
+                    """,
+                    (FAILED_MATCH_EVENT_ID,),
+                )
+                cleared = cursor.rowcount
+                self._commit(conn)
+                if cleared:
+                    logger.info(
+                        "[STREAM_CACHE] Cleared %d cached failure(s) after a config change",
+                        cleared,
+                    )
+                return cleared
+        except sqlite3.Error as e:
+            logger.warning("[STREAM_CACHE_ERROR] Clear failed entries: %s", e)
+            return 0
+
     def clear_group(self, group_id: int) -> int:
         """Clear all cache entries for a specific group.
 
