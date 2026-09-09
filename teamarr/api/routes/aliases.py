@@ -1,5 +1,6 @@
 """API routes for team aliases."""
 
+import logging
 from sqlite3 import Connection, IntegrityError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,6 +17,8 @@ from teamarr.database.aliases import (
     list_aliases,
     update_alias,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/aliases", tags=["Aliases"])
 
@@ -143,6 +146,8 @@ def import_aliases(
         for a in request.aliases
     ]
     created, skipped = bulk_create_aliases(conn, aliases_data)
+    if created:
+        _invalidate_after_alias_change()
     return BulkImportResponse(
         created=created,
         skipped=skipped,
@@ -162,6 +167,24 @@ def get_alias_by_id(
     return AliasResponse.from_db(alias)
 
 
+def _invalidate_after_alias_change() -> None:
+    """Drop caches an alias edit invalidates (#757).
+
+    An alias is an input to matching, so a cached FAILURE made before it
+    existed is now wrong — and wrong silently: the stale verdict
+    short-circuits before the new alias is ever consulted, so the user sees
+    their fix do nothing. The matcher's own alias memo is per-instance and
+    rebuilt each run, so only the persisted negative cache needs dropping here.
+    """
+    from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.connection import get_db
+
+    try:
+        StreamMatchCache(get_db).clear_failed()
+    except Exception as e:  # noqa: BLE001 — never fail an alias edit over a cache
+        logger.warning("[ALIASES] Could not clear cached failures: %s", e)
+
+
 @router.post("", response_model=AliasResponse, status_code=201)
 def create_new_alias(
     request: AliasCreate,
@@ -177,6 +200,7 @@ def create_new_alias(
             team_name=request.team_name,
             provider=request.provider,
         )
+        _invalidate_after_alias_change()
         return AliasResponse.from_db(alias)
     except IntegrityError as e:
         raise HTTPException(
@@ -203,6 +227,7 @@ def update_existing_alias(
     )
     if not alias:
         raise HTTPException(status_code=404, detail="Alias not found")
+    _invalidate_after_alias_change()
     return AliasResponse.from_db(alias)
 
 
@@ -214,3 +239,4 @@ def delete_alias_by_id(
     """Delete an alias."""
     if not delete_alias(conn, alias_id):
         raise HTTPException(status_code=404, detail="Alias not found")
+    _invalidate_after_alias_change()

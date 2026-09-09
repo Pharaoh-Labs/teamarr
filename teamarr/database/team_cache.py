@@ -4,9 +4,12 @@ Simple queries for the team_cache table.
 Used by providers to look up team names without going through consumers layer.
 """
 
+import logging
 from sqlite3 import Connection
 
 from teamarr.core.sports import get_sport_display_names_from_db
+
+logger = logging.getLogger(__name__)
 
 
 def invalidate_team_identity_caches() -> None:
@@ -27,14 +30,27 @@ def invalidate_team_identity_caches() -> None:
       the same rows, so they are dropped together rather than leaving callers to
       remember which caches are which.
 
+    One PERSISTED cache is dropped too (#757): the negative match cache's failed
+    entries. They are the same hazard as the index above and for the same
+    reason — a cached ``FIXTURE_NOT_IN_LEAGUE`` short-circuits before the
+    newly-refreshed identity is ever consulted, so the refresh appears to do
+    nothing for up to its TTL. Successful matches are left alone; they are
+    validated on read.
+
     Imports are function-local: both consumers import from this module, so
     module-level imports would be circular.
     """
     from teamarr.consumers.matching.team_matcher import reset_identity_index_cache
+    from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.connection import get_db
     from teamarr.services.sports_data import clear_team_identity_memo
 
     reset_identity_index_cache()
     clear_team_identity_memo()
+    try:
+        StreamMatchCache(get_db).clear_failed()
+    except Exception as e:  # noqa: BLE001 — invalidation must never break a refresh
+        logger.warning("[TEAM_CACHE] Could not clear cached failures: %s", e)
 
 
 def get_team_name_by_id(
