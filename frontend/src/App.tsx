@@ -6,6 +6,7 @@ import { MainLayout } from "@/layouts/MainLayout"
 import { EpgLayout } from "@/components/EpgLayout"
 import { ChannelsLayout } from "@/components/ChannelsLayout"
 import { GenerationProvider } from "@/contexts/GenerationContext"
+import { CacheRefreshProvider } from "@/contexts/CacheRefreshContext"
 import { StartupOverlay } from "@/components/StartupOverlay"
 import { Dashboard } from "@/pages/Dashboard"
 
@@ -188,7 +189,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <GenerationProvider>
-        <AppContent />
+        <CacheRefreshProvider>
+          <AppContent />
+        </CacheRefreshProvider>
       </GenerationProvider>
     </QueryClientProvider>
   )

@@ -130,60 +130,8 @@ export async function getCacheStatus(): Promise<CacheStatus> {
 }
 
 export async function refreshCache(): Promise<{ status: string; message: string }> {
-  // The backend returns an SSE stream, we need to consume it and return the final result
-  const response = await fetch("/api/v1/cache/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  })
-
-  if (!response.ok) {
-    throw new Error(`Cache refresh failed: ${response.statusText}`)
-  }
-
-  // Read the SSE stream and extract the final status
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new Error("No response body")
-  }
-
-  const decoder = new TextDecoder()
-  let lastStatus: { status: string; message: string } = { status: "unknown", message: "" }
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const text = decoder.decode(value, { stream: true })
-      // Parse SSE data lines: "data: {...}\n\n"
-      const lines = text.split("\n")
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.status === "complete") {
-              // Backend sends "complete", not "completed"
-              const teams = data.result?.teams_count || 0
-              const leagues = data.result?.leagues_count || 0
-              lastStatus = { status: "success", message: `Refreshed ${leagues} leagues, ${teams} teams` }
-            } else if (data.status === "error") {
-              lastStatus = { status: "error", message: data.message || "Refresh failed" }
-            }
-          } catch {
-            // Ignore parse errors for heartbeats or malformed lines
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
-
-  if (lastStatus.status === "error") {
-    throw new Error(lastStatus.message)
-  }
-
-  return lastStatus
+  const status = await api.post<{ status: string; message: string }>("/cache/refresh")
+  return { status: "success", message: status.message || "Cache refresh started" }
 }
 
 // EPG Analysis types and functions

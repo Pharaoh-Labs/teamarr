@@ -40,11 +40,10 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 The lifespan handler in `app.py` orchestrates startup in phases:
 
 1. **INITIALIZING** — Database init and integrity check
-2. **REFRESHING_CACHE** — Team/league cache refresh from providers (skippable via `SKIP_CACHE_REFRESH`)
-3. **LOADING_SETTINGS** — Display settings, timezone from DB
-4. **CONNECTING_DISPATCHARR** — Lazy factory initialization
-5. **STARTING_SCHEDULER** — Background EPG cron scheduler
-6. **READY** — Fully operational
+2. **LOADING_SETTINGS** — Display settings, timezone from DB
+3. **CONNECTING_DISPATCHARR** — Lazy factory initialization
+4. **STARTING_SCHEDULER** — Background EPG cron scheduler
+5. **READY** — Fully operational; the team/league cache refresh then runs in the background (skippable via `SKIP_CACHE_REFRESH`)
 
 ## Generation Status
 

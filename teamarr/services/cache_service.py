@@ -115,11 +115,11 @@ class CacheService:
         result = refresher.refresh(progress_callback)
 
         return RefreshResult(
-            success=not result.get("errors"),
+            success=not result.get("errors") and not result.get("error"),
             leagues_added=result.get("leagues_count", 0),
             teams_added=result.get("teams_count", 0),
             duration_seconds=result.get("duration_seconds", 0.0),
-            errors=result.get("errors", []),
+            errors=result.get("errors", []) or ([result["error"]] if result.get("error") else []),
         )
 
     def refresh_if_needed(self, max_age_days: int = 7) -> bool:
