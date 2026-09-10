@@ -7,6 +7,7 @@ Provides REST API for:
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
@@ -439,6 +440,31 @@ class BulkGroupUpdateRequest(BaseModel):
     clear_subscription_leagues: bool = False
     clear_subscription_soccer_mode: bool = False
     clear_subscription_soccer_followed_teams: bool = False
+
+    # Stream filters + custom regex (#551). A pattern set here is also switched
+    # ON for every selected group; a clear_* flag removes it and switches it OFF —
+    # one control per field in bulk, unlike the per-source form.
+    skip_builtin_filter: bool | None = None
+    stream_include_regex: str | None = None
+    stream_exclude_regex: str | None = None
+    custom_regex_teams: str | None = None
+    custom_regex_date: str | None = None
+    custom_regex_month: str | None = None
+    custom_regex_day: str | None = None
+    custom_regex_time: str | None = None
+    custom_regex_league: str | None = None
+    custom_regex_fighters: str | None = None
+    custom_regex_event_name: str | None = None
+    clear_stream_include_regex: bool = False
+    clear_stream_exclude_regex: bool = False
+    clear_custom_regex_teams: bool = False
+    clear_custom_regex_date: bool = False
+    clear_custom_regex_month: bool = False
+    clear_custom_regex_day: bool = False
+    clear_custom_regex_time: bool = False
+    clear_custom_regex_league: bool = False
+    clear_custom_regex_fighters: bool = False
+    clear_custom_regex_event_name: bool = False
 
 
 class ClearCacheRequest(BaseModel):
@@ -974,6 +1000,39 @@ def create_groups_bulk(request: BulkGroupCreateRequest):
     )
 
 
+BULK_REGEX_FIELDS = (
+    "stream_include_regex",
+    "stream_exclude_regex",
+    "custom_regex_teams",
+    "custom_regex_date",
+    "custom_regex_month",
+    "custom_regex_day",
+    "custom_regex_time",
+    "custom_regex_league",
+    "custom_regex_fighters",
+    "custom_regex_event_name",
+)
+
+
+def _bulk_regex_kwargs(request: "BulkGroupUpdateRequest") -> dict[str, Any]:
+    """update_group kwargs for the regex fields of a bulk request (#551).
+
+    Bulk carries one control per pattern: setting it enables it, clearing it
+    disables it. Fields the request does not mention are left untouched.
+    """
+    kwargs: dict[str, Any] = {}
+    for field in BULK_REGEX_FIELDS:
+        if getattr(request, f"clear_{field}"):
+            kwargs[f"clear_{field}"] = True
+            kwargs[f"{field}_enabled"] = False
+        elif getattr(request, field) is not None:
+            kwargs[field] = getattr(request, field)
+            kwargs[f"{field}_enabled"] = True
+    if request.skip_builtin_filter is not None:
+        kwargs["skip_builtin_filter"] = request.skip_builtin_filter
+    return kwargs
+
+
 @router.put("/bulk", response_model=BulkGroupUpdateResponse)
 def update_groups_bulk(request: BulkGroupUpdateRequest):
     """Bulk update event EPG groups with shared settings.
@@ -1072,6 +1131,8 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                     clear_subscription_leagues=request.clear_subscription_leagues,
                     clear_subscription_soccer_mode=request.clear_subscription_soccer_mode,
                     clear_subscription_soccer_followed_teams=request.clear_subscription_soccer_followed_teams,
+                    # Stream filters + custom regex (#551)
+                    **_bulk_regex_kwargs(request),
                 )
 
                 results.append(
