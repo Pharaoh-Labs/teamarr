@@ -1201,6 +1201,42 @@ def _push_stream_orders(
     return failures
 
 
+def run_stream_ordering_only(
+    db_factory: Callable[[], Any],
+    dispatcharr_client: Any | None,
+    manual: bool = True,
+) -> dict | None:
+    """Re-sort every managed channel's streams without a generation run (#576).
+
+    The whole ordering step and nothing else: pull current stats from
+    Dispatcharr, re-apply the rules, push only the channels whose order
+    changed. No matching, no provider calls, no EPG rebuild, no media-server
+    refresh, no run-history row. Takes the generation lock so it can never
+    overlap a real run (or vice versa); returns None when a run is in
+    progress so the caller can answer 409.
+
+    ``manual`` defaults True: this is the user's button, and like a manual
+    generation it bypasses the live-event #1 pin (#232) — the escape hatch
+    when the pinned stream is wrong. A scheduled caller must pass False.
+    """
+    global _generation_running
+
+    if not _generation_lock.acquire(blocking=False):
+        return None
+    if _generation_running:
+        _generation_lock.release()
+        return None
+    _generation_running = True
+    try:
+        logger.info("[ORDERING] Manual stream re-order (no generation)")
+        return _apply_stream_ordering(
+            db_factory, dispatcharr_client, lambda *a, **k: None, manual=manual
+        )
+    finally:
+        _generation_running = False
+        _generation_lock.release()
+
+
 def _apply_stream_ordering(
     db_factory: Callable[[], Any],
     dispatcharr_client: Any | None,

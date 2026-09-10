@@ -13,6 +13,7 @@ import {
   Upload,
   Pencil,
   Copy,
+  ArrowDownUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -41,6 +42,7 @@ import {
   useUpdateStreamOrderingScope,
   useDeleteStreamOrderingScope,
   useTeamFilterSettings,
+  useApplyStreamOrdering,
 } from "@/hooks/useSettings"
 import { useGroups } from "@/hooks/useGroups"
 import { useChannelGroupsWithChannels } from "@/hooks/useDispatcharr"
@@ -1054,6 +1056,21 @@ export function StreamOrderingManager() {
       },
     })
 
+  // Reorder-only pass (#576). Disabled while there are unsaved rule edits so
+  // the button always applies what the page shows as saved.
+  const applyOrdering = useApplyStreamOrdering()
+  const handleApplyNow = async () => {
+    try {
+      const r = await applyOrdering.mutateAsync()
+      toast.success(
+        `Reordered ${r.channels_reordered} channel${r.channels_reordered === 1 ? "" : "s"} ` +
+          `(${r.streams_reordered} streams); stats refreshed for ${r.stats_refreshed}`
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reorder streams")
+    }
+  }
+
   const handleSave = async () => {
     // Validate rules — no-value types (team_feed, not_team_feed, catch_all) don't require a value
     const invalidRules = rules.filter(r => !NO_VALUE_TYPES.has(r.type) && !r.value.trim())
@@ -1524,7 +1541,31 @@ export function StreamOrderingManager() {
           </p>
         )}
 
-        <div className="flex items-center justify-end pt-2 border-t">
+        <div className="flex items-center justify-between gap-3 pt-2 border-t">
+          <RichTooltip
+            content={
+              <>
+                Re-sorts every managed channel's streams by the saved rules right now, pulling
+                fresh Stream Stats from Dispatcharr first. Nothing else runs — no matching, no
+                EPG rebuild. Like a manual generation, this can move a live channel's #1 stream.
+              </>
+            }
+          >
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleApplyNow}
+              disabled={applyOrdering.isPending || hasChanges}
+            >
+              {applyOrdering.isPending ? (
+                <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ArrowDownUp className="h-4 w-4 mr-2" />
+              )}
+              Order streams now
+            </Button>
+          </RichTooltip>
           <SaveButton
             onClick={handleSave}
             pending={updateSettings.isPending || updateScope.isPending}

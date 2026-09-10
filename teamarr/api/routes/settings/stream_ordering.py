@@ -1,6 +1,7 @@
 """Stream ordering settings endpoints."""
 
 from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import BaseModel
 
 from teamarr.database import get_db
 from teamarr.database.settings.types import NO_VALUE_RULE_TYPES, VALID_RULE_TYPES
@@ -15,6 +16,46 @@ from .models import (
 )
 
 router = APIRouter()
+
+
+class ApplyStreamOrderingResponse(BaseModel):
+    """Counts from a reorder-only pass (#576)."""
+
+    channels_reordered: int = 0
+    streams_reordered: int = 0
+    windows_synced: int = 0
+    order_drift_synced: int = 0
+    stats_refreshed: int = 0
+
+
+@router.post("/settings/stream-ordering/apply", response_model=ApplyStreamOrderingResponse)
+def apply_stream_ordering():
+    """Re-sort every managed channel's streams now, without a generation run (#576).
+
+    Pulls current stream stats from Dispatcharr, re-applies the ordering rules
+    and pushes only the channels whose order changed. Nothing else runs — no
+    matching, provider calls, EPG rebuild or media-server refresh. Like a
+    manual generation, it bypasses the live-event #1 pin. Returns 409 while a
+    generation is in progress.
+    """
+    from teamarr.consumers.generation import run_stream_ordering_only
+    from teamarr.database.settings import get_dispatcharr_settings
+    from teamarr.dispatcharr import get_dispatcharr_connection
+
+    with get_db() as conn:
+        dispatcharr_settings = get_dispatcharr_settings(conn)
+    client = None
+    if dispatcharr_settings.enabled and dispatcharr_settings.url:
+        client = get_dispatcharr_connection(get_db)
+
+    result = run_stream_ordering_only(get_db, client, manual=True)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Generation already in progress",
+        )
+    fields = ApplyStreamOrderingResponse.model_fields
+    return ApplyStreamOrderingResponse(**{k: int(v) for k, v in result.items() if k in fields})
 
 
 def _validated_rules(rules) -> list[dict]:

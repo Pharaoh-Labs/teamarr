@@ -566,6 +566,19 @@ export async function updateStreamOrderingSettings(
   return api.put("/settings/stream-ordering", data)
 }
 
+export interface ApplyStreamOrderingResult {
+  channels_reordered: number
+  streams_reordered: number
+  windows_synced: number
+  order_drift_synced: number
+  stats_refreshed: number
+}
+
+/** Re-sort every managed channel's streams now, without a generation run (#576). */
+export async function applyStreamOrdering(): Promise<ApplyStreamOrderingResult> {
+  return api.post("/settings/stream-ordering/apply", {})
+}
+
 export async function getStreamOrderingScopes(): Promise<StreamOrderingScope[]> {
   return api.get("/settings/stream-ordering/scopes")
 }
