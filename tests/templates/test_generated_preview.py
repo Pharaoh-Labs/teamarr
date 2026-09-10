@@ -10,8 +10,14 @@ from teamarr.providers.espn.preview import apply_generated_preview_fields
 from teamarr.services.sports_data import SportsDataService
 from teamarr.templates.conditions import ConditionEvaluator
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
-from teamarr.templates.generated_preview import build_generated_preview
-from teamarr.templates.variables.generated_preview import extract_generated_preview
+from teamarr.templates.generated_preview import (
+    _expand_team_abbreviations,
+    build_generated_preview,
+)
+from teamarr.templates.variables.generated_preview import (
+    PUBLIC_PREVIEW_FIELDS,
+    extract_generated_preview,
+)
 from teamarr.templates.variables.registry import get_registry
 from tests.fakes import FakeCache
 
@@ -161,7 +167,9 @@ def test_baseball_parser_populates_exact_public_fields():
     assert event.away_home_runs_leader == "Willson Contreras — 26 home runs"
     assert event.home_batting_average_leader == "Otto Lopez — .307 batting average"
     assert event.away_rbi_leader == "Willson Contreras — 78 RBI"
-    assert event.series_summary == "Boston Red Sox leads 2-1"
+    # The public variable keeps ESPN's raw text; only the prose expands codes (#613).
+    assert event.series_summary == "BOS leads 2-1"
+    assert _expand_team_abbreviations(event.series_summary, event) == "Boston Red Sox leads 2-1"
     assert not hasattr(event, "pickcenter")
 
 
@@ -365,20 +373,23 @@ def test_basketball_parser_and_renderer_include_all_secondary_stats():
     assert "Olivia Nelson-Ododa with 5.9 rebounds per game" in text
 
 
-def test_named_variables_are_exact_and_generated_preview_is_opt_in():
+def test_composed_facts_are_not_public_variables_but_feed_the_preview():
+    """Policy (#613): a public variable is a raw provider value or the final
+    {generated_preview}. "Name — value label" strings are assembled by our
+    parser, so they are prose inputs only."""
     event = _event(
         away_home_runs_leader="Willson Contreras — 26 home runs",
         away_probable_starter="Payton Tolle (8-6, 3.08 ERA)",
+        week=3,
     )
     ctx, game = _context(event)
     registry = get_registry()
 
-    assert registry.get("away_home_runs_leader").extractor(ctx, game) == (
-        "Willson Contreras — 26 home runs"
-    )
-    assert registry.get("away_probable_starter").extractor(ctx, game) == (
-        "Payton Tolle (8-6, 3.08 ERA)"
-    )
+    assert registry.get("away_home_runs_leader") is None
+    assert registry.get("away_probable_starter") is None
+    assert registry.get("week").extractor(ctx, game) == "3"
+    assert "Willson Contreras" in build_generated_preview(event)
+    assert "Payton Tolle" in build_generated_preview(event)
     assert extract_generated_preview(ctx, game) == build_generated_preview(event)
     assert ConditionEvaluator().evaluate("has_generated_preview", None, ctx, game)
 
@@ -421,6 +432,11 @@ def test_generated_preview_field_registry_cache_and_refresh_parity():
         assert serialized[field_name] == expected
         assert getattr(restored, field_name) == expected
         assert getattr(refreshed, field_name) == expected
+        # Composed "Name — value label" strings are prose inputs only (#613);
+        # raw fields are public either here or via an older variable.
+        composed = field_name.endswith(("_leader", "_probable_starter"))
+        assert (registry.get(field_name) is None) == composed
+    for field_name in PUBLIC_PREVIEW_FIELDS:
         assert registry.get(field_name) is not None
 
 

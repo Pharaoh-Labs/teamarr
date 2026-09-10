@@ -172,6 +172,28 @@ def _football_leader_prose(value: str, role: str) -> str:
     return f"{name} — {detail}" if detail else name
 
 
+def _expand_team_abbreviations(summary: str, event: Event) -> str:
+    """Replace ESPN team codes ("BOS leads 2-1") with full names in prose.
+
+    Applied only to the prose builder's copy: the {series_summary} variable
+    itself stays the provider's raw text (#613).
+    """
+    replacements = {
+        team.abbreviation.casefold(): team.name
+        for team in (event.home_team, event.away_team)
+        if team.abbreviation and team.name
+    }
+    if not replacements:
+        return summary
+    aliases = "|".join(re.escape(code) for code in sorted(replacements, key=len, reverse=True))
+    return re.sub(
+        rf"(?<![\w])(?:{aliases})(?![\w])",
+        lambda match: replacements[match.group(0).casefold()],
+        summary,
+        flags=re.IGNORECASE,
+    )
+
+
 def _series_clause(value: str) -> str:
     """Turn ESPN's compact series summary into a grammatical clause."""
     summary = value.strip().rstrip(".")
@@ -211,7 +233,7 @@ def _base_sentence(event: Event) -> str:
         phase = "preseason " if event.season_type == "preseason" else ""
         return f"The {away} visit the {home}{location} for a Week {event.week} {phase}matchup."
     if event.sport == "baseball" and event.series_summary:
-        summary = _series_clause(event.series_summary)
+        summary = _series_clause(_expand_team_abbreviations(event.series_summary, event))
         return f"The {away} visit the {home}{location}, with {summary}."
     return f"The {away} visit the {home}{location}."
 

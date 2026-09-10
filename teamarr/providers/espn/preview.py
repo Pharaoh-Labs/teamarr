@@ -115,32 +115,6 @@ def _parse_week(raw: Any) -> int | None:
         return None
 
 
-def _expand_team_abbreviations(summary: str, competition: dict, event: Event) -> str:
-    """Replace ESPN team codes in matchup prose with full display names."""
-    replacements: dict[str, str] = {}
-    for competitor in competition.get("competitors") or []:
-        team = competitor.get("team") or {}
-        abbreviation = str(team.get("abbreviation") or "").strip()
-        display_name = str(team.get("displayName") or "").strip()
-        if abbreviation and display_name:
-            replacements[abbreviation.casefold()] = display_name
-    for team in (event.home_team, event.away_team):
-        if team.abbreviation and team.name:
-            replacements.setdefault(team.abbreviation.casefold(), team.name)
-    if not replacements:
-        return summary
-    aliases = "|".join(
-        re.escape(abbreviation)
-        for abbreviation in sorted(replacements, key=len, reverse=True)
-    )
-    return re.sub(
-        rf"(?<![\w])(?:{aliases})(?![\w])",
-        lambda match: replacements[match.group(0).casefold()],
-        summary,
-        flags=re.IGNORECASE,
-    )
-
-
 def _leader_blocks(data: dict, competition: dict) -> list[dict]:
     """Return summary leaders, falling back to competitor-scoped leaders."""
     if data.get("leaders"):
@@ -222,6 +196,7 @@ def apply_generated_preview_fields(data: dict[str, Any], event: Event) -> None:
         (item for item in series_options if item.get("type") == "season"), None
     )
     if series and series.get("summary"):
-        event.series_summary = _expand_team_abbreviations(
-            str(series["summary"]), competition, event
-        )
+        # Raw provider text — {series_summary} is a public variable and public
+        # variables are never rewritten by our code (#613). The prose builder
+        # expands team codes for readability on its own copy.
+        event.series_summary = str(series["summary"])

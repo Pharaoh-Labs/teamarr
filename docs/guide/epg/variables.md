@@ -10,7 +10,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 258 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 266 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -455,16 +455,6 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | `{game_preview}` | Pregame preview blurb. Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Toronto Blue Jays (35-38) vs. Boston Red Sox` |
 | `{generated_preview}` | Opt-in sport-specific preview for baseball, football, and basketball, with a generic matchup sentence for other sports; composed from public fields and never betting information | base, .next, .last | `The Packers visit the Broncos at Empower Field...` |
 | `{week}` | Provider-reported football week number | base, .next, .last | `3` |
-| `{home_probable_starter}` / `{away_probable_starter}` | Baseball probable starter with ESPN-reported record and ERA | base, .next, .last | `M. Boyd (8-2, 4.02 ERA)` |
-| `{home_home_runs_leader}` / `{away_home_runs_leader}` | Exact home-run leader fact | base, .next, .last | `S. Ohtani — 30 home runs` |
-| `{home_batting_average_leader}` / `{away_batting_average_leader}` | Exact batting-average leader fact | base, .next, .last | `R. Arozarena — .272 batting average` |
-| `{home_rbi_leader}` / `{away_rbi_leader}` | Exact RBI leader fact | base, .next, .last | `J. Ramírez — 82 RBI` |
-| `{home_passing_leader}` / `{away_passing_leader}` | Exact football passing-leader fact | base, .next, .last | `B. Nix — 18/25, 246 YDS` |
-| `{home_rushing_leader}` / `{away_rushing_leader}` | Exact football rushing-leader fact | base, .next, .last | `J. Dobbins — 12 CAR, 68 YDS` |
-| `{home_receiving_leader}` / `{away_receiving_leader}` | Exact football receiving-leader fact | base, .next, .last | `C. Sutton — 6 REC, 84 YDS` |
-| `{home_points_leader}` / `{away_points_leader}` | Exact basketball points leader fact | base, .next, .last | `K. Cardoso — 14.7 points per game` |
-| `{home_rebounds_leader}` / `{away_rebounds_leader}` | Exact basketball rebounds leader fact | base, .next, .last | `K. Cardoso — 8.8 rebounds per game` |
-| `{home_assists_leader}` / `{away_assists_leader}` | Exact basketball assists leader fact | base, .next, .last | `N. Cloud — 5.0 assists per game` |
 | `{home_total_yards_per_game}` / `{away_total_yards_per_game}` | Football team total yards per game | base, .next, .last | `360` |
 | `{home_rushing_yards_per_game}` / `{away_rushing_yards_per_game}` | Football team rushing yards per game | base, .next, .last | `162` |
 | `{home_points_allowed_per_game}` / `{away_points_allowed_per_game}` | Basketball points allowed per game | base, .next, .last | `87.0` |
