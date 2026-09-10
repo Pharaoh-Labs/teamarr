@@ -12,11 +12,11 @@
   "dependencies": {
     "@radix-ui/react-tooltip": "1.2.16",
     "@tanstack/react-query": "^5.102.8",
-    "@tanstack/react-virtual": "^3.14.10",
+    "@tanstack/react-virtual": "^3.14.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cronstrue": "^3.24.0",
-    "lucide-react": "^1.34.0",
+    "lucide-react": "^1.40.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.1",
@@ -28,15 +28,15 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "25.9.5",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.9.1",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.5",
-    "globals": "^17.11.0",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.68.0",
+    "typescript-eslint": "^8.69.0",
     "vite": "8.2.2"
   }
 }
