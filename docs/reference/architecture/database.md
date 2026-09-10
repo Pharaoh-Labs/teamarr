@@ -55,7 +55,7 @@ The settings table is a single row with 133 columns, organized into these groups
 |--------|---------|-------------|
 | `team_schedule_days_ahead` | 30 | Days to fetch for `.next` variables |
 | `event_match_days_ahead` | 3 | Event matching window forward |
-| `event_match_days_back` | 7 | Event matching window backward |
+| `event_match_days_back` | 7 | Retired (#744) — unread; every match method looks back `MATCH_WINDOW_DAYS` (30) |
 | `epg_output_days_ahead` | 14 | Days in XMLTV output |
 | `epg_lookback_hours` | 6 | Check for in-progress games |
 
