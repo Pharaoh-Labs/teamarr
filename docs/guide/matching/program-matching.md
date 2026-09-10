@@ -169,7 +169,7 @@ A channel that shows **red** in Dispatcharr means no streams are currently attac
 ## Caveats & limits
 
 - **Attach/detach precision is bounded by generation cadence.** A stream can only swap in/out when EPG generation runs (your scheduled cron). With hourly runs, expect roughly hourly granularity — the buffers exist partly to cover this.
-- **Replays and studio shows are intentionally skipped.** Programs tagged *Classic Sport Event* (replays) or *Sports non-event* (studio/talk) don't match. A live channel showing offseason replays will legitimately match little or nothing.
+- **Replays and studio shows are intentionally skipped.** Programs tagged *Classic Sport Event* (replays) or *Sports non-event* (studio/talk) don't match, and so does any programme whose title or sub-title carries a replay or highlights word (*Hlts*, *Highlights*, *Replay*, *Encore*, *Rerun*, *Re-air*, *As-live*) — guides without categories, such as Sky and TNT, put that evidence in the title instead. A live channel showing offseason replays will legitimately match little or nothing.
 - **A matched event must actually exist.** EPG matching pairs a program to a real event in your subscribed leagues. A guide entry for a game in a league you don't follow (or a finished game) won't match.
 - **Strict name matching skips ambiguous names** to avoid wrong matches. Some channels may not resolve by name alone and will rely on the channel-mapping or direct-tvg_id strategies.
 

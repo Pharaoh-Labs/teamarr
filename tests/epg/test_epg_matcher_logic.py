@@ -171,3 +171,36 @@ def test_should_attempt_true_for_generic_title_input():
 def test_should_attempt_false_when_match_input_empty():
     # truly nothing to match on
     assert should_attempt(_prog("", None)) is False
+
+
+# --- Title lexicon (#716): guides without categories name the replay in the title
+
+
+def test_highlights_token_in_title_is_skip_classic_without_categories():
+    # Sky's guide: no categories at all, the evidence is the trailing "Hlts".
+    assert (
+        classify_program_policy((), "PL: Brighton v Leeds United Hlts")
+        is EPGMatchPolicy.SKIP_CLASSIC
+    )
+
+
+def test_replay_token_beats_a_sports_event_category():
+    assert (
+        classify_program_policy(("Sports event",), "Serie A | Juventus v AC Milan Replay")
+        is EPGMatchPolicy.SKIP_CLASSIC
+    )
+
+
+def test_replay_words_are_whole_words_only():
+    # "Highlighted" and "Replayed" are not in the lexicon; "Classic" is a real
+    # event word ("Classic Boxing") and is deliberately not matched by title.
+    assert classify_program_policy((), "Classic Boxing: Ali v Frazier") is EPGMatchPolicy.ATTEMPT
+    highlighted = classify_program_policy((), "Highlighted Games: Cubs at Cardinals")
+    assert highlighted is EPGMatchPolicy.ATTEMPT
+    assert classify_program_policy((), "Live: Brighton v Leeds United") is EPGMatchPolicy.ATTEMPT
+
+
+def test_should_attempt_reads_title_and_sub_title_for_replay_words():
+    assert should_attempt(_prog(title="PL: Brighton v Leeds United Hlts", sub_title="")) is False
+    assert should_attempt(_prog(title="Serie A", sub_title="Juventus v AC Milan (Replay)")) is False
+    assert should_attempt(_prog(title="Serie A", sub_title="Juventus v AC Milan")) is True

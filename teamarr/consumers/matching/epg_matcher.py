@@ -46,6 +46,19 @@ _NON_EVENT = "sports non-event"
 _EVENT = "sports event"
 
 
+# Title tokens that mark a programme as a re-air or a highlights package
+# (#716). Category-based classification only works where the guide carries
+# Gracenote-style categories; UK feeds (Sky, TNT) tag nothing and put the
+# evidence in the title instead: "PL: Brighton v Leeds United Hlts",
+# "Serie A | Juventus v AC Milan" airing a day after the match as a replay.
+# Whole-word only — "classic" is deliberately absent (it is a real event word:
+# "Classic Boxing", "MLB Classic"), and so is "live", which names the opposite.
+_REPLAY_TITLE_RE = re.compile(
+    r"\b(?:hlts|highlights|replay|replays|encore|rerun|re-?air|as-live)\b",
+    re.IGNORECASE,
+)
+
+
 class EPGMatchPolicy(Enum):
     """Whether a program should be run through the matcher, based on categories.
 
@@ -60,15 +73,25 @@ class EPGMatchPolicy(Enum):
     SKIP_CLASSIC = "skip_classic"
 
 
-def classify_program_policy(categories: tuple[str, ...]) -> EPGMatchPolicy:
-    """Decide whether to attempt matching a program from its categories.
+def classify_program_policy(
+    categories: tuple[str, ...], title: str | None = None
+) -> EPGMatchPolicy:
+    """Decide whether to attempt matching a program from its categories and title.
 
     Precedence: SKIP_CLASSIC > SKIP_NON_EVENT > ATTEMPT. Classic wins because
     replays carry both "Sports event" and "Classic Sport Event".
 
-    Empty/unknown categories → ATTEMPT (fail safe via the match itself, never
-    fail open — a non-game simply won't extract two real teams in-window).
+    ``title`` (title and sub_title joined, #716) is a second, independent
+    source of the same verdict: a replay/highlights word anywhere in it is
+    SKIP_CLASSIC regardless of categories, because feeds that carry no
+    categories at all put that evidence in the title.
+
+    Empty/unknown categories and a clean title → ATTEMPT (fail safe via the
+    match itself, never fail open — a non-game simply won't extract two real
+    teams in-window).
     """
+    if title and _REPLAY_TITLE_RE.search(title):
+        return EPGMatchPolicy.SKIP_CLASSIC
     if not categories:
         return EPGMatchPolicy.ATTEMPT
     lowered = {c.strip().lower() for c in categories}
@@ -116,6 +139,7 @@ def should_attempt(program: DispatcharrProgram) -> bool:
 
     Requires a non-empty match input AND a non-skip category policy.
     """
-    if classify_program_policy(program.categories) is not EPGMatchPolicy.ATTEMPT:
+    title = " ".join(t for t in (program.title, program.sub_title) if t)
+    if classify_program_policy(program.categories, title) is not EPGMatchPolicy.ATTEMPT:
         return False
     return bool(build_match_input(program))

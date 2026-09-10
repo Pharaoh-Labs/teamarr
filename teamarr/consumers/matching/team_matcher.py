@@ -2453,6 +2453,11 @@ class TeamMatcher:
                     classified=ctx.classified,
                     team1=canonical1,
                     team2=canonical2,
+                    # The EPG anchor must survive the retry (#716). Without it
+                    # the 90-minute gate that just rejected every candidate as
+                    # CANDIDATES_GATED is silently dropped, and a highlights or
+                    # replay programme binds to the live event hours earlier.
+                    anchor_dt=ctx.anchor_dt,
                     sport_durations=ctx.sport_durations,
                 )
 
