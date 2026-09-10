@@ -7,6 +7,7 @@ Provides REST API for:
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
@@ -1013,13 +1014,13 @@ BULK_REGEX_FIELDS = (
 )
 
 
-def _bulk_regex_kwargs(request: "BulkGroupUpdateRequest") -> dict[str, object]:
+def _bulk_regex_kwargs(request: "BulkGroupUpdateRequest") -> dict[str, Any]:
     """update_group kwargs for the regex fields of a bulk request (#551).
 
     Bulk carries one control per pattern: setting it enables it, clearing it
     disables it. Fields the request does not mention are left untouched.
     """
-    kwargs: dict[str, object] = {}
+    kwargs: dict[str, Any] = {}
     for field in BULK_REGEX_FIELDS:
         if getattr(request, f"clear_{field}"):
             kwargs[f"clear_{field}"] = True
