@@ -1114,7 +1114,7 @@ def _clean_team_name(name: str) -> str:
     # that anchored metadata so it cannot become part of the first team name.
     name = re.sub(r"^(?:LIVE\s+)?\d{1,2}\s*-\s*", "", name, flags=re.IGNORECASE)
     name = re.sub(
-        r"^(?:TNF|SNF|MNF)\s+(?:TIME_MASK|\d{1,2}(?::\d{2})?\s*(?:AM|PM))\s+",
+        r"^(?:TNF|SNF|MNF)\b(?:\s+(?:TIME_MASK|\d{1,2}(?::\d{2})?\s*(?:AM|PM)))?\s+",
         "",
         name,
         flags=re.IGNORECASE,
