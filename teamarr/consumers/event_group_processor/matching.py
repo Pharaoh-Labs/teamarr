@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING, Any
 from teamarr.consumers.event_group_processor.stream_fetcher import (
     managed_channel_ids,
 )
-from teamarr.consumers.matching import BatchMatchResult, StreamCategory, StreamMatcher
+from teamarr.consumers.matching import (
+    MATCH_WINDOW_DAYS,
+    BatchMatchResult,
+    StreamCategory,
+    StreamMatcher,
+)
 from teamarr.consumers.matching.epg_resolver import (
     EpgCatalogIndex,
     build_epg_catalog_index,
@@ -112,7 +117,7 @@ class StreamMatching:
             row = conn.execute(
                 "SELECT include_final_events, "
                 "epg_xtream_fallback_enabled, epg_xtream_cache_hours, "
-                "event_match_days_back, event_match_days_ahead, "
+                "event_match_days_ahead, "
                 "tennis_majors_only "
                 "FROM settings WHERE id = 1"
             ).fetchone()
@@ -121,7 +126,6 @@ class StreamMatching:
             )
             xtream_fallback = bool(row["epg_xtream_fallback_enabled"]) if row else False
             xtream_cache_hours = (row["epg_xtream_cache_hours"] if row else 24) or 24
-            match_days_back = (row["event_match_days_back"] if row else 7) or 7
             match_days_ahead = (row["event_match_days_ahead"] if row else 3) or 3
             tennis_majors_only = bool(row["tennis_majors_only"]) if row else False
 
@@ -140,7 +144,7 @@ class StreamMatching:
         # epg_index is None → matcher behaves exactly as before.
         epg_index = self._build_epg_index(
             group, streams, target_date,
-            match_days_back, match_days_ahead, xtream_fallback,
+            match_days_ahead, xtream_fallback,
             xtream_cache_hours,
         )
 
@@ -207,7 +211,6 @@ class StreamMatching:
         group,
         streams: list[dict],
         target_date: date,
-        match_days_back: int,
         match_days_ahead: int,
         xtream_fallback: bool = False,
         xtream_cache_hours: int = 24,
@@ -256,10 +259,14 @@ class StreamMatching:
         )
 
         # Window mirrors the event match window so programs overlapping any
-        # candidate event are indexed. Localize to the user's timezone before
-        # converting to UTC (to_utc rejects naive datetimes).
+        # candidate event are indexed. The back edge is the same MATCH_WINDOW_DAYS
+        # the name matcher uses (#744): one lookback for every match method,
+        # hidden and hardcoded by design — this used to read the retired
+        # event_match_days_back column and silently disagreed (7 vs 30).
+        # Localize to the user's timezone before converting to UTC (to_utc
+        # rejects naive datetimes).
         day_start = datetime.combine(target_date, time.min, tzinfo=get_user_timezone())
-        window_start = to_utc(day_start - timedelta(days=match_days_back))
+        window_start = to_utc(day_start - timedelta(days=MATCH_WINDOW_DAYS))
         window_end = to_utc(day_start + timedelta(days=match_days_ahead + 1))
 
         try:

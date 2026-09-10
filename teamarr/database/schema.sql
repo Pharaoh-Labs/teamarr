@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Look Ahead Settings
     team_schedule_days_ahead INTEGER DEFAULT 30,    -- How far to fetch team schedules (for .next vars, conditionals)
     event_match_days_ahead INTEGER DEFAULT 3,       -- Event-stream matching window forward (Event Groups only)
-    event_match_days_back INTEGER DEFAULT 7,        -- Event-stream matching window backward (for weekly sports like NFL)
+    event_match_days_back INTEGER DEFAULT 7,        -- RETIRED (Jan 2026, #744): unread. Lookback is MATCH_WINDOW_DAYS for every match method
     epg_output_days_ahead INTEGER DEFAULT 14,       -- Days to include in final XMLTV
     epg_lookback_hours INTEGER DEFAULT 6,           -- Check for in-progress games
 
