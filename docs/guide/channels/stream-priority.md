@@ -116,7 +116,11 @@ While an event is airing, scheduled generation runs won't displace the channel's
 
 The pin holds because the top slot is presumed to be what somebody is watching. When a probe contradicts that — the cached [Stream Stats](#rule-types) say the stream is **dead or a black screen** — the pin releases and normal rule ordering takes the top slot, because a stream that isn't there is not one anybody is watching. Only an actual measurement lifts it: a stream with no stats, or stats that say nothing about liveness, stays pinned, since not knowing a stream is dead is not the same as knowing it is.
 
-A **manually triggered** generation run bypasses this pin entirely — that's your escape hatch if the pinned stream is the wrong one for any other reason: fix your rules (or remove the bad stream) and hit Generate.
+A **manually triggered** generation run bypasses this pin entirely — that's your escape hatch if the pinned stream is the wrong one for any other reason: fix your rules (or remove the bad stream) and hit Generate, or press **Order streams now** on this page.
+
+## Order streams now
+
+The **Order streams now** button at the bottom of the rules page re-sorts every managed channel by the saved rules without running a generation: it pulls fresh Stream Stats from Dispatcharr, re-applies the rules, and pushes only the channels whose order changed. Nothing else runs — no matching, no EPG rebuild, no media-server refresh — so it finishes in seconds. Like a manual generation it bypasses the live-event #1 pin, and it is unavailable while you have unsaved rule edits or a generation is in progress.
 
 ## Why is a stream ordered this way?
 

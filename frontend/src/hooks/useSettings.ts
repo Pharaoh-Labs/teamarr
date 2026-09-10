@@ -24,6 +24,7 @@ import {
   updateChannelNumberingSettings,
   getStreamOrderingSettings,
   updateStreamOrderingSettings,
+  applyStreamOrdering,
   getStreamOrderingScopes,
   getStreamOrderingScope,
   createStreamOrderingScope,
@@ -151,6 +152,11 @@ export const useStreamOrderingSettings = settingsQueryHook(
 export const useUpdateStreamOrderingSettings = settingsMutationHook(updateStreamOrderingSettings, [
   ["settings", "stream-ordering"],
 ])
+
+/** Reorder-only pass (#576): no query to invalidate — it changes Dispatcharr, not settings. */
+export function useApplyStreamOrdering() {
+  return useMutation({ mutationFn: applyStreamOrdering })
+}
 
 export const useStreamOrderingScopes = settingsQueryHook(
   "stream-ordering-scopes",
