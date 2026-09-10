@@ -1,4 +1,6 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
+
+import { usePersistentState } from "@/hooks/usePersistentState"
 
 export type SortDirection = "asc" | "desc"
 
@@ -17,6 +19,17 @@ interface UseTableSortOptions<Row, Col extends string> {
    * field). Omit to keep the input order.
    */
   defaultCompare?: (a: Row, b: Row) => number
+  /**
+   * Remember the sort for the tab's lifetime under `teamarr.<persistKey>.sort`
+   * (#552), so leaving for a detail page and coming back keeps it. Omit for
+   * plain in-memory state.
+   */
+  persistKey?: string
+}
+
+interface SortState<Col extends string> {
+  column: Col | null
+  direction: SortDirection
 }
 
 /**
@@ -27,32 +40,33 @@ export function useTableSort<Row, Col extends string>({
   comparators,
   cycleToNull = false,
   defaultCompare,
+  persistKey,
 }: UseTableSortOptions<Row, Col>) {
-  const [sortColumn, setSortColumn] = useState<Col | null>(null)
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
+  const [sort, setSort] = usePersistentState<SortState<Col>>(
+    persistKey ? `${persistKey}.sort` : null,
+    { column: null, direction: "asc" }
+  )
+  const { column: sortColumn, direction: sortDirection } = sort
 
   const handleSort = useCallback(
     (column: Col) => {
       if (sortColumn !== column) {
-        setSortColumn(column)
-        setSortDirection("asc")
+        setSort({ column, direction: "asc" })
       } else if (sortDirection === "asc") {
-        setSortDirection("desc")
+        setSort({ column, direction: "desc" })
       } else if (cycleToNull) {
-        setSortColumn(null)
-        setSortDirection("asc")
+        setSort({ column: null, direction: "asc" })
       } else {
-        setSortDirection("asc")
+        setSort({ column, direction: "asc" })
       }
     },
-    [sortColumn, sortDirection, cycleToNull]
+    [sortColumn, sortDirection, cycleToNull, setSort]
   )
 
   /** Clear the column sort, returning to the default ordering. */
   const clearSort = useCallback(() => {
-    setSortColumn(null)
-    setSortDirection("asc")
-  }, [])
+    setSort({ column: null, direction: "asc" })
+  }, [setSort])
 
   const sortedRows = useMemo(() => {
     const result = [...rows]

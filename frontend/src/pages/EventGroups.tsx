@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog"
 import { FilterSelect } from "@/components/ui/filter-select"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { usePersistentState } from "@/hooks/usePersistentState"
 import { useTableSort } from "@/hooks/useTableSort"
 import { useRowSelection } from "@/hooks/useRowSelection"
 import { Input } from "@/components/ui/input"
@@ -127,9 +128,13 @@ export function EventGroups() {
   const [clearCacheConfirm, setClearCacheConfirm] = useState<EventGroup | null>(null)
   const [showBulkClearCache, setShowBulkClearCache] = useState(false)
 
-  // Filter state
-  const [nameFilter, setNameFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"" | "enabled" | "disabled">("")
+  // Filter state — remembered for the tab's lifetime so editing a source and
+  // coming back does not reset the list (#552).
+  const [nameFilter, setNameFilter] = usePersistentState("sources.list.name", "")
+  const [statusFilter, setStatusFilter] = usePersistentState<"" | "enabled" | "disabled">(
+    "sources.list.status",
+    ""
+  )
 
   const [deleteConfirm, setDeleteConfirm] = useState<EventGroup | null>(null)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
@@ -155,6 +160,7 @@ export function EventGroups() {
       comparators: SORT_COMPARATORS,
       cycleToNull: true,
       defaultCompare: BY_SORT_ORDER,
+      persistKey: "sources.list",
     })
 
   const isDndActive = sortColumn === null
