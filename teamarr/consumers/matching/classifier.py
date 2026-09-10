@@ -1109,6 +1109,17 @@ def _clean_team_name(name: str) -> str:
     # "NFL 03 Bills" → after league strip: "03 Bills" → "Bills"
     name = re.sub(r"^\d{1,2}\s+", "", name)
 
+    # NFL schedule feeds prepend a channel and broadcast-window label after the
+    # league prefix, e.g. "NFL | 02 - TNF 8:35pm 49ers at Rams". Strip only
+    # that anchored metadata so it cannot become part of the first team name.
+    name = re.sub(r"^(?:LIVE\s+)?\d{1,2}\s*-\s*", "", name, flags=re.IGNORECASE)
+    name = re.sub(
+        r"^(?:TNF|SNF|MNF)\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM)\s+",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+
     # Remove leading punctuation and whitespace
     name = re.sub(r"^[\s\-:.,]+", "", name)
 

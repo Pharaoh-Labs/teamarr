@@ -79,6 +79,21 @@ class TestDigitBearingNamesAreUntouched:
         assert strip_quality_tags(text) == text
 
 
+class TestNflSchedulePrefixes:
+    @pytest.mark.parametrize(
+        "stream,team1,team2",
+        [
+            ("NFL | 02 - TNF 8:35pm 49ers at Rams", "49ers", "Rams"),
+            ("NFL | 15 - SNF 8:20pm Cowboys at Giants", "Cowboys", "Giants"),
+            ("US| NFL LIVE 02 - MNF 8:15pm Broncos at Chiefs", "Broncos", "Chiefs"),
+        ],
+    )
+    def test_schedule_metadata_does_not_pollute_the_first_team(self, stream, team1, team2):
+        result = classify_stream(stream)
+        assert result.category is StreamCategory.TEAM_VS_TEAM
+        assert (result.team1, result.team2) == (team1, team2)
+
+
 class TestFixtureGateIgnoresQualityResidue:
     """The score was one kill; `residual_contradicts` was the other."""
 
