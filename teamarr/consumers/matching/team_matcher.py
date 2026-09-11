@@ -1643,6 +1643,7 @@ class TeamMatcher:
         # No match found
         stream_date = ctx.classified.normalized.extracted_date
         stream_date_trusted = ctx.classified.normalized.extracted_date_trusted
+        beyond_note: str | None = None
         if team1_normalized and not team2_normalized:
             reason = FailedReason.TEAM2_NOT_FOUND
         elif team2_normalized and not team1_normalized:
@@ -1664,6 +1665,10 @@ class TeamMatcher:
             # NO_EVENT_FOUND would point triage at an unrelated near-miss.
             # The stream will match as the event enters the window.
             reason = FailedReason.EVENT_BEYOND_WINDOW
+            beyond_note = (
+                f"stream date {stream_date.isoformat()} is beyond "
+                f"the +{self._days_ahead}d match window"
+            )
         elif fixture_rejected:
             # The stream names two real teams and this league is not where they
             # meet (epic goax). "No event found" would send the user hunting for
@@ -1709,11 +1714,8 @@ class TeamMatcher:
         )
         if gated_rejected:
             near_miss = f"{near_miss}; gated={gated_rejected}"
-        if reason is FailedReason.EVENT_BEYOND_WINDOW:
-            near_miss = (
-                f"{near_miss}; stream date {stream_date.isoformat()} is beyond "
-                f"the +{self._days_ahead}d match window"
-            )
+        if beyond_note is not None:
+            near_miss = f"{near_miss}; {beyond_note}"
         elif reason is FailedReason.FIXTURE_LEAGUE_NOT_SUBSCRIBED:
             wanted = ", ".join(sorted(fixture_leagues or set()))
             near_miss = f"{near_miss}; fixture needs unsubscribed league(s): {wanted}"
