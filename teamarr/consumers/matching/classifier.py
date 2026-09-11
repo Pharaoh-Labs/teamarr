@@ -18,6 +18,7 @@ from typing import cast
 from teamarr.consumers.matching.normalizer import (
     QUALITY_TOKEN,
     NormalizedStream,
+    is_datetime_tail,
     normalize_stream,
 )
 from teamarr.services.detection_keywords import DetectionKeywordService
@@ -896,6 +897,15 @@ def is_placeholder(text: str) -> bool:
 def find_game_separator(text: str) -> tuple[str | None, int]:
     """Find game separator in stream name.
 
+    A separator whose right side is only date/time material is not a matchup
+    separator (#787): ``"<title> @ Sep 11 12:00 PM ET"`` has no second team,
+    yet ``@`` outranks ``at`` in GAME_SEPARATORS, so winning the scan handed
+    the whole title to the matcher as a lone junk "team" — which then
+    false-matched via single-team abbreviation hits ("... Day 1 ..." →
+    DAY → Dayton). Such an occurrence is skipped and the scan continues, so
+    "Ohio State at Wisconsin Fri @ Sep 11 08:00PM ET" still splits at "at"
+    and "Court 8 @ Sep 10 10:00AM ET" finds no separator at all.
+
     Args:
         text: Stream name (should be normalized)
 
@@ -905,7 +915,15 @@ def find_game_separator(text: str) -> tuple[str | None, int]:
     if not text:
         return None, -1
 
-    return DetectionKeywordService.find_separator(text)
+    lower = text.lower()
+    for sep in DetectionKeywordService.get_separators():
+        needle = sep.lower()
+        start = 0
+        while (pos := lower.find(needle, start)) != -1:
+            if not is_datetime_tail(text[pos + len(sep) :]):
+                return sep, pos
+            start = pos + 1
+    return None, -1
 
 
 def extract_teams_from_separator(
