@@ -13,14 +13,12 @@ import re
 from dataclasses import dataclass
 from datetime import date, time
 
-from unidecode import unidecode
-
 from teamarr.utilities.constants import (
     BROADCAST_NETWORKS,
-    CITY_TRANSLATIONS,
     LIVE_STATUS_PREFIXES,
     PROVIDER_PREFIXES,
 )
+from teamarr.utilities.fuzzy_match import translate_cities
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +251,10 @@ def apply_city_translations(text: str) -> str:
     First normalizes with unidecode (München → Munchen),
     then applies manual translations (munchen → munich).
 
+    Delegates to fuzzy_match.translate_cities, which normalize_text also runs
+    on provider team names — a stream-only copy of this logic made native
+    spellings the provider itself uses unmatchable (#797).
+
     Args:
         text: Text containing city names
 
@@ -261,23 +263,7 @@ def apply_city_translations(text: str) -> str:
     """
     if not text:
         return text
-
-    # First pass: unidecode to normalize accents
-    # This converts München → Munchen
-    text = unidecode(text)
-
-    # Second pass: apply manual translations
-    # Work on lowercased version for matching, preserve original case pattern
-    result = text
-    text_lower = text.lower()
-
-    for variant, english in CITY_TRANSLATIONS.items():
-        if variant in text_lower:
-            # Find the position and replace preserving some case
-            pattern = re.compile(re.escape(variant), re.IGNORECASE)
-            result = pattern.sub(english, result)
-
-    return result
+    return translate_cities(text)
 
 
 # =============================================================================

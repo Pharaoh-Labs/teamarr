@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 from rapidfuzz import fuzz
 from unidecode import unidecode
 
+from teamarr.utilities.constants import CITY_TRANSLATIONS
+
 if TYPE_CHECKING:
     from teamarr.core import Team
 
@@ -54,18 +56,35 @@ class FuzzyMatchResult:
     pattern_used: str | None = None
 
 
+def translate_cities(text: str) -> str:
+    """unidecode, then map native city spellings to English (München → Munich).
+
+    The one implementation of CITY_TRANSLATIONS. normalize_text runs it on
+    provider team names and normalize_stream / normalize_for_matching run it on
+    stream text, so the two sides can never disagree about a city (#797).
+    """
+    text = unidecode(text)
+    lowered = text.lower()
+    for variant, english in CITY_TRANSLATIONS.items():
+        if variant in lowered:
+            text = re.sub(re.escape(variant), english, text, flags=re.IGNORECASE)
+    return text
+
+
 @lru_cache(maxsize=16384)
 def normalize_text(value: str) -> str:
     """Normalize text for matching.
 
-    Applies: unidecode, lowercase, strip punctuation, normalize whitespace.
+    Applies: unidecode, city translations, lowercase, strip punctuation,
+    normalize whitespace. City translations must match normalize_for_matching,
+    which stream text passes through first (#797).
 
     Cached: the matcher re-normalizes the same event/team names for every
     stream × event comparison, making this the dominant pure-Python cost of
     the inner match loop without memoization.
     """
-    # Normalize: strip accents (é→e, ü→u), lowercase
-    normalized = unidecode(value).lower().strip()
+    # Normalize: strip accents (é→e, ü→u), translate cities, lowercase
+    normalized = translate_cities(value).lower().strip()
     # Remove apostrophes/backticks without adding a space so "O’Reilly",
     # "O`Reilly", and "OReilly" all normalize to "oreilly".
     # Hex escapes used to avoid source-encoding ambiguity: \x27=apostrophe, \x60=backtick.
