@@ -945,6 +945,30 @@ def extract_teams_from_separator(
 _QUALITY_TAG = rf"[\(\[]?\s*{QUALITY_TOKEN}\s*[\)\]]?"
 
 
+def _reads_as_hint_label(candidate: str) -> bool:
+    """Does this text read as nothing but a league/sport label (#790)?
+
+    Hint detection is containment-based (``pattern.search``), which is right
+    for classification but wrong for stripping: "OHL 01 : Kitchener"
+    *contains* the OHL hint, yet stripping that whole run would eat the team.
+    Here the pattern must consume the candidate exactly. Tried on both the
+    raw text and a ":"-suffixed probe: league patterns carry their own
+    trailing delimiter (``[:\\s-]``) that only the probe satisfies, while
+    bare-word sport patterns (``\\bsoccer\\b``) only satisfy the raw form.
+    """
+    probes = (candidate, f"{candidate}:")
+    for patterns in (
+        DetectionKeywordService.get_league_hints(),
+        DetectionKeywordService.get_sport_hints(),
+    ):
+        for pattern, _target in patterns:
+            for probe in probes:
+                match = pattern.match(probe)
+                if match and match.end() == len(probe):
+                    return True
+    return False
+
+
 def _clean_team_name(name: str) -> str:
     """Clean extracted team name."""
     if not name:
@@ -969,6 +993,15 @@ def _clean_team_name(name: str) -> str:
 
     # Clean up "@ ET", "@ EST", "@ PT", etc. at end
     name = re.sub(r"\s*@\s*[A-Z]{2,4}T?\s*$", "", name, flags=re.IGNORECASE)
+
+    # Trailing "@ <venue>" tail (#790): "West Brom @   London". The date/time
+    # it travelled with is already masked away; a venue tail carries no digits
+    # and no separators, so anything richer than a plain word run stays.
+    name = re.sub(r"\s*@\s+[A-Za-z][A-Za-z.'\s]*$", "", name)
+
+    # Trailing weekday from "… Fri @ Sep 11" shapes (#790): once the datetime
+    # masks off, "Wisconsin Fri" is left holding the broadcast's weekday tag.
+    name = re.sub(r"\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s*$", "", name, flags=re.IGNORECASE)
 
     # Remove standalone timezone codes (ET, EST, PT, PST, CT, CST, MT, MST, etc.)
     # These can remain after date/time stripping: "Jan 17 5PM ET" → "ET"
@@ -1081,6 +1114,19 @@ def _clean_team_name(name: str) -> str:
     # Strip leading channel numbers like "02 :", "15 :", "142 :"
     name = re.sub(r"^\d+\s*:\s*", "", name)
 
+    # Strip a channel number the brand strip leaves behind (#790): the brand
+    # pass removes "Sky Sports" from "Sky Sports + 01: …" but the "+" anchors
+    # the rules above away from "01:", so the plus form is handled here.
+    name = re.sub(r"^\+\s*\d+\s*[:\-]\s*", "", name)
+
+    # Strip brand-with-plus channel designations (#790): "BIG10+ 21:", where
+    # the plus lives inside the brand and defeats the generic brand-colon rule.
+    name = re.sub(r"^[A-Za-z0-9]+\s*\+\s*\d+\s*:\s*", "", name)
+
+    # Strip parenthesized provider designations (#790): "US (Peacock 057):",
+    # "UK (Sky Sports 042):" — bracketed brand plus digits before the colon.
+    name = re.sub(r"^[A-Z]{2,3}\s*\([^)]*\d+[^)]*\)\s*:?\s*", "", name, flags=re.IGNORECASE)
+
     # Strip 1-2 digit channel numbers followed by whitespace only (no dash/colon)
     # "01 Bills" → "Bills", "03 49ers" → "49ers"
     # Safe because after separator split, a leading 1-2 digit number + space is a channel number
@@ -1088,6 +1134,26 @@ def _clean_team_name(name: str) -> str:
 
     # Strip numbered channel prefixes like "NFL Game Pass 03:", "ESPN+ 45:"
     name = re.sub(r"^[A-Za-z][A-Za-z\s+]*\d*:\s*", "", name)
+
+    # Strip a leading competition/sport label (#790): "EFL Championship Derby"
+    # → "Derby", "Soccer Ohio State" → "Ohio State". The longest leading word
+    # run that reads as a label goes first, so an umbrella phrase
+    # ("EFL Championship") wins over its single words ("EFL",
+    # "Championship" — either alone still leaves a polluting word). At least
+    # one word always remains: a team that is itself a label phrase is
+    # trimmed, never erased.
+    if " " in name:
+        words = name.split()
+        for n in range(len(words) - 1, 0, -1):
+            if _reads_as_hint_label(" ".join(words[:n])):
+                name = " ".join(words[n:])
+                break
+
+        # A label can shield channel-number residue from the strips above
+        # ("OHL 01 : Kitchener Rangers" sheds "OHL" here, leaving "01 :") —
+        # re-apply the leading-number strips once the label is gone.
+        name = re.sub(r"^\d+\s*[:\-]\s*", "", name)
+        name = re.sub(r"^\d{1,2}\s+", "", name)
 
     # Strip show name prefixes like "MNF Playbook:", "NFL RedZone:"
     prev = None

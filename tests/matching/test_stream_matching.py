@@ -220,8 +220,7 @@ class TestCheckAbbreviationMatch:
         assert result is None
 
     def test_stopword_abbreviation_single_team_does_not_match(self, matcher):
-        """Stop words like 'THE', 'FOR', 'AND' must never match as single-team abbreviations (#705).
-        """
+        """Stop words must never match as single-team abbreviations (#705)."""
         home = _make_team("Brockport Golden Eagles", "THE")
         away = _make_team("Buffalo State Bengals", "BUF")
         event = _make_event(home, away)
@@ -251,8 +250,7 @@ class TestCheckAbbreviationMatch:
         assert matcher._check_abbreviation_match("AND", None, and_event) is None
 
     def test_stopword_abbreviation_in_multitoken_matchup_does_not_match(self, matcher):
-        """In two-team matchups, stop word abbreviations cannot match in multi-word phrases (#705).
-        """
+        """In two-team matchups, stop word abbreviations cannot match (#705)."""
         home = _make_team("Brockport Golden Eagles", "THE")
         away = _make_team("Buffalo State Bengals", "BUF")
         event = _make_event(home, away)
@@ -319,21 +317,20 @@ class TestMatchTeamsToEventAbbreviationIntegration:
 
     def test_rejects_low_score_side_with_no_shared_team_token(self, matcher):
         """Barrie Colts must not bind to Erie Otters on character similarity alone."""
-        classified = classify_stream(
-            "OHL  01 : 6:00 PM Kitchener Rangers @ Barrie Colts [1080p]"
-        )
+        classified = classify_stream("OHL  01 : 6:00 PM Kitchener Rangers @ Barrie Colts [1080p]")
         event = _make_event(
             _make_team("Kitchener Rangers", "KIT"),
             _make_team("Erie Otters", "ER"),
         )
 
-        assert classified.team1 == "OHL 01 :  Kitchener Rangers"
+        # The channel junk ("OHL 01 :") is stripped as a label + channel
+        # number since #790 — the old assertion pinned the polluted name.
+        assert classified.team1 == "Kitchener Rangers"
         assert classified.team2 == "Barrie Colts"
         assert matcher._match_teams_to_event(classified.team1, classified.team2, event) is None
 
     def test_brockport_the_stopword_does_not_match_random_streams(self, matcher):
-        """ESPN abbreviation 'THE' for Brockport Golden Eagles must not match random streams (#705).
-        """
+        """Brockport's ESPN abbreviation 'THE' must not match random streams (#705)."""
         home = _make_team("Brockport Golden Eagles", "THE")
         away = _make_team("Buffalo State Bengals", "BUF")
         event = _make_event(home, away)
