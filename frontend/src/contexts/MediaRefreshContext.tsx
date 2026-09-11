@@ -10,24 +10,15 @@ interface MediaRefreshStatus {
   message: string
   current: number
   total: number
-  percent: number
   error: string | null
   result: Array<{ server: string; success: boolean }>
 }
 
 function ProgressDescription({ status }: { status: MediaRefreshStatus }) {
   return (
-    <div className="mt-1 w-[356px] space-y-2">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${status.percent}%` }}
-        />
-      </div>
-      <div className="space-y-1 text-xs text-muted-foreground">
-        <div>{status.message}</div>
-        {status.total > 0 && <div>{status.current}/{status.total} servers complete</div>}
-      </div>
+    <div className="mt-1 w-[356px] space-y-1 text-xs text-muted-foreground">
+      <div>{status.message}</div>
+      {status.total > 1 && <div>{status.current}/{status.total} servers complete</div>}
     </div>
   )
 }
@@ -45,7 +36,7 @@ export function MediaRefreshProvider({ children }: { children: ReactNode }) {
 
         if (status.in_progress) {
           wasRefreshing.current = true
-          toast.loading(`Refreshing media servers (${status.percent}%)`, {
+          toast.loading("Refreshing media servers", {
             id: TOAST_ID,
             duration: Infinity,
             description: <ProgressDescription status={status} />,
