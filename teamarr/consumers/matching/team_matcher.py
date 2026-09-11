@@ -11,6 +11,7 @@ import os
 import re
 import threading
 from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
@@ -118,9 +119,7 @@ UserAliasCache = dict[tuple[str, str], str]
 # are hand-written and a few contain punctuation ("miami-oh", "texas a&m-cc")
 # that the stream side never has after normalize_for_matching — those entries
 # could never fire. Lookups go through this view so store and lookup agree.
-_NORMALIZED_TEAM_ALIASES: dict[str, str] = {
-    normalize_text(k): v for k, v in TEAM_ALIASES.items()
-}
+_NORMALIZED_TEAM_ALIASES: dict[str, str] = {normalize_text(k): v for k, v in TEAM_ALIASES.items()}
 
 
 class _Unresolved:
@@ -240,9 +239,7 @@ def _is_short_code(normalized: str) -> bool:
 
 def _resolve_alt_codes(tokens: set[str]) -> set[str]:
     """Expand stream tokens with canonical provider codes (AZ -> ARI, ...)."""
-    return tokens | {
-        ALTERNATE_TEAM_CODES[t] for t in tokens if t in ALTERNATE_TEAM_CODES
-    }
+    return tokens | {ALTERNATE_TEAM_CODES[t] for t in tokens if t in ALTERNATE_TEAM_CODES}
 
 
 @lru_cache(maxsize=16384)
@@ -395,8 +392,10 @@ def _best_name_score_cached(
 ) -> float:
     """Memoized kernel of :func:`_best_name_score` — see its docstring."""
     name_norm = normalize_text(team_name)
-    score = 0.0 if residual_contradicts(stream_norm, name_norm) else fuzz.token_set_ratio(
-        stream_norm, name_norm
+    score = (
+        0.0
+        if residual_contradicts(stream_norm, name_norm)
+        else fuzz.token_set_ratio(stream_norm, name_norm)
     )
 
     short = team_short
@@ -475,6 +474,7 @@ class TeamMatcher:
         cache: StreamMatchCache,
         db_factory: Any = None,
         days_ahead: int = 3,
+        include_leagues: AbstractSet[str] | None = None,
     ):
         """Initialize matcher.
 
@@ -483,12 +483,16 @@ class TeamMatcher:
             cache: Stream match cache
             db_factory: Optional database factory for alias lookups
             days_ahead: Days to look ahead for events (default 3)
+            include_leagues: Leagues whose events this group subscribes to
+                (None = unknown); used only to refine a fixture veto into
+                FIXTURE_LEAGUE_NOT_SUBSCRIBED (#791)
         """
         self._service = service
         self._cache = cache
         self._db = db_factory
         self._fuzzy = get_matcher()
         self._days_ahead = days_ahead
+        self._include_leagues = include_leagues
         # Load user-defined aliases from database
         # Forward cache: (alias, league) -> canonical
         self._user_aliases: UserAliasCache = self._load_user_aliases()
@@ -814,11 +818,13 @@ class TeamMatcher:
             filtered/failed outcome if nothing matched.
         """
         if classified.category != StreamCategory.TEAM_ONLY:
-            return [MatchOutcome.filtered(
-                FilteredReason.NOT_EVENT,
-                stream_name=classified.normalized.original,
-                stream_id=stream_id,
-            )]
+            return [
+                MatchOutcome.filtered(
+                    FilteredReason.NOT_EVENT,
+                    stream_name=classified.normalized.original,
+                    stream_id=stream_id,
+                )
+            ]
 
         stream_name = classified.normalized.original
 
@@ -831,12 +837,14 @@ class TeamMatcher:
                 hint_display = (
                     league_hint if isinstance(league_hint, str) else ", ".join(league_hint)
                 )
-                return [MatchOutcome.filtered(
-                    FilteredReason.LEAGUE_NOT_INCLUDED,
-                    stream_name=stream_name,
-                    stream_id=stream_id,
-                    detail=f"League '{hint_display}' not in enabled leagues",
-                )]
+                return [
+                    MatchOutcome.filtered(
+                        FilteredReason.LEAGUE_NOT_INCLUDED,
+                        stream_name=stream_name,
+                        stream_id=stream_id,
+                        detail=f"League '{hint_display}' not in enabled leagues",
+                    )
+                ]
             leagues_to_search = valid_leagues
         else:
             leagues_to_search = enabled_leagues
@@ -852,8 +860,7 @@ class TeamMatcher:
             )
         else:
             is_tsdb_map = {
-                lg: self._service.get_provider_name(lg) == "tsdb"
-                for lg in leagues_to_search
+                lg: self._service.get_provider_name(lg) == "tsdb" for lg in leagues_to_search
             }
             for league in leagues_to_search:
                 for offset in range(-window_days, window_days + 1):
@@ -864,22 +871,26 @@ class TeamMatcher:
                         all_events.append((league, event))
 
         if not all_events:
-            return [MatchOutcome.failed(
-                FailedReason.NO_EVENT_FOUND,
-                stream_name=stream_name,
-                stream_id=stream_id,
-                detail=f"No events in window ±{window_days}d for {target_date}",
-                parsed_team1=classified.team1,
-            )]
+            return [
+                MatchOutcome.failed(
+                    FailedReason.NO_EVENT_FOUND,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=f"No events in window ±{window_days}d for {target_date}",
+                    parsed_team1=classified.team1,
+                )
+            ]
 
         team_norm = normalize_for_matching(classified.team1) if classified.team1 else None
         if not team_norm:
-            return [MatchOutcome.failed(
-                FailedReason.TEAMS_NOT_PARSED,
-                stream_name=stream_name,
-                stream_id=stream_id,
-                detail="No team candidate extracted",
-            )]
+            return [
+                MatchOutcome.failed(
+                    FailedReason.TEAMS_NOT_PARSED,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail="No team candidate extracted",
+                )
+            ]
 
         matched_outcomes: list[MatchOutcome] = []
         seen_event_ids: set[str] = set()
@@ -906,29 +917,33 @@ class TeamMatcher:
                 league,
                 score,
             )
-            matched_outcomes.append(MatchOutcome.matched(
-                MatchMethod.FUZZY,
-                event,
-                detected_league=league,
-                confidence=score / 100.0,
-                stream_name=stream_name,
-                stream_id=stream_id,
-                parsed_team1=classified.team1,
-                # Which event side the branded team is (#489) — the lifecycle
-                # persists that side's team id per-stream for ordering rules.
-                matched_side=side,
-            ))
+            matched_outcomes.append(
+                MatchOutcome.matched(
+                    MatchMethod.FUZZY,
+                    event,
+                    detected_league=league,
+                    confidence=score / 100.0,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    parsed_team1=classified.team1,
+                    # Which event side the branded team is (#489) — the lifecycle
+                    # persists that side's team id per-stream for ordering rules.
+                    matched_side=side,
+                )
+            )
 
         if matched_outcomes:
             return matched_outcomes
 
-        return [MatchOutcome.failed(
-            FailedReason.NO_EVENT_FOUND,
-            stream_name=stream_name,
-            stream_id=stream_id,
-            detail=f"No event found for team '{classified.team1}'",
-            parsed_team1=classified.team1,
-        )]
+        return [
+            MatchOutcome.failed(
+                FailedReason.NO_EVENT_FOUND,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail=f"No event found for team '{classified.team1}'",
+                parsed_team1=classified.team1,
+            )
+        ]
 
     def match_all_star(
         self,
@@ -972,29 +987,31 @@ class TeamMatcher:
             filtered/failed outcome if nothing matched.
         """
         if classified.category != StreamCategory.ALL_STAR:
-            return [MatchOutcome.filtered(
-                FilteredReason.NOT_EVENT,
-                stream_name=classified.normalized.original,
-                stream_id=stream_id,
-            )]
+            return [
+                MatchOutcome.filtered(
+                    FilteredReason.NOT_EVENT,
+                    stream_name=classified.normalized.original,
+                    stream_id=stream_id,
+                )
+            ]
 
         stream_name = classified.normalized.original
 
         # An ALL_STAR classification always carries a league hint (enforced by
         # the classifier); narrow to the hinted leagues this group subscribes to.
         league_hint = classified.league_hint
-        hint_leagues = (
-            [league_hint] if isinstance(league_hint, str) else list(league_hint or [])
-        )
+        hint_leagues = [league_hint] if isinstance(league_hint, str) else list(league_hint or [])
         leagues_to_search = [lg for lg in hint_leagues if lg in enabled_leagues]
         if not leagues_to_search:
             hint_display = ", ".join(hint_leagues) if hint_leagues else "?"
-            return [MatchOutcome.filtered(
-                FilteredReason.LEAGUE_NOT_INCLUDED,
-                stream_name=stream_name,
-                stream_id=stream_id,
-                detail=f"League '{hint_display}' not in enabled leagues",
-            )]
+            return [
+                MatchOutcome.filtered(
+                    FilteredReason.LEAGUE_NOT_INCLUDED,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=f"League '{hint_display}' not in enabled leagues",
+                )
+            ]
 
         # Narrow date window to ±2 days to minimise false positives.
         window_days = 2
@@ -1037,24 +1054,28 @@ class TeamMatcher:
                 event.away_team.name,
                 event.home_team.name,
             )
-            matched_outcomes.append(MatchOutcome.matched(
-                MatchMethod.FUZZY,
-                event,
-                detected_league=league,
-                confidence=1.0,
-                stream_name=stream_name,
-                stream_id=stream_id,
-            ))
+            matched_outcomes.append(
+                MatchOutcome.matched(
+                    MatchMethod.FUZZY,
+                    event,
+                    detected_league=league,
+                    confidence=1.0,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                )
+            )
 
         if matched_outcomes:
             return matched_outcomes
 
-        return [MatchOutcome.failed(
-            FailedReason.NO_EVENT_FOUND,
-            stream_name=stream_name,
-            stream_id=stream_id,
-            detail=f"No All-Star event in window ±{window_days}d for {target_date}",
-        )]
+        return [
+            MatchOutcome.failed(
+                FailedReason.NO_EVENT_FOUND,
+                stream_name=stream_name,
+                stream_id=stream_id,
+                detail=f"No All-Star event in window ±{window_days}d for {target_date}",
+            )
+        ]
 
     # =========================================================================
     # PRIVATE METHODS
@@ -1210,9 +1231,7 @@ class TeamMatcher:
         """Multi-league entry point: candidates already carry their league."""
         return self._match_against_candidates(ctx, events)
 
-    def _league_counts(
-        self, candidates: Sequence[tuple[str, Event]]
-    ) -> dict[str, int]:
+    def _league_counts(self, candidates: Sequence[tuple[str, Event]]) -> dict[str, int]:
         """``league -> candidate count``, memoized for the shared batch tuple (#747)."""
         if not isinstance(candidates, tuple):
             counts: dict[str, int] = {}
@@ -1276,9 +1295,7 @@ class TeamMatcher:
         key = (id(events), ctx.target_date, ctx.user_tz)
         cached = self._in_window_memo.get(key)
         if cached is None:
-            cached = tuple(
-                pair for pair in events if ctx.is_event_in_search_window(pair[1])
-            )
+            cached = tuple(pair for pair in events if ctx.is_event_in_search_window(pair[1]))
             self._in_window_memo[key] = cached
         return cached
 
@@ -1409,11 +1426,8 @@ class TeamMatcher:
         # so a shared city has many more wrong events to land on there.
         fixture_leagues = self._fixture_leagues(ctx)
 
-
         league_hint = ctx.classified.league_hint
-        hinted_leagues = (
-            {league_hint} if isinstance(league_hint, str) else set(league_hint or [])
-        )
+        hinted_leagues = {league_hint} if isinstance(league_hint, str) else set(league_hint or [])
 
         # Validate events are within the search window (lifecycle handles
         # exclusions). Hoisted out of the loop below (#742): the window depends
@@ -1479,10 +1493,7 @@ class TeamMatcher:
                 compare_tz = ctx.stream_tz or ctx.user_tz
                 event_date_in_stream_tz = _local_date(event.start_time, compare_tz)
                 stream_date_dist = abs(
-                    (
-                        ctx.classified.normalized.extracted_date
-                        - event_date_in_stream_tz
-                    ).days
+                    (ctx.classified.normalized.extracted_date - event_date_in_stream_tz).days
                 )
 
             # Check for sport mismatch from stream (if detected)
@@ -1630,19 +1641,43 @@ class TeamMatcher:
             )
 
         # No match found
+        stream_date = ctx.classified.normalized.extracted_date
+        stream_date_trusted = ctx.classified.normalized.extracted_date_trusted
         if team1_normalized and not team2_normalized:
             reason = FailedReason.TEAM2_NOT_FOUND
         elif team2_normalized and not team1_normalized:
             reason = FailedReason.TEAM1_NOT_FOUND
         elif date_rejected:
             # Candidates existed but every one was gated by the stream's
-            # date — say so instead of a generic "no event found" (#474)
+            # date — say so instead of a generic "no event found" (#474).
+            # Deliberately ahead of EVENT_BEYOND_WINDOW: a gated candidate
+            # was actually compared against the stream's date, which is the
+            # more specific verdict.
             reason = FailedReason.DATE_MISMATCH
+        elif (
+            stream_date is not None
+            and stream_date_trusted
+            and (stream_date - ctx.target_date).days > self._days_ahead
+        ):
+            # The stream names its own date and it sits beyond the fetch
+            # window (#791): no candidate for it can exist in the pool, and
+            # NO_EVENT_FOUND would point triage at an unrelated near-miss.
+            # The stream will match as the event enters the window.
+            reason = FailedReason.EVENT_BEYOND_WINDOW
         elif fixture_rejected:
             # The stream names two real teams and this league is not where they
             # meet (epic goax). "No event found" would send the user hunting for
-            # a scheduling gap that isn't there.
-            reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
+            # a scheduling gap that isn't there. Refine further when the sides
+            # DO share leagues but none of them are subscribed (#791): the
+            # fixture can exist, its events just never get fetched.
+            if (
+                fixture_leagues
+                and self._include_leagues is not None
+                and fixture_leagues.isdisjoint(self._include_leagues)
+            ):
+                reason = FailedReason.FIXTURE_LEAGUE_NOT_SUBSCRIBED
+            else:
+                reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
         elif gated_rejected and not scored and not narrowed_away:
             # Every candidate was skipped before scoring — nothing was ever
             # compared, so "no event found" would be a claim about scores that
@@ -1674,6 +1709,14 @@ class TeamMatcher:
         )
         if gated_rejected:
             near_miss = f"{near_miss}; gated={gated_rejected}"
+        if reason is FailedReason.EVENT_BEYOND_WINDOW:
+            near_miss = (
+                f"{near_miss}; stream date {stream_date.isoformat()} is beyond "
+                f"the +{self._days_ahead}d match window"
+            )
+        elif reason is FailedReason.FIXTURE_LEAGUE_NOT_SUBSCRIBED:
+            wanted = ", ".join(sorted(fixture_leagues or set()))
+            near_miss = f"{near_miss}; fixture needs unsubscribed league(s): {wanted}"
         logger.debug("[NEAR_MISS] stream_id=%d %s", ctx.stream_id, near_miss)
         return MatchOutcome.failed(
             reason,
@@ -1772,14 +1815,10 @@ class TeamMatcher:
         ALTERNATE_TEAM_CODES.
         """
         home_abbr = (
-            normalize_text(event.home_team.abbreviation)
-            if event.home_team.abbreviation
-            else ""
+            normalize_text(event.home_team.abbreviation) if event.home_team.abbreviation else ""
         )
         away_abbr = (
-            normalize_text(event.away_team.abbreviation)
-            if event.away_team.abbreviation
-            else ""
+            normalize_text(event.away_team.abbreviation) if event.away_team.abbreviation else ""
         )
 
         if not home_abbr or not away_abbr or len(home_abbr) < 2 or len(away_abbr) < 2:
@@ -1796,6 +1835,7 @@ class TeamMatcher:
 
         # Both teams must match different event teams
         if team1 and team2:
+
             def _valid_abbr_hit(abbr: str, tokens: frozenset[str]) -> bool:
                 if not abbr:
                     return False
@@ -1809,21 +1849,13 @@ class TeamMatcher:
                 return (MatchMethod.FUZZY, 100.0)
         elif len(home_abbr) >= 3 and len(away_abbr) >= 3:
             if team1:
-                if (
-                    home_abbr not in ABBREVIATION_STOPWORDS
-                    and home_abbr in t1_tokens
-                ) or (
-                    away_abbr not in ABBREVIATION_STOPWORDS
-                    and away_abbr in t1_tokens
+                if (home_abbr not in ABBREVIATION_STOPWORDS and home_abbr in t1_tokens) or (
+                    away_abbr not in ABBREVIATION_STOPWORDS and away_abbr in t1_tokens
                 ):
                     return (MatchMethod.FUZZY, 100.0)
             elif team2:
-                if (
-                    home_abbr not in ABBREVIATION_STOPWORDS
-                    and home_abbr in t2_tokens
-                ) or (
-                    away_abbr not in ABBREVIATION_STOPWORDS
-                    and away_abbr in t2_tokens
+                if (home_abbr not in ABBREVIATION_STOPWORDS and home_abbr in t2_tokens) or (
+                    away_abbr not in ABBREVIATION_STOPWORDS and away_abbr in t2_tokens
                 ):
                     return (MatchMethod.FUZZY, 100.0)
 
@@ -2011,11 +2043,7 @@ class TeamMatcher:
                 if canonical:
                     alias_score = _best_name_score(canonical, event_team)
                 if _is_short_code(stream_norm):
-                    base = (
-                        100.0
-                        if _abbrev_equals(stream_norm, event_team.abbreviation)
-                        else 0.0
-                    )
+                    base = 100.0 if _abbrev_equals(stream_norm, event_team.abbreviation) else 0.0
                 else:
                     base = _best_name_score(stream_norm, event_team)
                     # A whole side written as a code longer than the short-code
@@ -2137,12 +2165,8 @@ class TeamMatcher:
             # lone 2-letter token stays unmatchable (noise guard).
             if len(team_norm) < 3:
                 return None, None
-            home_score = (
-                100.0 if _abbrev_equals(team_norm, event.home_team.abbreviation) else 0.0
-            )
-            away_score = (
-                100.0 if _abbrev_equals(team_norm, event.away_team.abbreviation) else 0.0
-            )
+            home_score = 100.0 if _abbrev_equals(team_norm, event.home_team.abbreviation) else 0.0
+            away_score = 100.0 if _abbrev_equals(team_norm, event.away_team.abbreviation) else 0.0
         else:
             home_score = _best_name_score(team_norm, event.home_team)
             away_score = _best_name_score(team_norm, event.away_team)
@@ -2665,7 +2689,6 @@ class TeamMatcher:
                 color=away_data.get("color"),
             )
 
-
             status_data = cached_data.get("status") or {}
             status = EventStatus(
                 state=status_data.get("state", "scheduled"),
@@ -2750,8 +2773,7 @@ class TeamMatcher:
             for team in (home_team, away_team):
                 if team.name and not team.short_name:
                     logger.debug(
-                        "[MATCH_CACHE] Stale: team %r has name but no short_name; "
-                        "invalidating",
+                        "[MATCH_CACHE] Stale: team %r has name but no short_name; invalidating",
                         team.name,
                     )
                     return None

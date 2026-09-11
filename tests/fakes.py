@@ -182,11 +182,19 @@ class FakeSubscription:
 # ---------------------------------------------------------------------------
 
 
-def make_team_matcher(service=None, cache=None, *, db_factory=None, days_ahead=3):
+def make_team_matcher(
+    service=None, cache=None, *, db_factory=None, days_ahead=3, include_leagues=None
+):
     """Real TeamMatcher via its constructor (db_factory=None → empty alias caches)."""
     from teamarr.consumers.matching.team_matcher import TeamMatcher
 
-    return TeamMatcher(service, cache, db_factory=db_factory, days_ahead=days_ahead)
+    return TeamMatcher(
+        service,
+        cache,
+        db_factory=db_factory,
+        days_ahead=days_ahead,
+        include_leagues=include_leagues,
+    )
 
 
 def make_stream_matcher(
