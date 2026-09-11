@@ -121,3 +121,52 @@ class TestReportedScenarios:
     def test_full_names_unaffected(self):
         outcome = _match("San Francisco Giants vs Seattle Mariners", MLB_GAME)
         assert outcome.category == ResultCategory.MATCHED
+
+
+class TestCommonWordAbbreviations:
+    """Everyday words that are also team codes never match by code (#705/#788).
+
+    The second pass added day/sun/red/old/may/big/top/pay/run, measured over
+    9,608 distinct live stream names: each had prose occurrences and zero
+    legitimate standalone code uses. DAY was attaching ~40 confidence-1.0
+    streams to a Dayton game via single-team abbreviation hits.
+    """
+
+    def test_measured_stopwords_rejected_by_abbrev_equals(self):
+        for word in ("day", "sun", "red", "old", "may", "big", "top", "pay", "run"):
+            assert not _abbrev_equals(word, word.upper()), word
+
+    def test_active_codes_kept(self):
+        # Measured as in active legitimate use — must NOT be stopworded.
+        for word in ("can", "van", "sea", "sf", "col"):
+            assert _abbrev_equals(word, word.upper()), word
+
+    def test_single_team_junk_side_never_abbrev_matches(self):
+        # The live false-match shape: a show title whose "Day 1" token hit
+        # Dayton's DAY code at (FUZZY, 100.0).
+        dayton = _team("Dayton Flyers", "DAY", "womens-college-volleyball")
+        south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
+        event = _event(south_florida, dayton, "evt-day")
+        matcher = make_team_matcher()
+        assert (
+            matcher._check_abbreviation_match(
+                "TAIF Racing Season 2026 - Week 8, Day 1", None, event
+            )
+            is None
+        )
+
+    def test_junk_day_stream_does_not_match_dayton(self):
+        dayton = _team("Dayton Flyers", "DAY", "womens-college-volleyball")
+        south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
+        event = _event(south_florida, dayton, "evt-day")
+        outcome = _match(
+            "DAZN CA 16: MLTT - Week 1, Day 1 @ 11 Sep 03:00 PM ET", event
+        )
+        assert outcome.category != ResultCategory.MATCHED
+
+    def test_full_name_dayton_streams_still_match(self):
+        dayton = _team("Dayton Flyers", "DAY", "womens-college-volleyball")
+        south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
+        event = _event(south_florida, dayton, "evt-day")
+        outcome = _match("Dayton vs. South Florida @ Sep 11 5:00PM ET", event)
+        assert outcome.category == ResultCategory.MATCHED
