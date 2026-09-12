@@ -71,10 +71,11 @@ def test_scoreboard_fetched_once_per_day_across_teams(monkeypatch):
     for i in range(n_teams):
         service_opt.get_team_schedule(f"team{i}", "verify-on", days_ahead=days_ahead)
 
-    # Flat regardless of team count — the whole point. The +2 is the pair of
-    # boundary buckets: a contiguous run of N days spans N+2 provider-days
-    # once each day fetches D-1..D+1 (#601).
-    assert client_opt.scoreboard_calls == days_ahead + 2
+    # Flat regardless of team count — the whole point. A contiguous run of N
+    # days spans N+2 provider-day buckets (D-1..D+1, #601); the first day
+    # fetches its three buckets as ONE ranged request (#808) and every later
+    # day adds exactly one new bucket, so the run costs N requests.
+    assert client_opt.scoreboard_calls == days_ahead
 
 
 def test_optimization_cuts_redundant_fetches(monkeypatch):
@@ -90,5 +91,5 @@ def test_optimization_cuts_redundant_fetches(monkeypatch):
         service_on.get_team_schedule(f"team{i}", "verify-on", days_ahead=days_ahead)
 
     assert client_off.scoreboard_calls == n_teams * days_ahead
-    assert client_on.scoreboard_calls == days_ahead + 2
+    assert client_on.scoreboard_calls == days_ahead  # one range + (N-1) new buckets (#808)
     assert client_on.scoreboard_calls < client_off.scoreboard_calls

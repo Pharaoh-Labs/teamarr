@@ -8,6 +8,7 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from teamarr.core import (
     SEASON_OFFSEASON,
@@ -266,11 +267,18 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         sport_league: tuple[str, str] | None,
     ) -> list[Event]:
         """Standard per-date scoreboard fetch (non-MMA, non-tournament)."""
-        date_str = target_date.strftime("%Y%m%d")
+        return self._scoreboard_events_for(league, target_date.strftime("%Y%m%d"), sport_league)
+
+    def _scoreboard_events_for(
+        self, league: str, date_str: str, sport_league: tuple[str, str] | None
+    ) -> list[Event]:
+        """One scoreboard request for ``date_str`` (a day or a ``A-B`` range), parsed."""
         data = self._client.get_scoreboard(league, date_str, sport_league)
         if not data:
             return []
+        return self._parse_scoreboard_payload(data, league)
 
+    def _parse_scoreboard_payload(self, data: dict, league: str) -> list[Event]:
         # Capture league name from scoreboard for discovered leagues
         self._capture_league_name(data, league)
 
@@ -281,6 +289,56 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 events.append(event)
 
         return events
+
+    # ESPN files a scoreboard event under the US-Eastern date of its start
+    # (verified 2026-09-12: 161/161 events across MLB, NFL, NCAAF, EPL, La
+    # Liga). The span fetch below re-creates those buckets from a ranged
+    # response, so the service's per-day raw cache stays the cache of record.
+    SCOREBOARD_BUCKET_TZ = ZoneInfo("America/New_York")
+
+    def get_events_span(
+        self, league: str, start: date, end: date
+    ) -> dict[date, list[Event]] | None:
+        """The provider-day buckets ``start..end`` from ONE ranged scoreboard call (#808).
+
+        The date seam unions D-1, D and D+1 (#601); on a cold cache that was
+        three requests per league. ESPN accepts ``?dates=YYYYMMDD-YYYYMMDD``
+        and answers with the identical event set (measured over 16 league ×
+        weekend cases, including college football's per-conference ``groups``
+        calls), so the union costs one request. Returns the events keyed by
+        the bucket day ESPN would have filed them under, every day in the span
+        present (empty days included), so the caller can cache each bucket
+        exactly as a per-day fetch would have. ``None`` for the MMA and
+        tournament paths, which have their own windowing — the caller falls
+        back to per-day fetches.
+        ``None`` also when the request itself fails, so a blip on the range
+        endpoint costs nothing: the per-day fetches take over.
+        """
+        if end < start:
+            return None
+        sport_league = self._get_sport_league_from_db(league)
+        sport = self._get_sport(league)
+        if self._is_mma(league, sport) or sport in TOURNAMENT_SPORTS:
+            return None
+        data = self._client.get_scoreboard(league, f"{start:%Y%m%d}-{end:%Y%m%d}", sport_league)
+        if not data:
+            # A failed range request must not become three cached empty days;
+            # declining lets the caller fetch each day as before.
+            return None
+        events = self._parse_scoreboard_payload(data, league)
+        buckets: dict[date, list[Event]] = {}
+        day = start
+        while day <= end:
+            buckets[day] = []
+            day += timedelta(days=1)
+        for event in events:
+            bucket_day = event.start_time.astimezone(self.SCOREBOARD_BUCKET_TZ).date()
+            # A range answer is the union of its days; anything ESPN filed
+            # outside the asked-for days is not something a per-day fetch
+            # would have returned, so it is dropped rather than mis-filed.
+            if bucket_day in buckets:
+                buckets[bucket_day].append(event)
+        return buckets
 
     def get_sample_candidates(self, league: str) -> list[Event]:
         """Recent + upcoming events for a sample preview, in ≤2 calls.
