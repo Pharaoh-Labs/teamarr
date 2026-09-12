@@ -93,6 +93,8 @@ class TournamentParserMixin:
         _client: "ESPNClient"
         name: str
 
+        def _get_sport_league_from_db(self, league: str) -> tuple[str, str] | None: ...
+
         def _parse_tennis_matches(
             self, data: dict, league: str, sport: str, target_date: date
         ) -> list[Event]: ...
