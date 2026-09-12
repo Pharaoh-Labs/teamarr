@@ -396,16 +396,20 @@ class ChannelLifecycleService(
         self,
         stream_name: str,
         conn: Connection,
+        event: Any = None,
     ) -> tuple[str | None, str | None]:
         """Check if stream name matches any exception keyword.
+
+        ``event`` (the matched Event) lets the check skip terms the event is
+        itself named with (#803).
 
         Returns:
             Tuple of (matched_keyword, behavior) or (None, None)
         """
-        from teamarr.database.channels import check_exception_keyword
+        from teamarr.database.channels import check_exception_keyword, event_identity_text
 
         keywords = self._get_exception_keywords(conn)
-        return check_exception_keyword(stream_name, keywords)
+        return check_exception_keyword(stream_name, keywords, event_identity_text(event))
 
     def _resolve_event_template(
         self,

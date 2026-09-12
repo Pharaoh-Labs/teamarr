@@ -31,6 +31,7 @@ from .history import (
 # Keywords operations
 from .keywords import (
     check_exception_keyword,
+    event_identity_text,
     get_exception_keywords,
 )
 
@@ -105,6 +106,7 @@ __all__ = [
     # Keywords
     "get_exception_keywords",
     "check_exception_keyword",
+    "event_identity_text",
     # Settings helpers
     "get_dispatcharr_settings",
     "get_reconciliation_settings",

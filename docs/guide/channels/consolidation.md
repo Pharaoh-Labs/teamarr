@@ -41,6 +41,8 @@ Each keyword has:
 A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box. Each seeded keyword is offered **once**: delete or rename one and it stays gone across restarts and upgrades. To get a deleted default back, add it again by hand.
 
 {: .note }
+A keyword never fires on a word the event itself is named with: the *Spanish* keyword leaves a `Spanish Grand Prix` stream alone (and *French* a French Open stream), while `En Español` or `(ESP)` on that same event still counts as a language feed.
+
 The Exception Keywords card is only *shown* in Consolidate mode, but stored keywords are checked on every run regardless of mode — a keyword's behavior overrides the global mode per-stream (an **Ignore** keyword drops its streams even in Separate mode).
 
 Keyword placement is **enforced every generation**: if a stream should move between a main channel and its keyword variant (because keywords or stream names changed), it's moved, and the main channel is always kept on the lower channel number than its variants.

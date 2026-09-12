@@ -234,7 +234,7 @@ class ChannelCreator(_LifecycleHost):
 
                         # Check exception keyword
                         matched_keyword, keyword_behavior = self._check_exception_keyword(
-                            stream_name, conn
+                            stream_name, conn, event
                         )
 
                         # V1 Parity: If behavior is 'ignore', skip stream entirely
