@@ -85,6 +85,7 @@ class KeywordEnforcer:
         from teamarr.database.channels import (
             add_stream_to_channel,
             check_exception_keyword,
+            event_identity_text,
             get_all_managed_channels,
             get_channel_streams,
             get_exception_keywords,
@@ -126,7 +127,7 @@ class KeywordEnforcer:
 
                         # What keyword should this stream have?
                         expected_keyword, behavior = check_exception_keyword(
-                            stream_name, exception_keywords
+                            stream_name, exception_keywords, event_identity_text(channel)
                         )
 
                         # Normalize: None for no keyword
