@@ -1738,6 +1738,31 @@ CREATE TABLE IF NOT EXISTS seeded_default_exception_keywords (
     seeded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Race feeds (#245): per-league driver and feed-variant rows that ride the
+-- exception-keyword engine. Each row is a keyword scoped to ONE league —
+-- "Hamilton" must fire on F1 streams and never on the Tiger-Cats — with a
+-- stable feed_key so a roster refresh can update the label/terms of a managed
+-- row without touching the user's behavior/enabled choice. Default behavior is
+-- 'ignore': out of the box no onboard/pit-lane/tracker stream reaches any
+-- channel; the user flips the drivers they want to 'consolidate' and each gets
+-- its own channel per session (the existing Sub-Consolidate path).
+CREATE TABLE IF NOT EXISTS race_feeds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    league TEXT NOT NULL,                     -- 'f1'
+    feed_key TEXT NOT NULL,                   -- 'driver:charles-leclerc' | 'variant:pit-lane'
+    kind TEXT NOT NULL CHECK(kind IN ('driver', 'variant')),
+    label TEXT NOT NULL,                      -- channel-name suffix / {exception_keyword}
+    match_terms TEXT NOT NULL,                -- comma-separated, same grammar as exception keywords
+    behavior TEXT NOT NULL DEFAULT 'ignore'
+        CHECK(behavior IN ('consolidate', 'separate', 'ignore')),
+    enabled BOOLEAN DEFAULT 1,
+    managed BOOLEAN DEFAULT 1,                -- label/terms owned by the roster refresh
+    last_seen TIMESTAMP,                      -- last refresh that still listed this row
+    UNIQUE(league, feed_key)
+);
+CREATE INDEX IF NOT EXISTS idx_race_feeds_league ON race_feeds(league, enabled);
+
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_behavior ON consolidation_exception_keywords(behavior);
 

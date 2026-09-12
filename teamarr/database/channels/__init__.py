@@ -33,6 +33,7 @@ from .keywords import (
     check_exception_keyword,
     event_identity_text,
     get_exception_keywords,
+    get_keywords_for_league,
 )
 
 # Settings helpers
@@ -105,6 +106,7 @@ __all__ = [
     "cleanup_old_history",
     # Keywords
     "get_exception_keywords",
+    "get_keywords_for_league",
     "check_exception_keyword",
     "event_identity_text",
     # Settings helpers
