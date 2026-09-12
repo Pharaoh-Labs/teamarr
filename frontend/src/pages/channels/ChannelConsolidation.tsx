@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label"
 import { RadioCards } from "@/components/ui/radio-cards"
 import { ExceptionKeywordsCard } from "@/components/ExceptionKeywordsCard"
+import { RaceFeedsCard } from "@/components/RaceFeedsCard"
 import { FeedSeparationCard } from "@/components/FeedSeparationCard"
 import {
   useChannelNumberingSettings,
@@ -97,6 +98,7 @@ export function ChannelConsolidation() {
       </Card>
 
       <ExceptionKeywordsCard />
+      <RaceFeedsCard />
       <FeedSeparationCard />
     </div>
   )

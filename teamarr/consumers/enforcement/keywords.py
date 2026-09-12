@@ -89,6 +89,7 @@ class KeywordEnforcer:
             get_all_managed_channels,
             get_channel_streams,
             get_exception_keywords,
+            get_keywords_for_league,
             get_next_stream_priority,
             log_channel_history,
             remove_stream_from_channel,
@@ -98,12 +99,17 @@ class KeywordEnforcer:
 
         try:
             with self._db_factory() as conn:
-                # Load exception keywords
-                exception_keywords = get_exception_keywords(conn)
+                # Load exception keywords. Race feeds (#245) are league-scoped
+                # keywords merged per channel league below.
+                from teamarr.database.race_feeds import race_feed_leagues
 
-                if not exception_keywords:
+                exception_keywords = get_exception_keywords(conn)
+                feed_leagues = set(race_feed_leagues(conn))
+
+                if not exception_keywords and not feed_leagues:
                     logger.debug("[KEYWORD] No exception keywords configured, skipping")
                     return result
+                league_keywords: dict[str | None, list] = {}
 
                 # Get all active channels
                 channels = get_all_managed_channels(conn, include_deleted=False)
@@ -126,8 +132,13 @@ class KeywordEnforcer:
                         stream_name = stream.stream_name or ""
 
                         # What keyword should this stream have?
+                        league = channel.league if channel.league in feed_leagues else None
+                        if league not in league_keywords:
+                            league_keywords[league] = get_keywords_for_league(
+                                conn, league, exception_keywords
+                            )
                         expected_keyword, behavior = check_exception_keyword(
-                            stream_name, exception_keywords, event_identity_text(channel)
+                            stream_name, league_keywords[league], event_identity_text(channel)
                         )
 
                         # Normalize: None for no keyword

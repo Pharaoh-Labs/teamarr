@@ -47,6 +47,22 @@ The Exception Keywords card is only *shown* in Consolidate mode, but stored keyw
 
 Keyword placement is **enforced every generation**: if a stream should move between a main channel and its keyword variant (because keywords or stream names changed), it's moved, and the main channel is always kept on the lower channel number than its variants.
 
+## Race Feeds
+
+Race weekends come with many simultaneous views of the same session — a camera on every driver, the pit lane, the driver tracker, live timing, team radio. Teamarr keeps a **Race Feeds** list for each racing league it has a roster for (Formula 1 today), one row per driver and one per feed type, and every row works like an exception keyword scoped to that league:
+
+| Behavior | What happens to a matching stream |
+|----------|-----------------------------------|
+| **Own channel** | The feed gets its own channel for each session (`Spanish GP - Qualifying - Charles Leclerc`), with the session's guide data. A 4K copy of the same feed joins that channel. |
+| **Separate** | Every matching stream gets its own channel. |
+| **Ignore** | The stream is dropped. |
+
+Everything starts as **Ignore**, so out of the box no onboard or pit-lane stream reaches any channel — the main broadcast is the only channel per session. Switch on the drivers you follow and each gets a channel per session; leave the rest ignored. "All own channel" and "All ignore" set every driver at once.
+
+The driver names, the forms providers write them in (`Charles Leclerc`, `Leclerc`, `C. Leclerc`, `LEC`) and the feed vocabulary come from the provider roster and refresh with the team cache, so a mid-season substitute appears after their first race. Only the behavior and on/off switch are yours; a refresh never changes them. A driver who leaves the grid keeps their row so your choice survives if they return.
+
+Because the rows are scoped to their league, a driver's surname never affects other sports — `Hamilton` fires on F1 streams and not on the Tiger-Cats.
+
 ## Feed Separation
 
 When multiple IPTV providers carry separate home and away broadcast feeds for the same event, Feed Separation detects them and creates distinct channels for each.

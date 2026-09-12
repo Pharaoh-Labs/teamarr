@@ -8,7 +8,10 @@ import logging
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
+from unidecode import unidecode
+
 from teamarr.core import Event, EventStatus, RacingResult, RacingSession, Team, Venue
+from teamarr.database.race_feeds import RosterEntry
 
 if TYPE_CHECKING:
     from teamarr.providers.espn.client import ESPNClient
@@ -48,6 +51,27 @@ _RACING_SESSION_NAMES = {
 }
 
 
+# FIA-style three-letter driver codes. ESPN gives no abbreviation for drivers;
+# the first three letters of the surname cover the whole current grid
+# (VER/HAM/LEC/NOR/PIA/RUS/SAI/ALO/ANT/TSU/...). The override map exists for
+# the collisions the FIA itself resolves by hand (Schumacher = MSC, not SCH).
+_DRIVER_CODE_OVERRIDES: dict[str, str] = {
+    "schumacher": "MSC",
+}
+
+
+def _driver_code(full_name: str) -> str | None:
+    parts = unidecode(full_name).replace(".", "").split()
+    if len(parts) < 2:
+        return None
+    surname = parts[-1] if parts[-1].lower() not in {"jr", "sr", "ii", "iii"} else parts[-2]
+    key = surname.lower()
+    if key in _DRIVER_CODE_OVERRIDES:
+        return _DRIVER_CODE_OVERRIDES[key]
+    letters = "".join(ch for ch in surname if ch.isalpha())
+    return letters[:3].upper() if len(letters) >= 3 else None
+
+
 def _racing_session_info(type_data: dict | None) -> tuple[str, str]:
     """Map an ESPN competition `type` block to (session_code, session_name)."""
     abbrev = (type_data or {}).get("abbreviation", "").strip().lower()
@@ -68,6 +92,8 @@ class TournamentParserMixin:
         # Provided by the host provider class (ESPNProvider).
         _client: "ESPNClient"
         name: str
+
+        def _get_sport_league_from_db(self, league: str) -> tuple[str, str] | None: ...
 
         def _parse_tennis_matches(
             self, data: dict, league: str, sport: str, target_date: date
@@ -280,6 +306,78 @@ class TournamentParserMixin:
         except Exception as e:
             logger.warning("[ESPN_RACING] Failed to parse event: %s", e)
             return None
+
+    # Leagues whose provider payload carries a usable driver roster (#245).
+    # ESPN lists competitors ONLY on sessions that have run (a scheduled race
+    # has zero), so the roster is harvested from the most recent COMPLETED
+    # event of the season. F1 only: NASCAR (~40 cars, part-timers) and IndyCar
+    # have no stable grid to speak of.
+    ROSTER_LEAGUES: frozenset[str] = frozenset({"f1"})
+
+    def get_race_roster(self, league: str) -> list[RosterEntry]:
+        """The current driver grid for a roster league, from the last completed race.
+
+        One scoreboard request for the whole season (``dates=YYYY0101-YYYY1231``,
+        verified 2026-09-12: 25 events, the last completed race carrying 22
+        competitors with fullName/displayName/shortName and a country flag, no
+        ids and no constructor). Falls back to the previous season before the
+        first race of a year. Empty when the league is not roster-capable or
+        nothing has completed yet.
+        """
+        if league not in self.ROSTER_LEAGUES:
+            return []
+        sport_league = self._get_sport_league_from_db(league)
+        year = date.today().year
+        for season in (year, year - 1):
+            data = self._client.get_scoreboard(league, f"{season}0101-{season}1231", sport_league)
+            if not data:
+                continue
+            completed = [
+                e for e in data.get("events", []) if self._last_session_state(e) == "post"
+            ]
+            if not completed:
+                continue
+            latest = max(completed, key=lambda e: e.get("date", ""))
+            race = max(latest.get("competitions", []), key=lambda c: c.get("date", ""))
+            roster = self._roster_from_competition(race)
+            if roster:
+                logger.info(
+                    "[ESPN_RACING] %s roster: %d drivers from %s",
+                    league,
+                    len(roster),
+                    latest.get("name"),
+                )
+                return roster
+        return []
+
+    @staticmethod
+    def _last_session_state(event_data: dict) -> str:
+        competitions = event_data.get("competitions", [])
+        if not competitions:
+            return "pre"
+        last = max(competitions, key=lambda c: c.get("date", ""))
+        return last.get("status", {}).get("type", {}).get("state", "pre")
+
+    @staticmethod
+    def _roster_from_competition(competition: dict) -> list[RosterEntry]:
+        roster: list[RosterEntry] = []
+        seen: set[str] = set()
+        for competitor in competition.get("competitors", []):
+            athlete = competitor.get("athlete") or {}
+            name = athlete.get("fullName") or athlete.get("displayName")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            flag = (athlete.get("flag") or {}).get("href")
+            roster.append(
+                RosterEntry(
+                    name=name,
+                    short_name=athlete.get("shortName"),
+                    code=_driver_code(name),
+                    logo_url=flag,
+                )
+            )
+        return roster
 
     def _parse_racing_session(self, competition: dict) -> "RacingSession | None":
         """Parse a single ESPN `competitions[]` entry into a RacingSession.
