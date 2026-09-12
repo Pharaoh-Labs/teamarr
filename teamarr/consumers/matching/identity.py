@@ -385,9 +385,17 @@ class TeamIdentityIndex:
 
         # A full-name hit is exact. It still carries every partial reading of
         # the same text: the usa.ncaa row literally named "Utah" must not hide
-        # the Jazz behind it.
+        # the Jazz behind it — and, since #789, every abbreviation reading
+        # too. A bare label that happens to be another team's FULL name
+        # otherwise resolves narrowly and vetoes the club the stream meant:
+        # "Roma" exact-hits the women's club ("Roma", uefa.wchampions) while
+        # AS Roma's surfaces are all "AS Roma" (its short name included), so
+        # no partial key "roma" exists and "Fenerbahce vs Roma" vetoed the
+        # very real uefa.champions fixture. The provider's own code (ROMA)
+        # is a curated statement about that club; carried as a never-exact
+        # reading it only widens the identity set, per the module rules.
         if norm in self._exact:
-            hits = self._exact[norm] + self._partial.get(norm, [])
+            hits = self._exact[norm] + self._partial.get(norm, []) + self._by_abbrev.get(norm, [])
             return Resolution(tuple(dict.fromkeys(hits)), True)
 
         # A known alias rewrite that lands on a real surface form is as good as
@@ -405,9 +413,12 @@ class TeamIdentityIndex:
                 return Resolution(tuple(dict.fromkeys(hits)), not partial)
 
         # Partial-only: a short name or a bare city. Strong evidence of the set
-        # of teams it could be, no evidence about any it is not.
+        # of teams it could be, no evidence about any it is not. Abbreviation
+        # readings widen the same way (#789) — "lazio" carries SS Lazio's
+        # leagues even when no surface form is that bare word.
         if partial:
-            return Resolution(tuple(dict.fromkeys(partial)), False)
+            hits = partial + self._by_abbrev.get(norm, [])
+            return Resolution(tuple(dict.fromkeys(hits)), False)
 
         hits = process.extract(
             norm,

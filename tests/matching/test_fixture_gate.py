@@ -66,6 +66,13 @@ CACHED_TEAMS = [
     ("Utah Jazz", "Jazz", "UTAH", "nba", "basketball"),
     ("Utah", "Utah", "UTAH", "usa.ncaa.w.1", "soccer"),
     ("Washington Wizards", "Wizards", "WSH", "nba", "basketball"),
+    # A bare label equal to another club's FULL name must not veto the club
+    # it also names through its code (#789): "Roma" is the women's club's
+    # full name AND AS Roma's abbreviation; AS Roma's short name is "AS Roma",
+    # so no partial key "roma" exists to widen the reading.
+    ("AS Roma", "AS Roma", "ROMA", "uefa.champions", "soccer"),
+    ("Fenerbahce", "Fenerbahce", "FEN", "uefa.champions", "soccer"),
+    ("Roma", "Roma", "ROMA", "uefa.wchampions", "soccer"),
 ]
 
 
@@ -254,7 +261,7 @@ class TestPartialTeamNames:
         assert result.event.id == BREWERS_METS.id
 
     def test_city_only_pair_resolves_to_every_league_those_cities_share(self, db_factory):
-        """"Kansas City @ Toronto" is an MLB game AND an MLS game. The index must
+        """ "Kansas City @ Toronto" is an MLB game AND an MLS game. The index must
         say so, not pick one: the schedule (which events exist) decides."""
         index = TeamIdentityIndex(CACHED_TEAMS)
         assert index.fixture_leagues("Kansas City", "Toronto") == {"mlb"}
@@ -353,9 +360,7 @@ class TestUnknownLeagueIsNeverVetoed:
     has no standing to refuse anything (#619)."""
 
     def test_event_in_uncached_league_is_not_fixture_rejected(self, db_factory):
-        custom = Event(
-            **{**NHL_GAME.__dict__, "id": "custom-1", "league": "my-custom-hockey"}
-        )
+        custom = Event(**{**NHL_GAME.__dict__, "id": "custom-1", "league": "my-custom-hockey"})
         result = _match(
             "ESPN+ 81 (D): Tampa Bay Lightning vs. Detroit Red Wings",
             custom,
@@ -407,9 +412,7 @@ class TestOneSidedStreamsAreNotVetoed:
 
     def test_unknown_team_names_do_not_veto(self, db_factory):
         """Neither side is in team_cache — resolution is empty, so no veto."""
-        result = _match(
-            "Some Unlisted FC vs Another Unlisted FC", TB_DET, "mlb", db_factory
-        )
+        result = _match("Some Unlisted FC vs Another Unlisted FC", TB_DET, "mlb", db_factory)
         assert result.failed_reason is not FailedReason.FIXTURE_NOT_IN_LEAGUE
 
 
@@ -568,3 +571,43 @@ class TestPathParity:
             ResultCategory.MATCHED
         )
         assert _match_multi(stream, event, db_factory).category is ResultCategory.MATCHED
+
+
+class TestBareLabelOfPrefixedClub:
+    """#789: "Roma" is the women's club's full name and AS Roma's code.
+
+    Live install: "UEFA: 01- Fenerbahce vs Roma 5:45pm" failed
+    fixture_not_in_league even though "AS Roma at Fenerbahce"
+    (uefa.champions) was the next day, in window, both clubs cached — the
+    exact-hit on the women's Roma resolved narrowly and the empty
+    intersection vetoed every candidate. The abbreviation reading now
+    widens the identity set instead.
+    """
+
+    def test_bare_label_carries_the_abbrev_clubs_leagues(self):
+        roma = TeamIdentityIndex(CACHED_TEAMS).resolve("Roma")
+        leagues = {i.league for i in roma.identities}
+        assert "uefa.wchampions" in leagues  # the exact full-name hit
+        assert "uefa.champions" in leagues  # carried via the ROMA code
+
+    def test_bare_label_pair_finds_the_real_fixture_league(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        leagues = index.fixture_leagues("Roma", "Fenerbahce")
+        assert leagues is not None and "uefa.champions" in leagues
+
+    def test_disjoint_leagues_are_still_contradicted(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        verdict, _ = index.verdict("Roma", "Fenerbahce", "mlb")
+        assert verdict == "contradicted"
+
+    def test_bare_label_stream_matches_the_champions_league_event(self, db_factory):
+        event = _event(
+            _team("AS Roma", "AS Roma", "ROMA", "uefa.champions", "soccer"),
+            _team("Fenerbahce", "Fenerbahce", "FEN", "uefa.champions", "soccer"),
+            "uefa-fen-rom",
+        )
+        stream = "UEFA: 01-  Fenerbahce  vs Roma   5:45pm"
+        result = _match(stream, event, "uefa.champions", db_factory)
+        assert result.category is ResultCategory.MATCHED
+        result_multi = _match_multi(stream, event, db_factory)
+        assert result_multi.category is ResultCategory.MATCHED
