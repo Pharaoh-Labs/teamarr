@@ -495,7 +495,7 @@ class StreamMatcher:
             include_leagues=self._include_leagues,
         )
         self._event_matcher = EventCardMatcher(service, self._cache)
-        self._racing_matcher = RacingMatcher(service, self._cache)
+        self._racing_matcher = RacingMatcher(service, self._cache, db_factory=db_factory)
         self._tennis_matcher = TennisMatcher(service, self._cache, majors_only=tennis_majors_only)
         # EPG tennis programmes that could not be resolved to a matchup, per
         # tvg_id (mf7.9) — surfaced on the linear stream's result in
