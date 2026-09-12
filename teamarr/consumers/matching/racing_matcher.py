@@ -18,7 +18,8 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rapidfuzz import fuzz
 
@@ -109,15 +110,48 @@ class RacingMatcher:
         self,
         service: SportsDataService,
         cache: StreamMatchCache,
+        db_factory: Any = None,
     ):
         """Initialize matcher.
 
         Args:
             service: Sports data service for event lookups
             cache: Stream match cache
+            db_factory: Optional DB factory; enables race-feed evidence (#245)
         """
         self._service = service
         self._cache = cache
+        self._db_factory = db_factory
+        self._feed_keywords: dict[str, list] = {}
+
+    def _names_a_race_feed(self, league: str, stream_name: str) -> bool:
+        """Does the stream name a configured driver or feed variant (#245)?
+
+        A stream that carries no Grand Prix name — "[4K] Ferrari: Charles
+        Leclerc @ 13 Sep", "Formula 1 Pit Lane - Practice #3" — still belongs
+        to the weekend when it names a roster driver or a feed type. The race
+        feeds are the league's own dictionary of those names (enabled rows,
+        any behavior: an *Ignore* feed is still evidence the stream is F1's).
+        Memoized per league for the matcher's life (one group run).
+        """
+        if self._db_factory is None:
+            return False
+        if league not in self._feed_keywords:
+            try:
+                from teamarr.database.race_feeds import race_feed_keywords
+
+                with self._db_factory() as conn:
+                    self._feed_keywords[league] = race_feed_keywords(conn, league)
+            except Exception as e:  # noqa: BLE001 — evidence only, never fatal
+                logger.debug("[RACING] race feeds unavailable for %s: %s", league, e)
+                self._feed_keywords[league] = []
+        keywords = self._feed_keywords[league]
+        if not keywords:
+            return False
+        from teamarr.database.channels.keywords import check_exception_keyword
+
+        label, _ = check_exception_keyword(stream_name, keywords)
+        return label is not None
 
     def match(
         self,
@@ -256,6 +290,19 @@ class RacingMatcher:
     # =========================================================================
     # PRIVATE METHODS
     # =========================================================================
+
+    def _stream_instant_covered(self, ctx: RacingMatchContext, event: Event) -> bool:
+        """Does the stream's own timestamp fall inside (or near) a session of ``event``?"""
+        extracted_time = ctx.classified.normalized.extracted_time
+        if extracted_time is None or not event.sessions:
+            return False
+        tz_name = ctx.classified.normalized.extracted_tz
+        try:
+            tz = ZoneInfo(tz_name) if tz_name else ctx.user_tz
+        except (ValueError, KeyError, ZoneInfoNotFoundError):
+            tz = ctx.user_tz
+        instant = datetime.combine(ctx.target_date, extracted_time, tzinfo=tz)
+        return self._covers_instant(event, instant, ctx.sport_durations)
 
     def _covers_date(self, event: Event, target_date: date, user_tz: ZoneInfo) -> bool:
         """Check if a race weekend's session window covers the target date."""
@@ -404,10 +451,32 @@ class RacingMatcher:
         # series before Strategy 1 is allowed to fire.
         if len(events) == 1 and best_score < SINGLE_EVENT_SANITY_THRESHOLD:
             best_score = max(best_score, country_scores.get(events[0].id, 0))
+        # A stream naming a configured driver / feed variant is that weekend's
+        # stream even with no Grand Prix name to score (#245): the roster is
+        # the evidence, so the sanity score is waived when one event covers
+        # the date. Never a selector — with two covering events it defers to
+        # the name scores like everything else.
+        feed_evidence = len(events) == 1 and self._names_a_race_feed(league, ctx.stream_name)
+        # Likewise a bare world feed ("F1 LIVE @ 13 Sep 09:00 AM") names the
+        # series and a time that lands inside one of the covering event's
+        # sessions — the same instant gate the EPG path uses (#245).
+        timed_evidence = (
+            len(events) == 1
+            and not feed_evidence
+            and best_score < SINGLE_EVENT_SANITY_THRESHOLD
+            and has_racing_text_evidence(ctx.stream_name)
+            and self._stream_instant_covered(ctx, events[0])
+        )
         if (
             len(events) == 1
-            and best_score >= SINGLE_EVENT_SANITY_THRESHOLD
-            and has_racing_text_evidence(ctx.stream_name)
+            and (
+                feed_evidence
+                or timed_evidence
+                or (
+                    best_score >= SINGLE_EVENT_SANITY_THRESHOLD
+                    and has_racing_text_evidence(ctx.stream_name)
+                )
+            )
         ):
             event = events[0]
             logger.debug(
