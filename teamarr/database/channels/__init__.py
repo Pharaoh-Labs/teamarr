@@ -32,6 +32,7 @@ from .history import (
 from .keywords import (
     check_exception_keyword,
     get_exception_keywords,
+    get_keywords_for_league,
 )
 
 # Settings helpers
@@ -104,6 +105,7 @@ __all__ = [
     "cleanup_old_history",
     # Keywords
     "get_exception_keywords",
+    "get_keywords_for_league",
     "check_exception_keyword",
     # Settings helpers
     "get_dispatcharr_settings",

@@ -10,6 +10,25 @@ from sqlite3 import Connection
 from teamarr.database.exception_keywords import ExceptionKeyword, get_all_keywords
 
 
+def get_keywords_for_league(
+    conn: Connection,
+    league: str | None,
+    global_keywords: list[ExceptionKeyword] | None = None,
+) -> list[ExceptionKeyword]:
+    """Race feeds for ``league`` (#245) first, then the global exception keywords.
+
+    Race feeds are league-scoped keywords (driver onboards, pit lane, tracker
+    …); a driver's surname is somebody else's team elsewhere, so they only
+    ever join the list for streams of their own league. Precedence is the
+    more specific list first: a stream that names a driver is that driver's
+    feed even if a global keyword would also match it.
+    """
+    from teamarr.database.race_feeds import race_feed_keywords
+
+    base = global_keywords if global_keywords is not None else get_exception_keywords(conn)
+    return race_feed_keywords(conn, league) + base
+
+
 def get_exception_keywords(conn: Connection, enabled_only: bool = True) -> list[ExceptionKeyword]:
     """Get all consolidation exception keywords.
 

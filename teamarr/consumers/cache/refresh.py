@@ -155,6 +155,7 @@ class CacheRefresher:
 
             # NCAA conference trees (#91) — best-effort, never fails the refresh
             conf_count = self.refresh_conferences()
+            self.refresh_race_feeds()
             if conf_count:
                 report(f"Cached {conf_count} conference groups", 99)
 
@@ -318,6 +319,45 @@ class CacheRefresher:
                 )
         return groups
 
+    def refresh_race_feeds(self, only_league: str | None = None) -> dict[str, dict]:
+        """Refresh the driver/variant race-feed rows from provider rosters (#245).
+
+        For every provider that can answer ``get_race_roster`` and every league
+        it lists as roster-capable (ESPN: F1), harvest the grid from the last
+        completed race and upsert it. Managed rows get new labels/terms; the
+        user's behavior/enabled choices are never touched. Best-effort: a
+        provider failure is logged and the rest continue, so a roster blip
+        cannot fail a cache refresh.
+        """
+        from teamarr.database.race_feeds import upsert_roster
+        from teamarr.services.sports_data import create_default_service
+
+        results: dict[str, dict] = {}
+        try:
+            providers = create_default_service()._providers
+        except Exception as e:  # noqa: BLE001 — best-effort
+            logger.warning("[RACE_FEEDS] Could not build providers: %s", e)
+            return results
+        for provider in providers:
+            leagues = getattr(provider, "ROSTER_LEAGUES", None)
+            harvest = getattr(provider, "get_race_roster", None)
+            if not leagues or harvest is None:
+                continue
+            for league in sorted(leagues):
+                if only_league and league != only_league:
+                    continue
+                try:
+                    roster = harvest(league)
+                except Exception as e:  # noqa: BLE001 — best-effort
+                    logger.warning("[RACE_FEEDS] %s roster failed: %s", league, e)
+                    continue
+                if not roster:
+                    logger.info("[RACE_FEEDS] %s: no completed race yet, nothing to do", league)
+                    continue
+                with self._db() as conn:
+                    results[league] = upsert_roster(conn, league, roster)
+        return results
+
     def refresh_if_needed(self, max_age_days: int = 7) -> bool:
         """Refresh cache if stale.
 
@@ -423,6 +463,7 @@ class CacheRefresher:
         # NCAA leagues also refresh their conference tree (#91) — best-effort
         if league_code in self.CONFERENCE_LEAGUES:
             self.refresh_conferences(only_league=league_code)
+        self.refresh_race_feeds(only_league=league_code)
 
         return {"success": True, "league_code": league_code, "team_count": count, "error": None}
 

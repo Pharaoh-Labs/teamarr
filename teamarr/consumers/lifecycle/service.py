@@ -396,15 +396,24 @@ class ChannelLifecycleService(
         self,
         stream_name: str,
         conn: Connection,
+        league: str | None = None,
     ) -> tuple[str | None, str | None]:
         """Check if stream name matches any exception keyword.
+
+        ``league`` scopes in that league's race feeds (#245) ahead of the
+        global keywords; the merged list is memoized per league for the run.
 
         Returns:
             Tuple of (matched_keyword, behavior) or (None, None)
         """
-        from teamarr.database.channels import check_exception_keyword
+        from teamarr.database.channels import check_exception_keyword, get_keywords_for_league
 
         keywords = self._get_exception_keywords(conn)
+        if league:
+            memo = self.__dict__.setdefault("_league_keywords", {})
+            if league not in memo:
+                memo[league] = get_keywords_for_league(conn, league, keywords)
+            keywords = memo[league]
         return check_exception_keyword(stream_name, keywords)
 
     def _resolve_event_template(
