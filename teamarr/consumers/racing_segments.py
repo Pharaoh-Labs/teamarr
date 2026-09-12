@@ -20,9 +20,11 @@ one segment via the same code path - no special-casing required.
 
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from teamarr.core.types import Event
+from teamarr.core.types import Event, RacingSession
+from teamarr.utilities.tz import get_user_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +221,55 @@ def _isolate_stream_session_label(stream_name: str) -> str:
     return segment.split(":", 1)[0].strip()
 
 
+# Trailing provider metadata that hides the session word from the label
+# scan: "@ 12 Sep 06:20 AM ET", "(2026-09-12 10:20:00)", "[1080p]",
+# "(English) (UHD)". Stripped for LABEL DETECTION ONLY — the name itself is
+# never rewritten.
+_TRAILING_META_RE = re.compile(
+    r"(?:\s*@\s*\d{1,2}\s+[A-Za-z]{3}.*$)"  # "@ 12 Sep 06:20 AM ET"
+    r"|(?:\s*@\s*[A-Za-z]{3}\s+\d{1,2}.*$)"  # "@ Sep 12 6:00PM ET"
+    r"|(?:\s*\(\d{4}-\d{2}-\d{2}[^)]*\))"  # "(2026-09-12 10:20:00)"
+    r"|(?:\s*\[[^\]]*\d{3,4}p[^\]]*\])"  # "[1080p]"
+    r"|(?:\s*\((?:english|spanish|french|german|italian|uhd|4k|hd)\))",  # "(English)"
+    re.IGNORECASE,
+)
+# Session phrases anywhere in the name (#245). Providers put the session
+# mid-name — "Spain: Qualifying - Charles Leclerc", "Practice #3 @ …" — where
+# the trailing-label scan cannot see it. "Race" is deliberately NOT here: it
+# is everywhere ("Pre-Race Show", "Day at the Races"); a bare race binds only
+# as a trailing label, or by timestamp.
+_ANYWHERE_FP_RE = re.compile(r"\b(?:free\s*practice|practice|fp)\s*#?\s*(\d)\b", re.IGNORECASE)
+_ANYWHERE_FP_BARE_RE = re.compile(r"\b(?:free\s*practice|practice)\b(?!\s*#?\s*\d)", re.IGNORECASE)
+_ANYWHERE_SPRINT_QUALI_RE = re.compile(r"\bsprint\s*(?:qualifying|shootout)\b", re.IGNORECASE)
+_ANYWHERE_SPRINT_RE = re.compile(r"\bsprint(?:\s*race)?\b", re.IGNORECASE)
+_ANYWHERE_QUALI_RE = re.compile(r"\bqualifying\b", re.IGNORECASE)
+
+
+def strip_stream_metadata(stream_name: str) -> str:
+    """The stream name minus trailing timestamps/quality/language tags."""
+    previous = None
+    text = stream_name
+    while previous != text:
+        previous = text
+        text = _TRAILING_META_RE.sub("", text).strip()
+    return text
+
+
+def _session_category_anywhere(stream_name: str) -> str | None:
+    text = strip_stream_metadata(stream_name)
+    if _ANYWHERE_SPRINT_QUALI_RE.search(text):
+        return "sprint_qualifying"
+    if m := _ANYWHERE_FP_RE.search(text):
+        return f"fp{m.group(1)}"
+    if _ANYWHERE_FP_BARE_RE.search(text):
+        return "practice"
+    if _ANYWHERE_QUALI_RE.search(text):
+        return "qualifying"
+    if _ANYWHERE_SPRINT_RE.search(text):
+        return "sprint"
+    return None
+
+
 def _session_category_from_stream_name(stream_name: str) -> str | None:
     """Best-effort session-type CATEGORY from a stream's own name.
 
@@ -238,7 +289,7 @@ def _session_category_from_stream_name(stream_name: str) -> str | None:
     false negatives (a real session-specific stream getting excluded from
     the one session channel it actually belongs on).
     """
-    label = _isolate_stream_session_label(stream_name)
+    label = _isolate_stream_session_label(strip_stream_metadata(stream_name))
     if not label:
         return None
     if category := _classify_session_label(label):
@@ -261,6 +312,10 @@ def _session_category_from_stream_name(stream_name: str) -> str | None:
         for field in segment.split(":", 1):
             if category := _classify_session_label(field.strip()):
                 return category
+    # Session word mid-name (#245): "Spain: Qualifying - Charles Leclerc",
+    # "On-Board Camera: X - Spanish Grand Prix Practice #3 @ 12 Sep …".
+    if category := _session_category_anywhere(stream_name):
+        return category
     return None
 
 
@@ -379,9 +434,57 @@ def nearest_session(
     return best_code, best_dist
 
 
+def _session_from_stream_time(
+    event: Event,
+    match: dict,
+    stream_timezone: str | None,
+    sport_durations: dict[str, float] | None,
+) -> "RacingSession | None":
+    """The session the stream's own timestamp points at (#245).
+
+    A driver-only or feed-only name ("[4K] Ferrari: Charles Leclerc @ 13 Sep
+    09:00 AM") names no session, but its timestamp does. Uses the classifier's
+    extracted time (and tz, falling back to the group's stream timezone, then
+    the user's) on the extracted date (falling back to the weekend's days),
+    and accepts the nearest session inside the EPG anchor tolerance — the same
+    bound the EPG path uses. None when the name carries no time or nothing
+    airs near it, so the caller keeps its fan-out.
+    """
+    stream_time = match.get("stream_time")
+    if not stream_time:
+        return None
+    try:
+        hh, mm = (int(x) for x in str(stream_time).split(":")[:2])
+    except ValueError:
+        return None
+    tz_name = match.get("stream_tz") or stream_timezone
+    try:
+        tz = ZoneInfo(tz_name) if tz_name else get_user_timezone()
+    except (ValueError, KeyError, ZoneInfoNotFoundError):
+        tz = get_user_timezone()
+    days: list[date] = []
+    if match.get("stream_date"):
+        try:
+            days.append(date.fromisoformat(str(match["stream_date"])))
+        except ValueError:
+            pass
+    if not days:
+        days = sorted({sess.start_time.astimezone(tz).date() for sess in event.sessions})
+    best: tuple[float, str | None] = (float("inf"), None)
+    for day in days:
+        instant = datetime.combine(day, time(hh, mm), tzinfo=tz)
+        code, dist = nearest_session(event, instant, sport_durations)
+        if code is not None and dist < best[0]:
+            best = (dist, code)
+    if best[1] is None or best[0] > RACING_ANCHOR_TOLERANCE_SECONDS:
+        return None
+    return next((sess for sess in event.sessions if sess.code == best[1]), None)
+
+
 def expand_racing_segments(
     matched_streams: list[dict],
     sport_durations: dict[str, float] | None = None,
+    stream_timezone: str | None = None,
 ) -> list[dict]:
     """Expand racing matched streams into session-based channels.
 
@@ -470,6 +573,11 @@ def expand_racing_segments(
                 )
                 continue
             sessions = overlapping
+        elif timed := _session_from_stream_time(event, match, stream_timezone, sport_durations):
+            # The name carries no session word but its timestamp lands inside
+            # (or near) one session — a driver onboard, pit lane or timing
+            # feed: one channel, not a fan-out (#245).
+            sessions = [timed]
         else:
             # Providers frequently don't carry a dedicated practice feed at
             # all (coverage often starts at qualifying), so a generic

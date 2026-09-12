@@ -507,6 +507,13 @@ class StreamMatching:
                             # MatchMethod.EPG matches; None for name matches (full-life).
                             "epg_program_start": result.epg_program_start,
                             "epg_program_end": result.epg_program_end,
+                            # The stream's own date/time/tz as the classifier
+                            # read them (#245): racing session binding falls
+                            # back to the timestamp when the name carries no
+                            # session word.
+                            "stream_date": result.extracted_date,
+                            "stream_time": result.extracted_time,
+                            "stream_tz": result.extracted_tz,
                         }
                     )
 
@@ -516,7 +523,7 @@ class StreamMatching:
 
         # Apply racing session expansion
         # This splits racing streams into separate per-session channels
-        matched = self._expand_racing_segments(matched)
+        matched = self._expand_racing_segments(matched, stream_timezone)
 
         return matched
 
@@ -867,7 +874,9 @@ class StreamMatching:
         sport_durations = self._load_sport_durations_cached()
         return expand_mma_segments(matched_streams, sport_durations, stream_timezone)
 
-    def _expand_racing_segments(self, matched_streams: list[dict]) -> list[dict]:
+    def _expand_racing_segments(
+        self, matched_streams: list[dict], stream_timezone: str | None = None
+    ) -> list[dict]:
         """Expand racing streams into session-based channels.
 
         Splits each matched racing stream into one entry per race-weekend
@@ -883,7 +892,7 @@ class StreamMatching:
         from teamarr.consumers.racing_segments import expand_racing_segments
 
         sport_durations = self._load_sport_durations_cached()
-        return expand_racing_segments(matched_streams, sport_durations)
+        return expand_racing_segments(matched_streams, sport_durations, stream_timezone)
 
     def _enrich_matched_events(self, matched_streams: list[dict]) -> list[dict]:
         """Enrich all matched events with fresh status from provider.
