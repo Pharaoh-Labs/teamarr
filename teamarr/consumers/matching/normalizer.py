@@ -444,6 +444,34 @@ TZ_ABBREVIATION_MAP = {
 }
 
 
+def is_datetime_tail(text: str) -> bool:
+    """True when `text` carries no team/venue material — only date/time (#787).
+
+    Separator selection uses this to reject an ``@ <date>`` tail as a matchup
+    separator: ``"Court 8 @ Sep 10 10:00AM ET"`` has no second team, so the
+    ``@`` must not win the separator scan and hand a show title to the
+    single-team matcher as junk. Accepts both raw datetime atoms and their
+    DATE_MASK/TIME_MASK placeholders — ``extract_and_mask_datetime`` masks
+    only the first date+time, so a second timestamp can still be raw here.
+    Anything that survives (a venue like "London", a team word) makes the
+    tail real matchup material and the separator stays valid.
+    """
+    if not text or not text.strip():
+        # Empty right side: no second team there either — treat like a
+        # datetime tail so a dangling separator is never "accepted".
+        return True
+    result = text.replace("—", " ").replace("–", " ")
+    result = re.sub(r"\b(?:DATE|TIME)_MASK\b", " ", result, flags=re.IGNORECASE)
+    for pattern, _mask in DATE_PATTERNS:
+        result = re.sub(pattern, " ", result, flags=re.IGNORECASE)
+    for pattern, _mask in TIME_PATTERNS:
+        result = re.sub(pattern, " ", result, flags=re.IGNORECASE)
+    result = re.sub(rf"\b(?:{_TZ_ABBREVS})\b", " ", result, flags=re.IGNORECASE)
+    # Team/venue material is any surviving alphanumeric content; leftover
+    # punctuation/brackets around a masked timestamp are not.
+    return not re.search(r"[a-z0-9]", result, flags=re.IGNORECASE)
+
+
 def extract_and_mask_datetime(text: str) -> tuple[str, date | None, time | None, str | None]:
     """Extract date/time/timezone from stream name and mask for separator detection.
 
