@@ -64,6 +64,10 @@ ALTERNATE_TEAM_CODES: dict[str, str] = {
 # -> "AND"). Matching these words as abbreviation tokens causes unrelated
 # streams containing everyday English words (e.g. "AT THE MOVIES", "The
 # Golics", "RedZone at the US Open") to false-match with 100% confidence.
+# FROZEN as of #799: the matcher now honours a code only when the stream
+# writes it as one (upper-case token, or the whole side), which is the rule
+# the #705/#788 measurements were approximating. Do not extend this list —
+# a prose word that trips a code is a case-rule bug, not a missing stopword.
 ABBREVIATION_STOPWORDS: frozenset[str] = frozenset({
     "the",
     "and",

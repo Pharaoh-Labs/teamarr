@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from functools import lru_cache
@@ -59,7 +60,7 @@ from sqlite3 import Connection
 from rapidfuzz import fuzz, process
 
 from teamarr.consumers.matching.constants import SHORT_CODE_MAX_LEN
-from teamarr.database.team_cache import load_team_identities
+from teamarr.database.team_cache import load_label_surfaces, load_team_identities
 from teamarr.utilities.constants import TEAM_ALIASES
 from teamarr.utilities.fuzzy_match import normalize_text
 
@@ -176,6 +177,29 @@ def _discriminating(tokens: AbstractSet[str]) -> set[str]:
     }
 
 
+# Extraction refinement (#799). A stream side is refined to the longest run of
+# its tokens that is a known team surface, so provider junk around the name
+# ("B1G Football - Howard", "Indiana (Big Ten Network)", "TOLEDO | 9.12 |
+# ESPN+") never reaches the scorer or the stored parsed_team fields. Spans are
+# capped at four tokens: no cached surface is longer, and the cap bounds the
+# per-side lookups to 4 x len(tokens) dictionary hits.
+MAX_SPAN_TOKENS = 4
+# Lookup-only canonicalisation so "Washington St." finds the "washington state"
+# surface. Applied to both the keys and the probe, never to what is returned:
+# the refined side is always a verbatim slice of the original text, so the
+# scorer still sees "Washington St" and keeps its own St/State tolerance.
+_SPAN_CANON = {"st": "state"}
+
+
+def _canon_span(tokens: Sequence[str]) -> tuple[str, ...]:
+    return tuple(_SPAN_CANON.get(t, t) for t in tokens)
+
+
+def _initialism(tokens: Sequence[str]) -> str:
+    """First letter of each token, in order ("san francisco" -> "sf")."""
+    return "".join(t[0] for t in tokens if t)
+
+
 # Cap on TeamIdentityIndex.resolve's memo. Keyed by normalized stream-side text,
 # so it grows with the variety of names a run sees, not with team_cache.
 _RESOLVE_CACHE_MAX = 16384
@@ -223,7 +247,11 @@ def residual_contradicts(stream_norm: str, team_norm: str) -> bool:
 class TeamIdentityIndex:
     """Resolves stream-side text to the real teams bearing that name."""
 
-    def __init__(self, rows: list[tuple[str, str | None, str | None, str, str]]) -> None:
+    def __init__(
+        self,
+        rows: list[tuple[str, str | None, str | None, str, str]],
+        labels: Iterable[str] = (),
+    ) -> None:
         # One entry per (surface form -> identity). A team contributes its full
         # name and its short name, because streams use whichever the provider
         # liked ("D-backs" is ESPN's own short_name for Arizona, #480).
@@ -312,9 +340,27 @@ class TeamIdentityIndex:
 
         self._cache: dict[str, Resolution] = {}
 
+        # Refinement support (#799): which codes each identity answers to, and
+        # the span map, built lazily on first use from the surface tables above.
+        self._abbrevs_of: dict[TeamIdentity, set[str]] = {}
+        for code, identities in self._by_abbrev.items():
+            for identity in identities:
+                self._abbrevs_of.setdefault(identity, set()).add(code)
+        self._span_map: dict[tuple[str, ...], tuple[TeamIdentity, ...]] | None = None
+        # Competition, sport and conference labels ("EFL Championship",
+        # "Soccer", "Big Ten"): the one kind of word-run that may sit flush
+        # against a team name and still be junk. Loaded from the leagues,
+        # sports and provider_group_cache tables — data the app already keeps,
+        # never a list in code.
+        self._labels: set[tuple[str, ...]] = set()
+        for label in labels:
+            tokens = normalize_text(label).split() if label else []
+            if tokens:
+                self._labels.add(_canon_span(tokens))
+
     @classmethod
     def from_db(cls, conn: Connection) -> TeamIdentityIndex:
-        return cls(load_team_identities(conn))
+        return cls(load_team_identities(conn), load_label_surfaces(conn))
 
     def __len__(self) -> int:
         return len(self._identities)
@@ -365,6 +411,152 @@ class TeamIdentityIndex:
                     replaced = tokens[:i] + canonical.split() + tokens[i + n :]
                     variants.append(" ".join(dict.fromkeys(replaced)))
         return variants
+
+    # ------------------------------------------------------------------
+    # Extraction refinement (#799)
+    # ------------------------------------------------------------------
+
+    def _spans(self) -> dict[tuple[str, ...], tuple[TeamIdentity, ...]]:
+        """Every surface form as a canonical token tuple -> the teams it names.
+
+        Full names, short names, the ≥2-token prefixes (#650) and the alias
+        keys (#480) — the same tables `resolve` reads, so refinement can never
+        find a "team" the identity gate does not also know.
+        """
+        if self._span_map is None:
+            spans: dict[tuple[str, ...], list[TeamIdentity]] = {}
+            for table in (self._exact, self._partial):
+                for key, identities in table.items():
+                    spans.setdefault(_canon_span(key.split()), []).extend(identities)
+            for key_tokens, canonical in self._alias_tokens:
+                identities = self._exact.get(canonical) or self._partial.get(canonical)
+                if identities:
+                    spans.setdefault(_canon_span(key_tokens), []).extend(identities)
+            self._span_map = {
+                key: tuple(dict.fromkeys(ids))
+                for key, ids in spans.items()
+                if len(key) <= MAX_SPAN_TOKENS
+            }
+        return self._span_map
+
+    def _code_identities(self, raw_token: str, norm_token: str) -> tuple[TeamIdentity, ...]:
+        """The teams a code-cased token names, or nothing for prose.
+
+        A provider code is a surface only when the stream writes it as a code:
+        "CCSU AT TOLEDO" carries CCSU, "US Open: Day #13" does not carry DAY.
+        The #788 audit measured exactly this split (DAY: 1 upper / 217 lower),
+        so case is the rule and the stopword list is frozen rather than grown.
+        """
+        if not (raw_token.isalpha() and raw_token.isupper() and 2 <= len(raw_token) <= 5):
+            return ()
+        return tuple(self._by_abbrev.get(norm_token, ()))
+
+    def _claims_remainder(
+        self,
+        remainder: set[str],
+        span_tokens: set[str],
+        identities: tuple[TeamIdentity, ...],
+    ) -> bool:
+        """Could any team bearing the span own a token outside it?
+
+        The guard that makes refinement a pure strip of junk: "SF Giants" keeps
+        its "SF" because it is the initialism of what the Giants' own full name
+        carries beyond "Giants"; "B1G Football - Howard" loses "B1G Football"
+        because no team named Howard has any use for those words. A club suffix
+        in the remainder ("Dallas FC") also keeps the side whole — that is a
+        club-name variant for the alias/fuzzy path, not junk.
+        """
+        if not remainder:
+            return False
+        if remainder & _NON_DISCRIMINATING:
+            return True
+        for identity in identities:
+            name_tokens = normalize_text(identity.name).split()
+            allowed = set(name_tokens)
+            allowed.add(_initialism(name_tokens))
+            allowed.add(_initialism([t for t in name_tokens if t not in span_tokens]))
+            allowed |= self._abbrevs_of.get(identity, set())
+            if remainder & allowed:
+                return True
+        return False
+
+    def refine_side(self, side: str, *, anchor: str) -> str | None:
+        """The slice of ``side`` that names a team, or None to leave it alone.
+
+        Finds the longest run of tokens that is a known surface (ties go to the
+        run nearest ``anchor`` — "end" for the side before the separator,
+        "start" for the side after it, since that is where the team sits) and
+        returns that run verbatim from the original text, provided no team the
+        run could name has a claim on any token outside it. None when the side
+        is already a surface, contains none, or the remainder might matter — in
+        every such case the existing fuzzy path scores the untouched side.
+        """
+        raw_tokens = side.split()
+        if len(raw_tokens) < 2:
+            return None
+        norm: list[str] = []
+        owner: list[int] = []
+        for i, token in enumerate(raw_tokens):
+            for piece in normalize_text(token).split():
+                norm.append(piece)
+                owner.append(i)
+        total = len(norm)
+        if total < 2:
+            return None
+        canon = _canon_span(norm)
+        spans = self._spans()
+        best: tuple[int, int, int, tuple[TeamIdentity, ...]] | None = None
+        for n in range(min(MAX_SPAN_TOKENS, total), 0, -1):
+            for i in range(total - n + 1):
+                identities = spans.get(canon[i : i + n])
+                if not identities and n == 1:
+                    identities = self._code_identities(raw_tokens[owner[i]], norm[i])
+                if not identities:
+                    continue
+                distance = total - (i + n) if anchor == "end" else i
+                candidate = (n, -distance, i, identities)
+                if best is None or candidate[:2] > best[:2]:
+                    best = candidate
+            if best is not None:
+                break
+        if best is None:
+            return None
+        n, _, start, identities = best
+        if n == total:
+            return None
+        span_tokens = set(norm[start : start + n])
+        remainder = (set(norm[:start]) | set(norm[start + n :])) - span_tokens
+        if self._claims_remainder(remainder, span_tokens, identities):
+            return None
+        lo, hi = owner[start], owner[start + n - 1]
+        if not self._bounded(raw_tokens[:lo][::-1]) or not self._bounded(raw_tokens[hi + 1 :]):
+            return None
+        return " ".join(raw_tokens[lo : hi + 1])
+
+    def _bounded(self, outward: list[str]) -> bool:
+        """Is the stripped text separated from the span by a real boundary?
+
+        ``outward`` is the remainder on one side, nearest token first. A plain
+        word flush against the span could be the rest of the name — "Oklahoma
+        State", "Ohio Wesleyan", "Georgia Tech" — and when that team is not
+        in the cache, nothing else can tell the extension from junk. So the
+        run of bare words touching the span must be empty, or be a known
+        competition/sport/conference label ("EFL Championship Derby",
+        "Soccer Ohio State"); anything else stays whole for the fuzzy path,
+        which already rejects "Ohio Wesleyan" against the Bobcats. A token
+        with punctuation or a digit ("Football:", "(Big", "|", "13", "6pm")
+        is the boundary providers actually write.
+        """
+        run: list[str] = []
+        for token in outward:
+            if token.isalpha():
+                run.append(token)
+            else:
+                break
+        if not run:
+            return True
+        words = [piece for token in run for piece in normalize_text(token).split()]
+        return _canon_span(words) in self._labels or _canon_span(words[::-1]) in self._labels
 
     def _resolve_uncached(self, norm: str) -> Resolution:
         # Short codes read by abbreviation (#472) — token_set_ratio gives a

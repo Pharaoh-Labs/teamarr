@@ -256,6 +256,31 @@ def _code_tokens(team_name: str) -> frozenset[str]:
     return frozenset(_resolve_alt_codes(set(normalize_text(team_name).split())))
 
 
+def _code_cased_tokens(raw_side: str | None) -> frozenset[str]:
+    """Normalized tokens of a side that the stream itself writes as codes (#799).
+
+    A token is a code when it is upper-case alphabetic, 2-5 letters ("CCSU",
+    "TCU", "NYY"), or when it is the whole side ("tb" in "tb vs det"). The
+    abbreviation paths honour only these: "Day 1" carries no code, however
+    many teams abbreviate to DAY. This is the rule behind the #705/#788
+    stopword lists — measured there as DAY 1 upper / 217 lower — so the list
+    is frozen and case decides from here on. Alternate codes are resolved so
+    "AZ" still reaches ARI.
+    """
+    if not raw_side:
+        return frozenset()
+    tokens = raw_side.split()
+    coded = {
+        normalize_text(t)
+        for t in tokens
+        if t.isalpha() and t.isupper() and 2 <= len(t) <= 5
+    }
+    if len(tokens) == 1:
+        coded.add(normalize_text(tokens[0]))
+    coded.discard("")
+    return frozenset(_resolve_alt_codes(coded))
+
+
 def _abbrev_equals(stream_code: str, event_abbrev: str | None) -> bool:
     """Does a short stream code equal the event team's abbreviation (#472)?
 
@@ -1326,6 +1351,11 @@ class TeamMatcher:
            without breaking legitimate disambiguators like "Miami (OH)")
         4. Rank by: score > time proximity > date proximity
         """
+        # Strip provider junk from both sides before anything reads them (#799).
+        # Here, in the one loop, rather than at the entry points: #660 is the
+        # standing lesson that a step added to a wrapper lands on one path.
+        self._refine_sides(ctx)
+
         team1_normalized = normalize_for_matching(ctx.team1) if ctx.team1 else None
         team2_normalized = normalize_for_matching(ctx.team2) if ctx.team2 else None
 
@@ -1347,6 +1377,9 @@ class TeamMatcher:
         pipe_t1, pipe_t2, has_pipe_fallback = self._prepare_pipe_fallback(
             ctx.team1, ctx.team2, team1_normalized, team2_normalized
         )
+        # Which tokens the stream writes as provider codes (#799): computed from
+        # the raw sides once, honoured by every abbreviation check below.
+        code_tokens = (_code_cased_tokens(ctx.team1), _code_cased_tokens(ctx.team2))
 
         # Check if we have date validation from the stream
         has_date_validation = ctx.classified.normalized.extracted_date is not None
@@ -1489,7 +1522,7 @@ class TeamMatcher:
             # Fall back to whole-name matching using extracted teams
             if not match_result:
                 match_result = self._match_teams_to_event(
-                    team1_normalized, team2_normalized, event, has_date_validation
+                    team1_normalized, team2_normalized, event, has_date_validation, code_tokens
                 )
 
             # Fallback: retry with parentheticals stripped from raw names
@@ -1497,14 +1530,14 @@ class TeamMatcher:
             # breaking legitimate disambiguators like "Miami (OH)" (tried above)
             if not match_result and has_stripped_fallback:
                 match_result = self._match_teams_to_event(
-                    fallback_t1, fallback_t2, event, has_date_validation
+                    fallback_t1, fallback_t2, event, has_date_validation, code_tokens
                 )
 
             # Fallback: retry with pipe metadata trimmed (#652). Last tier, so
             # a name that matches intact never reaches it.
             if not match_result and has_pipe_fallback:
                 match_result = self._match_teams_to_event(
-                    pipe_t1, pipe_t2, event, has_date_validation
+                    pipe_t1, pipe_t2, event, has_date_validation, code_tokens
                 )
 
             # Trusted-date gate (#474), applied AFTER team scoring (#480):
@@ -1721,6 +1754,7 @@ class TeamMatcher:
         team1: str | None,
         team2: str | None,
         event: Event,
+        code_tokens: tuple[frozenset[str], frozenset[str]] | None = None,
     ) -> tuple[MatchMethod, float] | None:
         """Check if stream teams exactly match event team abbreviations as tokens.
 
@@ -1753,6 +1787,12 @@ class TeamMatcher:
 
         t1_tokens = _code_tokens(team1) if team1 else frozenset()
         t2_tokens = _code_tokens(team2) if team2 else frozenset()
+        # Only tokens the stream writes as codes may hit by code (#799): "Day 1"
+        # never reaches DAY, "CCSU AT TOLEDO" still reaches CCSU. Callers that
+        # pass no code set (tests, older paths) keep the case-blind behaviour.
+        if code_tokens is not None:
+            t1_tokens = t1_tokens & code_tokens[0]
+            t2_tokens = t2_tokens & code_tokens[1]
 
         # Both teams must match different event teams
         if team1 and team2:
@@ -1795,6 +1835,7 @@ class TeamMatcher:
         team2: str | None,
         event: Event,
         has_date_validation: bool = False,
+        code_tokens: tuple[frozenset[str], frozenset[str]] | None = None,
     ) -> tuple[MatchMethod, float] | None:
         """Match extracted team names against event teams.
 
@@ -1812,12 +1853,12 @@ class TeamMatcher:
             Tuple of (method, confidence) if matched, None otherwise
         """
         # Try exact abbreviation token match (tournament/international streams)
-        abbr_result = self._check_abbreviation_match(team1, team2, event)
+        abbr_result = self._check_abbreviation_match(team1, team2, event, code_tokens)
         if abbr_result:
             return abbr_result
 
         # Try fuzzy matching with team names
-        return self._score_teams_against_event(team1, team2, event)
+        return self._score_teams_against_event(team1, team2, event, code_tokens)
 
     @staticmethod
     def _strip_parentheticals(name: str) -> str:
@@ -1923,6 +1964,7 @@ class TeamMatcher:
         team1: str | None,
         team2: str | None,
         event: Event,
+        code_tokens: tuple[frozenset[str], frozenset[str]] | None = None,
     ) -> tuple[MatchMethod, float] | None:
         """Score team names against event teams.
 
@@ -1955,6 +1997,8 @@ class TeamMatcher:
             # gives a spurious 100 when a code is a literal word of an
             # unrelated name ("SEA" in "Portland Sea Dogs") and useless
             # scores for real abbreviations ("SF" vs the Giants = 9).
+            coded = (code_tokens[0] | code_tokens[1]) if code_tokens else frozenset()
+
             def _side_score(stream_norm: str, event_team) -> float:
                 # Per-side alias resolution (#480 round 2): an alias is a
                 # statement about ONE team, so its canonical name scores
@@ -1974,6 +2018,16 @@ class TeamMatcher:
                     )
                 else:
                     base = _best_name_score(stream_norm, event_team)
+                    # A whole side written as a code longer than the short-code
+                    # cap ("CCSU", "UAPB") scores by abbreviation equality too
+                    # (#799) — additive, so a real 4-letter name ("Iowa",
+                    # "Utah") keeps its name score when it is not a code.
+                    if (
+                        stream_norm in coded
+                        and " " not in stream_norm
+                        and _abbrev_equals(stream_norm, event_team.abbreviation)
+                    ):
+                        base = 100.0
                 score = max(base, alias_score)
                 if (
                     not canonical
@@ -2267,6 +2321,38 @@ class TeamMatcher:
 
         self._identity_index = index
         return index
+
+    def _refine_sides(self, ctx: MatchContext) -> None:
+        """Strip provider junk from both extracted sides before anything reads them (#799).
+
+        `_clean_team_name` knows the shapes it was taught; providers keep
+        inventing new ones ("B1G Football - Howard", "Big 12 Football:
+        Washington St.", "TOLEDO | 9.12 | ESPN+", "West Brom @ London"), and
+        every one used to be another anchored regex. Instead each side is
+        refined to the longest run of tokens that is a known team surface in
+        the identity index, with the guard that no team the run could name has
+        a claim on the stripped tokens ("SF Giants" keeps its SF). The refined
+        text is written back to the classified stream, so the scorer, the token
+        index (#747), the fixture gate, the negative cache and the stored
+        parsed_team fields all see the team, not the show title. A side the
+        index cannot place is left exactly as it was.
+
+        Two-sided streams only: a lone side has no separator to anchor on, and
+        TEAM_ONLY scoring already tolerates a branded-channel suffix.
+        """
+        if not (ctx.team1 and ctx.team2):
+            return
+        index = self._get_identity_index()
+        if index is None:
+            return
+        refined1 = index.refine_side(ctx.team1, anchor="end")
+        refined2 = index.refine_side(ctx.team2, anchor="start")
+        if refined1:
+            ctx.team1 = refined1
+            ctx.classified.team1 = refined1
+        if refined2:
+            ctx.team2 = refined2
+            ctx.classified.team2 = refined2
 
     def _fixture_leagues(self, ctx: MatchContext) -> set[str] | None:
         """Leagues where this stream's two sides could actually meet.

@@ -5,6 +5,7 @@ Used by providers to look up team names without going through consumers layer.
 """
 
 import logging
+import sqlite3
 from sqlite3 import Connection
 
 from teamarr.core.sports import get_sport_display_names_from_db
@@ -387,3 +388,30 @@ def get_league_info(conn: Connection, league_slug: str) -> dict | None:
         "sport": row["sport"],
         "team_count": row["team_count"],
     }
+
+
+def load_label_surfaces(conn: Connection) -> list[str]:
+    """Competition, sport and conference names, for extraction refinement (#799).
+
+    The identity index strips provider junk from an extracted side only across
+    a real boundary — punctuation, a digit — or when the bare words touching
+    the team name are a label the app itself knows: a league's display name
+    or alias ("EFL Championship"), a sport ("Soccer"), a conference from the
+    provider group cache ("Big Ten"). Read from the tables that already hold
+    them; a database without one of them (tests, a pre-#91 install) simply
+    contributes fewer labels.
+    """
+    labels: list[str] = []
+    queries = (
+        "SELECT display_name, league_alias FROM leagues",
+        "SELECT display_name FROM sports",
+        "SELECT DISTINCT group_name, group_abbrev FROM provider_group_cache",
+    )
+    for query in queries:
+        try:
+            rows = conn.execute(query).fetchall()
+        except sqlite3.OperationalError:
+            continue
+        for row in rows:
+            labels.extend(value for value in tuple(row) if value)
+    return labels
