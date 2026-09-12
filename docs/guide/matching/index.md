@@ -36,6 +36,12 @@ The check only ever *rejects* a candidate; it never creates a match on its own. 
 {: .note }
 > This relies on the team cache, so it is inactive until your first cache refresh — and a stream naming teams from a league Teamarr hasn't cached is passed through to normal matching rather than rejected.
 
+## Name Cleanup
+
+Providers wrap team names in all sorts of extras — a competition label (`B1G Football - Howard at Indiana`), a network in brackets (`Michigan State (Big Ten Network)`), a venue after the time (`West Brom @ London`), or pipe-separated metadata (`CCSU AT TOLEDO | 9.12 3:30 PM | ESPN+`). Teamarr trims these by looking for the longest part of each side that is a real team name in its team cache, so the score is computed on `Howard` and `Indiana`, not on the label. The trimmed names are what you see in the run history and the Pattern Tester.
+
+Two rules keep this safe. A word that any team of that name could own is never trimmed (`SF Giants` keeps its `SF`), and plain words touching the name are left alone unless they are a known competition, sport or conference label — so a school the cache has not seen, like `Ohio Wesleyan`, is never shortened to `Ohio`. Team codes such as `CCSU` or `NYY` are recognised only when the stream writes them in capitals, or when the whole side is the code; a word like `Day` in `US Open: Day 13` is never read as Dayton.
+
 ## Tennis
 
 Tennis streams are matched on player surnames plus date/time, and get the same kind of protection as team sports:
