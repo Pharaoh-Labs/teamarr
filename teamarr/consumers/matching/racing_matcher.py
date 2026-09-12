@@ -25,7 +25,7 @@ from rapidfuzz import fuzz
 from teamarr.consumers.matching.classifier import (
     ClassifiedStream,
     StreamCategory,
-    has_racing_text_evidence,
+    detect_racing_series_leagues,
 )
 from teamarr.consumers.matching.result import (
     FailedReason,
@@ -85,6 +85,27 @@ def _augment_compounds(normalized: str) -> str:
     """
     tokens = normalized.split()
     return " ".join(tokens + [a + b for a, b in zip(tokens, tokens[1:], strict=False)])
+
+
+def _single_event_evidence(stream_name: str) -> bool:
+    """May a weak name score bind to the one event covering the date? (#804)
+
+    The generic evidence ("grand prix") that classifies a stream as racing is
+    not enough here: a cycling "Grand Prix Cycliste de Québec" shares those
+    two words with every Grand Prix, scored 52.6 against the Spanish GP and
+    sat on its session channels for a weekend. Below the normal name floor
+    the stream must name a **series** (formula/f1/nascar/indycar/motogp/
+    wec/imsa …) or a **session** (practice/qualifying/sprint/race). Streams
+    that actually name the Grand Prix still bind on the name score alone,
+    and country-named streams keep the venue-country path.
+    """
+    if not stream_name:
+        return False
+    if detect_racing_series_leagues(stream_name) is not None:
+        return True
+    from teamarr.consumers.racing_segments import _session_category_from_stream_name
+
+    return _session_category_from_stream_name(stream_name) is not None
 
 
 @dataclass
@@ -407,7 +428,7 @@ class RacingMatcher:
         if (
             len(events) == 1
             and best_score >= SINGLE_EVENT_SANITY_THRESHOLD
-            and has_racing_text_evidence(ctx.stream_name)
+            and _single_event_evidence(ctx.stream_name)
         ):
             event = events[0]
             logger.debug(
