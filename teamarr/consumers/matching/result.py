@@ -91,6 +91,12 @@ class FailedReason(Enum):
     # matched is not one where those two could meet — an NHL stream offered to an
     # MLB source. Distinct from NO_EVENT_FOUND: the game exists, just not here.
     FIXTURE_NOT_IN_LEAGUE = "fixture_not_in_league"
+    # The two sides DO share leagues — the fixture can exist — but every one of
+    # them is outside this install's subscription, so its events are never
+    # fetched (#791). Not a matcher defect: subscribing the league is the fix.
+    # Reported as a refinement of FIXTURE_NOT_IN_LEAGUE, never instead of a
+    # more specific verdict.
+    FIXTURE_LEAGUE_NOT_SUBSCRIBED = "fixture_league_not_subscribed"
 
     # League detection failures (multi-sport groups)
     NO_LEAGUE_DETECTED = "no_league_detected"  # Teams matched but can't determine league
@@ -104,6 +110,11 @@ class FailedReason(Enum):
     # candidates were scored and none cleared the floor; the near-miss detail
     # used to show 100/100 for an event the loop never looked at.
     CANDIDATES_GATED = "candidates_gated"
+    # The stream carries its own trusted date, and that date sits beyond
+    # event_match_days_ahead — no candidate for it can be in the pool yet
+    # (#791). It will match as the event enters the fetch window; reporting
+    # NO_EVENT_FOUND sent triage after scheduling gaps that don't exist.
+    EVENT_BEYOND_WINDOW = "event_beyond_window"
 
     # Event card failures (UFC, boxing)
     NO_EVENT_CARD_MATCH = "no_event_card_match"  # Could not match to event card

@@ -201,3 +201,135 @@ class TestPersistedReasonsAreHonest:
             ),
         ]
         assert self._persist(db_conn, run_and_group, results) == {}
+
+
+class TestWindowAndSubscriptionReasons:
+    """#791: two failure shapes reported reasons that sent triage nowhere.
+
+    Streams carrying their own future date beyond event_match_days_ahead
+    reported NO_EVENT_FOUND with an unrelated near-miss (Stan lists EPL
+    matchweek 5 nine days out against a 7-back/3-ahead window), and streams
+    whose two sides share only unsubscribed leagues reported
+    FIXTURE_NOT_IN_LEAGUE (implying a veto bug) when the honest answer is
+    "subscribe that league".
+    """
+
+    FUTURE_STREAM = (
+        "AU (STAN 94) | Nottingham Forest v Coventry City"
+        "  Premier League Matchweek 5 2026/2027 (2026-09-20 02:20:29)"
+    )
+
+    def test_future_dated_stream_beyond_window_is_named(self):
+        result = _match(self.FUTURE_STREAM, _event(0))
+        assert result.failed_reason is FailedReason.EVENT_BEYOND_WINDOW
+        assert "beyond" in (result.detail or "")
+        assert "+3d" in (result.detail or "")
+
+    def test_future_date_within_window_is_still_no_event_found(self):
+        # Tomorrow is inside the +3d window: an unmatched pairing stays the
+        # ordinary verdict — beyond-window must not absorb it.
+        stream = "Duke vs Clemson @ " + (TODAY + timedelta(days=1)).strftime("%b %d")
+        result = _match(stream, _event(0))
+        assert result.failed_reason is FailedReason.NO_EVENT_FOUND
+
+    @pytest.fixture
+    def soccer_db_factory(self):
+        import sqlite3
+
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            """CREATE TABLE team_cache (
+                team_name TEXT, team_short_name TEXT, team_abbrev TEXT,
+                league TEXT, sport TEXT)"""
+        )
+        conn.execute("CREATE TABLE team_aliases (alias TEXT, team_name TEXT, league TEXT)")
+        conn.executemany(
+            "INSERT INTO team_cache VALUES (?,?,?,?,?)",
+            [
+                ("Marshall Thundering Herd", "Marshall", "MAR", "usa.ncaa.w.1", "soccer"),
+                ("Utah Valley Wolverines", "Utah Valley", "UVU", "usa.ncaa.w.1", "soccer"),
+                (
+                    "Marshall Thundering Herd",
+                    "Marshall",
+                    "MAR",
+                    "womens-college-volleyball",
+                    "volleyball",
+                ),
+                ("Duke Blue Devils", "Duke", "DUKE", "womens-college-volleyball", "volleyball"),
+            ],
+        )
+        conn.commit()
+
+        class _Factory:
+            def __call__(self):
+                return self
+
+            def __enter__(self):
+                return conn
+
+            def __exit__(self, *exc):
+                return False
+
+        return _Factory()
+
+    def _soccer_match(self, db_factory, include_leagues):
+        # The candidate is a volleyball game; the stream names the women's
+        # soccer fixture. Their only shared league is unsubscribed.
+        classified = classify_stream("ESPN+ 95: Utah Valley vs. #20 Marshall @ Sep 11 7:10PM ET")
+        matcher = make_team_matcher(db_factory=db_factory, include_leagues=include_leagues)
+        ctx = MatchContext(
+            stream_name="ESPN+ 95: Utah Valley vs. #20 Marshall @ Sep 11 7:10PM ET",
+            stream_id=1,
+            group_id=1,
+            target_date=TODAY,
+            generation=1,
+            user_tz=ZoneInfo("UTC"),
+            classified=classified,
+            team1=classified.team1,
+            team2=classified.team2,
+        )
+        duke = Team(
+            id="t-duke",
+            provider="espn",
+            name="Duke Blue Devils",
+            short_name="Duke",
+            abbreviation="DUKE",
+            league="womens-college-volleyball",
+            sport="volleyball",
+        )
+        marshall = Team(
+            id="t-mar",
+            provider="espn",
+            name="Marshall Thundering Herd",
+            short_name="Marshall",
+            abbreviation="MAR",
+            league="womens-college-volleyball",
+            sport="volleyball",
+        )
+        event = Event(
+            id="vb-1",
+            provider="espn",
+            name="Duke Blue Devils vs Marshall Thundering Herd",
+            short_name="Duke vs Marshall",
+            start_time=datetime.now(UTC).replace(hour=23),
+            home_team=duke,
+            away_team=marshall,
+            status=EventStatus(state="scheduled"),
+            league="womens-college-volleyball",
+            sport="volleyball",
+        )
+        return matcher._match_against_events(ctx, [event], "womens-college-volleyball")
+
+    def test_shared_league_unsubscribed_is_named(self, soccer_db_factory):
+        result = self._soccer_match(soccer_db_factory, {"mlb", "eng.1"})
+        assert result.failed_reason is FailedReason.FIXTURE_LEAGUE_NOT_SUBSCRIBED
+        assert "usa.ncaa.w.1" in (result.detail or "")
+
+    def test_plain_fixture_veto_when_shared_leagues_subscribed(self, soccer_db_factory):
+        result = self._soccer_match(soccer_db_factory, {"mlb", "usa.ncaa.w.1"})
+        assert result.failed_reason is FailedReason.FIXTURE_NOT_IN_LEAGUE
+
+    def test_unknown_subscription_keeps_plain_fixture_veto(self, soccer_db_factory):
+        result = self._soccer_match(soccer_db_factory, None)
+        assert result.failed_reason is FailedReason.FIXTURE_NOT_IN_LEAGUE
