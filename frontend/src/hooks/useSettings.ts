@@ -52,6 +52,8 @@ import {
   getProxyProviders,
   getProxySettings,
   updateProxySettings,
+  getManagedTeamChannelSettings,
+  updateManagedTeamChannelSettings,
 } from "@/api/settings"
 
 // ---------------------------------------------------------------------------
@@ -110,6 +112,15 @@ export const useUpdateDispatcharrSettings = settingsMutationHook(updateDispatcha
 export const useUpdateLifecycleSettings = settingsMutationHook(updateLifecycleSettings, [
   ["settings", "channel-numbering"],
 ])
+
+export const useManagedTeamChannelSettings = settingsQueryHook(
+  "managed-team-channels",
+  getManagedTeamChannelSettings,
+)
+export const useUpdateManagedTeamChannelSettings = settingsMutationHook(
+  updateManagedTeamChannelSettings,
+  [["settings", "managed-team-channels"]],
+)
 
 export const useSchedulerSettings = settingsQueryHook("scheduler", getSchedulerSettings)
 export const useUpdateSchedulerSettings = settingsMutationHook(updateSchedulerSettings, [

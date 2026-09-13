@@ -184,6 +184,23 @@ def update_lifecycle_settings(
     return True
 
 
+def update_managed_team_channel_settings(
+    conn: Connection,
+    *,
+    range_start: int | None = None,
+    range_end: int | None | object = _NOT_PROVIDED,
+    priority_ids: list[int] | None = None,
+) -> bool:
+    """Update persistent Team EPG channel numbering settings.
+
+    ``range_end=None`` clears the upper bound; omitted fields remain unchanged.
+    """
+    provided = _skip_none(range_start=range_start, priority_ids=priority_ids) | _skip_missing(
+        range_end=range_end
+    )
+    return _apply(conn, "managed_team_channels", provided)
+
+
 def update_epg_settings(conn: Connection, **kwargs) -> bool:
     """Update EPG generation settings (unknown keys and None values ignored).
 

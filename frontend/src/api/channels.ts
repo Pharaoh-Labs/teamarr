@@ -2,6 +2,8 @@ import { api } from "./client"
 
 export interface ManagedChannel {
   id: number
+  channel_type: "event" | "team"
+  team_id: number | null
   event_epg_group_id: number | null // Source group (provenance, not ownership)
   event_id: string
   event_provider: string

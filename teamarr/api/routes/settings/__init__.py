@@ -23,6 +23,7 @@ from .epg import router as epg_router
 from .feed_separation import router as feed_separation_router
 from .jellyfin import router as jellyfin_router
 from .lifecycle import router as lifecycle_router
+from .managed_team_channels import router as managed_team_channels_router
 from .models import (
     AllSettingsModel,
     ChannelNumberingSettingsModel,
@@ -58,6 +59,7 @@ router.include_router(emby_router)
 router.include_router(jellyfin_router)
 router.include_router(channelsdvr_router)
 router.include_router(lifecycle_router)
+router.include_router(managed_team_channels_router)
 router.include_router(epg_router)
 router.include_router(display_router)
 router.include_router(team_filter_router)

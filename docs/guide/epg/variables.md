@@ -64,6 +64,7 @@ Three template fields hold image URLs and accept the same variables as any other
 |-------|----------|
 | **Program Art URL** (`program_art_url`) | the programme `<icon>` in the EPG (per-game artwork) |
 | **Channel Logo URL** (`event_channel_logo_url`, event templates) | the Dispatcharr channel logo **and** the EPG channel icon |
+| **Team Channel Logo URL** (`team_channel_logo_url`, team templates) | logo for an opt-in managed Team EPG channel |
 | **Filler Art URL** (pregame/postgame/idle `art_url`) | artwork on filler programmes |
 
 ### Game-Thumbs base URL

@@ -357,6 +357,27 @@ class ChannelNumberingSettingsUpdate(BaseModel):
 
 
 # =============================================================================
+# MANAGED TEAM CHANNEL SETTINGS
+# =============================================================================
+
+
+class ManagedTeamChannelSettingsModel(BaseModel):
+    """Dedicated numbering settings for persistent Team EPG channels."""
+
+    range_start: int = 9000
+    range_end: int | None = None
+    priority_ids: list[int] = []
+
+
+class ManagedTeamChannelSettingsUpdate(BaseModel):
+    """Partial update model for managed Team EPG channel settings."""
+
+    range_start: int | None = None
+    range_end: int | None = None
+    priority_ids: list[int] | None = None
+
+
+# =============================================================================
 # STREAM ORDERING SETTINGS
 # =============================================================================
 

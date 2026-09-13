@@ -29,6 +29,14 @@ export interface LifecycleSettings {
   channel_range_end: number | null
 }
 
+export interface ManagedTeamChannelSettings {
+  range_start: number
+  range_end: number | null
+  priority_ids: number[]
+}
+
+export type ManagedTeamChannelSettingsUpdate = Partial<ManagedTeamChannelSettings>
+
 export interface SchedulerSettings {
   enabled: boolean
   interval_minutes: number
@@ -107,6 +115,16 @@ export interface TSDBKeyValidationResult {
 
 export async function validateTSDBKey(apiKey: string): Promise<TSDBKeyValidationResult> {
   return api.post("/settings/tsdb/validate-key", { api_key: apiKey })
+}
+
+export async function getManagedTeamChannelSettings(): Promise<ManagedTeamChannelSettings> {
+  return api.get("/settings/managed-team-channels")
+}
+
+export async function updateManagedTeamChannelSettings(
+  data: ManagedTeamChannelSettingsUpdate,
+): Promise<ManagedTeamChannelSettings> {
+  return api.put("/settings/managed-team-channels", data)
 }
 
 export interface TeamFilterEntry {

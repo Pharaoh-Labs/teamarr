@@ -9,7 +9,7 @@ Provides REST API for:
 
 import logging
 from datetime import date, datetime, timezone
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -28,6 +28,7 @@ from teamarr.database.channels.streams import (
     refresh_stream_stats,
 )
 from teamarr.database.groups import get_group_names_by_ids
+from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
 from teamarr.database.settings import get_dispatcharr_settings
 from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
 from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
@@ -73,6 +74,8 @@ class ManagedChannelModel(BaseModel):
     """Managed channel response model."""
 
     id: int
+    channel_type: Literal["event", "team"] = "event"
+    team_id: int | None = None
     event_epg_group_id: int | None = None  # Source group (provenance)
     event_id: str
     event_provider: str
@@ -256,11 +259,50 @@ def list_managed_channels(
                 conn, include_deleted=include_deleted,
                 sport=sport, league=league,
             )
+        team_channels = list_owned_enabled_managed_team_channels(conn)
+
+    if sport:
+        team_channels = [channel for channel in team_channels if channel["sport"] == sport]
+    if league:
+        team_channels = [
+            channel for channel in team_channels if channel["primary_league"] == league
+        ]
+
+    managed_ids = {channel.id for channel in channels}
+    team_models: list[ManagedChannelModel] = []
+    for team_channel in team_channels:
+        # Keep team-channel audit row ids separate from managed_channels ids.
+        synthetic_id = -int(team_channel["team_id"])
+        while synthetic_id in managed_ids:
+            synthetic_id -= 1
+        managed_ids.add(synthetic_id)
+        team_models.append(
+            ManagedChannelModel(
+                id=synthetic_id,
+                channel_type="team",
+                team_id=team_channel["team_id"],
+                event_id=str(team_channel["team_id"]),
+                event_provider="teamarr",
+                tvg_id=team_channel["channel_id"],
+                channel_name=team_channel["team_name"],
+                channel_number=str(team_channel["channel_number"]),
+                logo_url=team_channel["channel_logo_url"] or team_channel["team_logo_url"],
+                dispatcharr_channel_id=team_channel["dispatcharr_channel_id"],
+                dispatcharr_uuid=team_channel["dispatcharr_uuid"],
+                event_name="Persistent team channel",
+                league=team_channel["primary_league"],
+                sport=team_channel["sport"],
+                sync_status=team_channel["sync_status"],
+                created_at=_safe_isoformat(team_channel["created_at"]),
+                updated_at=_safe_isoformat(team_channel["updated_at"]),
+            )
+        )
 
     return ManagedChannelListResponse(
         channels=[
             ManagedChannelModel(
                 id=c.id,
+                channel_type="event",
                 event_epg_group_id=c.event_epg_group_id,
                 event_id=c.event_id,
                 event_provider=c.event_provider,
@@ -285,8 +327,8 @@ def list_managed_channels(
                 deleted_at=_safe_isoformat(c.deleted_at),
             )
             for c in channels
-        ],
-        total=len(channels),
+        ] + team_models,
+        total=len(channels) + len(team_models),
     )
 
 

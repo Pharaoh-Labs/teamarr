@@ -24,6 +24,7 @@ from .types import (
     FeedSeparationSettings,
     JellyfinSettings,
     LifecycleSettings,
+    ManagedTeamChannelSettings,
     ProxySettings,
     SchedulerSettings,
     StreamFilterSettings,
@@ -107,6 +108,11 @@ def get_scheduler_settings(conn: Connection) -> SchedulerSettings:
 def get_lifecycle_settings(conn: Connection) -> LifecycleSettings:
     """Get channel lifecycle settings."""
     return _get_group(conn, "lifecycle")
+
+
+def get_managed_team_channel_settings(conn: Connection) -> ManagedTeamChannelSettings:
+    """Get persistent Team EPG channel numbering settings."""
+    return _get_group(conn, "managed_team_channels")
 
 
 def get_epg_settings(conn: Connection) -> EPGSettings:

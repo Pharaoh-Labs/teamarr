@@ -113,13 +113,29 @@ export function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, 
 
   return (
     <div className="space-y-6">
-      {/* Channel Name & Logo (Event templates only) */}
-      {!isTeamTemplate && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Channel Name & Logo</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      {/* Channel Name & Logo */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Channel Name & Logo</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isTeamTemplate ? (
+            <TemplateField
+              id="team_channel_logo_url"
+              isImageField
+              label="Channel Logo URL Template"
+              value={formData.team_channel_logo_url || ""}
+              onChange={(v) => setFormData((prev) => ({ ...prev, team_channel_logo_url: v || null }))}
+              placeholder="Optional"
+              helpText="Optional logo for managed Team EPG channels. Static URL or template with variables."
+              fieldRefs={fieldRefs}
+              setLastFocusedField={setLastFocusedField}
+              resolveTemplate={resolveTemplate}
+              validationData={validationData}
+              isEventTemplate={isEventTemplate}
+            />
+          ) : (
+            <>
             <TemplateField
               id="event_channel_name"
               label="Channel Name Template"
@@ -147,9 +163,10 @@ export function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, 
               validationData={validationData}
               isEventTemplate={isEventTemplate}
             />
-          </CardContent>
-        </Card>
-      )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Title & Subtitle */}
       <Card>

@@ -53,6 +53,15 @@ class LifecycleSettings:
 
 
 @dataclass
+class ManagedTeamChannelSettings:
+    """Numbering settings for persistent, opt-in Team EPG channels."""
+
+    range_start: int = 9000
+    range_end: int | None = None
+    priority_ids: list[int] = field(default_factory=list)
+
+
+@dataclass
 class ReconciliationSettings:
     """Reconciliation settings."""
 
@@ -389,6 +398,9 @@ class AllSettings:
 
     dispatcharr: DispatcharrSettings = field(default_factory=DispatcharrSettings)
     lifecycle: LifecycleSettings = field(default_factory=LifecycleSettings)
+    managed_team_channels: ManagedTeamChannelSettings = field(
+        default_factory=ManagedTeamChannelSettings
+    )
     reconciliation: ReconciliationSettings = field(default_factory=ReconciliationSettings)
     scheduler: SchedulerSettings = field(default_factory=SchedulerSettings)
     epg: EPGSettings = field(default_factory=EPGSettings)

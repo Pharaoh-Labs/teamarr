@@ -30,6 +30,16 @@ def _row_to_dict(row) -> dict:
     return data
 
 
+def _managed_channel_number_column(conn: Connection) -> str:
+    """Select the assigned number when the current schema includes ownership."""
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'managed_team_channels'"
+    ).fetchone()
+    if exists:
+        return "mtc.channel_number AS managed_channel_assigned_number"
+    return "NULL AS managed_channel_assigned_number"
+
+
 def list_teams(conn: Connection, active_only: bool = False) -> list[dict]:
     """List all teams.
 
@@ -40,10 +50,21 @@ def list_teams(conn: Connection, active_only: bool = False) -> list[dict]:
     Returns:
         List of team dicts with parsed leagues
     """
+    assigned_number = _managed_channel_number_column(conn)
+    join = (
+        "LEFT JOIN managed_team_channels mtc ON mtc.team_id = t.id"
+        if "mtc." in assigned_number
+        else ""
+    )
     if active_only:
-        cursor = conn.execute("SELECT * FROM teams WHERE active = 1 ORDER BY team_name")
+        cursor = conn.execute(
+            f"SELECT t.*, {assigned_number} FROM teams t {join} "
+            "WHERE t.active = 1 ORDER BY t.team_name"
+        )
     else:
-        cursor = conn.execute("SELECT * FROM teams ORDER BY team_name")
+        cursor = conn.execute(
+            f"SELECT t.*, {assigned_number} FROM teams t {join} ORDER BY t.team_name"
+        )
     return [_row_to_dict(row) for row in cursor.fetchall()]
 
 
@@ -57,7 +78,15 @@ def get_team(conn: Connection, team_id: int) -> dict | None:
     Returns:
         Team dict with parsed leagues, or None if not found
     """
-    cursor = conn.execute("SELECT * FROM teams WHERE id = ?", (team_id,))
+    assigned_number = _managed_channel_number_column(conn)
+    join = (
+        "LEFT JOIN managed_team_channels mtc ON mtc.team_id = t.id"
+        if "mtc." in assigned_number
+        else ""
+    )
+    cursor = conn.execute(
+        f"SELECT t.*, {assigned_number} FROM teams t {join} WHERE t.id = ?", (team_id,)
+    )
     row = cursor.fetchone()
     return _row_to_dict(row) if row else None
 
@@ -94,6 +123,8 @@ def create_team(
     channel_logo_url: str | None,
     template_id: int | None,
     active: bool,
+    managed_channel_enabled: bool = False,
+    managed_channel_number: int | None = None,
 ) -> dict:
     """Create a new team.
 
@@ -121,8 +152,9 @@ def create_team(
         INSERT INTO teams (
             provider, provider_team_id, primary_league, leagues, sport,
             team_name, team_abbrev, team_logo_url, team_color,
-            channel_id, channel_logo_url, template_id, active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            channel_id, channel_logo_url, template_id, active,
+            managed_channel_enabled, managed_channel_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             provider,
@@ -138,6 +170,8 @@ def create_team(
             channel_logo_url,
             template_id,
             active,
+            managed_channel_enabled,
+            managed_channel_number,
         ),
     )
     team_id = cursor.lastrowid

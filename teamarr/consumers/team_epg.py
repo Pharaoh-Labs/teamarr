@@ -41,6 +41,7 @@ class TeamEPGOptions:
     filler_enabled: bool = True  # Enable filler generation
     filler_config: Any = None  # Pre-loaded FillerConfig (avoids DB access in threads)
     epg_timezone: str = "America/New_York"
+    art_base_url: str = ""
     midnight_crossover_mode: str = "postgame"  # 'postgame' or 'idle'
 
     # Sport durations (from database settings)
