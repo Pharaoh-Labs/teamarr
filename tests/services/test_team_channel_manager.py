@@ -185,7 +185,7 @@ def test_creation_uses_managed_output_and_uploads_resolved_template_logo(
         "get_template",
         lambda *_: SimpleNamespace(
             team_channel_name="{league} | {team_name}",
-            team_channel_logo_url="https://logos.example/{league}/{team_name}.png",
+            team_channel_logo_url="https://logos.example/{league_code}/{team_name}.png",
         ),
     )
     monkeypatch.setattr(
@@ -200,7 +200,7 @@ def test_creation_uses_managed_output_and_uploads_resolved_template_logo(
     assert channels.updated == [(99, {"logo_id": 42})]
     assert uploaded == [{
         "name": "Blue Logo",
-        "url": "https://logos.example/National Basketball Association/Blue.png",
+        "url": "https://logos.example/nba/Blue.png",
     }]
 
 

@@ -111,6 +111,9 @@ class FillerConfig:
         default_factory=lambda: FillerTemplate(title="", description="")
     )
     idle_offseason: OffseasonFillerTemplate = field(default_factory=OffseasonFillerTemplate)
+    idle_provider_unavailable: OffseasonFillerTemplate = field(
+        default_factory=OffseasonFillerTemplate
+    )
 
     # Condition rows per register (#420, epic cajd) — hehg.2 row shape
     # ({condition, condition_value, template, title?, subtitle?, priority,

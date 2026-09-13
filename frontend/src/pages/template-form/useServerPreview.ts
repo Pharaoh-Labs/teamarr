@@ -105,6 +105,7 @@ export function collectTemplateStrings(form: TemplateCreate): string[] {
     form.postgame_fallback,
     form.idle_content,
     form.idle_offseason,
+    form.idle_provider_unavailable,
   ]
   for (const group of groups) {
     if (group) Object.values(group).forEach(push)

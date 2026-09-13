@@ -467,6 +467,7 @@ class TeamChannelManager:
             {
                 "league": get_league_display(conn, team["primary_league"]),
                 "league_id": team["primary_league"],
+                "league_code": team["primary_league"],
                 "team_name": team["team_name"],
             },
         )
@@ -492,6 +493,7 @@ class TeamChannelManager:
             {
                 "league": get_league_display(conn, team["primary_league"]),
                 "league_id": team["primary_league"],
+                "league_code": team["primary_league"],
                 "team_name": team["team_name"],
             },
         )

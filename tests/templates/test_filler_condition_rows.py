@@ -219,6 +219,49 @@ def test_offseason_register_ignores_rows():
     assert selected.description == "Offseason text"
 
 
+def test_provider_unavailable_register_takes_precedence_over_offseason():
+    gen = _generator()
+    config = FillerConfig(
+        idle_template=BASE,
+        idle_offseason=OffseasonFillerTemplate(enabled=True, description="Offseason text"),
+        idle_provider_unavailable=OffseasonFillerTemplate(
+            enabled=True, description="Schedule unavailable"
+        ),
+    )
+    selected = gen._select_register_template(
+        FillerType.IDLE,
+        config,
+        _filler_context(),
+        is_offseason=True,
+        provider_unavailable=True,
+    )
+    assert selected.description == "Schedule unavailable"
+
+
+def test_provider_unavailable_conversion_allows_a_title_only_override():
+    from teamarr.database.templates import Template, template_to_filler_config
+
+    config = template_to_filler_config(
+        Template(
+            id=1,
+            name="t",
+            template_type="team",
+            idle_provider_unavailable={
+                "title_enabled": True,
+                "title": "Schedule unavailable",
+                "subtitle_enabled": False,
+                "subtitle": "ignored",
+                "description_enabled": False,
+                "description": "ignored",
+            },
+        )
+    )
+    assert config.idle_provider_unavailable.enabled is True
+    assert config.idle_provider_unavailable.title == "Schedule unavailable"
+    assert config.idle_provider_unavailable.subtitle is None
+    assert config.idle_provider_unavailable.description is None
+
+
 # --- config conversion: rows plumbed, legacy shim only when rows empty ---
 
 

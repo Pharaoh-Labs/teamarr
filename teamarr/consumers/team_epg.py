@@ -223,6 +223,7 @@ class TeamEPGGenerator:
         # Fetch team schedule from all leagues (parallel for multi-league teams)
         all_events: list[Event] = []
         seen_event_ids: set = set()
+        schedule_failures: list[tuple[str, Exception]] = []
 
         def fetch_league(lg: str) -> list[Event]:
             return self._service.get_team_schedule(
@@ -234,19 +235,35 @@ class TeamEPGGenerator:
         # Single league: fetch directly (no thread overhead)
         # Multi-league: fetch in parallel (e.g., soccer teams in 6+ competitions)
         if len(leagues_to_fetch) == 1:
-            events = fetch_league(leagues_to_fetch[0])
+            try:
+                events = fetch_league(leagues_to_fetch[0])
+            except Exception as exc:
+                schedule_failures.append((leagues_to_fetch[0], exc))
+                events = []
             all_events.extend(events)
             seen_event_ids.update(e.id for e in events)
         else:
             with ThreadPoolExecutor(max_workers=len(leagues_to_fetch)) as executor:
                 futures = {executor.submit(fetch_league, lg): lg for lg in leagues_to_fetch}
                 for future in as_completed(futures):
-                    events = future.result()
+                    try:
+                        events = future.result()
+                    except Exception as exc:
+                        schedule_failures.append((futures[future], exc))
+                        continue
                     # Dedupe by event ID across leagues
                     for event in events:
                         if event.id not in seen_event_ids:
                             seen_event_ids.add(event.id)
                             all_events.append(event)
+
+        provider_unavailable = len(schedule_failures) == len(leagues_to_fetch)
+        if provider_unavailable:
+            logger.warning(
+                "[TEAM_EPG] Schedule unavailable for team=%s; all requested leagues failed: %s",
+                team_id,
+                ", ".join(league for league, _ in schedule_failures),
+            )
 
         # Fetch team stats once for all events
         team_stats = self._service.get_team_stats(team_id, league)
@@ -363,6 +380,7 @@ class TeamEPGGenerator:
                 logo_url=logo_url,
                 team_stats=team_stats,
                 options=options,
+                provider_unavailable=provider_unavailable,
             )
             programmes.extend(filler_programmes)
 
@@ -506,6 +524,7 @@ class TeamEPGGenerator:
         logo_url: str | None,
         team_stats,
         options: TeamEPGOptions,
+        provider_unavailable: bool = False,
     ) -> list[Programme]:
         """Generate filler programmes for gaps between events.
 
@@ -548,6 +567,7 @@ class TeamEPGGenerator:
             team_stats=team_stats,
             options=filler_options,
             config=filler_config,
+            provider_unavailable=provider_unavailable,
         )
 
     def _load_filler_config(self, options: TeamEPGOptions):

@@ -29,6 +29,11 @@ Each team's EPG includes:
 - **Postgame** programmes after the game ends
 - **Idle** programmes on days with no games
 
+In a team template's **Fillers** tab, idle content can be overridden separately
+for an offseason schedule with no upcoming game and for a schedule provider
+outage. The outage override applies only when every requested league schedule
+fetch fails; a successful empty schedule is treated as offseason.
+
 ## Importing Teams
 
 Go to **EPG → Team EPG** and click **Add Team** to browse the league cache by sport.

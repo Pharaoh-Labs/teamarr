@@ -523,6 +523,7 @@ class TeamProcessor:
                 {
                     "league": options.league_display_name or team.primary_league.upper(),
                     "league_id": team.primary_league,
+                    "league_code": team.primary_league,
                     "team_name": team.team_name,
                 },
             )
@@ -545,6 +546,7 @@ class TeamProcessor:
                 {
                     "league": options.league_display_name or team.primary_league.upper(),
                     "league_id": team.primary_league,
+                    "league_code": team.primary_league,
                     "team_name": team.team_name,
                 },
             )

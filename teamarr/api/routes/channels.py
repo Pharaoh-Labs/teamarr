@@ -265,6 +265,7 @@ def _effective_team_channel_logo(conn, team_channel: dict) -> str | None:
                 {
                     "league": get_league_display(conn, team_channel["primary_league"]),
                     "league_id": team_channel["primary_league"],
+                    "league_code": team_channel["primary_league"],
                     "team_name": team_channel["team_name"],
                 },
             )
