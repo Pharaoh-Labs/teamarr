@@ -8,23 +8,26 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ChannelProfileSelector } from "@/components/ChannelProfileSelector"
 import { getLeagues, getSports } from "@/api/teams"
 import { cn, getSportDisplayName } from "@/lib/utils"
 import {
   useDispatcharrStatus,
   useLeagueConfigs,
+  useLeagueDivisions,
   useUpsertLeagueConfig,
   useDeleteLeagueConfig,
 } from "@/hooks/useSettings"
 import { useSubscription } from "@/hooks/useSubscription"
 import { useChannelProfiles, useChannelGroups } from "@/hooks/useDispatcharr"
-import type { SubscriptionLeagueConfig } from "@/api/settings"
+import type { LeagueDivision, SubscriptionLeagueConfig } from "@/api/settings"
 
 function LeagueConfigRow({
   leagueName,
   sportName,
   config,
+  divisions,
   isExpanded,
   hasOverride,
   channelProfiles,
@@ -38,6 +41,7 @@ function LeagueConfigRow({
   leagueName: string
   sportName: string
   config: SubscriptionLeagueConfig | null
+  divisions: LeagueDivision[]
   isExpanded: boolean
   hasOverride: boolean
   channelProfiles: { id: number; name: string }[]
@@ -50,6 +54,7 @@ function LeagueConfigRow({
     channel_group_id?: number | null
     channel_group_mode?: string | null
     matchup_order?: string | null
+    included_divisions?: string[] | null
   }) => Promise<void>
   onClear: () => Promise<void>
 }) {
@@ -57,6 +62,9 @@ function LeagueConfigRow({
   const [localGroupId, setLocalGroupId] = useState<number | null>(null)
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
   const [localMatchupOrder, setLocalMatchupOrder] = useState<string | null>(null)
+  // #811: the divisions still ingested. Held as the checked set (null config =
+  // all of them), so the UI never has to special-case "no override".
+  const [localDivisions, setLocalDivisions] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   // Sync local state when config changes or row expands (render-time "adjust
@@ -76,11 +84,13 @@ function LeagueConfigRow({
       setLocalGroupId(config.channel_group_id)
       setLocalGroupMode(config.channel_group_mode)
       setLocalMatchupOrder(config.matchup_order ?? null)
+      setLocalDivisions(config.included_divisions ?? divisions.map((d) => d.key))
     } else if (isExpanded && !config) {
       setLocalProfileIds([])
       setLocalGroupId(null)
       setLocalGroupMode(null)
       setLocalMatchupOrder(null)
+      setLocalDivisions(divisions.map((d) => d.key))
     }
   }
 
@@ -124,6 +134,12 @@ function LeagueConfigRow({
         channel_group_id: localGroupId,
         channel_group_mode: localGroupMode,
         matchup_order: localMatchupOrder,
+        // All of them is stored as "no override" so the selection still means
+        // everything if ESPN's slate gains a division later.
+        included_divisions:
+          divisions.length > 0 && localDivisions.length < divisions.length
+            ? localDivisions
+            : null,
       })
     } finally {
       setSaving(false)
@@ -271,6 +287,46 @@ function LeagueConfigRow({
                 )}
               </div>
 
+              {/* NCAA Divisions (#811) */}
+              {divisions.length > 0 && (
+                <div>
+                  <Label className="text-sm font-medium">Divisions</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Which divisions of this league to ingest. A deselected division is
+                    never fetched — no channels, no matching. Games between divisions
+                    are filed under both, so they survive either way.
+                  </p>
+                  <div className="space-y-1.5">
+                    {divisions.map((d) => {
+                      const checked = localDivisions.includes(d.key)
+                      return (
+                        <label
+                          key={d.key}
+                          className="flex items-center gap-2 cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(next) =>
+                              setLocalDivisions(
+                                next
+                                  ? [...localDivisions, d.key]
+                                  : localDivisions.filter((k) => k !== d.key)
+                              )
+                            }
+                          />
+                          {d.label}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  {localDivisions.length === 0 && (
+                    <p className="text-xs text-destructive mt-1.5">
+                      Keep at least one division — otherwise this league has nothing to ingest.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Matchup Order (#692) */}
               <div>
                 <Label className="text-sm font-medium">Matchup Order</Label>
@@ -291,7 +347,11 @@ function LeagueConfigRow({
               </div>
 
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving || (divisions.length > 0 && localDivisions.length === 0)}
+                >
                   {saving ? "Saving..." : "Save Override"}
                 </Button>
                 <Button
@@ -336,6 +396,7 @@ function LeagueConfigRow({
  */
 export function PerLeagueChannelConfig() {
   const { data: leagueConfigsData } = useLeagueConfigs()
+  const { data: leagueDivisions } = useLeagueDivisions()
   const upsertLeagueConfigMutation = useUpsertLeagueConfig()
   const deleteLeagueConfigMutation = useDeleteLeagueConfig()
   const dispatcharrStatus = useDispatcharrStatus()
@@ -441,6 +502,7 @@ export function PerLeagueChannelConfig() {
                       leagueName={league.name}
                       sportName={getSportDisplayName(league.sport, sportsMap)}
                       config={config ?? null}
+                      divisions={leagueDivisions?.divisions?.[league.slug] ?? []}
                       isExpanded={isExpanded}
                       hasOverride={hasOverride}
                       channelProfiles={channelProfilesQuery.data ?? []}

@@ -36,6 +36,7 @@ import {
   getFeedSeparationSettings,
   updateFeedSeparationSettings,
   getLeagueConfigs,
+  getLeagueDivisions,
   upsertLeagueConfig,
   deleteLeagueConfig,
   getEmbySettings,
@@ -368,6 +369,14 @@ export function useLeagueConfigs() {
   })
 }
 
+export function useLeagueDivisions() {
+  return useQuery({
+    queryKey: ["league-divisions"],
+    queryFn: getLeagueDivisions,
+    staleTime: Infinity, // a static catalog compiled into the backend
+  })
+}
+
 export function useUpsertLeagueConfig() {
   const queryClient = useQueryClient()
 
@@ -378,6 +387,8 @@ export function useUpsertLeagueConfig() {
         channel_profile_ids?: (number | string)[] | null
         channel_group_id?: number | null
         channel_group_mode?: string | null
+        matchup_order?: string | null
+        included_divisions?: string[] | null
       }
     }) => upsertLeagueConfig(leagueCode, data),
     onSuccess: () => {
