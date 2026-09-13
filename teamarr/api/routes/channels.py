@@ -331,7 +331,7 @@ def list_managed_channels(
                 team_channel_names[int(channel["team_id"])] = remote.name
                 if remote.logo_url:
                     team_channel_logos[int(channel["team_id"])] = remote.logo_url
-                elif remote.logo_id:
+                elif remote.logo_id and dispatcharr:
                     logo = dispatcharr.logos.get(remote.logo_id)
                     if logo and logo.url:
                         team_channel_logos[int(channel["team_id"])] = logo.url
