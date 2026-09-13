@@ -402,3 +402,15 @@ def test_resolve_channel_group_falls_back_when_abbrev_unknown(db_conn):
         == 42
     )
     resolver._get_or_create_group.assert_called_once_with("NCAAF | SEC")
+
+
+def test_profile_pattern_skips_unresolved_conference_tokens(db_conn):
+    """A profile pattern using a conference token is skipped, not created
+    as a profile literally named 'NCAAF | {conference}'."""
+    resolver = _resolver_with_cache(db_conn)
+    resolver._initialized = True
+    resolver._league_aliases = {CFB: "NCAAF"}
+    resolver._get_or_create_profile = MagicMock()
+
+    assert resolver.resolve_channel_profiles(["{league} | {conference}"], "football", CFB) == []
+    resolver._get_or_create_profile.assert_not_called()

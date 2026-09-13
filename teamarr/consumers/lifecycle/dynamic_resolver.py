@@ -583,8 +583,21 @@ class DynamicResolver:
                     # Pattern - resolve it
                     resolved_name = self.resolve_pattern(item, event_sport, event_league)
 
-                    # Check if wildcards remain unresolved
-                    if "{sport}" in resolved_name or "{league}" in resolved_name:
+                    # Check if wildcards remain unresolved. The conference
+                    # tokens are never passed here (profiles get sport/league
+                    # only), so without these checks a profile pattern using
+                    # one would create a profile literally named
+                    # "NCAAF | {conference}".
+                    if any(
+                        token in resolved_name
+                        for token in (
+                            "{sport}",
+                            "{league}",
+                            "{conference}",
+                            "{conference_abbrev}",
+                            "{division}",
+                        )
+                    ):
                         logger.warning(
                             "[RESOLVER] Profile pattern has unresolved wildcards: %s -> %s",
                             item,
