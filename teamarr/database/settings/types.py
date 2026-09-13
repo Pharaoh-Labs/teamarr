@@ -25,6 +25,10 @@ class DispatcharrSettings:
     default_channel_group_id: int | None = None
     # Channel group mode: 'static', 'sport', 'league', or custom pattern like '{sport} | {league}'
     default_channel_group_mode: str = "static"
+    # Dedicated output defaults for persistent Team EPG channels. These do not
+    # inherit event-channel defaults: None means no group / all profiles.
+    managed_team_channel_profile_ids: list[int | str] | None = None
+    managed_team_channel_group_id: int | None = None
     # When True, call Dispatcharr's /api/channels/logos/cleanup/ after generation
     # This removes ALL unused logos in Dispatcharr, not just ones Teamarr uploaded
     cleanup_unused_logos: bool = False

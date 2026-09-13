@@ -40,7 +40,7 @@ import { useGroups } from "@/hooks/useGroups"
 import { useQuery } from "@tanstack/react-query"
 import { getLeagues } from "@/api/teams"
 import { deleteManagedChannel, getChannelStreams } from "@/api/channels"
-import type { ManagedChannel, ChannelStreamEntry, StreamRuleMatch } from "@/api/channels"
+import type { ManagedChannel, ChannelStreamEntry, ChannelStreamsResponse, StreamRuleMatch } from "@/api/channels"
 import { OrphansDialog } from "@/components/managed-channels/OrphansDialog"
 import { ResetAllDialog } from "@/components/managed-channels/ResetAllDialog"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
@@ -468,6 +468,7 @@ interface ChannelRowProps {
   expanded: boolean
   selected: boolean
   streams: ChannelStreamEntry[] | undefined
+  currentEvent: { title: string | null; sub_title: string | null; start: string | null; stop: string | null } | null | undefined
   loading: boolean
   isGenerating: boolean
   sportLabel: string
@@ -485,6 +486,7 @@ const ChannelRow = React.memo(function ChannelRow({
   expanded,
   selected,
   streams,
+  currentEvent,
   loading,
   isGenerating,
   sportLabel,
@@ -500,17 +502,15 @@ const ChannelRow = React.memo(function ChannelRow({
     <>
       <TableRow className={expanded ? "border-b-0" : ""}>
         <TableCell className="px-1">
-          {!isTeamChannel && (
-            <button
-              onClick={() => onToggleExpand(channel.id)}
-              className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
-              aria-label={expanded ? "Collapse" : "Expand"}
-            >
-              {expanded
-                ? <ChevronDown className="h-4 w-4" />
-                : <ChevronRight className="h-4 w-4" />}
-            </button>
-          )}
+          <button
+            onClick={() => onToggleExpand(channel.id)}
+            className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
+            aria-label={expanded ? "Collapse" : "Expand"}
+          >
+            {expanded
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />}
+          </button>
         </TableCell>
         <TableCell>
           <Checkbox
@@ -595,15 +595,32 @@ const ChannelRow = React.memo(function ChannelRow({
         <TableRow className="hover:bg-transparent border-b border-border/40">
           <TableCell colSpan={10} className="p-0 pb-2">
             <div className="ml-4 border-l-2 border-border/50 pl-2 pr-4 pt-2">
-            {loading ? (
-              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                <LoaderCircle className="h-3 w-3 animate-spin" />
-                Loading streams…
-              </div>
-            ) : (streams ?? []).length === 0 ? (
-              <p className="text-xs text-muted-foreground py-1">No active streams.</p>
-            ) : (
-              <table className="w-full text-xs">
+              {loading ? (
+                <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                  <LoaderCircle className="h-3 w-3 animate-spin" />
+                  Loading streams…
+                </div>
+              ) : (
+                <>
+                  {isTeamChannel && currentEvent && (
+                    <div className="mb-2 rounded bg-muted/50 px-2 py-1 text-xs">
+                      <span className="font-semibold">Current event: </span>
+                      {currentEvent.title}
+                      {currentEvent.sub_title && <span className="text-muted-foreground"> · {currentEvent.sub_title}</span>}
+                    </div>
+                  )}
+                  {(streams ?? []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-1">
+                      {isTeamChannel ? "No assigned streams." : "No active streams."}
+                    </p>
+                  ) : (
+                    <>
+                      {isTeamChannel && (
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                          Assigned streams
+                        </p>
+                      )}
+                      <table className="w-full text-xs">
                 <colgroup>
                   <col className="w-[24%]" />
                   <col className="w-[16%]" />
@@ -657,8 +674,11 @@ const ChannelRow = React.memo(function ChannelRow({
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            )}
+                      </table>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </TableCell>
         </TableRow>
@@ -678,6 +698,7 @@ export function ManagedChannelsTable() {
   // Expand states
   const [expandedChannels, setExpandedChannels] = useState<Set<number>>(new Set())
   const [channelStreams, setChannelStreams] = useState<Map<number, ChannelStreamEntry[]>>(new Map())
+  const [channelCurrentEvents, setChannelCurrentEvents] = useState<Map<number, ChannelStreamsResponse["current_event"]>>(new Map())
   const [loadingStreams, setLoadingStreams] = useState<Set<number>>(new Set())
 
   const { isGenerating } = useGenerationProgress()
@@ -823,6 +844,7 @@ export function ManagedChannelsTable() {
     try {
       const data = await getChannelStreams(channelId)
       setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
+      setChannelCurrentEvents((prev) => new Map(prev).set(channelId, data.current_event))
     } catch {
       setChannelStreams((prev) => new Map(prev).set(channelId, []))
     } finally {
@@ -1091,6 +1113,7 @@ export function ManagedChannelsTable() {
                     expanded={expandedChannels.has(channel.id)}
                     selected={selectedIds.has(channel.id)}
                     streams={channelStreams.get(channel.id)}
+                    currentEvent={channelCurrentEvents.get(channel.id)}
                     loading={loadingStreams.has(channel.id)}
                     isGenerating={isGenerating}
                     sportLabel={channel.sport ? getSportDisplayName(channel.sport, sportsMap) : "-"}

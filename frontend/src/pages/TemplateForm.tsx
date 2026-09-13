@@ -287,6 +287,8 @@ export function TemplateForm() {
       conditional_descriptions: template.conditional_descriptions || [],
       event_channel_name: template.event_channel_name,
       event_channel_logo_url: template.event_channel_logo_url,
+      team_channel_name: template.team_channel_name,
+      team_channel_logo_url: template.team_channel_logo_url,
     })
   }
 

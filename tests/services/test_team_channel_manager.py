@@ -71,8 +71,9 @@ def conn():
         CREATE TABLE teams (
             id INTEGER PRIMARY KEY, active INTEGER, managed_channel_enabled INTEGER,
             managed_channel_number INTEGER, channel_id TEXT, team_name TEXT,
-            primary_league TEXT
+            primary_league TEXT, template_id INTEGER
         );
+        CREATE TABLE leagues (league_code TEXT PRIMARY KEY, league_alias TEXT, display_name TEXT);
         CREATE TABLE managed_team_channels (
             team_id INTEGER PRIMARY KEY, dispatcharr_channel_id INTEGER,
             dispatcharr_uuid TEXT, channel_number INTEGER NOT NULL, sync_status TEXT NOT NULL,
@@ -131,13 +132,15 @@ def settings(monkeypatch):
             default_channel_group_id=7,
             default_channel_profile_ids=[3],
             default_stream_profile_id=4,
+            managed_team_channel_group_id=None,
+            managed_team_channel_profile_ids=None,
         ),
     )
 
 
 def test_creates_owned_streamless_channel_with_requested_number(conn, settings):
     conn.execute(
-        "INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba')"
+        "INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba', NULL)"
     )
     channels = FakeChannels()
 
@@ -147,7 +150,7 @@ def test_creates_owned_streamless_channel_with_requested_number(conn, settings):
     assert channels.created == [
         {
             "name": "Blue", "channel_number": 9100, "stream_ids": [], "tvg_id": "team-blue",
-            "channel_group_id": 7, "channel_profile_ids": [3], "stream_profile_id": 4,
+            "channel_group_id": None, "channel_profile_ids": None, "stream_profile_id": 4,
         }
     ]
     mapping = get_managed_team_channel(conn, 1)
@@ -155,8 +158,48 @@ def test_creates_owned_streamless_channel_with_requested_number(conn, settings):
     assert mapping.channel_number == 9100
 
 
+def test_creation_uses_managed_output_and_uploads_resolved_template_logo(
+    conn, settings, monkeypatch
+):
+    conn.execute(
+        "INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba', 5)"
+    )
+    conn.execute("INSERT INTO leagues VALUES ('nba', NULL, 'National Basketball Association')")
+    channels = FakeChannels()
+    uploaded = []
+
+    class Logos:
+        def upload(self, **kwargs):
+            uploaded.append(kwargs)
+            return SimpleNamespace(success=True, logo={"id": 42})
+
+    import teamarr.database.templates as templates
+
+    monkeypatch.setattr(
+        templates,
+        "get_template",
+        lambda *_: SimpleNamespace(
+            team_channel_name="{league} | {team_name}",
+            team_channel_logo_url="https://logos.example/{league}/{team_name}.png",
+        ),
+    )
+    monkeypatch.setattr(
+        "teamarr.services.team_channel_manager.get_epg_settings",
+        lambda _: SimpleNamespace(art_base_url=""),
+    )
+
+    TeamChannelManager(_factory(conn), channels, logo_manager=Logos()).sync()
+
+    assert channels.created[0]["name"] == "National Basketball Association | Blue"
+    assert channels.created[0]["logo_id"] == 42
+    assert uploaded == [{
+        "name": "Blue Logo",
+        "url": "https://logos.example/National Basketball Association/Blue.png",
+    }]
+
+
 def test_manual_tvg_id_conflict_is_not_adopted(conn, settings):
-    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba')")
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
     manual = RemoteChannel(8, "manual", "Manual", "9000", tvg_id="team-blue")
     channels = FakeChannels([manual])
 
@@ -168,7 +211,7 @@ def test_manual_tvg_id_conflict_is_not_adopted(conn, settings):
 
 
 def test_rejects_an_occupied_exact_number(conn, settings):
-    conn.execute("INSERT INTO teams VALUES (1, 1, 1, 9000, 'team-blue', 'Blue', 'nba')")
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, 9000, 'team-blue', 'Blue', 'nba', NULL)")
     channels = FakeChannels([RemoteChannel(8, "external", "External", "9000")])
 
     result = TeamChannelManager(_factory(conn), channels).sync()
@@ -178,7 +221,7 @@ def test_rejects_an_occupied_exact_number(conn, settings):
 
 
 def test_existing_mapping_preserves_streams_and_is_removed_when_disabled(conn, settings):
-    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba')")
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
     conn.execute(
         "INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL, NULL)"
     )
@@ -189,8 +232,8 @@ def test_existing_mapping_preserves_streams_and_is_removed_when_disabled(conn, s
         "9000",
         tvg_id="team-blue",
         streams=(1,),
-        channel_group_id=7,
-        channel_profile_ids=(3,),
+        channel_group_id=None,
+        channel_profile_ids=None,
         stream_profile_id=4,
     )
     channels = FakeChannels([owned])
@@ -208,7 +251,7 @@ def test_existing_mapping_preserves_streams_and_is_removed_when_disabled(conn, s
 
 
 def test_associates_only_owned_channels_after_refresh(conn, settings):
-    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba')")
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
     conn.execute(
         "INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL, NULL)"
     )

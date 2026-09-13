@@ -110,6 +110,20 @@ def find_next_live_window(
     return candidates[0] if candidates else None
 
 
+def find_current_live_window(
+    xmltv_content: str | None,
+    channel_id: str,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Return the live event programme currently airing on a team channel."""
+    programme = find_next_live_window(xmltv_content, channel_id, now)
+    current_time = (now or datetime.now(UTC)).astimezone(UTC)
+    if programme and programme["start"] and programme["start"] <= current_time:
+        if programme["stop"] is None or programme["stop"] > current_time:
+            return programme
+    return None
+
+
 def build_team_channel_status(
     team: dict[str, Any],
     dispatcharr_channel: Any | None,

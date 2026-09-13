@@ -6,6 +6,17 @@ from datetime import UTC, datetime
 from sqlite3 import Connection
 
 
+def get_assigned_team_streams(conn: Connection, team_id: int) -> list[dict]:
+    """Return the current generation's stream assignments for a team channel."""
+    rows = conn.execute(
+        """SELECT * FROM managed_team_channel_streams
+           WHERE team_id = ? AND removed_at IS NULL
+           ORDER BY priority, id""",
+        (team_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def reconcile_team_streams(conn: Connection, memberships: list[dict]) -> None:
     """Replace the current generation's desired memberships without expiring channels."""
     desired = {

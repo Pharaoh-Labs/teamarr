@@ -28,12 +28,17 @@ from teamarr.database.channels.streams import (
     refresh_stream_stats,
 )
 from teamarr.database.groups import get_group_names_by_ids
+from teamarr.database.managed_team_channel_streams import get_assigned_team_streams
 from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
-from teamarr.database.settings import get_dispatcharr_settings
+from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
 from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
+from teamarr.database.teams import get_team_xmltv
 from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 from teamarr.services import create_channel_service, create_default_service
 from teamarr.services.stream_ordering import StreamOrderingService
+from teamarr.services.team_channel_status import find_current_live_window
+from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.art_url import apply_art_base_url
 from teamarr.utilities.tz import parse_db_timestamp
 
 logger = logging.getLogger(__name__)
@@ -224,11 +229,44 @@ class ChannelStreamEntry(BaseModel):
     corrected_at: str | None = None
 
 
+class TeamChannelCurrentEvent(BaseModel):
+    """The live programme currently airing on a persistent team channel."""
+
+    title: str | None = None
+    sub_title: str | None = None
+    start: str | None = None
+    stop: str | None = None
+
+
 class ChannelStreamsResponse(BaseModel):
     """Streams attached to a managed channel."""
 
     streams: list[ChannelStreamEntry]
     stats_refreshed: bool = False
+    current_event: TeamChannelCurrentEvent | None = None
+
+
+def _effective_team_channel_logo(conn, team_channel: dict) -> str | None:
+    """Match Team EPG artwork resolution, excluding the deprecated team override."""
+    from teamarr.database.leagues import get_league_display
+    from teamarr.database.templates import get_template
+
+    template_id = team_channel.get("template_id")
+    if template_id:
+        template = get_template(conn, template_id)
+        logo = template.team_channel_logo_url if template else None
+        if logo:
+            art_base_url = get_epg_settings(conn).art_base_url
+            resolved = TemplateResolver(art_base_url).resolve_with_map(
+                logo,
+                {
+                    "league": get_league_display(conn, team_channel["primary_league"]),
+                    "league_id": team_channel["primary_league"],
+                    "team_name": team_channel["team_name"],
+                },
+            )
+            return apply_art_base_url(resolved, art_base_url)
+    return team_channel["team_logo_url"]
 
 
 # =============================================================================
@@ -260,6 +298,10 @@ def list_managed_channels(
                 sport=sport, league=league,
             )
         team_channels = list_owned_enabled_managed_team_channels(conn)
+        team_channel_logos = {
+            int(channel["team_id"]): _effective_team_channel_logo(conn, channel)
+            for channel in team_channels
+        }
 
     if sport:
         team_channels = [channel for channel in team_channels if channel["sport"] == sport]
@@ -286,7 +328,7 @@ def list_managed_channels(
                 tvg_id=team_channel["channel_id"],
                 channel_name=team_channel["team_name"],
                 channel_number=str(team_channel["channel_number"]),
-                logo_url=team_channel["channel_logo_url"] or team_channel["team_logo_url"],
+                logo_url=team_channel_logos[int(team_channel["team_id"])],
                 dispatcharr_channel_id=team_channel["dispatcharr_channel_id"],
                 dispatcharr_uuid=team_channel["dispatcharr_uuid"],
                 event_name="Persistent team channel",
@@ -380,6 +422,57 @@ def get_managed_channel_streams(channel_id: int):
     Source group names are resolved from event_epg_groups via a join.
     """
     from teamarr.database.channels import get_managed_channel
+
+    if channel_id < 0:
+        team_id = -channel_id
+        with get_db() as conn:
+            team_channels = {
+                int(channel["team_id"]): channel
+                for channel in list_owned_enabled_managed_team_channels(conn)
+            }
+            team_channel = team_channels.get(team_id)
+            if not team_channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Channel {channel_id} not found",
+                )
+            streams = get_assigned_team_streams(conn, team_id)
+            group_names = get_group_names_by_ids(
+                conn, [stream["source_group_id"] for stream in streams]
+            )
+            xmltv = get_team_xmltv(conn, team_id)
+            current = find_current_live_window(
+                xmltv["xmltv_content"] if xmltv else None,
+                team_channel["channel_id"],
+            )
+
+        return ChannelStreamsResponse(
+            streams=[
+                ChannelStreamEntry(
+                    dispatcharr_stream_id=stream["dispatcharr_stream_id"],
+                    stream_name=stream["stream_name"],
+                    source_group=group_names.get(stream["source_group_id"]),
+                    m3u_account_name=stream["m3u_account_name"],
+                    match_method=stream["match_method"],
+                    match_type=stream["match_type"],
+                    feed_side=stream["feed_side"],
+                    priority=stream["priority"],
+                    expected_priority=stream["priority"],
+                    sorting_scope="Team channel",
+                )
+                for stream in streams
+            ],
+            current_event=(
+                TeamChannelCurrentEvent(
+                    title=current["title"],
+                    sub_title=current["sub_title"],
+                    start=_safe_isoformat(current["start"]),
+                    stop=_safe_isoformat(current["stop"]),
+                )
+                if current
+                else None
+            ),
+        )
 
     with get_db() as conn:
         channel = get_managed_channel(conn, channel_id)

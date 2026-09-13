@@ -76,6 +76,8 @@ def update_dispatcharr_settings(
     default_stream_profile_id: int | None | object = _NOT_PROVIDED,
     default_channel_group_id: int | None | object = _NOT_PROVIDED,
     default_channel_group_mode: str | None | object = _NOT_PROVIDED,
+    managed_team_channel_profile_ids: list[int] | None | object = _NOT_PROVIDED,
+    managed_team_channel_group_id: int | None | object = _NOT_PROVIDED,
     cleanup_unused_logos: bool | None = None,
 ) -> bool:
     """Update Dispatcharr settings.
@@ -100,6 +102,8 @@ def update_dispatcharr_settings(
         default_stream_profile_id=default_stream_profile_id,
         default_channel_group_id=default_channel_group_id,
         default_channel_group_mode=default_channel_group_mode,
+        managed_team_channel_profile_ids=managed_team_channel_profile_ids,
+        managed_team_channel_group_id=managed_team_channel_group_id,
     )
     return _apply(conn, "dispatcharr", provided)
 

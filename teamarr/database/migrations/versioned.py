@@ -367,6 +367,11 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 99
 
+    if current_version < 100:
+        # Output columns are added by schema reconciliation.
+        _advance_version(conn, 100, "managed team channel output settings")
+        current_version = 100
+
 
 # =============================================================================
 # Migration helpers

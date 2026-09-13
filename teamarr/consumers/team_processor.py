@@ -462,6 +462,7 @@ class TeamProcessor:
         in the EPG generator, which is critical for thread-safety during
         parallel processing.
         """
+        from teamarr.database.leagues import get_league_display
         from teamarr.database.settings import get_all_settings
         from teamarr.database.templates import (
             get_template,
@@ -501,6 +502,7 @@ class TeamProcessor:
             sport_durations=sport_durations,
             epg_timezone=all_settings.epg.epg_timezone,
             art_base_url=all_settings.epg.art_base_url,
+            league_display_name=get_league_display(conn, team.primary_league),
             midnight_crossover_mode=all_settings.epg.midnight_crossover_mode,
             template_id=team.template_id,
             template=template_config,  # Pre-loaded template
@@ -519,7 +521,7 @@ class TeamProcessor:
             return TemplateResolver(options.art_base_url).resolve_with_map(
                 name,
                 {
-                    "league": team.primary_league,
+                    "league": options.league_display_name or team.primary_league.upper(),
                     "league_id": team.primary_league,
                     "team_name": team.team_name,
                 },
@@ -539,7 +541,12 @@ class TeamProcessor:
         logo = template.team_channel_logo_url if template else None
         if logo:
             resolved = TemplateResolver(options.art_base_url).resolve_with_map(
-                logo, {"league_id": team.primary_league, "team_name": team.team_name}
+                logo,
+                {
+                    "league": options.league_display_name or team.primary_league.upper(),
+                    "league_id": team.primary_league,
+                    "team_name": team.team_name,
+                },
             )
             return apply_art_base_url(resolved, options.art_base_url)
         return team.team_logo_url

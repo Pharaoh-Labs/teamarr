@@ -383,6 +383,10 @@ GROUPS: dict[str, GroupSpec] = {
                         # not SQL NULL.
                         "dump": json.dumps,
                     },
+                    "managed_team_channel_profile_ids": {
+                        "parse": _parse_profile_ids,
+                        "dump": json.dumps,
+                    },
                     **_URL_HOOK,
                 },
             ),

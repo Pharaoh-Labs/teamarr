@@ -49,6 +49,8 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
             default_stream_profile_id=update.default_stream_profile_id,
             default_channel_group_id=update.default_channel_group_id,
             default_channel_group_mode=update.default_channel_group_mode,
+            managed_team_channel_profile_ids=update.managed_team_channel_profile_ids,
+            managed_team_channel_group_id=update.managed_team_channel_group_id,
             cleanup_unused_logos=update.cleanup_unused_logos,
         )
 

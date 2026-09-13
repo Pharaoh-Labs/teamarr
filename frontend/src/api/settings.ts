@@ -16,6 +16,9 @@ export interface DispatcharrSettings {
   default_channel_group_id: number | null
   // Channel group mode: 'static', 'sport', 'league', or custom pattern
   default_channel_group_mode: string | null
+  // Dedicated output defaults for managed Team EPG channels.
+  managed_team_channel_profile_ids: (number | string)[] | null
+  managed_team_channel_group_id: number | null
   // Clean up ALL unused logos in Dispatcharr after generation
   cleanup_unused_logos: boolean
 }

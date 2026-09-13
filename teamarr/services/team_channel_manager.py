@@ -21,7 +21,6 @@ from teamarr.database.settings import (
     get_epg_settings,
     get_managed_team_channel_settings,
 )
-from teamarr.database.subscription import get_league_config
 from teamarr.utilities.art_url import apply_art_base_url
 from teamarr.utilities.tz import now_utc
 
@@ -115,8 +114,8 @@ class TeamChannelManager:
                         "channel_number": channel_number,
                         "stream_ids": [],
                         "tvg_id": team["channel_id"],
-                        "channel_group_id": self._channel_group(dispatcharr, conn, team),
-                        "channel_profile_ids": self._channel_profiles(dispatcharr, conn, team),
+                        "channel_group_id": self._channel_group(dispatcharr),
+                        "channel_profile_ids": self._channel_profiles(dispatcharr),
                         "stream_profile_id": dispatcharr.default_stream_profile_id,
                     }
                     logo_id = self._logo_id(conn, team)
@@ -402,25 +401,22 @@ class TeamChannelManager:
         return None, None
 
     @staticmethod
-    def _channel_group(dispatcharr, conn, team):
-        league = get_league_config(conn, team["primary_league"])
-        if league and league.channel_group_id is not None:
-            return league.channel_group_id
-        return dispatcharr.default_channel_group_id
+    def _channel_group(dispatcharr):
+        """Return the managed-team-only group, never an event-channel default."""
+        return dispatcharr.managed_team_channel_group_id
 
     @staticmethod
-    def _channel_profiles(dispatcharr, conn, team):
-        league = get_league_config(conn, team["primary_league"])
-        profiles = league.channel_profile_ids if league else None
-        return profiles if profiles is not None else dispatcharr.default_channel_profile_ids
+    def _channel_profiles(dispatcharr):
+        """Return managed-team-only profiles; None retains Dispatcharr's all-profile default."""
+        return dispatcharr.managed_team_channel_profile_ids
 
     def _changes(self, remote, team, number, dispatcharr, conn) -> dict:
         desired = {
             "name": self._channel_name(conn, team),
             "channel_number": number,
             "tvg_id": team["channel_id"],
-            "channel_group_id": self._channel_group(dispatcharr, conn, team),
-            "channel_profile_ids": self._channel_profiles(dispatcharr, conn, team),
+            "channel_group_id": self._channel_group(dispatcharr),
+            "channel_profile_ids": self._channel_profiles(dispatcharr),
             "stream_profile_id": dispatcharr.default_stream_profile_id,
         }
         logo_id = self._logo_id(conn, team)
@@ -444,6 +440,7 @@ class TeamChannelManager:
     def _logo_id(self, conn, team) -> int | None:
         if not self._logos or not team.get("template_id"):
             return None
+        from teamarr.database.leagues import get_league_display
         from teamarr.database.templates import get_template
         from teamarr.templates.resolver import TemplateResolver
 
@@ -453,7 +450,11 @@ class TeamChannelManager:
             return None
         url = TemplateResolver(get_epg_settings(conn).art_base_url).resolve_with_map(
             url,
-            {"league_id": team["primary_league"], "team_name": team["team_name"]},
+            {
+                "league": get_league_display(conn, team["primary_league"]),
+                "league_id": team["primary_league"],
+                "team_name": team["team_name"],
+            },
         )
         uploaded = self._logos.upload(
             name=f'{team["team_name"]} Logo',
@@ -465,6 +466,7 @@ class TeamChannelManager:
     def _channel_name(conn, team) -> str:
         if not team.get("template_id"):
             return team["team_name"]
+        from teamarr.database.leagues import get_league_display
         from teamarr.database.templates import get_template
         from teamarr.templates.resolver import TemplateResolver
 
@@ -474,7 +476,7 @@ class TeamChannelManager:
         return TemplateResolver(get_epg_settings(conn).art_base_url).resolve_with_map(
             template.team_channel_name,
             {
-                "league": team["primary_league"],
+                "league": get_league_display(conn, team["primary_league"]),
                 "league_id": team["primary_league"],
                 "team_name": team["team_name"],
             },

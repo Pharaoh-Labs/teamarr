@@ -209,6 +209,12 @@ export interface StreamNameMatch {
 export interface ChannelStreamsResponse {
   streams: ChannelStreamEntry[]
   stats_refreshed: boolean
+  current_event: {
+    title: string | null
+    sub_title: string | null
+    start: string | null
+    stop: string | null
+  } | null
 }
 
 export async function getChannelStreams(channelId: number): Promise<ChannelStreamsResponse> {

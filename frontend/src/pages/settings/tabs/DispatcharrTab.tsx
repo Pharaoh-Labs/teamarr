@@ -47,6 +47,8 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
         default_stream_profile_id: initial.default_stream_profile_id,
         default_channel_group_id: initial.default_channel_group_id,
         default_channel_group_mode: initial.default_channel_group_mode,
+        managed_team_channel_profile_ids: initial.managed_team_channel_profile_ids,
+        managed_team_channel_group_id: initial.managed_team_channel_group_id,
         cleanup_unused_logos: dispatcharr.cleanup_unused_logos,
       }
       if (dispatcharr.password) {
