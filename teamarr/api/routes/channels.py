@@ -239,6 +239,7 @@ class TeamChannelCurrentEvent(BaseModel):
 
     title: str | None = None
     sub_title: str | None = None
+    is_attached: bool = False
     is_live: bool = False
     start: str | None = None
     stop: str | None = None
@@ -475,10 +476,31 @@ def get_managed_channel_streams(channel_id: int):
                 conn, [stream["source_group_id"] for stream in streams]
             )
             xmltv = get_team_xmltv(conn, team_id)
-            current = find_current_live_window(
-                xmltv["xmltv_content"] if xmltv else None,
-                team_channel["channel_id"],
-            )
+            current = None
+            if streams:
+                attached = streams[0]
+                current = {
+                    "title": attached["stream_name"],
+                    "sub_title": None,
+                    "is_attached": True,
+                    "is_live": False,
+                    "start": None,
+                    "stop": None,
+                }
+                try:
+                    event = create_default_service().get_event(
+                        attached["event_id"], team_channel["primary_league"]
+                    )
+                    if event:
+                        current["title"] = event.name
+                        current["start"] = event.start_time
+                except Exception:
+                    logger.debug("[CHANNELS] Could not load attached team event", exc_info=True)
+            else:
+                current = find_current_live_window(
+                    xmltv["xmltv_content"] if xmltv else None,
+                    team_channel["channel_id"],
+                )
             if current is None:
                 # The channel's guide remains useful outside its stream window:
                 # show the upcoming game even when no stream is currently attached.
@@ -600,6 +622,7 @@ def get_managed_channel_streams(channel_id: int):
                 TeamChannelCurrentEvent(
                     title=current["title"],
                     sub_title=current["sub_title"],
+                    is_attached=current.get("is_attached", False),
                     is_live=current.get("is_live", False),
                     start=_safe_isoformat(current["start"]),
                     stop=_safe_isoformat(current["stop"]),

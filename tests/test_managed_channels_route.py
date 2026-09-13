@@ -102,7 +102,7 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
     assert channel.logo_url == "epg-channel-logo"
 
 
-def test_managed_team_channel_streams_include_next_epg_event_without_assigned_streams(monkeypatch):
+def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript(
@@ -143,28 +143,25 @@ def test_managed_team_channel_streams_include_next_epg_event_without_assigned_st
     )
     monkeypatch.setattr(channels, "get_db", lambda: _connection(conn))
     monkeypatch.setattr(channels, "get_group_names_by_ids", lambda *_args: {3: "Sports"})
-    monkeypatch.setattr(channels, "get_assigned_team_streams", lambda *_args: [])
     monkeypatch.setattr(channels, "resolve_stream_ordering_rules", lambda *_args: ([], None))
     monkeypatch.setattr(channels, "get_stream_match_details", lambda *_args: {})
     monkeypatch.setattr(channels, "get_dispatcharr_client", lambda *_args: None)
     monkeypatch.setattr(
         channels,
-        "find_current_live_window",
-        lambda *_args: None,
-    )
-    monkeypatch.setattr(
-        channels,
-        "find_next_live_window",
-        lambda *_args: {
-            "title": "Blue at Red", "sub_title": "Regular season",
-            "start": "2026-09-13T09:00:00+00:00", "stop": "2026-09-13T11:00:00+00:00",
-            "is_live": False,
-        },
+        "create_default_service",
+        lambda: SimpleNamespace(
+            get_event=lambda event_id, league: SimpleNamespace(
+                name=f"Attached {event_id} in {league}",
+                start_time="2026-09-13T09:00:00+00:00",
+            )
+        ),
     )
 
     response = channels.get_managed_channel_streams(-7)
 
     assert response.current_event is not None
-    assert response.current_event.title == "Blue at Red"
-    assert response.current_event.is_live is False
-    assert response.streams == []
+    assert response.current_event.title == "Attached game-1 in nba"
+    assert response.current_event.is_attached is True
+    assert response.current_event.start == "2026-09-13T09:00:00+00:00"
+    assert response.current_event.attach_at is None
+    assert response.streams[0].dispatcharr_stream_id == 44

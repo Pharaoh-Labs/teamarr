@@ -212,6 +212,7 @@ export interface ChannelStreamsResponse {
   current_event: {
     title: string | null
     sub_title: string | null
+    is_attached: boolean
     is_live: boolean
     start: string | null
     stop: string | null
