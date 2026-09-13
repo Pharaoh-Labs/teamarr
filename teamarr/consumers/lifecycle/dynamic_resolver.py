@@ -1,7 +1,7 @@
 """Dynamic channel group and profile resolver.
 
-Resolves {sport}, {league}, {conference} and {division} wildcards to actual
-Dispatcharr group/profile IDs.
+Resolves {sport}, {league}, {conference}, {conference_abbrev} and {division}
+wildcards to actual Dispatcharr group/profile IDs.
 Auto-creates groups/profiles in Dispatcharr if they don't exist.
 """
 
@@ -236,6 +236,16 @@ class DynamicResolver:
         group = self._get_event_group(event)
         return group["name"] if group else None
 
+    def get_event_conference_abbrev(self, event: Any) -> str | None:
+        """Conference abbreviation for an event's home team (#777).
+
+        The cached tree's compact label ('SEC', 'ACC', 'Big Ten') — ESPN's
+        shortName for the conference. None when the tree row carries none,
+        so the pattern falls back like any unresolved wildcard.
+        """
+        group = self._get_event_group(event)
+        return group.get("abbrev") if group else None
+
     def get_event_division(self, event: Any) -> str | None:
         """Division for an event's home team — the conference's parent (#717).
 
@@ -265,6 +275,7 @@ class DynamicResolver:
         event_league: str | None,
         conference: str | None = None,
         division: str | None = None,
+        conference_abbrev: str | None = None,
     ) -> str:
         """Interpolate pattern with event data.
 
@@ -274,6 +285,8 @@ class DynamicResolver:
             event_league: Event's league code (e.g., 'eng.1', 'nfl')
             conference: Conference name for the {conference} wildcard (#91)
             division: Division name for the {division} wildcard (#717)
+            conference_abbrev: Conference abbreviation for the
+                {conference_abbrev} wildcard (#777)
 
         Returns:
             Resolved string with wildcards replaced by display names
@@ -288,11 +301,16 @@ class DynamicResolver:
             alias = self.get_league_alias(event_league)
             result = result.replace("{league}", alias)
 
+        # Exact-token replaces: '{conference}' cannot match inside
+        # '{conference_abbrev}' because the latter's brace follows '_'.
         if conference and "{conference}" in result:
             result = result.replace("{conference}", conference)
 
         if division and "{division}" in result:
             result = result.replace("{division}", division)
+
+        if conference_abbrev and "{conference_abbrev}" in result:
+            result = result.replace("{conference_abbrev}", conference_abbrev)
 
         return result
 
@@ -437,13 +455,13 @@ class DynamicResolver:
 
         Args:
             mode: 'static' or pattern string containing
-                {sport}/{league}/{conference}/{division}
+                {sport}/{league}/{conference}/{conference_abbrev}/{division}
             static_group_id: Group ID to use for 'static' mode
             event_sport: Event's sport code
             event_league: Event's league code
-            event: The event itself — needed only for the {conference} (#91)
-                and {division} (#717) wildcards, which resolve from the
-                home team
+            event: The event itself — needed only for the {conference} (#91),
+                {conference_abbrev} (#777) and {division} (#717) wildcards,
+                which resolve from the home team
 
         Returns:
             Resolved group ID or None
@@ -486,17 +504,24 @@ class DynamicResolver:
                 self.get_event_conference(event) if "{conference}" in mode else None
             )
             division = self.get_event_division(event) if "{division}" in mode else None
+            conference_abbrev = (
+                self.get_event_conference_abbrev(event)
+                if "{conference_abbrev}" in mode
+                else None
+            )
             resolved_name = self.resolve_pattern(
-                mode, event_sport, event_league, conference, division
+                mode, event_sport, event_league, conference, division, conference_abbrev
             )
 
             # Check if any wildcards remain unresolved (a non-NCAA event under
-            # a {conference}/{division} pattern falls back to the static group)
+            # a {conference}/{conference_abbrev}/{division} pattern falls back
+            # to the static group)
             if (
                 "{sport}" in resolved_name
                 or "{league}" in resolved_name
                 or "{conference}" in resolved_name
                 or "{division}" in resolved_name
+                or "{conference_abbrev}" in resolved_name
             ):
                 logger.warning(
                     "[RESOLVER] Pattern has unresolved wildcards: %s -> %s (sport=%s, league=%s)",
@@ -558,8 +583,21 @@ class DynamicResolver:
                     # Pattern - resolve it
                     resolved_name = self.resolve_pattern(item, event_sport, event_league)
 
-                    # Check if wildcards remain unresolved
-                    if "{sport}" in resolved_name or "{league}" in resolved_name:
+                    # Check if wildcards remain unresolved. The conference
+                    # tokens are never passed here (profiles get sport/league
+                    # only), so without these checks a profile pattern using
+                    # one would create a profile literally named
+                    # "NCAAF | {conference}".
+                    if any(
+                        token in resolved_name
+                        for token in (
+                            "{sport}",
+                            "{league}",
+                            "{conference}",
+                            "{conference_abbrev}",
+                            "{division}",
+                        )
+                    ):
                         logger.warning(
                             "[RESOLVER] Profile pattern has unresolved wildcards: %s -> %s",
                             item,

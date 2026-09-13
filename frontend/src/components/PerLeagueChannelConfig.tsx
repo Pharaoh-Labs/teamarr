@@ -279,9 +279,9 @@ function LeagueConfigRow({
                       className="w-64 mt-2"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      {"{sport}"}, {"{league}"}, plus {"{conference}"} and {"{division}"} for NCAA
-                      leagues — "{"{league}"} | {"{division}"}" splits college football into
-                      "NCAAF | FBS" and "NCAAF | FCS".
+                      {"{sport}"}, {"{league}"}, plus {"{conference}"}, {"{conference_abbrev}"}, and{" "}
+                      {"{division}"} for NCAA leagues — "{"{league}"} | {"{conference_abbrev}"}"
+                      buckets college football as "NCAAF | SEC".
                     </p>
                   </>
                 )}

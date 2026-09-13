@@ -1,8 +1,8 @@
 """Provider group (conference) cache — #91, epic y5l8.
 
 Covers the DB round-trip, the core-tree walk with $ref parsing, the
-conferences API endpoint, and the dynamic-resolver {conference} and
-{division} (#717) wildcards.
+conferences API endpoint, and the dynamic-resolver {conference},
+{conference_abbrev} (#777) and {division} (#717) wildcards.
 """
 
 from unittest.mock import MagicMock
@@ -35,6 +35,8 @@ B1G = {
 }
 # A tree cached before #717 carries no parent — {division} must stay silent
 MVFC = {"key": "21", "name": "Missouri Valley Football Conference", "team_ids": ["2"]}
+# Neither shortName nor abbreviation published — {conference_abbrev} defers
+NO_ABBREV = {**SEC, "key": "77", "abbrev": None, "team_ids": ["300"]}
 
 
 # ---------------------------------------------------------------------------
@@ -268,10 +270,11 @@ def test_event_division_none_without_parent_data(db_conn):
 
 
 def test_home_team_group_cached_once(db_conn):
-    """Conference and division share one lookup per team."""
+    """Conference, abbreviation and division share one lookup per team."""
     resolver = _resolver_with_cache(db_conn)
     event = _cfb_event("2")
     resolver.get_event_conference(event)
+    resolver.get_event_conference_abbrev(event)
     resolver.get_event_division(event)
     assert len(resolver._group_by_team) == 1
 
@@ -310,3 +313,104 @@ def test_resolve_channel_group_falls_back_when_division_unknown(db_conn):
         == 42
     )
     resolver._get_or_create_group.assert_called_once_with("NCAAF | FBS")
+
+
+# ---------------------------------------------------------------------------
+# {conference_abbrev} wildcard (#777)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_pattern_replaces_conference_abbrev():
+    resolver = DynamicResolver()
+    resolver._initialized = True
+    resolver._league_aliases = {CFB: "NCAAF"}
+    assert (
+        resolver.resolve_pattern(
+            "{league} | {conference_abbrev}",
+            "football",
+            CFB,
+            "Southeastern Conference",
+            "FBS",
+            "SEC",
+        )
+        == "NCAAF | SEC"
+    )
+
+
+def test_resolve_pattern_conference_and_abbrev_coexist():
+    """Replacing {conference} must not eat the {conference_abbrev} token."""
+    resolver = DynamicResolver()
+    assert (
+        resolver.resolve_pattern(
+            "{conference} | {conference_abbrev}",
+            "football",
+            CFB,
+            "Southeastern Conference",
+            None,
+            "SEC",
+        )
+        == "Southeastern Conference | SEC"
+    )
+
+
+def test_event_conference_abbrev_from_home_team(db_conn):
+    resolver = _resolver_with_cache(db_conn)
+    assert resolver.get_event_conference_abbrev(_cfb_event("2")) == "SEC"
+    # Unknown team / non-NCAA league resolves to None (pattern falls back)
+    assert resolver.get_event_conference_abbrev(_cfb_event("9999")) is None
+    assert resolver.get_event_conference_abbrev(None) is None
+
+
+def test_event_conference_abbrev_none_without_abbrev(db_conn):
+    """A tree row with no abbreviation defers rather than inventing a label."""
+    save_provider_groups(db_conn, "espn", CFB, 2026, [NO_ABBREV])
+    resolver = DynamicResolver()
+    resolver._db_conn = db_conn
+    assert resolver.get_event_conference(_cfb_event("300")) == "Southeastern Conference"
+    assert resolver.get_event_conference_abbrev(_cfb_event("300")) is None
+
+
+def test_resolve_channel_group_falls_back_when_abbrev_unknown(db_conn):
+    """An event with no cached abbreviation under {conference_abbrev} lands
+    in the static group, same contract as {conference}/{division}."""
+    resolver = _resolver_with_cache(db_conn)
+    resolver._initialized = True
+    resolver._groups_loaded = True
+    resolver._known_group_ids = {7}
+    resolver._league_aliases = {CFB: "NCAAF"}
+    resolver._get_or_create_group = MagicMock(return_value=42)
+
+    assert (
+        resolver.resolve_channel_group(
+            mode="{league} | {conference_abbrev}",
+            static_group_id=7,
+            event_sport="football",
+            event_league=CFB,
+            event=_cfb_event("9999"),  # not in the conference tree
+        )
+        == 7
+    )
+
+    assert (
+        resolver.resolve_channel_group(
+            mode="{league} | {conference_abbrev}",
+            static_group_id=7,
+            event_sport="football",
+            event_league=CFB,
+            event=_cfb_event("2"),
+        )
+        == 42
+    )
+    resolver._get_or_create_group.assert_called_once_with("NCAAF | SEC")
+
+
+def test_profile_pattern_skips_unresolved_conference_tokens(db_conn):
+    """A profile pattern using a conference token is skipped, not created
+    as a profile literally named 'NCAAF | {conference}'."""
+    resolver = _resolver_with_cache(db_conn)
+    resolver._initialized = True
+    resolver._league_aliases = {CFB: "NCAAF"}
+    resolver._get_or_create_profile = MagicMock()
+
+    assert resolver.resolve_channel_profiles(["{league} | {conference}"], "football", CFB) == []
+    resolver._get_or_create_profile.assert_not_called()
