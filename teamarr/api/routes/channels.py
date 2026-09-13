@@ -27,6 +27,7 @@ from teamarr.database.channels.streams import (
     get_stream_match_details,
     refresh_stream_stats,
 )
+from teamarr.database.channels.types import ManagedChannelStream
 from teamarr.database.groups import get_group_names_by_ids
 from teamarr.database.managed_team_channel_streams import get_assigned_team_streams
 from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
@@ -236,6 +237,8 @@ class TeamChannelCurrentEvent(BaseModel):
     sub_title: str | None = None
     start: str | None = None
     stop: str | None = None
+    attach_at: str | None = None
+    detach_at: str | None = None
 
 
 class ChannelStreamsResponse(BaseModel):
@@ -446,6 +449,75 @@ def get_managed_channel_streams(channel_id: int):
                 team_channel["channel_id"],
             )
 
+            ordering_rules, ordering_scope = resolve_stream_ordering_rules(
+                conn, team_channel["sport"], team_channel["primary_league"]
+            )
+            ordering_service = StreamOrderingService(ordering_rules, conn)
+            sorting_scope = ordering_scope.name if ordering_scope else "Global"
+            has_rules = bool(ordering_service.rules)
+            stream_models = [
+                ManagedChannelStream(
+                    id=stream["id"],
+                    managed_channel_id=0,
+                    dispatcharr_stream_id=stream["dispatcharr_stream_id"],
+                    stream_name=stream["stream_name"],
+                    source_group_id=stream["source_group_id"],
+                    m3u_account_name=stream["m3u_account_name"],
+                    match_type=stream["match_type"],
+                    match_method=stream["match_method"],
+                    feed_team_id=stream["feed_team_id"],
+                    feed_side=stream["feed_side"],
+                    dispatcharr_channel_group=stream["dispatcharr_channel_group"],
+                    priority=stream["priority"],
+                )
+                for stream in streams
+            ]
+            matched_by_stream: dict[int, list[StreamRuleMatch]] = {}
+            expected_by_stream: dict[int, int] = {}
+            for stream in stream_models:
+                group_name = (
+                    group_names.get(stream.source_group_id)
+                    if stream.source_group_id is not None
+                    else None
+                )
+                matched_by_stream[stream.dispatcharr_stream_id] = [
+                    StreamRuleMatch(
+                        type=entry.type,
+                        value=entry.value,
+                        priority=entry.priority,
+                        is_winner=entry.is_winner,
+                        mode=entry.mode,
+                        points=entry.points,
+                    )
+                    for entry in ordering_service.evaluate_rules(stream, group_name)
+                ]
+                expected_by_stream[stream.dispatcharr_stream_id] = (
+                    ordering_service.compute_priority(stream, group_name)
+                    if has_rules
+                    else stream.priority
+                )
+
+            stats_by_stream: dict[int, dict] = {}
+            try:
+                client = get_dispatcharr_client(get_db)
+                if client and stream_models:
+                    stats_by_stream = {
+                        entry["id"]: entry["stream_stats"]
+                        for entry in client.get_stream_stats_by_ids(
+                            [stream.dispatcharr_stream_id for stream in stream_models]
+                        )
+                        if entry.get("id") is not None and entry.get("stream_stats") is not None
+                    }
+            except Exception:
+                logger.debug("[CHANNELS] Could not fetch managed team stream stats", exc_info=True)
+
+            match_pairs = [
+                (stream.source_group_id, stream.dispatcharr_stream_id)
+                for stream in stream_models
+                if stream.source_group_id is not None
+            ]
+            match_details = get_stream_match_details(conn, match_pairs)
+
         return ChannelStreamsResponse(
             streams=[
                 ChannelStreamEntry(
@@ -457,8 +529,32 @@ def get_managed_channel_streams(channel_id: int):
                     match_type=stream["match_type"],
                     feed_side=stream["feed_side"],
                     priority=stream["priority"],
-                    expected_priority=stream["priority"],
-                    sorting_scope="Team channel",
+                    expected_priority=expected_by_stream.get(
+                        stream["dispatcharr_stream_id"], int(stream["priority"])
+                    ),
+                    stream_stats=stats_by_stream.get(stream["dispatcharr_stream_id"]),
+                    matched_rules=matched_by_stream.get(stream["dispatcharr_stream_id"], []),
+                    sorting_scope=sorting_scope,
+                    matched_event=current["title"] if current else None,
+                    matched_league=team_channel["primary_league"],
+                    cache_match_method=(detail := match_details.get(
+                        (stream["source_group_id"], stream["dispatcharr_stream_id"]), {}
+                    )).get("match_method"),
+                    cache_created_at=(
+                        _safe_isoformat(detail.get("created_at"))
+                        if detail.get("match_method") == "cache"
+                        else None
+                    ),
+                    match_aliases=[
+                        StreamNameMatch(text=alias["alias"], team=alias["team"])
+                        for alias in detail.get("aliases", [])
+                    ],
+                    match_patterns=[
+                        StreamNameMatch(text=pattern["token"], team=pattern["team"])
+                        for pattern in detail.get("patterns", [])
+                    ],
+                    user_corrected=detail.get("user_corrected", False),
+                    corrected_at=_safe_isoformat(detail.get("corrected_at")),
                 )
                 for stream in streams
             ],
@@ -468,6 +564,8 @@ def get_managed_channel_streams(channel_id: int):
                     sub_title=current["sub_title"],
                     start=_safe_isoformat(current["start"]),
                     stop=_safe_isoformat(current["stop"]),
+                    attach_at=_safe_isoformat(streams[0]["attach_at"]) if streams else None,
+                    detach_at=_safe_isoformat(streams[0]["detach_at"]) if streams else None,
                 )
                 if current
                 else None

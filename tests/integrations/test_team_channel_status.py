@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from teamarr.api.models import TeamUpdate
 from teamarr.api.routes import teams as teams_route
 from teamarr.services.team_channel_status import (
     build_team_channel_status,
@@ -286,3 +287,21 @@ def test_team_channel_status_endpoint_team_not_found(monkeypatch):
         teams_route.get_team_channel_status(999)
 
     assert exc.value.status_code == 404
+
+
+def test_disabling_managed_team_channel_waits_for_generation(monkeypatch):
+    conn = _team_status_db()
+    _patch_team_status_db(monkeypatch, conn)
+    updated = []
+
+    monkeypatch.setattr(teams_route, "db_update_team", lambda *_args: updated.append(_args) or TEAM)
+    monkeypatch.setattr(
+        teams_route,
+        "TeamChannelManager",
+        lambda *_args: pytest.fail("team channel lifecycle must wait for generation"),
+    )
+
+    response = teams_route.update_team(TEAM["id"], TeamUpdate(managed_channel_enabled=False))
+
+    assert response == TEAM
+    assert updated[0][2] == {"managed_channel_enabled": False}

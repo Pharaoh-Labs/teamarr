@@ -2,10 +2,15 @@
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
+from teamarr.database.managed_team_channel_streams import (
+    active_stream_ids,
+    get_assigned_team_streams,
+)
 from teamarr.database.managed_team_channels import get_managed_team_channel
 from teamarr.services.team_channel_manager import TeamChannelManager
 
@@ -192,6 +197,7 @@ def test_creation_uses_managed_output_and_uploads_resolved_template_logo(
 
     assert channels.created[0]["name"] == "National Basketball Association | Blue"
     assert channels.created[0]["logo_id"] == 42
+    assert channels.updated == [(99, {"logo_id": 42})]
     assert uploaded == [{
         "name": "Blue Logo",
         "url": "https://logos.example/National Basketball Association/Blue.png",
@@ -373,4 +379,60 @@ def test_stream_ordering_uses_team_scope_and_excludes_closed_windows(monkeypatch
     assert ("basketball", "nba") in seen
     assert result == {"channels": 1, "streams": 3, "errors": 0}
     assert channels.updated == [(10, {"streams": [56, 55]})]
+    database.close()
+
+
+def test_active_streams_exclude_overlapping_events():
+    database = sqlite3.connect(":memory:")
+    database.row_factory = sqlite3.Row
+    database.executescript(
+        """
+        CREATE TABLE managed_team_channel_streams (
+            id INTEGER PRIMARY KEY, team_id INTEGER, dispatcharr_stream_id INTEGER,
+            event_id TEXT, event_provider TEXT, priority INTEGER, attach_at TEXT,
+            detach_at TEXT, removed_at TEXT
+        );
+        INSERT INTO managed_team_channel_streams VALUES
+            (1, 1, 55, 'game-1', 'espn', 2, '2026-01-01 11:00:00',
+             '2026-01-01 13:30:00', NULL),
+            (2, 1, 56, 'game-1', 'espn', 1, '2026-01-01 11:00:00',
+             '2026-01-01 13:30:00', NULL),
+            (3, 1, 57, 'game-2', 'espn', 1, '2026-01-01 12:30:00',
+             '2026-01-01 16:00:00', NULL);
+        """
+    )
+
+    streams = active_stream_ids(database, 1, datetime(2026, 1, 1, 13, tzinfo=UTC))
+
+    assert streams == [56, 55]
+    database.close()
+
+
+def test_assigned_streams_deduplicate_active_event_memberships():
+    database = sqlite3.connect(":memory:")
+    database.row_factory = sqlite3.Row
+    database.executescript(
+        """
+        CREATE TABLE managed_team_channel_streams (
+            id INTEGER PRIMARY KEY, team_id INTEGER, dispatcharr_stream_id INTEGER,
+            event_id TEXT, event_provider TEXT, priority INTEGER, attach_at TEXT,
+            detach_at TEXT, removed_at TEXT
+        );
+        INSERT INTO managed_team_channel_streams VALUES
+            (1, 1, 55, 'game-1', 'espn', 2, '2026-01-01 11:00:00',
+             '2026-01-01 13:30:00', NULL),
+            (2, 1, 55, 'game-1', 'espn', 1, '2026-01-01 11:00:00',
+             '2026-01-01 13:30:00', NULL),
+            (3, 1, 56, 'game-1', 'espn', 3, '2026-01-01 11:00:00',
+             '2026-01-01 13:30:00', NULL),
+            (4, 1, 57, 'game-2', 'espn', 1, '2026-01-01 12:30:00',
+             '2026-01-01 16:00:00', NULL);
+        """
+    )
+
+    streams = get_assigned_team_streams(
+        database, 1, datetime(2026, 1, 1, 13, tzinfo=UTC)
+    )
+
+    assert [stream["dispatcharr_stream_id"] for stream in streams] == [55, 56]
     database.close()

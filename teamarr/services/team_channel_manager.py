@@ -142,6 +142,20 @@ class TeamChannelManager:
                         channel_number=channel_number,
                         sync_status="ready",
                     )
+                    # Dispatcharr does not consistently persist logo_id from a
+                    # channel-create payload, so enforce the template logo once
+                    # the newly-created channel has a stable ID.
+                    if logo_id is not None:
+                        logo_result = self._channels.update_channel(
+                            remote["id"], {"logo_id": logo_id}
+                        )
+                        if not logo_result.success:
+                            self._record_error(
+                                conn,
+                                team,
+                                logo_result.error or "Dispatcharr logo update failed",
+                            )
+                            result["errors"] += 1
                     result["created"] += 1
                     continue
 

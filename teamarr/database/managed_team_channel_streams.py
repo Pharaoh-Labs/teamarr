@@ -6,13 +6,33 @@ from datetime import UTC, datetime
 from sqlite3 import Connection
 
 
-def get_assigned_team_streams(conn: Connection, team_id: int) -> list[dict]:
-    """Return the current generation's stream assignments for a team channel."""
+def get_assigned_team_streams(
+    conn: Connection, team_id: int, now: datetime | None = None
+) -> list[dict]:
+    """Return the active channel membership for one selected event, deduplicated."""
+    timestamp = (now or datetime.now(UTC)).strftime("%Y-%m-%d %H:%M:%S")
     rows = conn.execute(
-        """SELECT * FROM managed_team_channel_streams
-           WHERE team_id = ? AND removed_at IS NULL
+        """WITH active_streams AS (
+               SELECT * FROM managed_team_channel_streams
+               WHERE team_id = ? AND removed_at IS NULL
+                 AND (attach_at IS NULL OR attach_at <= ?)
+                 AND (detach_at IS NULL OR detach_at > ?)
+           ), selected_event AS (
+               SELECT event_id, event_provider FROM active_streams
+               ORDER BY detach_at IS NULL, detach_at, event_id, event_provider
+               LIMIT 1
+           ), ranked_streams AS (
+               SELECT *, ROW_NUMBER() OVER (
+                   PARTITION BY dispatcharr_stream_id ORDER BY priority, id
+               ) AS stream_rank
+               FROM active_streams
+               WHERE (event_id, event_provider) = (
+                   SELECT event_id, event_provider FROM selected_event
+               )
+           )
+           SELECT * FROM ranked_streams WHERE stream_rank = 1
            ORDER BY priority, id""",
-        (team_id,),
+        (team_id, timestamp, timestamp),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -77,14 +97,24 @@ def reconcile_team_streams(conn: Connection, memberships: list[dict]) -> None:
 
 
 def active_stream_ids(conn: Connection, team_id: int, now: datetime | None = None) -> list[int]:
-    """Return deduplicated stream ids whose half-open windows are active now."""
+    """Return streams for one active event, preserving that event's priority order."""
     now = now or datetime.now(UTC)
     timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
     rows = conn.execute(
-        """SELECT dispatcharr_stream_id FROM managed_team_channel_streams
-           WHERE team_id = ? AND removed_at IS NULL
-             AND (attach_at IS NULL OR attach_at <= ?)
-             AND (detach_at IS NULL OR detach_at > ?)
+        """WITH active_streams AS (
+               SELECT * FROM managed_team_channel_streams
+               WHERE team_id = ? AND removed_at IS NULL
+                 AND (attach_at IS NULL OR attach_at <= ?)
+                 AND (detach_at IS NULL OR detach_at > ?)
+           ), selected_event AS (
+               SELECT event_id, event_provider FROM active_streams
+               ORDER BY detach_at IS NULL, detach_at, event_id, event_provider
+               LIMIT 1
+           )
+           SELECT dispatcharr_stream_id FROM active_streams
+           WHERE (event_id, event_provider) = (
+               SELECT event_id, event_provider FROM selected_event
+           )
            ORDER BY priority, id""",
         (team_id, timestamp, timestamp),
     ).fetchall()

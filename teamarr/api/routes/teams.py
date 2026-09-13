@@ -223,16 +223,6 @@ def update_team(team_id: int, team: TeamUpdate):
         current = db_get_team(conn, team_id)
         if current is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-        removes_management = (
-            current.get("managed_channel_enabled")
-            and (updates.get("managed_channel_enabled") is False or updates.get("active") is False)
-        )
-        if removes_management:
-            client = get_dispatcharr_client(get_db)
-            manager = TeamChannelManager(get_db, ChannelManager(client) if client else None)
-            deleted, error = manager.remove_team_channel(team_id)
-            if not deleted:
-                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error)
         result = db_update_team(conn, team_id, updates)
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")

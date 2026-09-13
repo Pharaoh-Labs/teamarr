@@ -315,8 +315,8 @@ def run_full_generation(
         result.teams_programmes = team_result.total_programmes
         timer.mark("teams")
 
-        # Persistent Team EPG channels have no streams and are owned exclusively
-        # through managed_team_channels. Create/sync them before guide refresh.
+        # Persistent Team EPG channels are owned exclusively through
+        # managed_team_channels. Reconcile them after the XMLTV guide is written.
         team_channels = (
             dispatcharr_client
             if isinstance(dispatcharr_client, DispatcharrConnection)
@@ -328,7 +328,6 @@ def run_full_generation(
             team_channels.epg if team_channels else None,
             team_channels.logos if team_channels else None,
         )
-        result.managed_team_channels = team_channel_manager.sync()
 
         # Transition message - teams done, starting groups
         logger.info("[GENERATION] Sending transition message: teams -> groups")
@@ -406,10 +405,6 @@ def run_full_generation(
         result.programmes_total = result.teams_programmes + result.groups_programmes
         timer.mark("groups")
 
-        result.managed_team_streams = team_channel_manager.sync_stream_memberships(
-            team_matched_streams
-        )
-
         # Step 3b: Global channel reassignment (if enabled)
         check_cancelled()
         _sync_global_channels(
@@ -454,6 +449,13 @@ def run_full_generation(
                 "[GENERATION] EPG written to %s (%s bytes)", output_path, f"{result.file_size:,}"
             )
         timer.mark("xmltv_save")
+
+        # Apply managed-team channel creation, deletion, and stream membership
+        # only after the Team EPG has been fully generated and written.
+        result.managed_team_channels = team_channel_manager.sync()
+        result.managed_team_streams = team_channel_manager.sync_stream_memberships(
+            team_matched_streams
+        )
 
         # Create lifecycle service once for steps 5-6
         # Reuse shared_service to maintain cache warmth

@@ -214,6 +214,8 @@ export interface ChannelStreamsResponse {
     sub_title: string | null
     start: string | null
     stop: string | null
+    attach_at?: string | null
+    detach_at?: string | null
   } | null
 }
 
