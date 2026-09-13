@@ -87,6 +87,7 @@ class EventGroupProcessor(
         db_factory: Any,
         dispatcharr_client: Any = None,
         service: SportsDataService | None = None,
+        matched_stream_callback: Callable[[int, list[dict]], None] | None = None,
     ):
         """Initialize the processor.
 
@@ -98,6 +99,7 @@ class EventGroupProcessor(
         self._db_factory = db_factory
         self._dispatcharr_client = dispatcharr_client
         self._service = service or create_default_service()
+        self._matched_stream_callback = matched_stream_callback
 
         # EPG generator for XMLTV output (art_base_url injected so the resolver
         # reconstructs game-thumbs URLs — epic z02s).
@@ -742,6 +744,8 @@ class EventGroupProcessor(
             matched_streams, filtered_team_count = self._filter_by_teams(
                 matched_streams, group, conn
             )
+            if self._matched_stream_callback:
+                self._matched_stream_callback(group.id, matched_streams)
             result.filtered_team = filtered_team_count
 
             # Build set of event IDs that passed the filter (segment-aware)
@@ -1022,6 +1026,7 @@ def process_all_event_groups(
     service: SportsDataService | None = None,
     aggregate_xmltv: bool = True,
     run_id: int | None = None,
+    matched_stream_callback: Callable[[int, list[dict]], None] | None = None,
 ) -> BatchProcessingResult:
     """Process all active event groups.
 
@@ -1045,6 +1050,7 @@ def process_all_event_groups(
         db_factory=db_factory,
         dispatcharr_client=dispatcharr_client,
         service=service,
+        matched_stream_callback=matched_stream_callback,
     )
     return processor.process_all_groups(
         target_date,

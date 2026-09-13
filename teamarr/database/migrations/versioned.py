@@ -344,6 +344,11 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _advance_version(conn, 95, "managed team channel schema")
         current_version = 95
 
+    if current_version < 96:
+        # managed_team_channel_streams is created by schema reconciliation.
+        _advance_version(conn, 96, "reconciliation: managed team stream memberships")
+        current_version = 96
+
 
 # =============================================================================
 # Migration helpers
