@@ -12,13 +12,16 @@ redirect_from:
 
 ![EPG → Team EPG — settings card, stats, and the teams table](../../assets/images/epg-teams.png)
 
-Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. By default, point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association). Optionally, enable **managed channels** for an individual team and Teamarr will create and maintain its persistent Dispatcharr channel as well.
+Team EPG builds one persistent **XMLTV schedule** per active team in the guide Teamarr writes. By default, point one of your existing Dispatcharr channels at the team's XMLTV channel id through Dispatcharr's normal EPG association. This is a manual, guide-only setup: Teamarr does not create or modify that Dispatcharr channel.
+
+Optionally, enable **managed channels** for an individual team. Teamarr then creates and maintains one persistent Dispatcharr channel in the dedicated managed-team range, attaches the team's XMLTV guide, and attaches matching streams from enabled Event Groups only while their game windows are active. The channel remains in place between games, with no streams attached.
 
 ## How It Works
 
 1. Import teams from the league cache
 2. Assign a **team template** to each team
 3. Teamarr looks up each team's schedule and writes EPG programmes for that team's XMLTV channel
+4. For managed teams, Teamarr also evaluates streams from enabled Event Groups against the team's scheduled games and reconciles temporary stream memberships on the persistent channel
 
 Each team's EPG includes:
 - **Pregame** programmes before the game starts

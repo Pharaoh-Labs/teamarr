@@ -541,10 +541,11 @@ export function Teams() {
 
       {/* What is Team EPG — info tile */}
       <Alert variant="info" title="What is Team EPG?">
-        Teamarr always generates a team-only guide. You can associate that guide with an existing
-        Dispatcharr channel, or enable managed channels per team to have Teamarr create and maintain
-        a persistent channel in the dedicated managed-team range. Most setups still rely on event-based
-        matching from Sources.
+        Team EPG builds a dedicated XMLTV schedule for each active team. You can associate that guide
+        with an existing Dispatcharr channel, or enable management to have Teamarr create and maintain
+        a persistent Dispatcharr channel in the dedicated managed-team range. Managed channels keep the
+        team guide between games and attach streams matched from enabled Sources only while their game
+        windows are active.
       </Alert>
 
       {/* Team EPG settings (lifted from Settings) */}
