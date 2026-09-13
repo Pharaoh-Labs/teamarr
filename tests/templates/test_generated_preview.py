@@ -4,6 +4,8 @@ from dataclasses import fields
 from datetime import UTC, datetime
 from unittest.mock import patch
 
+import pytest
+
 from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, EventStatus, Team, Venue
 from teamarr.database.provider_cache import dict_to_event, event_to_dict
 from teamarr.providers.espn.preview import apply_generated_preview_fields
@@ -192,6 +194,38 @@ def test_baseball_renderer_includes_starter_and_exact_leader_fallbacks():
     assert "Probable starter Payton Tolle is 8-6 with a 3.08 ERA" in text
     assert "Probable starter Tyler Phillips is 3-6 with a 3.67 ERA" in text
     assert "72-59 after going 3-2 in its last 5 games" in text
+
+
+@pytest.mark.parametrize(
+    ("sport", "league", "away", "home", "expected"),
+    [
+        ("soccer", "eng.1", ("Arsenal", "Arsenal"), ("Chelsea", "Chelsea"),
+         "Arsenal visits Chelsea at Example Park."),
+        ("football", "nfl", ("Buffalo Bills", "Bills"), ("Miami Dolphins", "Dolphins"),
+         "The Bills visit the Dolphins at Example Park for a Week 3 matchup."),
+        ("baseball", "mlb", ("Orlando Magic", "Magic"), ("Miami Heat", "Heat"),
+         "The Magic visits the Heat at Example Park."),
+    ],
+)
+def test_base_sentence_uses_team_identity_for_articles_and_agreement(
+    sport, league, away, home, expected
+):
+    event = _event(
+        sport=sport,
+        league=league,
+        away_team=Team(
+            id="away", provider="espn", name=away[0], short_name=away[1],
+            abbreviation="AWY", league=league, sport=sport,
+        ),
+        home_team=Team(
+            id="home", provider="espn", name=home[0], short_name=home[1],
+            abbreviation="HOM", league=league, sport=sport,
+        ),
+        week=3 if sport == "football" else None,
+        away_team_record="1-0" if sport == "baseball" else None,
+    )
+
+    assert build_generated_preview(event).startswith(expected)
 
 
 def test_baseball_renderer_normalizes_series_summary_grammar():
@@ -526,7 +560,7 @@ def test_nfl_stat_abbreviations_expand_in_generated_prose():
     apply_generated_preview_fields(payload, event)
 
     assert build_generated_preview(event) == (
-        "The Pittsburgh Steelers visit the Buffalo Bills at Highmark Stadium for a "
+        "The Steelers visit the Bills at Highmark Stadium for a "
         "Week 4 preseason matchup. Pittsburgh enters at 1-1 after going 2-3 in its "
         "last 5 games, producing 343 total yards per game, including 85 rushing yards "
         "per game. Team leaders include Drew Allar with 11/23 completions for 110 "

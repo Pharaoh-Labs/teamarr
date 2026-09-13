@@ -4,6 +4,7 @@ import re
 from collections import OrderedDict
 
 from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, Team
+from teamarr.core.naming import team_with_article
 
 SUPPORTED_SPORTS = frozenset({"baseball", "football", "basketball"})
 
@@ -53,6 +54,35 @@ def _team_subject(team: Team) -> str:
     if short and full.lower().endswith(f" {short.lower()}"):
         return full[: -(len(short) + 1)]
     return full
+
+
+def _team_matchup_name(team: Team) -> str:
+    """Return the natural matchup name, reducing franchise names to mascots."""
+    short = (team.short_name or "").strip()
+    full = team.name.strip()
+    if short and full.casefold().endswith(f" {short.casefold()}"):
+        return short
+    return full
+
+
+def _team_is_plural(team: Team) -> bool:
+    """Use the mascot shape to choose plural versus singular agreement."""
+    short = (team.short_name or "").strip()
+    full = team.name.strip()
+    if not short or full.casefold() == short.casefold() or not full.casefold().endswith(
+        f" {short.casefold()}"
+    ):
+        return False
+    word = short.casefold().split()[-1].rstrip(".,")
+    return word.endswith(("s", "x", "z", "ch", "sh"))
+
+
+def _team_matchup_phrase(team: Team, *, sentence_start: bool = False) -> str:
+    name = _team_matchup_name(team)
+    phrase = team_with_article(name, team.league, team.sport)
+    if sentence_start and phrase:
+        return phrase[:1].upper() + phrase[1:]
+    return phrase
 
 
 def _recent_phrase(value: str) -> str:
@@ -225,17 +255,23 @@ def _probable_starter_sentence(value: str) -> str:
 
 
 def _base_sentence(event: Event) -> str:
-    away = event.away_team.name
-    home = event.home_team.name
+    if event.sport in SUPPORTED_SPORTS or event.sport == "soccer":
+        away = _team_matchup_phrase(event.away_team, sentence_start=True)
+        home = _team_matchup_phrase(event.home_team)
+        away_verb = "visit" if _team_is_plural(event.away_team) else "visits"
+    else:
+        away = f"The {event.away_team.name}"
+        home = f"the {event.home_team.name}"
+        away_verb = "visit"
     venue = event.venue.name if event.venue else ""
     location = f" at {venue}" if venue else ""
     if event.sport == "football" and event.week:
         phase = "preseason " if event.season_type == "preseason" else ""
-        return f"The {away} visit the {home}{location} for a Week {event.week} {phase}matchup."
+        return f"{away} {away_verb} {home}{location} for a Week {event.week} {phase}matchup."
     if event.sport == "baseball" and event.series_summary:
         summary = _series_clause(_expand_team_abbreviations(event.series_summary, event))
-        return f"The {away} visit the {home}{location}, with {summary}."
-    return f"The {away} visit the {home}{location}."
+        return f"{away} {away_verb} {home}{location}, with {summary}."
+    return f"{away} {away_verb} {home}{location}."
 
 
 def _baseball_sentence(event: Event, side: str) -> str:
