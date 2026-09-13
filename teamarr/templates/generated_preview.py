@@ -4,7 +4,6 @@ import re
 from collections import OrderedDict
 
 from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, Team
-from teamarr.core.naming import team_with_article
 
 SUPPORTED_SPORTS = frozenset({"baseball", "football", "basketball"})
 
@@ -56,33 +55,27 @@ def _team_subject(team: Team) -> str:
     return full
 
 
-def _team_matchup_name(team: Team) -> str:
-    """Return the natural matchup name, reducing franchise names to mascots."""
+def _mascot(team: Team) -> str:
+    """Return the short name when it is a proper suffix of the full name."""
     short = (team.short_name or "").strip()
-    full = team.name.strip()
-    if short and full.casefold().endswith(f" {short.casefold()}"):
+    if short and team.name.strip().casefold().endswith(f" {short.casefold()}"):
         return short
-    return full
+    return ""
 
 
-def _team_is_plural(team: Team) -> bool:
-    """Use the mascot shape to choose plural versus singular agreement."""
-    short = (team.short_name or "").strip()
-    full = team.name.strip()
-    if not short or full.casefold() == short.casefold() or not full.casefold().endswith(
-        f" {short.casefold()}"
-    ):
-        return False
-    word = short.casefold().split()[-1].rstrip(".,")
-    return word.endswith(("s", "x", "z", "ch", "sh"))
+def _matchup_name(team: Team, article: str) -> tuple[str, bool]:
+    """Return the matchup name and whether it takes plural agreement (#785).
 
-
-def _team_matchup_phrase(team: Team, *, sentence_start: bool = False) -> str:
-    name = _team_matchup_name(team)
-    phrase = team_with_article(name, team.league, team.sport)
-    if sentence_start and phrase:
-        return phrase[:1].upper() + phrase[1:]
-    return phrase
+    Only a plural mascot reads with an article ("the Bills"); club names and
+    singular mascots keep the full, articleless name ("Arsenal", "Miami Heat").
+    A mascot counts as plural when its last word ends in "s", plus "Sox". Exact
+    grammatical number would need metadata the Team model doesn't carry.
+    """
+    mascot = _mascot(team)
+    word = mascot.casefold().split()[-1] if mascot else ""
+    if word.endswith("s") or word == "sox":
+        return f"{article} {mascot}", True
+    return team.name.strip(), False
 
 
 def _recent_phrase(value: str) -> str:
@@ -255,14 +248,9 @@ def _probable_starter_sentence(value: str) -> str:
 
 
 def _base_sentence(event: Event) -> str:
-    if event.sport in SUPPORTED_SPORTS or event.sport == "soccer":
-        away = _team_matchup_phrase(event.away_team, sentence_start=True)
-        home = _team_matchup_phrase(event.home_team)
-        away_verb = "visit" if _team_is_plural(event.away_team) else "visits"
-    else:
-        away = f"The {event.away_team.name}"
-        home = f"the {event.home_team.name}"
-        away_verb = "visit"
+    away, away_plural = _matchup_name(event.away_team, "The")
+    home, _ = _matchup_name(event.home_team, "the")
+    away_verb = "visit" if away_plural else "visits"
     venue = event.venue.name if event.venue else ""
     location = f" at {venue}" if venue else ""
     if event.sport == "football" and event.week:

@@ -196,15 +196,44 @@ def test_baseball_renderer_includes_starter_and_exact_leader_fallbacks():
     assert "72-59 after going 3-2 in its last 5 games" in text
 
 
+def _named_team(
+    name: str, short_name: str, abbreviation: str, league: str, sport: str
+) -> Team:
+    return Team(
+        id=abbreviation,
+        provider="espn",
+        name=name,
+        short_name=short_name,
+        abbreviation=abbreviation,
+        league=league,
+        sport=sport,
+    )
+
+
 @pytest.mark.parametrize(
     ("sport", "league", "away", "home", "expected"),
     [
-        ("soccer", "eng.1", ("Arsenal", "Arsenal"), ("Chelsea", "Chelsea"),
+        # Clubs: short name is the full name, so no mascot and no article.
+        ("soccer", "eng.1", ("Arsenal", "Arsenal", "ARS"), ("Chelsea", "Chelsea", "CHE"),
          "Arsenal visits Chelsea at Example Park."),
-        ("football", "nfl", ("Buffalo Bills", "Bills"), ("Miami Dolphins", "Dolphins"),
+        # Plural mascots take the article and a plural verb.
+        ("football", "nfl", ("Buffalo Bills", "Bills", "BUF"),
+         ("Miami Dolphins", "Dolphins", "MIA"),
          "The Bills visit the Dolphins at Example Park for a Week 3 matchup."),
-        ("baseball", "mlb", ("Orlando Magic", "Magic"), ("Miami Heat", "Heat"),
-         "The Magic visits the Heat at Example Park."),
+        # Singular mascots keep the full articleless name.
+        ("basketball", "nba", ("Miami Heat", "Heat", "MIA"), ("Utah Jazz", "Jazz", "UTA"),
+         "Miami Heat visits Utah Jazz at Example Park."),
+        ("basketball", "mens-college-basketball",
+         ("Green Bay Phoenix", "Phoenix", "GB"), ("Orlando Magic", "Magic", "ORL"),
+         "Green Bay Phoenix visits Orlando Magic at Example Park."),
+        # Each side is decided independently.
+        ("basketball", "nba", ("Utah Jazz", "Jazz", "UTA"),
+         ("Boston Celtics", "Celtics", "BOS"),
+         "Utah Jazz visits the Celtics at Example Park."),
+        # Sox is the one plural mascot that does not end in s.
+        ("baseball", "mlb", ("Boston Red Sox", "Red Sox", "BOS"),
+         ("Chicago White Sox", "White Sox", "CHW"),
+         "The Red Sox visit the White Sox at Example Park."),
     ],
 )
 def test_base_sentence_uses_team_identity_for_articles_and_agreement(
@@ -213,19 +242,26 @@ def test_base_sentence_uses_team_identity_for_articles_and_agreement(
     event = _event(
         sport=sport,
         league=league,
-        away_team=Team(
-            id="away", provider="espn", name=away[0], short_name=away[1],
-            abbreviation="AWY", league=league, sport=sport,
-        ),
-        home_team=Team(
-            id="home", provider="espn", name=home[0], short_name=home[1],
-            abbreviation="HOM", league=league, sport=sport,
-        ),
+        away_team=_named_team(*away, league, sport),
+        home_team=_named_team(*home, league, sport),
         week=3 if sport == "football" else None,
-        away_team_record="1-0" if sport == "baseball" else None,
+        away_team_record="1-0",
     )
 
     assert build_generated_preview(event).startswith(expected)
+
+
+def test_baseball_series_sentence_uses_matchup_names():
+    event = _event(
+        away_team=_named_team("Boston Red Sox", "Red Sox", "BOS", "mlb", "baseball"),
+        home_team=_named_team("Miami Marlins", "Marlins", "MIA", "mlb", "baseball"),
+        series_summary="BOS leads series 2-1",
+    )
+
+    assert build_generated_preview(event).startswith(
+        "The Red Sox visit the Marlins at Example Park, "
+        "with the Boston Red Sox leading the series 2-1."
+    )
 
 
 def test_baseball_renderer_normalizes_series_summary_grammar():
@@ -589,7 +625,7 @@ def test_unsupported_sport_generates_only_generic_complete_matchup():
     ctx, game = _context(event)
 
     assert build_generated_preview(event) == (
-        "The New York Rangers visit the Boston Bruins at TD Garden."
+        "The Rangers visit the Bruins at TD Garden."
     )
     assert ConditionEvaluator().evaluate("has_generated_preview", None, ctx, game)
     assert "44-22-8" not in build_generated_preview(event)
