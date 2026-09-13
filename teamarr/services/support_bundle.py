@@ -159,8 +159,10 @@ class SupportBundleService:
     def _account_names_from(self, conn: sqlite3.Connection) -> set[str]:
         try:
             rows = conn.execute(
-                "SELECT DISTINCT m3u_account_name FROM managed_channel_streams "
-                "WHERE m3u_account_name IS NOT NULL"
+                """SELECT DISTINCT m3u_account_name FROM managed_channel_streams
+                   WHERE m3u_account_name IS NOT NULL
+                   UNION SELECT DISTINCT m3u_account_name FROM managed_team_channel_streams
+                   WHERE m3u_account_name IS NOT NULL"""
             ).fetchall()
             return {str(row[0]) for row in rows if row[0]}
         except sqlite3.Error:
@@ -221,6 +223,8 @@ class SupportBundleService:
     def _channels(self, conn: sqlite3.Connection, errors: list[str]) -> dict[str, Any]:
         channels = self._query(conn, "managed_channels", errors)
         stream_rows = self._query(conn, "managed_channel_streams", errors)
+        team_channels = self._query(conn, "managed_team_channels", errors)
+        team_streams = self._query(conn, "managed_team_channel_streams", errors)
         groups = {
             row["id"]: row.get("name") for row in self._query(conn, "event_epg_groups", errors)
         }
@@ -255,6 +259,8 @@ class SupportBundleService:
         return {
             "total": len(channels),
             "channels": channel_entries,
+            "managed_team_channels": team_channels,
+            "managed_team_channel_streams": team_streams,
         }
 
     def _safe_stream_ordering(self, conn: sqlite3.Connection, errors: list[str]) -> Any:
@@ -506,7 +512,7 @@ class SupportBundleService:
             [
                 "",
                 "## Report Layout",
-                "`support-report.json` contains summary, signals, configuration, templates, sources_and_subscriptions, channels, generation, matching, reconciliation, environment, and collection_errors.",
+                "`channels` includes event channels plus managed-team ownership and temporary membership rows. `support-report.json` also contains summary, signals, configuration, templates, sources_and_subscriptions, generation, matching, reconciliation, environment, and collection_errors.",
                 "",
                 "## Collection Limits",
                 f"Recent runs: {RUN_LIMIT}; matched/failed stream details per run: {MATCH_DETAIL_LIMIT}; log tail per file: {LOG_BYTES} bytes.",

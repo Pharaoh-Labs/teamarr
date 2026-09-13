@@ -75,12 +75,21 @@ The `event_group_processor/` package handles the core matching and channel lifec
 
 ## Team Processor
 
-`team_processor.py` generates XMLTV programmes for each team's XMLTV channel (schedule tracking). It does not create or modify Dispatcharr channels — that's the lifecycle service's job and only happens for event-based workflows.
+`team_processor.py` generates XMLTV programmes for each team's XMLTV channel (schedule tracking). For teams without managed channels, Dispatcharr association remains manual. Opted-in persistent Team EPG channels are maintained separately by `TeamChannelManager`.
 
 | Method | Description |
 |--------|-------------|
 | `process_team(team_id)` | Single team EPG — load config, fetch schedule, generate programmes |
 | `process_all_teams(callback)` | Parallel processing with ThreadPoolExecutor (up to `ESPN_MAX_WORKERS`) |
+
+### Managed Team Channels (`services/team_channel_manager.py`)
+
+`TeamChannelManager` creates and synchronizes persistent Dispatcharr channels for active teams with managed channels enabled. It runs before the EPG refresh, associates the refreshed Team EPG afterward, and applies team-channel stream ordering during generation.
+
+- Ownership is established only by a `managed_team_channels` record. A same-`tvg_id` Dispatcharr channel without that mapping is manual and is left untouched; a conflict is reported rather than adopted.
+- Matched event streams are persisted in `managed_team_channel_streams`, then attached only while their membership window is active. This is independent of event-channel create/delete timing.
+- Disabling management, deactivating, or deleting a team deletes only a UUID-verified owned remote channel before its mapping is removed. Failed or unverifiable deletion leaves the team change blocked.
+- Event-channel reset, expiry, reconciliation, and orphan cleanup deliberately exclude persistent Team EPG channels. Dashboard rows for them are audit-only.
 
 ## Stream Matching
 

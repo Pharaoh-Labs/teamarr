@@ -430,7 +430,7 @@ class TeamProcessor:
             if programmes:
                 channel_dict = {
                     "id": team.channel_id,
-                    "name": team.team_name,
+                    "name": self._resolve_channel_name(options, team),
                     "icon": self._resolve_channel_logo(options, team),
                 }
                 from teamarr.database.settings import get_epg_settings
@@ -510,6 +510,21 @@ class TeamProcessor:
             # user setting — the toggle was removed in the v2.7.0 EPG overhaul).
             include_final_events=True,
         )
+
+    @staticmethod
+    def _resolve_channel_name(options: TeamEPGOptions, team: TeamConfig) -> str:
+        template = options.template
+        name = template.team_channel_name if template else None
+        if name:
+            return TemplateResolver(options.art_base_url).resolve_with_map(
+                name,
+                {
+                    "league": team.primary_league,
+                    "league_id": team.primary_league,
+                    "team_name": team.team_name,
+                },
+            )
+        return team.team_name
 
     @staticmethod
     def _resolve_channel_logo(options: TeamEPGOptions, team: TeamConfig) -> str | None:

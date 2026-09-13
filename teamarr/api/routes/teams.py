@@ -14,6 +14,7 @@ from teamarr.api.models import (
 )
 from teamarr.database import get_db
 from teamarr.database.leagues import get_league_sport
+from teamarr.database.managed_team_channels import get_managed_team_channel
 from teamarr.database.teams import (
     bulk_update_channel_ids as db_bulk_update,
 )
@@ -36,6 +37,7 @@ from teamarr.database.teams import (
     update_team as db_update_team,
 )
 from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
+from teamarr.services.team_channel_manager import TeamChannelManager
 from teamarr.services.team_channel_status import build_team_channel_status
 from teamarr.services.team_import import ImportTeam
 from teamarr.services.team_import import bulk_import_teams as do_import
@@ -164,6 +166,7 @@ def get_team_channel_status(team_id: int):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
 
         xmltv_row = get_team_xmltv(conn, team_id)
+        ownership = get_managed_team_channel(conn, team_id)
 
     dispatcharr_channel = None
     dispatcharr_error = None
@@ -171,7 +174,11 @@ def get_team_channel_status(team_id: int):
         client = get_dispatcharr_client(get_db)
         if client:
             manager = ChannelManager(client)
-            dispatcharr_channel = manager.find_by_tvg_id(team["channel_id"])
+            if ownership:
+                if ownership.dispatcharr_channel_id is not None:
+                    dispatcharr_channel = manager.get_channel(ownership.dispatcharr_channel_id)
+            elif not team.get("managed_channel_enabled"):
+                dispatcharr_channel = manager.find_by_tvg_id(team["channel_id"])
         else:
             dispatcharr_error = "Dispatcharr connection not available"
     except Exception as exc:
@@ -188,6 +195,7 @@ def get_team_channel_status(team_id: int):
         xmltv_content=xmltv_row["xmltv_content"] if xmltv_row else None,
         xmltv_updated_at=xmltv_row["updated_at"] if xmltv_row else None,
         dispatcharr_error=dispatcharr_error,
+        ownership=ownership,
     )
 
 
@@ -212,6 +220,19 @@ def update_team(team_id: int, team: TeamUpdate):
         updates["active"] = True
 
     with get_db() as conn:
+        current = db_get_team(conn, team_id)
+        if current is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        removes_management = (
+            current.get("managed_channel_enabled")
+            and (updates.get("managed_channel_enabled") is False or updates.get("active") is False)
+        )
+        if removes_management:
+            client = get_dispatcharr_client(get_db)
+            manager = TeamChannelManager(get_db, ChannelManager(client) if client else None)
+            deleted, error = manager.remove_team_channel(team_id)
+            if not deleted:
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error)
         result = db_update_team(conn, team_id, updates)
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
@@ -223,6 +244,13 @@ def delete_team(team_id: int):
     """Delete a team and its associated XMLTV content."""
 
     with get_db() as conn:
+        if not db_get_team(conn, team_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        client = get_dispatcharr_client(get_db)
+        manager = TeamChannelManager(get_db, ChannelManager(client) if client else None)
+        deleted, error = manager.remove_team_channel(team_id)
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error)
         if not db_delete_team(conn, team_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
 

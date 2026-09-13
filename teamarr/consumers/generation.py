@@ -75,6 +75,7 @@ class GenerationResult:
     epg_refresh: dict = field(default_factory=dict)
     epg_association: dict = field(default_factory=dict)
     managed_team_channels: dict = field(default_factory=dict)
+    managed_team_streams: dict = field(default_factory=dict)
     deletions: dict = field(default_factory=dict)
     reconciliation: dict = field(default_factory=dict)
     cleanup: dict = field(default_factory=dict)
@@ -1549,6 +1550,14 @@ def _apply_stream_ordering(
                     order_drifted,
                 )
                 pushes.append((plan, ordered_ids))
+
+            # Team channels are durable and use their own membership table, but
+            # their streams obey the same scoped ordering rules and windows.
+            team_ordering = TeamChannelManager(db_factory, channel_mgr).sync_stream_ordering()
+            reorder_result["managed_team_channels_reordered"] = team_ordering["channels"]
+            reorder_result["managed_team_streams_reordered"] = team_ordering["streams"]
+            if team_ordering["errors"]:
+                reorder_result["managed_team_order_errors"] = team_ordering["errors"]
 
         # Phase 3 (parallel, network only): issue the pushes. Outside the `with`
         # so the database connection is closed before any thread runs — every

@@ -30,6 +30,11 @@ def _row_to_channel(row) -> ManagedTeamChannel:
 
 
 def get_managed_team_channel(conn: Connection, team_id: int) -> ManagedTeamChannel | None:
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'managed_team_channels'"
+    ).fetchone()
+    if not exists:
+        return None
     row = conn.execute(
         "SELECT * FROM managed_team_channels WHERE team_id = ?", (team_id,)
     ).fetchone()

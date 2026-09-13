@@ -36,6 +36,8 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `event_epg_groups` | Event group config (leagues, filters, M3U account, template) |
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
 | `managed_channels` | Channels created in Dispatcharr (tvg_id, delete_at, profiles) |
+| `managed_team_channels` | Sole ownership records for persistent Team EPG Dispatcharr channels |
+| `managed_team_channel_streams` | Temporary, event-scoped stream memberships for managed team channels |
 | `detection_keywords` | User-defined stream classification patterns |
 | `team_aliases` | Team name aliases for matching |
 | `team_cache` | Cached team data from providers |
@@ -43,7 +45,13 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `stream_match_cache` | Fingerprint cache for stream matching |
 | `processing_runs` | EPG generation run statistics (28 columns) |
 
-The schema contains **35 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed stream membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `numbering_exceptions` (pinned blocks, #333), `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
+The schema contains **35 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed event-channel membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `numbering_exceptions` (pinned blocks, #333), `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
+
+## Persistent Team Channels
+
+`managed_team_channels` maps one opted-in `teams` row to the Dispatcharr channel Teamarr created. It stores the Dispatcharr id and UUID, allocated number, and sync status. This mapping is the sole ownership authority: a Dispatcharr channel that merely shares the team's `channel_id` / `tvg_id` is manual and is never adopted, updated, repaired, or deleted.
+
+`managed_team_channel_streams` records matched streams separately from `managed_channel_streams`. A row identifies the team, stream, event, source, match metadata, ordering priority, and optional attach/detach window. Reconciliation replaces the desired memberships for each generation and marks obsolete rows removed. The persistent channel itself has no event expiry; only its streams are attached and detached as games require them. Membership records cascade from their team ownership mapping, which itself cascades from the team, keeping this lifecycle distinct from event-channel reset, expiry, reconciliation, and orphan cleanup.
 
 ## Settings Table
 

@@ -118,6 +118,7 @@ class TeamChannelStatusResponse(BaseModel):
 
     team: TeamChannelStatusTeam
     dispatcharr_channel: TeamChannelStatusDispatcharrChannel
+    management: dict
     next_live_window: TeamChannelStatusProgramme
     status: str
     missing: list[str] = Field(default_factory=list)
@@ -261,6 +262,7 @@ class TemplateCreate(BaseModel):
 
     # Event template specific
     event_channel_name: str | None = None
+    team_channel_name: str | None = None
     event_channel_logo_url: str | None = None
     team_channel_logo_url: str | None = None
 
@@ -308,6 +310,7 @@ class TemplateUpdate(BaseModel):
 
     # Event template specific
     event_channel_name: str | None = None
+    team_channel_name: str | None = None
     event_channel_logo_url: str | None = None
     team_channel_logo_url: str | None = None
 
@@ -325,6 +328,8 @@ class TemplateResponse(BaseModel):
     title_format: str | None
     subtitle_template: str | None
     program_art_url: str | None
+    event_channel_logo_url: str | None = None
+    team_channel_logo_url: str | None = None
     game_duration_mode: str | None
     game_duration_override: float | None
     pregame_enabled: bool | None
@@ -357,6 +362,7 @@ class TemplateFullResponse(TemplateResponse):
     idle_conditional_rows: list[dict] | None = None
     conditional_descriptions: list[dict] | None = None
     event_channel_name: str | None = None
+    team_channel_name: str | None = None
     event_channel_logo_url: str | None = None
     team_channel_logo_url: str | None = None
 

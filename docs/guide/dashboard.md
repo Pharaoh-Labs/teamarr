@@ -45,11 +45,11 @@ A table of recent full-pipeline runs (matching, channels, and EPG). Five show by
 
 ## Managed Channels
 
-A collapsible **Managed Channels** table lists the channels Teamarr currently maintains in Dispatcharr, with the channel name, the event it's tied to, sport, league, sync status, and scheduled delete time. The Event column shows a compact matchup (league, then away/home abbreviations — e.g. `MLB | LAA/MIN`; card and racing events show the event name) plus the start time and the provider's native event id (`espn:401816119`).
+A collapsible **Managed Channels** table lists the channels Teamarr currently maintains in Dispatcharr. It includes time-limited event channels and persistent managed Team EPG channels. Team rows are identified as persistent team channels and show their ownership sync status; they are included for audit and visibility only. The Event column for an event channel shows a compact matchup (league, then away/home abbreviations — e.g. `MLB | LAA/MIN`; card and racing events show the event name) plus the start time and the provider's native event id (`espn:401816119`).
 
-- **Sync status badges** — In Sync, Pending, Created, Drifted, Orphaned, or Error. Drifted channels are corrected on the next generation run.
-- **Expand a row** to see its attached streams with per-stream match detail, priority, and stream health (resolution, fps, bitrate).
-- **Find Orphans** detects Teamarr-tagged channels in Dispatcharr that aren't tracked locally; **Reset All**, the multi-select bar, and a per-row delete button handle removals. Sport and League dropdowns filter the table, and a **Pending Deletions** banner appears when channels are scheduled for removal.
+- **Sync status badges** — In Sync, Pending, Created, Drifted, Orphaned, or Error. Drifted event channels are corrected on the next generation run. Team-channel status reflects only a locally recorded ownership mapping.
+- **Expand an event row** to see its attached streams with per-stream match detail, priority, and stream health (resolution, fps, bitrate). Team channels remain visible as an ownership audit, while their memberships are managed from the Team EPG workflow.
+- **Find Orphans** detects Teamarr-tagged event channels in Dispatcharr that aren't tracked locally; **Reset All**, the multi-select bar, and a per-row delete button handle event-channel removals. These controls, pending deletion scheduling, expiry, reconciliation, and orphan handling exclude persistent managed Team EPG channels. Manage those channels from [EPG → Team EPG](epg/teams).
 
 A separate **Recently Deleted** section lists channels removed by event cleanup (channel, event, sport, league, and when they were deleted).
 

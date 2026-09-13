@@ -64,6 +64,16 @@ The edit dialog can enable a persistent managed channel for a team. Enabling it 
 
 Configure the automatic **Managed Team EPG Channels** range and choose priority teams in **Channels → Numbering**. Priority teams fill the automatic range first. This range is independent from event-channel numbering, so ordinary channel blocks do not consume it.
 
+Managed Team EPG channels are durable, empty Dispatcharr channels when no game is live. During generation, Teamarr attaches streams matched to that team's games, applies stream-priority rules, and removes memberships that no longer match. For EPG-matched linear streams, the attachment is limited to the programme window and its configured buffers. This lets one linear stream move between games without creating or deleting the team's channel.
+
+#### Ownership And Lifecycle
+
+Teamarr treats a channel as managed only after it has created a record for that team. A Dispatcharr channel with the same XMLTV channel id (`tvg-id`) is still a manual channel, so Teamarr will not adopt, update, repair, or delete it. If that conflict exists when management is enabled, Teamarr reports it instead of creating a duplicate.
+
+Disable managed channels, deactivate a team, or delete a team from **EPG → Team EPG**. Each action first removes the proven Teamarr-owned Dispatcharr channel, then removes its ownership and temporary stream-membership records. If Teamarr cannot prove ownership or Dispatcharr deletion fails, the change is rejected so a manual replacement cannot be deleted accidentally. Disabling management leaves an active team's XMLTV output in place; deactivating the team stops its Team EPG output, and deleting removes the team configuration entirely.
+
+The [Dashboard](../dashboard) lists managed team channels for status and stream audit only. Its event-channel reset, expiry, reconciliation, orphan discovery, and deletion controls do not apply to persistent Team EPG channels.
+
 ## Team EPG Settings
 
 The **Team EPG Settings** card at the top of the page holds the behavior settings:

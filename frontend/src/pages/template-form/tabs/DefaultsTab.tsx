@@ -120,20 +120,10 @@ export function DefaultsTab({ formData, setFormData, isTeamTemplate, fieldRefs, 
         </CardHeader>
         <CardContent className="space-y-4">
           {isTeamTemplate ? (
-            <TemplateField
-              id="team_channel_logo_url"
-              isImageField
-              label="Channel Logo URL Template"
-              value={formData.team_channel_logo_url || ""}
-              onChange={(v) => setFormData((prev) => ({ ...prev, team_channel_logo_url: v || null }))}
-              placeholder="Optional"
-              helpText="Optional logo for managed Team EPG channels. Static URL or template with variables."
-              fieldRefs={fieldRefs}
-              setLastFocusedField={setLastFocusedField}
-              resolveTemplate={resolveTemplate}
-              validationData={validationData}
-              isEventTemplate={isEventTemplate}
-            />
+            <>
+              <TemplateField id="team_channel_name" label="Channel Name Template" value={formData.team_channel_name || ""} onChange={(v) => setFormData((prev) => ({ ...prev, team_channel_name: v || null }))} placeholder="{league} | {team_name}" helpText="Name for the Team EPG XMLTV and managed Dispatcharr channel." fieldRefs={fieldRefs} setLastFocusedField={setLastFocusedField} resolveTemplate={resolveTemplate} validationData={validationData} isEventTemplate={isEventTemplate} />
+              <TemplateField id="team_channel_logo_url" isImageField label="Channel Logo URL Template" value={formData.team_channel_logo_url || ""} onChange={(v) => setFormData((prev) => ({ ...prev, team_channel_logo_url: v || null }))} placeholder="Optional" helpText="Optional logo for managed Team EPG channels. Static URL or template with variables." fieldRefs={fieldRefs} setLastFocusedField={setLastFocusedField} resolveTemplate={resolveTemplate} validationData={validationData} isEventTemplate={isEventTemplate} />
+            </>
           ) : (
             <>
             <TemplateField

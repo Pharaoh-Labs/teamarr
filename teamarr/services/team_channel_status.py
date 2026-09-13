@@ -117,6 +117,7 @@ def build_team_channel_status(
     xmltv_updated_at: str | datetime | None = None,
     dispatcharr_error: str | None = None,
     now: datetime | None = None,
+    ownership: Any | None = None,
 ) -> dict[str, Any]:
     """Build the API response payload for a static team channel."""
     next_live_window = find_next_live_window(
@@ -170,6 +171,13 @@ def build_team_channel_status(
             "active": bool(team.get("active")),
         },
         "dispatcharr_channel": dispatcharr_payload,
+        "management": {
+            "enabled": bool(team.get("managed_channel_enabled")),
+            "owned": ownership is not None,
+            "sync_status": getattr(ownership, "sync_status", None),
+            "sync_message": getattr(ownership, "sync_message", None),
+            "last_verified_at": getattr(ownership, "last_verified_at", None),
+        },
         "next_live_window": programme_payload,
         "status": status,
         "missing": missing,

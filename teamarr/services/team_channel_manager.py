@@ -11,6 +11,7 @@ from teamarr.database.managed_team_channel_streams import (
 )
 from teamarr.database.managed_team_channels import (
     delete_managed_team_channel,
+    get_managed_team_channel,
     list_disabled_managed_team_channels,
     list_enabled_managed_teams,
     upsert_managed_team_channel,
@@ -22,6 +23,7 @@ from teamarr.database.settings import (
 )
 from teamarr.database.subscription import get_league_config
 from teamarr.utilities.art_url import apply_art_base_url
+from teamarr.utilities.tz import now_utc
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +111,7 @@ class TeamChannelManager:
                         result["conflicts"] += 1
                         continue
                     create_data = {
-                        "name": team["team_name"],
+                        "name": self._channel_name(conn, team),
                         "channel_number": channel_number,
                         "stream_ids": [],
                         "tvg_id": team["channel_id"],
@@ -188,6 +190,44 @@ class TeamChannelManager:
                     result["errors"] += 1
         return result
 
+    def remove_team_channel(self, team_id: int) -> tuple[bool, str | None]:
+        """Delete one proven-owned remote channel before removing its mapping."""
+        if not self._channels:
+            return False, "Dispatcharr connection not available"
+        with self._db_factory() as conn:
+            mapping = get_managed_team_channel(conn, team_id)
+            if not mapping:
+                return True, None
+            remote = next(
+                (
+                    channel
+                    for channel in self._channels.get_channels()
+                    if channel.id == mapping.dispatcharr_channel_id
+                ),
+                None,
+            )
+            if remote is None:
+                delete_managed_team_channel(conn, team_id)
+                return True, None
+            if mapping.dispatcharr_uuid and remote.uuid != mapping.dispatcharr_uuid:
+                message = "Mapped Dispatcharr channel UUID no longer matches Teamarr ownership"
+                self._record_error(
+                    conn,
+                    {
+                        "id": team_id,
+                        "dispatcharr_channel_id": remote.id,
+                        "dispatcharr_uuid": mapping.dispatcharr_uuid,
+                        "allocated_channel_number": mapping.channel_number,
+                    },
+                    message,
+                )
+                return False, message
+            deleted = self._channels.delete_channel(remote.id)
+            if not deleted.success:
+                return False, deleted.error or "Dispatcharr delete failed"
+            delete_managed_team_channel(conn, team_id)
+            return True, None
+
     def sync_stream_memberships(self, matched_streams: list[dict]) -> dict[str, int]:
         """Persist matched event streams and synchronize active remote memberships."""
         result = {"memberships": 0, "channels": 0, "errors": 0}
@@ -226,6 +266,10 @@ class TeamChannelManager:
                 for side in sides:
                     team = recipients.get((provider, str(getattr(side, "id", ""))))
                     if team:
+                        feed_team_id = getattr(side, "id", None)
+                        feed_side = (
+                            "home" if side is getattr(event, "home_team", None) else "away"
+                        )
                         memberships.append(
                             {
                                 "team_id": team["id"],
@@ -234,36 +278,98 @@ class TeamChannelManager:
                                 "event_provider": provider,
                                 "source_group_id": matched["source_group_id"],
                                 "match_method": matched.get("match_method"),
+                                "match_type": matched.get("match_type", "event"),
+                                "stream_name": stream.get("name"),
+                                "m3u_account_name": stream.get("m3u_account_name"),
+                                "feed_team_id": (
+                                    str(feed_team_id) if feed_team_id is not None else None
+                                ),
+                                "feed_side": feed_side,
+                                "dispatcharr_channel_group": stream.get("dp_channel_group"),
                                 "attach_at": attach_at,
                                 "detach_at": detach_at,
                             }
                         )
             reconcile_team_streams(conn, memberships)
             result["memberships"] = len(memberships)
+        ordering = self.sync_stream_ordering()
+        result["channels"] = ordering["channels"]
+        result["errors"] += ordering["errors"]
+        return result
+
+    def sync_stream_ordering(self) -> dict[str, int]:
+        """Apply scoped ordering and active windows to durable team channels."""
+        result = {"channels": 0, "streams": 0, "errors": 0}
+        if not self._channels:
+            return result
+
+        from teamarr.database.channels.types import ManagedChannelStream
+        from teamarr.services.stream_ordering import get_stream_ordering_service
+
+        try:
+            remote_order = {
+                channel.id: list(channel.streams or ()) for channel in self._channels.get_channels()
+            }
+        except Exception as exc:
+            logger.warning("[TEAM_CHANNEL] Could not read Dispatcharr stream order: %s", exc)
+            return result
+        with self._db_factory() as conn:
+            teams = list_enabled_managed_teams(conn)
             for team in teams:
                 channel_id = team.get("dispatcharr_channel_id")
                 if not channel_id:
                     continue
+                rows = conn.execute(
+                    "SELECT * FROM managed_team_channel_streams "
+                    "WHERE team_id = ? AND removed_at IS NULL",
+                    (team["id"],),
+                ).fetchall()
+                service = get_stream_ordering_service(
+                    conn, team.get("sport"), team.get("primary_league")
+                )
+                for row in rows:
+                    stream = ManagedChannelStream(
+                        id=row["id"], managed_channel_id=0,
+                        dispatcharr_stream_id=row["dispatcharr_stream_id"],
+                        stream_name=row["stream_name"],
+                        m3u_account_name=row["m3u_account_name"],
+                        source_group_id=row["source_group_id"],
+                        match_type=row["match_type"], match_method=row["match_method"],
+                        feed_team_id=row["feed_team_id"], feed_side=row["feed_side"],
+                        dispatcharr_channel_group=row["dispatcharr_channel_group"],
+                        priority=row["priority"],
+                    )
+                    priority = service.compute_priority(stream)
+                    if priority != stream.priority:
+                        conn.execute(
+                            "UPDATE managed_team_channel_streams SET priority = ?, "
+                            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            (priority, stream.id),
+                        )
+                        result["streams"] += 1
+
+                ordered = active_stream_ids(conn, team["id"], now_utc())
+                if ordered == remote_order.get(channel_id, []):
+                    continue
                 try:
-                    self._channels.update_channel(channel_id, {
-                        "streams": active_stream_ids(conn, team["id"])
-                    })
+                    sync_result = self._channels.update_channel(channel_id, {"streams": ordered})
+                    if not sync_result.success:
+                        raise RuntimeError(sync_result.error or "Dispatcharr update failed")
                     result["channels"] += 1
                 except Exception:
-                    logger.exception("[TEAM_CHANNEL] Stream sync failed for %s", team["team_name"])
+                    logger.exception(
+                        "[TEAM_CHANNEL] Stream order sync failed for %s", team["team_name"]
+                    )
                     result["errors"] += 1
         return result
 
     def _delete_disabled(self, conn, remote_channels, result) -> None:
         for mapping in list_disabled_managed_team_channels(conn):
-            remote = remote_channels.get(mapping["dispatcharr_channel_id"])
-            if remote:
-                deleted = self._channels.delete_channel(remote.id)
-                if not deleted.success:
-                    result["errors"] += 1
-                    continue
-            delete_managed_team_channel(conn, mapping["team_id"])
-            result["deleted"] += 1
+            deleted, _ = self.remove_team_channel(mapping["team_id"])
+            if deleted:
+                result["deleted"] += 1
+            else:
+                result["errors"] += 1
 
     @staticmethod
     def _number(value: Any) -> int | None:
@@ -310,7 +416,7 @@ class TeamChannelManager:
 
     def _changes(self, remote, team, number, dispatcharr, conn) -> dict:
         desired = {
-            "name": team["team_name"],
+            "name": self._channel_name(conn, team),
             "channel_number": number,
             "tvg_id": team["channel_id"],
             "channel_group_id": self._channel_group(dispatcharr, conn, team),
@@ -354,6 +460,25 @@ class TeamChannelManager:
             url=apply_art_base_url(url, get_epg_settings(conn).art_base_url),
         )
         return uploaded.logo.get("id") if uploaded.success and uploaded.logo else None
+
+    @staticmethod
+    def _channel_name(conn, team) -> str:
+        if not team.get("template_id"):
+            return team["team_name"]
+        from teamarr.database.templates import get_template
+        from teamarr.templates.resolver import TemplateResolver
+
+        template = get_template(conn, team["template_id"])
+        if not template or not template.team_channel_name:
+            return team["team_name"]
+        return TemplateResolver(get_epg_settings(conn).art_base_url).resolve_with_map(
+            template.team_channel_name,
+            {
+                "league": team["primary_league"],
+                "league_id": team["primary_league"],
+                "team_name": team["team_name"],
+            },
+        )
 
     @staticmethod
     def _record_error(conn, team, message: str) -> None:
