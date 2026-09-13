@@ -44,7 +44,13 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         network_name="NESN",
         league="mlb",
         team_abbreviation="BOS",
-        patterns=(r"\bnesn\b", r"\bnesn\s*\+\b", r"\bnesn\s*plus\b", r"\bnesn\s*hd\b", r"\bnesn\s*national\b"),
+        patterns=(
+            r"\bnesn\b",
+            r"\bnesn\s*\+\b",
+            r"\bnesn\s*plus\b",
+            r"\bnesn\s*hd\b",
+            r"\bnesn\s*national\b",
+        ),
         team_synonyms=("BOS", "RED SOX", "BOSTON RED SOX"),
     ),
     RSNEntry(
@@ -70,7 +76,6 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         ),
         team_synonyms=("TB", "TBR", "RAYS", "TAMPA BAY RAYS"),
     ),
-
     # --- AL Central ---
     RSNEntry(
         network_name="Chicago Sports Network",
@@ -83,9 +88,7 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         network_name="FanDuel Sports Network Detroit",
         league="mlb",
         team_abbreviation="DET",
-        patterns=(
-            r"\b(?:bally|fanduel|fdsn|bs)\s*(?:sports\s*)?(?:network\s*)?detroit\b",
-        ),
+        patterns=(r"\b(?:bally|fanduel|fdsn|bs)\s*(?:sports\s*)?(?:network\s*)?detroit\b",),
         team_synonyms=("DET", "TIGERS", "DETROIT TIGERS"),
     ),
     RSNEntry(
@@ -120,7 +123,6 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         ),
         team_synonyms=("MIN", "TWINS", "MINNESOTA TWINS"),
     ),
-
     # --- AL West ---
     RSNEntry(
         network_name="Space City Home Network",
@@ -167,7 +169,6 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         ),
         team_synonyms=("LAA", "ANGELS", "LOS ANGELES ANGELS"),
     ),
-
     # --- NL East ---
     RSNEntry(
         network_name="SportsNet New York",
@@ -202,12 +203,9 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         network_name="FanDuel Sports Network Florida (Marlins)",
         league="mlb",
         team_abbreviation="MIA",
-        patterns=(
-            r"\b(?:bally|fanduel|fdsn|bs)\s*(?:sports\s*)?(?:network\s*)?florida\b",
-        ),
+        patterns=(r"\b(?:bally|fanduel|fdsn|bs)\s*(?:sports\s*)?(?:network\s*)?florida\b",),
         team_synonyms=("MIA", "MARLINS", "MIAMI MARLINS"),
     ),
-
     # --- NL Central ---
     RSNEntry(
         network_name="Marquee Sports Network",
@@ -220,9 +218,7 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         network_name="FanDuel Sports Network Midwest (Cardinals)",
         league="mlb",
         team_abbreviation="STL",
-        patterns=(
-            r"\b(?:bally|fanduel|fdsn|bs)\s*(?:sports\s*)?(?:network\s*)?midwest\b",
-        ),
+        patterns=(r"\b(?:bally|fanduel|fdsn|bs)\s*(?:sports\s*)?(?:network\s*)?midwest\b",),
         team_synonyms=("STL", "CARDINALS", "ST. LOUIS CARDINALS", "ST LOUIS CARDINALS"),
     ),
     RSNEntry(
@@ -259,7 +255,6 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         ),
         team_synonyms=("PIT", "PIRATES", "PITTSBURGH PIRATES"),
     ),
-
     # --- NL West ---
     RSNEntry(
         network_name="Spectrum SportsNet LA",
@@ -318,7 +313,6 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
         ),
         team_synonyms=("SF", "SFG", "GIANTS", "SAN FRANCISCO GIANTS"),
     ),
-
     # --- Ambiguous Multi-Team Networks ---
     # These MUST NOT auto-resolve without user mapping or EPG data
     RSNEntry(
@@ -353,8 +347,7 @@ MLB_RSN_CATALOG: tuple[RSNEntry, ...] = (
 
 # Compiled pattern cache
 _COMPILED_CATALOG: list[tuple[RSNEntry, list[re.Pattern]]] = [
-    (entry, [re.compile(p, re.IGNORECASE) for p in entry.patterns])
-    for entry in MLB_RSN_CATALOG
+    (entry, [re.compile(p, re.IGNORECASE) for p in entry.patterns]) for entry in MLB_RSN_CATALOG
 ]
 
 

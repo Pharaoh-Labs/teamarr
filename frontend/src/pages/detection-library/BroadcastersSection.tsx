@@ -86,7 +86,7 @@ export function BroadcastersSection() {
     if (team) {
       setForm((f) => ({
         ...f,
-        team_id: team.abbreviation || team.team_id,
+        team_id: team.team_id,
         team_name: team.name || "",
       }))
     } else {
@@ -153,8 +153,7 @@ export function BroadcastersSection() {
     <>
       <CollapsibleSection
         title="Broadcasters & RSN Feeds"
-        description="Explicitly map regional sports networks, stream regexes, or tvg-ids to specific teams (resolves multi-team networks like MASN)."
-        badge={
+        count={
           <Badge variant="secondary" className="gap-1 font-mono">
             <Radio className="h-3 w-3" />
             {mappings.length} Custom
@@ -231,8 +230,8 @@ export function BroadcastersSection() {
           </div>
         ) : (
           <ResponsiveTable
-            data={mappings}
-            keyField="id"
+            rows={mappings}
+            keyExtractor={(m) => m.id}
             columns={[
               {
                 key: "name",
@@ -339,19 +338,18 @@ export function BroadcastersSection() {
                 <label className="text-xs font-semibold">Match Type</label>
                 <Select
                   value={form.pattern_type}
-                  onChange={(val) =>
+                  onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      pattern_type: val as "regex" | "exact" | "tvg_id" | "channel_id",
+                      pattern_type: e.target.value as "regex" | "exact" | "tvg_id" | "channel_id",
                     }))
                   }
-                  options={[
-                    { value: "regex", label: "Regex Pattern" },
-                    { value: "exact", label: "Exact Name Match" },
-                    { value: "tvg_id", label: "tvg-id Match" },
-                    { value: "channel_id", label: "Dispatcharr Channel ID" },
-                  ]}
-                />
+                >
+                  <option value="regex">Regex Pattern</option>
+                  <option value="exact">Exact Name Match</option>
+                  <option value="tvg_id">tvg-id Match</option>
+                  <option value="channel_id">Dispatcharr Channel ID</option>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
@@ -385,7 +383,7 @@ export function BroadcastersSection() {
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">Target Team</label>
               <TeamPicker
-                league={form.league}
+                leagues={[form.league]}
                 selectedTeams={selectedTeams}
                 onSelectionChange={handleTeamSelect}
                 singleSelect={true}
@@ -412,7 +410,8 @@ export function BroadcastersSection() {
         title="Delete Broadcaster Mapping"
         description={`Are you sure you want to delete the mapping "${deleteConfirm?.name}"?`}
         confirmLabel="Delete"
-        variant="destructive"
+        confirmVariant="destructive"
+        isPending={deleteMutation.isPending}
         onConfirm={handleDelete}
       />
     </>

@@ -28,7 +28,9 @@ class BroadcasterMappingCreate(BaseModel):
     name: str = Field(..., description="User-friendly name (e.g. 'MASN Orioles')")
     pattern: str = Field(..., description="Regex pattern or match string (e.g. '(?i)\\bMASN\\b')")
     pattern_type: str = Field("regex", description="Match type: regex, exact, tvg_id, channel_id")
-    team_id: str = Field(..., description="Team abbreviation or provider team ID (e.g. 'BAL', '110')")
+    team_id: str = Field(
+        ..., description="Team abbreviation or provider team ID (e.g. 'BAL', '110')"
+    )
     team_name: str | None = Field(None, description="Optional team display name")
     league: str = Field("mlb", description="League code (e.g. 'mlb')")
     is_active: bool = Field(True, description="Whether mapping is active")

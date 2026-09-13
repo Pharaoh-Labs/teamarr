@@ -49,10 +49,20 @@ def test_mlbstats_provider_broadcast_parsing():
         "gameDate": "2026-06-15T23:05:00Z",
         "teams": {
             "away": {
-                "team": {"id": 111, "name": "Boston Red Sox", "abbreviation": "BOS", "teamName": "Red Sox"}
+                "team": {
+                    "id": 111,
+                    "name": "Boston Red Sox",
+                    "abbreviation": "BOS",
+                    "teamName": "Red Sox",
+                }
             },
             "home": {
-                "team": {"id": 147, "name": "New York Yankees", "abbreviation": "NYY", "teamName": "Yankees"}
+                "team": {
+                    "id": 147,
+                    "name": "New York Yankees",
+                    "abbreviation": "NYY",
+                    "teamName": "Yankees",
+                }
             },
         },
         "status": {"abstractGameState": "Live", "detailedState": "In Progress"},

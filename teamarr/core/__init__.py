@@ -1,4 +1,10 @@
 from teamarr.core.interfaces import LeagueMapping, LeagueMappingSource, SportsProvider
+from teamarr.core.rsn_catalog import (
+    MLB_RSN_CATALOG,
+    RSNEntry,
+    resolve_unambiguous_rsn_team,
+    team_matches_rsn,
+)
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
     SEASON_OFFSEASON,
@@ -15,12 +21,6 @@ from teamarr.core.types import (
     TeamStats,
     TemplateConfig,
     Venue,
-)
-from teamarr.core.rsn_catalog import (
-    MLB_RSN_CATALOG,
-    RSNEntry,
-    resolve_unambiguous_rsn_team,
-    team_matches_rsn,
 )
 
 __all__ = [
@@ -47,4 +47,3 @@ __all__ = [
     "resolve_unambiguous_rsn_team",
     "team_matches_rsn",
 ]
-

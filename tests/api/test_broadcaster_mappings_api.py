@@ -1,6 +1,7 @@
 """Tests for user-defined broadcaster mappings DB, API routes, and matching integration."""
 
 from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from teamarr.api.app import create_app
@@ -64,13 +65,28 @@ def test_match_user_broadcaster_helper():
     init_db()
     with get_db() as conn:
         m1 = create_broadcaster_mapping(
-            conn, name="MASN", pattern=r"(?i)\bMASN\b", pattern_type="regex", team_id="BAL", league="mlb"
+            conn,
+            name="MASN",
+            pattern=r"(?i)\bMASN\b",
+            pattern_type="regex",
+            team_id="BAL",
+            league="mlb",
         )
         m2 = create_broadcaster_mapping(
-            conn, name="NESN 4K", pattern="US: NESN 4K", pattern_type="exact", team_id="BOS", league="mlb"
+            conn,
+            name="NESN 4K",
+            pattern="US: NESN 4K",
+            pattern_type="exact",
+            team_id="BOS",
+            league="mlb",
         )
         m3 = create_broadcaster_mapping(
-            conn, name="SNY TVG", pattern="SNY.us", pattern_type="tvg_id", team_id="NYM", league="mlb"
+            conn,
+            name="SNY TVG",
+            pattern="SNY.us",
+            pattern_type="tvg_id",
+            team_id="NYM",
+            league="mlb",
         )
 
         mappings = [m1, m2, m3]
@@ -177,7 +193,10 @@ def test_user_mapping_resolves_ambiguous_masn_in_matching():
 
     # Without user mapping: stays None (zero guessing)
     resolved_no_user = matcher._resolve_feed_teams(
-        matched_streams, detect_team_names=False, separation_enabled=True, user_broadcaster_mappings=[]
+        matched_streams,
+        detect_team_names=False,
+        separation_enabled=True,
+        user_broadcaster_mappings=[],
     )
     assert resolved_no_user[0]["stream_feed_team"] is None
 
@@ -185,7 +204,12 @@ def test_user_mapping_resolves_ambiguous_masn_in_matching():
     init_db()
     with get_db() as conn:
         mapping = create_broadcaster_mapping(
-            conn, name="MASN Orioles", pattern=r"(?i)\bMASN\b", pattern_type="regex", team_id="BAL", league="mlb"
+            conn,
+            name="MASN Orioles",
+            pattern=r"(?i)\bMASN\b",
+            pattern_type="regex",
+            team_id="BAL",
+            league="mlb",
         )
         resolved_with_user = matcher._resolve_feed_teams(
             matched_streams,
