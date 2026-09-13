@@ -55,6 +55,29 @@ def _team_subject(team: Team) -> str:
     return full
 
 
+def _mascot(team: Team) -> str:
+    """Return the short name when it is a proper suffix of the full name."""
+    short = (team.short_name or "").strip()
+    if short and team.name.strip().casefold().endswith(f" {short.casefold()}"):
+        return short
+    return ""
+
+
+def _matchup_name(team: Team, article: str) -> tuple[str, bool]:
+    """Return the matchup name and whether it takes plural agreement (#785).
+
+    Only a plural mascot reads with an article ("the Bills"); club names and
+    singular mascots keep the full, articleless name ("Arsenal", "Miami Heat").
+    A mascot counts as plural when its last word ends in "s", plus "Sox". Exact
+    grammatical number would need metadata the Team model doesn't carry.
+    """
+    mascot = _mascot(team)
+    word = mascot.casefold().split()[-1] if mascot else ""
+    if word.endswith("s") or word == "sox":
+        return f"{article} {mascot}", True
+    return team.name.strip(), False
+
+
 def _recent_phrase(value: str) -> str:
     if not value or "-" not in value:
         return ""
@@ -225,17 +248,18 @@ def _probable_starter_sentence(value: str) -> str:
 
 
 def _base_sentence(event: Event) -> str:
-    away = event.away_team.name
-    home = event.home_team.name
+    away, away_plural = _matchup_name(event.away_team, "The")
+    home, _ = _matchup_name(event.home_team, "the")
+    away_verb = "visit" if away_plural else "visits"
     venue = event.venue.name if event.venue else ""
     location = f" at {venue}" if venue else ""
     if event.sport == "football" and event.week:
         phase = "preseason " if event.season_type == "preseason" else ""
-        return f"The {away} visit the {home}{location} for a Week {event.week} {phase}matchup."
+        return f"{away} {away_verb} {home}{location} for a Week {event.week} {phase}matchup."
     if event.sport == "baseball" and event.series_summary:
         summary = _series_clause(_expand_team_abbreviations(event.series_summary, event))
-        return f"The {away} visit the {home}{location}, with {summary}."
-    return f"The {away} visit the {home}{location}."
+        return f"{away} {away_verb} {home}{location}, with {summary}."
+    return f"{away} {away_verb} {home}{location}."
 
 
 def _baseball_sentence(event: Event, side: str) -> str:
