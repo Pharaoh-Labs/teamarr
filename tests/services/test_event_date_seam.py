@@ -329,3 +329,96 @@ def test_failing_neighbour_bucket_does_not_lose_the_requested_day():
     service.add_provider(_FlakyNeighbour([fight]))
 
     assert [e.id for e in service.get_events("boxing", date(2026, 8, 22))] == ["sat"]
+
+
+# ---------------------------------------------------------------------------
+# Ranged span fetch (#808)
+# ---------------------------------------------------------------------------
+
+
+class _SpanProvider(_DayBucketedProvider):
+    """A day-bucketed API that can also answer a date range in one call (ESPN)."""
+
+    def __init__(self, events, *, span_answer="buckets"):
+        super().__init__(events)
+        self.spans_fetched: list[tuple[date, date]] = []
+        self.span_answer = span_answer
+
+    def get_events_span(self, league, start, end):
+        self.spans_fetched.append((start, end))
+        if self.span_answer == "none":
+            return None
+        if self.span_answer == "raise":
+            raise RuntimeError("range endpoint down")
+        if self.span_answer == "garbage":
+            return object()  # a MagicMock-shaped provider answers like this
+        buckets = {}
+        day = start
+        while day <= end:
+            buckets[day] = [e for e in self.events if e.start_time.date() == day]
+            day += timedelta(days=1)
+        return buckets
+
+
+def _span_service(events, **kw):
+    service = SportsDataService(providers=[])
+    service._cache = _FakeCache()
+    provider = _SpanProvider(events, **kw)
+    service.add_provider(provider)
+    return service, provider
+
+
+def test_cold_lookup_is_one_ranged_call_not_three_buckets():
+    service, provider = _span_service([])
+    service.get_events("ita.1", date(2026, 8, 29))
+    assert provider.spans_fetched == [(date(2026, 8, 28), date(2026, 8, 30))]
+    assert provider.days_fetched == []
+    # Every day of the span is now a raw bucket, empty ones included.
+    raw = [k for k in service._cache.store if k.startswith("events_raw:")]
+    assert len(raw) == 3
+
+
+def test_span_result_equals_the_bucketed_result(monkeypatch):
+    """The #601 regression case, served by the range instead of three buckets."""
+    _use_tz(monkeypatch, ZoneInfo("Australia/Sydney"))
+    juventus = _event("juve", datetime(2026, 8, 29, 18, 45, tzinfo=UTC))
+    service, provider = _span_service([juventus])
+    assert [e.id for e in service.get_events("ita.1", date(2026, 8, 30))] == ["juve"]
+    assert service.get_events("ita.1", date(2026, 8, 29)) == []
+    # First lookup: one range (29..31). Second: only the 28th is missing, so
+    # a single per-day fetch — never a second range.
+    assert provider.spans_fetched == [(date(2026, 8, 29), date(2026, 8, 31))]
+    assert provider.days_fetched == [date(2026, 8, 28)]
+
+
+def test_consecutive_dates_fetch_only_the_new_day_per_day():
+    """Steady state: one missing bucket is one call either way — no range."""
+    service, provider = _span_service([])
+    service.get_events("ita.1", date(2026, 8, 29))
+    service.get_events("ita.1", date(2026, 8, 30))
+    assert provider.spans_fetched == [(date(2026, 8, 28), date(2026, 8, 30))]
+    assert provider.days_fetched == [date(2026, 8, 31)]
+
+
+def test_two_missing_non_adjacent_buckets_still_use_one_range():
+    service, provider = _span_service([])
+    # Warm only the middle day.
+    service._fetch_provider_day(provider, "ita.1", date(2026, 8, 29))
+    provider.days_fetched.clear()
+    service.get_events("ita.1", date(2026, 8, 29))
+    assert provider.spans_fetched == [(date(2026, 8, 28), date(2026, 8, 30))]
+    assert provider.days_fetched == []
+
+
+@pytest.mark.parametrize("answer", ["none", "raise", "garbage"])
+def test_span_declining_or_failing_falls_back_to_day_buckets(answer):
+    service, provider = _span_service([], span_answer=answer)
+    service.get_events("ita.1", date(2026, 8, 29))
+    assert provider.spans_fetched == [(date(2026, 8, 28), date(2026, 8, 30))]
+    assert provider.days_fetched == [date(2026, 8, 28), date(2026, 8, 29), date(2026, 8, 30)]
+
+
+def test_providers_without_a_span_method_are_untouched():
+    service, provider = _bucketed_service([])
+    service.get_events("ita.1", date(2026, 8, 29))
+    assert provider.days_fetched == [date(2026, 8, 28), date(2026, 8, 29), date(2026, 8, 30)]

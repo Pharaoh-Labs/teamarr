@@ -376,9 +376,11 @@ class SportsDataService:
         A failing neighbour bucket must never cost us the day actually asked
         for, so each fetch is isolated.
         """
+        days = provider_day_buckets(target_date)
+        self._prefill_span_buckets(provider, league, days)
         seen: set[tuple[str | None, str | None]] = set()
         events: list[Event] = []
-        for day in provider_day_buckets(target_date):
+        for day in days:
             try:
                 bucket = self._fetch_provider_day(provider, league, day)
             except Exception as e:  # noqa: BLE001 - one bad bucket ≠ lost day
@@ -398,6 +400,79 @@ class SportsDataService:
                 events.append(event)
         return events
 
+    def _prefill_span_buckets(
+        self, provider: SportsProvider, league: str, days: list[date]
+    ) -> None:
+        """Fill the missing raw day buckets with ONE ranged provider call (#808).
+
+        The per-day raw cache stays the cache of record: a provider that can
+        answer a date range (``get_events_span`` — ESPN) returns the events
+        already keyed by ITS bucket day, and each bucket is stored exactly as a
+        per-day fetch would store it, TTL included. Only when two or more of
+        the wanted days are missing is the range worth a request; one missing
+        day is the same single call either way, and that is the steady state
+        for consecutive target dates (D+1 of one day is D of the next). Any
+        failure or a ``None`` answer leaves the buckets missing, so the caller's
+        per-day loop fetches them as before — the range is an optimisation,
+        never the only path.
+        """
+        span = getattr(provider, "get_events_span", None)
+        if span is None:
+            return
+        missing = [
+            d for d in days if isinstance(self._load_raw_bucket(provider, league, d), _CacheMiss)
+        ]
+        if len(missing) < 2:
+            return
+        start, end = min(missing), max(missing)
+        try:
+            buckets = span(league, start, end)
+        except Exception as e:  # noqa: BLE001 - fall back to per-day fetches
+            logger.warning(
+                "[EVENTS] %s span %s..%s for %s failed, using day buckets: %s",
+                type(provider).__name__,
+                start,
+                end,
+                league,
+                e,
+            )
+            return
+        if not isinstance(buckets, dict):
+            # None = the provider declined (MMA/tournament paths, a failed
+            # request); anything else is not a bucket map. Either way the
+            # per-day loop below fetches as before.
+            return
+        for day in missing:
+            raw_key = self._raw_bucket_key(provider, league, day)
+            with self._cache.lock_key(raw_key):
+                if isinstance(self._load_raw_bucket(provider, league, day), _CacheMiss):
+                    self._store_raw_bucket(raw_key, day, buckets.get(day, []))
+
+    def _raw_bucket_key(self, provider: SportsProvider, league: str, day: date) -> str:
+        return make_cache_key("events_raw", type(provider).__name__, league, day.isoformat())
+
+    def _load_raw_bucket(
+        self, provider: SportsProvider, league: str, day: date
+    ) -> list[Event] | _CacheMiss:
+        cached = self._cache.get(self._raw_bucket_key(provider, league, day))
+        if not isinstance(cached, list):
+            return _CACHE_MISS
+        if any(_event_dict_is_stale(e) for e in cached if isinstance(e, dict)):
+            return _CACHE_MISS
+        try:
+            return [dict_to_event(e) for e in cached]
+        except (KeyError, TypeError) as e:
+            logger.warning("[CACHE_ERROR] Raw bucket deserialization failed: %s", e)
+            return _CACHE_MISS
+
+    def _store_raw_bucket(self, raw_key: str, day: date, events: list[Event]) -> None:
+        all_final = len(events) == 0 or all(is_event_final(e) for e in events)
+        self._cache.set(
+            raw_key,
+            [event_to_dict(e) for e in events],
+            get_events_cache_ttl(day, all_events_final=all_final),
+        )
+
     def _fetch_provider_day(
         self, provider: SportsProvider, league: str, day: date
     ) -> list[Event]:
@@ -415,38 +490,19 @@ class SportsDataService:
         matching. Lock order is always events_v2 → events_raw, never the
         reverse, so the nesting cannot cycle.
         """
-        raw_key = make_cache_key(
-            "events_raw", type(provider).__name__, league, day.isoformat()
-        )
+        raw_key = self._raw_bucket_key(provider, league, day)
 
-        def load_bucket() -> list[Event] | _CacheMiss:
-            cached = self._cache.get(raw_key)
-            if not isinstance(cached, list):
-                return _CACHE_MISS
-            if any(_event_dict_is_stale(e) for e in cached if isinstance(e, dict)):
-                return _CACHE_MISS
-            try:
-                return [dict_to_event(e) for e in cached]
-            except (KeyError, TypeError) as e:
-                logger.warning("[CACHE_ERROR] Raw bucket deserialization failed: %s", e)
-                return _CACHE_MISS
-
-        hit = load_bucket()
+        hit = self._load_raw_bucket(provider, league, day)
         if not isinstance(hit, _CacheMiss):
             return hit
 
         with self._cache.lock_key(raw_key):
-            hit = load_bucket()
+            hit = self._load_raw_bucket(provider, league, day)
             if not isinstance(hit, _CacheMiss):
                 return hit
 
             events = provider.get_events(league, day)
-            all_final = len(events) == 0 or all(is_event_final(e) for e in events)
-            self._cache.set(
-                raw_key,
-                [event_to_dict(e) for e in events],
-                get_events_cache_ttl(day, all_events_final=all_final),
-            )
+            self._store_raw_bucket(raw_key, day, events)
             return events
 
     def get_sample_event(self, league: str) -> Event | None:
