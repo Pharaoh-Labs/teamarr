@@ -34,7 +34,11 @@ from teamarr.database.managed_team_channels import list_owned_enabled_managed_te
 from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
 from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
 from teamarr.database.teams import get_team_xmltv
-from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
+from teamarr.dispatcharr import (
+    ChannelManager,
+    get_dispatcharr_client,
+    get_dispatcharr_connection,
+)
 from teamarr.services import create_channel_service, create_default_service
 from teamarr.services.stream_ordering import StreamOrderingService
 from teamarr.services.team_channel_status import find_current_live_window, find_next_live_window
@@ -235,6 +239,7 @@ class TeamChannelCurrentEvent(BaseModel):
 
     title: str | None = None
     sub_title: str | None = None
+    is_live: bool = False
     start: str | None = None
     stop: str | None = None
     attach_at: str | None = None
@@ -306,6 +311,27 @@ def list_managed_channels(
             int(channel["team_id"]): _effective_team_channel_logo(conn, channel)
             for channel in team_channels
         }
+        team_channel_names = {
+            int(channel["team_id"]): channel["team_name"] for channel in team_channels
+        }
+
+    # The remote channel logo is what subscribers see for this managed output.
+    # Fall back to the Team EPG artwork when Dispatcharr cannot provide one.
+    try:
+        dispatcharr = get_dispatcharr_connection(get_db)
+        remote_channels = (
+            {channel.id: channel for channel in dispatcharr.channels.get_channels()}
+            if dispatcharr
+            else {}
+        )
+        for channel in team_channels:
+            remote = remote_channels.get(channel["dispatcharr_channel_id"])
+            if remote:
+                team_channel_names[int(channel["team_id"])] = remote.name
+                if remote.logo_url:
+                    team_channel_logos[int(channel["team_id"])] = remote.logo_url
+    except Exception:
+        logger.debug("[CHANNELS] Could not fetch managed team channel logos", exc_info=True)
 
     if sport:
         team_channels = [channel for channel in team_channels if channel["sport"] == sport]
@@ -330,7 +356,7 @@ def list_managed_channels(
                 event_id=str(team_channel["team_id"]),
                 event_provider="teamarr",
                 tvg_id=team_channel["channel_id"],
-                channel_name=team_channel["team_name"],
+                channel_name=team_channel_names[int(team_channel["team_id"])],
                 channel_number=str(team_channel["channel_number"]),
                 logo_url=team_channel_logos[int(team_channel["team_id"])],
                 dispatcharr_channel_id=team_channel["dispatcharr_channel_id"],
@@ -449,9 +475,9 @@ def get_managed_channel_streams(channel_id: int):
                 xmltv["xmltv_content"] if xmltv else None,
                 team_channel["channel_id"],
             )
-            if current is None and streams:
-                # Stream attachment starts before the programme's live window,
-                # so show the imminent matched event throughout its prebuffer.
+            if current is None:
+                # The channel's guide remains useful outside its stream window:
+                # show the upcoming game even when no stream is currently attached.
                 current = find_next_live_window(
                     xmltv["xmltv_content"] if xmltv else None,
                     team_channel["channel_id"],
@@ -570,6 +596,7 @@ def get_managed_channel_streams(channel_id: int):
                 TeamChannelCurrentEvent(
                     title=current["title"],
                     sub_title=current["sub_title"],
+                    is_live=current.get("is_live", False),
                     start=_safe_isoformat(current["start"]),
                     stop=_safe_isoformat(current["stop"]),
                     attach_at=_safe_isoformat(streams[0]["attach_at"]) if streams else None,

@@ -529,10 +529,7 @@ const ChannelRow = React.memo(function ChannelRow({
               />
             )}
             <div>
-              <div className="flex items-center gap-1.5 font-medium">
-                {channel.channel_name}
-                {isTeamChannel && <Badge variant="info" className="text-[10px]">Team</Badge>}
-              </div>
+              <div className="font-medium">{channel.channel_name}</div>
               <div className="text-xs text-muted-foreground">
                 {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
                 {channel.tvg_id}
@@ -604,7 +601,9 @@ const ChannelRow = React.memo(function ChannelRow({
                 <>
                   {isTeamChannel && currentEvent && (
                     <div className="mb-2 rounded bg-muted/50 px-2 py-1.5 text-xs">
-                      <div className="font-semibold">{currentEvent.title ?? "Current matched event"}</div>
+                      <div className="font-semibold">
+                        {currentEvent.is_live ? "Current event" : "Next scheduled event"}: {currentEvent.title ?? "Unknown"}
+                      </div>
                       {currentEvent.sub_title && (
                         <div className="text-muted-foreground">{currentEvent.sub_title}</div>
                       )}

@@ -67,6 +67,21 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
     monkeypatch.setattr(
         channels, "get_all_managed_channels", lambda *_args, **_kwargs: [event_channel]
     )
+    monkeypatch.setattr(
+        channels,
+        "get_dispatcharr_connection",
+        lambda *_: SimpleNamespace(
+            channels=SimpleNamespace(
+                get_channels=lambda: [
+                    SimpleNamespace(
+                        id=90,
+                        name="NBA | Blue",
+                        logo_url="epg-channel-logo",
+                    )
+                ]
+            )
+        ),
+    )
 
     response = channels.list_managed_channels(
         group_id=None, sport=None, league=None, include_deleted=False
@@ -79,10 +94,11 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
     assert channel.team_id == 7
     assert channel.tvg_id == "team-blue"
     assert channel.dispatcharr_channel_id == 90
-    assert channel.logo_url == "team-logo"
+    assert channel.channel_name == "NBA | Blue"
+    assert channel.logo_url == "epg-channel-logo"
 
 
-def test_managed_team_channel_streams_include_current_epg_event(monkeypatch):
+def test_managed_team_channel_streams_include_next_epg_event_without_assigned_streams(monkeypatch):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript(
@@ -123,15 +139,22 @@ def test_managed_team_channel_streams_include_current_epg_event(monkeypatch):
     )
     monkeypatch.setattr(channels, "get_db", lambda: _connection(conn))
     monkeypatch.setattr(channels, "get_group_names_by_ids", lambda *_args: {3: "Sports"})
+    monkeypatch.setattr(channels, "get_assigned_team_streams", lambda *_args: [])
     monkeypatch.setattr(channels, "resolve_stream_ordering_rules", lambda *_args: ([], None))
     monkeypatch.setattr(channels, "get_stream_match_details", lambda *_args: {})
     monkeypatch.setattr(channels, "get_dispatcharr_client", lambda *_args: None)
     monkeypatch.setattr(
         channels,
         "find_current_live_window",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        channels,
+        "find_next_live_window",
         lambda *_args: {
             "title": "Blue at Red", "sub_title": "Regular season",
             "start": "2026-09-13T09:00:00+00:00", "stop": "2026-09-13T11:00:00+00:00",
+            "is_live": False,
         },
     )
 
@@ -139,5 +162,5 @@ def test_managed_team_channel_streams_include_current_epg_event(monkeypatch):
 
     assert response.current_event is not None
     assert response.current_event.title == "Blue at Red"
-    assert response.streams[0].dispatcharr_stream_id == 44
-    assert response.streams[0].source_group == "Sports"
+    assert response.current_event.is_live is False
+    assert response.streams == []
