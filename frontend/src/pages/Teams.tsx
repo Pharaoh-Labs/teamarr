@@ -77,6 +77,8 @@ interface TeamUpdate {
   channel_logo_url?: string | null
   template_id?: number | null
   active?: boolean
+  managed_channel_enabled?: boolean
+  managed_channel_number?: number | null
 }
 
 interface EditTeamDialogProps {
@@ -97,6 +99,8 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
     channel_logo_url: team.channel_logo_url,
     template_id: team.template_id,
     active: team.active,
+    managed_channel_enabled: team.managed_channel_enabled,
+    managed_channel_number: team.managed_channel_number,
   })
 
   const handleSubmit = async () => {
@@ -171,6 +175,37 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
               onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
             />
             <Label className="font-normal">Active</Label>
+          </div>
+          <div className="space-y-2 border-t pt-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={formData.managed_channel_enabled ?? false}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, managed_channel_enabled: checked })
+                }
+              />
+              <Label className="font-normal">Manage persistent Dispatcharr channel</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Creates and keeps this team&apos;s Team EPG channel in the dedicated managed-team range.
+            </p>
+            {formData.managed_channel_enabled && (
+              <div className="space-y-2 max-w-xs">
+                <Label htmlFor="managed_channel_number">Channel number override</Label>
+                <Input
+                  id="managed_channel_number"
+                  type="number"
+                  min={1}
+                  value={formData.managed_channel_number ?? ""}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    managed_channel_number: e.target.value ? parseInt(e.target.value) : null,
+                  })}
+                  placeholder="Automatic"
+                />
+                <p className="text-xs text-muted-foreground">Leave empty to assign automatically.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -506,10 +541,10 @@ export function Teams() {
 
       {/* What is Team EPG — info tile */}
       <Alert variant="info" title="What is Team EPG?">
-        A secondary flow for teams you already have static channels for in Dispatcharr.
-        Teamarr generates guide data (a team-only EPG) for them but does <strong>not</strong>{" "}
-        create or manage these channels — it just fills in their EPG. Most setups rely on
-        event-based matching from Sources instead.
+        Teamarr always generates a team-only guide. You can associate that guide with an existing
+        Dispatcharr channel, or enable managed channels per team to have Teamarr create and maintain
+        a persistent channel in the dedicated managed-team range. Most setups still rely on event-based
+        matching from Sources.
       </Alert>
 
       {/* Team EPG settings (lifted from Settings) */}
@@ -679,8 +714,8 @@ export function Teams() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </TableHead>
-                  <TableHead
-                    className="w-[28%] cursor-pointer hover:bg-muted/50"
+                   <TableHead
+                     className="w-[22%] cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("team")}
                   >
                     <div className="flex items-center">
@@ -703,14 +738,15 @@ export function Teams() {
                       Sport {renderSortIcon("sport")}
                     </div>
                   </TableHead>
-                  <TableHead
-                    className="w-[28%] cursor-pointer hover:bg-muted/50"
+                   <TableHead
+                     className="w-[20%] cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("channel")}
                   >
                     <div className="flex items-center">
                       Channel ID {renderSortIcon("channel")}
                     </div>
-                  </TableHead>
+                   </TableHead>
+                   <TableHead className="w-20 text-center">Managed</TableHead>
                   <TableHead
                     className="w-24 cursor-pointer hover:bg-muted/50"
                     onClick={() => handleSort("template")}
@@ -727,11 +763,12 @@ export function Teams() {
                       Status {renderSortIcon("status")}
                     </div>
                   </TableHead>
-                  <TableHead className="w-20 text-right">Actions</TableHead>
+                   <TableHead className="w-20 text-right">Actions</TableHead>
                 </TableRow>
                 {/* Filter row - styled like V1 */}
                 <TableRow className="border-b-2 border-border">
-                  <TableHead className="py-0.5 pb-1.5"></TableHead>
+                   <TableHead className="py-0.5 pb-1.5"></TableHead>
+                   <TableHead className="py-0.5 pb-1.5"></TableHead>
                   <TableHead className="py-0.5 pb-1.5">
                     <div className="relative">
                       <Input
@@ -800,7 +837,7 @@ export function Teams() {
               <TableBody>
                 {filteredTeams.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No teams match the current filters.
                     </TableCell>
                   </TableRow>
@@ -898,6 +935,15 @@ export function Teams() {
                       </span>
                     </TableCell>
                     <TableCell className="font-mono text-sm">{team.channel_id}</TableCell>
+                    <TableCell className="text-center">
+                      {team.managed_channel_enabled ? (
+                        <Badge variant="success">
+                          {team.managed_channel_assigned_number ?? team.managed_channel_number ?? "Auto"}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {team.template_id ? (
                         <Badge variant="success">

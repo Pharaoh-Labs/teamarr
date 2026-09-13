@@ -359,6 +359,7 @@ class TemplateConfig:
     description_format: str
     subtitle_format: str
     program_art_url: str | None = None
+    team_channel_logo_url: str | None = None
     conditional_descriptions: list[dict] = field(default_factory=list)
 
     # V1 Parity: Duration override support

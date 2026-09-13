@@ -116,6 +116,7 @@ export interface Template {
   // Event template specific
   event_channel_name: string | null
   event_channel_logo_url: string | null
+  team_channel_logo_url: string | null
 
   // Usage counts (from list endpoint)
   team_count?: number
@@ -173,6 +174,7 @@ export interface TemplateCreate {
   // Event template specific
   event_channel_name?: string | null
   event_channel_logo_url?: string | null
+  team_channel_logo_url?: string | null
 }
 
 export type TemplateUpdate = Partial<TemplateCreate>

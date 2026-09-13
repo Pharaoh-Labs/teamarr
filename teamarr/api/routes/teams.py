@@ -131,6 +131,8 @@ def create_team(team: TeamCreate):
                 channel_logo_url=team.channel_logo_url,
                 template_id=team.template_id,
                 active=team.active,
+                managed_channel_enabled=team.managed_channel_enabled,
+                managed_channel_number=team.managed_channel_number,
             )
         except Exception as e:
             if "UNIQUE constraint failed" in str(e):
@@ -195,12 +197,19 @@ def update_team(team_id: int, team: TeamUpdate):
     """Update a team (full or partial)."""
 
     updates = {k: v for k, v in team.model_dump().items() if v is not None}
+    # Unlike other optional fields, null deliberately clears the manual override.
+    if "managed_channel_number" in team.model_fields_set:
+        updates["managed_channel_number"] = team.managed_channel_number
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
     # Convert leagues list to JSON if present
     if "leagues" in updates:
         updates["leagues"] = json.dumps(updates["leagues"])
+
+    if updates.get("managed_channel_enabled"):
+        # A managed channel cannot have a stale/missing Team EPG guide.
+        updates["active"] = True
 
     with get_db() as conn:
         result = db_update_team(conn, team_id, updates)

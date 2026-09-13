@@ -22,7 +22,8 @@ from typing import Any
 from teamarr.consumers.team_epg import TeamEPGGenerator, TeamEPGOptions
 from teamarr.core import Programme
 from teamarr.services import SportsDataService, create_default_service
-from teamarr.utilities.art_url import read_art_base_url
+from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.art_url import apply_art_base_url, read_art_base_url
 from teamarr.utilities.tz import now_utc
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
@@ -406,7 +407,7 @@ class TeamProcessor:
                 channel_id=team.channel_id,
                 team_name=team.team_name,
                 team_abbrev=team.team_abbrev,
-                logo_url=team.channel_logo_url or team.team_logo_url,
+                logo_url=self._resolve_channel_logo(options, team),
                 options=options,
                 provider=team.provider,
                 sport=team.sport,
@@ -430,7 +431,7 @@ class TeamProcessor:
                 channel_dict = {
                     "id": team.channel_id,
                     "name": team.team_name,
-                    "icon": team.channel_logo_url or team.team_logo_url,
+                    "icon": self._resolve_channel_logo(options, team),
                 }
                 from teamarr.database.settings import get_epg_settings
 
@@ -499,6 +500,7 @@ class TeamProcessor:
             default_duration_hours=all_settings.durations.default,
             sport_durations=sport_durations,
             epg_timezone=all_settings.epg.epg_timezone,
+            art_base_url=all_settings.epg.art_base_url,
             midnight_crossover_mode=all_settings.epg.midnight_crossover_mode,
             template_id=team.template_id,
             template=template_config,  # Pre-loaded template
@@ -508,6 +510,24 @@ class TeamProcessor:
             # user setting — the toggle was removed in the v2.7.0 EPG overhaul).
             include_final_events=True,
         )
+
+    @staticmethod
+    def _resolve_channel_logo(options: TeamEPGOptions, team: TeamConfig) -> str | None:
+        """Return the team-template channel logo, falling back to provider artwork.
+
+        Teamarr-managed channels deliberately do not read the per-team
+        ``channel_logo_url`` override. A template value without variables can
+        be resolved before schedule generation; variable-backed logos are
+        resolved with the team schedule in the managed-channel lifecycle.
+        """
+        template = options.template
+        logo = template.team_channel_logo_url if template else None
+        if logo:
+            resolved = TemplateResolver(options.art_base_url).resolve_with_map(
+                logo, {"league_id": team.primary_league, "team_name": team.team_name}
+            )
+            return apply_art_base_url(resolved, options.art_base_url)
+        return team.team_logo_url
 
     def _get_team(self, conn: Connection, team_id: int) -> TeamConfig | None:
         """Get team by ID."""

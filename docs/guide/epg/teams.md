@@ -12,7 +12,7 @@ redirect_from:
 
 ![EPG → Team EPG — settings card, stats, and the teams table](../../assets/images/epg-teams.png)
 
-Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. Teamarr does *not* create a Dispatcharr channel for each team — that's only done for event-based workflows. Instead, you point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association), and Teamarr keeps that XMLTV channel populated with the team's schedule — upcoming games, live events, and recent results.
+Team-based EPG produces one persistent **XMLTV channel** per team in the guide Teamarr writes. By default, point one of your existing Dispatcharr channels at the team's XMLTV channel id (via Dispatcharr's normal EPG association). Optionally, enable **managed channels** for an individual team and Teamarr will create and maintain its persistent Dispatcharr channel as well.
 
 ## How It Works
 
@@ -49,6 +49,7 @@ The Teams table lists all imported teams. Columns are sortable, and a filter row
 | **League** | League the team belongs to |
 | **Sport** | The team's sport |
 | **Channel ID** | XMLTV channel id — point a Dispatcharr channel at this id to wire up the EPG. Generated as PascalCase team name + league (e.g. `DetroitLions.nfl`) at import; regenerate in bulk with a custom format via the **Channel ID** action after selecting rows |
+| **Managed** | Shows whether Teamarr manages a persistent Dispatcharr channel for this team and its requested number, or `Auto` when the dedicated range assigns it |
 | **Template** | Assigned template (click to change) |
 | **Status** | On/off toggle — inactive teams are excluded from EPG generation |
 | **Actions** | Per-team actions (delete, etc.) |
@@ -56,6 +57,12 @@ The Teams table lists all imported teams. Columns are sortable, and a filter row
 ### Assigning Templates
 
 Each team needs a **team template** assigned — see [Team vs Event](team-vs-event) for how team templates differ. Edit a team (pencil icon) to change its template, or select multiple rows and use **Assign Template** to bulk-assign.
+
+### Managed Channels
+
+The edit dialog can enable a persistent managed channel for a team. Enabling it also keeps the team active, because Teamarr needs its guide data to manage the channel. Set an optional channel-number override there, or leave it automatic.
+
+Configure the automatic **Managed Team EPG Channels** range and choose priority teams in **Channels → Numbering**. Priority teams fill the automatic range first. This range is independent from event-channel numbering, so ordinary channel blocks do not consume it.
 
 ## Team EPG Settings
 

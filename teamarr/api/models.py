@@ -25,6 +25,8 @@ class TeamCreate(BaseModel):
     channel_logo_url: str | None = None
     template_id: int | None = None
     active: bool = True
+    managed_channel_enabled: bool = False
+    managed_channel_number: int | None = None
 
 
 class TeamUpdate(BaseModel):
@@ -38,6 +40,8 @@ class TeamUpdate(BaseModel):
     channel_logo_url: str | None = None
     template_id: int | None = None
     active: bool | None = None
+    managed_channel_enabled: bool | None = None
+    managed_channel_number: int | None = None
     primary_league: str | None = None
     leagues: list[str] | None = None
 
@@ -61,6 +65,9 @@ class TeamResponse(BaseModel):
     channel_logo_url: str | None
     template_id: int | None
     active: bool
+    managed_channel_enabled: bool = False
+    managed_channel_number: int | None = None
+    managed_channel_assigned_number: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -255,6 +262,7 @@ class TemplateCreate(BaseModel):
     # Event template specific
     event_channel_name: str | None = None
     event_channel_logo_url: str | None = None
+    team_channel_logo_url: str | None = None
 
 
 class TemplateUpdate(BaseModel):
@@ -301,6 +309,7 @@ class TemplateUpdate(BaseModel):
     # Event template specific
     event_channel_name: str | None = None
     event_channel_logo_url: str | None = None
+    team_channel_logo_url: str | None = None
 
 
 class TemplateResponse(BaseModel):
@@ -349,6 +358,7 @@ class TemplateFullResponse(TemplateResponse):
     conditional_descriptions: list[dict] | None = None
     event_channel_name: str | None = None
     event_channel_logo_url: str | None = None
+    team_channel_logo_url: str | None = None
 
 
 class TemplateValidationWarning(BaseModel):

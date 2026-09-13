@@ -19,7 +19,7 @@ from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.dispatcharr.managers import ChannelManager
 from teamarr.emby.client import EmbyClient
 from teamarr.jellyfin.client import JellyfinClient
-from teamarr.services import create_default_service
+from teamarr.services import TeamChannelManager, create_default_service
 from teamarr.services.sports_data import flush_shared_cache
 from teamarr.utilities import call_metrics
 from teamarr.utilities.xmltv import merge_xmltv_content
@@ -74,6 +74,7 @@ class GenerationResult:
     stream_ordering: dict = field(default_factory=dict)
     epg_refresh: dict = field(default_factory=dict)
     epg_association: dict = field(default_factory=dict)
+    managed_team_channels: dict = field(default_factory=dict)
     deletions: dict = field(default_factory=dict)
     reconciliation: dict = field(default_factory=dict)
     cleanup: dict = field(default_factory=dict)
@@ -313,6 +314,21 @@ def run_full_generation(
         result.teams_programmes = team_result.total_programmes
         timer.mark("teams")
 
+        # Persistent Team EPG channels have no streams and are owned exclusively
+        # through managed_team_channels. Create/sync them before guide refresh.
+        team_channels = (
+            dispatcharr_client
+            if isinstance(dispatcharr_client, DispatcharrConnection)
+            else None
+        )
+        team_channel_manager = TeamChannelManager(
+            db_factory,
+            team_channels.channels if team_channels else None,
+            team_channels.epg if team_channels else None,
+            team_channels.logos if team_channels else None,
+        )
+        result.managed_team_channels = team_channel_manager.sync()
+
         # Transition message - teams done, starting groups
         logger.info("[GENERATION] Sending transition message: teams -> groups")
         update_progress(
@@ -463,6 +479,9 @@ def run_full_generation(
 
             update_progress("dispatcharr", 97, "Associating EPG with channels...")
             result.epg_association = lifecycle_service.associate_epg_with_channels(
+                dispatcharr_settings.epg_id
+            )
+            result.epg_association["managed_team_channels"] = team_channel_manager.associate_epg(
                 dispatcharr_settings.epg_id
             )
         timer.mark("dispatcharr_epg_refresh")

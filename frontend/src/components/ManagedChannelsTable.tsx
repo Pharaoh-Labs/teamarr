@@ -66,6 +66,9 @@ function eventSummary(
   channel: ManagedChannel,
   leagueLabel: string | null
 ): { text: string; title: string } {
+  if (channel.channel_type === "team") {
+    return { text: "Persistent team channel", title: "Persistent team channel" }
+  }
   const fullMatchup =
     channel.home_team || channel.away_team
       ? `${channel.away_team ?? ""} / ${channel.home_team ?? ""}`
@@ -492,24 +495,28 @@ const ChannelRow = React.memo(function ChannelRow({
   onDelete,
 }: ChannelRowProps) {
   const { formatRelativeTime, timezone } = useDateFormat()
+  const isTeamChannel = channel.channel_type === "team"
   return (
     <>
       <TableRow className={expanded ? "border-b-0" : ""}>
         <TableCell className="px-1">
-          <button
-            onClick={() => onToggleExpand(channel.id)}
-            className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
-            aria-label={expanded ? "Collapse" : "Expand"}
-          >
-            {expanded
-              ? <ChevronDown className="h-4 w-4" />
-              : <ChevronRight className="h-4 w-4" />}
-          </button>
+          {!isTeamChannel && (
+            <button
+              onClick={() => onToggleExpand(channel.id)}
+              className="flex items-center justify-center w-6 h-6 text-muted-foreground hover:text-foreground"
+              aria-label={expanded ? "Collapse" : "Expand"}
+            >
+              {expanded
+                ? <ChevronDown className="h-4 w-4" />
+                : <ChevronRight className="h-4 w-4" />}
+            </button>
+          )}
         </TableCell>
         <TableCell>
           <Checkbox
             checked={selected}
             onCheckedChange={() => onToggleSelect(channel.id)}
+            disabled={isTeamChannel}
           />
         </TableCell>
         <TableCell>
@@ -522,7 +529,10 @@ const ChannelRow = React.memo(function ChannelRow({
               />
             )}
             <div>
-              <div className="font-medium">{channel.channel_name}</div>
+              <div className="flex items-center gap-1.5 font-medium">
+                {channel.channel_name}
+                {isTeamChannel && <Badge variant="info" className="text-[10px]">Team</Badge>}
+              </div>
               <div className="text-xs text-muted-foreground">
                 {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
                 {channel.tvg_id}
@@ -567,14 +577,16 @@ const ChannelRow = React.memo(function ChannelRow({
         </TableCell>
         <TableCell>
           <div className="flex items-center justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(channel)}
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
+            {!isTeamChannel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDelete(channel)}
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            )}
           </div>
         </TableCell>
         <TableCell></TableCell>
@@ -781,7 +793,7 @@ export function ManagedChannelsTable() {
     toggleAll: toggleSelectAll,
     isAllSelected,
     setSelectedIds,
-  } = useRowSelection(filteredChannels)
+  } = useRowSelection(filteredChannels.filter((channel) => channel.channel_type === "event"))
 
   // Mutation for bulk delete
   const bulkDeleteMutation = useMutation({
@@ -858,7 +870,7 @@ export function ManagedChannelsTable() {
   }, [isGenerating])
 
   const handleDelete = async () => {
-    if (!deleteConfirm) return
+    if (!deleteConfirm || deleteConfirm.channel_type === "team") return
     try {
       const result = await deleteMutation.mutateAsync(deleteConfirm.id)
       if (result.success) {
@@ -873,7 +885,11 @@ export function ManagedChannelsTable() {
   }
 
   const handleBulkDelete = () => {
-    bulkDeleteMutation.mutate(Array.from(selectedIds))
+    bulkDeleteMutation.mutate(
+      Array.from(selectedIds).filter((id) =>
+        filteredChannels.some((channel) => channel.id === id && channel.channel_type === "event")
+      )
+    )
   }
 
   if (error) {

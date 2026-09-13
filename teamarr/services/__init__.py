@@ -54,6 +54,7 @@ from teamarr.services.stream_ordering import (
     StreamWithPriority,
     get_stream_ordering_service,
 )
+from teamarr.services.team_channel_manager import TeamChannelManager
 
 __all__ = [
     # Core services
@@ -69,6 +70,7 @@ __all__ = [
     "ReconciliationResult",
     "ReconciliationSummary",
     "create_channel_service",
+    "TeamChannelManager",
     # Scheduler service
     "SchedulerRunResult",
     "SchedulerService",

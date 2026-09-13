@@ -15,6 +15,9 @@ export interface Team {
   channel_logo_url: string | null
   template_id: number | null
   active: boolean
+  managed_channel_enabled: boolean
+  managed_channel_number: number | null
+  managed_channel_assigned_number: number | null
   created_at: string
   updated_at: string
 }
@@ -33,6 +36,8 @@ export interface TeamCreate {
   channel_logo_url?: string | null
   template_id?: number | null
   active?: boolean
+  managed_channel_enabled?: boolean
+  managed_channel_number?: number | null
 }
 
 export interface TeamUpdate {
@@ -44,6 +49,8 @@ export interface TeamUpdate {
   channel_logo_url?: string | null
   template_id?: number | null
   active?: boolean | null
+  managed_channel_enabled?: boolean | null
+  managed_channel_number?: number | null
   primary_league?: string | null
   leagues?: string[] | null
 }

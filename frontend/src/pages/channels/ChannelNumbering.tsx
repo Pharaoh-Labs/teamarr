@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -15,8 +15,11 @@ import {
   useUpdateLifecycleSettings,
   useChannelNumberingSettings,
   useUpdateChannelNumberingSettings,
+  useManagedTeamChannelSettings,
+  useUpdateManagedTeamChannelSettings,
 } from "@/hooks/useSettings"
 import type { LifecycleSettings, ChannelNumberingSettings } from "@/api/settings"
+import { useTeams } from "@/hooks/useTeams"
 
 /**
  * Channels → Numbering, listed most-specific first (a channel takes the first
@@ -32,6 +35,9 @@ export function ChannelNumbering() {
   const updateLifecycle = useUpdateLifecycleSettings()
   const { data: channelNumberingData } = useChannelNumberingSettings()
   const updateChannelNumbering = useUpdateChannelNumberingSettings()
+  const { data: managedTeamData } = useManagedTeamChannelSettings()
+  const updateManagedTeam = useUpdateManagedTeamChannelSettings()
+  const { data: teams } = useTeams()
 
   const [lifecycle, setLifecycle] = useState<LifecycleSettings | null>(null)
   const [channelNumbering, setChannelNumbering] = useState<ChannelNumberingSettings>({
@@ -46,6 +52,9 @@ export function ChannelNumbering() {
   })
   const [channelRangeStart, setChannelRangeStart] = useState("")
   const [channelRangeEnd, setChannelRangeEnd] = useState("")
+  const [managedTeamRangeStart, setManagedTeamRangeStart] = useState("9000")
+  const [managedTeamRangeEnd, setManagedTeamRangeEnd] = useState("")
+  const [managedTeamPriorityIds, setManagedTeamPriorityIds] = useState<number[]>([])
 
   const lifecycleInitRef = useRef(false)
   useEffect(() => {
@@ -62,6 +71,19 @@ export function ChannelNumbering() {
     setSyncedNumbering(channelNumberingData)
     setChannelNumbering(channelNumberingData)
   }
+
+  const [syncedManagedTeamData, setSyncedManagedTeamData] = useState<typeof managedTeamData>(undefined)
+  if (managedTeamData && managedTeamData !== syncedManagedTeamData) {
+    setSyncedManagedTeamData(managedTeamData)
+    setManagedTeamRangeStart(String(managedTeamData.range_start))
+    setManagedTeamRangeEnd(managedTeamData.range_end?.toString() ?? "")
+    setManagedTeamPriorityIds(managedTeamData.priority_ids)
+  }
+
+  const managedTeams = useMemo(
+    () => (teams ?? []).filter((team) => team.managed_channel_enabled),
+    [teams],
+  )
 
   const channelRangeInitializedRef = useRef(false)
   useEffect(() => {
@@ -87,6 +109,18 @@ export function ChannelNumbering() {
       ]
       if (lifecycle) {
         promises.push(updateLifecycle.mutateAsync(lifecycle))
+      }
+      const rangeStart = parseInt(managedTeamRangeStart)
+      const rangeEnd = managedTeamRangeEnd ? parseInt(managedTeamRangeEnd) : null
+      if (!isNaN(rangeStart) && rangeStart >= 1 && (rangeEnd === null || rangeEnd >= rangeStart)) {
+        promises.push(updateManagedTeam.mutateAsync({
+          range_start: rangeStart,
+          range_end: rangeEnd,
+          priority_ids: managedTeamPriorityIds,
+        }))
+      } else {
+        toast.error("Managed Team EPG channel range is invalid")
+        return
       }
       await Promise.all(promises)
       toast.success("Channel numbering settings saved")
@@ -197,6 +231,58 @@ export function ChannelNumbering() {
                 not limited by it.
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Managed Team EPG Channels</CardTitle>
+          <CardDescription>
+            Persistent channels enabled per team use this dedicated range. They do not share event-channel numbering.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="managed-team-range-start">Range Start</Label>
+              <Input id="managed-team-range-start" type="number" min={1} value={managedTeamRangeStart} onChange={(e) => setManagedTeamRangeStart(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="managed-team-range-end">Range End</Label>
+              <Input id="managed-team-range-end" type="number" min={1} value={managedTeamRangeEnd} onChange={(e) => setManagedTeamRangeEnd(e.target.value)} placeholder="No limit" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Priority teams</Label>
+            <p className="text-xs text-muted-foreground">Selected teams fill the automatic range first, in this order. Use each team&apos;s edit dialog to enable managed channels or set a fixed number.</p>
+            {managedTeams.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No teams have managed channels enabled.</p>
+            ) : (
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+                {managedTeams
+                  .slice()
+                  .sort((a, b) => {
+                    const ai = managedTeamPriorityIds.indexOf(a.id)
+                    const bi = managedTeamPriorityIds.indexOf(b.id)
+                    return (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi) || a.team_name.localeCompare(b.team_name)
+                  })
+                  .map((team) => {
+                    const priorityIndex = managedTeamPriorityIds.indexOf(team.id)
+                    return (
+                      <label key={team.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={priorityIndex >= 0}
+                          onChange={(e) => setManagedTeamPriorityIds((ids) => e.target.checked ? [...ids, team.id] : ids.filter((id) => id !== team.id))}
+                        />
+                        <span className="min-w-5 text-muted-foreground">{priorityIndex >= 0 ? priorityIndex + 1 : ""}</span>
+                        <span>{team.team_name}</span>
+                      </label>
+                    )
+                  })}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -331,10 +417,10 @@ export function ChannelNumbering() {
           <div className="pt-4 border-t">
             <SaveButton
               onClick={handleSave}
-              pending={updateChannelNumbering.isPending || updateLifecycle.isPending}
+               pending={updateChannelNumbering.isPending || updateLifecycle.isPending || updateManagedTeam.isPending}
             />
             <p className="text-xs text-muted-foreground mt-2">
-              Saves Everything Else and Number Stability. Channel numbers update on the
+               Saves event and managed-team ranges plus Number Stability. Channel numbers update on the
               next EPG generation.
             </p>
           </div>
