@@ -248,7 +248,6 @@ class TemplateCreate(BaseModel):
     idle_content: FillerFallback | None = None
     idle_conditional: ConditionalContent | None = None
     idle_offseason: IdleOffseasonContent | None = None
-    idle_provider_unavailable: IdleOffseasonContent | None = None
 
     # Filler condition rows (#420, epic cajd) — same row shape as
     # conditional_descriptions, evaluated against the register's reference
@@ -297,7 +296,6 @@ class TemplateUpdate(BaseModel):
     idle_content: FillerFallback | None = None
     idle_conditional: ConditionalContent | None = None
     idle_offseason: IdleOffseasonContent | None = None
-    idle_provider_unavailable: IdleOffseasonContent | None = None
 
     # Filler condition rows (#420, epic cajd) — same row shape as
     # conditional_descriptions, evaluated against the register's reference
@@ -359,7 +357,6 @@ class TemplateFullResponse(TemplateResponse):
     idle_content: dict | None = None
     idle_conditional: dict | None = None
     idle_offseason: dict | None = None
-    idle_provider_unavailable: dict | None = None
     pregame_conditional_rows: list[dict] | None = None
     postgame_conditional_rows: list[dict] | None = None
     idle_conditional_rows: list[dict] | None = None

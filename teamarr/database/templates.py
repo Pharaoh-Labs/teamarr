@@ -134,9 +134,6 @@ class Template:
     idle_offseason: dict = field(
         default_factory=lambda: {"enabled": False, "subtitle": None, "description": None}
     )
-    idle_provider_unavailable: dict = field(
-        default_factory=lambda: {"enabled": False, "subtitle": None, "description": None}
-    )
 
     # Filler condition rows (#420, epic cajd) — hehg.2 row shape, evaluated
     # against the register's reference game. Replace the legacy *_conditional
@@ -251,10 +248,6 @@ def _row_to_template(row: Row) -> Template:
         ),
         idle_offseason=_parse_json(
             row["idle_offseason"], {"enabled": False, "subtitle": None, "description": None}
-        ),
-        idle_provider_unavailable=_parse_json(
-            row["idle_provider_unavailable"],
-            {"enabled": False, "subtitle": None, "description": None},
         ),
         pregame_conditional_rows=_parse_json(row["pregame_conditional_rows"], []),
         postgame_conditional_rows=_parse_json(row["postgame_conditional_rows"], []),
@@ -477,7 +470,6 @@ def create_template(
         "idle_content",
         "idle_conditional",
         "idle_offseason",
-        "idle_provider_unavailable",
         "pregame_conditional_rows",
         "postgame_conditional_rows",
         "idle_conditional_rows",
@@ -539,7 +531,6 @@ def update_template(conn: Connection, template_id: int, **kwargs) -> bool:
         "idle_content",
         "idle_conditional",
         "idle_offseason",
-        "idle_provider_unavailable",
         "pregame_conditional_rows",
         "postgame_conditional_rows",
         "idle_conditional_rows",
@@ -656,21 +647,6 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         subtitle=idle_off.get("subtitle") if idle_off.get("subtitle_enabled") else None,
         description=idle_off.get("description"),
     )
-    idle_provider = template.idle_provider_unavailable or {}
-    idle_provider_unavailable = OffseasonFillerTemplate(
-        enabled=any(
-            idle_provider.get(field, False)
-            for field in ("title_enabled", "subtitle_enabled", "description_enabled")
-        ),
-        title=idle_provider.get("title") if idle_provider.get("title_enabled") else None,
-        subtitle=idle_provider.get("subtitle") if idle_provider.get("subtitle_enabled") else None,
-        description=(
-            idle_provider.get("description")
-            if idle_provider.get("description_enabled")
-            else None
-        ),
-    )
-
     # Filler categories are independent from event categories (#199).
     filler_categories = template.xmltv_filler_categories or []
 
@@ -682,7 +658,6 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         idle_enabled=template.idle_enabled,
         idle_template=idle_template,
         idle_offseason=idle_offseason,
-        idle_provider_unavailable=idle_provider_unavailable,
         xmltv_categories=filler_categories,
         pregame_rows=template.pregame_conditional_rows or [],
         postgame_rows=postgame_rows,

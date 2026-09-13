@@ -95,10 +95,6 @@ The idle register's **offseason override** (no upcoming game in the
 lookahead) stays separate from condition rows — it's a no-game state, and
 condition rows need a reference game to evaluate.
 
-The Fillers tab also has a separate **provider unavailable override**. It is
-used only when every requested league schedule fetch fails. A successful empty
-schedule remains offseason, so it continues to use the offseason override.
-
 ---
 
 ## Available Conditions

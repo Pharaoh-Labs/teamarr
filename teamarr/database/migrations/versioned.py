@@ -380,11 +380,14 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         current_version = 101
 
     if current_version < 102:
-        _apply_migration(
-            conn, 102, "team filler provider-unavailable override",
-            _migrate_v102_provider_unavailable_override,
-        )
+        # v102 was released with the now-removed provider-unavailable setting.
+        _advance_version(conn, 102, "provider-unavailable setting retired")
         current_version = 102
+
+    if current_version < 103:
+        _advance_version(conn, 103, "provider-unavailable setting cleanup")
+        current_version = 103
+
 
 
 # =============================================================================
@@ -423,15 +426,6 @@ def _migrate_v101_team_channel_logo_repair(conn: sqlite3.Connection) -> None:
     _migrate_v98_team_channel_logo(conn)
 
 
-def _migrate_v102_provider_unavailable_override(conn: sqlite3.Connection) -> None:
-    """Add the disabled provider-unavailable register to existing templates."""
-    _add_column_if_not_exists(
-        conn,
-        "templates",
-        "idle_provider_unavailable",
-        "JSON DEFAULT '{\"title_enabled\": false, \"title\": null, \"subtitle_enabled\": false, "
-        "\"subtitle\": null, \"description_enabled\": false, \"description\": null}'",
-    )
 #   _advance_version(conn, target, reason)
 #       For version ranges that are entirely handled by reconciliation
 #       (i.e. only added columns; data is unchanged). Caller checks the

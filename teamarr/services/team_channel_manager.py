@@ -72,6 +72,8 @@ class TeamChannelManager:
             teams.sort(
                 key=lambda team: (
                     priorities.get(team["id"], len(priorities)),
+                    team.get("sport") or "",
+                    team.get("primary_league") or "",
                     team["team_name"],
                 )
             )

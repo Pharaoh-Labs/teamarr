@@ -78,7 +78,6 @@ class FillerGenerator:
         team_stats: TeamStats | None = None,
         options: FillerOptions | None = None,
         config: FillerConfig | None = None,
-        provider_unavailable: bool = False,
     ) -> list[Programme]:
         """Generate filler programmes for gaps between events.
 
@@ -93,7 +92,6 @@ class FillerGenerator:
             team_stats: Team statistics (for template resolution)
             options: Generation options
             config: Filler template configuration
-            provider_unavailable: All requested schedule providers failed
 
         Returns:
             List of filler Programme entries
@@ -148,7 +146,6 @@ class FillerGenerator:
                 options=options,
                 config=config,
                 epg_start=epg_start,
-                provider_unavailable=provider_unavailable,
             )
             fillers.extend(day_fillers)
             current_date += timedelta(days=1)
@@ -172,7 +169,6 @@ class FillerGenerator:
         options: FillerOptions,
         config: FillerConfig,
         epg_start: datetime,
-        provider_unavailable: bool = False,
     ) -> list[Programme]:
         """Generate fillers for a single day."""
         from zoneinfo import ZoneInfo
@@ -257,7 +253,6 @@ class FillerGenerator:
                     options=options,
                     config=config,
                     tz=tz,
-                    provider_unavailable=provider_unavailable,
                 )
             )
 
@@ -379,7 +374,6 @@ class FillerGenerator:
         options: FillerOptions,
         config: FillerConfig,
         tz=None,  # ZoneInfo - timezone for time alignment
-        provider_unavailable: bool = False,
     ) -> list[Programme]:
         """Generate fillers for a day with no games."""
         fillers: list[Programme] = []
@@ -437,7 +431,6 @@ class FillerGenerator:
                 channel_id=channel_id,
                 logo_url=logo_url,
                 is_offseason=is_offseason,
-                provider_unavailable=provider_unavailable,
                 last_event=last_past_event or prev_day_last_event,
                 next_event=next_future_event,
             )
@@ -455,7 +448,6 @@ class FillerGenerator:
         channel_id: str,
         logo_url: str | None,
         is_offseason: bool = False,
-        provider_unavailable: bool = False,
         last_event: Event | None = None,
         next_event: Event | None = None,
     ) -> list[Programme]:
@@ -472,7 +464,6 @@ class FillerGenerator:
             config=config,
             context=context,
             is_offseason=is_offseason,
-            provider_unavailable=provider_unavailable,
         )
 
         # Determine if we should prepend "Postponed: " label
@@ -552,7 +543,6 @@ class FillerGenerator:
         config: FillerConfig,
         context: TemplateContext,
         is_offseason: bool = False,
-        provider_unavailable: bool = False,
     ) -> FillerTemplate:
         """Select the register's template, applying condition rows (#420).
 
@@ -574,16 +564,11 @@ class FillerGenerator:
         else:  # IDLE
             # Offseason register stays separate — it's a no-game state;
             # condition rows need a reference game to evaluate.
-            override = (
-                config.idle_provider_unavailable
-                if provider_unavailable and config.idle_provider_unavailable.enabled
-                else config.idle_offseason
-            )
-            if (provider_unavailable or is_offseason) and override.enabled:
+            if is_offseason and config.idle_offseason.enabled:
                 return FillerTemplate(
-                    title=override.title or config.idle_template.title,
-                    subtitle=override.subtitle or config.idle_template.subtitle,
-                    description=override.description,
+                    title=config.idle_offseason.title or config.idle_template.title,
+                    subtitle=config.idle_offseason.subtitle or config.idle_template.subtitle,
+                    description=config.idle_offseason.description,
                     art_url=config.idle_template.art_url,
                 )
             base, rows, game_ctx = config.idle_template, config.idle_rows, context.last_game

@@ -182,7 +182,6 @@ _CONTENT_FIELDS = (
     "idle_content",
     "idle_conditional",
     "idle_offseason",
-    "idle_provider_unavailable",
     "pregame_conditional_rows",
     "postgame_conditional_rows",
     "idle_conditional_rows",
@@ -541,14 +540,6 @@ def _team_base(**overrides) -> dict:
             "description_enabled": True,
             "description": "No upcoming {team_name} games scheduled.",
         },
-        "idle_provider_unavailable": {
-            "title_enabled": False,
-            "title": None,
-            "subtitle_enabled": False,
-            "subtitle": None,
-            "description_enabled": False,
-            "description": None,
-        },
         "conditional_descriptions": [
             {
                 "condition": "has_preview",
@@ -694,14 +685,6 @@ def _event_base(**overrides) -> dict:
             "subtitle": "",
             "description_enabled": False,
             "description": "",
-        },
-        "idle_provider_unavailable": {
-            "title_enabled": False,
-            "title": None,
-            "subtitle_enabled": False,
-            "subtitle": None,
-            "description_enabled": False,
-            "description": None,
         },
         "conditional_descriptions": [
             {

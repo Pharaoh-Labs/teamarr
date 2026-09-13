@@ -14,7 +14,6 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
   const postgame = formData.postgame_fallback || DEFAULT_POSTGAME
   const idle = formData.idle_content || DEFAULT_IDLE
   const idleOffseason = formData.idle_offseason || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null }
-  const idleProviderUnavailable = formData.idle_provider_unavailable || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null }
 
   const updatePregame = (field: keyof FillerContent, value: string | null) => {
     setFormData((prev) => {
@@ -48,13 +47,6 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
     setFormData((prev) => {
       const current = prev.idle_offseason || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null }
       return { ...prev, idle_offseason: { ...current, [field]: value } }
-    })
-  }
-
-  const updateIdleProviderUnavailable = (field: keyof IdleOffseasonSettings, value: boolean | string | null) => {
-    setFormData((prev) => {
-      const current = prev.idle_provider_unavailable || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null }
-      return { ...prev, idle_provider_unavailable: { ...current, [field]: value } }
     })
   }
 
@@ -258,28 +250,6 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                 )}
               </div>
 
-              <div className="p-3 bg-secondary/30 rounded-lg space-y-3 -mt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={idleProviderUnavailable.title_enabled}
-                    onCheckedChange={() => updateIdleProviderUnavailable("title_enabled", !idleProviderUnavailable.title_enabled)}
-                  />
-                  <span className="text-sm">Override title when the schedule provider is unavailable</span>
-                </label>
-                {idleProviderUnavailable.title_enabled && (
-                  <TemplateField
-                    id="idle_provider_unavailable.title"
-                    label="Provider unavailable:"
-                    value={idleProviderUnavailable.title || ""}
-                    onChange={(v) => updateIdleProviderUnavailable("title", v || null)}
-                    placeholder="Schedule Unavailable"
-                    fieldRefs={fieldRefs}
-                    setLastFocusedField={setLastFocusedField}
-                    resolveTemplate={resolveTemplate}
-                  />
-                )}
-              </div>
-
               {/* Subtitle with offseason override */}
               <TemplateField
                 id="idle_content.subtitle"
@@ -313,28 +283,6 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                 )}
               </div>
 
-              <div className="p-3 bg-secondary/30 rounded-lg space-y-3 -mt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={idleProviderUnavailable.subtitle_enabled}
-                    onCheckedChange={() => updateIdleProviderUnavailable("subtitle_enabled", !idleProviderUnavailable.subtitle_enabled)}
-                  />
-                  <span className="text-sm">Override subtitle when the schedule provider is unavailable</span>
-                </label>
-                {idleProviderUnavailable.subtitle_enabled && (
-                  <TemplateField
-                    id="idle_provider_unavailable.subtitle"
-                    label="Provider unavailable:"
-                    value={idleProviderUnavailable.subtitle || ""}
-                    onChange={(v) => updateIdleProviderUnavailable("subtitle", v || null)}
-                    placeholder="Schedule data is temporarily unavailable"
-                    fieldRefs={fieldRefs}
-                    setLastFocusedField={setLastFocusedField}
-                    resolveTemplate={resolveTemplate}
-                  />
-                )}
-              </div>
-
               {/* Description with offseason override */}
               <TemplateField
                 id="idle_content.description"
@@ -360,28 +308,6 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                     value={idleOffseason.description || ""}
                     onChange={(v) => updateIdleOffseason("description", v || null)}
                     placeholder="No upcoming {team_name} games scheduled."
-                    fieldRefs={fieldRefs}
-                    setLastFocusedField={setLastFocusedField}
-                    resolveTemplate={resolveTemplate}
-                  />
-                )}
-              </div>
-
-              <div className="p-3 bg-secondary/30 rounded-lg space-y-3 -mt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={idleProviderUnavailable.description_enabled}
-                    onCheckedChange={() => updateIdleProviderUnavailable("description_enabled", !idleProviderUnavailable.description_enabled)}
-                  />
-                  <span className="text-sm">Override description when the schedule provider is unavailable</span>
-                </label>
-                {idleProviderUnavailable.description_enabled && (
-                  <TemplateField
-                    id="idle_provider_unavailable.description"
-                    label="Provider unavailable:"
-                    value={idleProviderUnavailable.description || ""}
-                    onChange={(v) => updateIdleProviderUnavailable("description", v || null)}
-                    placeholder="Schedule data for {team_name} is temporarily unavailable."
                     fieldRefs={fieldRefs}
                     setLastFocusedField={setLastFocusedField}
                     resolveTemplate={resolveTemplate}

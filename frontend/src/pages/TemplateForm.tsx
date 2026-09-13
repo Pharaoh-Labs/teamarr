@@ -274,7 +274,6 @@ export function TemplateForm() {
       idle_content: mergeFillerContent(template.idle_content, DEFAULT_IDLE),
       idle_conditional: { enabled: false, title_final: null, title_not_final: null, subtitle_final: null, subtitle_not_final: null, description_final: null, description_not_final: null },
       idle_offseason: template.idle_offseason || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
-      idle_provider_unavailable: template.idle_provider_unavailable || { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
       // Empty rows + an enabled legacy dict = a template authored in the
       // pre-#420 UI: show (and on save persist) the converted rows the
       // generator's legacy shim already uses.

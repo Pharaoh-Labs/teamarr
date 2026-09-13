@@ -147,7 +147,6 @@ export const DEFAULT_FORM: TemplateCreate = {
   // description_enabled is the master toggle; title unset falls back to the
   // idle title (no .next in it).
   idle_offseason: { title_enabled: false, title: null, subtitle_enabled: true, subtitle: "No upcoming game currently on schedule", description_enabled: true, description: "No upcoming {team_name} games scheduled." },
-  idle_provider_unavailable: { title_enabled: false, title: null, subtitle_enabled: false, subtitle: null, description_enabled: false, description: null },
   conditional_descriptions: [],
   event_channel_name: "{matchup}",
   event_channel_logo_url: null,

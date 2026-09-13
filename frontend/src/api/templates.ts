@@ -102,7 +102,6 @@ export interface Template {
   idle_content: FillerContent | null
   idle_conditional: ConditionalSettings | null
   idle_offseason: IdleOffseasonSettings | null
-  idle_provider_unavailable: IdleOffseasonSettings | null
 
   // Filler condition rows (#420) — same shape as conditional_descriptions,
   // evaluated against the register's reference game (pregame → next game,
@@ -164,7 +163,6 @@ export interface TemplateCreate {
   idle_content?: FillerContent | null
   idle_conditional?: ConditionalSettings | null
   idle_offseason?: IdleOffseasonSettings | null
-  idle_provider_unavailable?: IdleOffseasonSettings | null
 
   // Filler condition rows (#420)
   pregame_conditional_rows?: ConditionalDescription[] | null
