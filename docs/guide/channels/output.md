@@ -61,10 +61,16 @@ Override channel profiles, channel groups, group modes, and the [matchup order](
 | **Channel Profiles** | Default or specific profiles | Which Dispatcharr profiles this league's channels appear in |
 | **Channel Group** | Default or specific group | Which Dispatcharr channel group to assign channels to |
 | **Channel Group Mode** | Default, Static, Dynamic by Sport, Dynamic by League, Custom | How the channel group is determined |
+| **Divisions** | All (default) or a subset | Which divisions of an NCAA league to ingest at all — college football and both college basketballs only |
 
 When Channel Group Mode is set to **Custom**, a pattern field appears where you can enter a template like `{sport} - {league}` that dynamically creates groups.
 
 {: .note }
 Per-league overrides take precedence over the global defaults above. Use the **X** button to clear an override and revert to the default.
+
+**Divisions** narrows what Teamarr fetches for the NCAA leagues ESPN splits across division scoreboards: college football (**Division I (FBS & FCS)** / **Division II & III**) and men's and women's college basketball (**NCAA Division I** / **Non-NCAA Division I**). Deselecting a division means those games are never requested — no matching cost, no channels, and no lower-division events falling back into your default group because `{division}` can't name them. ESPN files a game under a division when *either* side belongs to it, so cross-division fixtures (an FCS team hosting a Division II opponent) survive with Division I alone; only games played entirely inside a dropped division disappear. Leave every division checked — the default — and nothing changes.
+
+{: .note }
+If you use `{division}` in a group pattern and see lower-division games landing in your default channel group, this is the setting: the conference tree only names FBS and FCS, so a Division II or III home team has no division to resolve. Deselect **Division II & III** and those games stop being ingested altogether.
 
 **Matchup Order** decides which team `{matchup}` and `{team1}`/`{team2}` name first for that league: **Default** inherits the global setting under Settings → General → Localization; **Auto** follows the sport's convention; **Away first** / **Home first** force it. Useful when one competition breaks its sport's habit (a soccer league you want listed visitor-first, or vice versa).

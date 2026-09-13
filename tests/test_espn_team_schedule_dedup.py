@@ -40,7 +40,7 @@ class _CountingClient:
     def __init__(self):
         self.scoreboard_calls = 0
 
-    def get_scoreboard(self, league, date_str=None, sport_league=None):
+    def get_scoreboard(self, league, date_str=None, sport_league=None, groups=None):
         self.scoreboard_calls += 1
         return {"events": [], "leagues": [{"name": "NBA"}]}
 

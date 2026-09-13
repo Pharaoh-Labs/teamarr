@@ -746,7 +746,11 @@ CREATE TABLE IF NOT EXISTS subscription_league_config (
     channel_group_mode TEXT DEFAULT NULL,       -- NULL = use global default ('static', 'sport', 'league', or custom pattern)
     -- Matchup order override (#692): NULL = use the global setting
     matchup_order TEXT DEFAULT NULL
-        CHECK(matchup_order IS NULL OR matchup_order IN ('auto', 'away_first', 'home_first'))
+        CHECK(matchup_order IS NULL OR matchup_order IN ('auto', 'away_first', 'home_first')),
+    -- NCAA divisions this league still ingests (#811): NULL = every division
+    -- ESPN files under the league, otherwise a JSON list of division keys
+    -- (see COLLEGE_SCOREBOARD_DIVISIONS). A dropped division is never fetched.
+    included_divisions JSON DEFAULT NULL
 );
 
 

@@ -638,6 +638,16 @@ export interface SubscriptionLeagueConfig {
   channel_group_id: number | null
   channel_group_mode: string | null
   matchup_order: string | null // "auto" | "away_first" | "home_first"; null = global setting
+  included_divisions: string[] | null // #811: null = every division ESPN files under the league
+}
+
+export interface LeagueDivision {
+  key: string
+  label: string
+}
+
+export interface LeagueDivisionsResponse {
+  divisions: Record<string, LeagueDivision[]>
 }
 
 export interface LeagueConfigListResponse {
@@ -657,9 +667,15 @@ export async function upsertLeagueConfig(
     channel_group_id?: number | null
     channel_group_mode?: string | null
     matchup_order?: string | null
+    included_divisions?: string[] | null
   }
 ): Promise<SubscriptionLeagueConfig> {
   return api.put(`/league-configs/${encodeURIComponent(leagueCode)}`, data)
+}
+
+// Leagues whose ingest can be narrowed by division, and their divisions (#811)
+export async function getLeagueDivisions(): Promise<LeagueDivisionsResponse> {
+  return api.get("/league-divisions")
 }
 
 export async function deleteLeagueConfig(leagueCode: string): Promise<void> {

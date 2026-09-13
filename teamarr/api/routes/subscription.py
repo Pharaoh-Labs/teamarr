@@ -25,6 +25,7 @@ from teamarr.database.subscription import (
 from teamarr.database.subscription import (
     update_subscription as db_update_subscription,
 )
+from teamarr.providers.espn import COLLEGE_SCOREBOARD_DIVISIONS
 
 router = APIRouter()
 
@@ -93,6 +94,7 @@ class LeagueConfigResponse(BaseModel):
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
     matchup_order: str | None = None  # #692: None = global setting
+    included_divisions: list[str] | None = None  # #811: None = every division
 
 
 class LeagueConfigUpdate(BaseModel):
@@ -102,6 +104,20 @@ class LeagueConfigUpdate(BaseModel):
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
     matchup_order: str | None = None  # #692: 'auto' | 'away_first' | 'home_first'
+    included_divisions: list[str] | None = None  # #811: None = every division
+
+
+class LeagueDivision(BaseModel):
+    """One selectable division of a league's scoreboard fetch (#811)."""
+
+    key: str
+    label: str
+
+
+class LeagueDivisionsResponse(BaseModel):
+    """Leagues whose ingest can be narrowed by division, and their divisions."""
+
+    divisions: dict[str, list[LeagueDivision]]
 
 
 class LeagueConfigListResponse(BaseModel):
@@ -290,6 +306,57 @@ def delete_subscription_template_endpoint(assignment_id: int):
 # =============================================================================
 
 
+def _validate_included_divisions(league_code: str, divisions: list[str] | None) -> list[str] | None:
+    """Normalize a division selection, or 400.
+
+    None and "every division of this league" both persist as None, so the
+    stored config carries an override only while it means something — a
+    selection saved today keeps working if ESPN's slate gains a division
+    tomorrow only because the full set is spelled as None, not as a list.
+    An empty selection is refused rather than silently ingesting nothing.
+    """
+    if divisions is None:
+        return None
+    known = COLLEGE_SCOREBOARD_DIVISIONS.get(league_code)
+    if not known:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"League '{league_code}' has no selectable divisions",
+        )
+    valid = {d.key for d in known}
+    unknown = [d for d in divisions if d not in valid]
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown divisions {sorted(unknown)}. Valid: {sorted(valid)}",
+        )
+    if not divisions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one division must be included",
+        )
+    kept = [d.key for d in known if d.key in divisions]
+    return None if len(kept) == len(valid) else kept
+
+
+@router.get(
+    "/league-divisions",
+    response_model=LeagueDivisionsResponse,
+)
+def list_league_divisions():
+    """Leagues whose ingest can be narrowed by division, and their divisions (#811).
+
+    The catalog the per-league UI renders from, so division keys live in one
+    place (the ESPN client) rather than being duplicated in the frontend.
+    """
+    return LeagueDivisionsResponse(
+        divisions={
+            league: [LeagueDivision(key=d.key, label=d.label) for d in divisions]
+            for league, divisions in COLLEGE_SCOREBOARD_DIVISIONS.items()
+        }
+    )
+
+
 @router.get(
     "/league-configs",
     response_model=LeagueConfigListResponse,
@@ -308,6 +375,7 @@ def list_league_configs():
                 channel_group_id=c.channel_group_id,
                 channel_group_mode=c.channel_group_mode,
                 matchup_order=c.matchup_order,
+                included_divisions=c.included_divisions,
             )
             for c in configs
         ],
@@ -326,6 +394,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid matchup_order. Valid: {sorted(MATCHUP_ORDER_MODES)}",
         )
+    included_divisions = _validate_included_divisions(league_code, request.included_divisions)
 
     with get_db() as conn:
         config = upsert_league_config(
@@ -335,6 +404,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
             channel_group_id=request.channel_group_id,
             channel_group_mode=request.channel_group_mode,
             matchup_order=request.matchup_order,
+            included_divisions=included_divisions,
         )
     set_league_matchup_order(league_code, config.matchup_order)  # render-time cache (#692)
 
@@ -344,6 +414,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
         channel_group_id=config.channel_group_id,
         channel_group_mode=config.channel_group_mode,
         matchup_order=config.matchup_order,
+        included_divisions=config.included_divisions,
     )
 
 

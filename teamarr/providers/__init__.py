@@ -19,6 +19,7 @@ from collections.abc import Callable
 
 from teamarr.database import get_db
 from teamarr.database.settings import get_proxy_settings
+from teamarr.database.subscription import get_league_config
 from teamarr.database.team_cache import get_team_name_by_id
 from teamarr.providers.base_client import configure_provider_request_policy
 from teamarr.providers.bellmedia import BellMediaClient, BellMediaProvider
@@ -48,11 +49,32 @@ def reload_provider_request_policy() -> None:
     )
 
 
+def _get_included_divisions(league: str) -> list[str] | None:
+    """The NCAA divisions a league still ingests, or None for all of them (#811).
+
+    This is the database boundary for the setting: the provider layer takes the
+    answer as an injected callable and never queries. Read per fetch (a handful
+    of times per run — one per league), so switching a division off takes
+    effect on the next generation rather than the next restart. Any failure
+    answers None, which is the pre-setting behaviour: fetch every division.
+    """
+    try:
+        with get_db() as conn:
+            config = get_league_config(conn, league)
+    except Exception:
+        # Database not available (startup, migration) — never fail a fetch over
+        # a preference; the full slate is the safe answer.
+        return None
+    return config.included_divisions if config else None
+
+
 def _create_espn_provider() -> ESPNProvider:
     """Factory for ESPN provider with injected dependencies."""
-    return ESPNProvider(
+    provider = ESPNProvider(
         league_mapping_source=ProviderRegistry.get_league_mapping_source(),
     )
+    provider.set_included_divisions_fn(_get_included_divisions)
+    return provider
 
 
 def _create_bellmedia_provider() -> BellMediaProvider:

@@ -59,7 +59,7 @@ def test_span_is_one_ranged_request_filed_by_eastern_day(espn, monkeypatch):
     ]
 
     class Client:
-        def get_scoreboard(self, league, date_str=None, sport_league=None):
+        def get_scoreboard(self, league, date_str=None, sport_league=None, groups=None):
             calls.append(date_str)
             return {"events": ["payload"]}
 

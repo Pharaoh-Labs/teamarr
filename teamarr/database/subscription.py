@@ -43,6 +43,9 @@ class SubscriptionLeagueConfig:
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
     matchup_order: str | None = None  # #692: NULL = global setting
+    # #811: NCAA divisions this league ingests. None = every division ESPN
+    # files under it (the default); otherwise the kept division keys.
+    included_divisions: list[str] | None = None
 
 
 @dataclass
@@ -495,18 +498,20 @@ def upsert_league_config(
     channel_group_id: int | None = None,
     channel_group_mode: str | None = None,
     matchup_order: str | None = None,
+    included_divisions: list[str] | None = None,
 ) -> SubscriptionLeagueConfig:
     """Create or update per-league config. Returns the saved config."""
     conn.execute(
         """INSERT INTO subscription_league_config
            (league_code, channel_profile_ids, channel_group_id,
-            channel_group_mode, matchup_order)
-           VALUES (?, ?, ?, ?, ?)
+            channel_group_mode, matchup_order, included_divisions)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(league_code) DO UPDATE SET
                channel_profile_ids = excluded.channel_profile_ids,
                channel_group_id = excluded.channel_group_id,
                channel_group_mode = excluded.channel_group_mode,
-               matchup_order = excluded.matchup_order
+               matchup_order = excluded.matchup_order,
+               included_divisions = excluded.included_divisions
         """,
         (
             league_code,
@@ -516,6 +521,7 @@ def upsert_league_config(
             channel_group_id,
             channel_group_mode,
             matchup_order,
+            json.dumps(included_divisions) if included_divisions is not None else None,
         ),
     )
     logger.info("[LEAGUE_CONFIG] Upserted config for %s", league_code)
@@ -544,6 +550,12 @@ def _build_league_config(row) -> SubscriptionLeagueConfig:
             profile_ids = json.loads(row["channel_profile_ids"])
         except (json.JSONDecodeError, TypeError):
             pass
+    divisions = None
+    if "included_divisions" in row.keys() and row["included_divisions"]:
+        try:
+            divisions = json.loads(row["included_divisions"])
+        except (json.JSONDecodeError, TypeError):
+            pass
     return SubscriptionLeagueConfig(
         id=row["id"],
         league_code=row["league_code"],
@@ -551,4 +563,5 @@ def _build_league_config(row) -> SubscriptionLeagueConfig:
         channel_group_id=row["channel_group_id"],
         channel_group_mode=row["channel_group_mode"],
         matchup_order=row["matchup_order"] if "matchup_order" in row.keys() else None,
+        included_divisions=divisions,
     )
