@@ -254,7 +254,11 @@ class TeamChannelManager:
         with self._db_factory() as conn:
             teams = list_enabled_managed_teams(conn)
             recipients = {
-                (team.get("provider", "espn"), str(team.get("provider_team_id", ""))): team
+                (
+                    team.get("provider", "espn"),
+                    team.get("primary_league"),
+                    str(team.get("provider_team_id", "")),
+                ): team
                 for team in teams
                 if team.get("dispatcharr_channel_id")
             }
@@ -271,6 +275,7 @@ class TeamChannelManager:
                 if not event or stream.get("id") is None:
                     continue
                 provider = getattr(event, "provider", None)
+                league = getattr(event, "league", None)
                 sides = (getattr(event, "home_team", None), getattr(event, "away_team", None))
                 attach_at, detach_at = compute_stream_window(
                     matched.get("epg_program_start"),
@@ -279,7 +284,7 @@ class TeamChannelManager:
                     post_buffer,
                 )
                 for side in sides:
-                    team = recipients.get((provider, str(getattr(side, "id", ""))))
+                    team = recipients.get((provider, league, str(getattr(side, "id", ""))))
                     if team:
                         feed_team_id = getattr(side, "id", None)
                         feed_side = (
