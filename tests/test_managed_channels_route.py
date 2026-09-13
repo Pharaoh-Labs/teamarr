@@ -156,12 +156,28 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
             )
         ),
     )
+    import teamarr.consumers.team_processor as team_processor
+
+    monkeypatch.setattr(
+        team_processor,
+        "TeamProcessor",
+        lambda *_: SimpleNamespace(
+            render_event_programme=lambda *_: SimpleNamespace(
+                title="NBA Basketball",
+                subtitle="Blue at Red",
+                start="2026-09-13T09:00:00+00:00",
+                stop="2026-09-13T11:00:00+00:00",
+            )
+        ),
+    )
 
     response = channels.get_managed_channel_streams(-7)
 
     assert response.current_event is not None
-    assert response.current_event.title == "Attached game-1 in nba"
+    assert response.current_event.title == "NBA Basketball"
+    assert response.current_event.sub_title == "Blue at Red"
     assert response.current_event.is_attached is True
     assert response.current_event.start == "2026-09-13T09:00:00+00:00"
+    assert response.current_event.stop == "2026-09-13T11:00:00+00:00"
     assert response.current_event.attach_at is None
     assert response.streams[0].dispatcharr_stream_id == 44

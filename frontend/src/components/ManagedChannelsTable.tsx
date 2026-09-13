@@ -603,10 +603,8 @@ const ChannelRow = React.memo(function ChannelRow({
                     <div className="mb-2 rounded bg-muted/50 px-2 py-1.5 text-xs">
                       <div className="font-semibold">
                         {currentEvent.is_attached
-                          ? "Attached event"
-                          : currentEvent.is_live
-                            ? "Current event"
-                            : "Next scheduled event"}: {currentEvent.title ?? "Unknown"}
+                          ? "Attached Event"
+                          : "Next Event"}: {currentEvent.title ?? "Unknown"}
                       </div>
                       {currentEvent.sub_title && (
                         <div className="text-muted-foreground">{currentEvent.sub_title}</div>

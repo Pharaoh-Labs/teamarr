@@ -152,6 +152,22 @@ class TeamEPGGenerator:
             additional_leagues=additional_leagues,
         )
 
+    def render_event(
+        self,
+        event: Event,
+        *,
+        team_id: str,
+        league: str,
+        channel_id: str,
+        logo_url: str | None,
+        options: TeamEPGOptions,
+    ) -> Programme | None:
+        """Render one resolved event through the Team EPG template."""
+        if not options.template:
+            return None
+        context = self._context_builder.build_for_event(event, team_id, league)
+        return self._event_to_programme(event, context, channel_id, logo_url, options)
+
     def generate(
         self,
         team_id: str,

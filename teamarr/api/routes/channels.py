@@ -41,7 +41,7 @@ from teamarr.dispatcharr import (
 )
 from teamarr.services import create_channel_service, create_default_service
 from teamarr.services.stream_ordering import StreamOrderingService
-from teamarr.services.team_channel_status import find_current_live_window, find_next_live_window
+from teamarr.services.team_channel_status import find_next_live_window
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.art_url import apply_art_base_url
 from teamarr.utilities.tz import parse_db_timestamp
@@ -488,20 +488,31 @@ def get_managed_channel_streams(channel_id: int):
                     "stop": None,
                 }
                 try:
-                    event = create_default_service().get_event(
+                    sports_service = create_default_service()
+                    event = sports_service.get_event(
                         attached["event_id"], team_channel["primary_league"]
                     )
                     if event:
-                        current["title"] = event.name
-                        current["start"] = event.start_time
+                        from teamarr.consumers.team_processor import TeamProcessor
+
+                        programme = TeamProcessor(get_db, sports_service).render_event_programme(
+                            conn, team_id, event
+                        )
+                        if programme:
+                            current.update(
+                                {
+                                    "title": programme.title,
+                                    "sub_title": programme.subtitle,
+                                    "start": programme.start,
+                                    "stop": programme.stop,
+                                }
+                            )
+                        else:
+                            current["title"] = event.name
+                            current["start"] = event.start_time
                 except Exception:
                     logger.debug("[CHANNELS] Could not load attached team event", exc_info=True)
             else:
-                current = find_current_live_window(
-                    xmltv["xmltv_content"] if xmltv else None,
-                    team_channel["channel_id"],
-                )
-            if current is None:
                 # The channel's guide remains useful outside its stream window:
                 # show the upcoming game even when no stream is currently attached.
                 current = find_next_live_window(

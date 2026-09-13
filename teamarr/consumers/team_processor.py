@@ -197,6 +197,21 @@ class TeamProcessor:
 
             return self._process_team_internal(conn, team)
 
+    def render_event_programme(self, conn: Connection, team_id: int, event) -> Programme | None:
+        """Render one event for a team channel using its current template."""
+        team = self._get_team(conn, team_id)
+        if not team:
+            return None
+        options = self._build_options(conn, team)
+        return self._epg_generator.render_event(
+            event,
+            team_id=team.provider_team_id,
+            league=team.primary_league,
+            channel_id=team.channel_id,
+            logo_url=team.channel_logo_url or team.team_logo_url,
+            options=options,
+        )
+
     def process_all_teams(
         self,
         progress_callback: Callable[[int, int, str], None] | None = None,
