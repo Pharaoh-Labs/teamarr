@@ -382,6 +382,11 @@ def run_full_generation(
                 db_factory, external_occupied
             )
 
+        team_matched_streams: list[dict] = []
+
+        def collect_team_matches(group_id: int, matches: list[dict]) -> None:
+            team_matched_streams.extend({**match, "source_group_id": group_id} for match in matches)
+
         group_result = process_all_event_groups(
             db_factory=db_factory,
             dispatcharr_client=dispatcharr_client,
@@ -393,11 +398,16 @@ def run_full_generation(
             # whole guide a second time for a value nothing reads.
             aggregate_xmltv=False,
             run_id=stats_run.id,  # Details + per-group breakdown key on this run (#645)
+            matched_stream_callback=collect_team_matches,
         )
         result.groups_processed = group_result.groups_processed
         result.groups_programmes = group_result.total_programmes
         result.programmes_total = result.teams_programmes + result.groups_programmes
         timer.mark("groups")
+
+        result.managed_team_streams = team_channel_manager.sync_stream_memberships(
+            team_matched_streams
+        )
 
         # Step 3b: Global channel reassignment (if enabled)
         check_cancelled()

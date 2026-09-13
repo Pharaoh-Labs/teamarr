@@ -168,5 +168,7 @@ class TestCommonWordAbbreviations:
         dayton = _team("Dayton Flyers", "DAY", "womens-college-volleyball")
         south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
         event = _event(south_florida, dayton, "evt-day")
-        outcome = _match("Dayton vs. South Florida @ Sep 11 5:00PM ET", event)
+        outcome = _match(
+            f"Dayton vs. South Florida @ {TODAY.strftime('%b %-d')} 5:00PM ET", event
+        )
         assert outcome.category == ResultCategory.MATCHED

@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from teamarr.database.managed_team_channel_streams import (
+    active_stream_ids,
+    reconcile_team_streams,
+)
 from teamarr.database.managed_team_channels import (
     delete_managed_team_channel,
     list_disabled_managed_team_channels,
@@ -17,7 +21,6 @@ from teamarr.database.settings import (
     get_managed_team_channel_settings,
 )
 from teamarr.database.subscription import get_league_config
-from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
@@ -185,6 +188,72 @@ class TeamChannelManager:
                     result["errors"] += 1
         return result
 
+    def sync_stream_memberships(self, matched_streams: list[dict]) -> dict[str, int]:
+        """Persist matched event streams and synchronize active remote memberships."""
+        result = {"memberships": 0, "channels": 0, "errors": 0}
+        if not self._channels:
+            return result
+        # Import lazily: consumers.__init__ imports generation, which imports services.
+        from teamarr.consumers.lifecycle.timing import compute_stream_window
+
+        with self._db_factory() as conn:
+            teams = list_enabled_managed_teams(conn)
+            recipients = {
+                (team.get("provider", "espn"), str(team.get("provider_team_id", ""))): team
+                for team in teams
+                if team.get("dispatcharr_channel_id")
+            }
+            buffers = conn.execute(
+                "SELECT epg_stream_pre_buffer_minutes, epg_stream_post_buffer_minutes "
+                "FROM settings WHERE id = 1"
+            ).fetchone()
+            pre_buffer = buffers["epg_stream_pre_buffer_minutes"] if buffers else 60
+            post_buffer = buffers["epg_stream_post_buffer_minutes"] if buffers else 30
+            memberships = []
+            for matched in matched_streams:
+                event = matched.get("event")
+                stream = matched.get("stream") or {}
+                if not event or stream.get("id") is None:
+                    continue
+                provider = getattr(event, "provider", None)
+                sides = (getattr(event, "home_team", None), getattr(event, "away_team", None))
+                attach_at, detach_at = compute_stream_window(
+                    matched.get("epg_program_start"),
+                    matched.get("epg_program_end"),
+                    pre_buffer,
+                    post_buffer,
+                )
+                for side in sides:
+                    team = recipients.get((provider, str(getattr(side, "id", ""))))
+                    if team:
+                        memberships.append(
+                            {
+                                "team_id": team["id"],
+                                "dispatcharr_stream_id": stream["id"],
+                                "event_id": str(event.id),
+                                "event_provider": provider,
+                                "source_group_id": matched["source_group_id"],
+                                "match_method": matched.get("match_method"),
+                                "attach_at": attach_at,
+                                "detach_at": detach_at,
+                            }
+                        )
+            reconcile_team_streams(conn, memberships)
+            result["memberships"] = len(memberships)
+            for team in teams:
+                channel_id = team.get("dispatcharr_channel_id")
+                if not channel_id:
+                    continue
+                try:
+                    self._channels.update_channel(channel_id, {
+                        "streams": active_stream_ids(conn, team["id"])
+                    })
+                    result["channels"] += 1
+                except Exception:
+                    logger.exception("[TEAM_CHANNEL] Stream sync failed for %s", team["team_name"])
+                    result["errors"] += 1
+        return result
+
     def _delete_disabled(self, conn, remote_channels, result) -> None:
         for mapping in list_disabled_managed_team_channels(conn):
             remote = remote_channels.get(mapping["dispatcharr_channel_id"])
@@ -244,7 +313,6 @@ class TeamChannelManager:
             "name": team["team_name"],
             "channel_number": number,
             "tvg_id": team["channel_id"],
-            "streams": [],
             "channel_group_id": self._channel_group(dispatcharr, conn, team),
             "channel_profile_ids": self._channel_profiles(dispatcharr, conn, team),
             "stream_profile_id": dispatcharr.default_stream_profile_id,
@@ -256,7 +324,6 @@ class TeamChannelManager:
             "name": remote.name,
             "channel_number": self._number(remote.channel_number),
             "tvg_id": remote.tvg_id,
-            "streams": list(remote.streams),
             "channel_group_id": remote.channel_group_id,
             "channel_profile_ids": (
                 list(remote.channel_profile_ids)
@@ -272,6 +339,7 @@ class TeamChannelManager:
         if not self._logos or not team.get("template_id"):
             return None
         from teamarr.database.templates import get_template
+        from teamarr.templates.resolver import TemplateResolver
 
         template = get_template(conn, team["template_id"])
         url = template.team_channel_logo_url if template else None

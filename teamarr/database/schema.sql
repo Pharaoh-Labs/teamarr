@@ -171,6 +171,33 @@ CREATE TABLE IF NOT EXISTS managed_team_channels (
 CREATE INDEX IF NOT EXISTS idx_managed_team_channels_dispatcharr
     ON managed_team_channels(dispatcharr_channel_id);
 
+-- Temporary stream memberships for durable managed team channels. These stay
+-- separate from managed_channel_streams, whose foreign key and lifecycle are
+-- specific to event-expiring channels.
+CREATE TABLE IF NOT EXISTS managed_team_channel_streams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    dispatcharr_stream_id INTEGER NOT NULL,
+    event_id TEXT NOT NULL,
+    event_provider TEXT NOT NULL,
+    source_group_id INTEGER NOT NULL,
+    match_method TEXT,
+    attach_at TIMESTAMP,
+    detach_at TIMESTAMP,
+    removed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES managed_team_channels(team_id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_team_stream_identity
+    ON managed_team_channel_streams(
+        team_id, dispatcharr_stream_id, event_id, event_provider, source_group_id,
+        attach_at
+    );
+CREATE INDEX IF NOT EXISTS idx_managed_team_streams_active
+    ON managed_team_channel_streams(team_id, removed_at, attach_at, detach_at);
+
 CREATE TRIGGER IF NOT EXISTS update_teams_timestamp
 AFTER UPDATE ON teams
 BEGIN
@@ -510,7 +537,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 95
+    schema_version INTEGER DEFAULT 96
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains

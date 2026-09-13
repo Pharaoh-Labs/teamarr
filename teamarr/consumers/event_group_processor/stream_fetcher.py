@@ -22,11 +22,24 @@ def managed_channel_ids(db_factory: Any) -> set[int]:
         from teamarr.database.channels import get_all_managed_channels
 
         with db_factory() as conn:
-            return {
+            ids = {
                 mc.dispatcharr_channel_id
                 for mc in get_all_managed_channels(conn, include_deleted=False)
                 if mc.dispatcharr_channel_id
             }
+            has_team_channels = conn is not None and conn.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'managed_team_channels'"
+            ).fetchone()
+            if has_team_channels:
+                ids.update(
+                    row["dispatcharr_channel_id"]
+                    for row in conn.execute(
+                        "SELECT dispatcharr_channel_id FROM managed_team_channels "
+                        "WHERE dispatcharr_channel_id IS NOT NULL"
+                    )
+                )
+            return ids
     except Exception as e:
         logger.warning("[CHANNEL_SOURCE] Failed to load managed channel ids: %s", e)
         return set()
