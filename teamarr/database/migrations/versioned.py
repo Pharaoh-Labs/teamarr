@@ -349,12 +349,54 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _advance_version(conn, 96, "reconciliation: managed team stream memberships")
         current_version = 96
 
+    if current_version < 97:
+        _advance_version(conn, 97, "managed team stream ordering metadata")
+        current_version = 97
+
+    if current_version < 98:
+        _apply_migration(
+            conn, 98, "seed managed team channel logo on existing templates",
+            _migrate_v98_team_channel_logo,
+        )
+        current_version = 98
+
+    if current_version < 99:
+        _apply_migration(
+            conn, 99, "seed managed team channel name on existing templates",
+            _migrate_v99_team_channel_name,
+        )
+        current_version = 99
+
 
 # =============================================================================
 # Migration helpers
 # =============================================================================
 # Two patterns wrap the otherwise-repetitive guard/transform/bump/log work:
 #
+
+
+def _migrate_v98_team_channel_logo(conn: sqlite3.Connection) -> None:
+    """Backfill the default managed-channel logo without changing custom values."""
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()
+    }
+    if {"template_type", "team_channel_logo_url"} <= columns:
+        conn.execute(
+            """UPDATE templates SET team_channel_logo_url = ?
+               WHERE template_type = 'team' AND team_channel_logo_url IS NULL""",
+            ("{league_id}/{team_name|pascal}/logo.png?style=1&logo=true&fallback=true",),
+        )
+
+
+def _migrate_v99_team_channel_name(conn: sqlite3.Connection) -> None:
+    """Backfill the default managed-channel name without changing custom values."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()}
+    if {"template_type", "team_channel_name"} <= columns:
+        conn.execute(
+            """UPDATE templates SET team_channel_name = ?
+               WHERE template_type = 'team' AND team_channel_name IS NULL""",
+            ("{league} | {team_name}",),
+        )
 #   _advance_version(conn, target, reason)
 #       For version ranges that are entirely handled by reconciliation
 #       (i.e. only added columns; data is unchanged). Caller checks the

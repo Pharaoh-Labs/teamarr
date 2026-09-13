@@ -90,7 +90,10 @@ def conn():
         CREATE TABLE managed_team_channel_streams (
             id INTEGER PRIMARY KEY, team_id INTEGER, dispatcharr_stream_id INTEGER,
             event_id TEXT, event_provider TEXT, source_group_id INTEGER,
-            match_method TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT,
+            stream_name TEXT, m3u_account_name TEXT, match_method TEXT,
+            match_type TEXT DEFAULT 'event', feed_team_id TEXT, feed_side TEXT,
+            dispatcharr_channel_group TEXT, priority INTEGER DEFAULT 999,
+            attach_at TEXT, detach_at TEXT, removed_at TEXT,
             created_at TEXT, updated_at TEXT,
             UNIQUE(team_id, dispatcharr_stream_id, event_id, event_provider,
                    source_group_id, attach_at)
@@ -217,7 +220,7 @@ def test_associates_only_owned_channels_after_refresh(conn, settings):
     assert channels.epg_assignments == [(10, 42)]
 
 
-def test_stream_memberships_attach_only_to_matching_owned_team():
+def test_stream_memberships_attach_only_to_matching_owned_team(monkeypatch):
     database = sqlite3.connect(":memory:")
     database.row_factory = sqlite3.Row
     database.executescript(
@@ -241,7 +244,10 @@ def test_stream_memberships_attach_only_to_matching_owned_team():
         CREATE TABLE managed_team_channel_streams (
             id INTEGER PRIMARY KEY, team_id INTEGER, dispatcharr_stream_id INTEGER,
             event_id TEXT, event_provider TEXT, source_group_id INTEGER,
-            match_method TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT,
+            stream_name TEXT, m3u_account_name TEXT, match_method TEXT,
+            match_type TEXT DEFAULT 'event', feed_team_id TEXT, feed_side TEXT,
+            dispatcharr_channel_group TEXT, priority INTEGER DEFAULT 999,
+            attach_at TEXT, detach_at TEXT, removed_at TEXT,
             created_at TEXT, updated_at TEXT,
             UNIQUE(team_id, dispatcharr_stream_id, event_id, event_provider,
                    source_group_id, attach_at)
@@ -250,6 +256,10 @@ def test_stream_memberships_attach_only_to_matching_owned_team():
     )
     channels = FakeChannels()
     manager = TeamChannelManager(_factory(database), channels)
+    monkeypatch.setattr(
+        "teamarr.services.stream_ordering.get_stream_ordering_service",
+        lambda *_: SimpleNamespace(compute_priority=lambda stream: stream.priority),
+    )
     event = SimpleNamespace(
         id="game-1",
         provider="espn",
@@ -263,4 +273,61 @@ def test_stream_memberships_attach_only_to_matching_owned_team():
 
     assert result == {"memberships": 1, "channels": 1, "errors": 0}
     assert channels.updated == [(10, {"streams": [55]})]
+    database.close()
+
+
+def test_stream_ordering_uses_team_scope_and_excludes_closed_windows(monkeypatch):
+    database = sqlite3.connect(":memory:")
+    database.row_factory = sqlite3.Row
+    database.executescript(
+        """
+        CREATE TABLE teams (
+            id INTEGER PRIMARY KEY, active INTEGER, managed_channel_enabled INTEGER,
+            provider TEXT, provider_team_id TEXT, team_name TEXT, sport TEXT,
+            primary_league TEXT
+        );
+        INSERT INTO teams VALUES (1, 1, 1, 'espn', 'home', 'Home', 'basketball', 'nba');
+        CREATE TABLE managed_team_channels (
+            team_id INTEGER PRIMARY KEY, dispatcharr_channel_id INTEGER,
+            dispatcharr_uuid TEXT, channel_number INTEGER, sync_status TEXT,
+            sync_message TEXT, last_verified_at TEXT
+        );
+        INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL);
+        CREATE TABLE managed_team_channel_streams (
+            id INTEGER PRIMARY KEY, team_id INTEGER, dispatcharr_stream_id INTEGER,
+            event_id TEXT, event_provider TEXT, source_group_id INTEGER,
+            stream_name TEXT, m3u_account_name TEXT, match_method TEXT,
+            match_type TEXT, feed_team_id TEXT, feed_side TEXT,
+            dispatcharr_channel_group TEXT, priority INTEGER, attach_at TEXT,
+            detach_at TEXT, removed_at TEXT, created_at TEXT, updated_at TEXT
+        );
+        INSERT INTO managed_team_channel_streams VALUES
+            (1, 1, 55, 'game-1', 'espn', 7, 'Secondary', NULL, 'epg',
+             'event', 'home', 'home', NULL, 999, NULL, NULL, NULL, NULL, NULL),
+            (2, 1, 56, 'game-1', 'espn', 7, 'Primary', NULL, 'epg',
+             'event', 'home', 'home', NULL, 999, NULL, NULL, NULL, NULL, NULL),
+            (3, 1, 57, 'game-2', 'espn', 7, 'Closed', NULL, 'epg',
+             'event', 'home', 'home', NULL, 999, '2000-01-01 00:00:00',
+             '2000-01-01 01:00:00', NULL, NULL, NULL);
+        """
+    )
+    seen = []
+
+    def priority(stream):
+        seen.append(stream.stream_name)
+        return 1 if stream.stream_name == "Primary" else 2
+
+    monkeypatch.setattr(
+        "teamarr.services.stream_ordering.get_stream_ordering_service",
+        lambda conn, sport, league: (
+            seen.append((sport, league)) or SimpleNamespace(compute_priority=priority)
+        ),
+    )
+    channels = FakeChannels([RemoteChannel(10, "owned", "Home", "9000", streams=(55, 56, 57))])
+
+    result = TeamChannelManager(_factory(database), channels).sync_stream_ordering()
+
+    assert ("basketball", "nba") in seen
+    assert result == {"channels": 1, "streams": 3, "errors": 0}
+    assert channels.updated == [(10, {"streams": [56, 55]})]
     database.close()

@@ -434,6 +434,7 @@ def _team_base(**overrides) -> dict:
     """
     base = {
         "template_type": "team",
+        "team_channel_name": "{league} | {team_name}",
         "title_format": "{gracenote_category}",
         "subtitle_template": "{team1} {at_vs} {team2}",
         "program_art_url": _TEAM_ART,

@@ -148,6 +148,7 @@ class Template:
 
     # Event template specific
     event_channel_name: str | None = None
+    team_channel_name: str | None = None
     event_channel_logo_url: str | None = None
     team_channel_logo_url: str | None = None
 
@@ -253,6 +254,7 @@ def _row_to_template(row: Row) -> Template:
         idle_conditional_rows=_parse_json(row["idle_conditional_rows"], []),
         conditional_descriptions=_parse_json(row["conditional_descriptions"], []),
         event_channel_name=row["event_channel_name"],
+        team_channel_name=row["team_channel_name"],
         event_channel_logo_url=row["event_channel_logo_url"],
         team_channel_logo_url=row["team_channel_logo_url"],
         created_at=_parse_ts(row["created_at"]),
@@ -685,6 +687,7 @@ def template_to_programme_config(template: Template) -> TemplateConfig:
         description_format=template.description_template or "",
         subtitle_format=template.subtitle_template or "",
         program_art_url=template.program_art_url,
+        team_channel_name=template.team_channel_name,
         team_channel_logo_url=template.team_channel_logo_url,
         conditional_descriptions=template.conditional_descriptions or [],
         # V1 Parity: Duration override support

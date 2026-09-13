@@ -55,6 +55,7 @@ _VALIDATED_TEXT_FIELDS = (
     "description_template",
     "program_art_url",
     "event_channel_name",
+    "team_channel_name",
     "event_channel_logo_url",
     "team_channel_logo_url",
 )

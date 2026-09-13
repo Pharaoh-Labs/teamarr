@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS templates (
 
     -- Event Template Specific (for event-based EPG)
     event_channel_name TEXT,
+    team_channel_name TEXT,
     event_channel_logo_url TEXT,
 
     -- Team Template Specific (for persistent managed team channels)
@@ -181,7 +182,14 @@ CREATE TABLE IF NOT EXISTS managed_team_channel_streams (
     event_id TEXT NOT NULL,
     event_provider TEXT NOT NULL,
     source_group_id INTEGER NOT NULL,
+    stream_name TEXT,
+    m3u_account_name TEXT,
     match_method TEXT,
+    match_type TEXT NOT NULL DEFAULT 'event',
+    feed_team_id TEXT,
+    feed_side TEXT,
+    dispatcharr_channel_group TEXT,
+    priority INTEGER NOT NULL DEFAULT 999,
     attach_at TIMESTAMP,
     detach_at TIMESTAMP,
     removed_at TIMESTAMP,
@@ -537,7 +545,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 96
+    schema_version INTEGER DEFAULT 99
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains

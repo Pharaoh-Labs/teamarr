@@ -37,18 +37,30 @@ def reconcile_team_streams(conn: Connection, memberships: list[dict]) -> None:
         conn.execute(
             """INSERT INTO managed_team_channel_streams (
                    team_id, dispatcharr_stream_id, event_id, event_provider,
-                   source_group_id, match_method, attach_at, detach_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(team_id, dispatcharr_stream_id, event_id, event_provider,
-                           source_group_id, attach_at) DO UPDATE SET
-                   match_method = excluded.match_method,
-                   detach_at = excluded.detach_at,
+                   source_group_id, stream_name, m3u_account_name, match_method,
+                   match_type, feed_team_id, feed_side, dispatcharr_channel_group,
+                   priority, attach_at, detach_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(team_id, dispatcharr_stream_id, event_id, event_provider,
+                            source_group_id, attach_at) DO UPDATE SET
+                    stream_name = excluded.stream_name,
+                    m3u_account_name = excluded.m3u_account_name,
+                    match_method = excluded.match_method,
+                    match_type = excluded.match_type,
+                    feed_team_id = excluded.feed_team_id,
+                    feed_side = excluded.feed_side,
+                    dispatcharr_channel_group = excluded.dispatcharr_channel_group,
+                    priority = excluded.priority,
+                    detach_at = excluded.detach_at,
                    removed_at = NULL,
                    updated_at = CURRENT_TIMESTAMP""",
             (
                 item["team_id"], item["dispatcharr_stream_id"], item["event_id"],
-                item["event_provider"], item["source_group_id"], item.get("match_method"),
-                item.get("attach_at") or "", item.get("detach_at"),
+                item["event_provider"], item["source_group_id"], item.get("stream_name"),
+                item.get("m3u_account_name"), item.get("match_method"),
+                item.get("match_type", "event"), item.get("feed_team_id"),
+                item.get("feed_side"), item.get("dispatcharr_channel_group"),
+                item.get("priority", 999), item.get("attach_at") or "", item.get("detach_at"),
             ),
         )
 
@@ -62,7 +74,7 @@ def active_stream_ids(conn: Connection, team_id: int, now: datetime | None = Non
            WHERE team_id = ? AND removed_at IS NULL
              AND (attach_at IS NULL OR attach_at <= ?)
              AND (detach_at IS NULL OR detach_at > ?)
-           ORDER BY id""",
+           ORDER BY priority, id""",
         (team_id, timestamp, timestamp),
     ).fetchall()
     return list(dict.fromkeys(row["dispatcharr_stream_id"] for row in rows))

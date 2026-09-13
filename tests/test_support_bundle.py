@@ -28,6 +28,20 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
             "INSERT INTO managed_channel_streams (managed_channel_id, dispatcharr_stream_id, stream_name, m3u_account_name) VALUES (?, ?, ?, ?)",
             (channel_id, 17, "Example Stream", "Private Account"),
         )
+        team_id = conn.execute("SELECT id FROM teams WHERE channel_id = 'team-1'").fetchone()[0]
+        conn.execute(
+            """INSERT INTO managed_team_channels
+               (team_id, dispatcharr_channel_id, dispatcharr_uuid, channel_number, sync_status)
+               VALUES (?, ?, ?, ?, ?)""",
+            (team_id, 42, "owned-team", 9000, "ready"),
+        )
+        conn.execute(
+            """INSERT INTO managed_team_channel_streams
+               (team_id, dispatcharr_stream_id, event_id, event_provider, source_group_id,
+                m3u_account_name)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (team_id, 18, "event-2", "espn", 1, "Private Account"),
+        )
         conn.commit()
 
     logs = tmp_path / "logs"
@@ -54,6 +68,8 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
     assert "https://stream.example/live" not in contents
     assert "sb_publishable_abcdef" not in contents
     assert "secret@example.test" not in contents
+    assert report["channels"]["managed_team_channels"][0]["dispatcharr_channel_id"] == 42
+    assert report["channels"]["managed_team_channel_streams"][0]["event_id"] == "event-2"
 
 
 def test_bundle_signals_media_server_failing(db_path, tmp_path):
