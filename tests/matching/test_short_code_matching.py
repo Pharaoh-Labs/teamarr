@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from teamarr.consumers.matching.classifier import classify_stream
-from teamarr.consumers.matching.result import ResultCategory
+from teamarr.consumers.matching.result import FailedReason, ResultCategory
 from teamarr.consumers.matching.team_matcher import (
     MatchContext,
     _abbrev_equals,
@@ -20,6 +20,12 @@ from teamarr.core.types import Event, EventStatus, Team
 from tests.fakes import make_team_matcher
 
 TODAY = datetime.now(UTC).date()
+# Stream-name spellings of TODAY (#813). Fixtures whose event is built at
+# TODAY must annotate their stream with the same day, or the classifier reads
+# a date the event cannot satisfy and every such test rots into DATE_MISMATCH
+# the moment the wall clock moves past the hardcoded one.
+TODAY_MON_DAY = f"{TODAY:%b} {TODAY.day}"  # "Sep 12"
+TODAY_DAY_MON = f"{TODAY.day:02d} {TODAY:%b}"  # "12 Sep"
 
 
 def _team(name: str, abbr: str, league: str = "mlb") -> Team:
@@ -160,13 +166,17 @@ class TestCommonWordAbbreviations:
         south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
         event = _event(south_florida, dayton, "evt-day")
         outcome = _match(
-            "DAZN CA 16: MLTT - Week 1, Day 1 @ 11 Sep 03:00 PM ET", event
+            f"DAZN CA 16: MLTT - Week 1, Day 1 @ {TODAY_DAY_MON} 03:00 PM ET", event
         )
+        # Dated to the event's own day so the rejection can only come from the
+        # DAY stopword — a stale date would pass this test for free, which is
+        # exactly how it rotted (#813). Pinning the reason keeps it honest.
         assert outcome.category != ResultCategory.MATCHED
+        assert outcome.failed_reason == FailedReason.TEAMS_NOT_PARSED
 
     def test_full_name_dayton_streams_still_match(self):
         dayton = _team("Dayton Flyers", "DAY", "womens-college-volleyball")
         south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
         event = _event(south_florida, dayton, "evt-day")
-        outcome = _match("Dayton vs. South Florida @ Sep 11 5:00PM ET", event)
+        outcome = _match(f"Dayton vs. South Florida @ {TODAY_MON_DAY} 5:00PM ET", event)
         assert outcome.category == ResultCategory.MATCHED
