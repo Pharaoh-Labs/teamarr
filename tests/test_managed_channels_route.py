@@ -76,10 +76,14 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
                     SimpleNamespace(
                         id=90,
                         name="NBA | Blue",
-                        logo_url="epg-channel-logo",
+                        logo_id=42,
+                        logo_url=None,
                     )
-                ]
-            )
+                ],
+            ),
+            logos=SimpleNamespace(get=lambda logo_id: SimpleNamespace(
+                url="epg-channel-logo" if logo_id == 42 else None
+            )),
         ),
     )
 
