@@ -95,6 +95,13 @@ COLLEGE_SCOREBOARD_DIVISIONS: dict[str, tuple[ScoreboardDivision, ...]] = {
         ScoreboardDivision("d1", "NCAA Division I", "50"),
         ScoreboardDivision("non_d1", "Non-NCAA Division I", "51"),
     ),
+    # 91 is a division ("Non-NCAA Division I", the same shape as basketball's
+    # 51); 110 in the same fetch is the United Athletic CONFERENCE and is
+    # therefore absent here, so no selection can drop it.
+    "womens-college-volleyball": (
+        ScoreboardDivision("d1", "NCAA Division I", "90"),
+        ScoreboardDivision("non_d1", "Non-NCAA Division I", "91"),
+    ),
 }
 
 

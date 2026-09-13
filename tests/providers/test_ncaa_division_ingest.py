@@ -37,12 +37,16 @@ def test_no_usable_selection_keeps_every_group(divisions):
     assert scoreboard_groups_for_divisions("college-football", divisions) == ("90", "35")
 
 
-def test_conference_supplements_are_not_divisions():
+def test_conference_supplements_survive_a_division_opt_out():
     """Volleyball's 110 and lacrosse's 108 are conferences ESPN omits from the
     division slate (United Athletic, Mid-American). They have no division key,
-    so no selection can drop them and lose a whole conference's schedule."""
-    for league in ("womens-college-volleyball", "womens-college-lacrosse"):
-        assert scoreboard_groups_for_divisions(league, ["d1"]) == COLLEGE_SCOREBOARD_GROUPS[league]
+    so no selection can drop them and lose a whole conference's schedule —
+    women's volleyball drops its Non-D-I division (91) and keeps 110."""
+    assert scoreboard_groups_for_divisions("womens-college-volleyball", ["d1"]) == ("90", "110")
+    assert (
+        scoreboard_groups_for_divisions("womens-college-lacrosse", ["d1"])
+        == COLLEGE_SCOREBOARD_GROUPS["womens-college-lacrosse"]
+    )
 
 
 def test_league_with_no_groups_is_unaffected():
@@ -139,7 +143,7 @@ def test_provider_ignores_leagues_without_selectable_divisions(monkeypatch):
     provider = _provider(monkeypatch, lambda league: ["d1"])
 
     assert provider._scoreboard_groups("nfl") is None
-    assert provider._scoreboard_groups("womens-college-volleyball") is None
+    assert provider._scoreboard_groups("womens-college-lacrosse") is None
 
 
 # =============================================================================
@@ -188,13 +192,14 @@ def test_invalid_selections_are_refused(league, divisions):
     assert exc.value.status_code == 400
 
 
-def test_division_catalog_lists_football_and_both_basketballs():
+def test_division_catalog_lists_every_league_with_a_second_division():
     catalog = sub_route.list_league_divisions().divisions
 
     assert set(catalog) == {
         "college-football",
         "mens-college-basketball",
         "womens-college-basketball",
+        "womens-college-volleyball",
     }
     assert [d.key for d in catalog["college-football"]] == ["d1", "d2d3"]
     assert catalog["college-football"][1].label == "Division II & III"
