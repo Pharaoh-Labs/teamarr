@@ -88,6 +88,14 @@ def conn():
             league_code TEXT PRIMARY KEY, channel_profile_ids TEXT,
             channel_group_id INTEGER, channel_group_mode TEXT, matchup_order TEXT
         );
+        CREATE TABLE channel_sort_priorities (
+            id INTEGER PRIMARY KEY, sport TEXT, league_code TEXT, sort_priority INTEGER,
+            created_at TEXT, updated_at TEXT
+        );
+        CREATE TABLE channel_priority_teams (
+            id INTEGER PRIMARY KEY, provider TEXT, provider_team_id TEXT, team_name TEXT,
+            league TEXT, sport TEXT, scope TEXT
+        );
         CREATE TABLE settings (
             id INTEGER PRIMARY KEY, epg_stream_pre_buffer_minutes INTEGER,
             epg_stream_post_buffer_minutes INTEGER
@@ -254,6 +262,46 @@ def test_existing_mapping_preserves_streams_and_is_removed_when_disabled(conn, s
     assert result["deleted"] == 1
     assert channels.deleted == [10]
     assert get_managed_team_channel(conn, 1) is None
+
+
+def test_automatic_team_channels_reflow_in_sorted_order(conn, settings):
+    conn.execute("ALTER TABLE teams ADD COLUMN sport TEXT")
+    conn.execute(
+        "INSERT INTO teams (id, active, managed_channel_enabled, channel_id, team_name, "
+        "primary_league, sport) VALUES (1, 1, 1, 'alpha', 'Alpha', 'nhl', 'basketball')"
+    )
+    conn.execute(
+        "INSERT INTO teams (id, active, managed_channel_enabled, channel_id, team_name, "
+        "primary_league, sport) VALUES (2, 1, 1, 'zulu', 'Zulu', 'nhl', 'hockey')"
+    )
+    conn.execute(
+        "INSERT INTO channel_sort_priorities (id, sport, league_code, sort_priority) "
+        "VALUES (1, 'hockey', NULL, 0)"
+    )
+    conn.execute(
+        "INSERT INTO channel_sort_priorities (id, sport, league_code, sort_priority) "
+        "VALUES (2, 'basketball', NULL, 1)"
+    )
+    conn.execute(
+        "INSERT INTO managed_team_channels VALUES "
+        "(1, 10, 'alpha-uuid', 9000, 'ready', NULL, NULL, NULL)"
+    )
+    conn.execute(
+        "INSERT INTO managed_team_channels VALUES "
+        "(2, 11, 'zulu-uuid', 9001, 'ready', NULL, NULL, NULL)"
+    )
+    channels = FakeChannels([
+        RemoteChannel(10, "alpha-uuid", "Alpha", "9000", tvg_id="alpha", stream_profile_id=4),
+        RemoteChannel(11, "zulu-uuid", "Zulu", "9001", tvg_id="zulu", stream_profile_id=4),
+    ])
+
+    result = TeamChannelManager(_factory(conn), channels).sync()
+
+    assert result["synced"] == 2
+    assert channels.updated == [
+        (11, {"channel_number": 9000}),
+        (10, {"channel_number": 9001}),
+    ]
 
 
 def test_associates_only_owned_channels_after_refresh(conn, settings):

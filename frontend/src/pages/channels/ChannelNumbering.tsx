@@ -236,11 +236,12 @@ export function ChannelNumbering() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Managed Team EPG Channels</CardTitle>
-          <CardDescription>
-            Persistent channels enabled per team use this dedicated range. They do not share event-channel numbering.
-          </CardDescription>
+          <CardHeader>
+            <CardTitle>Managed Team EPG Channels</CardTitle>
+            <CardDescription>
+            Persistent channels enabled per team use this dedicated range by default. Automatic channels
+            follow Priority Teams, pinned blocks, and Sport &amp; League order, but not event start time.
+            </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

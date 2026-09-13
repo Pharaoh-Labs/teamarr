@@ -68,27 +68,67 @@ class TeamChannelManager:
             settings = get_managed_team_channel_settings(conn)
             dispatcharr = get_dispatcharr_settings(conn)
             teams = list_enabled_managed_teams(conn)
-            priorities = {team_id: index for index, team_id in enumerate(settings.priority_ids)}
-            teams.sort(
-                key=lambda team: (
-                    priorities.get(team["id"], len(priorities)),
-                    team.get("sport") or "",
-                    team.get("primary_league") or "",
+            from teamarr.database.priority_teams import get_priority_team_match_keys
+            from teamarr.database.sort_priorities import get_all_sort_priorities
+
+            managed_priorities = {
+                team_id: index for index, team_id in enumerate(settings.priority_ids)
+            }
+            sort_priorities = get_all_sort_priorities(conn)
+            sport_order = {
+                priority.sport.lower(): priority.sort_priority
+                for priority in sort_priorities
+                if priority.league_code is None
+            }
+            league_order = {
+                (priority.sport.lower(), priority.league_code.lower()): priority.sort_priority
+                for priority in sort_priorities
+                if priority.league_code is not None
+            }
+            priority_teams = get_priority_team_match_keys(conn)
+
+            def team_sort_key(team):
+                sport = (team.get("sport") or "").lower()
+                league = (team.get("primary_league") or "").lower()
+                priority_scope = priority_teams.get((sport, team["team_name"].lower()))
+                return (
+                    managed_priorities.get(team["id"], len(managed_priorities)),
+                    0 if priority_scope == "all" else 1,
+                    sport_order.get(sport, 9999),
+                    0 if priority_scope in {"all", "sport"} else 1,
+                    league_order.get((sport, league), 9999),
+                    0 if priority_scope else 1,
                     team["team_name"],
                 )
-            )
+
+            teams.sort(key=team_sort_key)
+            # Automatic channels deliberately float into this order on every
+            # sync. Pinned numbers remain occupied and are never reassigned.
+            floating_channel_ids = {
+                team["dispatcharr_channel_id"]
+                for team in teams
+                if team.get("dispatcharr_channel_id") and team.get("managed_channel_number") is None
+            }
+            for channel_id in floating_channel_ids:
+                remote = remote_channels.get(channel_id)
+                if remote:
+                    remote_number = self._number(remote.channel_number)
+                    if remote_number is not None:
+                        occupied.discard(remote_number)
             for team in teams:
                 mapping_id = team["dispatcharr_channel_id"]
                 remote = remote_channels.get(mapping_id) if mapping_id else None
                 requested = team.get("managed_channel_number")
                 team_occupied = occupied.copy()
-                if remote:
+                if remote and mapping_id not in floating_channel_ids:
                     remote_number = self._number(remote.channel_number)
                     if remote_number is not None:
                         team_occupied.discard(remote_number)
                 channel_number, allocation_error = self._allocate_number(
                     requested,
-                    team.get("allocated_channel_number"),
+                    # Automatic channels reflow according to the sorted team
+                    # order above. Retain an allocation only for a pinned team.
+                    team.get("allocated_channel_number") if requested is not None else None,
                     team_occupied,
                     settings,
                     conn,
