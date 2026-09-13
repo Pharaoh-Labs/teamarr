@@ -372,6 +372,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         _advance_version(conn, 100, "managed team channel output settings")
         current_version = 100
 
+    if current_version < 101:
+        _apply_migration(
+            conn, 101, "repair missing managed team channel template logos",
+            _migrate_v101_team_channel_logo_repair,
+        )
+        current_version = 101
+
 
 # =============================================================================
 # Migration helpers
@@ -402,6 +409,11 @@ def _migrate_v99_team_channel_name(conn: sqlite3.Connection) -> None:
                WHERE template_type = 'team' AND team_channel_name IS NULL""",
             ("{league} | {team_name}",),
         )
+
+
+def _migrate_v101_team_channel_logo_repair(conn: sqlite3.Connection) -> None:
+    """Apply the v98 default to databases that advanced before its backfill ran."""
+    _migrate_v98_team_channel_logo(conn)
 #   _advance_version(conn, target, reason)
 #       For version ranges that are entirely handled by reconciliation
 #       (i.e. only added columns; data is unchanged). Caller checks the

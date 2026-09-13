@@ -37,7 +37,7 @@ from teamarr.database.teams import get_team_xmltv
 from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client
 from teamarr.services import create_channel_service, create_default_service
 from teamarr.services.stream_ordering import StreamOrderingService
-from teamarr.services.team_channel_status import find_current_live_window
+from teamarr.services.team_channel_status import find_current_live_window, find_next_live_window
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.art_url import apply_art_base_url
 from teamarr.utilities.tz import parse_db_timestamp
@@ -448,6 +448,13 @@ def get_managed_channel_streams(channel_id: int):
                 xmltv["xmltv_content"] if xmltv else None,
                 team_channel["channel_id"],
             )
+            if current is None and streams:
+                # Stream attachment starts before the programme's live window,
+                # so show the imminent matched event throughout its prebuffer.
+                current = find_next_live_window(
+                    xmltv["xmltv_content"] if xmltv else None,
+                    team_channel["channel_id"],
+                )
 
             ordering_rules, ordering_scope = resolve_stream_ordering_rules(
                 conn, team_channel["sport"], team_channel["primary_league"]
