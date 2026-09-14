@@ -250,20 +250,14 @@ class TeamEPGGenerator:
         # Single league: fetch directly (no thread overhead)
         # Multi-league: fetch in parallel (e.g., soccer teams in 6+ competitions)
         if len(leagues_to_fetch) == 1:
-            try:
-                events = fetch_league(leagues_to_fetch[0])
-            except Exception:
-                events = []
+            events = fetch_league(leagues_to_fetch[0])
             all_events.extend(events)
             seen_event_ids.update(e.id for e in events)
         else:
             with ThreadPoolExecutor(max_workers=len(leagues_to_fetch)) as executor:
                 futures = {executor.submit(fetch_league, lg): lg for lg in leagues_to_fetch}
                 for future in as_completed(futures):
-                    try:
-                        events = future.result()
-                    except Exception:
-                        continue
+                    events = future.result()
                     # Dedupe by event ID across leagues
                     for event in events:
                         if event.id not in seen_event_ids:

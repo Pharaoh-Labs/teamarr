@@ -33,6 +33,18 @@ def apply_art_base_url(value: str | None, base_url: str) -> str | None:
     return f"{base_url.rstrip('/')}/{stripped}"
 
 
+def is_relative_art_path(value: str | None) -> bool:
+    """True for a non-empty value that is not an absolute URL (no ``scheme://``).
+
+    Such a value only becomes fetchable once ``apply_art_base_url`` has a base
+    to prefix; without one it must not be emitted as an icon or uploaded as a
+    logo (#826).
+    """
+    if not value:
+        return False
+    return not _ABSOLUTE_URL.match(value.lstrip("/"))
+
+
 def read_art_base_url(db_factory) -> str:
     """Fetch the configured game-thumbs base URL once via a db_factory.
 

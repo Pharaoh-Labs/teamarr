@@ -23,7 +23,11 @@ from teamarr.consumers.team_epg import TeamEPGGenerator, TeamEPGOptions
 from teamarr.core import Programme
 from teamarr.services import SportsDataService, create_default_service
 from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.art_url import apply_art_base_url, read_art_base_url
+from teamarr.utilities.art_url import (
+    apply_art_base_url,
+    is_relative_art_path,
+    read_art_base_url,
+)
 from teamarr.utilities.tz import now_utc
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
@@ -565,7 +569,11 @@ class TeamProcessor:
                     "team_name": team.team_name,
                 },
             )
-            return apply_art_base_url(resolved, options.art_base_url)
+            resolved = apply_art_base_url(resolved, options.art_base_url)
+            # A game-thumbs path with no base URL configured is not a URL a
+            # guide client can fetch; keep the provider artwork instead (#826).
+            if not is_relative_art_path(resolved):
+                return resolved
         return team.team_logo_url
 
     def _get_team(self, conn: Connection, team_id: int) -> TeamConfig | None:
